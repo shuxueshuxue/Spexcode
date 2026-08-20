@@ -4,16 +4,15 @@ scenarios:
     description: >
       On the session console (#/sessions), right-click a session row and pick "select…" from the
       context menu. The list should enter multi-select mode: the New/Search top row is replaced by a
-      select bar reading "1 selected" with icon-only archive and close tools plus a cancel control,
+      select bar reading "1 selected" with an icon-only close tool plus a cancel control,
       and the right-clicked row shows a ticked checkbox while its full body remains the drag surface. Clicking other rows toggles
       their checkbox (and the count) instead of switching the right pane. Cancel leaves the mode
       untouched.
     expected: >
-      The context menu carries rename, select…, archive, and close, with archive and close in its
-      danger section. Choosing select… flips the list into a checklist pre-ticking the clicked row
-      (count = "1 selected"); row clicks toggle picks without changing the selected terminal; archive
-      and close are enabled only when ≥1 row is picked and their accessible icon labels name the
-      actions. Cancel restores the ordinary New/Search top row with nothing changed.
+      The context menu carries rename, select…, and close. Choosing select… flips the list into a checklist
+      pre-ticking the clicked row (count = "1 selected"); row clicks toggle picks without changing the selected
+      terminal; close is enabled only when ≥1 row is picked and its accessible icon label names the action.
+      Cancel restores the ordinary New/Search top row with nothing changed.
     tags: [frontend-e2e]
   - name: bulk-close-confirm-and-close
     description: >
@@ -27,23 +26,19 @@ scenarios:
       after the board reload. A refused close reports the backend reason through the session action outcome
       while the rejected row remains visible. Cancelling the confirm closes nothing.
     tags: [frontend-e2e]
-  - name: drag-reparent-and-archive-danger
+  - name: drag-reparent-and-close-danger
     description: >
       In multi-select mode, primary-pointer drag a session row from its body (not a grip) onto a different session row, then leave
-      the mode and choose archive from that row's normal context menu. While a row is selected, also open
-      the bulk archive and close confirms; press Enter in each. Verify that no lifecycle request was made
-      before either confirm opened, and then count the resulting requests.
+      the mode and open the bulk close confirm. Press Enter and verify that no lifecycle request was made before
+      the confirm opened, then count the resulting requests.
     expected: >
       A short row click still changes only its check; after the movement threshold the source row dims, its
       full-row ghost keeps the source title, checkbox, fold pod, and live status, floats clear of the highlighted
       drop target, and the drag sends exactly one
       POST /api/sessions/reparent with the dragged id in children and the drop target as parent; no local tree
-      mutation stands in for that request. In the ordinary menu,
-      archive shares the danger section with close and opens an archive confirmation before any archive
-      endpoint is called. Bulk archive and close each open one confirm; their destructive commit button is
-      focused, so Enter closes that dialog and sends exactly one request per selected row to the matching
-      endpoint, then leaves multi-select mode. Escape, Cancel, and a backdrop click still cancel without a
-      lifecycle request.
+      mutation stands in for that request. Bulk close opens one confirm whose destructive commit button is
+      focused, so Enter closes that dialog and sends exactly one close request per selected row, then leaves
+      multi-select mode. Escape, Cancel, and a backdrop click still cancel without a lifecycle request.
     tags: [frontend-e2e, backend-api, desktop]
     test: "spec-dashboard/test/session-multi-select.e2e.mjs"
   - name: nested-count-moves-with-selectable-row
@@ -62,5 +57,5 @@ scenarios:
 
 Measured by driving the real dashboard in a browser against an isolated running `spex serve` with a few
 live sessions: right-click a row, read the popped menu and the resulting select bar / checkboxes from the
-live DOM, drag the rendered row body, and open the archive confirmation — comparing the on-screen
+live DOM, drag the rendered row body, and open the close confirmation — comparing the on-screen
 result and outgoing reparent payload to `expected`, never by reasoning about the source.

@@ -97,9 +97,12 @@ text is served by the id-addressed record detail, which reads the stored prompt 
 a receipt for one ask and keeps it whole. So the list body stays proportional to the NUMBER of sessions
 rather than to the total length of what was asked — otherwise one long ask outweighs the entire rest of the
 board, on every poll and in the last-known-row cache, to serve a field no list reader consults.
-Terminal close removes that record by design, so its append-only audit ledger is not folded into the board or
-revived as a second session type. It may answer one id-addressed post-close diagnostic with the durable target
-id and close time; a malformed or ambiguous ledger is unknown, never a plausible absence.
+Close retains that record as the one archived session source and records its `closedAt` beside the archived bit in
+the same atomic record publication. The public projection carries the timestamp without a timeline read, so a
+complete archive index remains proportional only to record count. Older archived records with no timestamp project
+`null`; creation time, manual sort order, and filesystem metadata never impersonate the missing close fact.
+An archived record is a retained, read-only fact: lifecycle writers reject it with an explicit closed/read-only
+reason rather than attempting to read its removed worktree and leaking a materialization error.
 The sibling `launch` artifact is the authoritative resolved first-turn payload, not a best-effort prompt cache.
 The shared layer preserves it across queue drain and failed launch, blocks later delivery debt behind it, and
 hands it back only through the resolved adapter's no-native-identity recovery seam. The adapter completes launch
@@ -165,19 +168,19 @@ A text send delegates its record-locked append-plus-queue acceptance to `@spexco
 agent-attributed send also fences its named sender in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
 transport witness. Its proven-unreachable answer becomes a stranded refusal only when this layer's independent
 registered-pid witness still proves the worker alive; an unproven transport remains queue-retryable and does not
-change liveness. Close keeps the sender lock through terminal record removal and then publishes the delivery
-queue's sender-revocation marker, so a stale process cannot append after close returns. Both locks release
+change liveness. Close keeps the sender lock while it publishes the retained archived record, so a stale process
+cannot append after close returns. Both locks release
 before the adapter poke: a native turn can synchronously invoke lifecycle hooks that re-enter the record writer,
 so no record lock spans the handover. The delivery queue's own lock is what makes a handover exactly-once and
 recognizes revoked unhanded debt, while normal adapter/runtime guards remain the authority for concurrent
 lifecycle operations. Direct close asks the resolved adapter whether the current record derives one exact native
 target identity. That adapter capability, not the presence of the storage alias `harness_session_id`, selects the
-ordinary interrupt/archive/cold-close path; no lifecycle branch names a harness or treats lifecycle status or
+ordinary exact cold-stop/close path; no lifecycle branch names a harness or treats lifecycle status or
 liveness as identity. A record with no derivable native target remains on the narrower unbound-residue retirement
 path and fails closed while any local worker ownership is live or unproven.
 
-Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
-cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory
+Close may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
+cold commit, and through archive-ref publication. This shared layer forwards that one in-memory
 object without inspecting it, persisting it, or exposing a recursive/public option; the adapter revalidates its own
 receipt before the stop guard may admit a known native descendant collection. If publication fails after cold commit,
 the same object authorizes adapter compensation of the original collection. A missing, forged, stale, or changed

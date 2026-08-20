@@ -59,8 +59,8 @@ on an unexpected close it retries with **capped, escalating backoff**, indefinit
 visible **"reconnecting…"** state — the pane tracks a small `connecting | open | reconnecting` health and
 shows it in a corner caption, so recovery is **loud**, never a silently dead pane. A connection that
 stays healthy a few seconds **resets** the backoff; a flapping server **escalates** to the cap instead of
-hammering it. The single **intentional** close — the pane unmounting, when a session goes offline and the
-header swaps in the relaunch panel — stops reopening for good.
+hammering it. The single **intentional** close — the terminal viewer standing down when a session goes offline
+and Conversation takes ownership of the base surface — stops reopening for good.
 
 Recovery is a **stateless reopen**, not a resync or sequence protocol. The endpoint is addressed by a stable
 session id and the backend holds all state in tmux, so a reopen is answered exactly like a first connect: a

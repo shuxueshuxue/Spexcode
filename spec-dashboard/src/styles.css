@@ -1050,8 +1050,9 @@ a.scenario-count:hover { background: var(--panel2); }
      A persisted wide list yields at the viewport edge: desktop never squeezes the terminal below the toolbar's
      280px minimum usable lane. */
   flex: 0 0 204px; border-right: 1px solid var(--line); background: var(--panel);
-  max-width: calc(100% - 280px); display: flex; flex-direction: column; overflow-y: auto;
+  max-width: calc(100% - 280px); min-height: 0; display: flex; flex-direction: column; overflow: hidden;
 }
+.si-board-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);
@@ -1141,13 +1142,8 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-/* the archive star ([[archive]]): muted at rest, amber while you are in the archive — a different hue from
-   New's blue, so "where am I looking" never reads as "what am I making". */
-.si-pill.shelf { color: var(--ink2); gap: 5px; }
-.si-pill.shelf:hover { color: var(--yellow); }
-.si-pill.shelf.on { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 16%, var(--panel2)); border-color: var(--yellow); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
-/* multi-select bar ([[session-multi-select]]) — a live count plus adjacent icon-only archive/close actions. */
+/* multi-select bar ([[session-multi-select]]) — a live count plus its adjacent icon-only close action. */
 .si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-selcount { flex: 1; font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); }
 .si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
@@ -1185,6 +1181,32 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
    muted at rest, inking blue on hover. Momentary (opens the palette), so it never wears an .on state. */
 .si-pill.search { color: var(--ink2); }
 .si-pill.search:hover { color: var(--blue); }
+
+.si-archive-drawer {
+  flex: 0 0 auto; display: flex; flex-direction: column; background: var(--panel);
+  border-top: 1px solid var(--line); font-family: var(--mono); overflow: visible;
+}
+.si-archive-preview { overflow: visible; }
+.si-archive-preview-row, .si-archive-all {
+  width: 100%; height: 30px; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 7px;
+  padding: 0 10px 0 12px; color: var(--ink2); background: transparent; border: 0; border-bottom: 1px solid var(--line);
+  font: inherit; font-size: var(--type-caption); text-align: left; cursor: pointer;
+}
+.si-archive-preview-row span, .si-archive-all span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-archive-preview-row:hover, .si-archive-all:hover { color: var(--ink); background: var(--panel2); }
+.si-archive-all { height: 32px; color: var(--blue); font-size: var(--type-meta); }
+.si-archive-bar { height: 36px; display: flex; align-items: stretch; color: var(--ink2); transition: background .12s, color .12s; }
+.si-archive-bar.drop-target { color: var(--green); background: color-mix(in srgb, var(--green) 14%, var(--panel2)); box-shadow: inset 0 0 0 1px var(--green); }
+.si-archive-toggle, .si-archive-label {
+  display: flex; align-items: center; color: inherit; background: transparent; border: 0; font: inherit; cursor: pointer;
+}
+.si-archive-toggle { flex: 0 0 32px; justify-content: center; padding: 0; }
+.si-archive-toggle svg { transition: transform .14s ease; }
+.si-archive-drawer.open .si-archive-toggle svg { transform: rotate(90deg); }
+.si-archive-label { flex: 1; min-width: 0; gap: 8px; padding: 0 12px 0 0; text-align: left; }
+.si-archive-label span { flex: 1; }
+.si-archive-label strong { color: var(--muted); font-size: var(--type-caption); font-weight: var(--weight-semibold); }
+.si-archive-toggle:hover, .si-archive-label:hover { color: var(--blue); }
 /* the Forum pill reads as a secondary top action beside New: muted at rest, inking blue on hover/select so
    New stays the primary blue action. Its glyph is a monochrome inline SVG (currentColor), never an emoji. */
 .si-pill.forum { color: var(--ink2); }
@@ -1583,6 +1605,39 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 
 .si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 
+.si-archive-page { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.si-archive-head {
+  flex: 0 0 auto; min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 14px 24px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--paper);
+}
+.si-archive-head > div { min-width: 0; }
+.si-archive-head h1 { margin: 0; color: var(--ink); font-size: var(--type-title); line-height: var(--leading-ui); letter-spacing: var(--tracking-normal); }
+.si-archive-head > div > span { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
+.si-archive-search {
+  width: min(420px, 52%); height: 34px; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+  padding: 0 10px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 5px;
+}
+.si-archive-search:focus-within { color: var(--blue); border-color: var(--blue); }
+.si-archive-search input { flex: 1; min-width: 0; padding: 0; color: var(--ink); background: transparent; border: 0; outline: 0; font: var(--type-control)/var(--leading-ui) var(--mono); }
+.si-archive-index { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px 32px; }
+.si-archive-group { max-width: 1040px; margin: 0 auto; }
+.si-archive-date {
+  position: sticky; top: 0; z-index: 2; margin: 0 -2px; padding: 14px 2px 7px;
+  color: var(--ink2); background: var(--paper); border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: var(--type-meta); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal);
+}
+.si-archive-page-row {
+  width: 100%; min-height: 44px; box-sizing: border-box; display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(100px, .55fr) auto 18px; align-items: center; gap: 16px;
+  padding: 7px 8px; color: var(--ink2); background: transparent; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  text-align: left; cursor: pointer;
+}
+.si-archive-page-row:hover { background: var(--panel2); color: var(--ink); }
+.si-archive-row-title, .si-archive-row-node { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-archive-row-title { font-family: var(--mono); font-size: var(--type-control); }
+.si-archive-row-node, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
+.si-archive-empty { padding: 18vh 24px; color: var(--muted); font-family: var(--mono); text-align: center; }
+
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
@@ -1928,13 +1983,6 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   overflow: hidden !important;
   background: var(--term-bg) !important;
 }
-/* Text command buttons remain for roomy pane actions such as the offline relaunch panel. */
-.si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: var(--type-meta); }
-.si-act:hover { border-color: var(--blue); color: var(--blue); }
-.si-act.go { border-color: var(--blue); color: var(--blue); }
-.si-act.go:hover { background: var(--blue); color: var(--paper); }
-.si-act.big { padding: 8px 18px; font-size: var(--type-body); margin-top: 8px; }
-
 .sc-red    { --sc: var(--red); }
 .sc-blue   { --sc: var(--blue); }
 .sc-green  { --sc: var(--green); }
@@ -1955,17 +2003,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-tool:disabled:hover { background: color-mix(in srgb, var(--sc) 8%, transparent); border-color: color-mix(in srgb, var(--sc) 72%, var(--line)); }
 .si-tool.command.on { background: var(--sc); color: var(--paper); border-color: var(--sc); }
 
-/* offline / lifecycle placeholder body */
-.si-offline { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; }
-.si-offline-msg { font-size: var(--type-title); color: var(--ink2); }
-.si-offline-sub { font-size: var(--type-control); color: var(--muted); max-width: 460px; line-height: var(--leading-body); }
-.si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 .si-offline-err { margin-top: 10px; font-size: var(--type-control); color: var(--yellow); max-width: 460px; line-height: var(--leading-relaxed); border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
-.si-offline > .si-action-outcome { margin-top: 10px; max-width: 460px; font-size: var(--type-control); padding: 8px 10px; }
-/* the shelf card ([[archive]]) reuses the offline panel's geometry — same centred column, same type scale — so
-   the two read as one family of "this session is in a state" cards. Only the mark and the action row differ. */
-.si-shelf-card .si-shelf-mark { color: var(--yellow); display: flex; margin-bottom: 2px; }
-.si-shelf-acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone
@@ -2149,6 +2187,19 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .m-ev-glyph { flex: none; }
 .m-ev-word { font-weight: var(--weight-bold); }
 .m-ev-time { margin-left: auto; flex: none; font-size: var(--type-caption); color: var(--muted); }
+.m-transcript-toggle { display: flex; justify-content: flex-end; width: 100%; margin: 3px 0 0; padding: 0 2px; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; }
+.m-transcript-toggle:hover { color: var(--blue); }
+.m-transcript-state, .m-transcript-empty, .m-transcript-truncated { margin: 5px 0 0 14px; padding: 6px 8px; color: var(--muted); background: var(--panel); border-left: 2px solid var(--line); font-size: var(--type-meta); overflow-wrap: anywhere; }
+.m-transcript-state.is-error { color: var(--red); }
+.m-transcript-flow { margin: 5px 0 0 14px; padding: 7px 9px; background: var(--panel); border-left: 2px solid var(--blue); }
+.m-transcript-turn { padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.m-transcript-turn:last-child { border-bottom: 0; }
+.m-transcript-role { margin-bottom: 2px; color: var(--muted); font-size: var(--type-caption); text-transform: uppercase; }
+.m-transcript-text { color: var(--ink2); overflow-wrap: anywhere; }
+.m-transcript-tool { margin-top: 5px; border: 1px solid var(--line); }
+.m-transcript-tool summary { display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; color: var(--ink2); cursor: pointer; font-size: var(--type-meta); }
+.m-transcript-tool summary span:last-child { color: var(--muted); white-space: nowrap; }
+.m-transcript-tool pre { max-height: 220px; overflow: auto; margin: 0; padding: 6px; color: var(--ink); background: var(--term-bg); font: inherit; font-size: var(--type-meta); white-space: pre-wrap; overflow-wrap: anywhere; }
 .m-ev-note {
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
   overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
@@ -2214,23 +2265,35 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .rich-text .katex-error { color: var(--red); white-space: pre-wrap; }
 
 /* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
-.m-offline, .m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
-.m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+.m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-senderr { color: var(--red); }
 .m-copy-status { color: var(--muted); }
 .m-copy-status.failed { color: var(--red); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.m-composer > .m-senderr { padding: 0 0 7px; }
 .m-composer-line { display: flex; align-items: stretch; gap: 8px; }
 .m-input {
   flex: 1; min-width: 0; min-height: 38px; max-height: min(28cqh, 240px); resize: none; padding: 9px 10px; font-family: var(--mono); font-size: var(--type-subtitle);
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; outline: none;
 }
 .m-input:focus { border-color: var(--blue); }
+.m-input:disabled { color: var(--muted); background: var(--panel2); cursor: default; }
 .m-send {
   flex: none; height: 38px; padding: 0 16px; font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-bold);
   color: var(--paper); background: var(--blue); border: none; border-radius: 8px; cursor: pointer;
 }
 .m-send:disabled { opacity: .45; cursor: default; }
+.m-coldline {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-control);
+}
+.m-coldline-action {
+  flex: none; padding: 4px 9px; color: var(--blue); font: inherit; background: transparent;
+  border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+}
+.m-coldline-action:hover, .m-coldline-action:focus-visible { border-color: var(--blue); outline: none; }
+.m-coldline-action:disabled { opacity: .45; cursor: default; }
+.m-composer > .si-action-outcome { margin-top: 7px; }
 
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: var(--type-body); }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }

@@ -21,10 +21,12 @@ const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
 const spexPackage = dirname(dirname(spex))
+const dependencyRoot = [spexPackage, resolve(spexPackage, '..'), resolve(spexPackage, '..', '..', '..')]
+  .find((candidate) => existsSync(join(candidate, 'node_modules', 'tsx', 'dist', 'cli.mjs')))
 const cli = join(spexPackage, 'src', 'cli.ts')
-const tsxCli = join(spexPackage, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+const tsxCli = dependencyRoot ? join(dependencyRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs') : ''
 if (!sessionId || !siblingId || !guardId || !noPaneId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, GUARD_SESSION=<blocked archive leg>, and NO_PANE_SESSION=<idle interactive Codex control> are required')
-for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'NO_PANE_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
+for (const name of ['SPEXCODE_HOME', 'SPEXCODE_TMUX', 'TARGET_PID_FILE', 'NO_PANE_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
 if (!dist || !existsSync(dist)) throw new Error('DIST=<prebuilt dashboard dist> is required')
@@ -103,8 +105,12 @@ const sharedPidBefore = processMarker(process.env.SHARED_PID_FILE)
 const sharedSocketBefore = socketMarker(process.env.SHARED_SOCKET)
 const siblingBefore = (await get(true)).find((s) => s.id === siblingId)
 assert.ok(siblingBefore, 'real sibling must be present before archive')
-const startMonitor = (verb) => {
-  const child = spawn(process.execPath, [tsxCli, cli, 'session', verb, sessionId, '--interval', '5', ...(verb === 'wait' ? ['--timeout', '60'] : []), '--api', base], { stdio: ['ignore', 'pipe', 'pipe'] })
+const startMonitor = () => {
+  const monitorEnv = { ...process.env, SPEXCODE_API_URL: '' }
+  delete monitorEnv.SPEXCODE_SESSION_ID
+  const child = spawn(process.execPath, [tsxCli, cli, 'session', 'watch', 'stream', sessionId, '--idle', '--interval', '1'], {
+    cwd: fixtureRoot, env: monitorEnv, stdio: ['ignore', 'pipe', 'pipe'],
+  })
   let stdout = ''; let stderr = ''
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
@@ -120,32 +126,40 @@ const waitClosed = async (child) => {
     ])
   } finally { clearTimeout(timer) }
 }
-const watch = startMonitor('watch')
-const wait = startMonitor('wait')
+const watch = startMonitor()
 await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
 
 const browser = await chromium.launch({ executablePath: chromiumPath, headless: true })
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, recordVideo: { dir: out, size: { width: 1280, height: 800 } } })
 const page = await context.newPage()
-const pageErrors = []; const consoleErrors = []
+const pageErrors = []; const consoleErrors = []; const failedResponses = []
 page.on('pageerror', (error) => pageErrors.push(String(error)))
 page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()) })
+page.on('response', (response) => {
+  if (response.status() >= 400) failedResponses.push({ status: response.status(), path: new URL(response.url()).pathname })
+})
 let failure
 try {
   narrate('▶ archive-guard-failure-visible · active native turn refuses without mutation')
   const guardBefore = await get(true)
-  const guardConsoleStart = consoleErrors.length
+  const guardFailureStart = failedResponses.length
   await page.goto(`${base}/#/sessions/${guardId}`, { waitUntil: 'domcontentloaded' })
   const guardRow = page.locator(`.si-item[data-sid="${guardId}"]`)
   await guardRow.waitFor({ state: 'visible', timeout: 30_000 })
   await guardRow.click({ button: 'right' })
   const guardArchive = page.locator('.sess-menu-item').filter({ hasText: /archive/i }).first()
   await guardArchive.waitFor({ state: 'visible' }); await guardArchive.click()
-  const guardError = page.locator('[role="alert"].si-offline-err').first()
+  const guardConfirm = page.locator('.sess-rename-modal .sess-rename-btn.danger').filter({ hasText: /archive/i }).first()
+  await guardConfirm.waitFor({ state: 'visible' }); await guardConfirm.click()
+  const guardError = page.locator('[role="alert"].tn-notice').first()
   await guardError.waitFor({ state: 'visible', timeout: 10_000 })
   assert.match((await guardError.textContent()) || '', /refus|ownership|unowned|turn|probe/i)
-  const guardConsoleErrors = consoleErrors.splice(guardConsoleStart)
-  assert.ok(guardConsoleErrors.every((message) => /409|Conflict/i.test(message)), `unexpected guard console errors: ${guardConsoleErrors.join('; ')}`)
+  const guardFailures = failedResponses.slice(guardFailureStart)
+  assert.ok(guardFailures.some((failure) => failure.status === 409 && failure.path === `/api/sessions/${guardId}/archive`),
+    `guard archive did not return the expected 409: ${JSON.stringify(guardFailures)}`)
+  assert.ok(guardFailures.every((failure) => (failure.status === 404 && failure.path === '/projects')
+    || (failure.status === 409 && failure.path === `/api/sessions/${guardId}/archive`)),
+  `unexpected guard HTTP failures: ${JSON.stringify(guardFailures)}`)
   const guardAfter = (await get(true)).find((s) => s.id === guardId)
   const guardRowBefore = guardBefore.find((s) => s.id === guardId)
   assert.deepEqual({ archived: guardAfter?.archived, status: guardAfter?.status, liveness: guardAfter?.liveness }, { archived: guardRowBefore?.archived, status: guardRowBefore?.status, liveness: guardRowBefore?.liveness }, 'guard refusal must not mutate the guarded record projection')
@@ -165,10 +179,6 @@ try {
   await waitFor(() => getTarget(true), (s) => s?.archived === true && s?.status === 'offline' && s?.liveness === 'offline', 'cold archived history row')
   // Capacity scheduling is intentionally unclaimed by this round trip; its queued-before control is a separate
   // scenario. Keeping the archive proof independent avoids treating a missing control as a false release.
-  await waitClosed(wait.child)
-  const waitTranscript = wait.text()
-  assert.match(waitTranscript.stdout, /offline/, `wait missed offline archive: ${JSON.stringify(waitTranscript)}`)
-  assert.doesNotMatch(waitTranscript.stdout + waitTranscript.stderr, /gone|no such \(living\)/i)
   const defaultRows = await get(false)
   assert.equal(defaultRows.some((s) => s.id === sessionId), false, 'cold target must leave default sessions')
   assert.equal(defaultRows.length, defaultCountBefore - 1, 'cold target must leave the default session count')
@@ -197,6 +207,17 @@ try {
   if (await shelf.getAttribute('aria-pressed') !== 'true') await shelf.click()
   await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
   assert.equal(await page.locator('.si-zone').count(), 0, 'archive shelf must be flat with no status zones')
+  const archivedRow = page.locator(`.si-item[data-sid="${sessionId}"]`)
+  await archivedRow.waitFor({ state: 'visible', timeout: 30_000 })
+  await archivedRow.click()
+  const archivedTimeline = await get(`/api/sessions/${sessionId}/timeline`)
+  const archivedConversation = page.locator('.tl-chat:visible')
+  await archivedConversation.waitFor({ state: 'visible', timeout: 30_000 })
+  assert.ok(archivedTimeline.events.length > 0, 'real archived target must retain timeline history')
+  assert.equal(await archivedConversation.locator('.m-ev:not(.m-ev-prompt)').count(), archivedTimeline.events.length, 'archive conversation must render the API timeline instead of a shelf card')
+  assert.equal(await page.locator('.si-shelf-card').count(), 0, 'archive card must not replace Conversation')
+  assert.equal(await archivedConversation.locator('.m-input').isDisabled(), true, 'archived composer must be disabled')
+  await archivedConversation.locator('.m-coldline-action').filter({ hasText: /restore/i }).waitFor({ state: 'visible' })
   frame('📷 flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
 
   const nonce = `sibling-archive-proof-${Date.now()}`
@@ -246,7 +267,7 @@ try {
     const sawStarting = () => stateTrace.includes('starting') || runtimeTrace.some((sample) => sample.tmux === true && sample.pid === null)
     const tracePromise = waitFor(async () => { const s = await getTarget(true); if (s) stateTrace.push(s.status); return s }, (s) => s?.archived === false && s?.liveness === 'online' && sawStarting(), 'resume starting -> online', 30_000, 10)
     const resumeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/sessions/${sessionId}/resume` && r.request().method() === 'POST')
-    await page.locator('.si-shelf-card .si-act.go').click(); assert.equal((await resumeResponse).ok(), true)
+    await page.locator('.m-coldline-action:visible').click(); assert.equal((await resumeResponse).ok(), true)
     resumed = await tracePromise
     assert.ok(sawStarting(), `resume trace lacked API or runtime starting witness: ${stateTrace.join(' -> ')}`)
   } finally { clearInterval(runtimeTimer) }
@@ -283,24 +304,24 @@ try {
   assert.ok((afterCloseResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === siblingId && ref.threadId === siblingBeforeRef.threadId), 'cold close leaves the sibling loaded reference unchanged')
   await page.locator(`.si-item[data-sid="${sessionId}"]`).waitFor({ state: 'detached', timeout: 30_000 })
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+  await waitFor(watch.text, (transcript) => /closed/.test(transcript.stdout), 'watch stream true close')
   watch.child.kill('SIGTERM'); await waitClosed(watch.child)
   const watchTranscript = watch.text()
   assert.equal((watchTranscript.stdout.match(/\[spex\] closed/g) ?? []).length, 1, watchTranscript.stdout)
   writeFileSync(join(out, 'watch.log'), watchTranscript.stdout + watchTranscript.stderr)
-  writeFileSync(join(out, 'wait.log'), waitTranscript.stdout + waitTranscript.stderr)
   frame('📷 cold close removes record, worktree, branch, and shelf row exactly once')
 } catch (error) { failure = error }
 finally {
   if (watch.child.exitCode == null) watch.child.kill('SIGTERM')
-  if (wait.child.exitCode == null) wait.child.kill('SIGTERM')
-  await Promise.all([waitClosed(watch.child), waitClosed(wait.child)]).catch(() => {})
+  await waitClosed(watch.child).catch(() => {})
   writeFileSync(join(out, 'watch.log'), `${watch.text().stdout}${watch.text().stderr}`)
-  writeFileSync(join(out, 'wait.log'), `${wait.text().stdout}${wait.text().stderr}`)
   const current = await getTarget(true).catch(() => null)
   if (current?.archived) await post(`/api/sessions/${sessionId}/resume`).catch(() => {})
 }
 const video = page.video(); await context.close(); const videoPath = await video.path(); await browser.close()
-const browserErrors = [...pageErrors, ...consoleErrors]
+const unexpectedResponses = failedResponses.filter((response) => !(response.status === 404 && response.path === '/projects')
+  && !(response.status === 409 && response.path === `/api/sessions/${guardId}/archive`))
+const browserErrors = [...pageErrors, ...unexpectedResponses.map((response) => `${response.status} ${response.path}`)]
 if (browserErrors.length && !failure) failure = new Error(`browser errors: ${browserErrors.join('\\n')}`)
 writeFileSync(join(out, 'archive-shelf.timeline.json'), `${JSON.stringify({ events, pageErrors, consoleErrors }, null, 2)}\n`)
 writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, error: failure ? String(failure.stack || failure) : null, sessionId, siblingId, capacityId: capacityId || null, video: videoPath, browserErrors }, null, 2)}\n`)

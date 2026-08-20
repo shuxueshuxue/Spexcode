@@ -18,7 +18,9 @@ related:
 
 `TimelineChat` remains the session's durable conversation: [[session-timeline]] is still the only record of
 what was said and declared. A harness transcript is neither a second conversation nor a durable SpexCode
-record. It is an adapter-local, ephemeral observation of work in progress.
+record. It is an adapter-local observation: the live execution trace is ephemeral, while a status disclosure may
+read a bounded native transcript payload from disk on demand. That payload is never copied into the session record
+or timeline.
 
 The backend derives a current-turn selector from the newest durable human send, then asks the selected adapter
 for exactly one **latest working note** and the normalized tool steps that follow it. The selector is fresh for
@@ -51,3 +53,6 @@ stuck. A non-governed or unknown session is a 404 on both routes.
 
 Pane-backed adapters keep their real terminal as the full live surface. This compact trace is additive to the
 Conversation surface, never a raw-process door or an alternate terminal.
+
+Status entries may disclose their bounded transcript interval lazily. Loading and unavailable states are visible,
+the result is cached per session, and tool rows stay collapsed until a second action discloses their output.

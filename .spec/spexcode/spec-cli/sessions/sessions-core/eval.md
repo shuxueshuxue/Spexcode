@@ -200,18 +200,6 @@ scenarios:
       remains available to retire the record itself.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/session-record-integrity.test.ts
-  - name: close-ledger-remains-a-bounded-diagnostic
-    tags: [cli]
-    description: >
-      In an isolated project runtime, write terminal-close audit facts for one id, then query it by a unique
-      prefix, query an absent prefix, and add a second matching id.
-    expected: >
-      The unique id returns its durable close time, absence remains null, and two matching close facts are a loud
-      ambiguity rather than a guessed answer. The read never creates a session record or a historical board row.
-    test:
-      path: spec-cli/src/sessions.test.ts
-      name: terminal close history distinguishes one closed id from absence and refuses ambiguous facts
-    code: spec-cli/src/sessions.ts
 ---
 
 # sessions-core — measurement

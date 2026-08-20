@@ -343,7 +343,7 @@ export function readCodexExecutionTrace(threadId: string, turn: ExecutionTurn | 
 
 const projectTranscriptRoot = () => join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects')
 
-function projectJsonlPath(threadId: string, root = projectTranscriptRoot()): string | null {
+export function claudeTranscriptPath(threadId: string, root = projectTranscriptRoot()): string | null {
   for (const project of children(root)) {
     const path = join(root, project, `${threadId}.jsonl`)
     try { if (statSync(path).isFile()) return path } catch { /* try next */ }
@@ -352,7 +352,7 @@ function projectJsonlPath(threadId: string, root = projectTranscriptRoot()): str
 }
 
 export function readProjectJsonlExecutionTrace(threadId: string, turn: ExecutionTurn | null, root = projectTranscriptRoot()): ExecutionTrace {
-  return readIncremental(projectJsonlPath(threadId, root), applyProjectJsonlEvent, turn)
+  return readIncremental(claudeTranscriptPath(threadId, root), applyProjectJsonlEvent, turn)
 }
 
 const sessionJsonlRoot = () => join(process.env.SPEXCODE_PI_AGENT_DIR || join(homedir(), '.pi', 'agent'), 'sessions')

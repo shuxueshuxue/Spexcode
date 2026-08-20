@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -77,31 +77,6 @@ function assertIsolatedResumeStore(home: string, id: string): void {
   assert.ok(sessionStoreDir(id).startsWith(`${home}/`), `resume fixture ${id} store escaped isolated SPEXCODE_HOME`)
   assert.ok(runtimeRoot().startsWith(`${home}/`), `resume fixture ${id} runtime root escaped isolated SPEXCODE_HOME`)
 }
-
-test('terminal close history distinguishes one closed id from absence and refuses ambiguous facts', serial, () => {
-  const previousHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-close-history-'))
-  process.env.SPEXCODE_HOME = home
-  try {
-    const root = runtimeRoot()
-    mkdirSync(root, { recursive: true })
-    const first = 'deadbeef-dead-4bee-8bee-deadbeefdead'
-    writeFileSync(join(root, 'session-close-ledger.ndjson'), [
-      JSON.stringify({ action: 'close-authorized', at: '2026-08-11T04:00:00.000Z', target: { id: first } }),
-      JSON.stringify({ action: 'other', at: '2026-08-11T04:01:00.000Z', target: { id: 'ignored' } }),
-    ].join('\n') + '\n')
-    assert.deepEqual(findSessionClosure('deadbeef'), { id: first, closedAt: '2026-08-11T04:00:00.000Z' })
-    assert.equal(findSessionClosure('ffffffff'), null)
-
-    const second = 'deadbeef-cafe-4bee-8bee-deadbeefcafe'
-    writeFileSync(join(root, 'session-close-ledger.ndjson'), `${readFileSync(join(root, 'session-close-ledger.ndjson'), 'utf8')}${JSON.stringify({ action: 'close-authorized', at: '2026-08-11T04:02:00.000Z', target: { id: second } })}\n`)
-    assert.throws(() => findSessionClosure('deadbeef'), /close history for deadbeef is ambiguous/)
-  } finally {
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
-    rmSync(home, { recursive: true, force: true })
-  }
-})
 
 test('command presets compose once at the backend prompt boundary while unknown slash text passes through', serial, () => {
   const presets = [
@@ -1269,272 +1244,8 @@ esac
   }
 })
 
-test('closing a proven-cold archive classifies stale leaf identity before retirement', serial, async () => {
-  const previousHome = process.env.SPEXCODE_HOME
-  const originalShared = codexHarness.sharedRuntimes
-  const originalColdPreflight = codexHarness.coldPreflight
-  const originalColdRetirementPreflight = codexHarness.coldRetirementPreflight
-  const originalCleanup = codexHarness.cleanupRuntime
-  const home = mkdtempSync(join(tmpdir(), 'spex-cold-close-'))
-  process.env.SPEXCODE_HOME = home
-  let residentIds: string[] = ['unrelated-unowned-thread']
-  let coldPreflightCalls = 0
-  let leaf: ReturnType<typeof spawn> | null = null
-  let unrelated: ReturnType<typeof spawn> | null = null
 
-  const writeColdRecord = (id: string, thread: string) => {
-    const dir = sessionStoreDir(id)
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-      session_id: id, governed: true, worktree_path: join(home, `${id}-absent-worktree`), branch: '',
-      node: 'archive', title: '', name: '', parent: '', status: 'asking', proposal: '',
-      merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
-      stopped: true, archived: true, cold_proof: `cold-v1|codex|${id}|thread:${thread}`,
-      adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
-    }, null, 2)}\n`)
-  }
-
-  codexHarness.sharedRuntimes = () => [{
-    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), receiptFile: join(home, 'shared.detached.json'),
-    residency: async () => ({ healthy: true, referenceIds: residentIds }),
-    probe: async () => { throw new Error('cold retirement must not enter the full shared-root ownership guard') },
-  }]
-  codexHarness.coldPreflight = async () => { throw new Error('cold retirement must not use mutation preflight') }
-  codexHarness.coldRetirementPreflight = async (rec) => {
-    coldPreflightCalls++
-    return rec.harnessSessionId && residentIds.includes(rec.harnessSessionId)
-      ? { ok: false, reason: `target adapter thread ${rec.harnessSessionId} is loaded` }
-      : { ok: true, alreadyCold: true }
-  }
-  codexHarness.cleanupRuntime = async () => { throw new Error('cold retirement must not invoke adapter cleanup') }
-
-  try {
-    const safeId = `cold-close-safe-${process.pid}`
-    const safeThread = `target-safe-${process.pid}`
-    writeColdRecord(safeId, safeThread)
-    assert.equal(await closeSession(safeId, { kind: 'unverified-session-claim', id: 'closing-operator' }), true)
-    assert.equal(existsSync(sessionStoreDir(safeId)), false, 'proven-cold target is permanently retired')
-    assert.equal(coldPreflightCalls, 1, 'target collection is checked without the full shared-root guard')
-    const ledger = readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
-    assert.equal(ledger.at(-1)?.action, 'close-authorized', 'the durable close event records that deletion was authorized')
-    assert.deepEqual(ledger.at(-1)?.source, { kind: 'unverified-session-claim', id: 'closing-operator' }, 'terminal close retains only an explicitly unverified caller claim after removing the target record')
-    assert.equal(ledger.at(-1)?.target?.id, safeId, 'terminal close ledger names the retired target')
-
-    const loadedId = `cold-close-loaded-${process.pid}`
-    const loadedThread = `target-loaded-${process.pid}`
-    writeColdRecord(loadedId, loadedThread)
-    residentIds = ['unrelated-unowned-thread', loadedThread]
-    writeFileSync(join(runtimeRoot(), 'codex-app-server-generations.json'), `${JSON.stringify({
-      version: 3, revision: 1, current: 'fixture-generation', pending: null,
-      generations: {
-        'fixture-generation': {
-          state: 'current',
-          endpoint: {
-            id: 'fixture-generation', pidFile: join(home, 'fixture.pid'), receiptFile: join(home, 'fixture.receipt'),
-            logFile: join(home, 'fixture.log'), socketPath: join(home, 'fixture.sock'),
-          },
-        },
-      },
-      bindings: { [loadedId]: { generationId: 'fixture-generation', threadId: loadedThread } },
-    }, null, 2)}\n`)
-    await assert.rejects(closeSession(loadedId), /target adapter thread .* is loaded/)
-    assert.equal(existsSync(sessionRecordPath(loadedId)), true, 'loaded target ambiguity preserves the shelf record')
-    assert.equal(readCodexGenerationLedger(runtimeRoot()).bindings[loadedId]?.phase, undefined,
-      'a rejected close does not strand an online target in the record-removing generation phase')
-    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
-      'a rejected close never writes a terminal-close audit event')
-
-    const writeFixtureGeneration = (bindings: Record<string, { generationId: string; threadId: string }>) => {
-      writeFileSync(join(runtimeRoot(), 'codex-app-server-generations.json'), `${JSON.stringify({
-        version: 3, revision: 1, current: 'fixture-generation', pending: null,
-        generations: {
-          'fixture-generation': {
-            state: 'current',
-            endpoint: {
-              id: 'fixture-generation', pidFile: join(home, 'fixture.pid'), receiptFile: join(home, 'fixture.receipt'),
-              logFile: join(home, 'fixture.log'), socketPath: join(home, 'fixture.sock'),
-            },
-          },
-        },
-        bindings,
-      }, null, 2)}\n`)
-    }
-    residentIds = ['unrelated-unowned-thread']
-    const missingBindingId = `cold-close-missing-binding-${process.pid}`
-    const missingBindingThread = `target-missing-binding-${process.pid}`
-    writeColdRecord(missingBindingId, missingBindingThread)
-    writeFixtureGeneration({})
-    await assert.rejects(closeSession(missingBindingId), /no exact generation binding to close/)
-    assert.equal(existsSync(sessionRecordPath(missingBindingId)), true, 'a missing Codex binding preserves the cold record')
-    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
-      'a missing Codex binding refuses before appending a close-authorized event')
-
-    const mismatchedBindingId = `cold-close-mismatched-binding-${process.pid}`
-    const mismatchedBindingThread = `target-mismatched-binding-${process.pid}`
-    writeColdRecord(mismatchedBindingId, mismatchedBindingThread)
-    writeFixtureGeneration({ [mismatchedBindingId]: { generationId: 'fixture-generation', threadId: 'different-native-thread' } })
-    await assert.rejects(closeSession(mismatchedBindingId), /no exact generation binding to close/)
-    assert.equal(existsSync(sessionRecordPath(mismatchedBindingId)), true, 'a mismatched Codex binding preserves the cold record')
-    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
-      'a mismatched Codex binding refuses before appending a close-authorized event')
-    rmSync(join(runtimeRoot(), 'codex-app-server-generations.json'), { force: true })
-
-    const pidId = `cold-close-pid-${process.pid}`
-    const pidThread = `target-pid-${process.pid}`
-    residentIds = ['unrelated-unowned-thread']
-    writeColdRecord(pidId, pidThread)
-    leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', pidThread], { stdio: 'ignore' })
-    for (let i = 0; i < 50 && !processStartToken(leaf.pid!); i++) await sleep(20)
-    const leafStart = processStartToken(leaf.pid!)!
-    writeFileSync(sessionArtifactPath(pidId, 'agent.pid'), `${leaf.pid}\n`)
-    writeFileSync(sessionArtifactPath(pidId, 'agent.identity.json'), `${JSON.stringify({
-      version: 1, kind: 'session-leaf', sessionId: pidId, pid: leaf.pid, startToken: leafStart,
-    })}\n`)
-    await assert.rejects(closeSession(pidId), /target leaf PID .* live or recycled/)
-    assert.ok(processStartToken(leaf.pid!), 'ambiguous target PID is left alive; cold close sends no signal')
-    assert.equal(existsSync(sessionRecordPath(pidId)), true, 'PID ambiguity preserves the shelf record')
-
-    const reusedId = `cold-close-reused-${process.pid}`
-    const reusedThread = `target-reused-${process.pid}`
-    writeColdRecord(reusedId, reusedThread)
-    unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-    for (let i = 0; i < 50 && !processStartToken(unrelated.pid!); i++) await sleep(20)
-    writeFileSync(sessionArtifactPath(reusedId, 'agent.pid'), `${unrelated.pid}\n`)
-    writeFileSync(sessionArtifactPath(reusedId, 'agent.identity.json'), `${JSON.stringify({
-      version: 1, kind: 'session-leaf', sessionId: reusedId, pid: unrelated.pid,
-      startToken: `retired-${processStartToken(unrelated.pid!)}`,
-    })}\n`)
-    assert.equal(await closeSession(reusedId), true, 'a receipt mismatch proves PID reuse without relying on argv')
-    assert.equal(existsSync(sessionRecordPath(reusedId)), false, 'receipt-proven PID reuse does not strand a cold row')
-    assert.ok(processStartToken(unrelated.pid!), 'cold retirement never signals the unrelated live process')
-
-    const unknownId = `cold-close-unknown-${process.pid}`
-    writeColdRecord(unknownId, `target-unknown-${process.pid}`)
-    writeFileSync(sessionArtifactPath(unknownId, 'agent.pid'), 'not-a-pid\n')
-    await assert.rejects(closeSession(unknownId), /leaf PID artifact|identity is unknown/)
-    assert.equal(existsSync(sessionRecordPath(unknownId)), true, 'unknown PID identity preserves the shelf record')
-  } finally {
-    codexHarness.sharedRuntimes = originalShared
-    codexHarness.coldPreflight = originalColdPreflight
-    codexHarness.coldRetirementPreflight = originalColdRetirementPreflight
-    codexHarness.cleanupRuntime = originalCleanup
-    if (leaf?.pid && processStartToken(leaf.pid)) {
-      try { process.kill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
-    }
-    if (unrelated?.pid && processStartToken(unrelated.pid)) {
-      try { process.kill(unrelated.pid, 'SIGKILL') } catch { /* already exited */ }
-    }
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
-    rmSync(home, { recursive: true, force: true })
-  }
-})
-
-test('archive returns the exact adapter receipt when filing fails after cold runtime committed', serial, async () => {
-  const liveBefore = liveSessionsCensus()
-  const previousHome = process.env.SPEXCODE_HOME
-  const originalShared = codexHarness.sharedRuntimes
-  const originalColdPreflight = codexHarness.coldPreflight
-  const originalColdRuntime = codexHarness.coldRuntime
-  const originalRestoreRuntime = codexHarness.restoreRuntime
-  const originalCleanup = codexHarness.cleanupRuntime
-  const home = mkdtempSync(join(tmpdir(), 'spex-archive-outer-compensation-'))
-  const id = `archive-outer-compensation-${process.pid}`
-  const threadId = `archive-outer-thread-${process.pid}`
-  const worktree = join(home, 'worktree')
-  const receipt = Object.freeze({ fixture: 'opaque-adapter-cold-receipt' })
-  let coldReceipt: unknown
-  let restoreReceipt: unknown
-  process.env.SPEXCODE_HOME = home
-  mkdirSync(worktree, { recursive: true })
-  mkdirSync(sessionStoreDir(id), { recursive: true })
-  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktree, branch: 'node/archive-outer-compensation',
-    node: 'archive', title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '',
-    sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId, stopped: true,
-    archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
-  }, null, 2)}\n`)
-  codexHarness.sharedRuntimes = () => []
-  codexHarness.cleanupRuntime = async () => {}
-  codexHarness.coldPreflight = async () => ({ ok: true, receipt })
-  codexHarness.coldRuntime = async (_rec, actualReceipt) => {
-    coldReceipt = actualReceipt
-    rmSync(sessionRecordPath(id), { force: true })
-    return { ok: true }
-  }
-  codexHarness.restoreRuntime = async (_rec, actualReceipt) => {
-    restoreReceipt = actualReceipt
-    return { ok: true }
-  }
-  try {
-    await assert.rejects(archiveSession(id), /session record disappeared before filing/)
-    assert.equal(coldReceipt, receipt, 'cold commit receives the opaque preflight receipt')
-    assert.equal(restoreReceipt, receipt, 'outer post-cold compensation receives that exact same receipt')
-  } finally {
-    codexHarness.sharedRuntimes = originalShared
-    codexHarness.coldPreflight = originalColdPreflight
-    codexHarness.coldRuntime = originalColdRuntime
-    codexHarness.restoreRuntime = originalRestoreRuntime
-    codexHarness.cleanupRuntime = originalCleanup
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
-    rmSync(home, { recursive: true, force: true })
-    assertLiveSessionsUnchanged(liveBefore, 'archive outer-compensation fixture')
-  }
-})
-
-test('a successful archive clears a prior adapter recovery marker so the cold session can close', serial, async () => {
-  const previousHome = process.env.SPEXCODE_HOME
-  const originalShared = codexHarness.sharedRuntimes
-  const originalColdPreflight = codexHarness.coldPreflight
-  const originalColdRuntime = codexHarness.coldRuntime
-  const originalColdRetirementPreflight = codexHarness.coldRetirementPreflight
-  const originalCleanup = codexHarness.cleanupRuntime
-  const home = mkdtempSync(join(tmpdir(), 'spex-archive-recovery-settle-'))
-  const id = `archive-recovery-settle-${process.pid}`
-  const threadId = `archive-recovery-thread-${process.pid}`
-  const worktree = join(home, 'worktree')
-  process.env.SPEXCODE_HOME = home
-  mkdirSync(worktree, { recursive: true })
-  mkdirSync(sessionStoreDir(id), { recursive: true })
-  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktree, branch: '',
-    node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: 'close', merges: 0, note: '',
-    sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId, stopped: true,
-    archived: false, cold_proof: '', adapter_recovery: 'restore-runtime:older archive compensation timed out',
-    launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
-  }, null, 2)}\n`)
-  codexHarness.sharedRuntimes = () => []
-  codexHarness.cleanupRuntime = async () => {}
-  codexHarness.coldPreflight = async () => ({ ok: true, receipt: Object.freeze({ fixture: 'recovered-cold-receipt' }) })
-  codexHarness.coldRuntime = async () => ({ ok: true })
-  codexHarness.coldRetirementPreflight = async () => ({ ok: true, alreadyCold: true })
-  try {
-    assert.equal(await archiveSession(id), true)
-    const archived = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(archived.archived, true)
-    assert.equal(archived.adapter_recovery, '', 'a fresh cold proof settles an older recovery warning')
-    archived.adapter_recovery = 'restore-runtime:legacy archive marker survived a prior successful cold proof'
-    writeFileSync(sessionRecordPath(id), `${JSON.stringify(archived, null, 2)}\n`)
-    assert.equal(await archiveSession(id), true)
-    const rearchived = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(rearchived.adapter_recovery, '', 'idempotent re-archive repairs an older marker on an otherwise valid cold record')
-    rmSync(worktree, { recursive: true, force: true })
-    assert.equal(await closeSession(id), true)
-    assert.equal(existsSync(sessionStoreDir(id)), false)
-  } finally {
-    codexHarness.sharedRuntimes = originalShared
-    codexHarness.coldPreflight = originalColdPreflight
-    codexHarness.coldRuntime = originalColdRuntime
-    codexHarness.coldRetirementPreflight = originalColdRetirementPreflight
-    codexHarness.cleanupRuntime = originalCleanup
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
-    rmSync(home, { recursive: true, force: true })
-  }
-})
-
-test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
+test('public close files queued and unbound rows without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
@@ -1581,8 +1292,9 @@ test('public close cancels a clean never-launched queue without entering the unr
     const clean = prepare('clean')
     assert.equal(await closeSession(clean.id), true)
     assert.equal(existsSync(clean.path), false, 'queue close removes the prepared worktree')
-    assert.equal(existsSync(sessionStoreDir(clean.id)), false, 'queue close removes record and prepared prompt')
-    assert.equal(execFileSync('git', ['-C', main, 'branch', '--list', clean.branch], { encoding: 'utf8' }).trim(), '', 'queue close removes the prepared branch')
+    assert.equal(existsSync(sessionRecordPath(clean.id)), true, 'queue close retains its record')
+    assert.notEqual(execFileSync('git', ['-C', main, 'branch', '--list', clean.branch], { encoding: 'utf8' }).trim(), '', 'queue close retains the prepared branch')
+    assert.notEqual(execFileSync('git', ['-C', main, 'rev-parse', '--verify', `refs/spex-archive/${clean.id}^{commit}`], { encoding: 'utf8' }).trim(), '', 'queue close publishes its archive ref')
     assert.equal(cleanupCalls, 0, 'never-launched queue close does not invoke adapter cleanup')
 
     const unbound = prepare('unbound')
@@ -1591,7 +1303,8 @@ test('public close cancels a clean never-launched queue without entering the unr
     rmSync(sessionArtifactPath(unbound.id, 'launch'))
     assert.equal(await closeSession(unbound.id), true)
     assert.equal(existsSync(unbound.path), false, 'unbound launch residue close removes the clean worktree')
-    assert.equal(existsSync(sessionStoreDir(unbound.id)), false, 'unbound launch residue close removes its record')
+    assert.equal(existsSync(sessionRecordPath(unbound.id)), true, 'unbound launch residue close retains its record')
+    assert.notEqual(execFileSync('git', ['-C', main, 'branch', '--list', unbound.branch], { encoding: 'utf8' }).trim(), '', 'unbound launch residue close retains its branch')
     assert.equal(cleanupCalls, 1, 'unbound residue cleanup reaches only its adapter-local cleanup seam')
 
     const unboundDirty = prepare('unbound-dirty')
@@ -1599,15 +1312,17 @@ test('public close cancels a clean never-launched queue without entering the unr
     writeFileSync(sessionRecordPath(unboundDirty.id), `${JSON.stringify({ ...dirtyRaw, status: 'active', launch_owner: '' }, null, 2)}\n`)
     rmSync(sessionArtifactPath(unboundDirty.id, 'launch'))
     writeFileSync(join(unboundDirty.path, 'uncommitted.txt'), 'owned work\n')
-    await assert.rejects(closeSession(unboundDirty.id), /unbound worktree has dirty work/)
-    assert.equal(existsSync(sessionRecordPath(unboundDirty.id)), true, 'dirty unbound residue preserves its record')
-    assert.equal(existsSync(unboundDirty.path), true, 'dirty unbound residue preserves its worktree')
+    assert.equal(await closeSession(unboundDirty.id), true)
+    assert.equal(execFileSync('git', ['-C', main, 'show', `refs/spex-archive/${unboundDirty.id}:uncommitted.txt`], { encoding: 'utf8' }), 'owned work\n', 'dirty unbound work is preserved in its archive ref')
+    assert.equal(existsSync(sessionRecordPath(unboundDirty.id)), true, 'dirty unbound residue retains its record')
+    assert.equal(existsSync(unboundDirty.path), false, 'dirty unbound residue removes its filed worktree')
 
     const dirty = prepare('dirty')
     writeFileSync(join(dirty.path, 'uncommitted.txt'), 'owned work\n')
-    await assert.rejects(closeSession(dirty.id), /prepared worktree has dirty work/)
-    assert.equal(existsSync(sessionRecordPath(dirty.id)), true, 'dirty-work ambiguity preserves the queued record')
-    assert.equal(existsSync(dirty.path), true, 'dirty-work ambiguity preserves the worktree')
+    assert.equal(await closeSession(dirty.id), true)
+    assert.equal(execFileSync('git', ['-C', main, 'show', `refs/spex-archive/${dirty.id}:uncommitted.txt`], { encoding: 'utf8' }), 'owned work\n', 'dirty queued work is preserved in its archive ref')
+    assert.equal(existsSync(sessionRecordPath(dirty.id)), true, 'dirty queued close retains its record')
+    assert.equal(existsSync(dirty.path), false, 'dirty queued close removes its filed worktree')
 
     const threaded = prepare('threaded', `unexpected-thread-${process.pid}`)
     await assert.rejects(closeSession(threaded.id), /record has a target thread or is no longer queued/)
@@ -1620,8 +1335,9 @@ test('public close cancels a clean never-launched queue without entering the unr
 
     const ahead = prepare('ahead')
     execFileSync('git', ['-c', 'user.name=Queue Close Fixture', '-c', 'user.email=queue-close@example.test', '-C', ahead.path, 'commit', '--allow-empty', '-q', '-m', 'fixture: owned queue work'])
-    await assert.rejects(closeSession(ahead.id), /prepared branch is 1 commit\(s\) ahead/)
-    assert.equal(existsSync(sessionRecordPath(ahead.id)), true, 'ahead-work ambiguity preserves the queued record')
+    assert.equal(await closeSession(ahead.id), true)
+    assert.equal(existsSync(sessionRecordPath(ahead.id)), true, 'ahead queued close retains its record')
+    assert.notEqual(execFileSync('git', ['-C', main, 'branch', '--list', ahead.branch], { encoding: 'utf8' }).trim(), '', 'ahead queued close retains its branch')
 
     const socket = prepare('socket')
     const socketPath = stampRvSock(socket.id, home)
@@ -1637,14 +1353,6 @@ test('public close cancels a clean never-launched queue without entering the unr
       rmSync(socketPath, { force: true })
     }
 
-    const deletionFailure = prepare('deletion-failure')
-    chmodSync(sessionStoreDir(deletionFailure.id), 0o500)
-    try {
-      await assert.rejects(closeSession(deletionFailure.id), /session record\/prompt removal failed/)
-      assert.equal(existsSync(sessionStoreDir(deletionFailure.id)), true, 'close cannot report success after incomplete store/prompt removal')
-    } finally {
-      chmodSync(sessionStoreDir(deletionFailure.id), 0o700)
-    }
   } finally {
     codexHarness.sharedRuntimes = originalShared
     codexHarness.cleanupRuntime = originalCleanup
@@ -1770,7 +1478,7 @@ test('launchPreflight refuses a launch that cannot succeed, naming which fact se
   const base: SessRec = {
     session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
     title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, note: null,
-    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false, closedAt: null,
     launcher: null, launchCmd: '/bin/true', launchOwner: null,
   }
   try {
@@ -1820,7 +1528,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+      harness: 'claude', harnessSessionId: null, stopped: false, archived: false, closedAt: null,
       launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
@@ -1918,7 +1626,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   const base: SessRec = {
     session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
     name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
-    createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, launcher: 'codex', launchCmd: 'codex',
+    createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, closedAt: null, launcher: 'codex', launchCmd: 'codex',
     launchOwner: publicAuthority,
   }
   assert.equal(rawLifecycleStatus(base), OWNED_QUEUE_RAW_STATUS)

@@ -12,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..', '..')
 const cliRoot = join(root, 'spec-cli')
 const dashboardRoot = join(root, 'spec-dashboard')
-const modules = join(dashboardRoot, 'node_modules')
+const modules = join(root, 'node_modules')
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
@@ -131,14 +131,11 @@ try {
     window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
   })
   page = await context.newPage()
-  let archiveRequests = 0
   let closeRequests = 0
   page.on('request', (request) => {
-    if (request.method() === 'POST' && /\/api\/sessions\/[^/]+\/archive$/.test(new URL(request.url()).pathname)) archiveRequests++
     if (request.method() === 'POST' && /\/api\/sessions\/[^/]+\/close$/.test(new URL(request.url()).pathname)) closeRequests++
   })
   await page.route('**/api/graph*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) }))
-  await page.route('**/api/sessions/*/archive', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }))
   await page.route('**/api/sessions/*/close', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }))
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
 
@@ -153,11 +150,11 @@ try {
   await row.click({ button: 'right' })
   await page.getByRole('menuitem', { name: /select/i }).click()
   step('enter multi-select')
-  const archiveButton = page.getByRole('button', { name: /^archive$/i })
-  const closeButton = page.getByRole('button', { name: /^close$/i })
+  const selectBar = page.locator('.si-selbar')
+  const closeButton = selectBar.getByRole('button', { name: /^close$/i })
   assert.equal(await treeRow.locator('> .si-drag-handle').count(), 0, 'the whole row, not a grip, is draggable')
-  assert.equal(await archiveButton.textContent(), '')
   assert.equal(await closeButton.textContent(), '')
+  assert.equal(await selectBar.getByRole('button', { name: /^archive$/i }).count(), 0, 'select bar has no retired archive action')
   const after = { checkbox: await row.locator('.si-check').boundingBox(), count: await count.boundingBox(), headline: await headline.boundingBox() }
   assert.ok(before.count && before.headline && after.checkbox && after.count && after.headline)
   const countShift = after.count.x - before.count.x
@@ -193,23 +190,7 @@ try {
   assert.deepEqual((await reparentRequest).postDataJSON(), { children: [parentId], parent: targetId })
   step('whole-row reparent request sent')
 
-  await archiveButton.click()
-  const bulkArchiveConfirm = page.getByRole('dialog', { name: /archive/i })
-  await bulkArchiveConfirm.waitFor({ state: 'visible' })
-  const bulkArchiveCommit = bulkArchiveConfirm.locator('button.sess-rename-btn.danger')
-  assert.equal(await bulkArchiveCommit.evaluate((button) => document.activeElement === button), true, 'bulk archive confirm focuses its commit button')
-  await page.keyboard.press('Enter')
-  await page.waitForTimeout(100)
-  assert.equal(await bulkArchiveConfirm.count(), 0, 'Enter dismisses the bulk archive confirm')
-  await bulkArchiveConfirm.waitFor({ state: 'detached' })
-  await archiveButton.waitFor({ state: 'detached' })
-  assert.equal(archiveRequests, 1, 'Enter confirms bulk archive')
-  step('Enter confirmed bulk archive')
-
-  await row.click({ button: 'right' })
-  await page.getByRole('menuitem', { name: /select/i }).click()
-  const bulkCloseButton = page.getByRole('button', { name: /^close$/i })
-  await bulkCloseButton.click()
+  await closeButton.click()
   const bulkCloseConfirm = page.getByRole('dialog', { name: /close/i })
   await bulkCloseConfirm.waitFor({ state: 'visible' })
   const bulkCloseCommit = bulkCloseConfirm.locator('button.sess-rename-btn.danger')
@@ -218,25 +199,9 @@ try {
   await page.waitForTimeout(100)
   assert.equal(await bulkCloseConfirm.count(), 0, 'Enter dismisses the bulk close confirm')
   await bulkCloseConfirm.waitFor({ state: 'detached' })
-  await bulkCloseButton.waitFor({ state: 'detached' })
+  await closeButton.waitFor({ state: 'detached' })
   assert.equal(closeRequests, 1, 'Enter confirms bulk close')
   step('Enter confirmed bulk close')
-
-  await row.click({ button: 'right' })
-  const archiveItem = page.getByRole('menuitem', { name: /^archive$/i })
-  assert.ok(await archiveItem.evaluate((item) => item.classList.contains('danger')))
-  await archiveItem.click()
-  const archiveConfirm = page.getByRole('dialog', { name: /archive/i })
-  await archiveConfirm.waitFor({ state: 'visible' })
-  assert.equal(archiveRequests, 1, 'row archive waits for confirmation')
-  const archiveCommit = archiveConfirm.locator('button.sess-rename-btn.danger')
-  assert.equal(await archiveCommit.evaluate((button) => document.activeElement === button), true, 'row archive confirm focuses its commit button')
-  await page.keyboard.press('Enter')
-  await page.waitForTimeout(100)
-  assert.equal(await archiveConfirm.count(), 0, 'Enter dismisses the row archive confirm')
-  await archiveConfirm.waitFor({ state: 'detached' })
-  assert.equal(archiveRequests, 2, 'Enter confirms archive')
-  step('Enter confirmed row archive')
   await page.screenshot({ path: `${out}/select-mode-reparent.png` })
 } finally {
   const video = page?.video()

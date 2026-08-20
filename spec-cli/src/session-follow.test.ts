@@ -41,7 +41,7 @@ const titled = (): Session => ({
   label: 'legacy-node-handle', title: 'current work summary', raw: { name: null, title: 'stored title' },
   parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
   lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null,
-  archived: false, archiveHazard: null, prompt: null, promptPreview: null, created: 0, activity: 'current work summary', sortKey: null, files: [],
+  archived: false, closedAt: null, archiveHazard: null, prompt: null, promptPreview: null, created: 0, activity: 'current work summary', sortKey: null, files: [],
 })
 
 test('follow notifications render the derived title, never the selector label', async () => {

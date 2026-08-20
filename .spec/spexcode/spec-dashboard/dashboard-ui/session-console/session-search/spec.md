@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/address.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/session-archive-drawer.e2e.mjs
 ---
 # session-search
 
@@ -27,7 +28,7 @@ pressed state.
 - **Lead weight.** You chose the session-search entry (`⌥+/` anywhere, or the Sessions Search pill), so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. The graph page's plain `/` chooses the node-search entry and still leads with nodes. This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so every plane stays reachable below its chosen lead.
 - **Empty-query order.** Before a query exists there is no relevance score to invent. Each plane therefore
   keeps its source surface's stable order. The session plane feeds the palette the SAME fully disclosed
-  [[session-nesting]] forest the dashboard list renders: triage zones in dashboard order, newest roots first
+  working-session [[session-nesting]] forest the dashboard list renders: triage zones in dashboard order, newest roots first
   within a zone, and each parent immediately followed by its recursively ordered descendants. The palette
   does not restate those rules or sort session names; it inherits them from the shared forest, so a future
   dashboard ordering change reaches the empty ⌥+/ list without a search-specific repair.
@@ -40,3 +41,8 @@ pressed state.
   on their review surfaces.
 
 **A modal owns the keys** — [[keyboard-nav]]'s standing contract, now realized over the sessions page too. While the palette is open it floats above the sessions page and owns every key; the session interface yields entirely (its own key router stands down) until the palette closes. That this reuse stayed clean — only a lead-order knob plus a shared select branch, no copied palette — is the whole point: a coupling that had forced a second palette would be a smell to fix at the shared component, never to route around.
+
+The session plane contains only the working board projection. Closed rows never enter ⌥+/ results, even when a
+query exactly matches one, and the palette renders no archive-match hint or count. Archive lookup belongs to the
+complete search field on [[session-console]]'s full archive page; each search surface is complete within its own
+place instead of mixing a small working set with an unbounded closed history.

@@ -19,6 +19,20 @@ scenarios:
     related:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx
+  - name: global-search-excludes-archive
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    code: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    related:
+      - spec-dashboard/src/SpecSearch.jsx
+      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/SessionInterface.jsx
+    description: >
+      Close a real session through the dashboard, open the global session-first palette with ⌥+/, and query
+      its exact id after the closed row has appeared in the permanent archive place.
+    expected: >
+      The global palette contains no session row for the closed id and adds no archive match/count hint. Archive
+      lookup remains complete in the full archive page's own search field.
   - name: search-pill-opens-same-palette
     tags: [frontend-e2e, desktop]
     description: >

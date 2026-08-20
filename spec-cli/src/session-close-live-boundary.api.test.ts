@@ -52,7 +52,7 @@ function pidAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true } catch { return false }
 }
 
-test('public direct close reaches deletion only after the live target is cold', { timeout: 30_000 }, async () => {
+test('public direct close removes the worktree only after the live target is cold and filed', { timeout: 30_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-live-close-boundary-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
@@ -67,7 +67,7 @@ test('public direct close reaches deletion only after the live target is cold', 
   const record = join(recordDir, 'session.json')
   const pidFile = join(recordDir, 'agent.pid')
   const socket = join(fixture, 'rendezvous.sock')
-  const capture = join(fixture, 'deletion-boundary.txt')
+  const capture = join(fixture, 'filing-boundary.txt')
   const config = join(fixture, 'agent.json')
   let backend: ChildProcess | null = null
   let agentPid = 0
@@ -150,9 +150,11 @@ setInterval(() => {}, 1000)
     assert.deepEqual(await closed.json(), { ok: true })
     assert.equal(readFileSync(capture, 'utf8'), 'archived=1 cold=1 pid=0 socket=0\n')
     assert.equal(pidAlive(agentPid), false)
-    assert.equal(existsSync(record), false)
+    assert.equal(existsSync(record), true, 'close retains the public record')
+    assert.equal(JSON.parse(readFileSync(record, 'utf8')).archived, true, 'the retained record projects closed')
     assert.equal(existsSync(worktree), false)
-    assert.equal(spawnSync('git', ['for-each-ref', '--format=%(refname:short)', `refs/heads/${branch}`], { cwd: project, encoding: 'utf8' }).stdout.trim(), '')
+    assert.equal(spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], { cwd: project }).status, 0, 'close retains the branch')
+    assert.equal(spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/spex-archive/${id}`], { cwd: project }).status, 0, 'close files the worktree tree before removal')
   } finally {
     await stopChild(backend)
     spawnSync('/usr/bin/tmux', ['-L', tmuxServer, 'kill-server'], { stdio: 'ignore' })

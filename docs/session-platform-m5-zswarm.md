@@ -59,6 +59,31 @@ M0 的 G.1 L09 写着「本仓库没有 production importer……external ZSwarm
 - swarm 分支是否已在 mbp 上以别的名字合并进主干，`NOT-MEASURED`。
 两者都不影响上面的取舍（迁移物只存在于 swarm 分支），但影响最终跨仓落地时的合并目标，落地计划里必须先复测。
 
+## 2.2 跨仓落地计划（机制已实测，等 lane I 证据齐备后执行）
+
+**为什么不能直接在这台机器上 `spex session new` 出一个 z-code session**：`spex session new` 会先跑
+`assertProjectMatch`（`spec-cli/src/sessions.ts:1928-1937`），它向 `SPEXCODE_API_URL` 的 `/api/settings` 取回
+后端所服务的项目并比对调用方项目。本 shell 继承的 `SPEXCODE_API_URL=http://127.0.0.1:8787` 服务的是
+**spexcode** 项目，所以从 z-code 目录调用会被这道守卫正确拦下——它存在的意义正是拦住这个错误。
+另外 z-code **未注册**为本机 SpexCode 项目（`~/.spexcode/projects.json` 只有 spexcode / rocket-delta / hanzi-fate-game）。
+
+**因此落地按这个顺序做，每一步都不写 `/home/jeffry/zcode` 的工作树**：
+
+1. **克隆而非 worktree**：`git clone /home/jeffry/zcode <新路径>`，再 checkout `b9b3fa701`。
+   选 clone 不选 `git worktree add`，是因为后者会往对方仓库的 `.git` 写 worktree 元数据；clone 对它是纯读。
+   （本机 clone 走硬链接，代价可以忽略。）
+2. **给 z-code 项目起一个独立后端**：`env -u SPEXCODE_API_URL PORT=<空闲端口> spex serve`，cwd 在该 clone。
+   `env -u` 与显式 `PORT` 两者缺一不可——本仓 CLAUDE.md 记着这个 footgun：被派发的 shell 会继承
+   `PORT` 与 `SPEXCODE_API_URL`，裸跑 `serve` 会静默绑到继承来的端口并把子进程指向**活着的**后端。
+   起之前先 `ss -tlnH "sport = :<port>"` 确认端口空闲。
+3. **在该后端上开 session**：`SPEXCODE_API_URL=http://127.0.0.1:<port> spex session new …`，
+   基线 `b9b3fa701`（理由见 §2.1：主干上没有被迁移物）。
+4. **停止时按实例停，不按签名停**：本仓 CLAUDE.md 明写每个后端的进程签名完全相同，
+   `pkill -f '…serve'` 会打死错的那个（历史上真打死过线上 :8787）。只按端口找 pid 停。
+
+这套机制我已经逐条实测了依据（守卫代码、projects.json、z-code 的 `mainBranch` 与 remote），
+但**尚未执行**——按既定次序，先收齐 lane I 的证据。
+
 ## 3. 门禁与结果
 
 （施工阶段填写。）

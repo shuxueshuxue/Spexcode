@@ -101,6 +101,12 @@ rather than adding a better one, and the entry says which existing record carrie
 being retracted. An audit that proposes an addition where a subtraction was available has failed its own standard,
 so a corrected proposal is recorded as a correction rather than quietly replaced.
 
+A proposal may branch on how an owner will read a rule, but the branch closes the moment that owner reads it.
+Leaving a settled question written as still open is the same defect as a ledger entry recording work that has
+already landed, and an audit that judges that defect in its material cannot carry it in its own table. So a decided
+proposal is rewritten to the decided path, the examined-and-rejected alternative stays visible with the reason it
+lost, and the correction is recorded as a correction.
+
 Each proposal names the owner who can act on it, because a finding filed against the wrong owner cannot be acted on
 and reads as unowned work. Ownership follows the file the fix touches, not the lane that found the defect: a gap in
 a deletion gate's coverage belongs to that gate's owner even when an unrelated audit proved it, and an evidence

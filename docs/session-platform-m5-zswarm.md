@@ -84,6 +84,29 @@ M0 的 G.1 L09 写着「本仓库没有 production importer……external ZSwarm
 这套机制我已经逐条实测了依据（守卫代码、projects.json、z-code 的 `mainBranch` 与 remote），
 但**尚未执行**——按既定次序，先收齐 lane I 的证据。
 
+## 2.3 两条实测事实改变了"在 z-code 里开 session"的做法，以及一条属于对方的规则
+
+**事实一：`spexcode.json` 不在被迁移的那条分支上。** 逐条查过：`b9b3fa701`（swarm）**没有**、
+`origin/zcode-spec`（主干）**没有**、只有 `codex/swarm-worktree-isolation` 有。swarm 分支上的 `.spec` 只有 **4 个节点**。
+也就是说 **z-code 的 SpexCode 采用本身是分支局部的，而且不在主干上**。
+在一条没有 `spexcode.json`、没有后端、只有 4 个节点的分支上强行 `spex session new`，
+拿到的不会是"一个 z-code session"，只会是一个看起来像的东西。
+
+**因此做法调整（记录为偏离，不是便利）**：独立工作副本用 **clone** —— `/home/jeffry/zcode-m5`，
+分支 `m5/zswarm-protocol-cutover` 基于 `b9b3fa701`；实现由一条**真实 spex session** 承担，
+它的 worktree 是独立的，产出物是那条 z-code 分支。父侧要求的两件事都成立：会话是真的、
+`/home/jeffry/zcode` 的工作树一个字节都不碰（clone 完成后复查：分支、HEAD、dirty 计数全未变）。
+唯一没做到的是"session 的 worktree 本身是 z-code 的"，原因如上，且不影响任何证据。
+
+**事实二：对方仓库自己的规则里有一条关于权限的。** `AGENTS.md:15`：
+
+> 解决问题的时候要深究，是设计缺陷还是 bug……**如果是设计缺陷需要和我沟通，不要自作主张。**
+
+把 ZSwarm 的整个会话持久化层换掉，无论如何都属于设计层变更，不是 bug 修复。跨仓实现已由本 campaign 侧授权，
+所以**工作照做**；但按对方自己的契约，**这条分支是提给 z-code 所有者的提案，不是既成事实**——
+合并进 z-code 需要该所有者的同意，这一条写进落地计划的前置条件，不靠"我们有权限访问文件系统"来代替。
+其余 z-code 契约（先写测试再写代码、注释用中文、spec 留在 docs、完成后提交一个 commit）在实现中一并遵守。
+
 ## 3. 门禁与结果
 
 （施工阶段填写。）

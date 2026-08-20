@@ -56,8 +56,7 @@ export interface OpenOptions {
   now?: () => number
 }
 
-export const PROTOCOL_VERSION = 1
-export { canonicalPreimage, LIMITS, payloadHash } from './canonical.js'
+export { canonicalPreimage, LIMITS, payloadHash, PROTOCOL_VERSION } from './canonical.js'
 export { ProtocolError } from './errors.js'
 export type { ProtocolErrorCode } from './errors.js'
 export { openProtocol } from './engine.js'

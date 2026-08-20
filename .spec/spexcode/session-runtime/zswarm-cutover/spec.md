@@ -27,8 +27,21 @@ protocol stack, running the adopter's own shape — its own absolute database pa
 worker loop — with no product runtime available to lean on. That proof belongs to this milestone whether or not the
 adopter's own repository has migrated yet, because it establishes that the replacement is sufficient.
 
-Removal authority is not the same as removal evidence. The facilities this milestone would retire sit in the
-adopter's repository, so this milestone produces the precise kill list and a replacement already shown to work, and
-stops there. An integrator that edits another product's source because it can reach the filesystem has confused
-access with ownership, and the campaign's own rule against repairing a branch under review is the same rule one
-level up.
+Removal authority is not the same as removal evidence. The facilities this milestone retires sit in the adopter's
+repository, so the work carries through to a real implementation there — a proposal branch on an isolated working
+copy that swaps the legacy dependency for the protocol stack and deletes what it actually replaces — while the
+authority to merge stays with that repository's owner, whose own contract reserves design-level changes to them.
+An integrator that merges another product's source because it can reach the filesystem has confused access with
+ownership. Implementing is not merging, and the milestone closes at the first of those.
+
+Because the adopter installs artifacts this repository builds, the proposal is only meaningful while the two sides
+name the same bytes: the packed tarballs carry their SHA-256 and their originating commit in the adopter's own
+documentation, so the vendored copies are traceable from the repository that holds them rather than only from here.
+Vendoring is transitional and states the condition that ends it; changing where a package installs from must never
+become a runtime fallback.
+
+Failures already present in the adopter's tree are not this milestone's to claim or to disown. Attribution is
+measured — the same tests, byte-identical between base and proposal, run in independently installed trees, compared
+by the identity of the failure set rather than its count — and what that measurement assigns to the base is handed
+back named, not silently fixed and not quietly ignored. A reference scan that reaches only direct callers may
+corroborate such a conclusion but can never carry it.

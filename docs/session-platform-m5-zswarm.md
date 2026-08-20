@@ -250,3 +250,47 @@ diff 相对 base 为 13 files / +1020 / −183。收口判定 **PASS**。
 
 三个 hash 两两不同这件事本身是有意义的：它排除了"用同一个内部 helper 断言三次、冒充三条产品测量"这种做法。
 z-code 侧 `spex eval lint` 的 missing 从 4 降到 1，剩下那 1 条是 base 既有，不属于本次。
+
+## 6. z-code 侧门禁的覆盖边界：跑了什么、没跑什么、哪一条不能声称
+
+把"跑过并通过"和"没跑"和"跑不了所以不能声称"三件事分开写。混成一句"门禁通过"是本 campaign 一路在打的那个毛病。
+
+**跑了且通过：**
+
+- `bootstrap` 与 `adapters` 的 **direct typecheck**：PASS。
+- 新增/拆分文件的 **oxlint**：无 finding。精确改动文件里只报 `create-app.ts` / `app/types.ts` 两处 max-lines，
+  且 base 用同一 oxlint 对这两个文件同样报——是既有超标，不是本提案引入（三个 >400 文件的 base 行数见 §3.4 同法核过）。
+- z-code `spex spec lint`：0 error / 2 warning。
+- 新门实测：adapter 1 file / 3 tests；bootstrap 5 files / 11 tests。
+
+**没跑（不是通过）：**
+
+- **聚合 typecheck / lint 未进入检查**——那个 clone 是裁剪安装，缺 `turbo`，聚合入口根本没跑起来。
+  所以它既不是绿也不是红，是**未执行**。
+
+**跑不了，因此明确不声称：**
+
+- **`spex eval lint --changed` 在 z-code 建立不了 scope**——该 clone 没有本地 `main` ref，
+  changed-scope 无从计算。**不声称它通过。** 全量 `spex eval lint` 的结论另算：
+  只剩 base 既有的 5 malformed / 2 stale / 1 missing，本轮新增的三条已 filing 完毕。
+
+**为什么要这样分**：一个没跑起来的聚合门和一个跑完全绿的门，在最终报告里长得一模一样——都是"没有报错"。
+把它们写成同一句话，等于把"我们没看"包装成"那里没问题"。落地决定要建立在知道哪些地方我们确实没看过的基础上。
+
+## 7. J-7 的 fail-first 与拆分保真度（最终状态）
+
+fail-first 向量：字段全合法、`text` 中含裸 0xff 的 message bytes。非 fatal 的当时实现上**唯一自有断言失败**
+（stdout/stderr/exit sha256 = `898014a8…` / `b1ca1938…` / `4355a46b…`，末者即 sha256("1\n")，exit 1）；
+恢复 `TextDecoder(..., {fatal:true})` 后拒绝为 `Invalid ZSwarm message`。
+
+拆分保真度：以拆分前 `65f710f5` 对 DDL / `sameRegistration` / `parseMessage` 逐字段人工复核，
+**fatal 恢复后未见第二处差异**，未扩 schema。这与我这边的机械审计一致——
+throw 站点 18/18、九条模板 throw 逐字一致、typeof 7/7、STRICT 2/2，`fatal:true` 是唯一实证丢失。
+两条独立路径得到同一结论，这条才算立住。
+
+## 8. K-2 最终措辞
+
+**DEFERRED / currently unreachable**，复测入口固定为 **windows-chole**（tailscale 上 offline, last seen 5d）。
+上线后跑：Node 24.14 default adapter 的 fixed drive、SMB network drive、production composition 三项。
+**Linux 上的 win32 注入测试明确不冒充 Windows runtime proof**——它证明的是"适配器被告知 win32 时行为正确"，
+不是"Windows 上确实如此"。

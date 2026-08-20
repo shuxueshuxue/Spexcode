@@ -95,6 +95,29 @@ B 与 C 再并行分叉于含 A 的集成头。
 | **C** self-launch adopter | `packages/session-selflaunch/**`、`.spec/spexcode/session-runtime/self-launch/**` | 不 import spec-core / session-core；不做 daemon、不做 drain loop、不假设 Spex root |
 | **集成方** | 根 `package.json`、`spexcode.json`、`package-lock.json`、本文件与其 owning 节点 | 不替 writer 改代码；不替 evaluator 报数 |
 
+**D-14 事务体自己抛出的异常必须原样传出。** 契约冻结了事务体里只能有 SQL 与纯内存校验，也冻结了错误码清单，
+但**没有**说调用方在事务体里抛出的异常该怎么处理。本阶段收口为：**调用方的异常是调用方的**——协议回滚，然后原样重抛，
+不分类、不包装。只有协议自己的语句（`BEGIN IMMEDIATE`、`COMMIT`）以及 `tx.exec` / `tx.query` / `tx.enqueue`
+这三个协议中介的操作，其失败才走协议分类。
+
+理由不是风格。合并树上实测（lane B 报出，集成方复现）：
+
+```
+case1  抛 TopologyError(TOPOLOGY_CYCLE_REFUSED) → 收到 ProtocolError(PROTOCOL_SQLITE_ERROR)
+case2  抛 TopologyError(TOPOLOGY_EDGE_EXISTS, "…is read-only in adopter policy")
+                                              → 收到 ProtocolError(PROTOCOL_DATABASE_READONLY)
+```
+
+case1 只是丢了身份；**case2 是凭空造出一个从未发生的协议条件**——分类器会回退到对 message 文本做正则，
+adopter 的错误话里带上 "read-only" / "database is locked" / "corrupt" 就会被提升成对应的协议码。
+契约 §9.1 禁止把协议条件降级成空值，这条是它的镜像：把非协议条件**升格**成协议码，同样是撒谎，而且更难查。
+
+这条直接决定 D-6 能不能成立：topology 的 mutation 结构上只能在 `withTransaction` 里跑，
+所以**每一次** topology 拒绝都发生在事务体内。不修的话 `session-topology` 就不可能有自己的稳定错误码。
+
+处置是**减法**：撤掉过宽的 catch，不是加一个 pass-through marker 机制。代价是分类责任要下沉到 `tx.exec` / `tx.query`
+自己身上（否则原始 SQLite 错误会裸奔出去，等于用一个缺陷换另一个），`COMMIT` 也要移出事务体的 try 单独分类。
+
 ## 3.1 施工期观察（不属于本阶段的文件面，只如实记录，不代改）
 
 **观察 1：`spikes/sqlite-m2/stubs/run.mjs` 的判定依赖 Node 的测试报告格式，在 fleet 钉死的 Node 22 上把

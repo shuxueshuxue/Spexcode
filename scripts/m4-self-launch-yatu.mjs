@@ -8,7 +8,7 @@
 // absent, corrupt, or read-only — belongs to the sabotage gate and is not restated here.
 //
 // usage: node scripts/m4-self-launch-yatu.mjs
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -31,6 +31,8 @@ say(`fixture ${root}`)
 // Everything the run touches must live under the fixture: SPEXCODE_HOME, the project, and the database.
 const baseEnv = { ...process.env, SPEXCODE_HOME: join(home, '.spexcode'), HOME: home, TMPDIR: join(root, 'tmp') }
 mkdirSync(baseEnv.TMPDIR, { recursive: true })
+
+const sleepMs = (ms) => { const b = new Int32Array(new SharedArrayBuffer(4)); Atomics.wait(b, 0, 0, ms) }
 
 const run = (cmd, args, opts = {}) => {
   const r = spawnSync(cmd, args, { encoding: 'utf8', cwd: opts.cwd ?? proj, env: { ...baseEnv, ...(opts.env ?? {}) }, input: opts.input })
@@ -107,8 +109,33 @@ const messageId = JSON.parse(produced.stdout).messageId
 say(`producer enqueued ${messageId} and exited`)
 
 // Nothing is running between producing and consuming: no daemon, no observer, no wake hint.
-const psAfter = spawnSync('bash', ['-c', `ps -eo args | grep -c "[s]pex-session" || true`], { encoding: 'utf8' }).stdout.trim()
-check(psAfter === '0', `no resident adopter process exists between produce and consume (found ${psAfter})`)
+// Residency is asked about THIS RUN, so it is counted by this run's unique fixture path rather than by the
+// adopter's name. Matching the name searches every process on the host: it counts unrelated work that merely
+// mentions `spex-session` — measured, 11 false matches from worktree paths on a busy machine — and it would
+// equally miss a resident child of ours whose argv spells the adopter differently. The fixture path can only
+// appear in argv that this run produced.
+// Read /proc directly rather than shelling out: a `ps | grep <fixture>` pipeline carries the fixture path in
+// its OWN argv, so it counts itself — measured, it never fell below 2. Our node process does not carry the
+// path, so the scan has no self-match to exclude.
+const residentCount = () => readdirSync('/proc')
+  .filter((entry) => /^\d+$/.test(entry) && entry !== String(process.pid))
+  .filter((pid) => {
+    try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').some((arg) => arg.includes(root)) }
+    catch { return false }          // the process exited between readdir and read; it is not resident
+  }).length
+
+// The count has to be able to find something, or a zero from it proves nothing. Hold one process that carries
+// the fixture path, confirm it is seen, then reap it and confirm the count falls back to zero.
+// The canary must both stay alive and carry the path: `sleep 30 --fixture=<path>` exits instantly on an
+// unknown option, which made the probe read 0 and look broken when it was the canary that had died.
+const canary = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)', root], { stdio: 'ignore' })
+let withCanary = 0
+for (let i = 0; i < 100 && withCanary === 0; i++) { withCanary = residentCount(); if (!withCanary) sleepMs(20) }
+canary.kill('SIGKILL')
+check(withCanary >= 1, `the residency probe can see a process of this run (canary observed ${withCanary})`)
+
+const psAfter = residentCount()
+check(psAfter === 0, `no resident adopter process exists between produce and consume (found ${psAfter})`)
 
 const delivered = fire('UserPromptSubmit', sid)
 check(delivered.status === 0, `UserPromptSubmit exits 0 (stderr: ${delivered.stderr.trim()})`)

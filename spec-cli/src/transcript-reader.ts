@@ -169,8 +169,12 @@ export async function readTranscript(harness: string, threadId: string, range: T
       try { value = JSON.parse(line) } catch (error) { throw new TranscriptReadError('invalid', `${harness} transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
       const event = parse(value)
       const stopAfterLine = lookingPastRange && ++postRangeLines >= POST_RANGE_LOOKAHEAD_LINES
-      const eventAt = event?.at
-      const hasTimestamp = eventAt !== null && eventAt !== undefined
+      if (!event) {
+        if (stopAfterLine) break
+        continue
+      }
+      const eventAt = event.at
+      const hasTimestamp = eventAt !== null
       if (hasTimestamp) sawTimestamp = true
       if (!lookingPastRange && hasTimestamp && eventAt > range.to) {
         lookingPastRange = true

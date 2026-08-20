@@ -165,16 +165,20 @@ test('Tree-sitter extractors reject syntax recovery instead of returning partial
   ]
   for (const [ext, source] of malformed) {
     const x = extractorFor(regs, ext)!
-    await assert.rejects(() => x.extract(source, `broken.${ext}`), /Tree-sitter syntax errors/, ext)
+    await assert.rejects(async () => {
+      await x.extract(source, `broken.${ext}`)
+    }, /Tree-sitter syntax errors/, ext)
   }
 })
 
 test('Tree-sitter parses the current governed TypeScript source before anchor resolution', async () => {
   const x = treeSitter()
-  await assert.doesNotReject(() => x.extract(
-    readFileSync(join(ROOT, 'packages/spec-core/src/git.ts'), 'utf8'),
-    'packages/spec-core/src/git.ts',
-  ))
+  await assert.doesNotReject(async () => {
+    await x.extract(
+      readFileSync(join(ROOT, 'packages/spec-core/src/git.ts'), 'utf8'),
+      'packages/spec-core/src/git.ts',
+    )
+  })
 })
 
 // ---- anchorHitCommits: historical file revisions, OR semantics, per-commit dedupe ----

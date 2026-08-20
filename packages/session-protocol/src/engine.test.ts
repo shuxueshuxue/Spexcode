@@ -507,15 +507,66 @@ test('an adopter table mutation and enqueue commit or roll back together', () =>
     tx.exec("INSERT INTO component_edges(note) VALUES('kept')")
     tx.enqueue('s1', message())
   })
+  const rejection = Object.assign(new Error('abort'), {
+    name: 'TopologyError',
+    code: 'TOPOLOGY_CYCLE_REFUSED',
+  })
   assert.throws(() => handle.withTransaction(tx => {
     tx.exec("INSERT INTO component_edges(note) VALUES('rolled-back')")
     tx.enqueue('s1', message({ body: bytes('rolled-back') }))
-    throw new Error('abort')
-  }))
+    throw rejection
+  }), error => {
+    assert.equal(error, rejection)
+    assert.equal((error as Error).name, 'TopologyError')
+    assert.equal((error as { code?: string }).code, 'TOPOLOGY_CYCLE_REFUSED')
+    return true
+  })
   assert.equal(inspectProtocol(handle).counts().messages, 1)
   const check = new DatabaseSync(path)
   assert.deepEqual(check.prepare('SELECT note FROM component_edges').all().map(row => row.note), ['kept'])
   check.close()
+  handle.close()
+})
+
+test('caller errors with SQLite-like messages retain their identity after rollback', () => {
+  const handle = openProtocol(freshDb())
+  for (const messageText of ['database is locked by policy', 'the parent record is read-only', 'adopter data is corrupt']) {
+    const rejection = Object.assign(new Error(messageText), {
+      name: 'TopologyError',
+      code: 'TOPOLOGY_EDGE_EXISTS',
+    })
+    assert.throws(() => handle.withTransaction(() => {
+      throw rejection
+    }), error => {
+      assert.equal(error, rejection)
+      assert.equal(error instanceof ProtocolError, false)
+      assert.equal((error as Error).message, messageText)
+      return true
+    })
+  }
+  handle.close()
+})
+
+test('transaction SQL failures are classified at the exec and query boundaries', () => {
+  const handle = openProtocol(freshDb())
+  const captured: unknown[] = []
+  handle.withTransaction(tx => {
+    for (const operation of [
+      () => tx.exec('THIS IS NOT SQL'),
+      () => tx.query('THIS IS NOT SQL'),
+    ]) {
+      try {
+        operation()
+      } catch (error) {
+        captured.push(error)
+      }
+    }
+  })
+  assert.equal(captured.length, 2)
+  for (const error of captured) {
+    assert.ok(error instanceof ProtocolError)
+    assert.equal(error.code, 'PROTOCOL_SQLITE_ERROR')
+  }
   handle.close()
 })
 

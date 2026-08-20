@@ -1,0 +1,29 @@
+{
+  "schema": "anchor-gold-manifest-v1",
+  "frozenAt": "2026-08-19",
+  "languages": ["typescript", "tsx", "python", "go", "rust", "java", "ruby"],
+  "note": "Snapshots are immutable benchmark inputs. Edit by adding a new snapshot and truth row; do not rewrite an existing snapshot.",
+  "entries": [
+    {"id": "ts-basic", "language": "typescript", "filename": "sample.ts", "snapshot": "ts-basic.ts.snap", "parse": "ok"},
+    {"id": "tsx-basic", "language": "tsx", "filename": "sample.tsx", "snapshot": "tsx-basic.tsx.snap", "parse": "ok"},
+    {"id": "python-basic", "language": "python", "filename": "sample.py", "snapshot": "python-basic.py.snap", "parse": "ok"},
+    {"id": "go-basic", "language": "go", "filename": "sample.go", "snapshot": "go-basic.go.snap", "parse": "ok"},
+    {"id": "rust-basic", "language": "rust", "filename": "sample.rs", "snapshot": "rust-basic.rs.snap", "parse": "ok"},
+    {"id": "java-basic", "language": "java", "filename": "Calculator.java", "snapshot": "java-basic.java.snap", "parse": "ok"},
+    {"id": "ruby-basic", "language": "ruby", "filename": "sample.rb", "snapshot": "ruby-basic.rb.snap", "parse": "ok"},
+    {"id": "ts-ambiguous", "language": "typescript", "filename": "ambiguous.ts", "snapshot": "ts-ambiguous.ts.snap", "parse": "ok"},
+    {"id": "tsx-ambiguous", "language": "tsx", "filename": "ambiguous.tsx", "snapshot": "tsx-ambiguous.tsx.snap", "parse": "ok"},
+    {"id": "python-ambiguous", "language": "python", "filename": "ambiguous.py", "snapshot": "python-ambiguous.py.snap", "parse": "ok"},
+    {"id": "go-ambiguous", "language": "go", "filename": "ambiguous.go", "snapshot": "go-ambiguous.go.snap", "parse": "ok"},
+    {"id": "rust-ambiguous", "language": "rust", "filename": "ambiguous.rs", "snapshot": "rust-ambiguous.rs.snap", "parse": "ok"},
+    {"id": "java-ambiguous", "language": "java", "filename": "Overloads.java", "snapshot": "java-ambiguous.java.snap", "parse": "ok"},
+    {"id": "ruby-ambiguous", "language": "ruby", "filename": "ambiguous.rb", "snapshot": "ruby-ambiguous.rb.snap", "parse": "ok"},
+    {"id": "ts-bad", "language": "typescript", "filename": "bad.ts", "snapshot": "ts-bad.ts.snap", "parse": "fail"},
+    {"id": "tsx-bad", "language": "tsx", "filename": "bad.tsx", "snapshot": "tsx-bad.tsx.snap", "parse": "fail"},
+    {"id": "python-bad", "language": "python", "filename": "bad.py", "snapshot": "python-bad.py.snap", "parse": "fail"},
+    {"id": "go-bad", "language": "go", "filename": "bad.go", "snapshot": "go-bad.go.snap", "parse": "fail"},
+    {"id": "rust-bad", "language": "rust", "filename": "bad.rs", "snapshot": "rust-bad.rs.snap", "parse": "fail"},
+    {"id": "java-bad", "language": "java", "filename": "bad.java", "snapshot": "java-bad.java.snap", "parse": "fail"},
+    {"id": "ruby-bad", "language": "ruby", "filename": "bad.rb", "snapshot": "ruby-bad.rb.snap", "parse": "fail"}
+  ]
+}

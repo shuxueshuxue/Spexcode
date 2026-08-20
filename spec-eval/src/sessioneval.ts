@@ -238,7 +238,7 @@ async function validateSelectorEntry(
   if (!x) {
     throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors[0]}' is unavailable: no designated extractor for '.${extOf(entry.path)}'`)
   }
-  const ready = x.ready()
+  const ready = await x.ready()
   if (ready !== true) {
     throw new SessionImpactUnavailableError(`session impact selectors on '${entry.path}' are unavailable: ${ready}`)
   }
@@ -253,7 +253,7 @@ async function validateSelectorEntry(
       if (source === null) {
         throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors[0]}' is dead at ${revision.slice(0, 8)}: the file does not exist`)
       }
-      try { return { extractor: x, units: x.extract(source, entry.path) } }
+      try { return { extractor: x, units: await x.extract(source, entry.path) } }
       catch (error: any) {
         throw new SessionImpactUnavailableError(`session impact selectors on '${entry.path}' are unextractable at ${revision.slice(0, 8)}: ${error?.message ?? String(error)}`)
       }

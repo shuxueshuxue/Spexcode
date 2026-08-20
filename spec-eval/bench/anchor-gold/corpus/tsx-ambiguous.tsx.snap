@@ -1,0 +1,7 @@
+export function duplicate(value: string) {
+  return <span>{value}</span>
+}
+
+export function duplicate(value: number) {
+  return <span>{value}</span>
+}

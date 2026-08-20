@@ -1,0 +1,16 @@
+package sample;
+
+public class Calculator {
+    public static final int LIMIT = 8;
+
+    public Calculator() {
+    }
+
+    public int add(int left, int right) {
+        return left + right;
+    }
+
+    public String add(String left, String right) {
+        return left + right;
+    }
+}

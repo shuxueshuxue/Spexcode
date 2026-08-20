@@ -70,7 +70,13 @@ baseline collections without another observed pass/fail flip. A later multi-run 
 with SHA, collection time, run count, and hashed logs, and resets both expiry clocks. While active it subtracts that test only from the candidate-only failure set. The report
 prints the entire committed registry on every declaration: an entry is visibly `APPLIED`, `NOT NEEDED`, or
 `NOT APPLIED`, with its evidence and expiry state. An expired or invalid entry subtracts nothing and is printed
-as requiring renewed evidence. Thus the list can explain noise but cannot silently erase it.
+as requiring renewed evidence. The registry is review-before policy, not a candidate escape hatch: an entry must
+already be committed and evidenced independently of the candidate declaration, and the worker whose candidate
+would benefit from the subtraction must not create, edit, or self-approve that entry. A worker may report a
+suspected instability, but only a later independent observation and owner can add or renew the exemption. The
+recent 19-test rerun is deliberately only an observation: `18/19` once and an isolated `1/1` pass did not enter
+the registry because the affected worker was the observer. Thus the list can explain noise but cannot silently
+erase it or become a self-issued license.
 
 The declaration note contains the complete acceptance summary: candidate SHA and runs, main SHA and runs, fresh
 versus cached provenance, candidate-only failures, and every registered flaky entry. If attributable

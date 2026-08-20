@@ -28,7 +28,7 @@ backend answers.
 **Three roles, one question per verb.**
 
 - **Owner** — doing it twice is destructive, and it needs a resource only an owner may hold: `new`, `resume`,
-  `stop`, `close`, `archive`, `quarantine`, `interrupt`, `merge`, and the poke half of `send`. These prefer
+  `stop`, `close`, `quarantine`, `interrupt`, `merge`, and the poke half of `send`. These prefer
   the running backend, which holds the launch environment and the concurrency cap. They may act in-process
   **only after proving there is no owner** — an explicit `ECONNREFUSED`; any HTTP answer, including `404`
   and `503`, proves a backend owns the target, and an indeterminate outcome fails loud rather than risking
@@ -48,14 +48,6 @@ enforced by the per-session record lock, not by the identity of the process hold
 backend is therefore the convenient owner of launch and the shared cache — never the holder of the
 invariant. (`session attach` remains its own case: a foreground terminal cannot be brokered over HTTP, so
 it stays local and guards that premise loudly against the resolved backend; see [[session-attach]].)
-
-An explicit `ls` id miss has one bounded cache companion: the id-addressed terminal-close ledger read. It uses
-the same backend-or-local cache role as the board, returns only `{id, closedAt}`, and is consulted only after
-the live/archive board miss. It never turns ordinary list reads into historical enumeration, and an explicit
-remote endpoint never falls back to a local ledger. A closure route's no-history 404 carries its explicit
-close-history capability marker; an unmarked 404 means the named backend predates or does not implement that
-route and is a loud incompatibility with an upgrade repair, never a local fallback and never a false
-never-existed result.
 
 Pointing `--api` (or `SPEXCODE_API_URL`) at another machine's backend still monitors and drives THAT
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.

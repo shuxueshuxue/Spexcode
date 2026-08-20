@@ -105,30 +105,6 @@ function normalizeCloseSource(raw: unknown): CloseSource {
   throw new ResourceConflict('refusing session close: source must be user or an unverified session claim')
 }
 
-// Compatibility readers for pre-close test fixtures. No current CLI or HTTP surface writes or queries this
-// ledger; retained records are the product source of truth.
-export type SessionClosure = { id: string; closedAt: string }
-export function findSessionClosure(selector: string): SessionClosure | null {
-  const query = stripRefSigil(selector).trim()
-  if (!query) return null
-  let text: string
-  try { text = readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8') }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
-  const matches = new Map<string, SessionClosure>()
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue
-    let event: any
-    try { event = JSON.parse(line) } catch { throw new ResourceConflict('session close history is unreadable') }
-    if (event?.action !== 'close-authorized') continue
-    const id = event?.action === 'close-authorized' ? event?.target?.id : null
-    const at = event?.action === 'close-authorized' ? event?.at : null
-    if (typeof id !== 'string' || !id || typeof at !== 'string' || !at) throw new ResourceConflict('session close history is malformed')
-    if (id === query || id.startsWith(query)) matches.set(id, { id, closedAt: at })
-  }
-  if (matches.size > 1) throw new ResourceConflict(`close history for ${query} is ambiguous`)
-  return matches.values().next().value || null
-}
-
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
 function writePromptFile(id: string, prompt: string): void {
@@ -3629,18 +3605,6 @@ async function coldStopSessionUnlocked(id: string): Promise<boolean> {
   return true
   } finally { archiving.delete(id) }
 }
-
-// Kept only for package consumers compiled against the pre-close module. It is intentionally not wired to any
-// CLI, route, or help surface; new callers use close/resume.
-export const archiveSession = (id: string, on = true): Promise<boolean> => withSessionTransition(id, () => withRecordLock(id, async () => {
-  if (!on) return (await resumeSessionUnlocked(id)).ok
-  const ok = await coldStopSessionUnlocked(id)
-  if (ok) {
-    const rec = readRecord(id)
-    if (rec) writeRecord({ ...rec, archived: true, stopped: true, coldProof: rec.coldProof || coldProofFor(rec) })
-  }
-  return ok
-}))
 
 // A never-launched queue owns only prepared disk state. The transition/record locks around close serialize
 // this check with startQueued: whichever wins decides whether the record is still a queue or has become live.

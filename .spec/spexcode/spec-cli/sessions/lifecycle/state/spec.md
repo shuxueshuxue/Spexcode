@@ -246,7 +246,8 @@ project's eventual source migration remains an explicit reviewed change rather t
   managed watch delivery or background task will wake you; with neither running to resume you the stop is `asking`, never a false
   `parked` the board misreads as self-resuming while you actually need the human.
   The teaching names the complete declared face: `done --propose merge` is **review** — the sole proposal
-  that offers a human-clickable merge; `done --propose close` is **close-pending** only after the task is
+  that offers a human-clickable merge, and [[review-acceptance]] runs its configured candidate-vs-main proof
+  before this one proposal can be written; `done --propose close` is **close-pending** only after the task is
   genuinely settled, its worktree is no longer needed, and no human decision, follow-up, or posted-artifact
   inspection remains. `ask` is **asking** when a human reply, direction, or decision is needed — including a
   reported finding/recommendation or a handoff awaiting the human's next direction — and `park` is **parked**, waiting only for a

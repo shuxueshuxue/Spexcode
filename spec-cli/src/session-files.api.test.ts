@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -81,6 +81,11 @@ test('public session files CLI stores a live path and the backend authorizes onl
     const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id, PORT: String(port) }
     delete env.SPEXCODE_API_URL
 
+    const missingAdd = await runCli(project, env, 'session', 'files', 'add', '../never-created.txt')
+    assert.equal(missingAdd.code, 1)
+    assert.match(missingAdd.err, /spex: file does not exist:/)
+    assert.equal(existsSync(sessionFilesPath(id)), false, 'a missing target is refused before the list changes')
+
     const add = await runCli(project, env, 'session', 'files', 'add', '../artifact.txt')
     assert.equal(add.code, 0, add.err)
     const absolute = resolve(project, '../artifact.txt')
@@ -140,6 +145,9 @@ test('public session files CLI stores a live path and the backend authorizes onl
     })
 
     rmSync(artifact)
+    const invalidList = await runCli(project, env, 'session', 'files', 'ls')
+    assert.equal(invalidList.code, 0, invalidList.err)
+    assert.match(invalidList.out, new RegExp(`INVALID ${absolute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} .*file does not exist`))
     const missing = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(absolute)}`, { method: 'HEAD' })
     assert.equal(missing.status, 404)
 

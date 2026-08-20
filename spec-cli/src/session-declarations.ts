@@ -89,14 +89,34 @@ export async function runSessionDeclaration(verb: DeclarationVerb, argv: readonl
     const proposal = (flag(argv, 'propose') as any) || 'nothing'
     if (proposal === 'nothing') nothingProposalTrap()
     const { s, sess, mark, noRecord, noteEcho } = await sessionStateKit(sessionId)
+    let acceptance = ''
+    if (proposal === 'merge') {
+      const readiness = s.mergeReadiness('merge')
+      if (!readiness.ready) {
+        console.error(`review declaration refused: ${readiness.reason}`)
+        process.exitCode = 1
+        return
+      }
+      const result = await (await import('./review-acceptance.js')).runReviewAcceptance({
+        onProgress: (line) => console.error(`[review acceptance] ${line}`),
+      })
+      acceptance = result.report
+      if (!result.ok) {
+        console.error(acceptance)
+        console.error('review declaration refused: fix the attributable failures, or use `spex session ask --note <finding>` to hand them upward')
+        process.exitCode = 1
+        return
+      }
+    }
     let closeNote = proposal === 'close' ? CLOSE_CLEANUP : ''
     if (proposal === 'close') {
       // The closeout nudge is advisory: a declaration must land even if the local issue store fails.
       try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
       catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
     }
-    const done = mark(() => s.markDone(proposal, sess, note))
-    console.log(done.ok ? `done (${proposal})${DECLARED}${noteEcho(note)}${closeNote}` : done.reason ?? noRecord())
+    const recordedNote = acceptance ? [note?.trim(), acceptance].filter(Boolean).join('\n\n') : note
+    const done = mark(() => s.markDone(proposal, sess, recordedNote))
+    console.log(done.ok ? `done (${proposal})${DECLARED}${noteEcho(recordedNote)}${closeNote}${acceptance ? `\n\n${acceptance}` : ''}` : done.reason ?? noRecord())
     return
   }
 

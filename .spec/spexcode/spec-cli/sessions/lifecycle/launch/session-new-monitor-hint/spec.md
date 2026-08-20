@@ -40,6 +40,9 @@ another lifecycle: `done --propose merge` means review and the sole clickable me
 intended no-write trap that sends the agent to merge, close, ask, or park, `close` means close-pending only for
 settled work with no outstanding human decision, follow-up, or inspection, while `ask` includes a reported
 finding/recommendation or handoff awaiting human direction and `park` retains its distinct self-wake owner.
+The merge entry also says that the configured candidate-against-main [[review-acceptance]] gate runs
+automatically; help advertises that non-optional declaration behavior without duplicating its suite, cache, or
+attribution policy.
 
 `spex session new --help` lists its optional `--name <name>` alongside the prompt and launcher inputs. The
 name is the new record's initial display override; it does not enter, replace, or alter the launch prompt.

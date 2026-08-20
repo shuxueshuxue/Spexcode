@@ -542,11 +542,16 @@ app.get('/api/sessions/:id/transcript', async (c) => {
   let raw: ReturnType<typeof readAliasedRawRecord>
   try { raw = readAliasedRawRecord(id) } catch (error) { return c.json({ error: `session ${id} record is unreadable: ${error instanceof Error ? error.message : String(error)}` }, 500) }
   if (!raw || !raw.governed) return c.json({ error: `session ${id} does not exist` }, 404)
-  const threadId = typeof raw.harness_session_id === 'string' ? raw.harness_session_id : ''
-  if (!threadId) return c.json({ error: `session ${id} transcript is unavailable: native harness identity is missing` }, 409)
   let harness
   try { harness = harnessById(typeof raw.harness === 'string' && raw.harness ? raw.harness : defaultHarness.id) }
   catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 500) }
+  const threadId = harness.exactNativeTargetId({
+    session: raw.session_id,
+    harnessSessionId: typeof raw.harness_session_id === 'string' ? raw.harness_session_id : null,
+    stopped: !!raw.stopped,
+    archived: !!raw.archived,
+  })
+  if (!threadId) return c.json({ error: `session ${id} transcript is unavailable: native harness identity is missing` }, 409)
   try {
     return c.json(await harness.readTranscript(threadId, { from, to }))
   } catch (error) {

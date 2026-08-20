@@ -64,6 +64,7 @@ mkdirSync(out, { recursive: true })
 const fixture = mkdtempSync(join(tmpdir(), 'spex-cold-readable-'))
 const project = join(fixture, 'project')
 const home = join(fixture, 'home')
+const claudeHome = join(home, 'claude')
 const tmux = `spex-cold-readable-${process.pid}`
 const events = []
 const started = Date.now()
@@ -107,6 +108,7 @@ try {
     SPEXCODE_HOME: home,
     SPEXCODE_TMUX: tmux,
     SPEXCODE_API_URL: '',
+    CLAUDE_CONFIG_DIR: claudeHome,
     FAKE_HARNESS_INTERVAL_MS: '80',
   }
   backend = spawn(process.execPath, [tsxCli, backendEntry], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -147,6 +149,24 @@ try {
     }, `${result.id} online`)
     return result.id
   }
+  const seedTranscript = async (id) => {
+    const timeline = await json(`/api/sessions/${id}/timeline`)
+    const statuses = timeline.events.filter((event) => event.kind === 'status')
+    assert.ok(statuses.length, `session ${id} has no status index`)
+    const path = join(claudeHome, 'projects', 'fixture', `${id}.jsonl`)
+    mkdirSync(dirname(path), { recursive: true })
+    const records = statuses.flatMap((status, index) => {
+      const ts = typeof status.ts === 'number' ? status.ts : Date.parse(status.ts)
+      assert.ok(Number.isFinite(ts), `session ${id} status timestamp is unreadable`)
+      const timestamp = new Date(ts).toISOString()
+      const toolId = `fixture-tool-${index}`
+      return [
+        { type: 'assistant', timestamp, message: { role: 'assistant', content: [{ type: 'text', text: 'persisted transcript turn' }, { type: 'tool_use', id: toolId, name: 'Bash', input: { command: 'printf transcript' } }] } },
+        { type: 'user', timestamp, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolId, content: 'fixture output\nline two' }] } },
+      ]
+    })
+    writeFileSync(path, records.map(JSON.stringify).join('\n') + '\n')
+  }
 
   archivedId = await create('archived session timeline marker')
   offlineId = await create('offline session timeline marker')
@@ -154,13 +174,16 @@ try {
   await post(`/api/sessions/${offlineId}/input`, { kind: 'text', text: 'offline authored history entry' })
   await post(`/api/sessions/${archivedId}/archive`)
   await post(`/api/sessions/${offlineId}/stop`)
-  await waitFor(async () => {
+  const cold = await waitFor(async () => {
     const rows = await json('/api/sessions?all=1')
     const archived = rows.find((row) => row.id === archivedId)
     const offline = rows.find((row) => row.id === offlineId)
     return archived?.archived && archived.liveness === 'offline'
       && !offline?.archived && offline?.liveness === 'offline' ? { archived, offline } : null
   }, 'real archived and offline records')
+  await seedTranscript(archivedId)
+  execFileSync('git', ['worktree', 'remove', '--force', cold.archived.path], { cwd: project })
+  assert.equal(existsSync(cold.archived.path), false, 'archived fixture worktree still exists')
   step('real sessions prepared through create, input, archive, and stop APIs')
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
@@ -171,6 +194,7 @@ try {
   })
   page = await context.newPage()
   const timelineRequests = new Map()
+  const transcriptRequests = new Map()
   const pageErrors = []
   const consoleErrors = []
   const failedResponses = []
@@ -181,10 +205,17 @@ try {
   })
   page.on('request', (request) => {
     if (request.method() !== 'GET') return
-    const match = new URL(request.url()).pathname.match(/^\/api\/sessions\/([^/]+)\/timeline$/)
-    if (!match) return
-    const id = decodeURIComponent(match[1])
-    timelineRequests.set(id, (timelineRequests.get(id) || 0) + 1)
+    const pathname = new URL(request.url()).pathname
+    const match = pathname.match(/^\/api\/sessions\/([^/]+)\/timeline$/)
+    if (match) {
+      const id = decodeURIComponent(match[1])
+      timelineRequests.set(id, (timelineRequests.get(id) || 0) + 1)
+    }
+    const transcript = pathname.match(/^\/api\/sessions\/([^/]+)\/transcript$/)
+    if (transcript) {
+      const transcriptId = decodeURIComponent(transcript[1])
+      transcriptRequests.set(transcriptId, (transcriptRequests.get(transcriptId) || 0) + 1)
+    }
   })
 
   const directShape = (locator) => locator.evaluate((element) => [...element.children].map((child) => ({
@@ -234,12 +265,26 @@ try {
   timelineRequests.set(archivedId, 0)
   await archivedRow.click()
   const archivedSurface = await assertSurface(archivedId, 'archived', '▤ 已归档 · 内容只读', '取回')
+  assert.equal(transcriptRequests.get(archivedId) || 0, 0, 'collapsed status fetched transcript eagerly')
+  const archivedTranscript = page.locator('.tl-chat:visible .m-transcript-toggle').first()
+  await archivedTranscript.click()
+  await page.locator('.m-transcript-flow').waitFor({ state: 'visible' })
+  assert.equal(transcriptRequests.get(archivedId), 1, 'expanded status did not issue exactly one transcript request')
+  assert.ok((await page.locator('.m-transcript-flow').innerText()).includes('persisted transcript turn'), 'archived transcript turn did not render after worktree removal')
+  const tool = page.locator('.m-transcript-tool').first()
+  assert.equal(await tool.locator('pre').isVisible(), false, 'tool output was expanded by default')
+  await tool.locator('summary').click()
+  assert.ok((await tool.innerText()).includes('fixture output'), 'tool output did not expand')
+  await archivedTranscript.click()
+  await archivedTranscript.click()
+  assert.equal(transcriptRequests.get(archivedId), 1, 'cached interval refetched on re-expand')
   assert.equal(await page.locator('.si-shelf-card').count(), 0, 'archive card still replaces Conversation')
   await page.screenshot({ path: join(out, 'archived-readable.png'), fullPage: true })
   step('archived timeline readable with disabled composer and terminal control')
   await page.waitForTimeout(8_750)
   assert.equal(timelineRequests.get(archivedId), 1, 'archived selection polled immutable timeline history')
   step('archived timeline remained at one request beyond a polling interval')
+  execFileSync('git', ['worktree', 'add', cold.archived.path, cold.archived.branch], { cwd: project })
   const archivedResume = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/sessions/${archivedId}/resume`
     && response.request().method() === 'POST')
   await archivedSurface.restore.click()
@@ -247,6 +292,11 @@ try {
 
   await page.goto(`${base}/#/sessions/${encodeURIComponent(offlineId)}`, { waitUntil: 'domcontentloaded' })
   const offlineSurface = await assertSurface(offlineId, 'offline', '⏻ agent 已离线 · 内容只读', '重新启动')
+  assert.equal(transcriptRequests.get(offlineId) || 0, 0, 'collapsed unavailable status fetched transcript eagerly')
+  await page.locator('.tl-chat:visible .m-transcript-toggle').first().click()
+  await page.locator('.tl-chat:visible .m-transcript-state.is-error').waitFor({ state: 'visible' })
+  assert.match(await page.locator('.tl-chat:visible .m-transcript-state.is-error').innerText(), /transcript 已不可用/, 'unavailable transcript was blank')
+  assert.equal(transcriptRequests.get(offlineId), 1, 'unavailable interval did not issue exactly one request')
   assert.deepEqual(offlineSurface.shape, archivedSurface.shape, 'offline and archived do not share one Conversation/footer shell')
   await page.screenshot({ path: join(out, 'offline-readable.png'), fullPage: true })
   step('offline session uses the same shell with relaunch copy')
@@ -257,10 +307,11 @@ try {
   step('both footer actions reached the real resume endpoint')
 
   assert.deepEqual(pageErrors, [], 'page errors')
-  assert.ok(failedResponses.every((failure) => failure.status === 404 && new URL(failure.url).pathname === '/projects'),
+  assert.ok(failedResponses.every((failure) => (failure.status === 404 && new URL(failure.url).pathname === '/projects')
+      || (failure.status === 409 && new URL(failure.url).pathname === `/api/sessions/${offlineId}/transcript`)),
     `unexpected failed browser responses: ${JSON.stringify(failedResponses)}`)
   assert.equal(consoleErrors.length, failedResponses.length, `console errors did not match the known absent /projects probes: ${consoleErrors.join('\n')}`)
-  assert.ok(consoleErrors.every((message) => /404 \(Not Found\)/.test(message)), `unexpected browser console errors: ${consoleErrors.join('\n')}`)
+  assert.ok(consoleErrors.every((message) => /(?:404 \(Not Found\)|409 \(Conflict\))/.test(message)), `unexpected browser console errors: ${consoleErrors.join('\n')}`)
 } catch (error) {
   failure = error
   step(`failure: ${String(error?.message || error)}`)

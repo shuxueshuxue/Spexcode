@@ -107,6 +107,26 @@ M0 的 G.1 L09 写着「本仓库没有 production importer……external ZSwarm
 合并进 z-code 需要该所有者的同意，这一条写进落地计划的前置条件，不靠"我们有权限访问文件系统"来代替。
 其余 z-code 契约（先写测试再写代码、注释用中文、spec 留在 docs、完成后提交一个 commit）在实现中一并遵守。
 
+## 2.4 clone 不是 Spex 对象，所以它的每一条保证都要手工补出来
+
+父侧接受了这次的双根隔离，但要求收口时显式补偿一个缺口：**Spex 管得住 session 的 worktree，管不住那个 clone**。
+clone 没有 session record 兜底，一旦 owner session 关闭，它就是个无主目录。因此收口时对 clone 逐条独立核验：
+realpath、branch、`b9b3fa701` 是祖先、HEAD、`git status --porcelain`（**含 untracked 必须为 0**）、
+相对 base 的精确 diff、以及**有没有别的 session/进程在写它**；同时复查活 checkout `/home/jeffry/zcode`
+的 branch / HEAD / dirty 三项未变。lane J 在提案被审完前不得 close、不得删除或移动 clone。
+
+**关于最后那条"没有别人在写"，我要写清楚它证明了什么、没证明什么**，因为我在做它的时候先把它做错了一次：
+
+- 第一版用"进程 cwd 是否在 clone 下"来数。这本身是**代理**：`git -C <clone>` 写它的时候 cwd 在别处。
+- 第二版补了扫 `/proc/*/fd` 的分支来盖住这种写法。加上之后，**探针不再能抓到一个活着的 canary**——
+  同样的循环体内联执行能抓到，放进脚本就抓不到，我没能定位原因。
+- 于是第三版**把没能证明的那半删掉**，只留能演示的那一半，并当场用一个 detached canary 证明它确实会报非零
+  （`FOREIGN process sleep pid=… session=…`，判定 FAIL）。
+
+**剩下的探针只覆盖"cwd 在 clone 内的并发进程"**；用绝对路径从别处写、或在两次采样之间开-写-关的写者，
+它看不见。这条限制写在这里，而不是让"foreign writers = 0"看起来像一条全称证明。
+一个从未被证明能报非零的探针，它的 0 不是证据——这条在本 campaign 里已经第三次咬到我自己。
+
 ## 3. 门禁与结果
 
 （施工阶段填写。）

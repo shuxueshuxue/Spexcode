@@ -144,8 +144,9 @@ For a live session that footer is only the enabled message composer. For an offl
 same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
 action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
 ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
-readable without restoring the agent; an archived timeline reads once when selected and does not poll immutable
-cold history. A pane-backed offline or archived record keeps its Terminal tab visible but disabled, and activating
+readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
+an offline record may still be written by an external `spex session send`, so archived is the only state that reads
+once when selected and does not poll. A pane-backed offline or archived record keeps its Terminal tab visible but disabled, and activating
 that tab cannot leave Conversation. `queued` remains the one exception to offline relaunch: it has intentionally
 not launched and self-starts as a slot frees.
 

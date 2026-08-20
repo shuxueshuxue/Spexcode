@@ -209,6 +209,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     })
     return () => cancelAnimationFrame(focusFrame)
   }, [s.id, active, isMobile])
+  // @@@archived-history-no-poll - archived records are immutable; offline records can still receive sent events from external `spex session send`, so only archived skips the interval.
   useEffect(() => {
     if (!active || footerState === 'archived') return undefined
     const iv = setInterval(load, 8000)

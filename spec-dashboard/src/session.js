@@ -44,6 +44,11 @@ export const sessionZone = (s) => {
 export const ZONE_ORDER = ['need', 'run', 'offline']
 
 export const isArchived = (s) => !!s?.archived
+export const sessionFooterState = (s) => {
+  if (isArchived(s)) return 'archived'
+  if (s?.liveness === 'offline' && s?.status !== 'queued') return 'offline'
+  return 'live'
+}
 export const splitArchived = (sessions = []) => ({
   live: sessions.filter((s) => !isArchived(s)),
   archived: sessions.filter(isArchived),

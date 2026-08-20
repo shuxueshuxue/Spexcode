@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionForest, splitArchived } from './session.js'
+import { sessionAncestorIds, sessionFooterState, sessionForest, splitArchived } from './session.js'
 import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionConsoleTreeRow, SessionZone, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
@@ -563,8 +563,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
-  const footerState = shelvedSel ? 'archived'
-    : noLivePane && selSession?.status !== 'queued' ? 'offline' : 'live'
+  const footerState = sessionFooterState(selSession)
   const activeResourceId = active === 'new' ? null : resourceSurface[active] || null
   const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId) || null
   const resourceOptions = selSession ? [
@@ -1673,7 +1672,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           pointerEvents: conversationShown ? 'auto' : 'none',
                         }}>
                           <TimelineChat s={session} sessions={allSessions} active={open && conversationShown}
-                            footerState={session.archived ? 'archived' : session.liveness === 'offline' && session.status !== 'queued' ? 'offline' : 'live'}
+                            footerState={sessionFooterState(session)}
                             onRestore={id === active ? resumeAndReturnToWorking : undefined}
                             actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />
                         </div>

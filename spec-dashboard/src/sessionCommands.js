@@ -34,15 +34,9 @@ export const UI_COMMANDS = [
     labelKey: 'session.relaunch', titleKey: 'session.relaunchTitle' },
   { name: 'stop',  color: 'muted',  button: false, when: (session) => !!session?.status && session.status !== 'offline' && session.status !== 'queued' && session.liveness !== 'offline',
     titleKey: 'session.cmd.stopTitle', descKey: 'session.cmd.stopDesc' },
-  // cold archive ([[archive]]) is typed-only: it exact-stops before filing. Archived rows expose no command-box
-  // lifecycle verbs; their card/context-menu resume action is the sole restore path.
-  { name: 'archive',   color: 'muted', button: false, when: (session) => archiveEligible(session?.status, session?.archived),
-    titleKey: 'session.cmd.archiveTitle', descKey: 'session.cmd.archiveDesc' },
   { name: 'close', color: 'red',    button: false, when: (session) => !!session?.status && session.status !== 'offline',
     titleKey: 'session.cmd.closeTitle', descKey: 'session.cmd.closeDesc' },
 ]
-export const archiveEligible = (status, archived = false) => !!status && !archived && !['queued', 'retired', 'corrupt'].includes(status)
-
 // bind the static registry to the live per-render actions, then keep only the commands available in the
 // current session state. `runners` maps name → the closure that DOES the thing (the same closure the toolbar
 // tool and typed command call), so the surfaces cannot drift apart.

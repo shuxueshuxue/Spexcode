@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, findSessionClosure, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -571,13 +571,6 @@ app.get('/api/sessions/:id/timeline', (c) => {
 // the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
 // plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
 // the CLI's show; 404 for an unknown id.
-app.get('/api/sessions/:id/closure', (c) => {
-  // A missing close fact and a backend that predates this route are different answers. The client requires
-  // this capability marker even on 404, so an old backend can never turn a closed id into "never existed".
-  c.header('x-spexcode-close-history', 'v1')
-  const closure = findSessionClosure(c.req.param('id'))
-  return closure ? c.json(closure) : c.json({ error: 'no terminal close history for this session' }, 404)
-})
 app.get('/api/sessions/:id', async (c) => {
   const id = c.req.param('id')
   const row = (await listSessions(true)).find((s) => s.id === id)
@@ -778,12 +771,6 @@ app.post('/api/sessions/:id/quarantine', async (c) => {
 app.post('/api/sessions/:id/quarantine/restore', async (c) => {
   const result = await restoreQuarantinedRecord(c.req.param('id'))
   return c.json({ ok: true, ...result })
-})
-// archive / legacy unarchive signpost ([[archive]]) — archive proves exact cold/offline ownership before filing;
-// `{on:false}` enters the same resume transition and recreates the preserved conversation. {ok:false}=no such session.
-app.post('/api/sessions/:id/archive', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  return c.json({ ok: await archiveSession(c.req.param('id'), body?.on !== false) })
 })
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but

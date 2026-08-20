@@ -66,8 +66,8 @@ first durable turn both landed may bind `harness_session_id` and consume it. A m
 unchanged and refuses loudly.
 
 **Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
-independent facts, computed independently (a third, the human's `archived` filing decision, is orthogonal to
-BOTH and owned by [[archive]] — it never reads as a status and never rewrites one):
+independent facts, computed independently (the human's `archived` close projection is orthogonal to BOTH and
+owned by [[archive]] — it never reads as a status and never rewrites one):
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
   `error`/`asking`/`queued`), never inferred — the `status` value above.
@@ -177,22 +177,15 @@ alive process (the one case where a deliberate kill is the repair). Only a **con
 `force`) is relaunched. The `merge` dispatch is the sole non-guarded caller: it merely needs a *live* agent to
 send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
 confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
-Contrast **`close`**, the other human-only terminal verb: with a readable owner it *removes* the worktree,
-discarding the work. An unreadable record proves no adapter, leaf, worktree, or branch owner, so close may copy
-the corrupt bytes to the control-plane quarantine but must then fail loudly before any signal or deletion and
-name the preserved residue. There is no fail-open cleanup path: a later exact recovery still enters through the
-same stop/close owner primitive, never a reclaim verb or second terminator. Both
-are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. Their public
-CLI commands exit nonzero whenever the backend commits no target transition; printing “no such session” while
-returning success is a false state-machine result. The third
-human-only verb, **`archive`** ([[archive]]), is the reversible cold-storage attention action: it reuses the
-exact existing stop guard, stops only the adapter-registered session-owned leaf plus that session's tmux and
-rendezvous transport, then writes `archived:true`. Success therefore implies `archived => offline`; if ownership
-cannot be proved, the command fails loudly and leaves the record unarchived and visible. It never touches the
-project-shared Codex app-server, whose control plane is reference-counted across sibling sessions/turns, and it
-preserves worktree, branch, transcript, and conversation identity. `resume` is the only way back: it clears
-`archived` first, then recreates the runtime through the normal `starting -> online` path; an archived record is
-never relaunched in place and never contributes to active slots or resource references. A stopped session
+Contrast **`close`**, the other human-only terminal verb: it proves the same exact cold stop, commits the complete
+worktree (including untracked files) into `refs/spex-archive/<id>`, then removes only the worktree while retaining
+branch, record, transcript, and conversation identity. An unreadable record proves no owner, so close quarantines
+only as evidence and fails before signaling or deletion. A native turn in flight is refused; close has no interrupt
+escape. `resume` recreates a missing worktree from the retained branch and reapplies the archive-ref delta before
+the normal `starting -> online` path. Both are human-only and direct (not agent proposals); stop is reversible
+without removing the worktree, while close is reversible through resume. Their public CLI commands exit nonzero
+whenever the backend commits no target transition; printing “no such session” while returning success is a false
+state-machine result. A stopped session
 occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
 idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers

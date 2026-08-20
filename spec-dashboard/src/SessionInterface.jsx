@@ -1244,10 +1244,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     merge: mergeSession,
     relaunch: resumeAndReturnToWorking,
     stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → read-only Conversation
-    // archive is cold storage: the backend stops the exact leaf before filing, then the browser opens the
-    // explicit history view so the newly archived row remains reachable without polluting the working list.
-    archive: async (owner) => { if (await act('archive', { on: true }, owner)) { await refreshArchive(); setShowShelf(true) } },
-    close: (owner) => act('close', undefined, owner),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
+    close: (owner) => act('close', undefined, owner),
   }
   const uiCmds = uiCommandsFor(selSession, runners)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false && command.enabled)

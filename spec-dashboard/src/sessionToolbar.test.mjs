@@ -184,6 +184,16 @@ test('archive index is a transient overlay and archive zone fold is persisted', 
   assert.doesNotMatch(source, /active === 'archive'|is-archive|\[\s*'new',\s*'archive'/)
 })
 
+test('offline and archive headers own the disclosure target without nested controls', () => {
+  assert.match(sessionWindow, /<button type="button" className=\{classes\} aria-expanded=\{!item\.folded\}/)
+  assert.match(sessionWindow, /className="si-zone-count" aria-hidden="true"/)
+  assert.doesNotMatch(sessionWindow, /className="si-zone-count"[\s\S]{0,220}aria-expanded/)
+  assert.match(source, /onMouseDownCapture=\{inertChromePress\}/)
+  assert.match(source, /Native buttons own Enter\/Space activation/)
+  assert.match(source, /e\.target\?\.closest\?\.\('button, a\[href\]'\)/)
+  assert.doesNotMatch(source, /si-zone-need[^\n]*onClick|si-zone-run[^\n]*onClick/)
+})
+
 test('close refusals remain visible instead of being swallowed by the background action', () => {
   assert.match(contextMenu, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(contextMenu, /!response\.ok \|\| body\?\.ok === false/)

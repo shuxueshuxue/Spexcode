@@ -126,8 +126,8 @@ try {
   assert.equal(await expanded(interfacePod), 'true')
   assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 1)
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.sessionTreeFocusProbe), 'before-fold')
-  record('SessionInterface', 'count click opens fold', await expanded(interfacePod))
-  record('SessionInterface', 'count click keeps focus owner', true)
+  record('SessionInterface', 'header click opens fold without taking focus', await expanded(interfacePod))
+  record('SessionInterface', 'header click keeps focus owner', true)
   await interfacePod.click()
 
   await interfaceBody.click()
@@ -159,14 +159,31 @@ try {
   await page.keyboard.press('Escape')
 
   const interfaceOffline = page.locator('.si-zone-offline')
-  const interfaceOfflineCount = interfaceOffline.locator('> .si-zone-count')
-  assert.equal(await expanded(interfaceOfflineCount), 'false')
-  await interfaceOffline.locator('> .si-zone-label').click()
-  assert.equal(await expanded(interfaceOfflineCount), 'false', 'OFFLINE label must be inert')
-  await interfaceOfflineCount.click()
-  assert.equal(await expanded(interfaceOfflineCount), 'true')
+  assert.equal(await expanded(interfaceOffline), 'false')
+  await interfaceOffline.locator('.si-zone-label').click()
+  assert.equal(await expanded(interfaceOffline), 'true', 'OFFLINE label must toggle the header')
+  const offlineBox = await interfaceOffline.boundingBox()
+  assert.ok(offlineBox, 'OFFLINE header must have a layout box')
+  await page.mouse.click(offlineBox.x + offlineBox.width - 4, offlineBox.y + offlineBox.height / 2)
+  assert.equal(await expanded(interfaceOffline), 'false', 'trailing rule area must toggle the header')
+  await interfaceOffline.focus()
+  assert.equal(await interfaceOffline.evaluate((node) => document.activeElement === node), true, 'OFFLINE header was not keyboard focusable')
+  await interfaceOffline.press('Enter')
+  assert.equal(await expanded(interfaceOffline), 'true', 'Enter must toggle the whole header')
+  await interfaceOffline.press('Space')
+  assert.equal(await expanded(interfaceOffline), 'false', 'Space must toggle the whole header')
+  assert.equal(await interfaceOffline.locator('.si-zone-count').getAttribute('aria-expanded'), null)
+  assert.equal(await interfaceOffline.locator('button').count(), 0, 'zone header must not nest a second button')
+  const unchangedSelection = await page.locator('.si-item.on').getAttribute('data-sid')
+  for (const zone of ['need', 'run']) {
+    const header = page.locator(`.si-zone-${zone}`)
+    if (await header.count()) {
+      await header.click()
+      assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), unchangedSelection, `${zone} header click changed selection`)
+    }
+  }
   assert.ok(await visibleRows(page, '.si-item') > 1)
-  await interfaceOfflineCount.click()
+  await interfaceOffline.click()
 
   await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, offline[0].id)
   await page.locator(`.si-item[data-sid="${offline[0].id}"]`).waitFor({ state: 'visible' })
@@ -269,8 +286,8 @@ try {
 
   // Compare the two real product surfaces. Fully disclose the dashboard forest, read its DOM order, then
   // open the empty Sessions palette and verify that its session plane inherits that exact order.
-  const offlineDisclosure = page.locator('.si-zone-offline > .si-zone-count')
-  if (await offlineDisclosure.count() && await expanded(offlineDisclosure) === 'false') await offlineDisclosure.click()
+  const offlineHeader = page.locator('.si-zone-offline')
+  if (await offlineHeader.count() && await expanded(offlineHeader) === 'false') await offlineHeader.click()
   while (await page.locator('.si-list .sess-fold-control[aria-expanded="false"]').count()) {
     await page.locator('.si-list .sess-fold-control[aria-expanded="false"]').first().click()
   }
@@ -314,13 +331,12 @@ try {
   assert.equal(await expanded(windowPod), 'true')
   assert.ok(await visibleRows(page, '.sesswin .sess-row') > windowRowsBefore)
   const windowOffline = page.locator('.sesswin-zone-offline')
-  const windowOfflineCount = windowOffline.locator('> .si-zone-count')
-  await windowOffline.locator('> .si-zone-label').click()
-  assert.equal(await expanded(windowOfflineCount), 'false')
-  await windowOfflineCount.click()
-  assert.equal(await expanded(windowOfflineCount), 'true')
+  await windowOffline.locator('.si-zone-label').click()
+  assert.equal(await expanded(windowOffline), 'true')
+  await windowOffline.click()
+  assert.equal(await expanded(windowOffline), 'false')
   assert.equal(await page.locator('.sesswin button button').count(), 0)
-  record('SessionWindow', 'row/count ownership', 'row=false,count=true')
+  record('SessionWindow', 'row/header ownership', 'row=false,header=true')
   await page.screenshot({ path: `${OUT}/session-window.png` })
 
   await page.setViewportSize({ width: 390, height: 760 })
@@ -346,13 +362,12 @@ try {
   assert.ok(await visibleRows(page, '.m-sess-row') > mobileRowsBefore)
 
   const mobileOffline = page.locator('.m-zone-offline')
-  const mobileOfflineCount = mobileOffline.locator('> .si-zone-count')
-  await mobileOffline.locator('> .si-zone-label').click()
-  assert.equal(await expanded(mobileOfflineCount), 'false')
-  await mobileOfflineCount.click()
-  assert.equal(await expanded(mobileOfflineCount), 'true')
+  await mobileOffline.locator('.si-zone-label').click()
+  assert.equal(await expanded(mobileOffline), 'true')
+  await mobileOffline.click()
+  assert.equal(await expanded(mobileOffline), 'false')
   assert.equal(await page.locator('.m-sesslist button button').count(), 0)
-  record('Mobile Sessions', 'row/count ownership', 'row=false,count=true')
+  record('Mobile Sessions', 'row/header ownership', 'row=false,header=true')
   await page.screenshot({ path: `${OUT}/mobile-sessions.png` })
 } finally {
   await context.close()

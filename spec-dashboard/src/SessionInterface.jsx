@@ -1440,6 +1440,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       if (e.target?.closest?.('[data-focus-overlay]')) return // a transient modal owns its focused control's native keys
+      // Native buttons own Enter/Space activation even while the New Session tab is selected. Keep the
+      // console router from cancelling a fold header's default click; text inputs still reach the menu/send paths below.
+      if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href]')) return
       // Reserved Alt+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.

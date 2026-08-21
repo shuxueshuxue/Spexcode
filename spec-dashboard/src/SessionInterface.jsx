@@ -311,13 +311,19 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
 
 // The toolbar consumes only the canonical graph session projection. Last-known survives input invalidation,
 // tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
-export function sessionEvalDisplay(projection, connected = true) {
-  if (!projection) return { phase: 'loading' }
+// `rowPresent` separates the two ways a projection can be absent. A selected row that carries none is a
+// retained record the board no longer projects at all — a closed session leaves the graph and is served from
+// `/api/sessions?all=1`, which has no summary to carry — so it is dormant, exactly like the backend's own
+// dormant phase. Only a selection with no row yet is still arriving.
+export function sessionEvalDisplay(projection, connected = true, rowPresent = false) {
+  if (!projection) return { phase: rowPresent ? 'dormant' : 'loading' }
   const stable = projection.phase === 'ready' && projection.value
     ? projection.value
     : projection.lastKnown?.value
   if (!connected) return stable ? { phase: 'disconnected', ...stable } : { phase: 'disconnected' }
   if (projection.phase === 'ready' && projection.value) return { phase: 'ready', ...projection.value }
+  // Dormant carries its last-known counts when it has them, and never a spinner: nothing is recomputing them.
+  if (projection.phase === 'dormant') return stable ? { phase: 'dormant', ...stable } : { phase: 'dormant' }
   if (projection.phase === 'updating') return stable ? { phase: 'updating', ...stable } : { phase: 'loading' }
   if (projection.phase === 'error') return stable ? { phase: 'error', ...stable } : { phase: 'error' }
   return { phase: 'loading' }
@@ -328,6 +334,9 @@ function SessionEvalStats({ summary }) {
   const hasValue = Number.isInteger(summary.total)
   if (!hasValue && summary.phase === 'loading') {
     return <span className="si-eval-wait" data-tip={t('session.evalLoading')}><Icon name="loader" size={12} className="si-eval-spinner" /></span>
+  }
+  if (!hasValue && summary.phase === 'dormant') {
+    return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalDormant')} size={12} /></span>
   }
   if (!hasValue) {
     return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} size={12} /></span>
@@ -350,6 +359,7 @@ function SessionEvalStats({ summary }) {
         <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.unknown} label={t('session.evalUnknown', { n: summary.unknown })} />
       )}
       {summary.phase === 'updating' && <Icon name="loader" size={11} className="si-eval-spinner si-eval-phase" />}
+      {summary.phase === 'dormant' && <ReviewState kind="eval" state="missing" title={t('session.evalDormantLast')} className="si-eval-phase" size={11} />}
       {(summary.phase === 'disconnected' || summary.phase === 'error') && (
         <ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} className="si-eval-phase" size={11} />
       )}
@@ -692,7 +702,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
   }
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
-  const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive)
+  const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive, !!selSession)
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
   const footerState = sessionFooterState(selSession)
   const activeResourceId = sessionActive ? resourceSurface[active] || null : null
@@ -1385,11 +1395,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       ? t('session.evalUpdating', { summary: evalKnownTitle })
       : evalSummary.phase === 'disconnected'
         ? t('session.evalDisconnected', { summary: evalKnownTitle })
-        : evalSummary.phase === 'loading'
-          ? t('session.evalLoading')
-          : evalKnownTitle
-            ? t('session.evalFailedKnown', { summary: evalKnownTitle })
-            : t('session.evalUnavailable')
+        : evalSummary.phase === 'dormant'
+          ? (evalKnownTitle ? t('session.evalDormantKnown', { summary: evalKnownTitle }) : t('session.evalDormant'))
+          : evalSummary.phase === 'loading'
+            ? t('session.evalLoading')
+            : evalKnownTitle
+              ? t('session.evalFailedKnown', { summary: evalKnownTitle })
+              : t('session.evalUnavailable')
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
   const stateRef = useRef({})

@@ -606,6 +606,9 @@ export default {
     surfaceLabel: 'current session surface',
     toolbarToolsLabel: 'session tools',
     evalLoading: "loading this session's eval summary",
+    evalDormant: "this session's eval summary is not computed — open Eval to measure it",
+    evalDormantLast: 'last known — this retained session is not being recomputed',
+    evalDormantKnown: ({ summary }) => `last known, not being recomputed — ${summary}`,
     evalUnavailable: "this session's eval summary is unavailable",
     evalUpdating: ({ summary }) => `updating this session's eval summary — last known: ${summary}`,
     evalDisconnected: ({ summary }) => summary

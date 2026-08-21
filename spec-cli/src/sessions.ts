@@ -3049,7 +3049,7 @@ function porcelainPath(line: string): string {
 }
 
 export type ReviewEvalFacts = { freshPass: number; freshFail: number; needReview: number; blind: number }
-export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' }
+export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' | 'dormant' }
 // the session-side gates only. The measured-loss readout is composed ABOVE this layer ([[manager-cockpit]]'s
 // cockpit.ts): the eval package imports this module, so reading it from here could only ever be a deferred
 // import working around a cycle. The eval side never consumed this field — it reads lint/conflict/ahead/dirty.

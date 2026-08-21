@@ -1473,7 +1473,10 @@ export type SessionEvalRevision = {
 export type SessionEvalProjection = {
   epoch: string
   generation: number
-  phase: 'loading' | 'updating' | 'ready' | 'error'
+  // `dormant` is the retained-history phase: nothing is computing this entry and nothing will until a demand
+  // asks for it. It is reported instead of `loading`/`updating` so a reader can never mistake a projection
+  // nobody is building for one that is arriving.
+  phase: 'loading' | 'updating' | 'ready' | 'error' | 'dormant'
   revision?: string
   value?: SessionEvalSummary
   lastKnown?: { generation: number; revision: string; value: SessionEvalSummary }
@@ -1975,6 +1978,15 @@ export class SessionEvalProjectionCache {
     this.demands.set(id, promise)
     promise.finally(() => {
       if (this.demands.get(id) === promise) this.demands.delete(id)
+      // The cancel above exists ONLY so the warmup does not duplicate the build this demand is about to run.
+      // Once the demand has settled that reason is spent — and a demand that REJECTED published nothing, so
+      // leaving the mark set kept `authorize` refusing this generation forever and the entry stuck at
+      // `loading`/`updating` with no build ever scheduled. A demand that published is already `ready` and
+      // needs no second build.
+      if (this.entries.get(id) !== entry || entry.demandCancelledGeneration !== entry.generation) return
+      entry.demandCancelledGeneration = null
+      this.authorize(entry)
+      queueMicrotask(() => this.startScheduled())
     }).catch(() => {})
     return promise
   }
@@ -1999,12 +2011,20 @@ export class SessionEvalProjectionCache {
     return true
   }
 
+  // Dormant offline history is demand-only BY POLICY: `authorize` refuses to schedule an offline entry, so
+  // nothing will move it until a demand builds it. `loading`/`updating` are arrival phases — a reader that
+  // renders them as progress waits forever. This names the difference at the one place that knows it.
+  private dormantEntry(entry: ProjectionEntry): boolean {
+    return entry.liveness === 'offline' && entry.running == null && entry.scheduled == null
+      && entry.observerHolds.size === 0 && entry.phase !== 'ready' && entry.phase !== 'error'
+  }
+
   private project(entry: ProjectionEntry): SessionEvalProjection {
     const stable = entry.current
     return {
       epoch: this.epoch,
       generation: entry.generation,
-      phase: entry.phase,
+      phase: this.dormantEntry(entry) ? 'dormant' : entry.phase,
       ...(entry.phase === 'ready' && stable
         ? { revision: stable.revision, value: stable.value }
         : stable ? { lastKnown: stable } : {}),

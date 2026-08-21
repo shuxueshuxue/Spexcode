@@ -1148,8 +1148,8 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-zone-all {
   justify-content: initial; color: var(--ink2);
 }
+.si-zone-all-lead { color: var(--muted); align-items: center; }
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-zone-all-meta { color: var(--muted); }
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
 /* multi-select bar ([[session-multi-select]]) — a live count plus its adjacent icon-only close action. */

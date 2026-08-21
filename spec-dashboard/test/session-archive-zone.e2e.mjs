@@ -248,9 +248,38 @@ try {
   })
   assert.ok(drawerMeasure.rows <= 8, `archive zone exposed too many rows: ${JSON.stringify(drawerMeasure)}`)
   assert.deepEqual(drawerMeasure.scrollables, ['si-board-scroll'], 'the sidebar has more than one scroll container')
-  assert.equal(await page.locator('.si-zone-all').count(), 1, 'archive zone omitted the View all row')
+  const viewAll = page.locator('.si-zone-all')
+  assert.equal(await viewAll.count(), 1, 'archive zone omitted the View all row')
+  assert.equal(await viewAll.locator('.si-zone-all-lead svg').count(), 1, 'View all row omitted its search glyph')
+  assert.equal(await viewAll.locator('.si-zone-all-meta, .si-zone-all .sess-glyph').count(), 0, 'View all row retained a trailing chevron')
+  const rowGeometry = await viewAll.evaluate((row) => {
+    const sessionRow = document.querySelector('.si-zone-archive ~ .si-tree-row .si-item[data-sid]')
+    const style = (node) => {
+      const computed = getComputedStyle(node)
+      return {
+        height: computed.height,
+        paddingLeft: computed.paddingLeft,
+        paddingRight: computed.paddingRight,
+        lineHeight: computed.lineHeight,
+        borderBottomWidth: computed.borderBottomWidth,
+        borderBottomStyle: computed.borderBottomStyle,
+      }
+    }
+    const icon = row.querySelector('.si-zone-all-lead svg').getBoundingClientRect()
+    const bounds = row.getBoundingClientRect()
+    return { viewAll: style(row), session: style(sessionRow), iconStart: icon.left, rowStart: bounds.left }
+  })
+  assert.deepEqual(rowGeometry.viewAll, rowGeometry.session, 'View all row geometry drifted from session rows')
+  assert.ok(rowGeometry.iconStart <= rowGeometry.rowStart + 16, 'View all search glyph is not in the row lead column')
+  await viewAll.hover()
+  const viewAllHover = await viewAll.evaluate((row) => getComputedStyle(row).backgroundColor)
+  const sessionRow = page.locator('.si-zone-archive ~ .si-tree-row .si-item[data-sid]').first()
+  await sessionRow.hover()
+  assert.equal(viewAllHover,
+    await sessionRow.evaluate((row) => getComputedStyle(row).backgroundColor),
+    'View all hover did not use the session-row wash')
   await page.screenshot({ path: join(out, 'archive-zone-expanded.png'), fullPage: true })
-  await page.locator('.si-zone-all').click()
+  await viewAll.click()
   const archivePage = page.locator('[data-archive-page]')
   await archivePage.waitFor({ state: 'visible' })
   await page.screenshot({ path: join(out, 'archive-index-overlay.png'), fullPage: true })

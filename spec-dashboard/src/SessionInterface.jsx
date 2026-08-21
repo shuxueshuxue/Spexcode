@@ -1598,8 +1598,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               )
             })}
             {archiveZoneOpen && <button type="button" className="si-item si-zone-all" onClick={openArchivePage}>
+              <span className="sess-lead si-zone-all-lead" aria-hidden="true"><Icon name="search" size={15} /></span>
               <span className="si-zone-all-label">{t('session.archiveViewAll', { n: archivedSessions.length })}</span>
-              <span className="sess-meta si-zone-all-meta" aria-hidden="true"><span className="sess-glyph"><Icon name="chevron-right" size={14} /></span></span>
             </button>}
           </div>
         </aside>

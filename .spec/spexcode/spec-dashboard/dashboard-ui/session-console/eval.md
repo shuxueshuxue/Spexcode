@@ -176,14 +176,14 @@ scenarios:
     expected: >-
       The top row has only New and Search; the final `archive 0` zone is still visible and folded. Its count chip
       toggles the zone without changing selection, and opening it shows only the newest bounded rows plus one
-      `View all N` row. The rows use ordinary session-row treatment; the sidebar still has exactly one scroll
-      container. Dropping a row on the visible zone heading issues one close without a dialog and moves it into the
-      archive; dragging near the viewport edge auto-scrolls until that heading is visible. `View all N` opens a
-      transient overlay, whose complete closed index filters locally, groups newest-first under sticky dates, closes
-      on Esc, and hands an explicitly selected row to the read-only Conversation rather than changing the right-pane
-      shape.
-      receives the complete closed index in one request, filters it with its own search field, and renders
-      newest-first rows beneath sticky date headings whose active heading remains fixed during scroll.
+      `View all N` row. The closed rows use ordinary session-row treatment; the `View all N` button uses the same
+      row geometry, normal ink, bottom rule, hover wash, and right-side chevron column but never a selected state.
+      The sidebar still has exactly one scroll container. Dropping a row on the visible zone heading issues one close
+      without a dialog and moves it into the archive; dragging near the viewport edge auto-scrolls until that heading
+      is visible. `View all N` opens a transient overlay, whose complete closed index filters locally, groups newest-first
+      under sticky dates, closes on Esc, and hands an explicitly selected row to the read-only Conversation rather than
+      changing the right-pane shape. It receives the complete closed index in one request and renders newest-first rows
+      beneath sticky date headings whose active heading remains fixed during scroll.
   - name: triage-zones-and-status-colour
     tags: [frontend-e2e, desktop]
     description: >-

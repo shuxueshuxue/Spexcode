@@ -76,10 +76,12 @@ The archive is a fourth session **zone**, after needs-you, running, and offline.
 when `N` is zero and carries the complete count of closed records. The heading uses the same count-chip disclosure
 as the offline zone and is folded by default with its fold choice persisted locally. When open it shows the newest
 closed rows (bounded to a small fixed number so it cannot drown the working list), then one `View all N` row. The
-rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
-Conversation. Dropping a working row on the visible archive heading performs the one reversible close transition
-without confirmation. While a drag approaches an off-screen archive heading, the working-board scrollport advances
-to reveal it; the sidebar still owns exactly one scroll container.
+closed rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
+Conversation. `View all N` is a keyboard-reachable button that follows the same row geometry, ink, bottom rule, and
+hover wash as a session row, with its `›` in the right-side status-marker column; it has no selected state. Dropping
+a working row on the visible archive heading performs the one reversible close transition without confirmation.
+While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
+sidebar still owns exactly one scroll container.
 
 `View all N` opens a transient archive index overlay, not a third right-pane mode. The overlay is scoped only to
 closed sessions, reads the complete index once, groups newest-first rows under sticky dates, filters locally, and

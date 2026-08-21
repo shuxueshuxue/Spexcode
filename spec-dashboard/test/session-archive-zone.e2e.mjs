@@ -21,7 +21,7 @@ const fakeLauncher = join(cliRoot, 'test', 'fixtures', 'fake-claude')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH
   || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
-const out = resolve(process.env.OUT || join(root, '.artifacts', 'session-archive-drawer'))
+const out = resolve(process.env.OUT || join(root, '.artifacts', 'session-archive-zone'))
 
 const freePort = () => new Promise((resolvePort, reject) => {
   const server = net.createServer()
@@ -64,10 +64,10 @@ if (!existsSync(join(dashboardRoot, 'dist', 'index.html'))) throw new Error('pre
 
 rmSync(out, { recursive: true, force: true })
 mkdirSync(out, { recursive: true })
-const fixture = mkdtempSync(join(tmpdir(), 'spex-archive-drawer-'))
+const fixture = mkdtempSync(join(tmpdir(), 'spex-archive-zone-'))
 const project = join(fixture, 'project')
 const home = join(fixture, 'home')
-const tmux = `spex-archive-drawer-${process.pid}`
+const tmux = `spex-archive-zone-${process.pid}`
 const events = []
 const started = Date.now()
 const step = (label) => events.push({ at: Date.now() - started, step: label })
@@ -180,30 +180,33 @@ try {
   })
 
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  const archiveBar = page.locator('.si-archive-bar')
-  await archiveBar.waitFor({ state: 'visible', timeout: 30_000 })
-  await page.waitForFunction(() => document.querySelector('.si-archive-bar')?.dataset.archiveCount === '0')
+  const archiveZone = page.locator('.si-zone-archive')
+  await archiveZone.waitFor({ state: 'visible', timeout: 30_000 })
+  await page.waitForFunction(() => document.querySelector('.si-zone-archive')?.dataset.archiveCount === '0')
   assert.equal(await page.locator('.si-pill.shelf').count(), 0, 'the retired star archive pill is still present')
   assert.equal(await page.locator('.si-toprow .si-pill').count(), 2, 'the top row does not contain exactly New and Search')
-  assert.equal(await archiveBar.locator('strong').innerText(), '0', 'the permanent archive place hid its zero count')
+  assert.equal(await archiveZone.locator('.si-zone-count').innerText(), '0', 'the archive zone hid its zero count')
+  assert.equal(await page.locator('.si-zone-archive ~ .si-tree-row .si-item').count(), 0, 'empty archive zone was not folded')
   assert.equal(archiveRequests.length, 1, 'the initial archive index was not fetched exactly once')
   assert.deepEqual(archiveRequests[0].params, [['all', '1']], 'the archive index request carried pagination parameters')
+  await page.screenshot({ path: join(out, 'archive-zone-zero.png'), fullPage: true })
   step('permanent Archive 0 place visible with no star pill')
 
   const closeResponse = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/sessions/${closeId}/close`
     && response.request().method() === 'POST')
   const sourceRow = page.locator(`.si-item[data-sid="${closeId}"]`)
   const sourceBox = await sourceRow.boundingBox()
-  const barBox = await archiveBar.boundingBox()
-  assert.ok(sourceBox && barBox, 'drag source or archive target has no layout box')
+  await archiveZone.scrollIntoViewIfNeeded()
+  const zoneBox = await archiveZone.boundingBox()
+  assert.ok(sourceBox && zoneBox, 'drag source or archive target has no layout box')
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height + 12, { steps: 3 })
-  await page.mouse.move(barBox.x + barBox.width / 2, barBox.y + barBox.height / 2, { steps: 8 })
+  await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height / 2, { steps: 8 })
   await page.mouse.up()
   assert.equal((await closeResponse).ok(), true, 'drag-to-archive did not reach the real close endpoint')
   await page.waitForFunction((id) => !document.querySelector(`.si-item[data-sid="${id}"]`), closeId)
-  await page.waitForFunction(() => document.querySelector('.si-archive-bar')?.dataset.archiveCount === '1')
+  await page.waitForFunction(() => document.querySelector('.si-zone-archive')?.dataset.archiveCount === '1')
   assert.equal(dialogs.length, 0, `drag-to-close opened a browser confirmation: ${dialogs.join('; ')}`)
   assert.equal(await page.locator('.sess-rename-modal').count(), 0, 'drag-to-close opened an in-app confirmation')
   const closed = await waitFor(async () => {
@@ -211,50 +214,43 @@ try {
     return row?.archived && typeof row.closedAt === 'string' ? row : null
   }, 'closed row with closedAt')
   assert.ok(Number.isFinite(Date.parse(closed.closedAt)), 'new close did not publish an ISO closedAt')
+  await page.screenshot({ path: join(out, 'archive-zone-folded.png'), fullPage: true })
   step('one drag closed the real row without confirmation and published closedAt')
 
-  await page.locator('.si-archive-toggle').click()
-  const previewRow = page.locator(`.si-archive-preview-row[data-sid="${closeId}"]`)
+  if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive .si-zone-count').click()
+  const previewRow = page.locator(`.si-zone-archive ~ .si-tree-row .si-item[data-sid="${closeId}"]`)
   await previewRow.waitFor({ state: 'visible' })
   const drawerMeasure = await page.locator('.si-list').evaluate((list) => {
-    const drawer = list.querySelector('[data-archive-drawer]')
-    const preview = list.querySelector('[data-archive-preview]')
-    const rows = preview ? [...preview.querySelectorAll('.si-archive-preview-row')] : []
-    const outlet = preview?.querySelector('.si-archive-all')
-    const bar = drawer?.querySelector('.si-archive-bar')
     const scrollables = [list, ...list.querySelectorAll('*')].filter((element) => {
       const overflow = getComputedStyle(element).overflowY
       return overflow === 'auto' || overflow === 'scroll'
     }).map((element) => element.className)
-    const rowHeight = rows[0]?.getBoundingClientRect().height || 30
-    const fixed = (outlet?.getBoundingClientRect().height || 0) + (bar?.getBoundingClientRect().height || 0)
     return {
-      listHeight: list.clientHeight,
-      drawerHeight: drawer?.getBoundingClientRect().height || 0,
-      drawerClient: drawer?.clientHeight || 0,
-      drawerScroll: drawer?.scrollHeight || 0,
-      drawerOverflow: drawer ? getComputedStyle(drawer).overflowY : '',
-      rows: rows.length,
-      maxRows: Math.max(0, Math.floor((list.clientHeight / 3 - fixed) / rowHeight)),
+      rows: list.querySelectorAll('.si-zone-archive ~ .si-tree-row .si-item').length,
       scrollables,
     }
   })
-  assert.ok(drawerMeasure.drawerHeight <= drawerMeasure.listHeight / 3 + 1,
-    `drawer exceeds one third: ${JSON.stringify(drawerMeasure)}`)
-  assert.ok(drawerMeasure.rows <= drawerMeasure.maxRows, `drawer exposed too many rows: ${JSON.stringify(drawerMeasure)}`)
-  assert.ok(drawerMeasure.drawerScroll <= drawerMeasure.drawerClient,
-    `drawer owns hidden scroll overflow: ${JSON.stringify(drawerMeasure)}`)
-  assert.ok(!['auto', 'scroll'].includes(drawerMeasure.drawerOverflow), 'drawer has its own scrolling policy')
+  assert.ok(drawerMeasure.rows <= 8, `archive zone exposed too many rows: ${JSON.stringify(drawerMeasure)}`)
   assert.deepEqual(drawerMeasure.scrollables, ['si-board-scroll'], 'the sidebar has more than one scroll container')
-  await previewRow.click()
+  assert.equal(await page.locator('.si-zone-all').count(), 1, 'archive zone omitted the View all row')
+  await page.screenshot({ path: join(out, 'archive-zone-expanded.png'), fullPage: true })
+  await page.locator('.si-zone-all').click()
+  const archivePage = page.locator('[data-archive-page]')
+  await archivePage.waitFor({ state: 'visible' })
+  await page.screenshot({ path: join(out, 'archive-index-overlay.png'), fullPage: true })
+  await page.keyboard.press('Escape')
+  await archivePage.waitFor({ state: 'detached' })
+  await page.locator('.si-zone-all').click()
+  await page.locator('[data-archive-page]').waitFor({ state: 'visible' })
+  await page.locator(`[data-archive-page] .si-archive-page-row[data-sid="${closeId}"]`).click()
   const archivedChat = page.locator('.tl-chat:visible')
   await archivedChat.waitFor({ state: 'visible', timeout: 30_000 })
   await archivedChat.locator('.m-empty').waitFor({ state: 'detached', timeout: 30_000 })
   assert.equal(await archivedChat.locator('.m-composer').getAttribute('data-footer-state'), 'archived')
-  assert.equal(await archivedChat.locator('.m-input').isDisabled(), true, 'drawer row did not open read-only Conversation')
+  assert.equal(await archivedChat.locator('.m-input').isDisabled(), true, 'archive index row did not open read-only Conversation')
   assert.match(await archivedChat.innerText(), /retained conversation proof/, 'closed Conversation lost its real timeline')
-  await page.screenshot({ path: join(out, 'archive-drawer.png'), fullPage: true })
-  step('bounded drawer has no scroll and opens the retained read-only Conversation')
+  await page.screenshot({ path: join(out, 'archive-zone-conversation.png'), fullPage: true })
+  step('archive zone stays in the single board scroll and index selection opens the retained read-only Conversation')
 
   await page.keyboard.press('Alt+/')
   const globalSearch = page.locator('.search-input')
@@ -317,11 +313,11 @@ try {
 
   const beforeReloadRequests = archiveRequests.length
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.waitForFunction(() => document.querySelector('.si-archive-bar')?.dataset.archiveCount === '32')
+  await page.waitForFunction(() => document.querySelector('.si-zone-archive')?.dataset.archiveCount === '32')
   assert.equal(archiveRequests.length, beforeReloadRequests + 1, 'one page load issued more than one archive index request')
   assert.deepEqual(archiveRequests.at(-1).params, [['all', '1']], 'full archive read was paginated')
-  await page.locator('.si-archive-label').click()
-  const archivePage = page.locator('[data-archive-page]')
+  if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive .si-zone-count').click()
+  await page.locator('.si-zone-all').click()
   await archivePage.waitFor({ state: 'visible' })
   const todayKey = dayKey(new Date(closed.closedAt))
   const yesterdayKey = dayKey(yesterday)
@@ -370,7 +366,7 @@ try {
   const video = page?.video()
   await context?.close().catch(() => {})
   const videoPath = video ? await video.path().catch(() => null) : null
-  const filedVideo = videoPath && existsSync(videoPath) ? join(out, 'session-archive-drawer.webm') : null
+  const filedVideo = videoPath && existsSync(videoPath) ? join(out, 'session-archive-zone.webm') : null
   if (filedVideo) renameSync(videoPath, filedVideo)
   await browser?.close().catch(() => {})
   if (api && controlId) {
@@ -386,11 +382,15 @@ try {
     controlId,
     legacyId,
     artifacts: [
-      'archive-drawer.png',
+      'archive-zone-zero.png',
+      'archive-zone-folded.png',
+      'archive-zone-expanded.png',
+      'archive-index-overlay.png',
+      'archive-zone-conversation.png',
       'archive-page.png',
       'archive-page-unknown.png',
       'global-search-excludes-archive.png',
-      filedVideo && 'session-archive-drawer.webm',
+      filedVideo && 'session-archive-zone.webm',
     ].filter(Boolean),
   }, null, 2)}\n`)
   rmSync(fixture, { recursive: true, force: true })

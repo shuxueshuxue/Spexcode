@@ -31,8 +31,7 @@ import { useTransientNotice } from './TransientNotice.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 const SESSION_DRAG_GHOST_SCALE = 0.75
-const ARCHIVE_ROW_HEIGHT = 30
-const ARCHIVE_FIXED_HEIGHT = 68
+const ARCHIVE_ZONE_LIMIT = 8
 
 const closedTime = (session) => {
   if (typeof session?.closedAt !== 'string') return null
@@ -53,9 +52,12 @@ const localDay = (time) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function ArchivePage({ sessions, onOpenSession }) {
+function ArchivePage({ sessions, onOpenSession, onClose }) {
   const { lang, t } = useI18n()
   const [query, setQuery] = useState('')
+  const searchRef = useRef(null)
+  const rowRefs = useRef([])
+  useEscLayer(true, onClose)
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(lang)
     if (!needle) return sessions
@@ -87,9 +89,19 @@ function ArchivePage({ sessions, onOpenSession }) {
     const time = closedTime(session)
     return time == null ? '' : new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(time)
   }
+  const archiveRows = groups.flatMap((group) => group.rows)
+  useEffect(() => { searchRef.current?.focus() }, [])
+  const onKeyDown = (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    const current = rowRefs.current.findIndex((element) => element === document.activeElement)
+    const next = Math.max(0, Math.min(archiveRows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))
+    rowRefs.current[next]?.focus()
+  }
 
   return (
-    <div className="si-archive-page" data-archive-page>
+    <div className="si-archive-backdrop" data-archive-backdrop onKeyDown={onKeyDown} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="si-archive-page" data-archive-page role="dialog" aria-modal="true" aria-label={t('session.archiveTitle')}>
       <header className="si-archive-head">
         <div>
           <h1>{t('session.archiveTitle')}</h1>
@@ -97,7 +109,7 @@ function ArchivePage({ sessions, onOpenSession }) {
         </div>
         <label className="si-archive-search">
           <Icon name="search" size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)}
+          <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)}
             placeholder={t('session.archiveSearch')} aria-label={t('session.archiveSearch')} />
         </label>
       </header>
@@ -107,7 +119,7 @@ function ArchivePage({ sessions, onOpenSession }) {
           <section key={group.key} className="si-archive-group" data-archive-day={group.key}>
             <h2 className="si-archive-date">{dateLabel(group.key)}</h2>
             {group.rows.map((session) => (
-              <button key={session.id} type="button" className="si-archive-page-row" data-sid={session.id}
+              <button key={session.id} ref={(element) => { rowRefs.current[archiveRows.indexOf(session)] = element }} type="button" className="si-archive-page-row" data-sid={session.id}
                 onClick={() => onOpenSession(session.id)}>
                 <span className="si-archive-row-title">{sessionHeadline(session)}</span>
                 <span className="si-archive-row-node">{session.node || session.label}</span>
@@ -118,6 +130,7 @@ function ArchivePage({ sessions, onOpenSession }) {
           </section>
         ))}
       </div>
+    </div>
     </div>
   )
 }
@@ -513,15 +526,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // headers + rows, children present only while their parent is expanded); `visible` is its flat row order,
   // which ↑/↓ nav walks, so display and nav never disagree (a collapsed child is off-screen AND out of the nav
   // order, never a hidden target). Within a zone the newest session sits on top (automatic ordering).
-  // The OFFLINE zone rests FOLDED behind its header — the one disclosure for retained session history
-  // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled only
-  // by the header's leading count pod, and the selected session stays visible while the zone is folded.
+  // The OFFLINE zone rests FOLDED behind its header — the disclosure for retained live-session history
+  // ([[session-console]]): collapsed on every fresh mount, toggled only by its leading count pod, and the
+  // selected session stays visible while the zone is folded. Archive is the final sibling zone and persists its
+  // own count-chip fold choice because it is a durable history surface.
   const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
   const [offlineOpen, setOfflineOpen] = useState(false)
+  const [archiveZoneOpen, setArchiveZoneOpen] = useState(() => {
+    try { return window.localStorage.getItem('spex.archiveZoneOpen') === '1' } catch { return false }
+  })
 
   const [archiveRows, setArchiveRows] = useState(null)
-  const [archiveOpen, setArchiveOpen] = useState(false)
-  const [sidebarHeight, setSidebarHeight] = useState(0)
   const refreshArchive = useCallback(() => {
     if (archiveRequestRef.current) return archiveRequestRef.current
     const request = fetch(apiUrl('/api/sessions?all=1'))
@@ -550,15 +565,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     workingIdsRef.current = next
     if (open && archiveRows !== null && previous && [...previous].some((id) => !next.has(id))) void refreshArchive()
   }, [open, sessions, archiveRows, refreshArchive])
-  useLayoutEffect(() => {
-    const element = listRef.current
-    if (!element) return undefined
-    const measure = () => setSidebarHeight(element.clientHeight)
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
   const allSessions = useMemo(() => {
     const byId = new Map(sessions.map((s) => [s.id, s]))
     for (const s of archiveRows || []) if (!byId.has(s.id)) byId.set(s.id, s)
@@ -566,18 +572,25 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [sessions, archiveRows])
   const liveSessions = useMemo(() => allSessions.filter((session) => !session.archived), [allSessions])
   const archivedSessions = useMemo(() => archiveOrder(allSessions.filter((session) => session.archived)), [allSessions])
-  const forest = useMemo(() => sessionForest(liveSessions, (id) => expanded.has(id), {
+  const liveForest = useMemo(() => sessionForest(liveSessions, (id) => expanded.has(id), {
       zoneFolded: (z) => z === 'offline' && !offlineOpen,
       keepVisible: (s) => s.id === sel,
     }), [liveSessions, expanded, offlineOpen, sel])
+  const forest = useMemo(() => [
+    ...liveForest,
+    { type: 'zone', zone: 'archive', count: archivedSessions.length, folded: !archiveZoneOpen },
+    ...(archiveZoneOpen ? archivedSessions.slice(0, ARCHIVE_ZONE_LIMIT).map((s) => ({
+      type: 'row', s, depth: 0, expandable: false, expanded: false, rollup: null, kin: 0, guides: [], archive: true,
+    })) : []),
+  ], [liveForest, archivedSessions, archiveZoneOpen])
   const foldableIds = useMemo(() => new Set(forest.filter((item) => item.type === 'row' && item.expandable)
     .map((item) => item.s.id)), [forest])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
-  const validIds = useMemo(() => new Set(['new', 'archive', ...allSessions.map((s) => s.id)]), [allSessions])
-  // content mode: 'new', the archive index, or a session id.
+  const validIds = useMemo(() => new Set(['new', ...allSessions.map((s) => s.id)]), [allSessions])
+  // content mode: 'new' or a session id. The archive index is a transient overlay.
   const active = validIds.has(sel) ? sel : 'new'
-  const sessionActive = active !== 'new' && active !== 'archive'
+  const sessionActive = active !== 'new'
   // An external jump may select a descendant omitted from the collapsed forest. Reveal its full path before
   // paint when the page opens or the selected id changes. Board refreshes deliberately do not retrigger this:
   // once visible, a human may collapse the selected branch again and that local fold choice should stick.
@@ -597,13 +610,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [listW, listDrag, resetListW] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = allSessions.find((s) => s.id === active)
-  const archivePreviewLimit = Math.max(0, Math.floor((sidebarHeight / 3 - ARCHIVE_FIXED_HEIGHT) / ARCHIVE_ROW_HEIGHT))
-  const archivePreviewRows = archiveOpen ? archivedSessions.slice(0, archivePreviewLimit) : []
-  const openArchivePage = () => { setArchiveOpen(false); setSel('archive') }
-  const toggleArchive = () => {
-    if (archivePreviewLimit < 1) return openArchivePage()
-    setArchiveOpen((value) => !value)
-  }
+  const openArchivePage = () => setArchiveIndexOpen(true)
+  const [archiveIndexOpen, setArchiveIndexOpen] = useState(false)
+  const toggleArchiveZone = () => setArchiveZoneOpen((value) => {
+    const next = !value
+    try { window.localStorage.setItem('spex.archiveZoneOpen', next ? '1' : '0') } catch { /* browser storage is optional */ }
+    return next
+  })
   const changeSessionParent = useCallback(async (childId, parent) => {
     const child = allSessions.find((session) => session.id === childId)
     if (!child || (child.parent || null) === parent) return
@@ -658,6 +671,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       }
       drag.x = move.clientX
       drag.y = move.clientY
+      const board = listRef.current?.querySelector('[data-session-board-scroll]')
+      const archiveZone = board?.querySelector('[data-session-archive-zone]')
+      if (board && archiveZone && drag.started) {
+        const boardBox = board.getBoundingClientRect()
+        const zoneBox = archiveZone.getBoundingClientRect()
+        if (move.clientY > boardBox.bottom - 42 && zoneBox.bottom > boardBox.bottom)
+          board.scrollTop += Math.max(12, Math.round((zoneBox.bottom - boardBox.bottom) / 3))
+        else if (move.clientY < boardBox.top + 42 && zoneBox.top < boardBox.top)
+          board.scrollTop -= Math.max(12, Math.round((boardBox.top - zoneBox.top) / 3))
+      }
       drag.target = targetAt(move.clientX, move.clientY)
       setSessionDrag({ ...drag })
     }
@@ -1421,7 +1444,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new' && active !== 'archive') {
+      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
@@ -1533,9 +1556,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             )}
             {forest.map((it) => {
               if (it.type === 'zone') {
-                return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="si-zone" onToggle={() => setOfflineOpen((v) => !v)} />
+                const zoneItem = it.zone === 'archive' ? { ...it, dropTarget: sessionDrag?.target === 'archive' } : it
+                return <SessionZone key={`zone-${it.zone}`} item={zoneItem} baseClass="si-zone"
+                  onToggle={it.zone === 'archive' ? toggleArchiveZone : () => setOfflineOpen((v) => !v)} />
               }
               const s = it.s
+              if (it.archive) {
+                return <SessionConsoleTreeRow key={s.id} item={it} activeId={active} selecting={false} picked={new Set()}
+                  dragging={sessionDrag?.id === s.id} dropTarget={false} onToggleFold={() => {}}
+                  rowProps={{ 'data-sid': s.id, onClick: () => selectSession(s.id) }} />
+              }
               return (
                 <SessionConsoleTreeRow
                   key={s.id}
@@ -1564,35 +1594,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 />
               )
             })}
-          </div>
-          <div className={`si-archive-drawer${archiveOpen ? ' open' : ''}`} data-archive-drawer>
-            {archiveOpen && (
-              <div className="si-archive-preview" data-archive-preview>
-                {archivePreviewRows.map((session) => (
-                  <button key={session.id} type="button" className="si-archive-preview-row" data-sid={session.id}
-                    onClick={() => selectSession(session.id)}>
-                    <span>{sessionHeadline(session)}</span>
-                    <Icon name="chevron-right" size={13} />
-                  </button>
-                ))}
-                <button type="button" className="si-archive-all" onClick={openArchivePage}>
-                  <span>{t('session.archiveViewAll', { n: archivedSessions.length })}</span>
-                  <Icon name="chevron-right" size={14} />
-                </button>
-              </div>
-            )}
-            <div className={`si-archive-bar${sessionDrag?.target === 'archive' ? ' drop-target' : ''}`}
-              data-session-archive-drop data-archive-count={archivedSessions.length}>
-              <button type="button" className="si-archive-toggle" aria-expanded={archiveOpen}
-                aria-label={t(archiveOpen ? 'session.archiveCollapse' : 'session.archiveExpand')}
-                onClick={toggleArchive}>
-                <Icon name="chevron-right" size={14} />
-              </button>
-              <button type="button" className="si-archive-label" onClick={openArchivePage}>
-                <span>{t('session.archiveTitle')}</span>
-                <strong>{archivedSessions.length}</strong>
-              </button>
-            </div>
+            {archiveZoneOpen && <button type="button" className="si-item si-zone-all" onClick={openArchivePage}>
+              <span className="si-zone-all-label">{t('session.archiveViewAll', { n: archivedSessions.length })}</span>
+              <span className="sess-meta si-zone-all-meta" aria-hidden="true"><span className="sess-glyph"><Icon name="chevron-right" size={14} /></span></span>
+            </button>}
           </div>
         </aside>
 
@@ -1600,8 +1605,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         <div className="pane-resizer si-resizer" onMouseDown={listDrag} onDoubleClick={resetListW}
           role="separator" aria-orientation="vertical" aria-valuenow={Math.round(listW)} />
 
-        <section className={`si-content${active === 'new' ? ' is-new' : active === 'archive' ? ' is-archive' : ' is-session'}`}>
-          {active === 'archive' && <ArchivePage sessions={archivedSessions} onOpenSession={selectSession} />}
+        <section className={`si-content${active === 'new' ? ' is-new' : ' is-session'}`}>
           {active === 'new' && (
             <div className="si-new-center">
               <LaunchHero />
@@ -1920,6 +1924,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         )}
       </div>
     </div>
+    {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); selectSession(id) }} onClose={() => setArchiveIndexOpen(false)} />}
     <SessionContextMenu
       menu={ctxMenu}
       onClose={() => setCtxMenu(null)}

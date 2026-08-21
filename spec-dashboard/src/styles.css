@@ -1141,6 +1141,13 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }
+.si-zone-archive { --zh: var(--blue); }
+.si-zone.drop-target { color: var(--green); background: color-mix(in srgb, var(--green) 14%, var(--panel2)); box-shadow: inset 0 0 0 1px var(--green); }
+.si-zone-all {
+  justify-content: initial; color: var(--ink2);
+}
+.si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-zone-all-meta { color: var(--muted); }
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
 /* multi-select bar ([[session-multi-select]]) — a live count plus its adjacent icon-only close action. */
@@ -1182,31 +1189,6 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-pill.search { color: var(--ink2); }
 .si-pill.search:hover { color: var(--blue); }
 
-.si-archive-drawer {
-  flex: 0 0 auto; display: flex; flex-direction: column; background: var(--panel);
-  border-top: 1px solid var(--line); font-family: var(--mono); overflow: visible;
-}
-.si-archive-preview { overflow: visible; }
-.si-archive-preview-row, .si-archive-all {
-  width: 100%; height: 30px; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 7px;
-  padding: 0 10px 0 12px; color: var(--ink2); background: transparent; border: 0; border-bottom: 1px solid var(--line);
-  font: inherit; font-size: var(--type-caption); text-align: left; cursor: pointer;
-}
-.si-archive-preview-row span, .si-archive-all span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-archive-preview-row:hover, .si-archive-all:hover { color: var(--ink); background: var(--panel2); }
-.si-archive-all { height: 32px; color: var(--blue); font-size: var(--type-meta); }
-.si-archive-bar { height: 36px; display: flex; align-items: stretch; color: var(--ink2); transition: background .12s, color .12s; }
-.si-archive-bar.drop-target { color: var(--green); background: color-mix(in srgb, var(--green) 14%, var(--panel2)); box-shadow: inset 0 0 0 1px var(--green); }
-.si-archive-toggle, .si-archive-label {
-  display: flex; align-items: center; color: inherit; background: transparent; border: 0; font: inherit; cursor: pointer;
-}
-.si-archive-toggle { flex: 0 0 32px; justify-content: center; padding: 0; }
-.si-archive-toggle svg { transition: transform .14s ease; }
-.si-archive-drawer.open .si-archive-toggle svg { transform: rotate(90deg); }
-.si-archive-label { flex: 1; min-width: 0; gap: 8px; padding: 0 12px 0 0; text-align: left; }
-.si-archive-label span { flex: 1; }
-.si-archive-label strong { color: var(--muted); font-size: var(--type-caption); font-weight: var(--weight-semibold); }
-.si-archive-toggle:hover, .si-archive-label:hover { color: var(--blue); }
 /* the Forum pill reads as a secondary top action beside New: muted at rest, inking blue on hover/select so
    New stays the primary blue action. Its glyph is a monochrome inline SVG (currentColor), never an emoji. */
 .si-pill.forum { color: var(--ink2); }
@@ -1605,7 +1587,15 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 
 .si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 
-.si-archive-page { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.si-archive-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
+  padding: 5vh 5vw; box-sizing: border-box; background: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.si-archive-page {
+  width: min(980px, 90vw); height: min(760px, 86vh); min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line);
+  box-shadow: 0 10px 36px color-mix(in srgb, var(--ink) 22%, transparent);
+}
 .si-archive-head {
   flex: 0 0 auto; min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px;
   padding: 14px 24px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--paper);

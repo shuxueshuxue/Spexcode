@@ -154,32 +154,36 @@ scenarios:
       tooltip/accessibility name and status metadata stays at the first-line top-right. No row overlap occurs.
   - name: session-sidebar-viewport-scroll
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    test: spec-dashboard/test/session-archive-zone.e2e.mjs
     code: spec-dashboard/src/styles.css
     related: spec-dashboard/src/SessionInterface.jsx
     description: >-
       In an isolated real backend and prebuilt Chromium dashboard, render working rows plus a long closed index,
-      then inspect the complete SessionInterface sidebar and archive drawer geometry.
+      then inspect the complete SessionInterface sidebar and archive zone geometry.
     expected: >-
       The sidebar remains bounded inside the routed page. The working-board region owns its only vertical
-      scrollport; the permanent `Archive N` bar stays pinned below it, remains visible at zero, and the expanded
-      preview fits within one third of the sidebar height without its own overflow.
-  - name: archive-drawer-place-and-full-page
+      scrollport; the permanent archive zone stays visible at zero, remains in the same scroll flow, and does not
+      introduce a second scroll container.
+  - name: archive-zone-and-index-overlay
     tags: [frontend-e2e, desktop, backend-api]
-    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    test: spec-dashboard/test/session-archive-zone.e2e.mjs
     code: spec-dashboard/src/SessionInterface.jsx
     related: [spec-dashboard/src/styles.css, spec-dashboard/src/session.js]
     description: >-
       Through an isolated real backend and the prebuilt dashboard in Chromium, begin with no closed sessions,
-      create real working sessions, drag one row onto the permanent archive bar, expand the preview, open its
-      row, then add a long closed-index fixture and open and search the full archive page while counting requests.
+      create real working sessions, drag one row onto the archive zone heading, expand the zone, click its `View all`
+      row to open the archive overlay, then add a long closed-index fixture and search that overlay while counting requests.
     expected: >-
-      The top row has only New and Search; the bottom `Archive 0` entry is still visible. The drawer has no
-      scrollport, shows only the newest rows that fit under one third of the sidebar, and leaves the working board
-      as the sidebar's single scroll container. Dropping a row on the bar issues one close without a dialog, moves
-      it into the archive, and its preview row opens the same read-only Conversation DOM. The full right-pane page
-      receives the complete closed index in one request, filters it with its own search field, and renders
-      newest-first rows beneath sticky date headings whose active heading remains fixed during scroll.
+      The top row has only New and Search; the final `archive 0` zone is still visible and folded. Its count chip
+      toggles the zone without changing selection, and opening it shows only the newest bounded rows plus one
+      `View all N` row. The closed rows use ordinary session-row treatment; the `View all N` button uses the same
+      row geometry, normal ink, bottom rule, hover wash, and right-side chevron column but never a selected state.
+      The sidebar still has exactly one scroll container. Dropping a row on the visible zone heading issues one close
+      without a dialog and moves it into the archive; dragging near the viewport edge auto-scrolls until that heading
+      is visible. `View all N` opens a transient overlay, whose complete closed index filters locally, groups newest-first
+      under sticky dates, closes on Esc, and hands an explicitly selected row to the read-only Conversation rather than
+      changing the right-pane shape. It receives the complete closed index in one request and renders newest-first rows
+      beneath sticky date headings whose active heading remains fixed during scroll.
   - name: triage-zones-and-status-colour
     tags: [frontend-e2e, desktop]
     description: >-

@@ -26,7 +26,7 @@ related:
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
-  - spec-dashboard/test/session-archive-drawer.e2e.mjs
+  - spec-dashboard/test/session-archive-zone.e2e.mjs
 ---
 
 # session-console
@@ -72,20 +72,29 @@ kept out of the `↑/↓` path down to a session: `＋` New Session and Search, 
 ([[session-search]] owns that contract). The list is bounded by the routed page's viewport. Its working-board
 region owns the sidebar's only vertical scrollbar when the rows exceed the available height.
 
-The archive is a permanent **place**, not a list mode. A bottom-pinned `Archive N` bar remains visible even when
-`N` is zero; `N` is the complete count of closed session records, with no capacity number because close has
-already reclaimed the worktree. The bar's disclosure control expands a flat newest-closed-first preview in place,
-while its label routes the right pane to the full archive page. These are separate actions on one line. The preview
-shows as many recent rows as fit without exceeding one third of the sidebar height, followed by one `View all N`
-exit to the full page. It never scrolls and never creates a nested scrollport. When the available third cannot
-hold a useful preview plus its exit, disclosure routes directly to the full page. Selecting a preview row opens
-that closed session's ordinary read-only Conversation face.
+The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
+when `N` is zero and carries the complete count of closed records. The heading uses the same count-chip disclosure
+as the offline zone and is folded by default with its fold choice persisted locally. When open it shows the newest
+closed rows (bounded to a small fixed number so it cannot drown the working list), then one `View all N` row. The
+closed rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
+Conversation. `View all N` is a keyboard-reachable button that follows the same row geometry, ink, bottom rule, and
+hover wash as a session row, with its `›` in the right-side status-marker column; it has no selected state. Dropping
+a working row on the visible archive heading performs the one reversible close transition without confirmation.
+While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
+sidebar still owns exactly one scroll container.
 
-The archive page occupies the complete right pane. It reads the full closed-session index in one request, renders
-the newest-closed-first rows under sticky Today / Yesterday / calendar-date headings, and owns a search field that
-filters that complete index locally. Pagination is deliberately absent: the scrollbar represents the whole result
-set from its first paint. This page is the only archive-search entry; the global palette neither includes closed
-rows nor hints at hidden archive matches.
+`View all N` opens a transient archive index overlay, not a third right-pane mode. The overlay is scoped only to
+closed sessions, reads the complete index once, groups newest-first rows under sticky dates, filters locally, and
+closes on Esc or backdrop press. Choosing an index row closes the overlay and hands selection to the ordinary
+read-only Conversation, so the right pane always represents the selected session (or New Session), never an archive
+page.
+
+The archive index overlay reads the full closed-session index in one request, renders the newest-closed-first rows
+under sticky Today / Yesterday / calendar-date headings, and owns a search field that filters that complete index
+locally. Pagination is deliberately absent: the overlay's index scrollbar represents the whole result set from its
+first paint. This overlay is the only archive-search entry; the global palette neither includes closed rows nor
+hints at hidden archive matches. Esc/backdrop closes it, and choosing a row returns to that session's ordinary
+Conversation in the right pane.
 
 The console list is the mutable home of its session forest ([[session-nesting]]). Dragging a row moves a
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
@@ -99,7 +108,7 @@ The gesture is deliberately ordinary pointer drag rather than a tiny dedicated h
 will move, so the feedback must visibly be that row. Right-click keeps the complementary
 explicit `remove from parent` action for a nested row. Both paths call the one reparent endpoint and leave
 selection, terminal focus, and invalid/no-op drops alone.
-Dropping a working row on the permanent archive bar instead performs the row's one reversible `close` transition:
+Dropping a working row on the visible archive zone heading instead performs the row's one reversible `close` transition:
 the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
 close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 

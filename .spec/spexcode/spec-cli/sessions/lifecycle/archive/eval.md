@@ -36,10 +36,10 @@ scenarios:
       launches the same conversation without requiring a new archive ref.
     tags: [backend-api, frontend-e2e]
   - name: close-index-time-is-explicit
-    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    test: spec-dashboard/test/session-archive-zone.e2e.mjs
     description: >
       Close a real working session through the browser drop target, inspect the public all-sessions index, then add
-      a historical archived:true record with no closed_at and open the full archive page.
+      a historical archived:true record with no closed_at and open the archive index overlay.
     expected: >
       The new close publishes an ISO closedAt written with its retained record and appears in the correct date group.
       The historical row projects closedAt:null and appears in the final explicit Time unknown group without using

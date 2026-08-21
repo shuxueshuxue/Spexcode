@@ -30,13 +30,16 @@ export default {
     pending: '待定',
   },
 
-  // 会话列表按此分成两个区（[[session-console]]）——「轮到谁」。
+  // 会话列表按此分成四个区（[[session-console]]）——「轮到谁」。
   sessionZone: {
     need: '待你处理',
     run: '自运行',
     offline: '离线',
+    archive: '归档',
     showHistory: ({ n }) => `展开 ${n} 个休眠会话（历史仅收纳，绝不删除）`,
     hideHistory: ({ n }) => `收起这 ${n} 个休眠会话`,
+    showArchive: ({ n }) => `展开 ${n} 个已归档会话`,
+    hideArchive: ({ n }) => `收起这 ${n} 个已归档会话`,
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
@@ -635,8 +638,6 @@ export default {
     offlineSubAfter: ' 仍然完好。重新启动以恢复同一对话。',
     archiveTitle: '归档',
     archiveCount: ({ n }) => `${n} 个已关闭会话`,
-    archiveExpand: '展开归档抽屉',
-    archiveCollapse: '收起归档抽屉',
     archiveViewAll: ({ n }) => `查看全部 ${n}`,
     archiveSearch: '搜索归档',
     archiveEmpty: '没有匹配的已关闭会话',

@@ -5,9 +5,9 @@ hue: 280
 desc: The explicit self-launch adapter seam for attaching a caller-owned native harness identity to a protocol address.
 code:
   - packages/session-selflaunch/src/index.ts
+related:
   - packages/session-selflaunch/src/index.test.ts
   - docs/session-selflaunch-bindings-plan.md
-related:
   - .spec/spexcode/session-runtime/runtime-bindings/spec.md
   - .spec/spexcode/session-runtime/self-launch-entry/spec.md
   - .spec/spexcode/session-protocol/spec.md

@@ -183,11 +183,10 @@ try {
     }
   }
   assert.ok(await visibleRows(page, '.si-item') > 1)
-  await interfaceOffline.click()
 
   await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, offline[0].id)
   await page.locator(`.si-item[data-sid="${offline[0].id}"]`).waitFor({ state: 'visible' })
-  assert.equal(await expanded(interfaceOfflineCount), 'false')
+  assert.equal(await expanded(interfaceOffline), 'false')
   record('SessionInterface', 'offline deep link remains visible while folded', true)
 
   await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, child.id)

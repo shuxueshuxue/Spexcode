@@ -1,7 +1,7 @@
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
@@ -2195,7 +2195,7 @@ const sessionCandidateLockId = (path: string, branch: string) => `create-resourc
 // after publication or bounded cleanup, so the path names exactly the transaction-owned worktree.
 export function pendingSessionCreateWorktreePaths(): Set<string> {
   const paths = new Set<string>()
-  let entries: import('node:fs').Dirent[]
+  let entries: Dirent[]
   try { entries = readdirSync(sessionCandidateReceiptDir(), { withFileTypes: true }) }
   catch { return paths }
   for (const entry of entries) {

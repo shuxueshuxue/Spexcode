@@ -253,6 +253,16 @@ runtime, missing grammar, incompatible grammar ABI, or parse error is an explici
 leaves the affected anchors unverified rather than silently selecting another parser or returning a fake
 pass. Tree-sitter's error-recovery tree is therefore rejected when its root reports `hasError`.
 
+That strictness has a cost the rejection message must carry: a shipped grammar can lag its language, so a
+file rejected here is not necessarily invalid source. The pinned TypeScript grammar, for one, parses
+`import('mod').Type` but not the array over it, `import('mod').Type[]`. And because a rejection is
+file-wide while a session's scope spans many nodes, ONE such file makes every selector into it
+unextractable and, through [[session-eval]]'s explicit-unavailable rule, takes down every session's eval
+summary at once — the loudest possible failure wearing the quietest possible face, a toolbar that reads
+"unavailable" and names no cause. So the message names the file and the engine's verdict, and the honest
+remedies are the grammar row and the source construct, never a softened gate: a parse this engine cannot
+certify may not be reported as a hit or a no-hit.
+
 The extractor contract stays language-agnostic above the seam: immutable file-revision memoization,
 dead/ambiguous resolution, and hunk∩range all live outside it. A memo key includes every input to the
 extractor: object-hash algorithm and blob oid, filename semantics (including script kind), extractor/schema

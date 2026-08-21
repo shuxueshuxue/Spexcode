@@ -162,7 +162,11 @@ Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plug
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). --harness is REQUIRED — the explicit choice of which harnesses materialize delivers into
 (stamped as spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
-field satisfies it. Additive — never overwrites your files. --preset picks the .plugins plugin tier (cumulative).
+field satisfies it; --harness none delivers into NO harness (spec tree + lint + git hooks only, nothing
+written into any agent's config). Additive: it never replaces a file you own — where a harness discovers its
+hooks in your own config (.claude/settings.json, …) only SpexCode's entries are merged in and out, and a
+skill/agent name you already use is skipped and reported rather than overwritten.
+--preset picks the .plugins plugin tier (cumulative).
 Footprint is fixed: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
 a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex spec lint (adoption TODO)',

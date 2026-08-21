@@ -62,17 +62,24 @@ file's own block-outside region (untracked, per-clone), while anything that must
 plugin node. This replaces the launch-time
   `--append-system-prompt` for self-launch (at user-message level — the ceiling for a discovered file, not
   system-prompt level);
-- **the shims** — each adapter's `shim().content` written to its `shimFile()`, whatever ARTIFACT that harness
-  auto-discovers to wire events to the dispatcher: a thin hooks JSON for claude/codex (`.claude/settings.json`
-  / `.codex/hooks.json`, one line per event), a generated event-bus plugin for opencode
+- **the shims** — each adapter's shim landed at its `shimFile()`, whatever ARTIFACT that harness
+  auto-discovers to wire events to the dispatcher: a hooks JSON for claude/codex/zcode (`.claude/settings.json`
+  / `.codex/hooks.json` / `.zcode/settings.json`, one entry per event), a generated event-bus plugin for opencode
   (`.opencode/plugins/spexcode.ts` — [[opencode-harness]]), or a generated extension for pi
-  (`.pi/extensions/spexcode.ts` — [[pi-harness]]). materialize writes the bytes verbatim; the shape is the
-  adapter's fact, not this pipeline's. The post-erase empty-dir sweep covers each artifact dir AND its parent
+  (`.pi/extensions/spexcode.ts` — [[pi-harness]]). The shape is the adapter's fact, not this pipeline's, and so
+  is WHO OWNS the file: a spexcode-named file of ours is written verbatim, while a config file the host agent
+  SHARES with the user takes only our identity-stamped hook entries, merged in beside whatever they already
+  had ([[harness-adapter]]'s `shimOwnership`). This pipeline never learns which harness that is — it reads the
+  ownership off the adapter and picks the writer. The post-erase empty-dir sweep covers each artifact dir AND its parent
   (never a checkout root), since a harness may nest its shim a level below its home;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no
-  skill primitive gets none. Exclude-hidden like the shims (generated, no user prose);
+  skill primitive gets none. Exclude-hidden like the shims (generated, no user prose). A skill dir is SHARED
+  with whatever the user put there, and a node name is not a claim on a path: a target that already exists
+  WITHOUT the `GENERATED_MARK` stamp is their file, so the write is skipped and the collision REPORTED rather
+  than resolved silently in our favour. The stamp gates both halves of the pass — write and erase — so a
+  same-named skill of theirs survives adoption, re-materialize, and uninstall alike;
 - **the sub-agents** — each `surface: agent` body as `<agentDir>/<name>.md` (claude `.claude/agents/`), a
   harness-auto-discovered Agent-tool definition carrying the node's `desc:` load-trigger and `tools:`
   allowlist, spawned **on demand**, not always-on. Same shape as skills, one definition per harness: the dir

@@ -81,7 +81,7 @@ filter on the spot — clean status, no "mystery M", no decision hint — and hi
 the per-clone exclude without touching the host's `.gitignore`. A lingering `render`/`private` field in a
 pre-existing config is ignored with a loud non-fatal notice; nothing about it is ever fatal to adoption.
 
-**The harness delivery choice is REQUIRED, up front.** `--harness <id[,id]|plugin:<folder>>` names which
+**The harness delivery choice is REQUIRED, up front.** `--harness <id[,id]|plugin:<folder>|none>` names which
 harnesses [[harness-select]] delivers into; init stamps it into `spexcode.json` as the persistent `harnesses`
 field (an explicit `--harness` on a re-init restamps that field of an existing config; the same write also
 fills a missing stable `mainBranch`, preserving every other field). A pre-existing explicit field satisfies
@@ -89,7 +89,17 @@ the requirement without the flag. Neither → init aborts
 BEFORE writing anything, like the git precondition — there is deliberately no default set, because with many
 registered harnesses "deliver to all" would litter the adopter's tree and global tool configs with artifacts
 for CLIs they never installed. An ILLEGAL set (unknown id, plugin paired with a native, plugin with no
-landing folder, empty list) fails just as loud, up front — never a soft "materialize skipped" warning.
+landing folder) fails just as loud, up front — never a soft "materialize skipped" warning.
+
+REQUIRED means *stated*, not *non-empty*. `--harness none` stamps the empty set: adoption seeds the spec
+tree, plants `spexcode.json`, installs the git hooks, and writes NOTHING into any agent's config. That is the
+L0-only posture — the spec asset and its lint, adopted by a repo whose agent SpexCode does not adapt, or by
+one that wants the data and none of the wiring — and refusing it would make "choose a vendor's harness" the
+price of admission to a layer that has no vendor in it. It is not the same as a MISSING field: `[]` is a
+choice, `undefined` is the absence of one, and only the second aborts. Because nothing is delivered, nothing
+needs hiding either — the tree's `.gitignore` block is not written at all, rather than written to ignore only
+itself. Selecting a harness later is the ordinary [[harness-select]] selection change, self-healing at the
+next git-native anchor; no re-adoption.
 
 **A git work tree is a precondition, checked first.** SpexCode is git-backed — git is the version
 database and the hooks live in `.git` — so a non-git target would leave a *half-state*: specs on disk but

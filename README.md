@@ -83,13 +83,18 @@ spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-head
 ```
 
 That's the whole adoption. The example lists all the built-in harnesses; remove the ones you don't
-use (`--harness` is required and takes any one id or comma-separated subset).
-`spex init` is additive: it works on any existing git repo, never overwrites your files, and does
-three things. It seeds a root `.spec/project/spec.md` plus a starter `spexcode.json`, installs the
-git hooks, and **materializes** the workflow rules into the files your agent already reads
-(`CLAUDE.md`, `AGENTS.md`): read the governing spec before the code, land spec and code in one
-commit, propose merges instead of performing them. Any agent that opens the repo discovers the
-workflow on its own.
+use (`--harness` is required and takes any one id or comma-separated subset). Want the spec asset and
+nothing wired into an agent? `--harness none` adopts L0 alone and writes nothing into any agent's config.
+`spex init` works on any existing git repo and does three things: it seeds a root
+`.spec/project/spec.md` plus a starter `spexcode.json`, installs the git hooks, and **materializes**
+the workflow rules into the files your agent already reads (`CLAUDE.md`, `AGENTS.md`): read the
+governing spec before the code, land spec and code in one commit, propose merges instead of
+performing them. Any agent that opens the repo discovers the workflow on its own.
+
+It is additive, and never replaces a file you own. Where a harness discovers its hooks inside your own
+config (`.claude/settings.json`, `.codex/hooks.json`), only SpexCode's entries are merged in — your
+permissions, env and hooks stay — and `spex uninstall` takes back exactly those entries. A skill or
+agent name you already use is skipped and reported, never overwritten.
 
 When you want the live board (the graph, sessions, evals), start the runtime:
 

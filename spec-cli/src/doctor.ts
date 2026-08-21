@@ -3,9 +3,10 @@ import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { loadSystemConfig, loadSkillConfig, loadSpecs } from '@spexcode/spec-core'
+import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadSpecs } from '@spexcode/spec-core'
 import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout, readJsonConfig } from '@spexcode/spec-core'
 import { loadConfig } from './lint.js'
+import { GENERATED_MARK } from './harness.js'
 import { trackedSourceFiles } from './source-files.js'
 import { gitBinary } from '@spexcode/spec-core'
 
@@ -257,6 +258,7 @@ function scanBundles(root: string, scope: string, ourSkills: string[]): Bundle[]
 async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; conflict: boolean }> {
   const { HARNESSES } = await import('./harness.js')
   const ourSkills = (() => { try { return loadSkillConfig().map((c) => c.name) } catch { return [] as string[] } })()
+  const ourAgents = (() => { try { return loadAgentConfig().map((c) => c.name) } catch { return [] as string[] } })()
   const L: string[] = []
   const line = (k: string, v: string) => L.push(`  ${k.padEnd(16)}: ${v}`)
   let conflict = false
@@ -279,6 +281,14 @@ async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; co
       ...(looseDispatch ? [`loose ${rel(shimFile)}`] : []),
       ...bundles.filter((b) => b.hooksToDispatch).map((b) => `plugin "${b.name}" (${b.scope})`),
     ]
+    // a DIFFERENT collision from the double-delivery channels below: a skill/agent path a live spec node
+    // names, already occupied by a file the user wrote (no GENERATED_MARK). materialize skips those, so the
+    // node silently never reaches this harness — worth naming here, where somebody asks "do we clash?".
+    const userOwned = [
+      ...(looseSkillDir ? ourSkills.map((s) => join(looseSkillDir, s, 'SKILL.md')) : []),
+      ...((dir) => dir ? ourAgents.map((a) => join(dir, `${a}.md`)) : [])(h.agentDir(base)),
+    ].filter((f) => existsSync(f) && !read(f).includes(GENERATED_MARK))
+
     // channel 2 — same-named skill in loose skillDir AND a bundle's skills dir
     const skillHits: string[] = []
     for (const s of ourSkills) {
@@ -298,6 +308,7 @@ async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; co
     for (const b of bundles) line('  plugin', `"${b.name}" (${b.scope}) — ${b.dir}`)
     line('hooks→dispatch', `${hookSrc.length}${hookSrc.length > 1 ? '  (>1 → CONFLICT): ' + hookSrc.join(', ') : hookSrc.length === 1 ? '  (single — ok)' : '  (none wired)'}`)
     line('skill shadowing', skillHits.length ? `CONFLICT: ${skillHits.join(', ')}` : 'none')
+    line('your files kept', userOwned.length ? `${userOwned.map(rel).join(', ')} — yours (no spexcode stamp), so the same-named spec node is NOT delivered here` : 'none')
     L.push('')
   }
 

@@ -43,7 +43,24 @@ test('unknown id and malformed members fail loud', () => {
   assert.throws(() => resolveHarnessTargets(['gemini']), /unknown harness id/i)
   assert.throws(() => resolveHarnessTargets([42]), /each member must be/i)
   assert.throws(() => resolveHarnessTargets('claude'), /must be an ARRAY/i)
-  assert.throws(() => resolveHarnessTargets([]), /EMPTY/)
+  // `none` is the WHOLE selection being empty, never a member alongside real targets.
+  assert.throws(() => resolveHarnessTargets(['none']), /not a member/i)
+  assert.throws(() => resolveHarnessTargets(['none', 'claude']), /not a member/i)
+})
+
+test('the EMPTY set is a legal, explicit choice: deliver into no harness at all', () => {
+  // distinct from a MISSING field — [] is somebody saying "none", not somebody forgetting to choose.
+  assert.deepEqual(resolveHarnessTargets([]), [])
+  assert.throws(() => resolveHarnessTargets(undefined), /no "harnesses" field/i)
+  assert.throws(() => resolveHarnessTargets(null), /no "harnesses" field/i)
+  const none = partitionHarnesses(resolveHarnessTargets([]))
+  assert.equal(none.selected.length, 0, 'nothing selected')
+  assert.deepEqual(none.unselected.map((h) => h.id).sort(), [...NATIVE_HARNESS_IDS].sort(), 'every adapter is pruned')
+  assert.equal(none.plugins.length, 0)
+  // the CLI spelling translates to it, and only when it IS the whole flag.
+  assert.deepEqual(parseHarnessFlag('none'), [])
+  assert.deepEqual(parseHarnessFlag(' none '), [])
+  assert.deepEqual(parseHarnessFlag('none,claude'), ['none', 'claude'])
 })
 
 test('partitionHarnesses splits live adapters into selected vs unselected', () => {

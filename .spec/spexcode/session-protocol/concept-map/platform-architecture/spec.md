@@ -6,6 +6,7 @@ desc: The human-reviewable top-level view of the proposed SQLite-backed session 
 code:
   - docs/session-platform-architecture.html
 related:
+  - docs/session-events-architecture.html
   - .spec/spexcode/session-protocol/concept-map/spec.md
   - .spec/spexcode/session-protocol/concept-map/session-management-refactor/spec.md
   - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
@@ -19,6 +20,10 @@ This node owns the linked HTML review view that presents the proposed session pl
 architecture: a fixed communication protocol, adopter-owned topology and runtime composition, separate harness
 runtime and configuration adapters, explicit storage placement, and the ZSwarm, self-launch, and Spex-governed
 adoption paths.
+
+The related `docs/session-events-architecture.html` is a review artifact for the proposed session-events and
+session-application layers. It must distinguish the current protocol/topology implementation from the planned event
+log and replay contract; it does not itself claim that those planned packages exist.
 
 The document is a decision surface, not an accepted runtime contract. It must label the proposal as a review draft,
 distinguish current behavior from target behavior, and link to both the implementation-level refactor view and the

@@ -21,7 +21,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build --workspace=@spexcode/spec-core && npm run build --workspace=@spexcode/session-core && npm run build --workspace=@spexcode/spec-eval && npm run build --workspace=@spexcode/spec-forge && npm run build --workspace=@spexcode/spec-cli",
+    "build": "npm run build --workspace=@spexcode/session-protocol && npm run build --workspace=@spexcode/session-topology && npm run build --workspace=@spexcode/session-runtime && npm run build --workspace=@spexcode/session-events && npm run build --workspace=@spexcode/session-application && npm run build --workspace=@spexcode/session-selflaunch && npm run build --workspace=@spexcode/spec-core && npm run build --workspace=@spexcode/session-core && npm run build --workspace=@spexcode/spec-eval && npm run build --workspace=@spexcode/spec-forge && npm run build --workspace=@spexcode/spec-cli",
     "typecheck": "tsc --noEmit -p spec-cli/tsconfig.json",
     "api": "npm run build && node bin/spex.mjs serve",
     "web": "cd spec-dashboard && npm run dev",

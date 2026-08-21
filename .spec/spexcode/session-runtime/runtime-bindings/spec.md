@@ -8,6 +8,10 @@ code:
 related:
   - .spec/spexcode/session-runtime/spec.md
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
+  - .spec/spexcode/session-runtime/runtime-bindings-package/spec.md
+  - .spec/spexcode/session-runtime/runtime-bindings-schema/spec.md
+  - .spec/spexcode/session-runtime/runtime-bindings-errors/spec.md
+  - .spec/spexcode/session-runtime/runtime-bindings-yatu/spec.md
   - .spec/spexcode/session-protocol/spec.md
   - .spec/spexcode/session-topology/spec.md
 ---

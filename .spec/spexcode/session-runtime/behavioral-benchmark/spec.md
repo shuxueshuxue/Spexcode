@@ -6,6 +6,7 @@ code:
 related:
   - docs/session-slopcodebench-two-problem.md
   - docs/session-slopcodebench-three-problem.md
+  - docs/session-behavior-findings.html
 ---
 
 # behavioral-benchmark
@@ -29,3 +30,6 @@ The same rule applies when a tool call or provider turn starts but no tool resul
 the bounded run is stopped: the durable session must remain visibly incomplete rather than becoming successful idle.
 Prompt text is not an isolation boundary, and a retry, fallback, implicit compaction, or fabricated completion receipt
 must not be used to hide this state.
+
+The consolidated review artifact in `docs/session-behavior-findings.html` summarizes these measurements and their
+evidence boundaries; it is a report view, not a separate runtime contract.

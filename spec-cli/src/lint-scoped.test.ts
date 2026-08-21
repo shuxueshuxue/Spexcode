@@ -33,6 +33,7 @@ type Fx = {
   g: (...a: string[]) => string
   lint: () => { code: number; out: string }
   node: (id: string, fm: string) => void
+  evalFor: (id: string, scenarios: string) => void
   commit: (msg: string) => void
 }
 // a governed fixture repo: src/calc.ts + a .spec tree; each node's spec.md and the source land in ONE
@@ -51,13 +52,22 @@ function fixture(): Fx {
     mkdirSync(join(proj, '.spec/proj', id), { recursive: true })
     writeFileSync(join(proj, '.spec/proj', id, 'spec.md'), `---\ntitle: ${id}\n${fm}\n---\n# ${id}\n`)
   }
+  // an eval.md beside a node's spec.md — the OTHER place a `path#unit` selector is declared
+  const evalFor = (id: string, scenarios: string) => {
+    mkdirSync(join(proj, '.spec/proj', id), { recursive: true })
+    writeFileSync(join(proj, '.spec/proj', id, 'eval.md'), `---\nscenarios:\n${scenarios}---\nfixture\n`)
+  }
   const commit = (msg: string) => { g('add', '-A'); g('commit', '-qm', msg) }
   const lint = () => {
     const r = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint'], { cwd: proj, encoding: 'utf8' })
     return { code: r.status ?? -1, out: `${r.stdout}${r.stderr}` }
   }
-  return { proj, g, lint, node, commit }
+  return { proj, g, lint, node, evalFor, commit }
 }
+
+// One scenario block; `code` is optional so the inherited-axis case can be written too.
+const SCENARIO = (name: string, code?: string) =>
+  `  - name: ${name}\n    tags: [cli]\n${code ? `    code: [${code}]\n` : ''}    description: drive the unit\n    expected: the unit answers\n`
 
 test('multi-hit dedupe: one commit inside BOTH pinned units → ONE anchor-drift error naming both selectors', { skip }, () => {
   const fx = fixture()
@@ -358,4 +368,59 @@ test('an issue-only pending commit keeps the parent drift index instead of clear
   const repeat = normalize(await specLint(fx.proj, extractors(fx.proj), { tip }))
   assert.deepEqual(fast, repeat)
   assert.ok(fast.some((row) => row.startsWith('warn|drift|calc|src/calc.ts')), `issue commit erased drift: ${fast.join('\n')}`)
+})
+
+// ---- an eval scenario's selector is a selector ([[code-anchor]] / [[spec-lint]]) ----
+// The four cases that decide whether one anchor gate covers BOTH declaration sites without swallowing the
+// measurement layer: resolution blocks, an unparseable file blocks even with no spec-node anchor on it, the
+// drift WINDOW never crosses over, and an inherited axis is not reported twice.
+
+test("a scenario's dead selector is an integrity error naming the scenario and its eval.md", { skip }, () => {
+  const fx = fixture()
+  fx.node('calc', 'code:\n  - src/calc.ts')
+  fx.evalFor('calc', SCENARIO('rate-moves', 'src/calc.ts#noSuchUnit'))
+  fx.commit('v1')
+  const { code, out } = fx.lint()
+  assert.equal(code, 1)
+  assert.match(out, /dead anchor: src\/calc\.ts#noSuchUnit \('calc' scenario 'rate-moves'\)/)
+  assert.match(out, /update the scenario's code: entry in \.spec\/proj\/calc\/eval\.md/)
+})
+
+test('a file only an eval scenario anchors still blocks when it does not parse', { skip }, () => {
+  const fx = fixture()
+  // the node claims the file WITHOUT a selector, so only the scenario anchors it — the exact shape that let
+  // an unparseable governed file through the gate and took every session's eval summary down with it.
+  fx.node('calc', 'code:\n  - src/calc.ts')
+  fx.evalFor('calc', SCENARIO('rate-moves', 'src/calc.ts#applyRate'))
+  fx.commit('v1')
+  // an array over an inline import type: legal TypeScript the shipped grammar rejects, which is exactly how
+  // this got past the gate in the first place
+  writeFileSync(join(fx.proj, 'src/calc.ts'), `${CALC('1', '2')}type Entries = import('node:fs').Dirent[]\n`)
+  const { code, out } = fx.lint()
+  assert.equal(code, 1)
+  assert.match(out, /integrity: anchor src\/calc\.ts#applyRate \('calc' scenario 'rate-moves'\) is unverifiable — the current file does not parse/)
+})
+
+test("a scenario's selector never opens a drift window — freshness stays the measurement layer's", { skip }, () => {
+  const fx = fixture()
+  fx.node('calc', 'code:\n  - src/calc.ts')
+  fx.evalFor('calc', SCENARIO('rate-moves', 'src/calc.ts#applyRate'))
+  fx.commit('v1')
+  writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('10', '2'))   // moves the anchored unit
+  fx.commit('move applyRate')
+  const { code, out } = fx.lint()
+  assert.equal(code, 0, `a moved eval anchor is stale measurement, never a blocked commit: ${out}`)
+  assert.doesNotMatch(out, /anchor-drift/)
+})
+
+test('a scenario with no own code: inherits the node axis and is not reported twice', { skip }, () => {
+  const fx = fixture()
+  fx.node('calc', 'code:\n  - src/calc.ts#noSuchUnit')
+  fx.evalFor('calc', SCENARIO('rate-moves'))
+  fx.commit('v1')
+  const { code, out } = fx.lint()
+  assert.equal(code, 1)
+  const dead = out.split('\n').filter((l) => l.includes('dead anchor'))
+  assert.equal(dead.length, 1, `one selector = one finding, whoever inherits it: ${out}`)
+  assert.match(dead[0], /\('calc'\)/)
 })

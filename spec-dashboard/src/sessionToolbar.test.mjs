@@ -236,7 +236,7 @@ test('cold archive rows render without paying for a git ops projection', () => {
 })
 
 test('session eval glance reuses the graph summary projection and review-state visual', () => {
-  assert.match(source, /sessionEvalDisplay\(sessionActive \? selSession\?\.evalSummary : null, boardLive\)/)
+  assert.match(source, /sessionEvalDisplay\(sessionActive \? selSession\?\.evalSummary : null, boardLive, !!selSession\)/)
   assert.match(source, /projection\.lastKnown\?\.value/)
   assert.doesNotMatch(source, /\/api\/sessions\/.*\/evals|setTimeout\(load, 15_000\)|useSessionEvalSummary/)
   assert.match(source, /<TabCount kind="eval" state="pass"/)

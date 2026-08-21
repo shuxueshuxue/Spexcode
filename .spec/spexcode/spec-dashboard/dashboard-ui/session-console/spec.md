@@ -229,7 +229,16 @@ timer. Switching tabs or remounting therefore preserves the cached last-known va
 `updating` beside that last-known value, never zero; a stable equal-generation projection becomes current; a
 compute failure stays explicit with last-known retained. A graph-stream disconnect similarly marks the value
 last-known until an authoritative reconnect snapshot re-anchors it. `ready` with every category at zero is the
-only empty state, distinct from loading, updating, disconnected, and error.
+only empty state, distinct from loading, updating, disconnected, dormant, and error.
+
+**A spinner is a promise that a value is arriving, so only an arriving state may spin.** The door spins for
+`loading` and `updating` and for nothing else. A **dormant** projection ([[session-eval]]: a retained offline
+session the backend deliberately does not precompute) and a selected row carrying no projection at all (a
+closed session, which leaves the board and is served from the archive index instead) are the same fact — no
+value is coming until someone asks for one — and the door says so: last-known counts when it has them, a
+still blind-spot mark when it does not, and an accessible name naming the door itself as the way to measure
+it. The door is already that anchor, so opening it is the whole repair; the console never fetches a summary
+of its own to fill the gap.
 
 The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the console** below it in both light and dark themes (the old flat strip blended

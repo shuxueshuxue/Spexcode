@@ -1,6 +1,6 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
-import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'node:fs'
+import { watch, mkdirSync, readdirSync, readFileSync, type Dirent, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch } from '@spexcode/spec-core'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
@@ -98,7 +98,7 @@ export class TreeWatcherRegistry {
     const visit = (dir: string): void => {
       desired.add(dir)
       if (!this.recursive || this.consolidated) return
-      let entries: import('node:fs').Dirent[]
+      let entries: Dirent[]
       try { entries = readdirSync(dir, { withFileTypes: true }) }
       catch (error) {
         if (dir !== this.root && (error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -743,7 +743,7 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
   try { sessions = await listSessions() } catch { return }
   if (era !== watcherEra) return
   const wantedPaths = sessionWorktreeWatchPaths(sessions, forcedSessions)
-  let ents: import('node:fs').Dirent[] = []
+  let ents: Dirent[] = []
   try { ents = readdirSync(dir, { withFileTypes: true }) } catch { /* no worktrees registry yet */ }
   const wantedNames = new Set<string>()
   let released = false

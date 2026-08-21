@@ -600,6 +600,9 @@ export default {
     surfaceLabel: '当前会话界面',
     toolbarToolsLabel: '会话工具',
     evalLoading: '正在载入此会话的评测概况',
+    evalDormant: '此会话的评测概况尚未计算 — 打开 Eval 即可测量',
+    evalDormantLast: '上次已知 — 此留存会话不再重新计算',
+    evalDormantKnown: ({ summary }) => `上次已知，不再重新计算 — ${summary}`,
     evalUnavailable: '此会话的评测概况不可用',
     evalUpdating: ({ summary }) => `正在更新此会话的评测概况 — 上次已知：${summary}`,
     evalDisconnected: ({ summary }) => summary

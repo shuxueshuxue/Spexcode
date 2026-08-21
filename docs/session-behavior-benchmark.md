@@ -17,6 +17,13 @@ whether the user-visible task, session tree, protocol messages, and isolated wor
 The benchmark source is the official [Terminal-Bench repository](https://github.com/laude-institute/terminal-bench),
 which defines tasks as real terminal environments with task instructions and independent tests.
 
+The same method was extended with three official SlopCodeBench tasks in
+[the follow-up study](session-slopcodebench-three-problem.md): SQLite migrations, dynamic code generation, and a DAG
+execution DSL. Those runs add a second incomplete-turn shape to the contract: a tool call or provider turn can start
+without ever yielding a tool result or assistant completion. A bounded cancellation of that state is not success and
+must not be projected as a successful idle session. Evaluator output is separate evidence; an empty snapshot whose
+Docker setup is still waiting for dependencies is not a product score.
+
 ## Runs
 
 ### Weak instruction, no forced Swarm

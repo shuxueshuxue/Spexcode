@@ -5,6 +5,7 @@ code:
   - docs/session-behavior-benchmark.md
 related:
   - docs/session-slopcodebench-two-problem.md
+  - docs/session-slopcodebench-three-problem.md
 ---
 
 # behavioral-benchmark
@@ -24,5 +25,7 @@ Iterative benchmarks keep one durable session across successive specifications w
 the process, storage, repository, snapshot, and evaluator boundaries. A headless turn is successful only when its
 provider termination reason denotes completion. In particular, a token-limit termination with an empty assistant
 response and no tool effects is an incomplete turn: it must not exit zero or project the session as successfully idle.
+The same rule applies when a tool call or provider turn starts but no tool result or assistant completion arrives before
+the bounded run is stopped: the durable session must remain visibly incomplete rather than becoming successful idle.
 Prompt text is not an isolation boundary, and a retry, fallback, implicit compaction, or fabricated completion receipt
 must not be used to hide this state.

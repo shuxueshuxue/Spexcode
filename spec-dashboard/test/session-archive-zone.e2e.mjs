@@ -189,6 +189,7 @@ try {
   assert.equal(await page.locator('.si-zone-archive ~ .si-tree-row .si-item').count(), 0, 'empty archive zone was not folded')
   assert.equal(archiveRequests.length, 1, 'the initial archive index was not fetched exactly once')
   assert.deepEqual(archiveRequests[0].params, [['all', '1']], 'the archive index request carried pagination parameters')
+  await page.screenshot({ path: join(out, 'archive-zone-zero.png'), fullPage: true })
   step('permanent Archive 0 place visible with no star pill')
 
   const closeResponse = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/sessions/${closeId}/close`
@@ -213,6 +214,7 @@ try {
     return row?.archived && typeof row.closedAt === 'string' ? row : null
   }, 'closed row with closedAt')
   assert.ok(Number.isFinite(Date.parse(closed.closedAt)), 'new close did not publish an ISO closedAt')
+  await page.screenshot({ path: join(out, 'archive-zone-folded.png'), fullPage: true })
   step('one drag closed the real row without confirmation and published closedAt')
 
   if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive .si-zone-count').click()
@@ -231,9 +233,11 @@ try {
   assert.ok(drawerMeasure.rows <= 8, `archive zone exposed too many rows: ${JSON.stringify(drawerMeasure)}`)
   assert.deepEqual(drawerMeasure.scrollables, ['si-board-scroll'], 'the sidebar has more than one scroll container')
   assert.equal(await page.locator('.si-zone-all').count(), 1, 'archive zone omitted the View all row')
+  await page.screenshot({ path: join(out, 'archive-zone-expanded.png'), fullPage: true })
   await page.locator('.si-zone-all').click()
   const archivePage = page.locator('[data-archive-page]')
   await archivePage.waitFor({ state: 'visible' })
+  await page.screenshot({ path: join(out, 'archive-index-overlay.png'), fullPage: true })
   await page.keyboard.press('Escape')
   await archivePage.waitFor({ state: 'detached' })
   await page.locator('.si-zone-all').click()
@@ -378,6 +382,10 @@ try {
     controlId,
     legacyId,
     artifacts: [
+      'archive-zone-zero.png',
+      'archive-zone-folded.png',
+      'archive-zone-expanded.png',
+      'archive-index-overlay.png',
       'archive-zone-conversation.png',
       'archive-page.png',
       'archive-page-unknown.png',

@@ -49,7 +49,7 @@ The successful receipt names what to read, monitor, and reply on. --ssh uses an 
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
 prompt carries a runnable reply path over that same tunnel.`, ['project-bound']],
     ls: [['spex session ls [SEL…] [--children[=<PARENT-SEL>]] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--children=<PARENT-SEL>] [--status a,b] [--json]'],
-      'One-shot table of this project\'s live sessions, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it. An explicit id missing from the session list is diagnosed from terminal-close history: closed is a successful answer, while no live, archived, or closed history is a named miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table, and archive projection stays unavailable on that peer route.', ['selector']],
+      'One-shot table of this project\'s session records, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Closed records are hidden from the working projection; --all includes them, and naming one explicitly always shows it. A missing id is a loud record miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
       'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
@@ -83,16 +83,14 @@ provably cannot land.`, ['selector', 'project-bound']],
 existing gateway-to-gateway communication tunnel and requires a full session id; live-pane capture stays local.`, ['selector']],
     resume: ['spex session resume <SEL> [--force]', 'Relaunch ONLY if confirmed offline; --force is for a wedged session.', ['selector', 'project-bound']],
     stop: ['spex session stop <SEL>', 'Soft stop: kill the exact agent and KEEP the worktree resumable.', ['selector', 'project-bound']],
-    archive: ['spex session archive <SEL>', 'Cold-archive it: exact leaf/runtime stopped, worktree and conversation kept.', ['selector']],
-    unarchive: ['spex session unarchive <SEL>', 'Deprecated compatibility spelling: same behavior as resume, relaunching the same conversation.', ['selector']],
-    close: [['spex session close <SEL>', 'spex session close --ssh <address> <FULL-SESSION-ID>'], `Retire ANOTHER session — one you dispatched — deleting its worktree, branch and record.
+    close: [['spex session close <SEL>', 'spex session close --ssh <address> <FULL-SESSION-ID>'], `Close ANOTHER session — one you dispatched — after an exact cold stop. Dirty work is committed to refs/spex-archive/<id>; only the worktree leaves the board. The branch, record, transcript, and conversation remain available to resume.
 <SEL> names that session; it is never \`.\` and never your own id. Closing yourself deletes the worktree
-you are running in, mid-turn. Your own ending is a declaration: \`done --propose close\`. --ssh uses an existing
+you are running in, mid-turn. A live turn is refused; stop it first. Your own ending is a declaration: \`done --propose close\`. --ssh uses an existing
 gateway-to-gateway communication tunnel and requires a full session id.`, ['selector', 'project-bound']],
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
       'Move only an unreadable record after the backend proves every named residue absent. --thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     done: ['spex session done --propose merge|nothing|close [--note T]',
-      '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` is an intended trap: it writes no state and sends the agent to the true merge, close, ask, or park destination. `close` declares close-pending only for settled work: discardable worktree and no outstanding human decision, follow-up, or inspection. The human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
+      '`merge` declares review: committed work ready for human review, runs the project\'s configured candidate-vs-main acceptance gate automatically, and is the ONLY declaration that offers a clickable merge. `nothing` is an intended trap: it writes no state and sends the agent to the true merge, close, ask, or park destination. `close` declares close-pending only for settled work: discardable worktree and no outstanding human decision, follow-up, or inspection. The human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
     park: ['spex session park --note <what-you-await>',
       'Declare parked only when a managed watch delivery or real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
     ask: ['spex session ask --note <what-you-await>',
@@ -104,7 +102,7 @@ LOCAL-only (fails loud on a remote backend); show --capture and send are non-int
 
 const SESSION_HELP_GROUPS = [
   { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge', 'reparent'] },
-  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'quarantine'] },
+  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'close', 'quarantine'] },
   { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask', 'files', 'web'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const

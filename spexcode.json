@@ -23,5 +23,62 @@
       "pi-headless": { "harness": "pi-headless", "cmd": "pi" }
     },
     "defaultLauncher": "claude"
+  },
+  "review": {
+    "runs": 2,
+    "setup": "npm ci --no-audit --no-fund && npm run build",
+    "timeoutMs": 1800000,
+    "suites": [
+      {
+        "id": "spec-cli",
+        "command": "cd spec-cli && npx tsx --import ../scripts/test-home.mjs --test --test-reporter=tap src/*.test.ts",
+        "format": "tap"
+      },
+      {
+        "id": "typecheck",
+        "command": "npm run typecheck",
+        "format": "exit"
+      }
+    ],
+    "flaky": [
+      {
+        "test": "spec-cli::queued proof rejection releases its slot and post-proof liveness resumes only the bound thread",
+        "observations": [
+          {
+            "sha": "62602add7af48f288daa8a36ddb23271844fcb24",
+            "observedAt": "2026-08-20T12:10:05.521Z",
+            "outcome": "pass",
+            "source": "session 086f3c0c timeline: four-file run 79/79"
+          },
+          {
+            "sha": "62602add7af48f288daa8a36ddb23271844fcb24",
+            "observedAt": "2026-08-20T12:12:52.919Z",
+            "outcome": "fail",
+            "source": "session 086f3c0c timeline: same four files 77/79"
+          }
+        ],
+        "expiresAfterDays": 30,
+        "expiresAfterBaselineCollections": 10
+      },
+      {
+        "test": "spec-cli::a launch failure the harness itself called settled is attempted exactly once",
+        "observations": [
+          {
+            "sha": "62602add7af48f288daa8a36ddb23271844fcb24",
+            "observedAt": "2026-08-20T12:10:05.521Z",
+            "outcome": "pass",
+            "source": "session 086f3c0c timeline: four-file run 79/79"
+          },
+          {
+            "sha": "62602add7af48f288daa8a36ddb23271844fcb24",
+            "observedAt": "2026-08-20T12:12:52.919Z",
+            "outcome": "fail",
+            "source": "session 086f3c0c timeline: same four files 77/79"
+          }
+        ],
+        "expiresAfterDays": 30,
+        "expiresAfterBaselineCollections": 10
+      }
+    ]
   }
 }

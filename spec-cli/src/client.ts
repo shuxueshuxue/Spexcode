@@ -6,7 +6,7 @@ import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
-import { apiBaseInfo, assertProjectMatch, findSessionClosure, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type SessionClosure, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 import { resolveMachinePeer } from './machine-peer.js'
 
 export class BackendError extends Error {
@@ -134,7 +134,7 @@ function corruptCachedSession(id: string, reason: string): Session {
     id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: 'unknown', capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
-    note: `session record is unreadable: ${reason}`, archived: false, archiveHazard: null,
+    note: `session record is unreadable: ${reason}`, archived: false, closedAt: null, archiveHazard: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }
 }
@@ -213,19 +213,6 @@ export async function clientListSessions(includeArchived = false): Promise<Sessi
     if (!r.ok) throw new BackendError(`backend error ${r.status} listing sessions`, r.status)
     return await r.json() as Session[]
   }, () => localCachedSessions(includeArchived))
-}
-
-// A terminal close removes the record from the board. The audit lookup is deliberately id-addressed and is
-// consulted only after an explicit selector missed that board, so ordinary lists stay a current-state read.
-export async function clientSessionClosure(selector: string): Promise<SessionClosure | null> {
-  return cachedRead(async () => {
-    const r = await apiFetch(`/api/sessions/${seg(selector)}/closure`)
-    if (r.headers.get('x-spexcode-close-history') !== 'v1')
-      throw new BackendError(`backend does not support terminal close history; refusing to label ${selector} as never existed (update the backend)`, 501)
-    if (r.status === 404) return null
-    if (!r.ok) throw new BackendError(`backend error ${r.status} retrieving close history for ${selector}`, r.status)
-    return await r.json() as SessionClosure
-  }, () => findSessionClosure(selector))
 }
 
 export async function clientResources(): Promise<import('./host-resources.js').ResourceReport> {
@@ -446,15 +433,6 @@ export async function clientRestoreQuarantine(id: string): Promise<{ id: string;
   const body = await r.json() as { ok?: boolean; id?: string; bundle?: string; sha256?: string; observedAt?: string }
   if (!body.ok || !body.id || !body.bundle || !body.sha256 || !body.observedAt) throw new BackendError(`backend returned an invalid quarantine restore for ${id}`, r.status)
   return { id: body.id, bundle: body.bundle, sha256: body.sha256, observedAt: body.observedAt }
-}
-
-// POST /api/sessions/:id/archive — cold-archive the session ([[archive]]). The legacy on=false spelling is a
-// signpost to the same resume transition; it never performs a record-only unarchive.
-export async function clientArchive(id: string, on = true): Promise<boolean> {
-  await guarded(on ? 'session archive' : 'session unarchive')
-  const r = await apiFetch(`/api/sessions/${seg(id)}/archive`, post({ on }))
-  if (!r.ok) throw new BackendError(`backend refused to ${on ? 'archive' : 'unarchive'} ${id}: ${await r.text()}`, r.status)
-  return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
 // POST /api/sessions/:id/rename — set (or clear, with a blank) the session's display-name override

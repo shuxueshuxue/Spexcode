@@ -68,6 +68,16 @@ export function listSessionFiles(id: string): string[] {
   return readSessionFiles(id)
 }
 
+export type SessionFileStatus = { path: string; valid: boolean; reason?: string }
+
+export function inspectSessionFiles(id: string): SessionFileStatus[] {
+  requireSession(id)
+  return readFiles(id).map((path) => {
+    try { currentFile(path); return { path, valid: true } }
+    catch (error) { return { path, valid: false, reason: error instanceof Error ? error.message : String(error) } }
+  })
+}
+
 // Session projections already hold a parsed record; re-checking session.json here would make an in-memory
 // projection depend on the public route's existence guard. The route-facing list keeps that guard above.
 export function readSessionFiles(id: string): string[] {

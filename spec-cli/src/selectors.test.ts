@@ -8,7 +8,7 @@ import { resolveSession, matchesSelector, selectSessions, type Session } from '.
 function mk(id: string, node: string | null, branch: string | null): Session {
   return {
     id, node, branch, label: node || branch || id, title: node || branch || id, raw: { name: null, title: null }, path: `/wt/${id}`, parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
-    lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null, archived: false,
+    lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null, archived: false, closedAt: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }
 }

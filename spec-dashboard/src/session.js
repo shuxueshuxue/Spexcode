@@ -44,6 +44,11 @@ export const sessionZone = (s) => {
 export const ZONE_ORDER = ['need', 'run', 'offline']
 
 export const isArchived = (s) => !!s?.archived
+export const sessionFooterState = (s) => {
+  if (isArchived(s)) return 'archived'
+  if (s?.liveness === 'offline' && s?.status !== 'queued') return 'offline'
+  return 'live'
+}
 export const splitArchived = (sessions = []) => ({
   live: sessions.filter((s) => !isArchived(s)),
   archived: sessions.filter(isArchived),
@@ -59,7 +64,7 @@ export const liveSession = (sessions, id) => {
 // the ONE source-session PRESENCE join ([[live-session-filter]] — the session:present|missing facet):
 // does the id still resolve to a session on the current board at ALL, any zone? Presence, not liveness —
 // the facet asks "is the source still around", never "is it online".
-// order the working list by its active lifecycle zones; the archive shelf is a separate flat cold collection.
+// order the working list by its active lifecycle zones; closed sessions live in a separate flat collection.
 // each zone the NEWEST session on top (descending effective time) — the fresh, recently-touched work you
 // actually reach for, not the oldest.
 const effOf = (s) => (s?.sortKey != null ? s.sortKey : (s?.created ?? 0))
@@ -185,6 +190,6 @@ export function sessionForest(sessions, isExpanded, { zoneFolded = () => false, 
 }
 
 // The natural working-list order behind session lists: zones, newest-first roots, and recursive parent-before-
-// child disclosure as sessionForest. The archive shelf deliberately bypasses this and remains flat.
+// child disclosure as sessionForest. The archive index deliberately bypasses this and remains flat.
 export const sessionPresentationOrder = (sessions) =>
   sessionForest(sessions, () => true).filter((item) => item.type === 'row').map((item) => item.s)

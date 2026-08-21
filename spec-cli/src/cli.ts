@@ -70,7 +70,7 @@ async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError'].includes(e.name)) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError', 'SessionFileError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }
@@ -99,7 +99,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--candidate', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
 const EXPLICIT_BACKEND_ROUTE_FLAGS = ['api', 'port', 'password', 'insecure'] as const
 const EXPLICIT_BACKEND_VALUE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
   .filter((name) => VALUE_FLAGS.has(`--${name}`))
@@ -892,9 +892,9 @@ if (cmd === 'serve') {
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
     const { ownSessionId, resolveSession, selectChildren, selectSessions, formatTable } = await import('./sessions.js')
-    const { clientListSessions, clientListSessionsThroughPeer, clientSessionClosure } = await import('./client.js')
-    // The backend's default projection excludes cold archives. --all and an explicit selector request the
-    // history projection so an operator can still inspect or unarchive one deliberately.
+    const { clientListSessions, clientListSessionsThroughPeer } = await import('./client.js')
+    // The backend's default projection excludes closed records. --all and an explicit selector request the
+    // retained record projection so an operator can inspect or resume one deliberately.
     const selectors = positionals(4)
     rejectUnknownBackendFlags('spex session ls', 4, ['status', 'all', 'json', 'ssh', 'children'], ['children'])
     const peerAnchor = parseSessionPeerAnchor('ls', selectors)
@@ -939,17 +939,10 @@ if (cmd === 'serve') {
     const selected = selectSessions(scoped, peerAnchor ? [] : selectors)
     const picked = flag('status') ? selected.filter((session) => flag('status')!.split(',').includes(session.status)) : selected
     if (!peerAnchor && children === undefined && selectors.length === 1 && !selected.length && idLikeSelector(selectors[0])) {
-      const closure = await clientSessionClosure(selectors[0])
-      if (closure) {
-        const result = { id: closure.id, status: 'closed', closedAt: closure.closedAt }
-        console.log(has('json') ? JSON.stringify([result], null, 2) : `${closure.id.slice(0, 8)}: closed at ${closure.closedAt}`)
-      } else {
-        console.error(`spex session ls: ${selectors[0]} was not found in this project's live, archive, or terminal-close history`)
-        process.exit(2)
-      }
-    } else {
-      console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
+      console.error(`spex session ls: ${selectors[0]} was not found in this project's session records`)
+      process.exit(2)
     }
+    console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
   } else if (sub === 'resources') {
     rejectUnknownBackendFlags('spex session resources', 4, ['json'])
     const { clientResources } = await import('./client.js')
@@ -971,7 +964,7 @@ if (cmd === 'serve') {
     }
     const files = await import('./session-files.js')
     if (verb === 'ls') {
-      for (const file of files.listSessionFiles(id)) console.log(file)
+      for (const file of files.inspectSessionFiles(id)) console.log(file.valid ? file.path : `INVALID ${file.path} — ${file.reason}`)
     } else if (verb === 'add') {
       const result = files.addSessionFile(id, path!, withSessionRecordLockSync)
       console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
@@ -1138,13 +1131,6 @@ if (cmd === 'serve') {
       const r = await c.clientInterrupt(full)
       console.log(r.ok ? `interrupted ${full}` : `interrupt failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
-    } else if (sub === 'archive' || sub === 'unarchive') {
-      // ARCHIVING/legacy unarchive ([[archive]]) — archive exact-stops before filing; unarchive signposts to
-      // resume and recreates the same conversation.
-      const on = sub === 'archive'
-      const full = await resolveSelectorOrExit(id)
-      const ok = await c.clientArchive(full, on)
-      console.log(!ok ? `no such session ${full}` : `${on ? 'archived' : 'resumed'} ${full}`)
     } else if (sub === 'close') {
       const full = targetArgs?.sshAddress
         ? (FULL_SESSION_ID.test(id ?? '') ? id! : sessionTargetUsage('close', '--ssh requires a full session id, not a selector'))
@@ -1504,6 +1490,15 @@ if (cmd === 'serve') {
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)
+  } else if (sub === 'review-gate') {
+    const { runReviewAcceptance } = await import('./review-acceptance.js')
+    const result = await runReviewAcceptance({
+      candidate: flag('candidate'),
+      base: flag('base'),
+      onProgress: (line) => console.error(`[review acceptance] ${line}`),
+    })
+    console.log(has('json') ? JSON.stringify(result, null, 2) : result.report)
+    process.exit(result.ok ? 0 : 1)
   } else if (sub === 'hook-prompt') {
     // The internal render seam shared by hook handlers and GuidanceCatalog. The hooks call it only on branches
     // that already emit model-facing text; their hot no-op paths remain pure shell.

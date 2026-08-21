@@ -2,7 +2,7 @@
 title: session-multi-select
 status: active
 hue: 20
-desc: Right-click → "select" turns the session list into a multi-select mode with checkboxes, compact bulk archive/close controls, and whole-row drag-to-reparent.
+desc: Right-click → "select" turns the session list into a multi-select mode with checkboxes, compact bulk close controls, and whole-row drag-to-reparent.
 code:
   - spec-dashboard/src/SessionSelectBar.jsx
 related:
@@ -20,7 +20,7 @@ The row right-click closes sessions **one at a time** ([[session-rename]]), whic
 run of finished or dead worktrees has piled up and a human wants them all gone. Closing ten sessions means
 ten right-clicks, ten confirms. So the same right-click that renames or closes a single row also offers
 **select** — it flips the session list into a **multi-select mode** where rows are checkboxes, not tabs, and
-bulk archive or **close** can act on every picked session, each behind one confirm. The same mode also makes the
+bulk **close** can act on every picked session behind one confirm. The same mode also makes the
 session tree editable: dragging a whole row onto another row makes it that row's child.
 
 ## expanded spec
@@ -43,13 +43,12 @@ single-row actions would fight the bulk one), so its lock-on-graph action is una
 ordering are unchanged — the mode only reinterprets a row's clicks, it does not reshuffle the list.
 
 The list's top button row is **replaced, while selecting, by a select bar**: a live **count of picked
-sessions**, adjacent icon-only **archive** and **close** actions, and a **cancel** that leaves the mode without
-touching anything. The icon tooltips name both actions. Archive and close are both danger actions, disabled at
-zero picks, and each opens one confirm naming how many sessions it affects. Archive is reversible cold filing,
-but its batch effect is still deliberate; close removes the worktree and branch. Each action uses the same
-per-session endpoint as its single-row counterpart, never a bulk-only lifecycle path.
+sessions**, an adjacent icon-only **close** action, and a **cancel** that leaves the mode without touching
+anything. The icon tooltip names the action. Close is disabled at zero picks and opens one confirm naming how
+many sessions it affects. It uses the same per-session endpoint as its single-row counterpart, never a bulk-only
+lifecycle path. Archive is a place below the list, not a second bulk lifecycle verb.
 
-Confirming **dismisses the prompt at once** and fires all selected archive or close requests in the
+Confirming **dismisses the prompt at once** and fires all selected close requests in the
 **background** — the same fire-and-forget the single close and the New Session launch use
 ([[session-console]]), never a frozen dialog watching N worktree operations run — then leaves multi-select
 mode and asks the board to reload, so changed rows converge across every surface together. A failed request is
@@ -57,8 +56,8 @@ reconciled by the next board poll and its returned reason is shown through the s
 single close; HTTP 409 is never a console-only clue or a silent success. Cancelling, or pressing Esc, leaves
 the mode with nothing changed.
 
-Each bulk lifecycle confirm focuses its destructive commit button on open, so a plain **Enter** confirms the
-visible archive or close action. Escape, Cancel, and a backdrop click still cancel without issuing a request.
+The bulk lifecycle confirm focuses its destructive commit button on open, so a plain **Enter** confirms the
+visible close action. Escape, Cancel, and a backdrop click still cancel without issuing a request.
 
 The select bar and its confirms are this node's own surface (`SessionSelectBar.jsx`); mode state (picks,
 drag source/target, and row toggle-instead-of-switch behaviour) lives in the list that owns the rows

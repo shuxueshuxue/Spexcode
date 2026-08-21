@@ -6,6 +6,21 @@ import { guardWorktree } from './resilience.js'
 import { HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
 import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
 
+export type ReviewSuiteConfig = { id: string; command: string; format: 'tap' | 'exit'; timeoutMs?: number }
+export type ReviewFlakyObservationConfig = { sha: string; observedAt: string; outcome: 'pass' | 'fail'; source: string }
+export type ReviewFlakyConfig = {
+  test: string
+  observations: ReviewFlakyObservationConfig[]
+  expiresAfterDays: number
+  expiresAfterBaselineCollections: number
+}
+export type ReviewAcceptanceConfig = {
+  runs: number
+  setup?: string
+  timeoutMs?: number
+  suites: ReviewSuiteConfig[]
+  flaky?: ReviewFlakyConfig[]
+}
 
 export type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
@@ -54,6 +69,7 @@ export type Config = {
     launchers?: { [name: string]: { harness?: HarnessId; cmd: string } }
     defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses; required for no-choice creates
   }
+  review?: ReviewAcceptanceConfig  // portable whole-suite candidate-vs-main proof; strictly validated by review-acceptance.ts
   resources?: {
     sessionRssMiB?: number         // resident-memory budget for one session owner (default 1024)
     backendRssMiB?: number         // resident-memory budget for this project's backend instance (default 2048)
@@ -78,10 +94,10 @@ export type Config = {
   }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
-// `serve`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
+// `serve`, `review`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'uploads' | 'sessions' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'uploads' | 'sessions' | 'review' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null
@@ -267,6 +283,7 @@ export type RawRecord = {
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
   stopped?: boolean
   archived?: boolean  // the human ARCHIVED this session ([[archive]]) — only a proven cold/offline row; absent → false on old records
+  closed_at?: string   // ISO close publication time; absent on archived records created before the retained-record archive index
   cold_proof?: string  // durable exact leaf + adapter cold proof; absent on legacy archives, which remain visible hazards
   adapter_recovery?: string // explicit lifecycle recovery required after a partial adapter mutation; absent on old records
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
@@ -299,6 +316,7 @@ export type RawLaunchReadinessOriginal = {
   note: string | null
   stopped: boolean
   archived: boolean
+  closed_at?: string | null
   cold_proof: string | null
   adapter_recovery: string | null
 }
@@ -321,6 +339,7 @@ export function rawLaunchReadinessOriginal(raw: RawRecord): RawLaunchReadinessOr
     || !(original.proposal === null || original.proposal === '' || isSessionProposal(original.proposal))
     || !(typeof original.note === 'string' || original.note === null)
     || typeof original.stopped !== 'boolean' || typeof original.archived !== 'boolean'
+    || !(typeof original.closed_at === 'string' || original.closed_at === null || original.closed_at === undefined)
     || !(typeof original.cold_proof === 'string' || original.cold_proof === null)
     || !(typeof original.adapter_recovery === 'string' || original.adapter_recovery === null)) {
     throw new Error(`session '${raw.session_id}' has an invalid launch_readiness_pending fence`)
@@ -408,6 +427,7 @@ export function projectPublicRecordEntry(id: string, entry: RecordEntry): Public
         note: original.note || null,
         stopped: original.stopped,
         archived: original.archived,
+        closed_at: original.closed_at ?? undefined,
         cold_proof: original.cold_proof ?? undefined,
         adapter_recovery: original.adapter_recovery ?? undefined,
         launch_readiness_pending: '',

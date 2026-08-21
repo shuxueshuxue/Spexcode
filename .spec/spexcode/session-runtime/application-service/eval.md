@@ -15,3 +15,8 @@ scenarios:
     description: A clean consumer installs packed protocol, topology, and application packages and completes a real notification loop.
     expected: The clean consumer observes one recipient, one durable message, and one successful dequeue.
     test: scripts/session-application-yatu.mjs
+---
+# session application service eval
+
+These scenarios measure the package transaction contract and the installed clean-consumer path. They do not claim
+that a production adopter has cut over to the facade.

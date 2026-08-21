@@ -176,7 +176,8 @@ scenarios:
     expected: >-
       The top row has only New and Search; the final `archive 0` zone is still visible and folded. Its count chip
       toggles the zone without changing selection, and opening it shows only the newest bounded rows plus one
-      `View all N` row. The closed rows use ordinary session-row treatment; the `View all N` button uses the same
+      `View all N` row. The header button toggles from its label and trailing rule area, and carries the only
+      `aria-expanded`; the chip is a visual marker. The closed rows use ordinary session-row treatment; the `View all N` button uses the same
       row geometry, normal ink, bottom rule, hover wash, and right-side chevron column but never a selected state.
       The sidebar still has exactly one scroll container. Dropping a row on the visible zone heading issues one close
       without a dialog and moves it into the archive; dragging near the viewport edge auto-scrolls until that heading
@@ -317,17 +318,17 @@ scenarios:
       records is the live case), use a real browser to inspect the narrow SessionInterface sidebar, the
       map-side SessionWindow, and the phone Sessions list. In each surface inspect the offline zone and a
       nesting parent at rest; click the parent row body, then its leading child-count pod; click the OFFLINE
-      label, then its leading count pod; finally select or deep-link an offline/nested session from outside the
+      header label and trailing rule area; finally select or deep-link an offline/nested session from outside the
       folded list. In the desktop console, press Alt+Shift+ArrowDown then Alt+Shift+ArrowUp on the selected
       parent; repeat Alt+Shift+ArrowDown on a live leaf while Command Box owns focus.
     expected: >-
       At rest the offline zone shows ONLY its header row with the hidden count (aria-expanded=false) — the
       dormant history no longer floods the list. Needs-you and running rows are all present at every fold
-      state. The header has the count pod before the OFFLINE label and no `>`/chevron/caret/`▸` direction
-      symbol. Parent rows likewise put their child count before the title/status body. Only those leading count
-      pods carry `aria-expanded` and toggle: row-body clicks select/open/lock as native to the surface without
-      changing the parent fold, and the OFFLINE label does nothing. Clicking either count again folds its rows
-      back. The controls are siblings, with no button nested in a button. A session selected by URL/search/menu
+      state. The header has the count marker before the OFFLINE label and no `>`/chevron/caret/`▸` direction
+      symbol. The whole header carries the only `aria-expanded` and toggles from its label, trailing rule area,
+      Enter, or Space. Parent rows likewise put their child count before the title/status body. Only those leading
+      parent count pods carry `aria-expanded` and toggle: row-body clicks select/open/lock as native to the surface
+      without changing the parent fold. The controls are siblings, with no button nested in a button. A session selected by URL/search/menu
       stays rendered and its present ancestors unfold as required, while a deep-linked offline row remains
       visible even when the offline zone itself is folded. On desktop, Alt+Shift+ArrowDown/ArrowUp
       expands/collapses the selected parent without moving the selected tab; on a leaf the chords are consumed

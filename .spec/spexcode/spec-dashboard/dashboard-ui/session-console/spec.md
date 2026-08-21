@@ -73,8 +73,10 @@ kept out of the `↑/↓` path down to a session: `＋` New Session and Search, 
 region owns the sidebar's only vertical scrollbar when the rows exceed the available height.
 
 The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
-when `N` is zero and carries the complete count of closed records. The heading uses the same count-chip disclosure
-as the offline zone and is folded by default with its fold choice persisted locally. When open it shows the newest
+when `N` is zero and carries the complete count of closed records. Like offline, its whole header is one keyboard-
+reachable disclosure button; the count chip is a visual marker inside it, not a separate target. The console's
+panel-level inert chrome press keeps pointer activation from stealing the current input sink. The zone is folded by
+default with its fold choice persisted locally. When open it shows the newest
 closed rows (bounded to a small fixed number so it cannot drown the working list), then one `View all N` row. The
 closed rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
 Conversation. `View all N` is a keyboard-reachable button that follows the same row geometry, ink, bottom rule, and
@@ -457,9 +459,9 @@ single row with the COUNT badge first and the `OFFLINE` label second; it contain
 direction symbol. Retired and
 dormant sessions accumulate (an adopter's CR record sessions are deliberately kept alive for their external
 deep links), and a list that renders every one of them drowns the two zones a human acts on; but they are
-records, so they are never deleted and never more than one click away. The header's leading COUNT pod is the
-**only** disclosure control: it carries `aria-expanded`, toggles the zone, and stays pointer-inert for focus.
-The adjacent `OFFLINE` label is inert; clicking anywhere else in the header never changes the fold. A parent
+records, so they are never deleted and never more than one click away. The whole header is the disclosure button:
+it carries the one `aria-expanded`, toggles the zone from its label or trailing rule area, and is keyboard reachable.
+The COUNT pod is only a visual marker inside it. A parent
 row with sub sessions uses the same grammar: its child-count pod is the first content before the title/status
 body, never a trailing action, and that pod alone toggles its children and carries `aria-expanded`. Clicking
 the rest of the parent row performs that surface's ordinary row action (select/open in the console or phone,

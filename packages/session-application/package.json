@@ -1,0 +1,26 @@
+{
+  "name": "@spexcode/session-application",
+  "version": "0.6.7",
+  "private": true,
+  "type": "module",
+  "description": "Adopter-owned composition of session protocol and topology transactions.",
+  "files": ["dist"],
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node ../../scripts/build-dist.mjs",
+    "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@spexcode/session-protocol": "0.6.7",
+    "@spexcode/session-topology": "0.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

@@ -23,7 +23,11 @@ adoption paths.
 
 The related `docs/session-events-architecture.html` is a review artifact for the proposed session-events and
 session-application layers. It must distinguish the current protocol/topology implementation from the planned event
-log and replay contract; it does not itself claim that those planned packages exist.
+log and replay contract; it does not itself claim that those planned packages exist. In the target dependency
+direction, `session-application` is the downward orchestration layer: it may depend on `session-topology`,
+`session-events`, and `session-protocol` to execute one use case. None of those three lower layers may call back into
+the application layer; topology and events may use protocol storage/transaction capabilities without becoming
+application-aware.
 
 The document is a decision surface, not an accepted runtime contract. It must label the proposal as a review draft,
 distinguish current behavior from target behavior, and link to both the implementation-level refactor view and the

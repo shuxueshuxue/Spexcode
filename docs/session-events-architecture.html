@@ -105,7 +105,7 @@
   <main>
     <section id="layers">
       <h2>1. 依赖方向</h2>
-      <p>底层包只提供自己的事实和能力；跨模块的业务动作由 application layer 编排。箭头表示依赖，虚线表示 adopter 注入的实现。</p>
+      <p>底层包只提供自己的事实和能力；跨模块的业务动作由 application layer 编排。箭头表示依赖，虚线表示 adopter 注入的实现。这里的 application 是向下编排者，不是 topology 的并列兄弟。</p>
       <div class="diagram">
         <svg viewBox="0 0 1080 390" role="img" aria-labelledby="layers-title layers-desc">
           <title id="layers-title">Session package dependency graph</title>
@@ -135,14 +135,18 @@
           <path class="arrow" d="M235 250 L425 286"/>
           <path class="arrow" d="M540 250 L540 286"/>
           <path class="arrow" d="M845 250 L655 286"/>
+          <path class="arrow" d="M705 214 L680 214"/>
+          <path class="arrow" d="M705 178 C640 134 435 134 375 178"/>
           <path class="arrow" d="M345 112 L785 178"/>
           <path class="arrow" d="M735 112 L880 178"/>
           <path class="arrow dashed" d="M345 112 L540 178"/>
           <path class="arrow dashed" d="M735 112 L540 178"/>
+          <text class="svg-code" x="540" y="128" text-anchor="middle">application → topology / events / protocol</text>
           <text class="svg-code" x="540" y="145" text-anchor="middle">adopter injects state semantics</text>
           <text class="svg-code" x="540" y="379" text-anchor="middle">protocol never calls topology or application</text>
         </svg>
       </div>
+      <div class="callout"><strong>依赖的准确说法：</strong><code>session-application</code> 语义上依赖 <code>session-topology</code>，因为它要在同一个 Unit of Work 中调用关系变更与 recipient 解析；它同时依赖 <code>session-events</code> 和 <code>session-protocol</code>。反向关系全部禁止：topology、events、protocol 不调用 application。</div>
       <div class="legend"><span class="current">当前已落地/验证的基础</span><span class="planned">下一版共享层</span><span class="boundary">adopter-owned 边界</span></div>
     </section>
 

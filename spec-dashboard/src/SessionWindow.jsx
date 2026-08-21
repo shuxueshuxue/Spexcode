@@ -121,16 +121,21 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   )
 }
 
-// Every list surface uses the same zone grammar. Offline is the sole foldable zone; only its leading count
-// pod is a disclosure control. The adjacent label is deliberately inert.
+// Every list surface uses the same zone grammar. Offline and archive are foldable zones; only their leading
+// count pod is a disclosure control. The adjacent label is deliberately inert.
 export function SessionZone({ item, baseClass, onToggle }) {
   const t = useT()
-  const classes = `${baseClass} ${baseClass}-${item.zone}${item.zone === 'offline' ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}`
-  if (item.zone !== 'offline') return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
-  const label = t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })
+  const foldable = item.zone === 'offline' || item.zone === 'archive'
+  const classes = `${baseClass} ${baseClass}-${item.zone}${foldable ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}`
+  if (!foldable) return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
+  const label = item.zone === 'archive'
+    ? t(item.folded ? 'sessionZone.showArchive' : 'sessionZone.hideArchive', { n: item.count })
+    : t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })
   return (
-    <div className={classes}>
-      {item.count > 0 && (
+    <div className={classes} data-archive-count={item.zone === 'archive' ? item.count : undefined}
+      data-session-archive-drop={item.zone === 'archive' ? '' : undefined}
+      data-session-archive-zone={item.zone === 'archive' ? '' : undefined}>
+      {(item.count > 0 || item.zone === 'archive') && (
         <button
           type="button"
           tabIndex={-1}

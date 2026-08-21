@@ -31,13 +31,16 @@ export default {
     pending: 'pending',
   },
 
-  // the two triage zones the session list groups into ([[session-console]]) — "whose turn is it".
+  // the four session zones the list groups into ([[session-console]]) — "whose turn is it".
   sessionZone: {
     need: 'needs you',
     run: 'running',
     offline: 'offline',
+    archive: 'archive',
     showHistory: ({ n }) => `show ${n} dormant session${n === 1 ? '' : 's'} (history is kept, never deleted)`,
     hideHistory: ({ n }) => `fold the ${n} dormant session${n === 1 ? '' : 's'} away`,
+    showArchive: ({ n }) => `show ${n} archived session${n === 1 ? '' : 's'}`,
+    hideArchive: ({ n }) => `fold the ${n} archived session${n === 1 ? '' : 's'} away`,
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
@@ -641,8 +644,6 @@ export default {
     offlineSubAfter: ' are intact. relaunch to resume the same conversation.',
     archiveTitle: 'Archive',
     archiveCount: ({ n }) => `${n} closed session${n === 1 ? '' : 's'}`,
-    archiveExpand: 'expand archive drawer',
-    archiveCollapse: 'collapse archive drawer',
     archiveViewAll: ({ n }) => `View all ${n}`,
     archiveSearch: 'Search archive',
     archiveEmpty: 'no matching closed sessions',

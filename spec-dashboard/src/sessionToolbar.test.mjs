@@ -125,20 +125,18 @@ test('live offline and archived conversations share one footer with cold input a
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
 })
 
-test('archive is a permanent labelled place below the board, separate from the two top pills', () => {
+test('archive is the fourth foldable zone and has no retired sidebar controls', () => {
   const topStart = source.indexOf('<div className="si-toprow">')
   const topRow = source.slice(topStart, source.indexOf('</div>', topStart) + 6)
   assert.equal((topRow.match(/<button /g) || []).length, 2)
   assert.match(topRow, /si-pill new/)
   assert.match(topRow, /si-pill search/)
   assert.doesNotMatch(topRow, /star|shelf|archive/)
-  assert.match(source, /data-archive-drawer/)
-  assert.match(source, /data-session-archive-drop data-archive-count=\{archivedSessions\.length\}/)
-  assert.match(source, /className="si-archive-toggle"[\s\S]{0,240}onClick=\{toggleArchive\}/)
-  assert.match(source, /className="si-archive-label" onClick=\{openArchivePage\}/)
-  assert.match(source, /<strong>\{archivedSessions\.length\}<\/strong>/)
-  assert.match(css, /\.si-archive-drawer\s*\{[^}]*overflow:\s*visible;/s)
-  assert.doesNotMatch(css, /\.si-archive-(?:drawer|preview)\s*\{[^}]*overflow-y:\s*(?:auto|scroll)/s)
+  assert.match(source, /zone: 'archive', count: archivedSessions\.length, folded: !archiveZoneOpen/)
+  assert.match(source, /<SessionZone key=\{`zone-\$\{it\.zone\}`\}/)
+  assert.match(source, /className="si-zone-all" onClick=\{openArchivePage\}/)
+  assert.doesNotMatch(source, /className="si-archive-(?:bar|toggle|preview-row|all)"/)
+  assert.match(css, /\.si-zone-archive\s*\{[^}]*--zh:\s*var\(--blue\)/s)
 })
 
 test('session tree drag moves the whole row and can detach a nested session', () => {
@@ -171,12 +169,17 @@ test('session tree drag moves the whole row and can detach a nested session', ()
   assert.doesNotMatch(css, /\.si-session-drag-ghost > \.si-item/)
 })
 
-test('archive index loads whole once and disclosure remains human-owned', () => {
+test('archive index is a transient overlay and archive zone fold is persisted', () => {
   assert.match(source, /fetch\(apiUrl\('\/api\/sessions\?all=1'\)\)/)
   assert.match(source, /if \(archiveRequestRef\.current\) return archiveRequestRef\.current/)
-  assert.match(source, /const \[archiveOpen, setArchiveOpen\] = useState\(false\)/)
-  assert.match(source, /setArchiveOpen\(\(value\) => !value\)/)
-  assert.doesNotMatch(source, /setArchiveOpen\([^)]*archived/)
+  assert.match(source, /const \[archiveZoneOpen, setArchiveZoneOpen\] = useState\(\(\) =>/)
+  assert.match(source, /localStorage\.getItem\('spex\.archiveZoneOpen'\)/)
+  assert.match(source, /setArchiveZoneOpen\(\(value\) =>/)
+  assert.match(source, /const \[archiveIndexOpen, setArchiveIndexOpen\] = useState\(false\)/)
+  assert.match(source, /<ArchivePage sessions=\{archivedSessions\}/)
+  assert.match(source, /data-session-archive-zone/)
+  assert.match(source, /archiveZone\.bottom > boardBox\.bottom[\s\S]{0,420}board\.scrollTop \+=/)
+  assert.doesNotMatch(source, /active === 'archive'|is-archive|\[\s*'new',\s*'archive'/)
 })
 
 test('close refusals remain visible instead of being swallowed by the background action', () => {

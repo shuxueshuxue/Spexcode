@@ -3,6 +3,8 @@ title: behavioral-benchmark
 desc: Real product behavior measurements for weak-instruction and write-oriented Swarm tasks.
 code:
   - docs/session-behavior-benchmark.md
+related:
+  - docs/session-slopcodebench-two-problem.md
 ---
 
 # behavioral-benchmark
@@ -17,3 +19,10 @@ silently treated as collected. Patch-equivalent collection is a conservative rec
 may leave a semantically collected worker in `need_review`, which is a measured projection limitation rather than
 permission to write `merged` optimistically. Any change to this boundary requires a real benchmark that fails before
 the change and passes after it while preserving protocol message and topology invariants.
+
+Iterative benchmarks keep one durable session across successive specifications while isolating unrelated problems at
+the process, storage, repository, snapshot, and evaluator boundaries. A headless turn is successful only when its
+provider termination reason denotes completion. In particular, a token-limit termination with an empty assistant
+response and no tool effects is an incomplete turn: it must not exit zero or project the session as successfully idle.
+Prompt text is not an isolation boundary, and a retry, fallback, implicit compaction, or fabricated completion receipt
+must not be used to hide this state.

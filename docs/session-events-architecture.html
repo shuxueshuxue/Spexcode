@@ -98,14 +98,14 @@
   <header><div class="hero">
     <p class="eyebrow">Architecture proposal · review draft</p>
     <h1>从 Action 到 Event，再到可回放的 Session</h1>
-    <p class="lede">这张图把 session-protocol、session-topology、session-events 和 session-application 放在同一个可检查的模型里。它描述下一版的目标形态，不把尚未实现的事件日志或 replay 说成当前功能。</p>
-    <div class="statusbar"><span class="status current">当前：protocol + topology + self-launch</span><span class="status next">下一版：events + application</span><span class="status">ZSwarm / Spex adopter</span></div>
+    <p class="lede">这张图把 session-protocol、session-topology、session-events 和 session-application 放在同一个可检查的模型里。当前已经有事件 append/read/replay、runtime bindings、self-launch 与 Spex adapter seams；<code>session-application</code> 当前明确是 Stage 1 notification transaction facade。最终的 state → event → watcher application service 仍是目标形态，不把 adopter 的生产接入说成已经完成。</p>
+    <div class="statusbar"><span class="status current">当前：protocol + topology + events/replay + runtime seams</span><span class="status next">目标：state → event → watcher application service</span><span class="status">Spex / ZSwarm production cut-in：未接入</span></div>
   </div></header>
 
   <main>
     <section id="layers">
       <h2>1. 依赖方向</h2>
-      <p>底层包只提供自己的事实和能力；跨模块的业务动作由 application layer 编排。箭头表示依赖，虚线表示 adopter 注入的实现。这里的 application 是向下编排者，不是 topology 的并列兄弟。</p>
+      <p>底层包只提供自己的事实和能力；跨模块的业务动作由 application layer 编排。箭头表示依赖，虚线表示 adopter 注入的实现。当前的 application 是 Stage 1 notification transaction facade，不是 state store 或 event projection；最终 application 仍是向下编排者，不是 topology 的并列兄弟。</p>
       <div class="diagram">
         <svg viewBox="0 0 1080 390" role="img" aria-labelledby="layers-title layers-desc">
           <title id="layers-title">Session package dependency graph</title>
@@ -146,17 +146,17 @@
           <text class="svg-code" x="540" y="379" text-anchor="middle">protocol never calls topology or application</text>
         </svg>
       </div>
-      <div class="callout"><strong>依赖的准确说法：</strong><code>session-application</code> 语义上依赖 <code>session-topology</code>，因为它要在同一个 Unit of Work 中调用关系变更与 recipient 解析；它同时依赖 <code>session-events</code> 和 <code>session-protocol</code>。反向关系全部禁止：topology、events、protocol 不调用 application。</div>
+      <div class="callout"><strong>依赖的准确说法：</strong>当前 Stage 1 <code>session-application</code> 依赖 <code>session-topology</code> 与 <code>session-protocol</code>，在同一个 Unit of Work 中完成关系变更、recipient 解析和消息入队。最终 state → event → watcher 服务还会组合 adopter-owned state store 与 <code>session-events</code>；反向关系全部禁止：topology、events、protocol 不调用 application。</div>
       <div class="legend"><span class="current">当前已落地/验证的基础</span><span class="planned">下一版共享层</span><span class="boundary">adopter-owned 边界</span></div>
     </section>
 
     <section id="transaction">
-      <h2>2. 一次状态变化的事务</h2>
-      <p>状态语义属于 adopter；事件、recipient 查询和消息入队由 application service 组合。SQLite transaction 是唯一提交边界。</p>
+      <h2>2. Stage 1 notification transaction（当前实现）</h2>
+      <p>Stage 1 facade 只负责 topology mutation、recipient 查询和 protocol message enqueue；它不更新 adopter state，也不 append event。状态语义属于 adopter，最终 state → event → watcher 服务才会把 state store、事件和 watcher delivery 组合在一个 SQLite transaction 中。</p>
       <div class="sequence">
         <svg viewBox="0 0 1120 430" role="img" aria-labelledby="sequence-title sequence-desc">
           <title id="sequence-title">State change transaction sequence</title>
-          <desc id="sequence-desc">An action crosses the application service, updates state, appends an event, expands recipients, and enqueues messages before commit.</desc>
+          <desc id="sequence-desc">The planned final application service updates adopter state, appends an event, expands recipients, and enqueues messages before commit.</desc>
           <defs><marker id="arrow-seq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#52645b"/></marker></defs>
           <rect x="35" y="20" width="190" height="48" rx="6" fill="#fff2d9" stroke="#d2a14c"/><text class="svg-label" x="130" y="50" text-anchor="middle">Action / Command</text>
           <rect x="270" y="20" width="190" height="48" rx="6" fill="#fff2d9" stroke="#d2a14c"/><text class="svg-label" x="365" y="50" text-anchor="middle">Application Service</text>
@@ -175,7 +175,7 @@
           <text class="svg-small" x="260" y="410">No network, file copy, provider call, or user callback inside the transaction.</text>
         </svg>
       </div>
-      <div class="callout"><strong>不需要 outbox：</strong>状态事实、domain event 和 protocol message 在同一数据库内提交。只有跨数据库或外部 broker 时，transactional outbox 才重新成为独立组件。</div>
+      <div class="callout"><strong>事务边界：</strong>当前 Stage 1 facade 的 topology mutation 与 notification enqueue 在同一数据库内提交。最终服务若把状态事实、domain event 和 protocol message 放进同一数据库，仍不需要 outbox；只有跨数据库或外部 broker 时，transactional outbox 才重新成为独立组件。</div>
     </section>
 
     <section id="events">
@@ -247,25 +247,22 @@ function replay(input: ReplayInput): SessionProjection {
     </section>
 
     <section id="code">
-      <h2>5. 最终代码形态</h2>
-      <p>下面是目标形态的最小 TypeScript 轮廓。它展示依赖方向和事务边界，不代表当前仓库已经提供这些新 API。</p>
-      <pre><code>// @spexcode/session-events
-export interface SessionEvent {
-  eventId: string
-  eventSeq: number
-  type: string
-  schemaVersion: number
-  subjectSessionId: string
-  payload: Uint8Array
-  occurredAtMs: number
-}
-
-export interface EventStore {
-  append(tx: ProtocolTransaction, event: NewSessionEvent): SessionEvent
-  read(sessionId: string, afterSeq?: number): SessionEvent[]
-  replay(sessionId: string, atSeq?: number): SessionProjection
-}</code></pre>
-      <pre><code>// @spexcode/session-application
+      <h2>5. 当前 API 与目标代码形态</h2>
+      <p>前两个片段对应当前公开 API；最后一个片段是仍待实现的 state → event → watcher application service，不是当前 package contract。</p>
+      <pre><code>// @spexcode/session-events (current)
+const events = openSessionEvents(protocol)
+const event = protocol.withTransaction(tx => events.append(tx, {
+  eventId, type: "session.state.changed", schemaVersion: 1,
+  subjectSessionId: sessionId, payload, occurredAtMs: Date.now(),
+}))
+const history = events.read(sessionId, { afterSequence: 0 })
+const projection = events.replay(sessionId, { initialState, reducers })</code></pre>
+      <pre><code>// @spexcode/session-application (Stage 1 notification transaction facade)
+const app = openSessionApplication(protocol, topology)
+app.attachAndNotify(parentId, subjectId, "watch", message)
+app.notifyRecipients(subjectId, message)
+// state, event meaning, and dequeue remain adopter-owned</code></pre>
+      <pre><code>// planned final application service
 // session_runtime_bindings is adopter-owned; protocol does not read it
 export function createSessionApplication(deps: {
   protocol: SessionProtocol
@@ -308,7 +305,7 @@ if (!binding || !adapter.isReady(binding)) throw new Error("runtime binding unav
 const message = protocol.dequeue(parentId)
 if (message) handleEventReference(message)
 </code></pre>
-      <div class="callout next"><strong>Implementation order:</strong> first freeze <code>session-events</code> schema and replay contract; then implement the thin application service; finally prove the same child-state → event → watcher delivery flow in Spex and ZSwarm. Do not retrofit the current v1 protocol silently.</div>
+      <div class="callout next"><strong>Implementation order:</strong> (1) keep the shipped protocol, topology, event store, runtime bindings, self-launch seam, and Spex adapter seam as separate foundations; (2) use the shipped Stage 1 facade for same-transaction topology notifications; (3) implement and prove the adopter-owned state → event → watcher service as a separate target; (4) pursue Spex and ZSwarm production cut-ins only in their owning repositories with explicit importer and approval evidence. Do not retrofit the current v1 protocol silently.</div>
     </section>
 
     <section>
@@ -318,10 +315,11 @@ if (message) handleEventReference(message)
         <tbody>
           <tr><td><code>session-protocol</code></td><td class="yes">Implemented and tested</td><td>Keep transaction and delivery authority</td></tr>
           <tr><td><code>session-topology</code></td><td class="yes">Implemented and tested</td><td>Keep relation authority; no state semantics</td></tr>
-          <tr><td><code>session-events</code></td><td class="open">Not yet implemented</td><td>Canonical domain facts and deterministic replay</td></tr>
-          <tr><td><code>session-application</code></td><td class="open">Not yet implemented as a shared package</td><td>Commands + state/event/message Unit of Work; depends on topology/events/protocol</td></tr>
-          <tr><td><code>session-runtime-bindings</code></td><td class="open">Contract only</td><td>Adopter-owned logical-address to native-runtime binding with generation fencing</td></tr>
-          <tr><td>Spex / ZSwarm adopters</td><td class="open">Separate runtime implementations</td><td>Inject state stores and share the application layer</td></tr>
+          <tr><td><code>session-events</code></td><td class="yes">Implemented: append, ordered read, replay</td><td>Keep canonical facts and deterministic replay; projections remain adopter-owned</td></tr>
+          <tr><td><code>session-application</code></td><td class="yes">Implemented Stage 1 notification transaction facade</td><td>Planned final state → event → watcher service; add adopter state semantics without changing protocol</td></tr>
+          <tr><td><code>session-runtime-bindings</code></td><td class="yes">Implemented with generation fencing</td><td>Keep adopter-owned logical-address to native-runtime binding</td></tr>
+          <tr><td>self-launch / Spex adapter seams</td><td class="yes">Implemented seams; no production cut-in</td><td>Adopter-owned runtime integration and proof</td></tr>
+          <tr><td>Spex / ZSwarm production adopters</td><td class="open">No production importer or wiring in this base</td><td>Separate owner-approved cut-ins; clean consumer proofs do not imply landing</td></tr>
         </tbody>
       </table>
       <footer>Review artifact. Source context: <a href="session-platform-architecture.html">platform architecture</a>, <a href="session-management-refactor.html">session refactor</a>, and <a href="session-behavior-findings.html">behavior findings</a>. The DeepSeek Harness comparison was source-only research, not an executed proof.</footer>

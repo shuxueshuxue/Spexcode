@@ -18,6 +18,11 @@ Spex backend, a ZSwarm worker loop, or a short-lived self-launch listener. Its m
 4. dequeue the local address;
 5. pass each returned message to the selected harness runtime adapter.
 
+The shared `session-application` package currently provides only the Stage 1 notification transaction facade: topology
+mutation, recipient resolution, and protocol enqueue in one transaction. The final adopter-owned state → event →
+watcher application service remains planned; no Spex or ZSwarm production cut-in is implied by the shared package
+seams or clean-consumer proofs.
+
 The runtime adapter owns native effects such as launch, ordinary input, interrupt, stop, liveness, and native
 identity. The adopter-owned [[runtime-bindings]] component may bind the exact protocol address to the current
 native identity with a generation fence. It may keep a handler journal keyed by protocol `messageId` when its own input

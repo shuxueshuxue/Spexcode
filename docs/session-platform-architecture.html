@@ -261,7 +261,7 @@
             <div class="stack-row">
               <div class="stack-label">Composition</div>
               <div class="stack-content">
-                <div class="block runtime"><strong>Adopter runtime</strong><small>何时 drain、失败策略、consumer journal</small></div>
+                <div class="block runtime"><strong>Adopter runtime</strong><small>何时 drain、失败策略、consumer journal、runtime binding</small></div>
                 <div class="block runtime"><strong>Harness runtime adapter</strong><small>native input、launch、stop、liveness、identity</small></div>
                 <div class="block runtime"><strong>Harness configuration adapter</strong><small>hooks、contract、skills、commands、trust</small></div>
               </div>
@@ -286,7 +286,7 @@
             </div>
           </div>
         </div>
-        <div class="callout green"><strong>依赖方向：</strong> protocol 不依赖 topology；topology 可依赖协议提供的数据库 capability；runtime 组合二者；materialization 与 runtime 正交。产品语义永远不反向进入 protocol。</div>
+        <div class="callout green"><strong>依赖方向：</strong> application/runtime 组合 topology、runtime binding 与 protocol；topology 可依赖协议提供的数据库 capability；protocol 不读取 topology 或 binding。materialization 与 runtime 正交，产品语义永远不反向进入 protocol。</div>
       </section>
 
       <section id="protocol">
@@ -328,11 +328,17 @@
           <thead><tr><th>模块</th><th>负责</th><th>不负责</th></tr></thead>
           <tbody>
             <tr><td>Harness runtime adapter</td><td>launch、native input、interrupt、stop、liveness、native identity、cold proof</td><td>不生成 hooks，不定义 queue 状态</td></tr>
+            <tr><td>session_runtime_bindings</td><td>protocol address → native runtime identity、start token、generation fence</td><td>不拥有 protocol session、topology、liveness 或 dequeue ack</td></tr>
             <tr><td>Harness configuration adapter</td><td>materialize contract、hooks、commands、skills、trust/config 文件</td><td>不持有进程，不 dequeue</td></tr>
             <tr><td>Adopter runtime</td><td>何时轮询/唤醒、dequeue 循环、输入组合、错误策略</td><td>不修改协议语义</td></tr>
           </tbody>
         </table>
         <p>当前巨大的 harness interface 应拆成这两个 facet。一个 registry row 可以同时提供两个 facet，但 self-launch 只需要 configuration facet 和一个显式 listener，不应被迫拥有 managed runtime。</p>
+        <h3>Logical session 与 native runtime 的绑定</h3>
+        <p><code>session_runtime_bindings</code> 是 adopter-owned component，而不是 protocol 的扩展列。它以
+        <code>(namespace, protocol_session_id)</code> 为键，保存 native identity、start token 和 generation fence。
+        runtime 在 dequeue 前解析并验证 binding；重启时同一个 protocol address 可以绑定新的 native runtime，旧 generation
+        不能覆盖新绑定。unbind 不 retire address，也不触碰 pending queue。</p>
       </section>
 
       <section id="adopters">

@@ -3,6 +3,8 @@ title: session-runtime
 status: active
 hue: 280
 desc: The adopter-owned composition loop that combines protocol, optional topology, and one harness runtime adapter while setup remains orthogonal.
+related:
+  - .spec/spexcode/session-runtime/runtime-bindings/spec.md
 ---
 # session-runtime
 
@@ -17,8 +19,10 @@ Spex backend, a ZSwarm worker loop, or a short-lived self-launch listener. Its m
 5. pass each returned message to the selected harness runtime adapter.
 
 The runtime adapter owns native effects such as launch, ordinary input, interrupt, stop, liveness, and native
-identity. It may keep a handler journal keyed by protocol `messageId` when its own input seam needs retry or
-exactly-once handling. The protocol does not call the adapter and the adapter does not edit protocol tables.
+identity. The adopter-owned [[runtime-bindings]] component may bind the exact protocol address to the current
+native identity with a generation fence. It may keep a handler journal keyed by protocol `messageId` when its own input
+seam needs retry or exactly-once handling. The protocol does not call the adapter and the adapter does not edit
+protocol tables.
 
 Harness configuration is a separate materialization adapter. It owns discovered contract files, hook bindings,
 trust, skills, commands, and other setup artifacts. One harness registry row may implement both runtime and
@@ -43,6 +47,9 @@ state write is not publication: it can lose the notification or reorder two comm
 and every notification it requires must use the same adopter database and commit in one synchronous transaction.
 The runtime may sweep committed pending messages after lost wake hints, but it does not reconcile two authorities:
 there is no outbox, keyed topology replay, observer bridge, or cross-database fallback in v1.
+
+Runtime binding is not protocol state. A runtime must resolve and validate its own binding before dequeue; a missing or
+stale binding is a runtime condition, not a reason to add claim/ack states to the protocol.
 
 An adopter that cannot be expressed by this list exposes one of two design defects. A shared database transaction
 or recovery need means the protocol is incomplete. A need for product state or a native effect means that adopter's

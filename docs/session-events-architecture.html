@@ -266,11 +266,13 @@ export interface EventStore {
   replay(sessionId: string, atSeq?: number): SessionProjection
 }</code></pre>
       <pre><code>// @spexcode/session-application
+// session_runtime_bindings is adopter-owned; protocol does not read it
 export function createSessionApplication(deps: {
   protocol: SessionProtocol
   topology: SessionTopology
   events: EventStore
   stateStore: StateStore       // adopter-owned semantics
+  bindings: RuntimeBindings    // validate before dequeue, never part of protocol schema
 }) {
   return {
     execute(action: SessionAction): ActionReceipt {
@@ -301,6 +303,8 @@ app.execute({
 })
 
 // a listener remains a consumer, not part of the transaction
+const binding = bindings.resolve(parentId)
+if (!binding || !adapter.isReady(binding)) throw new Error("runtime binding unavailable")
 const message = protocol.dequeue(parentId)
 if (message) handleEventReference(message)
 </code></pre>
@@ -315,7 +319,8 @@ if (message) handleEventReference(message)
           <tr><td><code>session-protocol</code></td><td class="yes">Implemented and tested</td><td>Keep transaction and delivery authority</td></tr>
           <tr><td><code>session-topology</code></td><td class="yes">Implemented and tested</td><td>Keep relation authority; no state semantics</td></tr>
           <tr><td><code>session-events</code></td><td class="open">Not yet implemented</td><td>Canonical domain facts and deterministic replay</td></tr>
-          <tr><td><code>session-application</code></td><td class="open">Not yet implemented as a shared package</td><td>Commands + state/event/message Unit of Work</td></tr>
+          <tr><td><code>session-application</code></td><td class="open">Not yet implemented as a shared package</td><td>Commands + state/event/message Unit of Work; depends on topology/events/protocol</td></tr>
+          <tr><td><code>session-runtime-bindings</code></td><td class="open">Contract only</td><td>Adopter-owned logical-address to native-runtime binding with generation fencing</td></tr>
           <tr><td>Spex / ZSwarm adopters</td><td class="open">Separate runtime implementations</td><td>Inject state stores and share the application layer</td></tr>
         </tbody>
       </table>

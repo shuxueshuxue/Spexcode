@@ -13,6 +13,7 @@ related:
   - .spec/spexcode/session-protocol/spec.md
   - .spec/spexcode/session-topology/spec.md
   - .spec/spexcode/session-runtime/spec.md
+  - .spec/spexcode/session-runtime/runtime-bindings/spec.md
 ---
 # session-platform-architecture-review
 

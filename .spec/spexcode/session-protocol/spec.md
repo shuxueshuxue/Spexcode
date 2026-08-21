@@ -104,7 +104,9 @@ Governed lifecycle fields, governance, parent/child edges, watch policy, sender 
 liveness, tmux, sockets, native RPC, prompt composition, and materialized harness files are outside this package.
 The protocol session row is not an extension container for those fields; each adopter state module owns its own
 tables and writes. The package must not import a harness adapter or a topology implementation. `session-protocol` and
-[[session-topology]] are sibling foundations; [[session-runtime]] is the composition layer that may import both.
+[[session-topology]] are sibling foundations; [[session-runtime]] is the composition layer that may import both. The
+adopter-owned [[runtime-bindings]] component may use the protocol transaction capability, but the protocol
+never reads its binding rows or interprets native identity, runtime kind, namespace, or binding metadata.
 
 The package does not depend on `spec-core` for storage placement. SpexCode's adopter resolves its global state
 root and project namespace, then passes the resulting absolute database path to this package. Another adopter may

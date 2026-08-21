@@ -2,6 +2,14 @@
 
 本文是从真实入口和可执行 spike 反推的 adopter cut-in contract。它不改写三份架构 HTML 的冻结原则，也不授权生产迁移。所有数据库均为 spike 创建的临时绝对路径；没有 ORM、daemon、outbox、observer 或 production adapter import。
 
+## 运行时身份绑定
+
+协议地址不是 native harness identity。每个 adopter 拥有一个 `session_runtime_bindings` component，以
+`(namespace, protocol_session_id)` 为键，保存 `runtime_kind`、`native_session_id`、`native_start_token` 和单调递增的
+`binding_generation`。bind/unbind 使用 expected generation 防止重启后的旧 runtime 覆盖新绑定；unbind 保留协议地址
+和 pending 消息。runtime 在 dequeue 前解析并验证 binding。该表不是 protocol extension container、topology relation、
+event log 或 consumer acknowledgement store。
+
 ## 证据边界与共同结论
 
 协议的 authority 是 adopter 解析出的显式绝对 `databasePath`。`initialize` 建立精确地址，`enqueue` 写入不可变 FIFO 消息，`dequeue` 在 commit 时完成 at-most-once 协议交付；跨进程 wake 只影响延迟。拓扑的 `attach`/`detach`/`reparent`/`subscribe`/`recipients` 属于 adopter，必要的 topology mutation 与 enqueue 用同一个数据库的同步事务 seam。

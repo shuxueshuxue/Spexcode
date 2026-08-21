@@ -1131,7 +1131,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
 /* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
 .si-zone-fold {
-  width: 100%; text-align: left; cursor: pointer; border: 0; background: transparent; font: inherit;
+  width: 100%; text-align: left; cursor: pointer; border: 0; background: transparent; font-family: inherit;
 }
 .si-zone-fold:hover { background: var(--panel2); }
 .si-zone-count {

@@ -192,6 +192,8 @@ test('session sidebar bounds one working-board scrollport above the archive plac
   assert.match(css, /\.si-board-scroll\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s)
   assert.match(css, /\.si-zone-archive\s*\{[^}]*--zh:\s*var\(--blue\)/s)
   assert.match(css, /\.si-zone-fold\s*\{[^}]*cursor:\s*pointer;[^}]*border:\s*0;/s)
+  assert.match(css, /\.si-zone-fold\s*\{[^}]*font-family:\s*inherit;/s)
+  assert.doesNotMatch(css, /\.si-zone-fold\s*\{[^}]*font\s*:/s)
   assert.match(css, /\.si-zone-fold:hover\s*\{[^}]*background:\s*var\(--panel2\)/s)
   assert.doesNotMatch(css, /\.si-zone-count\s*\{[^}]*cursor:\s*pointer/)
   assert.match(css, /\.si-zone-all\s*\{[^}]*color:\s*var\(--ink2\)/s)

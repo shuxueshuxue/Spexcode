@@ -312,6 +312,14 @@ body {
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
+/* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
+   is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
+   one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
+   instead of the head and the list sharing a piece of state to say "something is being carried". */
+body.is-session-dragging .dock-archive-door { color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+body.is-session-dragging .dock-archive-door:hover {
+  color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
+}
 .ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
 .ft-row {
   display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
@@ -331,6 +339,17 @@ body {
 .ft-dir .ft-label { color: var(--ink); }
 .ft-code, .ft-dir { text-decoration: none; }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+/* THE SEAM IS ALSO A GRIP, and it says so the way the split's own resizer already does. These two hid a 6px
+   grab strip with no feedback at all while [[resizable-panes]]'s divider lit under the pointer — two
+   dividers with two answers to the same question. One answer now: the seam thickens into the accent under
+   the pointer and while dragging, and shows nothing at rest, so a resting window gains no visible handle. */
+.ft-resize::after, .ctx-resize::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent;
+}
+.ft-resize:hover::after, .ctx-resize:hover::after,
+body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
+  background: color-mix(in srgb, var(--blue) 55%, transparent);
+}
 
 /* the explorer's two DISCLOSURES ([[disk-tree]]): Specs, the spec tree, open by default because it is the
    explorer's main body; Files, the disk, closed. A head borrows the DOCK HEADER's register exactly — muted
@@ -368,7 +387,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dock, .dock.dock-closing { animation: none; }
 }
-.dock-session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
+.dock-session-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
 .dock > .filetree { flex: 1; min-height: 0; border-right: 0; background: transparent; }
 /* the row that currently owns the graph ([[workspace-shell]]'s lock) wears the claim, so the dock is where
    both the claiming and the claimed state are visible. */
@@ -411,7 +430,16 @@ body {
 
 /* [[workspace-shell]] — the content area. One view at a time today; the host is the seam a second one
    would mount into, which is why it is a box of its own rather than the view being the child of the frame. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; }
+/* DEPTH IS THE LADDER, NOT A SHADOW. The three tones already say where the document is; what a single
+   hairline could not say is that the document sits ABOVE the chrome rather than beside it. The seam is
+   therefore a STEP made of the ladder's own middle rung: chrome (--ground) · the hairline (--edge) · one
+   pixel of --panel · the content plane (--paper). Four values in three pixels, and it works in every theme
+   by construction, because the ladder is ordered in every theme.
+   It also continues the tab strip: the strip IS --panel, so the middle rung runs unbroken across the top of
+   the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
+   thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
+   genuinely float (menus, the palette), never stacked to fake a surface. */
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -456,28 +484,41 @@ body {
    an open document it still answers where the reader is, by name. The strip sits on --panel; the ACTIVE tab
    is painted --paper so it reads as the near edge of the document below it rather than a lit chip on a bar
    — that continuity is what the three-tone ground ladder is for. */
-/* The band does not clip; the TAB LIST inside it does. A document action's dropdown hangs below the strip,
-   so a strip that is itself the scroller cuts every menu off at 30px — which is how the resource picker
-   came to render perfectly and show nothing. */
+/* The band does not clip, and it does not SCROLL either: tabs that do not fit on one line WRAP onto the
+   next, every row 30px, the way an editor's wrapped tab bar does. A horizontal scroller hides the working
+   set behind a gesture — the documents you are holding are off-screen and there is no mark saying so —
+   while wrapping keeps the whole set legible and pays for it in a thickness the reader can see and control.
+   The band's height is therefore the working set, not a constant; the strip is `flex: 0 0 auto` and the
+   rows are what make it tall. */
 .tabstrip {
-  flex: 0 0 30px; height: 30px; display: flex; align-items: stretch;
+  flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
   background: var(--panel); border-bottom: 1px solid var(--edge);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  flex-wrap: wrap; align-content: flex-start;
 }
-.tabstrip-tabs::-webkit-scrollbar { height: 0; }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
   display: inline-flex; align-items: center; padding: 0 var(--space-5);
   color: var(--muted); font-size: var(--type-meta); white-space: nowrap;
 }
 .tab {
+  position: relative; flex: 0 0 auto; height: 30px;
   display: flex; align-items: center; min-width: 0; max-width: 220px;
   border-right: 1px solid var(--edge); color: var(--muted);
 }
 .tab.on { background: var(--paper); color: var(--ink2); }
+/* A DRAG SAYS WHERE, NEVER WHAT. The moved tab fades to say it is in hand and the landing place wears a
+   single hairline on the edge the tab would arrive at — drawn ON a tab rather than between them, so it is
+   at home in any row of a wrapped strip. Nothing lifts and nothing casts a shadow: the strip stays one
+   plane while its order changes. */
+.tab.tab-moving { opacity: .38; }
+.tab.tab-drop-before::after, .tab.tab-drop-after::after {
+  content: ''; position: absolute; top: 3px; bottom: 3px; width: 2px; background: var(--blue); pointer-events: none;
+}
+.tab.tab-drop-before::after { left: 0; }
+.tab.tab-drop-after::after { right: 0; }
 /* the CURRENT SLOT: the one tab ordinary navigation reuses. Italic and weakened says replaceable — the
    same treatment the narrower preview tab used to wear, now naming the one slot every document passes
    through unless the reader holds it ([[tab-strip]]). */
@@ -496,8 +537,14 @@ body {
 .tab:hover .tab-x, .tab.on .tab-x { opacity: 1; }
 .tab-x:hover { color: var(--ink2); }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* The action cluster sits at the band's LAST row, against the content it acts on. It is a sibling of the
+   wrapping list rather than a member of it, so it reserves its own column and no tab can ever run under
+   it — a reserved-space trick measured in JS is what an editor needs only because its toolbar overlays the
+   rows. `align-self: flex-end` is the whole of the choice: with one row it is exactly where it always was,
+   and with several it stays put instead of drifting to the middle of a band that grew. */
 .tabstrip-actions {
-  flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; gap: var(--space-1);
+  flex: 0 0 auto; min-width: 0; margin-left: auto; align-self: flex-end; height: 30px;
+  display: flex; align-items: center; gap: var(--space-1);
   padding: 0 var(--space-3);
 }
 .document-action { position: relative; display: inline-flex; align-items: center; }
@@ -1387,22 +1434,22 @@ a.scenario-count:hover { background: var(--panel2); }
   border-left-color: var(--blue); border-left-width: 3px;
   box-shadow: inset 0 0 0 1px var(--blue);
 }
-.si-root-drop {
-  height: 28px; margin: 5px 10px 2px; display: flex; align-items: center; justify-content: center;
-  border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: var(--radius);
-  color: var(--muted); transition: background .12s, border-color .12s, color .12s;
+/* THE GAP IS THE TOP LEVEL ([[dock-modes]]). While a nested row is in hand the list outlines itself, and
+   the outline goes green where the release would actually detach. An OUTLINE, never a border or an
+   inserted strip: outlines take no layout, so the rows the reader is aiming at do not move under the
+   pointer the moment the drag begins — which is exactly what a head-of-list drop strip did. */
+.dock-session-list.root-armed { outline: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); outline-offset: -3px; }
+.dock-session-list.root-on { outline-style: solid; outline-color: var(--green); }
+.dock-root-hint {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; padding: 4px 6px; z-index: 2;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  border-radius: var(--radius); background: color-mix(in srgb, var(--ground) 88%, transparent);
+  color: var(--muted); font-size: var(--type-caption);
 }
-.si-root-drop.on {
-  position: relative; z-index: 51;
-  background: color-mix(in srgb, var(--green) 12%, var(--panel2));
-  border-color: var(--green); color: var(--green);
-}
-.si-session-drag-ghost {
-  position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0;
-  box-shadow: var(--shadow);
-  opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left;
-}
-body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
+.dock-session-list.root-on ~ .dock-root-hint { color: var(--green); }
+/* the window wears the gesture ([[drag-gesture]]): one class for every movable list, so a drag reads the
+   same whether it started in the tab strip or in the session dock. */
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
    the taller row. Resting rows keep the generic vertical centring above. */
 .si-item.on + .sess-fold-control { top: 7px; transform: none; }
@@ -1880,7 +1927,12 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 }
 .fv-send:disabled { opacity: 0.45; cursor: default; }
 
-.si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+/* THE TERMINAL IS A DARK CARD ON THE CONTENT PLANE, not a wall butted against the seam. A gutter of --paper
+   down its leading edge is what makes it read that way, and it is the same step the rest of the window
+   uses — the terminal keeps its own --term-bg (the one surface that is legitimately dark in every theme),
+   and the plane it sits on shows beside it. Leading edge only: the pane's other three sides already meet
+   chrome that steps for them. */
+.si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; padding-left: var(--space-3); background: var(--paper); }
 
 .si-archive-backdrop {
   position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;

@@ -10,6 +10,13 @@
 // not bands; overlays (palette, popup, menu) are z-layers, not bands; the preview slot is a tab property,
 // not a band. The classifier below is the operational definition — see `measureBands`.
 //
+// THE TAB STRIP IS ONE BAND HOWEVER MANY ROWS IT WRAPS TO. Wrapping is the strip's internal layout — the
+// working set laid out on more than one line ([[tab-strip]]) — not a second band stacked on the first, and
+// a model that counted rows would be counting the reader's open documents as chrome. So every state below
+// is entered with a working set DEEP ENOUGH TO WRAP, and the strip's row count is measured and printed
+// beside the band count. Measuring the fattest strip rather than an empty one is the stronger gate: an
+// empty strip is the one shape in which a stowaway band has nowhere to hide.
+//
 //   BASE=http://127.0.0.1:5199 node spec-dashboard/test/band-budget.e2e.mjs
 //
 // Env: BASE (dev server), OUT (artifact dir), SPEXCODE_PLAYWRIGHT_PATH, BAND_SURFACES=all (include the
@@ -214,6 +221,14 @@ const FILE_PATH = specNode.code[0]
 const secondSpec = specs.find((n) => n.id !== SPEC_ID && (n.code || []).length)?.id || SPEC_ID
 const session = sessionList.find((s) => !s.archived && s.liveness === 'online') || sessionList.find((s) => !s.archived)
 if (!session) throw new Error('no session on the board — cannot address #/sessions/<id>')
+
+// The working set every state is entered with. Twelve real spec documents, named by their own titles, is
+// past one row at this viewport with the dock either open or closed — so the strip WRAPS in every measured
+// state and the "one band, however many rows" claim is exercised rather than asserted. Real addresses, so
+// the labels are the board's own and the widths are the widths a reader would see.
+const WRAP_TABS = specs.filter((n) => (n.title || '').length >= 9).slice(0, 12)
+  .map((n) => ({ page: 'spec', param: n.id, query: null, pinned: true }))
+if (WRAP_TABS.length < 12) throw new Error('need twelve spec nodes to fill the strip past one row')
 const SESSION_ID = session.id
 
 const encodeParam = (param) => String(param).split('/').map(encodeURIComponent).join('/')
@@ -264,19 +279,26 @@ const page = await context.newPage()
 await page.goto(`${BASE}/#/empty`, { waitUntil: 'domcontentloaded' })
 
 const seed = async (state) => {
-  await page.evaluate(({ s, sessionId, splitParam }) => {
+  await page.evaluate(({ s, sessionId, wrapTabs, splitParam }) => {
     const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch { /* private mode */ } }
     set('spexcode.lang', 'en')          // aria labels and band classes must not shift with the locale
     set('spexcode.theme', 'minimal')
-    set('spexcode.tabs', '[]')          // the visited route mints its own tab: no carry-over from the last state
+    set('spexcode.tabs', JSON.stringify(wrapTabs))   // a strip deep enough to WRAP, rewritten per state so nothing carries over
     set('spexcode.dock', s.D === 'closed' ? '0' : '1')
     set('spexcode.dockMode', s.D === 'sessions' ? 'sessions' : 'explorer')
     set('spexcode.ctxOpen', s.C === 'open' ? '1' : '0')
     set('spexcode.split', s.S === 'open' ? JSON.stringify(splitParam) : null)
     set('spexcode.statusHidden', '[]')
     set(`spexcode.session-surface.v1.root`, JSON.stringify({ defaultSurface: s.U, sessions: { [sessionId]: s.U } }))
-  }, { s: state, sessionId: SESSION_ID, splitParam: { page: 'spec', param: secondSpec, query: null } })
+  }, { s: state, sessionId: SESSION_ID, wrapTabs: WRAP_TABS, splitParam: { page: 'spec', param: secondSpec, query: null } })
 }
+
+// How many ROWS the strip wrapped to, read off the tabs' own tops. It rides beside the band count in
+// every state's report: the model says a strip on three rows is still one band, and a number nobody
+// prints is a claim nobody checks.
+const stripRows = () => document.querySelectorAll('.tab').length
+  ? new Set([...document.querySelectorAll('.tab')].map((t) => Math.round(t.getBoundingClientRect().top))).size
+  : 0
 
 // Boot at #/empty, then navigate. A FIRST load at a bare #/evals or #/issues renders the cold review
 // fast-path — a different, dockless shell — so entering those addresses from a booted workspace is the
@@ -312,11 +334,12 @@ const results = []
 for (const state of traversal()) {
   await enter(state)
   const bands = await page.evaluate(measureBands, CFG)
+  const rows = await page.evaluate(stripRows)
   const predicted = B(state)
   const measured = bands.length
   const ok = measured === predicted
-  results.push({ state, predicted, measured, bands, ok })
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${stateName(state).padEnd(44)} predicted ${predicted}  measured ${measured}${ok ? '' : `  EXCESS ${measured - predicted}`}`)
+  results.push({ state, predicted, measured, bands, rows, ok })
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${stateName(state).padEnd(44)} predicted ${predicted}  measured ${measured}  strip rows ${rows}${ok ? '' : `  EXCESS ${measured - predicted}`}`)
   console.log(`      ${bands.map((b) => `${b.cls.split(/\s+/)[0]}(${b.w}x${b.h})`).join('  ')}`)
   if (!ok) {
     const shot = join(OUT, `excess-${measured - predicted}-${stateName(state).replace(/[^a-z0-9]+/gi, '-')}.png`)
@@ -341,6 +364,18 @@ for (const f of failures) for (const b of f.bands) {
 console.log('\n=== bands seen in breaching states ===')
 for (const [cls, n] of [...offenders].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(3)}  ${cls}`)
 
+// A WRAPPED STRIP IS STILL ONE BAND. Every state above was entered with a working set past one row; if a
+// row ever became a band of its own, the count would have risen with the rows and the states above would
+// already be failing. This block is what stops the property from going untested by accident — a strip that
+// stopped wrapping would leave the claim unexercised while every state still passed.
+const flat = results.filter((r) => r.rows < 2)
+console.log('\n=== the tab strip, wrapped ===')
+console.log(`rows measured: ${[...new Set(results.map((r) => r.rows))].sort().join(', ')} — one band at every one of them`)
+if (flat.length) {
+  console.log(`  ${flat.length} state(s) did NOT wrap, so "one band however many rows" went unexercised there:`)
+  for (const r of flat) console.log(`    ${stateName(r.state)}`)
+}
+
 const theoremHolds = all.every((s) => B(s) >= 3 && B(s) <= 5)
 console.log(`\ntheorem 3 ≤ B ≤ 5 over all ${all.length} reachable states: ${theoremHolds ? 'holds' : 'BROKEN'}`)
 console.log(`${results.length - failures.length} of ${results.length} visited states hold the budget`)
@@ -348,4 +383,4 @@ console.log(`${results.length - failures.length} of ${results.length} visited st
 writeFileSync(join(OUT, 'band-budget.json'), JSON.stringify({ base: BASE, states: results }, null, 2))
 await context.close()
 await browser.close()
-process.exit(failures.length || !theoremHolds ? 1 : 0)
+process.exit(failures.length || flat.length || !theoremHolds ? 1 : 0)

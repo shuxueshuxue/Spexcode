@@ -25,4 +25,19 @@ part, opens a session by navigating, and knows nothing else about it.
 
 **A board chord can compose text before this view exists.** That handoff goes through the workspace's
 one-shot compose slot rather than either view reaching into the other, because neither should have to be
-mounted for the other to hand it something. The view collects it once, on arrival.
+mounted for the other to hand it something.
+
+**The slot ANNOUNCES a drop, and this view collects WHILE IT IS SHOWING.** Collecting once, on mount, was
+the whole handoff while every navigation to the console built a fresh view — arrival and drop were the same
+event, so a mount-time take could not miss one. [[workspace-shell]]'s mounted-document pool broke that
+identity: once visited, this view stays warm, so the second composition and every one after it landed in a
+slot whose only reader had already run. The symptom was silence — selecting prose in a spec and asking for a
+new session opened an empty composer, with no error anywhere, because a one-shot nobody takes looks exactly
+like a one-shot that was never written.
+
+Two things restore it, and both are the same correction. Writing the slot WAKES its watchers, so a
+composition made while this view is already the shown document arrives at once. And the watch is held only
+while the view is SHOWING, because becoming the shown document is the arrival that still happens every
+time — and it is also the only moment the composer can take the focus the seed hands it, since a textarea
+inside a display-hidden pane cannot be focused. A cold mount is unchanged: a freshly mounted pane is already
+the showing one, so it collects exactly as it always did.

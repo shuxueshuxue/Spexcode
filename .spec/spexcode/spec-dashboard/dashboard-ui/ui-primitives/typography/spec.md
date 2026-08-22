@@ -85,6 +85,23 @@ With real ground steps doing the separating, a chrome boundary is **felt, not se
 half-strength `--line`, and it is what the rail, dock, strip, status bar and context dock are bounded with.
 `--line` remains the honest divider for a card, a field, a table rule — the places a real edge is the point.
 
+**A SEAM IS A STEP, NOT A LINE — and the step is built from the ladder itself.** Where the chrome floor
+meets the content plane the boundary runs `--ground` · the `--edge` hairline · one pixel of `--panel` ·
+`--paper`: four values in three pixels. That middle pixel is what makes the document read as sitting ABOVE
+the chrome rather than beside it, and it is the same rung the tab strip is painted in, so it continues
+unbroken across the top of the content column and then down its leading edge. This is the whole of the
+"raised panel" feel that other editors buy with a drop shadow, and it is why we do not have to:
+
+**One elevation, and depth is not one of its jobs.** `--shadow` is a single drop spent only on things that
+genuinely float. Stacking shadows to fake a surface is the failure mode this rule exists to prevent — a
+window whose panels each cast their own is a window where nothing reads as a plane and everything reads as
+a sticker. A surface earns its depth from the ladder; only a thing that leaves the plane pays the shadow.
+
+**The dark terminal is a card on the plane, not a wall against the seam.** It keeps its own `--term-bg` —
+the one surface that is legitimately dark in every theme — and a small `--paper` gutter runs down its
+leading edge so the plane it sits on is visible beside it. Leading edge only: its other three sides already
+meet chrome that steps for them.
+
 All seven theme presets plus the default carry all three tones as resolved values; `--ground` is each
 theme's own deepest surface where its palette has one, and a derived step below `--panel` where it does not.
 A theme that resolved only two of the three would silently collapse the ladder for its readers.

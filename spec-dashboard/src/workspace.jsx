@@ -29,7 +29,7 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 // ---------------------------------------------------------------------------------------------------
 
 const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split, lockedSource }
-const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, splitTo, closeSplit, lockGraphTo }
+const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, watchCompose, splitTo, closeSplit, lockGraphTo }
 
 const DOCK_KEY = 'spexcode.dock'
 const DOCK_MODE_KEY = 'spexcode.dockMode'
@@ -65,7 +65,15 @@ export function WorkspaceProvider({ children }) {
   // A one-shot handoff between views: a board chord composes text that the sessions view should open with.
   // It lives here rather than in either view because neither should have to be mounted for the other to
   // hand it something. A ref, not state — writing it must not re-render the shell.
+  //
+  // A DROP MUST ANNOUNCE ITSELF, because the receiver is no longer born on arrival. The take used to run
+  // once, when the sessions view mounted, which was the whole of the handoff while every navigation to the
+  // console mounted a fresh one. The mounted-document pool ([[workspace-shell]]) keeps that view WARM, so a
+  // second composition after the first visit had nobody left to collect it and "select prose → new session"
+  // silently opened an empty composer. The slot therefore carries watchers: writing it wakes whoever is
+  // holding, and a receiver that is not yet mounted still collects on arrival exactly as before.
   const compose = useRef(null)
+  const composeWatchers = useRef(new Set())
 
   const api = useMemo(() => ({
     setDock: (v) => setDockState((prev) => {
@@ -80,8 +88,15 @@ export function WorkspaceProvider({ children }) {
     }),
     openPalette: (mode) => setPalette(mode),
     closePalette: () => setPalette(null),
-    setCompose: (text) => { compose.current = text },
+    setCompose: (text) => {
+      compose.current = text
+      for (const watcher of [...composeWatchers.current]) watcher()
+    },
     takeCompose: () => { const t = compose.current; compose.current = null; return t },
+    watchCompose: (fn) => {
+      composeWatchers.current.add(fn)
+      return () => { composeWatchers.current.delete(fn) }
+    },
     splitTo: (route) => setSplitState(() => {
       const next = route?.page ? { page: route.page, param: route.param ?? null, query: route.query ?? null } : null
       try { localStorage.setItem(SPLIT_KEY, JSON.stringify(next)) } catch { /* private mode */ }

@@ -134,6 +134,45 @@ claimed to show what is open while the reader looked at something absent from it
 **The slot is visibly italic and weakened.** It is still a real route and can be copied, reloaded, closed,
 or pinned; the visual treatment names its replaceable status without inventing another tab kind.
 
+## the order is the reader's, and the strip wraps rather than scrolls
+
+**A tab can be dragged, and the order it lands in is the stored order.** There is no second arrangement to
+keep in step with the list — the strip renders the array, so moving a tab is one `splice` and the placement
+persists through the same local storage the open list already uses. Two consequences fall out rather than
+being arranged: the arrangement survives a reload for free, and a drag *changes nothing else* — the active
+document stays active, no address is written, and a release that lands where the tab started writes nothing
+at all. **The slot is not exempt.** It is an ordinary entry that happens to be unpinned, found by that flag
+and never by position, so it may be dragged anywhere and ordinary navigation still lands in it exactly
+where the reader put it.
+
+The gesture is the workspace's shared pointer drag ([[drag-gesture]]) and it is deliberately not native
+HTML5 drag-and-drop: a tab face is a button, which swallows `dragstart`, and the browser's drop protocol
+and ghost image are machinery neither this strip nor the session dock wants. Six pixels of slack keep a
+press a press, so click, double-click-to-pin, middle-click-to-close and the context menu are all untouched;
+the click the browser emits after a real drag is eaten, so dropping a tab never also opens it. **The mark is
+a hairline on the edge the tab would arrive at**, drawn on a tab rather than between tabs — which is what
+keeps it correct in any row of a wrapped strip — and it appears only where a release would actually change
+the order. Nothing lifts and nothing casts a shadow: the strip stays one plane while its order changes.
+
+**Tabs that do not fit WRAP onto the next row; the strip never scrolls sideways.** This is the one mode.
+A horizontal scroller hides the working set behind a gesture — the documents you are holding sit off-screen
+with nothing saying so, which is a strip that has stopped answering the question it exists to answer.
+Wrapping keeps the whole set legible and pays for it in a thickness the reader can see, and the payment is
+self-limiting: the current-slot rule means the strip only grows when someone decides it should, so a tall
+strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
+working set rather than a constant.
+
+**The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
+It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run
+under it — an editor needs a measured reserve at the end of the last row only because its toolbar floats
+over the rows. With one row this is exactly where the cluster always was; with several it stays put instead
+of drifting to the middle of a band that grew.
+
+**A wrapped strip is still ONE band.** Rows are the strip's internal layout, not stacked chrome, and
+[[ui-state-model]] counts it once at any height — a model that counted rows would be counting the reader's
+open documents as chrome. The budget gate enters every state with a working set deep enough to wrap and
+prints the row count beside the band count, so the claim is measured rather than asserted.
+
 **Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
 the reason every editor uses it: the reader's eye is already where the closed tab was.
 

@@ -83,8 +83,9 @@ The dock's session projection is the **one session list** in the desktop window.
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
 route-selected highlight (`activeSessionId`). The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
-overlay and all session content remain in the holding region. Rows are read-only navigation: plain click
-replaces the current tab and ctrl/command-click holds a new one.
+overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
+else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
+separate gesture with its own section below, and it changes no address.
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim
@@ -101,9 +102,48 @@ being a menu's anchor is not mutation state living in the dock: the row still on
 action the menu offers is performed by the menu.
 
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
-document tools. Drag-to-reparent and multi-select are deliberately removed in this milestone rather than
-silently disappearing: they were mutable gestures whose only home was the withdrawn list, and the dock's
-finding projection must not grow mutation state. The existing keyboard fresh-session binding remains active.
+document tools. Multi-select stayed retired with the list that owned it. The existing keyboard fresh-session
+binding remains active.
+
+## a row can be MOVED, and that is not navigation
+
+**Dragging a session row is how a session is moved, and it belongs wherever the sessions are listed.** It
+was withdrawn with the old list on the reasoning that the dock's finding projection must not grow mutation
+state — and that reasoning was one word too broad. What a finding surface must not grow is a second place
+where a session's *state* is decided; where a session SITS is not its state, it is the shape of the list
+itself, and a list is the only surface that can express a move at all. Withdrawing the gesture did not move
+it somewhere better, it deleted it: there has since been no pointer route anywhere in the window for
+"put this session under that one". Right-click already proved the shape — the row is a menu's anchor without
+the dock owning what the menu does ([[session-row]]) — and a drag is the same bargain: the dock says WHERE,
+the existing backend call does the moving.
+
+Three landings, and each is a place that was already on screen:
+
+- **Onto another row** — that row becomes the parent. Three landings refuse themselves and read as no
+  landing at all: a row onto itself, a row onto a descendant of its own (which would make a cycle out of a
+  tree), and a row onto the parent it already has.
+- **Into the list's own GAP, below the rows** — out of the subtree, to the top level. A tree has nowhere to
+  point at "no parent", so the empty space answers for it, and the list outlines itself while a nested row
+  is in hand. The outline is deliberate and so is what it replaced: the first version inserted a dashed
+  strip at the head of the list when a drag began, which pushed every row down by its own height at the
+  exact moment the reader was aiming at one — the row they were reaching for moved out from under the
+  pointer. An affordance for a move must not itself move anything.
+- **Onto the ARCHIVE DOOR in the header** — the same door that opens the archive takes what is dropped on
+  it. One door, one meaning ("where filed sessions go"), reached two ways; a separate drop strip would be a
+  second answer to a question this button already answers. It arms itself while a session is carried and
+  goes hot in the danger accent when the session is over it, because the drop removes a worktree.
+
+**A drop on the archive door asks the SAME confirm the menu's close asks** ([[session-rename]]'s menu). The
+removal is identical, so it is one prompt with two openers rather than two prompts for one destruction —
+two dialogs is two places for the wording, the danger styling and the background-removal semantics to
+drift. That a drag is a more deliberate gesture than a right-click does not make the removal less
+destructive.
+
+The pointer behaviour is the workspace's shared gesture ([[drag-gesture]]): six pixels of slack, so click,
+double-click-to-hold, alt-click-to-lock and the context menu are all untouched, and the click the browser
+emits after a real drag is eaten so a drop never also navigates. The move itself is the backend's existing
+reparent for both directions — the top level is the parent `null`, which is what it already was in the
+record, so there is no second notion of "detach" anywhere.
 When the dock is in sessions mode, `SessionInterface` renders no `si-list`, board scrollport, list resizer, or
 48px stub: the terminal or timeline owns the entire document content region. This is the [[workspace-shell]]
 four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on the right, AMBIENT at

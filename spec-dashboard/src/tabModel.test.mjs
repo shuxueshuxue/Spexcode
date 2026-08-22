@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 // [[tab-strip]]'s law, checked without a browser: **a new tab is a gesture, never a side effect.**
 // The regression this exists to catch is the one that shipped: browsing minted a tab per click, so a
@@ -81,6 +81,39 @@ test('a resident board is never the slot, and its details still are', () => {
   // …and the same store's DETAIL entry keeps the slot it was holding
   const kept = normalizeTabs([{ page: 'evals', param: null, pinned: false }, { page: 'evals', param: 'n/s', pinned: false }], resident)
   assert.deepEqual(kept.map((t) => t.pinned), [true, false])
+})
+
+// REORDERING IS A SPLICE, and the properties that matter are the ones a drag can violate: the set of open
+// documents never changes, the slot stays the slot wherever it lands, and a drag that goes nowhere writes
+// nothing (a new array here would wake every subscriber and rewrite storage for a click).
+test('a dragged tab is spliced to its landing place and nothing else moves', () => {
+  const strip = ['a', 'b', 'c', 'd'].map((id) => ({ page: 'spec', param: id, query: null, pinned: true }))
+  assert.deepEqual(moveTab(strip, '#/spec/d', '#/spec/b').map(tabKey), ['#/spec/a', '#/spec/d', '#/spec/b', '#/spec/c'])
+  assert.deepEqual(moveTab(strip, '#/spec/a', null).map(tabKey), ['#/spec/b', '#/spec/c', '#/spec/d', '#/spec/a'])
+  assert.deepEqual(moveTab(strip, '#/spec/b', '#/spec/a').map(tabKey), ['#/spec/b', '#/spec/a', '#/spec/c', '#/spec/d'])
+  // the working set is invariant under a move: same addresses, same count, same pinned flags
+  const moved = moveTab(strip, '#/spec/c', '#/spec/a')
+  assert.deepEqual([...moved.map(tabKey)].sort(), [...strip.map(tabKey)].sort())
+  assert.deepEqual(moved.map((t) => t.pinned), strip.map((t) => t.pinned))
+})
+
+test('a move that changes nothing returns the same array', () => {
+  const strip = ['a', 'b', 'c'].map((id) => ({ page: 'spec', param: id, query: null, pinned: true }))
+  assert.equal(moveTab(strip, '#/spec/a', '#/spec/b'), strip)   // already in front of b
+  assert.equal(moveTab(strip, '#/spec/c', null), strip)         // already last
+  assert.equal(moveTab(strip, '#/spec/zz', '#/spec/a'), strip)  // not in the strip
+  assert.equal(moveTab(strip, '#/spec/a', '#/spec/zz'), strip)  // landing on nothing
+})
+
+test('the slot survives a reorder as the slot, wherever it is dragged', () => {
+  let tabs = placeTab(placeTab([], spec('pin1'), 'pin'), spec('slotted'))
+  tabs = placeTab(tabs, spec('pin2'), 'pin')
+  assert.deepEqual(keys(tabs), ['*#/spec/pin1', '~#/spec/slotted', '*#/spec/pin2'])
+  tabs = moveTab(tabs, '#/spec/slotted', '#/spec/pin1')
+  assert.deepEqual(keys(tabs), ['~#/spec/slotted', '*#/spec/pin1', '*#/spec/pin2'])
+  // and ordinary navigation still lands in it, in its new place
+  tabs = placeTab(tabs, spec('next'))
+  assert.deepEqual(keys(tabs), ['~#/spec/next', '*#/spec/pin1', '*#/spec/pin2'])
 })
 
 test('legacy storage migrates to exactly one slot', () => {

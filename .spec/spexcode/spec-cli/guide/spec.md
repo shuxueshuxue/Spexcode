@@ -90,9 +90,6 @@ the agent from one verb, picked by an optional topic:
   commands remain authored profiles, never silent defaults. The sessions section names the worker cap's default, precedence,
   and the important meaning of "active": it counts compute slots, not total session rows, so human-waiting
   sessions do not block launches.
-  The review section mirrors [[review-acceptance]]'s repeated suite, exact-checkout preparation, cache
-  provenance, and evidence-bearing flaky expiry fields; it teaches configuration, while the declaration
-  remains the automatic caller.
   It mirrors the project `Config` type in `layout.ts` (the single source of truth — the manual
   restates the type's own field comments, it does not invent fields, and it omits fields the type keeps
   only as retired compat for the loud notice). Its uploads section names every transfer number, says that

@@ -157,7 +157,8 @@ The read-only guidance catalog ([[guidance-catalog]]) is exposed at `/api/guidan
 prose.
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
-`/api/sessions` list + spawn; per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
+`/api/sessions` list + spawn; `/api/sessions/archive-index` is the archived-only lean index (`id`, `title`, `label`,
+`closedAt`, `node`) and never substitutes for the id-addressed detail; per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
 bundle), `capture` (the live pane as text), `prompt`, and id-addressed `closure` (the durable terminal-close
 audit answer after record removal). `closure` returns only its target id and close time or 404; it is not a
 second historical session collection. Every closure response carries its capability marker, including a 404,

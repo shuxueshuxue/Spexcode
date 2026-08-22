@@ -54,8 +54,8 @@ the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent,
 The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
 budgets, and [[file-attach]]'s one `uploads` policy: attachment limit, chunk size, batch concurrency, request
 timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and eval-evidence ceiling.
-It also types [[review-acceptance]]'s portable repeat count, setup, suite commands, and evidenced flaky rows;
-the feature module owns their strict runtime validation because layout only transports that adjacent policy.
+It carries adjacent project policy through the same committed-config seam; feature modules own their own strict
+runtime validation because layout only transports that adjacent policy.
 `packages/spec-core/templates/spexcode.json` is the one shipped seed and numeric-default source: `readUploadPolicy()`
 and `spex init` both read it, then the former overlays the resolved project/local `uploads` object and validates
 every field loudly. Thus a pre-existing project may

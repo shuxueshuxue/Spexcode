@@ -326,7 +326,7 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
 // tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
 // `rowPresent` separates the two ways a projection can be absent. A selected row that carries none is a
 // retained record the board no longer projects at all — a closed session leaves the graph and is served from
-// `/api/sessions?all=1`, which has no summary to carry — so it is dormant, exactly like the backend's own
+// the archive index plus its id-addressed detail, neither of which carries eval summary — so it is dormant, exactly like the backend's own
 // dormant phase. Only a selection with no row yet is still arriving.
 export function sessionEvalDisplay(projection, connected = true, rowPresent = false) {
   if (!projection) return { phase: rowPresent ? 'dormant' : 'loading' }
@@ -539,11 +539,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [archiveRows, setArchiveRows] = useState(null)
   const refreshArchive = useCallback(() => {
     if (archiveRequestRef.current) return archiveRequestRef.current
-    const request = fetch(apiUrl('/api/sessions?all=1'))
+    const request = fetch(apiUrl('/api/sessions/archive-index'))
       .then(async (response) => {
         if (!response.ok) throw new Error(`archive index refused (HTTP ${response.status})`)
         const rows = await response.json()
-        const archived = archiveOrder(Array.isArray(rows) ? rows.filter((session) => session?.archived) : [])
+        const archived = archiveOrder(Array.isArray(rows) ? rows.map((session) => ({ ...session, archived: true })) : [])
         setArchiveRows(archived)
         return archived
       })

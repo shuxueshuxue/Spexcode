@@ -538,11 +538,12 @@ function GraphView({ param, query }) {
     focusNode(n.id)
   }, [focusNode])
 
-  // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup — still no pan
-  // (mouse never moves the camera; only the keyboard does).
+  // double-click is the mouse parallel to `i`: OPEN the node as a document. Single click still only
+  // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
+  // leaves it.
   const onNodeDoubleClick = useCallback((_e, n) => {
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    focusNode(n.id); setOverlay(true)
+    focusNode(n.id); navigate('spec', n.id)
   }, [focusNode])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
@@ -603,7 +604,7 @@ function GraphView({ param, query }) {
 
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
-          onInfo={() => setOverlay(true)}
+          onInfo={() => navigate('spec', focusRef.current.id)}
           onFresh={(id) => startNew(`[[${id}]] `)}
           onNewChild={(id) => startNew(CHORDS.nn(id))}
           onDelete={(id) => startNew(CHORDS.dd(id))}

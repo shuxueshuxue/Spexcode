@@ -38,7 +38,7 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
   writeFileSync(join(bin, 'tmux'), '#!/bin/sh\n[ "$1" = "-V" ] && { echo "tmux 3.4"; exit 0; }\nexit 1\n'); chmodSync(join(bin, 'tmux'), 0o755)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project }); execFileSync('git', ['config', 'user.email', 'yatu@example.test'], { cwd: project }); execFileSync('git', ['config', 'user.name', 'YATU'], { cwd: project }); execFileSync('git', ['add', '.'], { cwd: project }); execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: project })
   const seed = openProjectSessionApplication({ databasePath, locality: () => {} })
-  for (const id of ['parent', 'child', 'parent2', 'watch1', 'watch2', 'batch', 'batchw', 'pub', 'pubw', 'a', 'aw', 'b', 'bw', 'migrated']) seed.createSession({ sessionId: id })
+  for (const id of ['parent', 'child', 'parent2', 'watch1', 'watch2', 'batch', 'batchw', 'pub', 'pubw', 'a', 'aw', 'b', 'bw']) seed.createSession({ sessionId: id })
   seed.transitionSession('child', { parentSessionId: 'parent' }); seed.close()
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, SPEXCODE_HOME: home, PORT: String(port) }
   let backend: ChildProcess | null = null
@@ -77,7 +77,22 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
     await story('ordered-batch-delivery', async () => { await post('/api/session-runtime/batch/watch', { watcherSessionId: 'batchw' }); await post('/api/session-runtime/batch/state', { status: 'active' }); await post('/api/session-runtime/batch/state', { status: 'awaiting' }); await post('/api/session-runtime/batchw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'batchw', nativeStartToken: 'one' }); const one = await post('/api/session-runtime/batchw/dequeue', { namespace: 'spex-governed' }); const two = await post('/api/session-runtime/batchw/dequeue', { namespace: 'spex-governed' }); assert.ok(one.enqueueSeq < two.enqueueSeq) })
     await story('publish-before-after-watch', async () => { await post('/api/session-runtime/pub/publish', { kind: 'before', body: 'before' }); await post('/api/session-runtime/pub/watch', { watcherSessionId: 'pubw' }); await post('/api/session-runtime/pub/publish', { kind: 'after', body: 'after' }); await post('/api/session-runtime/pubw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'pubw', nativeStartToken: 'one' }); const message = await post('/api/session-runtime/pubw/dequeue', { namespace: 'spex-governed' }); assert.equal(message.kind, 'after') })
     await story('independent-session-pairs', async () => { await post('/api/session-runtime/a/watch', { watcherSessionId: 'aw' }); await post('/api/session-runtime/b/watch', { watcherSessionId: 'bw' }); await post('/api/session-runtime/a/publish', { kind: 'pair-a', body: 'a' }); await post('/api/session-runtime/aw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'aw', nativeStartToken: 'one' }); const message = await post('/api/session-runtime/aw/dequeue', { namespace: 'spex-governed' }); assert.equal(message.kind, 'pair-a') })
-    await story('one-time-migration-marker', async () => { const records = join(fixture, 'legacy'); mkdirSync(join(records, 'migrated'), { recursive: true }); writeFileSync(join(records, 'migrated', 'session.json'), JSON.stringify({ session_id: 'migrated', status: 'active', parent: null, createdAt: 1 })); const migrationDb = join(fixture, 'migration.sqlite'); execFileSync(process.execPath, ['scripts/migrate-session-json.mjs', '--records-root', records, '--database', migrationDb], { cwd: process.cwd(), env }); execFileSync(process.execPath, ['scripts/migrate-session-json.mjs', '--records-root', records, '--database', migrationDb], { cwd: process.cwd(), env }); assert.equal((await request('/api/session-runtime/child/events')).length > 0, true) })
+    await story('one-time-migration-marker', async () => {
+      const records = join(fixture, 'legacy')
+      mkdirSync(join(records, 'migrated'), { recursive: true })
+      writeFileSync(join(records, 'migrated', 'session.json'), JSON.stringify({ session_id: 'migrated', status: 'active', parent: null, createdAt: 1 }))
+      const first = JSON.parse(execFileSync(process.execPath, ['scripts/migrate-session-json.mjs', '--records-root', records], { cwd: process.cwd(), env, encoding: 'utf8' })) as { replayed: boolean; markerPath: string; backupRoot: string }
+      const second = JSON.parse(execFileSync(process.execPath, ['scripts/migrate-session-json.mjs', '--records-root', records], { cwd: process.cwd(), env, encoding: 'utf8' })) as { replayed: boolean; markerPath: string; backupRoot: string }
+      assert.equal(first.replayed, false)
+      assert.equal(second.replayed, true)
+      assert.equal(second.markerPath, join(home, 'sessions.sqlite.json-migration.json'))
+      assert.equal(second.backupRoot, join(home, 'sessions.sqlite.json-migration-backup'))
+      const replay = await request('/api/session-runtime/migrated/replay')
+      assert.deepEqual(replay, { sessionId: 'migrated', status: 'active', parentSessionId: null, updatedAtMs: 1 })
+      const events = await request('/api/session-runtime/migrated/events')
+      assert.equal(events.length, 1)
+      assert.equal(events[0].type, 'session.state.changed.v1')
+    })
     console.log(JSON.stringify({ scenarios: results, passed: results.filter(result => result.passed).length, failed: results.filter(result => !result.passed).length }, null, 2))
     assert.equal(results.length, 10); assert.equal(results.filter(result => !result.passed).length, 0)
   } finally { if (backend) await stop(backend) }

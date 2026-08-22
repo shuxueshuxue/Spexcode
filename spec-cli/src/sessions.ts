@@ -3168,22 +3168,14 @@ const MERGE_PROMPT = `Merge your branch into main, then settle the session hones
 
 export type MergeSessionResult =
   | { dispatched: true }
-  | { dispatched: false; reason: string; code?: 'session_merge_not_proposed'; status?: 409 }
+  | { dispatched: false; reason: string }
 
 export async function mergeSession(id: string): Promise<MergeSessionResult> {
   const wt = await findWorktree(id)
   if (!wt?.branch) return { dispatched: false, reason: 'no such mergeable session' }
   const r = await sendText(id, MERGE_PROMPT, undefined, {
     deferDrain: true,
-    acceptGuard: async (rec) => {
-      if (!rec.governed || rec.status !== 'awaiting' || rec.proposal !== 'merge') {
-        const error = new ResourceConflict(`session ${id} is not a governed awaiting merge proposal`)
-        Object.assign(error, { code: 'session_merge_not_proposed' })
-        throw error
-      }
-    },
   })
-  if (r.code === 'session_merge_not_proposed') return { dispatched: false, reason: r.error || 'merge dispatch refused', code: r.code, status: 409 }
   if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
   await resumeSession(id, { guard: false })
   await drainSession(id)
@@ -4133,7 +4125,7 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
-type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed'
+type DispatchAcceptCode = 'dispatch_key_reused'
 type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
 type SendTextOptions = {
   replyVia?: 'note'

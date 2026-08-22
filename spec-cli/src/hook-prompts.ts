@@ -80,6 +80,14 @@ const DEFINITIONS: readonly HookPromptDefinition[] = Object.freeze([
     render: () => '',
   },
   {
+    name: 'session-listen',
+    title: 'session-listen',
+    description: 'Lifecycle delivery signal; runtime adopter messages are delivered at harness input boundaries.',
+    role: 'signal',
+    content: NO_PROMPT('session-listen', 'It delivers adopter-owned queued messages as runtime context when configured.'),
+    render: () => '',
+  },
+  {
     name: 'spec-first',
     title: 'spec-first',
     description: 'Blocking prompt injected once before the first governed code read.',

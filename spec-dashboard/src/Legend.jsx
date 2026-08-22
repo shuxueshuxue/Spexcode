@@ -1,7 +1,7 @@
 import Modal from './Modal.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
 import { ACT, keyCap } from './keymap.js'
-import { keysOf } from './bindings.js'
+import { keysOf, withShortcut } from './bindings.js'
 import { useT } from './i18n/index.jsx'
 
 // alt keys not worth showing in the legend are dropped (the shift-less zoom variants, the capital of a
@@ -65,7 +65,7 @@ function KeymapSection({ title, rows, t }) {
 export default function Legend({ onClose }) {
   const t = useT()
   return (
-    <Modal title={t('legend.title')} closeLabel={t('legend.close')} onClose={onClose}>
+    <Modal title={t('legend.title')} closeLabel={withShortcut(t('legend.close'), 'graph.help')} onClose={onClose}>
           <BoardKeymap t={t} />
           <KeymapSection title={t('legend.secPopup')} rows={POPUP_KEYS} t={t} />
 

@@ -23,8 +23,8 @@ the accessible name impossible to forget.
 - **One file, one contract.** `icons.jsx` is the single home of every dashboard glyph. `<Icon name
   size/>` renders from an inlined registry — Lucide-derived paths (Obsidian's icon family, MIT,
   copied in so there is zero runtime dependency) plus the dashboard's own hand-drawn marks (the side
-  rail's 18-grid page and dock-projection glyphs, including the sessions list with status points, and
-  the 16-grid utility set). Every stroke icon obeys the same contract:
+  rail's 18-grid page and dock-projection glyphs — the files stack and the sessions list with status
+  points — and the 16-grid utility set). Every stroke icon obeys the same contract:
   `fill=none`, `stroke=currentColor`, round caps/joins, ~1.4–2 stroke width, `aria-hidden` — so any
   glyph inherits its host's color and hover exactly like text. A definition may declare its official
   fill/stroke geometry as data when fidelity is the point — notably Primer's MIT-licensed 16px
@@ -59,6 +59,15 @@ the accessible name impossible to forget.
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues
   drain's complete lifecycle also draws from here as the official filled `issue-opened` / `issue-closed`
   pair rather than mixing one Octicon with CSS-made dots.
+- **A glyph says what the control is about, not where its panel sits.** The mirrored panel pair —
+  the same 18-grid frame with the left column tinted and the right column tinted — is the LAYOUT
+  vocabulary: it means *which side a dock opens*, and it reads as a pair because the two toggles that
+  spend it sit a few pixels apart, each one's whole message being the side. Today only the right context
+  dock draws one; the mirror stays declared beside it, because half a mirrored pair is a glyph whose
+  meaning nobody can recover. The rail's explorer PROJECTION is not one of those toggles — it names what
+  the dock will list — so it wears the files stack instead: two sheets with folded corners, the shape
+  every editor's file tree already uses. Wearing the panel frame there made a file tree read as a card
+  or a folder, which is one glyph carrying two meanings and the law this registry exists to keep.
 - **Text stays text where text won.** Verb actions with room to breathe (promote/close/resolve/
   retract/send/cancel/save, tab labels, context-menu rows, settings) keep their words — the icon system
   does not replace prose with mystery glyphs. Context-menu rows pair those labels with a small leading

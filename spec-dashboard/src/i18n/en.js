@@ -106,12 +106,14 @@ export default {
   nav: {
     railLabel: 'main navigation',
     explorer: 'Explorer',
-    search: 'Search (/)',
-    graph: 'Spec Node Graph (⌥1)',
-    sessions: 'Sessions (⌥2)',
-    evals: 'Evals (⌥3 / ⌥F)',
-    issues: 'Issues (⌥4)',
-    settings: 'Settings (⌥5)',
+    // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
+    // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
+    search: 'Search',
+    graph: 'Spec Node Graph',
+    sessions: 'Sessions',
+    evals: 'Evals',
+    issues: 'Issues',
+    settings: 'Settings',
     projectChip: 'project: {name} — switch project',
     projectChipLogin: 'project: {name} — sign in to manage projects',
     projectOnline: 'online',
@@ -216,9 +218,14 @@ export default {
   statusBar: {
     hidden: 'hidden — restore from the bar',
     restore: 'restore hidden status items',
+    // the ambient board tallies; each names its own door, because each item IS that door.
+    nodes: ({ n }) => `${n} spec nodes — merged · active · drift · pending. Open the graph`,
+    evals: ({ pass, fail }) => `fresh evals: ${pass} passing, ${fail} failing — open the evals board`,
+    issues: ({ n }) => `${n} open issues — open the issues board`,
+    sessions: ({ run, need }) => `${run} running, ${need} waiting on you — open the sessions console`,
   },
   hud: {
-    helpTitle: 'help — keymap & legend (?)',
+    helpTitle: 'help — keymap & legend',
     loading: 'loading specs from git…',
     loadError: 'backend unreachable — the graph failed to load.',
     retry: 'retry',
@@ -382,7 +389,7 @@ export default {
 
   legend: {
     title: 'help · keymap & legend',
-    close: 'close (esc or ?)',
+    close: 'close (esc)',
     secBoard: 'graph keys',
     secPopup: 'node-info popup',
     secStatus: 'status dot',
@@ -421,6 +428,7 @@ export default {
       tabNext: 'select next tab',
       tabPrevious: 'select previous tab',
       tabSplit: 'send active tab to split pane',
+      commandBox: 'toggle the session Command Box',
     },
     popup: {
       switch: 'switch pane (spec / history)',
@@ -624,12 +632,14 @@ export default {
   },
 
   session: {
-    menuLabel: 'session actions',
+    // the ellipsis on the session document: it is the ONLY route to rename / tmux attach / graph
+    // lock on this surface, so the tooltip says so rather than naming a shape.
+    menuLabel: 'session actions — rename, attach, lock on graph, close',
     opsTitle: 'nodes this session is changing — right-click for session actions',
     lockTitle: 'right-click for session actions, including lock on graph',
     newSession: 'New Session',
-    newSessionTitle: 'New Session (⌥+N)',
-    searchTitle: 'Search (⌥+/)',
+    newSessionTitle: 'New Session',
+    searchTitle: 'Search',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
     issuesOff: 'The issues workflow is off.',
     issuesEmpty: 'No issues yet.',
@@ -681,6 +691,7 @@ export default {
     diffEmpty: 'no branch changes',
     diffFailed: 'diff unavailable: {message}',
     diffScope: 'branch diff',
+    diffClose: 'leave the branch diff, back to the session',
     diffComment: 'comment on lines',
     diffCommentPlaceholder: 'leave a review comment',
     diffCommentSave: 'save comment',
@@ -735,7 +746,7 @@ export default {
       `open this session's Evals page — ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
     commandBox: 'Command Box',
     commandBtn: 'Command Box',
-    commandTitle: 'open Command Box for an atomic prompt or graph command (Alt+I)',
+    commandTitle: 'open Command Box for an atomic prompt or graph command',
     commandClose: 'close Command Box',
     commandPlaceholder: 'Send an atomic prompt or run a graph command',
     commandSend: 'send from Command Box',
@@ -796,7 +807,7 @@ export default {
 
   settings: {
     title: 'settings',
-    close: 'close (esc or ,)',
+    close: 'close (esc)',
     secLanguage: 'language',
     secTheme: 'theme',
     secTerminal: 'terminal',

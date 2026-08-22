@@ -38,7 +38,11 @@ whole shell hangs off, re-derived from what the product is rather than from what
   the mockup's backlinks/scenarios panel when it earns its keep. Context is about the current document,
   which is why it is not a finding surface and not a tab.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
-  land above its right end, never over content.
+  land above its right end, never over content. The frame itself is what fills it: the workspace identity
+  and the BOARD TALLIES — spec nodes by state, fresh eval verdicts, open issues, live sessions — are true of
+  the window on every route, so no view may own them and each is registered here. A view contributes only
+  facts about the document it is showing. That division is what stopped the bar from emptying when a view
+  stopped being where a reader lands; the shape of an item and where it lands is [[status-bar]]'s.
 
 A control belongs to the region whose question it answers, and to exactly one owner there — the dock's
 explorer/sessions mode buttons sit on the rail with the other finding controls, not in a second dock modebar
@@ -78,6 +82,12 @@ visible when the document owns that capability, is disabled rather than hidden, 
 reason as the tooltip. The slot owns no document content, route parsing, or action semantics; it only invokes
 the registered callback and provides the one icon-button chrome for it. A registered popup is positioned by the
 slot's action wrapper, so a document can expose a picker without growing an internal toolbar.
+
+**The band does not clip; the tab list inside it does.** A popup hangs BELOW the row, so the row itself must
+not be the scroll container — the strip is a 30px box, and a strip that scrolls its own tabs cuts every
+dropdown off at 30px, which renders a picker perfectly and shows the reader nothing. The tabs get their own
+horizontal scroller inside the band; the actions cluster sits outside it, which also stops a long tab list
+from scrolling the document's own controls off the right edge.
 
 **What it replaced was not a component but a missing layer.** The board used to be one ~710-line component
 that *was* the graph, with every other page hung off it as a hidden pane and every page's state held in

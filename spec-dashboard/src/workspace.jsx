@@ -106,6 +106,42 @@ export function WorkspaceProvider({ children }) {
 export const useWorkspace = () => useContext(WorkspaceState) || {}
 export const useWorkspaceApi = () => useContext(WorkspaceApi) || {}
 
+// ---------------------------------------------------------------------------------------------------
+
+// THE PANE a view is mounted in ([[workspace-shell]]'s mounted-document pool). Two facts, and both are
+// facts a view cannot work out for itself once documents stay mounted while hidden:
+//
+//   · `address` — the address THIS pane holds, which is not the window's address when the pane is hidden.
+//     Anything that remembers something per-address (scroll position) must key on the pane, or a hidden
+//     pane will happily write its state over the visible one's.
+//   · `active` — whether this pane is the one showing. A hidden document must not hold the keyboard, and
+//     must not keep polling for a screen nobody is looking at.
+//
+// Absent (no provider) means "the whole window is this pane": the phone face, the projects hub, the cold
+// review fast-path and the sealed public build all render one view and nothing else.
+const Pane = createContext(null)
+// A HIDDEN DOCUMENT SEES THE BOARD IT WAS HIDDEN WITH. The board arrives by push and a busy project pushes
+// constantly; every push re-renders every subscriber, so a pool of mounted documents would multiply the
+// cost of data nobody is looking at by the number of tabs the reader keeps. Freezing the value a hidden
+// pane sees is half of what makes the pool free — the other half is the shell not re-rendering the pane at
+// all ([[workspace-shell]]); each alone does nothing, because a subtree re-renders if EITHER its props or
+// its context moved. Showing a pane hands it the live board again, so it catches up in the render that
+// reveals it, which is what a reader expects of a tab they have just come back to.
+export function PaneProvider({ value, children }) {
+  const board = useContext(BoardState)
+  const held = useRef(board)
+  if (value.active) held.current = board
+  return (
+    <Pane.Provider value={value}>
+      <BoardState.Provider value={value.active ? board : held.current}>{children}</BoardState.Provider>
+    </Pane.Provider>
+  )
+}
+export const usePane = () => useContext(Pane)
+// the two questions with their no-provider answers, so callers do not each invent a default.
+export const usePaneActive = () => useContext(Pane)?.active !== false
+export const usePaneAddress = () => useContext(Pane)?.address ?? null
+
 // A guard the shell asserts in development: a view must not read the global address. It receives its route
 // as props, because that is what lets the shell render two of them at once, and what stops a view from
 // silently coupling itself to whichever address happens to be current.

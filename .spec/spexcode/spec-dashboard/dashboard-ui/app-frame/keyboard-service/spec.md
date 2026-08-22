@@ -68,11 +68,16 @@ The service resolves each `KeyboardEvent` through one ordered ownership chain:
 1. The top overlay/palette/true modal owns the event and swallows it. Escape peels the existing LIFO escape
    layer first; the node-info popup remains a lens, so Shift+relationship navigation is passed to the active
    view while its unmodified pane/scroll grammar stays local.
-2. The active view may register a key-owner while mounted. Registration returns an unregister function and
-   is idempotent; unmounting gives the key-owner back to the service. Graph registers relationship walking,
+2. The **SHOWING** view may register a key-owner. Being mounted is not the condition and stopped being a
+   usable one the day documents outlived their turn on screen ([[workspace-shell]]'s mounted-document
+   pool): a mounted scope is a claim on every keystroke, so a hidden graph would go on answering `j`/`k`
+   while the reader typed into the spec beside it. A pane that is not showing registers nothing at all, and
+   a view rendered outside any pane — the phone, the hub, the cold review entry, the sealed build — is its
+   window's only view and always registers. Registration returns an unregister function and
+   is idempotent; unmounting or being hidden gives the key-owner back to the service. Graph registers relationship walking,
    zoom/cycle, chords, the node popup lens, and its legend. Other views retain their own inputs and review
    navigation without claiming shell shortcuts.
-3. The shell handles window-global actions: `Alt+1..5`, `Alt+N`, `Alt+F`, `Alt+/`, explorer dock visibility,
+3. The shell handles window-global actions: `Alt+1..4` ([[side-nav]]'s rail order), `Alt+N`, `Alt+F`, `Alt+/`, explorer dock visibility,
    dock mode, context dock visibility, tab close/next/previous, and sending the active tab to the split pane.
    These actions use existing workspace/route/tab APIs, so there is no second navigation model.
 

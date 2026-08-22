@@ -49,9 +49,12 @@ export default {
     aria: '项目文件树',
   },
   dockModes: {
+    collapse: '收起侧边栏',
     aria: '停靠栏模式',
     explorer: '资源管理器',
     sessions: '会话',
+    searchNodes: '搜索节点',
+    searchSessions: '搜索会话',
   },
   dockSessions: {
     new: '新建会话',
@@ -74,7 +77,6 @@ export default {
     hint: '你关掉了最后一个文档。选一个打开即可——什么都没丢，只是现在标签栏是空的。',
     search: '搜索节点',
     explorer: '在资源管理器里浏览',
-    graph: '打开图文档',
   },
   tabs: {
     aria: '已打开的文档',
@@ -105,8 +107,6 @@ export default {
     railLabel: '主导航',
     explorer: '资源管理器',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
-    search: '搜索',
-    graph: '规格节点图',
     sessions: '会话面板',
     evals: 'Evals',
     issues: '议题',
@@ -408,7 +408,6 @@ export default {
       help: '打开此帮助',
     },
     shell: {
-      pageGraph: '前往图页面',
       pageSessions: '前往会话页面',
       pageEvals: '前往评测页面',
       pageIssues: '前往议题页面',
@@ -809,14 +808,11 @@ export default {
   },
 
   search: {
-    title: '搜索节点、会话、议题与场景',
-    placeholder: '搜索节点、会话、议题、场景…',
+    title: '搜索节点与会话',
+    placeholder: '搜索节点、会话…',
     empty: '没有匹配项',
     hint: '↑↓ 选择 · ⏎ 跳转 · esc 关闭',
-    allResults: '完整评审列表',
-    allIssues: ({ n }) => `全部 issues · ${n}`,
-    allEvals: ({ n }) => `全部评测 · ${n}`,
-    kind: { spec: '节点', session: '会话', issue: '议题', scenario: '场景' },
+    kind: { spec: '节点', session: '会话' },
   },
 
   // 触控优先的手机界面（MobileApp）—— 桌面图谱是鼠标/键盘的操作方式，手机改用下钻列表 + 会话页。

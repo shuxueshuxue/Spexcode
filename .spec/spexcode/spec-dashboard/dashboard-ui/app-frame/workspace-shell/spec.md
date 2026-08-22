@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/Shell.jsx
 related:
   - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/test/keep-alive.e2e.mjs
   - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
@@ -20,20 +21,25 @@ It knows there is an address, that an address names a view, and where on the scr
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-- **Where is everything? — FINDING, on the left.** The rail (the activity bar: explorer and sessions mode
-  buttons, search, then the document openers) and the dock (the explorer — the spec tree, open by default).
-  Looking must be free:
-  browsing a finding surface never grows any state but the camera's. A wide board is where the region stands
-  down: Evals and Issues ARE finding surfaces, full-bleed by design, so while one of them is the routed
-  document the dock does not render — two finding surfaces side by side buys nothing and costs the board the
-  width it was drawn for. The rail's explorer toggle still owns the stored preference and stays lit by it;
-  a board suppresses the dock while it is the document and never edits the reader's choice ([[file-tree]]).
+- **Where is everything? — FINDING, on the left.** The rail is an **activity bar**: the explorer and
+  sessions projection buttons, search, then the singleton boards (evals, issues, settings pinned at the
+  bottom). The dock beside it is one finding surface with two projections. Looking must be free: browsing a
+  finding surface never grows any state but the camera's.
+  **The dock is a property of the focused tab** — both its projection and its existence. A session document
+  brings the session list, a node or a governed file brings the explorer, and a singleton board brings no
+  sidebar at all, taking the full width instead of inheriting the tree the last tab was showing. So the
+  sidebar describes the working set rather than being a setting maintained beside it, and the rail's lit
+  button reads as *where this document belongs* ([[dock-modes]]). A rail click overrides the derivation by
+  hand and the override lapses at the next focus change ([[file-tree]]).
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything readable is a document with an address — the graph, a node, a file, a session, the
-  boards. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
+  active tab; everything readable is a document with an address — a node, a file, a session, an eval, an
+  issue, and the **singleton boards** (evals, issues, settings), which are tabs you keep rather than places
+  you bounce off. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
+  区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
+  current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the
-  center says it holds nothing and names the ways back in, because the graph is a document too and must
-  never arrive as a substitute for the reader's own answer.
+  center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
+  the reader's own answer.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane today (a document sent right);
   the mockup's backlinks/scenarios panel when it earns its keep. Context is about the current document,
   which is why it is not a finding surface and not a tab.
@@ -108,9 +114,56 @@ props ([[view-registry]]). That one rule is the hinge: it is what makes renderin
 layout change rather than a rewrite, and what stops a view from silently coupling to whichever address
 happens to be current.
 
-**A view is keyed on its address**, so a different document is a different instance and one document's
-state cannot bleed into the next. The graph is the deliberate exception — keyed on the page alone, because
-its camera and expansion are the workspace's home state rather than one address's.
+## the mounted-document pool
+
+**Switching tabs does not reload the document.** Views used to be keyed on the address, so leaving a
+document unmounted it and returning ran its whole boot again — which is what *"为什么每次点击一个顶上打开
+的横 tab 都要重新加载"* was naming. The shell keeps a bounded pool of **mounted** documents (six, sized to
+the strip's usual working set) and shows one: the rest are `display:none`, not unmounted, exactly as the
+session console has always kept its terminals ([[session-console]]'s warm layers). Only exceeding the bound
+unmounts anything, and then it is the least recently shown.
+
+Three properties make that safe rather than merely fast:
+
+- **Render order is insertion order, never recency.** Reordering keyed children moves real DOM nodes, and a
+  moved node re-attaches its iframes and canvases — a reload wearing a different name. Recency lives in a
+  counter used only to choose which entry to drop.
+- **A pane knows two things a view cannot work out for itself once it can be hidden**: the address THIS
+  pane holds — which is not the window's address while it is hidden — and whether it is the one showing.
+  Anything keyed per address (a scroll position, [[page-scroll]]) keys on the pane, or a hidden pane writes
+  its state over the visible one's. A hidden document holds no keyboard scope ([[keyboard-service]]) and
+  does not fetch: it is kept WARM, not busy.
+- **A hidden pane does not re-render.** The shell re-renders on every board push, so the pool is memoised
+  per pane AND a hidden pane reads the board it was hidden with. Either alone does nothing — a subtree
+  re-renders if props or context moved — and together they are what stops an idle workspace from costing
+  more the more tabs it holds. A pane catches up in the render that reveals it.
+
+**What is "the same mounted document" is per view, not per address.** Most views are one per address. Two
+are one per PAGE: the graph, whose camera and expansion are the workspace's state rather than one address's,
+and the session console, which holds every live terminal's socket and scrollback — keying it per session id
+is precisely what made every session switch a cold boot. Those two receive their object as props and follow
+it, which the console already did for its own list.
+
+The SECOND pane is not a pool: it holds one document the reader deliberately sent there, so keying it on
+the address is the whole contract.
+
+Measured with six documents mounted (`test/keep-alive.e2e.mjs`): a document's own DOM node survives a round
+trip through two other tabs, warm switches between flowing documents land at **0.03–0.12s**, and the pool
+costs **0.019 seconds of script per 10 idle seconds** — 0.028s with a live session console hidden among
+them, whose cost is terminal output arriving rather than the pool.
+
+**The return to the session console is the measured exception, and it is the console's DOM rather than the
+pool's hiding.** That switch costs about **0.5s** against the 0.25s the others meet, and the long task
+inside it is laying out the console's terminal rows the moment they are rendered again — the probe counts
+**~4,500 row elements** across the console's warm layers, so the cost scales with how much terminal a reader
+has accumulated, not with the pool. Three hidden states were measured against exactly that switch and none
+of them moved it, which is the useful result: `display:none` pays ~0.5s on return; keeping the box laid out
+(`position:absolute` + `visibility:hidden`, the pattern the console uses internally) pays ~0.31s on EVERY
+switch instead, because the dock's width follows the focused tab so the box changes size while hidden and
+re-lays those rows out each time; `content-visibility:hidden` restores the other switches but still pays
+~0.37s on return. A property that takes a subtree out of rendering cannot make rendering it again cheap.
+So the pool keeps `display:none` — the cheapest of the three everywhere it differs — and the residual belongs
+to [[session-console]]'s warm-layer contract, where the row count is decided.
 
 **A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
 error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split

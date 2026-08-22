@@ -4,12 +4,13 @@ import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery } from '@spexcode/spec-core/review'
 import { addressHash, detailBackHash, evalAddress, sessionAddress, sessionEvalAddress } from './address.js'
-import { navigate, routeHash, useRoute } from './route.js'
+import { navigate, routeHash } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { useTransientNotice } from './TransientNotice.jsx'
+import { usePaneActive } from './workspace.jsx'
 
 // The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
 // page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, the whole face ONE token
@@ -25,6 +26,7 @@ import { useTransientNotice } from './TransientNotice.jsx'
 // graph session summary already rendered by the shell.
 const detailInflight = new Map()
 const EMPTY_SPECS = []
+const EMPTY_QUERY = {}
 
 export function detailMatchesProjection(detail, projection) {
   if (!detail?.evalRevision || !projection?.epoch) return true
@@ -193,10 +195,12 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
   )
 }
 
-export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession }) {
+// the route arrives as PROPS ([[view-registry]]'s one contract): this page is mounted in a pane that may
+// not be the one showing, and a view that reads the global address follows the reader out of its own pane.
+export default function EvalsPage({ param = null, query = EMPTY_QUERY, specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession }) {
   const t = useT()
+  const showing = usePaneActive()
   const { notify } = useTransientNotice()
-  const { param, query } = useRoute()
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
   // conflated with session:present|missing, the source-session presence facet.
   const sessionId = readToken(query.q || '', 'scope') || null
@@ -204,7 +208,9 @@ export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesSt
   const detail = useEvalDetail(param, sessionId, sessionProjection, !!param, issuesStamp)
   const queryText = String(query.q ?? '').trim() || EVAL_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
-  const list = useReviewPage('evals', queryText, page, { enabled: !param, refreshKey: specs })
+  // a hidden pane does not fetch: the list would refresh on every board push for a screen nobody is
+  // looking at, and the pool exists to keep documents WARM, not busy ([[workspace-shell]]).
+  const list = useReviewPage('evals', queryText, page, { enabled: !param && showing, refreshKey: specs })
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
   // ('@ new→<session>') reaches the shared notice surface, so an @-dispatch is never silent.
   const flash = (outcomes) => { if (outcomes) notify(outcomes) }

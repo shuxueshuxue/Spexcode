@@ -65,6 +65,10 @@
   --line-session-row: 18px; --line-status: 24px;
   --tracking-normal: 0;
 
+  /* MOTION. One duration for a panel opening or closing. Long enough to read as a movement rather than a
+     jump, short enough that nobody waits for it — and a token, so the whole frame moves at one speed
+     instead of each panel picking its own. */
+  --dur-panel: 170ms;
   /* GEOMETRY. One corner radius for every box that is not a circle, and one spacing ladder. New rules
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
@@ -328,6 +332,19 @@ body {
 .dock {
   flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
   background: var(--ground); border-right: 1px solid var(--edge);
+  overflow: hidden; max-width: 640px; animation: dock-in var(--dur-panel) ease;
+}
+/* the sidebar SLIDES rather than blinking: opening animates from nothing, and closing keeps the element on
+   screen for exactly one duration ([[dock-modes]]) so the reverse is visible too. The animated property is
+   MAX-WIDTH, not width: the dock's width is an inline style (the reader's own resize) and a keyframe
+   cannot outrank one — `!important` inside a keyframe is ignored by the spec, so the first version of this
+   animated nothing at all. Children keep their laid-out size so the tree slides instead of reflowing. */
+.dock.dock-closing { animation: dock-out var(--dur-panel) ease forwards; pointer-events: none; }
+.dock > * { flex-shrink: 0; }
+@keyframes dock-in { from { max-width: 0; opacity: 0; } }
+@keyframes dock-out { to { max-width: 0; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .dock, .dock.dock-closing { animation: none; }
 }
 .dock-session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
 .dock > .filetree { flex: 1; min-height: 0; border-right: 0; background: transparent; }
@@ -439,7 +456,10 @@ body {
   border-right: 1px solid var(--edge); color: var(--muted);
 }
 .tab.on { background: var(--paper); color: var(--ink2); }
-.tab.preview { opacity: .72; font-style: italic; }
+/* the CURRENT SLOT: the one tab ordinary navigation reuses. Italic and weakened says replaceable — the
+   same treatment the narrower preview tab used to wear, now naming the one slot every document passes
+   through unless the reader holds it ([[tab-strip]]). */
+.tab.slot { opacity: .72; font-style: italic; }
 .tab-face {
   display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-5); height: 100%;
   background: none; border: 0; color: inherit; cursor: pointer;
@@ -1281,21 +1301,10 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .search-kind.k-spec    { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
 .search-kind.k-session { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 40%, var(--line)); }
-.search-kind.k-issue   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
-.search-kind.k-scenario{ color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, var(--line)); }
 /* title and path both shrink-with-ellipsis so a long row truncates instead of forcing a horizontal
-   scrollbar; chips + kind stay fixed. */
+   scrollbar; the kind chip stays fixed. */
 .search-title { color: var(--ink2); font-weight: var(--weight-semibold); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-path { color: var(--muted); font-size: var(--type-meta); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.search-review-links { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-top: 1px solid var(--line); background: var(--panel); }
-.search-review-link {
-  flex: 1 1 160px; min-width: 0; min-height: 32px; display: flex; align-items: center; gap: 7px; padding: 6px 8px;
-  border-radius: var(--radius); color: var(--ink2); text-decoration: none;
-}
-.search-review-link span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.search-review-link:hover { background: var(--panel2); }
-.search-review-link:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--panel2); }
-.search-review-link > svg { flex: none; color: var(--muted); }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: var(--type-meta); }
 
 /* ---- session interface (#/sessions): two panes, right content morphs ---- */

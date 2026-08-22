@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
-import { previewTab, requestTab } from './tabs.js'
+import { pinTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import { useResizable } from './useResizable.js'
 
@@ -58,19 +58,21 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
         dot={STATUS[node.status]?.color} hasKids={hasKids} open={open}
         // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
         // discloses its contents. Splitting them into two hit targets would make the common move — look
-        // inside this node — cost two clicks in a list built for scanning. Ctrl/⌘ holds the document as a
-        // A plain explorer click is a bounded preview; ctrl/⌘ keeps the node as a resident tab.
+        // inside this node — cost two clicks in a list built for scanning.
+        // A plain click opens the node in the current slot; ctrl/⌘ or a double-click holds it ([[tab-strip]]).
+        // Disclosure never opens the governed files it reveals: the node's own document already shows its
+        // code, so a click that asked to read a node must not mint a file tab behind it.
         onClick={(e) => {
           setOpen((v) => !v)
-          if (e.ctrlKey || e.metaKey) requestTab('spec', node.id)
-          else previewTab('spec', node.id)
-        }} onDoubleClick={() => requestTab('spec', node.id)} />
+          if (e.ctrlKey || e.metaKey) pinTab('spec', node.id)
+          else navigate('spec', node.id)
+        }} onDoubleClick={() => pinTab('spec', node.id)} />
       {open && (
         <>
           {governed.map((f) => (
             <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()}
-              onClick={(e) => (e.ctrlKey || e.metaKey ? requestTab : previewTab)('file', f)}
-              onDoubleClick={() => requestTab('file', f)} />
+              onClick={(e) => (e.ctrlKey || e.metaKey ? pinTab : navigate)('file', f)}
+              onDoubleClick={() => pinTab('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}

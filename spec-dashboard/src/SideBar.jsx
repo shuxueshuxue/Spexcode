@@ -4,17 +4,20 @@ import { inertChromePress } from './focus.js'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
 import { RAIL_PAGES, routeHash } from './route.js'
+import { focusLatestTab, pinTab } from './tabs.js'
 import { IdentityIcon } from './IdentityIcon.jsx'
 import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
-// The workspace's rail ([[side-nav]]) — one slim icon strip with two kinds of entry, in this order:
-// FINDING controls (explorer/sessions dock projections, search — they change what helps you look, and are
-// buttons), then DOCUMENT OPENERS (graph · evals · issues, settings pinned at the bottom — they name an
-// address, and are REAL ANCHORS carrying it, so a click is a native hash navigation — the same transaction
-// the address bar, a bookmark, or ⌥digit produces — and middle-click/new-tab/copy-address come free; the
-// active document kind wears the accent). Glyphs come from the shared icon vocabulary ([[icon-system]],
-// icons.jsx); labels live in tooltips/aria — the rail stays slim.
+// The workspace's rail ([[side-nav]]) — an ACTIVITY BAR, not a page menu. Two kinds of entry, in this
+// order: the dock's two PROJECTION buttons (explorer/sessions — they change what helps you look, and are
+// buttons), then the SINGLETON BOARDS (evals · issues, settings pinned at the bottom). A board
+// entry is create-or-focus: it opens its tab if the workspace does not hold one and focuses it if it does,
+// which is what "singleton" means in the strip ([[tab-strip]]). It stays a real anchor carrying its
+// address, so middle-click/new-tab/copy-address still come free and the plain click is intercepted only to
+// hold the tab rather than to spend the current slot on it.
+// Glyphs come from the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria —
+// the rail stays slim.
 // Under the multi-project gateway ([[projects-hub]]) a scoped page adds the persistent current-project
 // selector chip at the top. A successful catalog probe gives it same-tab switching plus the global
 // /projects door; it never adds project management to the scoped rail. When the catalog is denied the
@@ -39,9 +42,13 @@ const PAGE_KEYS = {
 // WorkspaceProvider above it, and projection buttons with no dock state would be a lie, not disabled chrome.
 function WorkspaceControls() {
   const t = useT()
-  const { dock, dockMode, palette } = useWorkspace()
-  const { setDock, setDockMode, openPalette } = useWorkspaceApi()
+  const { dock, dockMode } = useWorkspace()
+  const { setDock, setDockMode } = useWorkspaceApi()
   if (!setDock || !setDockMode) return null
+  // Selecting a projection is a TEMPORARY override of the projection the focused tab implies
+  // ([[dock-modes]]): it holds until the reader moves to another document, and then the dock goes back to
+  // following. Clicking the active projection collapses the dock, which is the second door on the same
+  // toggle as the dock's own collapse control.
   const selectMode = (mode) => {
     if (!dock) {
       setDock(true)
@@ -51,6 +58,10 @@ function WorkspaceControls() {
     } else {
       setDockMode(mode)
     }
+    // ARMED, not opening: asking for a projection never mints a tab. The explorer waits for the reader to
+    // pick a node; sessions returns to the session already held, and otherwise waits the same way — a
+    // launch page nobody asked for is exactly the kind of document this workspace stopped putting on screen.
+    if (mode === 'sessions') focusLatestTab((tab) => tab.page === 'sessions' && tab.param)
   }
   return (
     <>
@@ -64,21 +75,7 @@ function WorkspaceControls() {
         aria-pressed={dock && dockMode === 'sessions'} onClick={() => selectMode('sessions')}>
         <Icon name="session-list" size={18} />
       </button>
-      <SearchRail palette={palette} onOpen={() => openPalette('nodes')} t={t} />
     </>
-  )
-}
-
-// Search is reached by two keys, and they open two scopes of the same palette: the bare key opens the node
-// palette this button opens, the ⌥ chord opens the session one. Naming both is what the printed `(/)` was
-// trying to say and could not, having lost its modifier the moment the chord moved into the shell.
-function SearchRail({ palette, onOpen, t }) {
-  const label = withShortcut(t('nav.search'), 'graph.search', 'shell.search')
-  return (
-    <button type="button" className={palette ? 'rail-btn on' : 'rail-btn'} data-tip={label}
-      aria-label={label} onClick={onOpen}>
-      <Icon name="search" size={18} />
-    </button>
   )
 }
 
@@ -95,6 +92,14 @@ function RailLink({ page, active, label, disabled = false }) {
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       href={routeHash(page)}
+      // create-or-focus: a plain click holds the singleton rather than spending the current slot on it, so
+      // clicking Evals twice is one tab and returning to it later finds it where it was left. Modified
+      // clicks stay the browser's (new window, new browser tab, copy address).
+      onClick={(event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+        event.preventDefault()
+        pinTab(page)
+      }}
     >
       <Icon name={page} size={18} />
     </a>

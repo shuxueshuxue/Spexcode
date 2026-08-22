@@ -14,7 +14,7 @@ import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { navigateAddress, sessionEvalAddress } from './address.js'
 import { navigate, routeHash } from './route.js'
-import { requestTab, useTabs } from './tabs.js'
+import { useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
@@ -598,7 +598,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     })
     activateResource(tab)
     setResourceMenu(false)
-    requestTab('sessions', tab.sessionId, { surface: resourceSurface(tab.id) })
+    // opening a resource is an ordinary navigation: it lands in the current slot like every other plain
+    // click ([[tab-strip]]). The preview stays warm because the slot IS a tab for its address.
+    navigate('sessions', tab.sessionId, { query: { surface: resourceSurface(tab.id) } })
   }
   const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
     current.id === tab.id ? { ...current, revision: current.revision + 1 } : current,

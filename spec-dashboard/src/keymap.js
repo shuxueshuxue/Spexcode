@@ -25,11 +25,12 @@ export const ACT = [
   // modals
   { id: 'graph.settings',  keys: [','],      rebind: true, desc: 'legend.graph.settings' },
   { id: 'graph.help',      keys: ['?'],      rebind: true, desc: 'legend.graph.help' },
-  { id: 'shell.pageGraph',   keys: ['Alt+Digit1'], rebind: false, desc: 'legend.shell.pageGraph' },
-  { id: 'shell.pageSessions',keys: ['Alt+Digit2'], rebind: false, desc: 'legend.shell.pageSessions' },
-  { id: 'shell.pageEvals',   keys: ['Alt+Digit3'], rebind: false, desc: 'legend.shell.pageEvals' },
-  { id: 'shell.pageIssues',  keys: ['Alt+Digit4'], rebind: false, desc: 'legend.shell.pageIssues' },
-  { id: 'shell.pageSettings',keys: ['Alt+Digit5'], rebind: false, desc: 'legend.shell.pageSettings' },
+  // the page-jump vocabulary is the RAIL's order, and it lost its first entry when the graph left the rail
+  // ([[side-nav]]): sessions is now ⌥1. A retired destination does not keep a digit warm.
+  { id: 'shell.pageSessions',keys: ['Alt+Digit1'], rebind: false, desc: 'legend.shell.pageSessions' },
+  { id: 'shell.pageEvals',   keys: ['Alt+Digit2'], rebind: false, desc: 'legend.shell.pageEvals' },
+  { id: 'shell.pageIssues',  keys: ['Alt+Digit3'], rebind: false, desc: 'legend.shell.pageIssues' },
+  { id: 'shell.pageSettings',keys: ['Alt+Digit4'], rebind: false, desc: 'legend.shell.pageSettings' },
   { id: 'shell.newSession',  keys: ['Alt+KeyN'],   rebind: false, desc: 'legend.shell.newSession' },
   { id: 'shell.evals',       keys: ['Alt+KeyF'],   rebind: false, desc: 'legend.shell.evals' },
   { id: 'shell.search',      keys: ['Alt+Slash'],  rebind: false, desc: 'legend.shell.search' },

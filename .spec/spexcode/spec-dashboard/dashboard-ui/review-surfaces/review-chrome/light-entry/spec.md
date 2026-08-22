@@ -16,7 +16,9 @@ related:
 # light-entry
 
 An external Evals LIST or DETAIL link, or a top-level Issues LIST link, is a review page before it is a
-dashboard visit. The root route selector resolves and normalizes the hash before importing the board runtime.
+dashboard visit. The root route selector resolves and normalizes the hash before importing the board
+runtime, and hands the route DOWN to the board it renders, exactly as the shell does — the boards take
+`{ param, query }` as props and never read the global address ([[view-registry]]).
 A canonical `#/evals` or
 `#/evals/<node>/<scenario>` address and its legacy session-scoped spelling both mount the SAME
 [[evals-view]] components behind a small responsive shell; canonical `#/issues` mounts the SAME

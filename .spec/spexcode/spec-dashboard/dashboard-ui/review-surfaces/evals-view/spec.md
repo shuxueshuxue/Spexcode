@@ -23,7 +23,10 @@ The project's measured loss deserves a surface of its own, and the human's direc
 model to copy: **GitHub's issues**, verified against the live product — the list is one page whose whole
 state (filters, query) lives in the URL, each row is a plain copyable link, clicking a row PUSHES a history
 entry onto a standalone full-page detail, and browser Back restores the exact filtered list URL (GitHub's
-own docs promise the URL↔view equivalence). No master-detail split pane, no in-page selection echo: **list
+own docs promise the URL↔view equivalence). The page READS that address from its props rather than from
+the window ([[view-registry]]'s one contract): it is mounted in a pane that may not be the one showing
+([[workspace-shell]]), and a view that reads the global address follows the reader out of its own pane.
+While it is hidden it also stops fetching — a warm document is not a busy one. No master-detail split pane, no in-page selection echo: **list
 page and detail page are two different addresses.** GitLab's default side-panel mode was explicitly NOT
 chosen — this is the full-page mode. And the second directive: un-merged worktree evals stop living under
 `#/sessions/<id>/eval` — one route family, `#/evals`, carries merged and un-merged loss alike, a session

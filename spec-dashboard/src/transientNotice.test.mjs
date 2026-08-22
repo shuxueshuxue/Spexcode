@@ -30,7 +30,7 @@ test('transient notices expire by readable length, honor overrides, and remain d
 })
 
 test('one root provider serves full and lightweight dashboard routes', () => {
-  assert.match(root, /<TransientNoticeProvider>[\s\S]*\{lightweight \? <ReviewEntry page=\{page\} \/> : <App \/>\}[\s\S]*<\/TransientNoticeProvider>/)
+  assert.match(root, /<TransientNoticeProvider>[\s\S]*\{lightweight \? <ReviewEntry page=\{page\} param=\{param\} query=\{query\} \/> : <App \/>\}[\s\S]*<\/TransientNoticeProvider>/)
 })
 
 test('review surfaces and the session console publish through the shared mechanism', () => {

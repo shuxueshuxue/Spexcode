@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
-// bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/graph, #/graph/<node>, #/sessions,
+// bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/sessions, #/graph, #/graph/<node>,
 // #/sessions/<id>, #/evals[?query], #/evals/<node>/<scenario>[?query], #/issues[?query], #/issues/<id>,
 // #/settings) — deliberately not the History API: the dashboard ships as a static dist behind plain file
 // servers/gateways with no index.html fallback, and a hash route needs nothing from the server. No router
@@ -21,8 +21,9 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
 // The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
 // opening something (a node, a governed file); there is no "go to the spec page" the way there is a
-// sessions page, and a rail icon for one would name a place that does not exist.
-export const RAIL_PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
+// sessions page, and a rail icon for one would name a place that does not exist. `graph` is absent for
+// the opposite reason: it is still addressable, but it is no longer a place the workspace sends anyone.
+export const RAIL_PAGES = ['sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
@@ -44,17 +45,21 @@ export function queryString(query) {
 // '#/graph/node-a' → { page: 'graph', param: 'node-a' }. '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
 // 'node/scenario' (the canonical eval DETAIL address — each segment decoded; the page splits on the first
 // '/'). '#/issues/<id>' → the issue detail. Anything after '?' inside the hash is the query axis.
-// Anything unknown lands on graph (the home page).
+// Anything unknown lands on sessions — the workspace's daily face. It used to land on the graph, back
+// when the graph WAS the board; the graph is now an addressable legacy view nothing routes to on its own.
 export function parseRoute(hash) {
   const h = (hash || '').replace(/^#\/?/, '')
   const qi = h.indexOf('?')
   const path = qi >= 0 ? h.slice(0, qi) : h
   const query = Object.fromEntries(new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : ''))
   const parts = path.split('/').filter(Boolean)
-  const page = PAGES.includes(parts[0]) ? parts[0] : 'graph'
+  const known = PAGES.includes(parts[0])
+  const page = known ? parts[0] : 'sessions'
   // `settings` and `empty` name no object, so they carry no selector; every other page does, and `file`
-  // carries a repo path, so the tail rejoins on '/'.
-  const param = page === 'settings' || page === 'empty'
+  // carries a repo path, so the tail rejoins on '/'. An UNKNOWN first segment carries no selector either:
+  // its tail was written for a page that does not exist, and handing it to the fallback page would mint an
+  // object address for an object nobody named.
+  const param = !known || page === 'settings' || page === 'empty'
     ? null
     : (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
   return { page, param, query }

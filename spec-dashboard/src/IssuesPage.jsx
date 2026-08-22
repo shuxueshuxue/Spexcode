@@ -10,11 +10,14 @@ import { ISSUE_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery, setToken 
 import { reviewActorName } from '@spexcode/spec-core/review'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { useTransientNotice } from './TransientNotice.jsx'
-import { navigate, routeHash, useRoute } from './route.js'
+import { navigate, routeHash } from './route.js'
 import { addressHash, detailBackHash, graphNodeAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import IssueLabels from './IssueLabels.jsx'
 import { useLaunchers } from './launch.js'
+import { usePaneActive } from './workspace.jsx'
+
+const EMPTY_QUERY = {}
 
 // The Issues surface ([[issues-view]]): GitHub-style pages over ONE route family, all wearing the shared
 // [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
@@ -302,10 +305,12 @@ function useIssueDetail(id, freshness) {
   return { issue, error, reload }
 }
 
-export default function IssuesPage({ onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
+// the route arrives as PROPS ([[view-registry]]'s one contract): this page is mounted in a pane that may
+// not be the one showing, and a view that reads the global address follows the reader out of its own pane.
+export default function IssuesPage({ param = null, query = EMPTY_QUERY, onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
   const t = useT()
+  const showing = usePaneActive()
   const { notify } = useTransientNotice()
-  const { param, query } = useRoute()
   const composing = param === NEW_PARAM
   const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
@@ -318,7 +323,8 @@ export default function IssuesPage({ onOpenSession, specs = [], sessions = [], i
   // and the source-session presence join ([[live-session-filter]]), carried by the session id set. Equal
   // key = equal answer, so a quiet board costs no request and neither input can move unnoticed.
   const presenceKey = useMemo(() => sessions.map((s) => s.id).join(','), [sessions])
-  const list = useReviewPage('issues', text, page, { enabled: !param || composing, refreshKey: `${issuesStamp ?? ''}|${presenceKey}` })
+  // a hidden pane does not fetch: the pool keeps documents WARM, not busy ([[workspace-shell]]).
+  const list = useReviewPage('issues', text, page, { enabled: (!param || composing) && showing, refreshKey: `${issuesStamp ?? ''}|${presenceKey}` })
   const detail = useIssueDetail(composing ? null : param, issuesStamp)
   const flash = (outcomes) => { if (outcomes) notify(outcomes) }
   const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }

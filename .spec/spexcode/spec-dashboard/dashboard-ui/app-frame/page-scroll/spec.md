@@ -41,7 +41,12 @@ following content position in normal flow before it sticks, so neither desktop n
 covers the first row. Popovers and tooltips remain above it; neighboring sticky list headers and detail
 rails keep their own containment. A route with no leading status contributes no empty sticky geometry.
 
-Scroll position is remembered by the full canonical address. When returned content already has its final
+Scroll position is remembered by the full canonical address — **the address of the PANE the page is
+mounted in**, which is the window's address only when the page is the window ([[workspace-shell]]: the
+phone, the hub, the cold review entry). Once documents stay mounted while hidden, reading the window's
+address here let a hidden page re-key onto whatever the reader had just opened and write its own zero
+position over that document's remembered one; the pane is the honest owner of "which document is this".
+When returned content already has its final
 height the primitive restores in the layout phase but does not yield until that target survives the next
 paint: Chromium may still apply its own history scroll after React's first successful write. When a long
 list arrives asynchronously, it preserves the saved target across the browser's temporary zero clamp and

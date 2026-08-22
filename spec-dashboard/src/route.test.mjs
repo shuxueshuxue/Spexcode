@@ -15,7 +15,11 @@ test('parseRoute splits path and query inside the hash', () => {
     { page: 'evals', param: 'my-node/my scenario', query: { q: 'scope:abc' } })
   assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc', query: {} })
   assert.deepEqual(parseRoute('#/sessions/abc?surface=terminal'), { page: 'sessions', param: 'abc', query: { surface: 'terminal' } })
-  assert.deepEqual(parseRoute('#/nope'), { page: 'graph', param: null, query: {} })
+  // an unknown address lands on the workspace's daily face, and carries no selector: its tail was written
+  // for a page that does not exist, so handing it to sessions would name an object nobody asked for.
+  assert.deepEqual(parseRoute('#/nope'), { page: 'sessions', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/nope/abc'), { page: 'sessions', param: null, query: {} })
+  assert.deepEqual(parseRoute(''), { page: 'sessions', param: null, query: {} })
 })
 
 test('session eval face redirects to the canonical scoped Evals address', () => {

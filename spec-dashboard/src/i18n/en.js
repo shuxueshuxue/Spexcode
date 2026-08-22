@@ -50,9 +50,14 @@ export default {
     aria: 'project file tree',
   },
   dockModes: {
+    collapse: 'Collapse sidebar',
     aria: 'dock mode',
     explorer: 'Explorer',
     sessions: 'Sessions',
+    // the dock head's search door names WHAT it searches — the head row already says which projection
+    // this is, so the scope is a fact of where the button sits, not a choice the label has to defend.
+    searchNodes: 'Search nodes',
+    searchSessions: 'Search sessions',
   },
   dockSessions: {
     new: 'New session',
@@ -75,7 +80,6 @@ export default {
     hint: 'You closed the last document. Pick one to open — nothing is lost, the tabs simply hold nothing right now.',
     search: 'Search for a node',
     explorer: 'Browse the explorer',
-    graph: 'Open the graph document',
   },
   tabs: {
     aria: 'open documents',
@@ -108,8 +112,6 @@ export default {
     explorer: 'Explorer',
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
-    search: 'Search',
-    graph: 'Spec Node Graph',
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
@@ -413,7 +415,6 @@ export default {
       help: 'open this help',
     },
     shell: {
-      pageGraph: 'go to graph page',
       pageSessions: 'go to sessions page',
       pageEvals: 'go to evals page',
       pageIssues: 'go to issues page',
@@ -820,14 +821,11 @@ export default {
   },
 
   search: {
-    title: 'search nodes, sessions, issues & scenarios',
-    placeholder: 'search nodes, sessions, issues, scenarios…',
+    title: 'search nodes & sessions',
+    placeholder: 'search nodes, sessions…',
     empty: 'no match',
     hint: '↑↓ pick · ⏎ jump · esc close',
-    allResults: 'full review lists',
-    allIssues: ({ n }) => `all issues · ${n}`,
-    allEvals: ({ n }) => `all evals · ${n}`,
-    kind: { spec: 'node', session: 'session', issue: 'issue', scenario: 'scenario' },
+    kind: { spec: 'node', session: 'session' },
   },
 
   // the touch-first phone interface (MobileApp) — the desktop graph is a mouse/keyboard instrument, so a

@@ -2,40 +2,43 @@
 title: paged-palette
 status: active
 hue: 205
-desc: The dashboard search palette keeps node/session ranking local but obtains bounded Issue/Eval planes from paged-review instead of graph row arrays.
+desc: The dashboard search palette is a two-plane jump-list over nodes and sessions — it ranks both from the board it was already handed and makes no review request of its own.
 code:
   - spec-dashboard/src/SpecSearch.jsx
 related:
-  - spec-dashboard/src/reviewPage.js
   - spec-dashboard/src/corpus.js
   - spec-dashboard/src/address.js
 ---
 
 # paged-palette
 
-The one graph/session search palette still ranks node prose from the lite corpus and live session identity
-locally. Its Issue and scenario planes are demand data: while the palette is open, the debounced text drives
-page 1 of `/api/issues` and current `/api/evals`; each contributes at most 25 matching rows and the palette
-interleaves them with node/session hits exactly as before. `/api/specs/lite` contains node prose only, never
-scenario declarations that recreate the Eval list. Opening the palette therefore pays bounded review rows,
-while never opening it pays none.
+**The palette carries the two planes a workspace HOLDS: spec nodes and live sessions.** Both are things a tab
+can be, so every row is somewhere the reader can go and stay — which is what makes this a jump-list rather
+than a report. Node prose comes from the lite corpus, session identity from the live board; both are already
+in the props the shell hands down, so opening the palette costs no request at all.
 
-Node and session planes still use the shared local lexical ranker. Issue and scenario rows have already passed
-the shared server matcher, so the palette preserves each response's stable order instead of applying corpus
-IDF a second time to a match-only page. In particular, an exact query returning one review row remains one
-visible hit; it cannot collapse to zero because every document in that filtered slice contains the query.
+It used to carry two more planes — Issues and scenarios — fetched live from page 1 of `/api/issues` and
+`/api/evals` on every debounced keystroke, plus a command row of **all Issues · N** / **all Evals · N**
+anchors into the review lists. That was a search box quietly growing a second job. An issue and a scenario
+are findings ABOUT a node, and they already have list pages built to filter, page and sort them
+([[issues-view]] / [[evals-view]]) — each one ⌥digit away, each strictly better at the job than fifteen
+interleaved rows and a total. Restating a page-1 slice under the jump-list gave the reader a worse copy of a
+surface that already existed, and paid two server round-trips per keystroke to do it. Removing the planes
+removes the round-trips, the "all results" anchors, and the second ranking rule with them.
 
-Every selectable result row is a real matched node, session, Issue, or scenario. The review responses'
-pagination totals are transport metadata, not searchable entities: the palette never appends synthetic
-"showing N of M" rows to its ranked results. Instead, a quiet command row below those results exposes one
-native anchor per non-empty review plane: **all Issues · N** and **all Evals · N**, where `N` is that page-1
-response's server total. Each anchor preserves the palette's current committed text in the canonical list
-query and is reached by ordinary Tab/Enter after the search input; it does not join Arrow-key entity ranking.
-The same un-nested anchors stay inside the palette at the narrowest desktop width; below that breakpoint the
-separate phone face remains unchanged and does not mount this desktop palette. Thus the bounded summary has a
-direct route to every matching Issue and every scenario's full declared prose without moving rows back into
-the graph or lite corpus.
+**One ranking rule now, because both planes are local.** Each plane is ranked on its own by the shared
+lexical ranker and the two are then interleaved — a node, a session, a node, a session. Not one ranking over
+both: nodes carry far richer text than sparse sessions, so a single relevance list buries the session plane
+(a node-heavy query like "session" returned only nodes). The preserve-the-server's-order branch is gone with
+the planes that needed it; nothing here is a match-only page any more.
 
-An Issue hit routes to its detail. A measured Eval hit routes to its detail; a blind scenario routes to the
-canonical node-filtered Evals list because it has no result detail. Plane boost, keyboard ownership, and
-selection routing remain [[session-search]]'s single shared behavior.
+**`boost` is the only knob a caller turns**, and it names which plane leads. Matcher, interleave, keys and
+rows are identical either way. The two callers are the dock's two projection heads ([[dock-modes]]): the
+sessions head leads with sessions, the explorer head leads with nodes. The keyboard twin follows the same
+rule — `/` leads with whatever projection is in force, and the `⌥/` chord leads with sessions because a
+typing context is the one place the bare key cannot fire and a session console is what a typing context is.
+
+An empty query is the plain jump-list: planes group in the caller's order and each keeps its source
+surface's stable order. Picking routes through [[address-routing]] — a node focuses the graph, a session
+jumps to its tab ([[session-console]]). Plane boost, keyboard ownership and selection routing remain
+[[session-search]]'s single shared behavior.

@@ -59,33 +59,44 @@ const openSession = (id) => navigate('sessions', id)
 
 // The three review-side pages already take everything they need as props and hold their own state; they
 // become views by reading the board from context instead of from whoever rendered them. No rewrite, and no
-// second copy of their data path.
-function EvalsView() {
+// second copy of their data path. The ROUTE comes down the same way — the two boards used to call
+// `useRoute` and were the only views breaking the contract above. It went unnoticed while every view was
+// unmounted the moment it stopped showing; once documents stay mounted ([[workspace-shell]]'s pool), a
+// board still reading the global address would follow the reader into whatever they opened next.
+function EvalsView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
   const { reload } = useBoardApi()
-  return <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
+  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
 }
-function IssuesView() {
+function IssuesView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
-  return <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
+  return <IssuesPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
 }
 function SettingsView() { return <Settings /> }
 
-// A tab holds an OBJECT, not a board face. `document(page, param)` therefore receives the route selector:
-// graph and bare list pages are finding surfaces, while only object-shaped addresses enter the working set.
-// `empty` is what the workspace shows when it holds nothing; a tab for it would contradict its own strip.
+// `document(page, param)` marks what the working set may hold. Two kinds qualify: an OBJECT (a node, a
+// file, a session, an eval detail, an issue detail) and a SINGLETON board — evals, issues and settings,
+// whose bare address names a place the reader keeps open rather than one they bounce off. A singleton is a
+// tab like any other; it is a singleton only because its address carries no selector, so opening it twice
+// is opening the same address twice, which the strip already resolves to one tab.
+// What is left out is what has no object and no residency: the graph (a legacy address), bare sessions and
+// the sessions launch page (a form), and `empty` — a tab for it would contradict its own strip.
 export const VIEWS = {
+  // `graph` is still registered and still renders at its own address; it is simply no longer anywhere the
+  // workspace SENDS a reader ([[node-graph]]). A retired entrance is not a deleted view.
   graph:    { component: GraphView,    document: false, className: 'view-graph' },
   spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
   file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
-  sessions: { component: SessionsView, document: (_page, param) => param != null, className: 'view-sessions' },
-  evals:    { component: EvalsView,    document: (_page, param) => param != null, className: 'view-evals' },
-  issues:   { component: IssuesView,   document: (_page, param) => param != null, className: 'view-issues' },
-  settings: { component: SettingsView, document: false, className: 'view-settings' },
+  // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
+  // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
+  sessions: { component: SessionsView, document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
+  evals:    { component: EvalsView,    document: true, className: 'view-evals' },
+  issues:   { component: IssuesView,   document: true, className: 'view-issues' },
+  settings: { component: SettingsView, document: true, className: 'view-settings' },
   empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
-export const viewFor = (page) => VIEWS[page] || VIEWS.graph
+export const viewFor = (page) => VIEWS[page] || VIEWS.sessions
 export const isDocument = (page, param = null) => typeof VIEWS[page]?.document === 'function'
   ? VIEWS[page].document(page, param)
   : !!VIEWS[page]?.document

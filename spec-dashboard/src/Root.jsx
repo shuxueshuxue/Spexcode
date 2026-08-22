@@ -16,7 +16,7 @@ const MobileApp = lazy(() => import('./MobileApp.jsx'))
 
 const openSession = (id) => navigate('sessions', id)
 
-function ReviewEntry({ page }) {
+function ReviewEntry({ page, param, query }) {
   const isMobile = useIsMobile()
   const t = useT()
   const loading = <div className="loading">{t('hud.loading')}</div>
@@ -37,9 +37,11 @@ function ReviewEntry({ page }) {
         <div className="app-main">
           <div className={`page-pane page-${page}`}>
             <Suspense fallback={loading}>
+              {/* the cold entry hands the route down like the shell does: the boards read their route
+                  from props, never from the global address ([[view-registry]]). */}
               {page === 'evals'
-                ? <EvalsPage onOpenSession={openSession} />
-                : <IssuesPage onOpenSession={openSession} />}
+                ? <EvalsPage param={param} query={query} onOpenSession={openSession} />
+                : <IssuesPage param={param} query={query} onOpenSession={openSession} />}
             </Suspense>
           </div>
         </div>
@@ -51,7 +53,7 @@ function ReviewEntry({ page }) {
 
 export default function Root() {
   const t = useT()
-  const { page, param } = useRoute()
+  const { page, param, query } = useRoute()
   const coldReviewRoute = page === 'evals' || (page === 'issues' && !param)
 
   const [boardStarted, setBoardStarted] = useState(() => !coldReviewRoute)
@@ -74,7 +76,7 @@ export default function Root() {
   return (
     <TransientNoticeProvider><StatusBarProvider><DocumentActionProvider>
       <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-        {lightweight ? <ReviewEntry page={page} /> : <App />}
+        {lightweight ? <ReviewEntry page={page} param={param} query={query} /> : <App />}
       </Suspense>
     </DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
   )

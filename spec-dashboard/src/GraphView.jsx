@@ -9,7 +9,7 @@ import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
-import { requestTab } from './tabs.js'
+import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
@@ -535,7 +535,7 @@ function GraphView({ param, query }) {
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.
     if (graphOnly) setOverlay(true)
-    else requestTab('spec', n.id)
+    else pinTab('spec', n.id)
   }, [focusNode, graphOnly])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —

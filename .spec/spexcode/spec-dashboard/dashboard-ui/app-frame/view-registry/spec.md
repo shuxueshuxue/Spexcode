@@ -20,11 +20,23 @@ Everything else it needs — the board, the workspace — it asks for by context
 another component's props. That is what dissolved the god component: its size was not the problem, its
 *ownership* was.
 
-**`document(page, param)` marks an object address [[tab-strip]] may accumulate**, and the strip asks the
-registry rather than keeping its own list. Only parameterized objects are documents: spec/file/session
-(including `/sessions/new`), eval detail, and issue detail. Graph (including its focused node), bare sessions,
-bare evals, and bare issues are finding surfaces and never accumulate. `settings` is a place people bounce
-off, and `empty` is what shows when nothing is held at all — none of those addresses accumulates.
+**The contract stopped being optional the day documents began outliving their turn on screen.** Two views
+— the evals and issues boards — read the global address instead of their props, and nothing broke while
+every view was unmounted the moment it stopped showing. Under [[workspace-shell]]'s mounted-document pool a
+view that reads the global address follows the reader out of its own pane: a hidden board would re-derive
+itself from whatever was opened next. Both now take `{ param, query }` like everything else, and the cold
+review entry hands them the same props the shell does.
+
+**`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
+keeping its own list. Two kinds qualify. Parameterized OBJECTS: spec, file, session, eval detail, issue
+detail. And the SINGLETON boards — evals, issues, settings — whose bare address names a place the reader
+keeps rather than one they bounce off; they are singletons only because their address carries no selector,
+so the strip's own identity rule resolves a second opening to the same tab.
+
+Left out: graph (including its focused node — a legacy address), bare sessions, and `empty`, which is what
+shows when nothing is held at all. **`/sessions/new` was a document and is not one now**: it names no
+session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
+form, and the session it starts becomes a document the moment it has an id.
 
 **A rail destination is not the same thing as an addressable kind.** `spec` and `file` are addresses you
 arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. The rail

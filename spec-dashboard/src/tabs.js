@@ -1,14 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { navigate, routeHash, useRoute } from './route.js'
 import { isDocument } from './views.jsx'
+import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
+
+export { placeTab, tabKey }
 
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
 //
-// LOOKING IS NOT HOLDING. The strip is the working set — every resident document stays at its address —
-// and browsing has one bounded exception: spec/file documents may occupy the single preview slot. A new
-// preview replaces only the old preview; it never replaces a resident tab. Holding is the explicit gesture:
-// ctrl/⌘-click (or a document's own promotion path) opens a resident tab.
+// A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. The strip holds the documents the reader asked it to hold,
+// plus ONE current slot that ordinary navigation lands in and reuses. Every plain click — an explorer row,
+// a dock session row, a board row, a link inside a document — replaces the slot's address; it never grows
+// the strip. Holding is explicit: ctrl/⌘-click, a double-click, or a document's own "open in a new tab"
+// action. That is the whole rule, and it is deliberately independent of WHAT is being opened: the old
+// version fenced replacement to spec/file documents by type, which meant browsing sessions or board rows
+// minted a tab per click and the strip filled with things nobody had decided to keep.
 //
 // The split of truth is deliberate and follows what every workspace editor settled on: the OPEN LIST is a
 // local layout preference (it survives reloads, it is not worth putting in a link, and two people opening
@@ -17,23 +23,11 @@ import { isDocument } from './views.jsx'
 // opened a second tab cannot tell this landed.
 
 const KEY = 'spexcode.tabs'
-const PREVIEW_PAGES = new Set(['spec', 'file'])
-const isPreviewable = (page) => PREVIEW_PAGES.has(page)
-
-// A tab's identity is its canonical hash. Two routes that print the same address ARE the same tab, so
-// nothing has to dedupe by hand and a re-open of an already-open document activates it instead of stacking.
-export const tabKey = (t) => routeHash(t.page, t.param, t.query)
 
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw)
-      ? raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param))
-        // Legacy entries had no preview contract. Treat entries without the new marker as resident;
-        // current preview entries survive reload as the one bounded preview slot.
-        .map((t) => ({ page: t.page, param: t.param ?? null, query: t.query ?? null,
-          preview: t.preview === true && isPreviewable(t.page) }))
-      : []
+    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param))) : []
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -42,11 +36,27 @@ const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) 
 // for one commit, and in that commit the strip could not hold the document addresses the registry had
 // already declared — two sources of truth disagreeing exactly where they were supposed to agree.
 
-// A finding surface cannot reach the strip's state directly: it marks the NEXT navigation, and the strip's
-// route subscription consumes the mark. The mode is intentionally one shared latch so promotion and preview
-// opening cannot drift into separate tab policies.
-let nextMode = 'resident'
-let nextModeKey = null
+// ONE working set, however many components read it. `useTabs` has more than one caller — the strip draws
+// it, the session console reads it to know which resource previews are still open — and per-component
+// state made those callers two copies of the same list that could disagree: a command routed through the
+// module (⌥⇧X, a double-click promotion) updated whichever copy had registered last, and the strip kept
+// drawing the other. The store is the list; every caller subscribes to it.
+let store = null
+const listeners = new Set()
+const getTabs = () => (store ??= read())
+const putTabs = (next) => {
+  if (next === getTabs()) return next
+  store = next
+  write(next)
+  for (const listener of [...listeners]) listener(next)
+  return next
+}
+
+// A finding surface cannot reach the strip's state directly: an explicit hold MARKS the next navigation and
+// the strip's route subscription reads the mark. The mark is an address, not a flag, so two subscribers
+// (the strip and the session console both call useTabs) read the same answer for the same navigation; it
+// is dropped when a different address arrives, which is the only way it can go stale.
+let pinKey = null
 let tabCommands = null
 export function registerTabCommands(commands) {
   tabCommands = commands
@@ -55,68 +65,54 @@ export function registerTabCommands(commands) {
 export function runTabCommand(name, ...args) {
   return tabCommands?.[name]?.(...args)
 }
-export function requestTab(page, param = null, query = null) {
-  nextMode = 'resident'
-  nextModeKey = routeHash(page, param, query)
-  if (window.location.hash === nextModeKey) {
-    tabCommands?.promoteActive?.()
-    nextModeKey = null
-    return
+// The explicit hold. Ordinary navigation needs nothing from this module — `navigate` lands in the slot,
+// which is what makes "a new tab is a gesture" true by default rather than by discipline at every call site.
+//
+// It pins the ADDRESS it was given, never "whatever is active". A double-click is two clicks and then the
+// dblclick event, and the first click has already navigated — so "active" is a race with React's own
+// processing of that navigation, and losing it pinned the document the reader had just left instead of the
+// one they were holding. Naming the address removes the race: if the tab is already in the list it is
+// pinned here, and if the navigation is still in flight the mark makes the placement itself pinned.
+export function pinTab(page, param = null, query = null) {
+  const key = routeHash(page, param, query)
+  pinKey = key
+  const held = getTabs()
+  if (held.some((tab) => tabKey(tab) === key)) {
+    putTabs(held.map((tab) => (tabKey(tab) === key ? { ...tab, pinned: true } : tab)))
+    pinKey = null
   }
   navigate(page, param, { query })
 }
-export function previewTab(page, param = null, query = null) {
-  nextMode = isPreviewable(page) ? 'preview' : 'resident'
-  nextModeKey = routeHash(page, param, query)
-  if (window.location.hash === nextModeKey) {
-    nextModeKey = null
-    return
-  }
-  navigate(page, param, { query })
+
+// Focus the most recently opened tab a predicate accepts, if there is one. The rail's sessions button is
+// the caller: asking for sessions when a session is already held should return the reader to it rather
+// than to a launch page they did not ask for. Returns whether anything was focused.
+export function focusLatestTab(match) {
+  const held = getTabs().filter(match)
+  const last = held[held.length - 1]
+  if (!last) return false
+  navigate(last.page, last.param, { query: last.query })
+  return true
 }
 
 export function useTabs() {
   const route = useRoute()
-  const [tabs, setTabs] = useState(read)
+  const [tabs, setTabs] = useState(getTabs)
+  useEffect(() => {
+    listeners.add(setTabs)
+    setTabs(getTabs())
+    return () => { listeners.delete(setTabs) }
+  }, [])
 
-  // The current address is always present in the strip. A new resident appends; a preview replaces only the
-  // existing preview. If navigation leaves a preview document for another document, the old preview is
-  // promoted first: opening something from a preview is an explicit decision to keep what was being read.
-  // Resident tabs are never truncated; a capacity bound must not become a hidden address replacement.
-  // The whole decision lives here, so finding surfaces do not grow their own tab semantics.
-  const tabsRef = useRef(tabs); tabsRef.current = tabs
-  const prevKeyRef = useRef(null)
+  // The current address is always present in the strip, because a strip that claimed to show what is open
+  // while the reader looked at something absent from it would be lying. Every caller runs this and the
+  // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
   useEffect(() => {
     if (!isDocument(route.page, route.param)) return
     const key = routeHash(route.page, route.param, route.query)
-    const mode = nextModeKey === key ? nextMode : 'resident'
-    if (nextModeKey && nextModeKey !== key) { nextMode = 'resident'; nextModeKey = null }
-    if (nextModeKey === key) { nextMode = 'resident'; nextModeKey = null }
-    const prev = tabsRef.current
-    const before = prevKeyRef.current
-    prevKeyRef.current = key
-    const existing = prev.find((t) => tabKey(t) === key)
-    const current = prev.find((t) => tabKey(t) === before)
-    if (existing) {
-      const promoteCurrent = current?.preview && before !== key
-      const promoteExisting = mode === 'resident' && existing.preview
-      if (promoteCurrent || promoteExisting) {
-        const next = prev.map((t) => (tabKey(t) === before || (promoteExisting && tabKey(t) === key))
-          ? { ...t, preview: false } : t)
-        write(next); setTabs(next)
-      }
-      return
-    }
-    const tab = { page: route.page, param: route.param, query: route.query, preview: mode === 'preview' && isPreviewable(route.page) }
-    let next = prev
-    if (tab.preview) {
-      next = prev.filter((t) => !t.preview)
-    } else if (current?.preview) {
-      next = prev.map((t) => tabKey(t) === before ? { ...t, preview: false } : t)
-    }
-    next = [...next, tab]
-    write(next)
-    setTabs(next)
+    const mode = pinKey === key ? 'pin' : 'slot'
+    if (pinKey && pinKey !== key) pinKey = null
+    putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 
   const activeKey = routeHash(route.page, route.param, route.query)
@@ -130,49 +126,37 @@ export function useTabs() {
   // state, and the reader is owed the state they produced rather than a substitute document.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
-    setTabs((prev) => {
-      const i = prev.findIndex((t) => tabKey(t) === key)
-      if (i < 0) return prev
-      const next = prev.filter((_, n) => n !== i)
-      write(next)
-      if (key === activeKey) {
-        const heir = next[i] || next[i - 1]
-        if (heir) navigate(heir.page, heir.param, { query: heir.query })
-        else navigate('empty')
-      }
-      return next
-    })
+    const prev = getTabs()
+    const i = prev.findIndex((t) => tabKey(t) === key)
+    if (i < 0) return
+    const next = prev.filter((_, n) => n !== i)
+    putTabs(next)
+    if (key === activeKey) {
+      const heir = next[i] || next[i - 1]
+      if (heir) navigate(heir.page, heir.param, { query: heir.query })
+      else navigate('empty')
+    }
   }, [activeKey])
 
   const closeOthers = useCallback((tab) => {
     const key = tabKey(tab)
-    setTabs((prev) => {
-      const kept = prev.filter((t) => tabKey(t) === key)
-      write(kept)
-      return kept
-    })
+    putTabs(getTabs().filter((t) => tabKey(t) === key))
     if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
   }, [activeKey])
 
   useEffect(() => registerTabCommands({
-    promoteActive: () => {
-      const active = tabs.find((tab) => tabKey(tab) === activeKey)
-      if (!active?.preview) return
-      const next = tabs.map((tab) => tab === active ? { ...tab, preview: false } : tab)
-      write(next); setTabs(next)
-    },
     closeActive: () => {
-      const active = tabs.find((tab) => tabKey(tab) === activeKey)
+      const active = getTabs().find((tab) => tabKey(tab) === activeKey)
       if (active) close(active)
     },
     move: (dir) => {
-      const index = tabs.findIndex((tab) => tabKey(tab) === activeKey)
-      if (index < 0 || tabs.length < 2) return
-      const next = tabs[(index + dir + tabs.length) % tabs.length]
-      open(next)
+      const list = getTabs()
+      const index = list.findIndex((tab) => tabKey(tab) === activeKey)
+      if (index < 0 || list.length < 2) return
+      open(list[(index + dir + list.length) % list.length])
     },
-    active: () => tabs.find((tab) => tabKey(tab) === activeKey) || null,
-  }), [tabs, activeKey, open, close])
+    active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
+  }), [activeKey, open, close])
 
   return useMemo(() => ({ tabs, activeKey, open, close, closeOthers }), [tabs, activeKey, open, close, closeOthers])
 }

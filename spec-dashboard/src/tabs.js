@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { navigate, parseRoute, routeHash, useRoute } from './route.js'
 import { isDocument, isResident } from './views.jsx'
-import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
-export { placeTab, tabKey }
+export { moveTab, placeTab, tabKey }
 
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
@@ -167,6 +167,11 @@ export function useTabs() {
     if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
   }, [activeKey])
 
+  // THE READER'S OWN ORDER. The strip already persists its list; reordering it is the same write, so the
+  // arrangement survives a reload for free and needs no second store. Nothing here navigates — a drag says
+  // where a document sits, never which one you are looking at.
+  const move = useCallback((key, before) => { putTabs(moveTab(getTabs(), key, before)) }, [])
+
   useEffect(() => registerTabCommands({
     closeActive: () => {
       const active = getTabs().find((tab) => tabKey(tab) === activeKey)
@@ -181,5 +186,5 @@ export function useTabs() {
     active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
   }), [activeKey, open, close])
 
-  return useMemo(() => ({ tabs, activeKey, open, close, closeOthers }), [tabs, activeKey, open, close, closeOthers])
+  return useMemo(() => ({ tabs, activeKey, open, close, closeOthers, move }), [tabs, activeKey, open, close, closeOthers, move])
 }

@@ -456,28 +456,41 @@ body {
    an open document it still answers where the reader is, by name. The strip sits on --panel; the ACTIVE tab
    is painted --paper so it reads as the near edge of the document below it rather than a lit chip on a bar
    — that continuity is what the three-tone ground ladder is for. */
-/* The band does not clip; the TAB LIST inside it does. A document action's dropdown hangs below the strip,
-   so a strip that is itself the scroller cuts every menu off at 30px — which is how the resource picker
-   came to render perfectly and show nothing. */
+/* The band does not clip, and it does not SCROLL either: tabs that do not fit on one line WRAP onto the
+   next, every row 30px, the way an editor's wrapped tab bar does. A horizontal scroller hides the working
+   set behind a gesture — the documents you are holding are off-screen and there is no mark saying so —
+   while wrapping keeps the whole set legible and pays for it in a thickness the reader can see and control.
+   The band's height is therefore the working set, not a constant; the strip is `flex: 0 0 auto` and the
+   rows are what make it tall. */
 .tabstrip {
-  flex: 0 0 30px; height: 30px; display: flex; align-items: stretch;
+  flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
   background: var(--panel); border-bottom: 1px solid var(--edge);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  flex-wrap: wrap; align-content: flex-start;
 }
-.tabstrip-tabs::-webkit-scrollbar { height: 0; }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
   display: inline-flex; align-items: center; padding: 0 var(--space-5);
   color: var(--muted); font-size: var(--type-meta); white-space: nowrap;
 }
 .tab {
+  position: relative; flex: 0 0 auto; height: 30px;
   display: flex; align-items: center; min-width: 0; max-width: 220px;
   border-right: 1px solid var(--edge); color: var(--muted);
 }
 .tab.on { background: var(--paper); color: var(--ink2); }
+/* A DRAG SAYS WHERE, NEVER WHAT. The moved tab fades to say it is in hand and the landing place wears a
+   single hairline on the edge the tab would arrive at — drawn ON a tab rather than between them, so it is
+   at home in any row of a wrapped strip. Nothing lifts and nothing casts a shadow: the strip stays one
+   plane while its order changes. */
+.tab.tab-moving { opacity: .38; }
+.tab.tab-drop-before::after, .tab.tab-drop-after::after {
+  content: ''; position: absolute; top: 3px; bottom: 3px; width: 2px; background: var(--blue); pointer-events: none;
+}
+.tab.tab-drop-before::after { left: 0; }
+.tab.tab-drop-after::after { right: 0; }
 /* the CURRENT SLOT: the one tab ordinary navigation reuses. Italic and weakened says replaceable — the
    same treatment the narrower preview tab used to wear, now naming the one slot every document passes
    through unless the reader holds it ([[tab-strip]]). */
@@ -496,8 +509,14 @@ body {
 .tab:hover .tab-x, .tab.on .tab-x { opacity: 1; }
 .tab-x:hover { color: var(--ink2); }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* The action cluster sits at the band's LAST row, against the content it acts on. It is a sibling of the
+   wrapping list rather than a member of it, so it reserves its own column and no tab can ever run under
+   it — a reserved-space trick measured in JS is what an editor needs only because its toolbar overlays the
+   rows. `align-self: flex-end` is the whole of the choice: with one row it is exactly where it always was,
+   and with several it stays put instead of drifting to the middle of a band that grew. */
 .tabstrip-actions {
-  flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; gap: var(--space-1);
+  flex: 0 0 auto; min-width: 0; margin-left: auto; align-self: flex-end; height: 30px;
+  display: flex; align-items: center; gap: var(--space-1);
   padding: 0 var(--space-3);
 }
 .document-action { position: relative; display: inline-flex; align-items: center; }
@@ -1402,7 +1421,9 @@ a.scenario-count:hover { background: var(--panel2); }
   box-shadow: var(--shadow);
   opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left;
 }
-body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
+/* the window wears the gesture ([[drag-gesture]]): one class for every movable list, so a drag reads the
+   same whether it started in the tab strip or in the session dock. */
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
    the taller row. Resting rows keep the generic vertical centring above. */
 .si-item.on + .sess-fold-control { top: 7px; transform: none; }

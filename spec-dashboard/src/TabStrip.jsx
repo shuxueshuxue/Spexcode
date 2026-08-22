@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
-import { pinTab, tabKey, useTabs } from './tabs.js'
+import { elementAt, startDrag } from './dragGesture.js'
+import { moveTab, pinTab, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
@@ -116,10 +118,51 @@ export function placeLabel(route, ctx) {
 
 export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const t = useT()
-  const { tabs, activeKey, open, close, closeOthers } = useTabs()
+  const { tabs, activeKey, open, close, closeOthers, move } = useTabs()
   const names = useDocumentNames()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
+  // WHAT IS MOVING AND WHERE IT WOULD LAND — `{ key, before }`, with `before` naming the tab it would go in
+  // FRONT of and null meaning the end of the strip ([[tab-strip]]'s splice). Nothing else about the strip
+  // changes during a drag: the active document stays active, no address is written, and a release outside
+  // any tab leaves the order exactly as it was.
+  const [drag, setDrag] = useState(null)
+  const abandon = useRef(null)
+  useEffect(() => () => abandon.current?.(), [])
+
+  // The insertion point under a pointer: the tab it is over, and which HALF of that tab. Past the midpoint
+  // means after — which on the last tab is the end of the strip, the one landing place no tab can name. A
+  // landing that would not move anything is reported as none, so the marker only ever appears where a
+  // release genuinely changes the order.
+  const landingAt = (point, movingKey) => {
+    const el = elementAt(point.x, point.y, '.tab')
+    if (!el) return undefined
+    const index = tabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
+    if (index < 0) return undefined
+    const box = el.getBoundingClientRect()
+    const after = point.x > box.left + box.width / 2
+    const before = after ? (tabs[index + 1] ? tabKey(tabs[index + 1]) : null) : el.dataset.tabKey
+    return moveTab(tabs, movingKey, before) === tabs ? undefined : before
+  }
+
+  const startTabDrag = (event, tab) => {
+    const key = tabKey(tab)
+    const track = (point) => {
+      const before = landingAt(point, key)
+      setDrag((prev) => (prev && prev.key === key && prev.before === before ? prev : { key, before }))
+    }
+    abandon.current = startDrag(event, {
+      onStart: track,
+      onMove: track,
+      onDrop: (point) => {
+        const before = landingAt(point, key)
+        setDrag(null)
+        abandon.current = null
+        if (before !== undefined) move(key, before)
+      },
+      onCancel: () => { setDrag(null); abandon.current = null },
+    })
+  }
   const activeActions = [...actions.values()]
     .filter((action) => action.document === activeKey)
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
@@ -132,11 +175,18 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
     <div className="tabstrip">
       <div className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const key = tabKey(tab)
         const active = key === activeKey
+        // the insertion marker rides the tab the moved one would land in front of — or, for the end of the
+        // strip, the trailing edge of the last tab. Two classes, one line, at home in any row of a wrapped
+        // strip because it is drawn on a tab rather than between them.
+        const marks = `${drag?.key === key ? ' tab-moving' : ''}${drag?.before === key ? ' tab-drop-before' : ''}`
+          + `${drag && drag.before === null && index === tabs.length - 1 ? ' tab-drop-after' : ''}`
         return (
-          <div key={key} className={`tab${active ? ' on' : ''}${tab.pinned ? '' : ' slot'}`} role="tab" aria-selected={active}
+          <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${tab.pinned ? '' : ' slot'}${marks}`}
+            role="tab" aria-selected={active} aria-grabbed={drag?.key === key || undefined}
+            onMouseDown={(e) => startTabDrag(e, tab)}
             onDoubleClick={(e) => {
               if (!tab.pinned && !e.target.closest('.tab-x')) pinTab(tab.page, tab.param, tab.query)
             }}

@@ -42,3 +42,22 @@ export function placeTab(tabs, route, mode = 'slot') {
   if (mode === 'pin' || slot < 0) return [...tabs, entry]
   return tabs.map((t, i) => (i === slot ? entry : t))
 }
+
+// REORDERING IS A SPLICE. The strip's order IS this array's order, so a dragged tab is one entry taken out
+// and put back at one index — there is no drag state machine here, and nothing about a tab changes except
+// where it sits. `before` names the tab the moved one lands in FRONT of; null means the end of the strip,
+// which is the one insertion point no existing tab can name.
+//
+// The slot is not special. It is an ordinary entry that happens to be unpinned, and `placeTab` finds it by
+// that flag rather than by position, so a reader may drag it anywhere without changing what it means.
+//
+// An order that did not change returns the SAME array, so a drag that lands where it started writes
+// nothing and wakes no subscriber.
+export function moveTab(tabs, key, before = null) {
+  const from = tabs.findIndex((t) => tabKey(t) === key)
+  if (from < 0) return tabs
+  const rest = tabs.filter((_, i) => i !== from)
+  const to = before == null ? rest.length : rest.findIndex((t) => tabKey(t) === before)
+  if (to < 0 || to === from) return tabs
+  return [...rest.slice(0, to), tabs[from], ...rest.slice(to)]
+}

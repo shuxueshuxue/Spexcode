@@ -6,7 +6,7 @@ desc: The left dock — a spec node is a folder, so the tree that navigates the 
 code:
   - spec-dashboard/src/FileTree.jsx
 related:
-  - spec-dashboard/src/FilesTree.jsx
+  - spec-dashboard/src/DiskTree.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/useResizable.js
@@ -44,7 +44,7 @@ above, and it cost a chrome band to give.
 
 **The explorer discloses TWO sections, and they are two projections of one project.** SPECS is this tree —
 open by default, because it is the explorer's main body rather than one option among two. FILES is the disk
-listed as the disk ([[files-tree]]) — closed by default, because it answers a question this tree cannot: a
+listed as the disk ([[disk-tree]]) — closed by default, because it answers a question this tree cannot: a
 path exists here only if some node claims it, so a reader who knows where a file lives but not which node
 governs it has nowhere to look. Closed also means unmounted, so a reader who never opens it never costs the
 backend a listing.

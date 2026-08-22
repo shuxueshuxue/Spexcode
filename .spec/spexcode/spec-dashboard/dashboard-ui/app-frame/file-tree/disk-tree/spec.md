@@ -1,10 +1,10 @@
 ---
-title: files-tree
+title: disk-tree
 status: active
 hue: 205
 desc: The explorer's ordinary-file projection — governed roots as a real directory tree, one level fetched per expand, closed until asked for.
 code:
-  - spec-dashboard/src/FilesTree.jsx
+  - spec-dashboard/src/DiskTree.jsx
 related:
   - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/data.js
@@ -12,7 +12,13 @@ related:
   - spec-cli/src/source-list.ts
   - spec-dashboard/src/styles.css
 ---
-# files-tree
+# disk-tree
+
+**On the name.** This node and [[file-tree]] are two projections of the same project, and the first pair of
+names for them — `file-tree` and `files-tree` — differed by one letter, which the id-confusability rule
+rightly refused: two ids a reader cannot tell apart are two ids that will be cited wrong. `disk-tree` says
+which projection this is. The dock still labels the section **Files**, because that is what a reader is
+looking for when they open it; the node is named for what it IS, the section for what it is FOR.
 
 [[file-tree]] navigates the project the way the SPEC tree is shaped: a node is a folder, and a governed file
 hangs off whichever node claims it. That is the right shape for the work this product is about, and it is

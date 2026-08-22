@@ -50,7 +50,7 @@ export default {
     specs: '规格',
     files: '文件',
   },
-  filesTree: {
+  diskTree: {
     loading: '正在加载…',
   },
   dockModes: {

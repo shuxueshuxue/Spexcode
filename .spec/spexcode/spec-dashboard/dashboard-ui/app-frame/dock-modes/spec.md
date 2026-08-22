@@ -20,7 +20,7 @@ The dock is one finding surface with two projections: **explorer** finds governe
 **sessions** finds active sessions.
 
 The explorer itself discloses two SECTIONS — the spec tree ([[file-tree]], open by default) and the real
-directory tree ([[files-tree]], closed). That is not a third projection: a projection decides what the dock
+directory tree ([[disk-tree]], closed). That is not a third projection: a projection decides what the dock
 is FOR right now and is chosen from the rail, while a section is a disclosure inside the one list the
 explorer already is. The distinction survives the band rule below because a section head owns its own
 disclosure control and scrolls with its list, so the dock is still exactly one band with either section

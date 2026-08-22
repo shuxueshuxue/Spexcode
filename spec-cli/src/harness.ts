@@ -956,7 +956,7 @@ const wsText = (s: string) => encodeWsFrame(0x1, Buffer.from(s, 'utf8'))
 // `onText`; honors ping→pong and a close. Shared by every app-server WS client here. Returns the (possibly
 // shrunk) buffer + whether a close was seen, plus the running fragment state threaded back in on each call.
 type FrameState = { buf: Buffer; fragOp: number; fragBuf: Buffer }
-function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void): boolean {
+function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void, acceptPayload: (payload: Buffer) => boolean = () => true): boolean {
   for (;;) {
     if (s.buf.length < 2) return false
     const b0 = s.buf[0], b1 = s.buf[1], op = b0 & 0x0f, fin = (b0 & 0x80) !== 0, masked = (b1 & 0x80) !== 0
@@ -973,11 +973,17 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
     if (op === 0xa) continue                                          // pong
     if (op === 0x0) s.fragBuf = Buffer.concat([s.fragBuf, payload])   // continuation
     else { s.fragOp = op; s.fragBuf = payload }
-    if (fin) { if (s.fragOp === 0x1) onText(s.fragBuf.toString('utf8')); s.fragBuf = Buffer.alloc(0); s.fragOp = 0 }
+    if (fin) {
+      if (s.fragOp === 0x1 && acceptPayload(s.fragBuf)) onText(s.fragBuf.toString('utf8'))
+      s.fragBuf = Buffer.alloc(0); s.fragOp = 0
+    }
   }
 }
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
+// Native Codex can take 15-17s to answer thread/resume under a loaded app-server. A shorter
+// deadline creates a retry storm in the session reconciler, not a useful failure signal.
+export const CODEX_TURN_OBSERVER_SUBSCRIBE_MS = 30_000
 
 // Codex has no StopFailure hook, but its app-server has the stronger native signal: every subscribed turn ends
 // with turn/completed and a final completed/interrupted/failed status. Rejoin is atomic with subscription, so
@@ -1017,7 +1023,7 @@ export function codexTurnFailureObserver(
     try { conn.destroy() } catch {}
     resolveClosed(reason)
   }
-  const timer = setTimeout(() => finish('Codex turn observer did not subscribe within 5000ms'), 5000)
+  const timer = setTimeout(() => finish(`Codex turn observer did not subscribe within ${CODEX_TURN_OBSERVER_SUBSCRIBE_MS}ms`), CODEX_TURN_OBSERVER_SUBSCRIBE_MS)
   timer.unref?.()
   const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
   const report = (turn: unknown, fallbackMessage?: string) => {
@@ -1033,6 +1039,10 @@ export function codexTurnFailureObserver(
   conn.on('close', () => finish('Codex turn observer connection closed'))
   conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
   const handle = (json: string) => {
+    // A resumed Codex thread can stream large goal/progress notifications while the turn runs. They are
+    // irrelevant to this failure observer; avoid JSON.parse on those payloads so one active turn cannot make
+    // the backend spend its memory and CPU re-materializing a transcript it does not use.
+    if (json.includes('"method"') && !json.includes('"method":"turn/started"') && !json.includes('"method":"turn/completed"')) return
     let message: JsonRpc
     try { message = JSON.parse(json) } catch { return }
     if (message.error) return finish(`Codex turn observer request failed: ${message.error.message || JSON.stringify(message.error)}`)
@@ -1090,7 +1100,10 @@ export function codexTurnFailureObserver(
       frames.buf = frames.buf.slice(split + 4)
       send(wsInitialize)
     }
-    if (drainWsFrames(frames, conn, handle)) finish('Codex app-server closed the turn observer')
+    if (drainWsFrames(frames, conn, handle, (payload) => {
+      const method = Buffer.from('"method"')
+      return !payload.includes(method) || payload.includes(Buffer.from('"turn/started"')) || payload.includes(Buffer.from('"turn/completed"'))
+    })) finish('Codex app-server closed the turn observer')
   })
   return { close: () => finish(null), closed }
 }

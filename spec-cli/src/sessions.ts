@@ -1102,10 +1102,11 @@ export async function sessionPrompt(id: string): Promise<string | null> {
 export type ArchiveSessionIndexRow = {
   id: string; title: string; label: string; closedAt: string | null; node: string | null
 }
+export type ArchiveSessionIndexProbe = { promptReads?: number }
 
 // The archive overlay has no reader for the session model. Keep this projection separate from listSessions so
 // opening it skips the live tmux census, resident adapter probes, and files/web reads, and carries no full prompt bytes.
-export async function listArchivedSessionIndex(): Promise<ArchiveSessionIndexRow[]> {
+export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe): Promise<ArchiveSessionIndexRow[]> {
   const rows: ArchiveSessionIndexRow[] = []
   for (const id of listSessionIds()) {
     let entry: PublicRecordEntry
@@ -1113,10 +1114,16 @@ export async function listArchivedSessionIndex(): Promise<ArchiveSessionIndexRow
     if (entry.kind !== 'ok') continue
     const rec = fromRaw(entry.raw)
     if (!rec.governed || !rec.archived) continue
-    const prompt = readPromptFile(id)
     const parts = {
       id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
-      activity: null, note: rec.note, promptPreview: prompt ? oneLinePreview(prompt) : null,
+      activity: null, note: rec.note, promptPreview: null as string | null,
+    }
+    // Name and note are ahead of the prompt in deriveTitle's precedence. Avoid touching the prompt artifact
+    // unless both are absent; only then can its preview change the visible title.
+    if (!rec.name && !rec.note?.trim()) {
+      probe && (probe.promptReads = (probe.promptReads || 0) + 1)
+      const prompt = readPromptFile(id)
+      parts.promptPreview = prompt ? oneLinePreview(prompt) : null
     }
     rows.push({
       id: rec.session,

@@ -189,6 +189,7 @@ function assertInputsUnchanged(recordsRoot: string, expectedFiles: string[], exp
 
 export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions): JsonSessionMigrationReport {
   if (!isAbsolute(options.databasePath)) fail('databasePath must be absolute')
+  if (isAbsolute(options.recordsRoot)) mkdirSync(options.recordsRoot, { recursive: true })
   const input = readInputs(options.recordsRoot)
   const sourceDigest = digestInputs(options.recordsRoot, input.files)
   const backupRoot = options.backupRoot ?? `${options.databasePath}.json-migration-backup`

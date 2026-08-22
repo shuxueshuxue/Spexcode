@@ -630,6 +630,28 @@ async function clearPendingWatchSnapshots(targetId: string): Promise<void> {
 
 export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
+  const application = configuredSessionApplicationIfCutover()
+  if (application) {
+    const watched: string[] = []
+    const channel = source === 'parent' ? 'watch:parent' : 'watch:manual'
+    for (const target of [...new Set(targets)]) {
+      if (target === watcher) throw new ResourceConflict('a session cannot watch itself')
+      const targetRecord = managedWatchRecord(target)
+      try { application.attachWatcher(watcher, target, channel) }
+      catch (error) {
+        if (!(error instanceof Error) || !/already exists|duplicate|active topology edge/i.test(error.message)) throw error
+      }
+      const message = watchMessage(targetRecord)
+      application.enqueueMessage(watcher, {
+        kind: 'session.prompt.v1',
+        body: Buffer.from(message, 'utf8'),
+        senderSessionId: target,
+        idempotencyKey: digest(`watch-initial-snapshot\0${watcher}\0${target}\0${source}\0${message}`),
+      })
+      watched.push(target)
+    }
+    return { watched }
+  }
   const watched: string[] = []
   for (const target of [...new Set(targets)]) {
     if (target === watcher) throw new ResourceConflict('a session cannot watch itself')
@@ -657,6 +679,13 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
 
 export function listSessionWatches(watcher: string): SessionWatch[] {
   managedWatchRecord(watcher)
+  const application = configuredSessionApplicationIfCutover()
+  if (application) {
+    return application.listWatchers(watcher)
+      .filter(edge => edge.relationType === 'watch' || edge.relationType.startsWith('watch:'))
+      .map(edge => ({ target: edge.toSessionId, createdAt: new Date(edge.createdAtMs).toISOString() }))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.target.localeCompare(b.target))
+  }
   const watches: SessionWatch[] = []
   for (const target of listSessionIds()) {
     const entries = readWatchEntries(target)
@@ -671,6 +700,19 @@ export function listSessionWatches(watcher: string): SessionWatch[] {
 
 export function cancelSessionWatch(watcher: string, targets: string[]): number {
   managedWatchRecord(watcher)
+  const application = configuredSessionApplicationIfCutover()
+  if (application) {
+    let cancelled = 0
+    for (const target of [...new Set(targets)]) {
+      for (const channel of ['watch:manual', 'watch']) {
+        try { application.detachWatcher(watcher, target, channel); cancelled++; break }
+        catch (error) {
+          if (!(error instanceof Error) || !/does not exist|unknown/i.test(error.message)) throw error
+        }
+      }
+    }
+    return cancelled
+  }
   let cancelled = 0
   for (const target of [...new Set(targets)]) {
     withRecordLockSync(target, () => {
@@ -1168,7 +1210,13 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
     const canonicalState = canonicalStates.get(id)
     const projectedRecord = canonicalState
-      ? { ...rec, status: canonicalState.status as Lifecycle, parent: canonicalState.parentSessionId }
+      ? {
+          ...rec,
+          status: canonicalState.status as Lifecycle,
+          proposal: canonicalState.proposal as Proposal | null,
+          note: canonicalState.note,
+          parent: canonicalState.parentSessionId,
+        }
       : rec
     // A forced public liveness comes only from the shared record projection. Do not let live process/thread
     // evidence punch through it (including archive hazard repair).
@@ -2803,6 +2851,16 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     if (raw?.archived) throw new ResourceConflict(`refusing lifecycle change for closed session ${id}: it is read-only; resume it before changing state`)
     const rec = readLiveRecord(id)
     if (!rec) return false
+    const application = configuredSessionApplicationIfCutover()
+    if (application) {
+      const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
+      application.transitionSession(id, {
+        status,
+        proposal,
+        note: opts.note ?? null,
+      })
+      return true
+    }
     const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
     writeRecord({
       ...rec, status,
@@ -2819,6 +2877,11 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
   return withRecordLockSync(sessionId, () => {
     const rec = readLiveRecord(sessionId)
     if (!rec || rec.status !== 'active' || rec.stopped || rec.archived) return false
+    const application = configuredSessionApplicationIfCutover()
+    if (application) {
+      application.transitionSession(sessionId, { status: 'error', proposal: null, note })
+      return true
+    }
     writeRecord({ ...rec, status: 'error', proposal: null, note })
     return true
   })

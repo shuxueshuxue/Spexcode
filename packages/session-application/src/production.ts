@@ -39,6 +39,8 @@ export interface LocalityPrecondition {
 export interface SessionState {
   sessionId: string
   status: string
+  proposal: string | null
+  note: string | null
   parentSessionId: string | null
   updatedAtMs: number
 }
@@ -46,6 +48,10 @@ export interface SessionState {
 export interface SessionStateChange {
   sessionId: string
   status: string
+  proposal: string | null
+  note: string | null
+  previousProposal: string | null
+  previousNote: string | null
   parentSessionId: string | null
   previousStatus: string | null
   previousParentSessionId: string | null
@@ -74,10 +80,14 @@ export interface CreateSessionInput {
   runtime?: NativeRuntimeIdentity
   eventId?: string
   updatedAtMs?: number
+  proposal?: string | null
+  note?: string | null
 }
 
 export interface TransitionSessionInput {
   status?: string
+  proposal?: string | null
+  note?: string | null
   parentSessionId?: string | null
   reason?: string | null
 }
@@ -100,6 +110,8 @@ export interface ProductionSessionApplication extends SessionApplication {
   transitionSession(sessionId: string, input: TransitionSessionInput): CommittedSessionChange
   enqueueMessage(sessionId: string, message: MessageInput): Message
   attachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
+  detachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
+  listWatchers(watcherSessionId: string, channel?: string): TopologyEdge[]
   bindRuntime(sessionId: string, identity: NativeRuntimeIdentity, expectedGeneration?: number): RuntimeBinding
   resolveRuntime(sessionId: string, namespace: string): RuntimeBinding | null
   dequeueForRuntime(sessionId: string, namespace: string, expectedGeneration?: number): Message | null
@@ -129,6 +141,8 @@ interface StateRow extends Record<string, unknown> {
   status: string
   parent_session_id: string | null
   updated_at_ms: number | bigint
+  proposal: string | null
+  note: string | null
 }
 
 const requirePath = (databasePath: string): void => {
@@ -149,13 +163,15 @@ const eventId = (): string => randomBytes(16).toString('hex')
 
 const readStateInTransaction = (tx: ProtocolTransaction, sessionId: string): SessionState | null => {
   const row = tx.query(
-    'SELECT session_id, status, parent_session_id, updated_at_ms FROM session_application_state WHERE session_id=?',
+    'SELECT session_id, status, proposal, note, parent_session_id, updated_at_ms FROM session_application_state WHERE session_id=?',
     sessionId,
   )[0] as StateRow | undefined
   return row
     ? {
         sessionId: String(row.session_id),
         status: String(row.status),
+        proposal: row.proposal === null ? null : String(row.proposal),
+        note: row.note === null ? null : String(row.note),
         parentSessionId: row.parent_session_id === null ? null : String(row.parent_session_id),
         updatedAtMs: Number(row.updated_at_ms),
       }
@@ -168,6 +184,10 @@ const messageForEvent = (state: SessionStateChange, id: string): MessageInput =>
     eventId: id,
     sessionId: state.sessionId,
     status: state.status,
+    proposal: state.proposal,
+    note: state.note,
+    previousProposal: state.previousProposal,
+    previousNote: state.previousNote,
     parentSessionId: state.parentSessionId,
     previousStatus: state.previousStatus,
     previousParentSessionId: state.previousParentSessionId,
@@ -238,6 +258,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       requireId(input.sessionId, 'sessionId')
       const status = input.status ?? 'created'
       requireStatus(status)
+      const proposal = input.proposal ?? null
+      const note = input.note ?? null
       const parentSessionId = input.parentSessionId ?? null
       if (parentSessionId !== null) requireId(parentSessionId, 'parentSessionId')
       initialize(input.sessionId)
@@ -250,9 +272,11 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         if (parentSessionId) edge = topology.attach(tx, parentSessionId, input.sessionId, PARENT_RELATION)
         const updatedAtMs = input.updatedAtMs ?? now()
         tx.exec(
-          'INSERT INTO session_application_state(session_id,status,parent_session_id,updated_at_ms) VALUES(?,?,?,?)',
+          'INSERT INTO session_application_state(session_id,status,proposal,note,parent_session_id,updated_at_ms) VALUES(?,?,?,?,?,?)',
           input.sessionId,
           status,
+          proposal,
+          note,
           parentSessionId,
           updatedAtMs,
         )
@@ -260,6 +284,10 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         const change: SessionStateChange = {
           sessionId: input.sessionId,
           status,
+          proposal,
+          note,
+          previousProposal: null,
+          previousNote: null,
           parentSessionId,
           previousStatus: null,
           previousParentSessionId: null,
@@ -280,7 +308,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           runtime = runtimeBindings.bind(tx, input.sessionId, input.runtime)
         }
         return {
-          state: { sessionId: input.sessionId, status, parentSessionId, updatedAtMs },
+          state: { sessionId: input.sessionId, status, proposal, note, parentSessionId, updatedAtMs },
           event,
           edge,
           recipients,
@@ -312,6 +340,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           throw new Error(`session application state is missing: ${sessionId}`)
         }
         const status = nextStatus ?? current.status
+        const proposal = input.proposal === undefined ? current.proposal : input.proposal
+        const note = input.note === undefined ? current.note : input.note
         const parentSessionId = input.parentSessionId === undefined ? current.parentSessionId : input.parentSessionId
         let edge: TopologyEdge | null = null
         if (parentSessionId !== current.parentSessionId) {
@@ -324,8 +354,10 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         }
         const updatedAtMs = now()
         tx.exec(
-          'UPDATE session_application_state SET status=?, parent_session_id=?, updated_at_ms=? WHERE session_id=?',
+          'UPDATE session_application_state SET status=?, proposal=?, note=?, parent_session_id=?, updated_at_ms=? WHERE session_id=?',
           status,
+          proposal,
+          note,
           parentSessionId,
           updatedAtMs,
           sessionId,
@@ -334,6 +366,10 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         const change: SessionStateChange = {
           sessionId,
           status,
+          proposal,
+          note,
+          previousProposal: current.proposal,
+          previousNote: current.note,
           parentSessionId,
           previousStatus: current.status,
           previousParentSessionId: current.parentSessionId,
@@ -350,7 +386,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         const recipients = topology.recipients(sessionId, tx)
         const messages = recipients.map(recipient => tx.enqueue(recipient, messageForEvent(change, id)))
         return {
-          state: { sessionId, status, parentSessionId, updatedAtMs },
+          state: { sessionId, status, proposal, note, parentSessionId, updatedAtMs },
           event,
           edge,
           recipients,
@@ -373,6 +409,17 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       initialize(watcherSessionId)
       initialize(subjectSessionId)
       return protocol.withTransaction(tx => topology.subscribe(tx, watcherSessionId, subjectSessionId, channel))
+    },
+
+    detachWatcher(watcherSessionId, subjectSessionId, channel = WATCH_RELATION) {
+      requireId(watcherSessionId, 'watcherSessionId')
+      requireId(subjectSessionId, 'subjectSessionId')
+      return protocol.withTransaction(tx => topology.unsubscribe(tx, watcherSessionId, subjectSessionId, channel))
+    },
+
+    listWatchers(watcherSessionId, channel = WATCH_RELATION) {
+      requireId(watcherSessionId, 'watcherSessionId')
+      return topology.subscriptions(watcherSessionId).filter(edge => edge.relationType === channel)
     },
 
     bindRuntime(sessionId, identity, expectedGeneration) {
@@ -413,6 +460,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
             return {
               sessionId: decoded.sessionId,
               status: decoded.status,
+              proposal: decoded.proposal,
+              note: decoded.note,
               parentSessionId: decoded.parentSessionId,
               updatedAtMs: event.occurredAtMs,
             }

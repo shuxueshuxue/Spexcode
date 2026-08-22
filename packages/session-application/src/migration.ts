@@ -206,6 +206,8 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
           app.createSession({
             sessionId: parent,
             status: 'archived',
+            proposal: null,
+            note: null,
             updatedAtMs: 0,
             eventId: createHash('sha256').update(`migration\0${sourceDigest}\0orphan-parent\0${parent}`).digest('hex').slice(0, 32),
           })
@@ -217,7 +219,7 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       const state = app.readState(record.session_id)
       const parent = record.parent ?? null
       if (!state) {
-        app.createSession({ sessionId: record.session_id, status: record.status, parentSessionId: parent, updatedAtMs: record.createdAt ?? 0, eventId: createHash('sha256').update(`migration\0${sourceDigest}\0${record.session_id}`).digest('hex').slice(0, 32) })
+        app.createSession({ sessionId: record.session_id, status: record.status, proposal: typeof record.proposal === 'string' ? record.proposal : null, note: typeof record.note === 'string' ? record.note : null, parentSessionId: parent, updatedAtMs: record.createdAt ?? 0, eventId: createHash('sha256').update(`migration\0${sourceDigest}\0${record.session_id}`).digest('hex').slice(0, 32) })
         events++
       } else if (state.status !== record.status || state.parentSessionId !== parent) {
         fail(`existing SQLite state for ${record.session_id} conflicts with JSON source`)
@@ -232,10 +234,13 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
         app.protocol.withTransaction(tx => app.topology.attach(tx, parent, record.session_id, 'parent'))
       }
       for (const entry of input.watches.get(record.session_id) ?? []) {
-        if (!app.topology.subscriptions(record.session_id).some(edge => edge.fromSessionId === entry.watcher && edge.toSessionId === record.session_id && edge.relationType === 'watch')) {
-          app.attachWatcher(entry.watcher, record.session_id, 'watch')
+        for (const source of entry.sources) {
+          const channel = source === 'parent' ? 'watch:parent' : 'watch:manual'
+          if (!app.topology.parents(record.session_id, channel).some(edge => edge.fromSessionId === entry.watcher)) {
+            app.attachWatcher(entry.watcher, record.session_id, channel)
+          }
+          watchEdges++
         }
-        watchEdges++
       }
     }
     app.close()

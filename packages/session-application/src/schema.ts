@@ -19,4 +19,11 @@ CREATE INDEX session_application_state_parent
   ON session_application_state (parent_session_id, session_id);
 `,
   },
+  {
+    version: 2,
+    sql: `
+ALTER TABLE session_application_state ADD COLUMN proposal TEXT;
+ALTER TABLE session_application_state ADD COLUMN note TEXT;
+`,
+  },
 ]

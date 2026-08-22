@@ -44,6 +44,8 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.deepEqual(restarted.replayState('child'), {
     sessionId: 'child',
     status: 'active',
+    proposal: null,
+    note: null,
     parentSessionId: 'parent',
     updatedAtMs: childEvents[1]!.occurredAtMs,
   })

@@ -28,6 +28,7 @@ import { SESSION_APPLICATION_MIGRATIONS } from './schema.js'
 const SESSION_ID = /^(?!-)[0-9A-Za-z_-]{1,256}$/
 const STATUS = /^[0-9A-Za-z._:-]{1,64}$/
 const STATE_EVENT = 'session.state.changed.v1'
+const MESSAGE_EVENT = 'session.message.sent.v1'
 const PARENT_RELATION = 'parent'
 const WATCH_RELATION = 'watch'
 const compositions = new Map<string, ProductionSessionApplication>()
@@ -100,6 +101,12 @@ export interface CommittedSessionChange {
   messages: Message[]
 }
 
+export interface ConversationMessageInput {
+  text: string
+  from: string | null
+  replyVia?: 'note'
+}
+
 export interface ProductionSessionApplication extends SessionApplication {
   readonly databasePath: string
   readonly protocol: SessionProtocol
@@ -109,6 +116,7 @@ export interface ProductionSessionApplication extends SessionApplication {
   createSession(input: CreateSessionInput): SessionState
   transitionSession(sessionId: string, input: TransitionSessionInput): CommittedSessionChange
   enqueueMessage(sessionId: string, message: MessageInput): Message
+  enqueueConversationMessage(sessionId: string, message: MessageInput, conversation: ConversationMessageInput): Message
   attachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
   detachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
   listWatchers(watcherSessionId: string, channel?: string): TopologyEdge[]
@@ -401,6 +409,43 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       requireId(sessionId, 'sessionId')
       initialize(sessionId)
       return protocol.withTransaction(tx => tx.enqueue(sessionId, message))
+    },
+
+    enqueueConversationMessage(sessionId, message, conversation) {
+      requireId(sessionId, 'sessionId')
+      if (!conversation || typeof conversation.text !== 'string' || conversation.text.length === 0) {
+        throw new TypeError('conversation message requires non-empty text')
+      }
+      if (conversation.from !== null && typeof conversation.from !== 'string') {
+        throw new TypeError('conversation message from must be a session id or null')
+      }
+      initialize(sessionId)
+      return protocol.withTransaction(tx => {
+        const queued = tx.enqueue(sessionId, message)
+        const recorded = events.read(sessionId, undefined, tx).some(event => {
+          if (event.type !== MESSAGE_EVENT) return false
+          try {
+            const payload = JSON.parse(new TextDecoder().decode(event.payload)) as { messageId?: unknown }
+            return payload.messageId === queued.messageId
+          } catch { return false }
+        })
+        if (!recorded) {
+          events.append(tx, {
+            eventId: eventId(),
+            type: MESSAGE_EVENT,
+            schemaVersion: 1,
+            subjectSessionId: sessionId,
+            payload: encodeEventJson({
+              messageId: queued.messageId,
+              text: conversation.text,
+              from: conversation.from,
+              ...(conversation.replyVia ? { replyVia: conversation.replyVia } : {}),
+            }),
+            occurredAtMs: queued.enqueuedAtMs,
+          })
+        }
+        return queued
+      })
     },
 
     attachWatcher(watcherSessionId, subjectSessionId, channel = WATCH_RELATION) {

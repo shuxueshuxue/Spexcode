@@ -4587,12 +4587,12 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       const existing = idempotencyKey
         ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
-      const message = existing ?? application.enqueueMessage(id, {
+      const message = existing ?? application.enqueueConversationMessage(id, {
           kind: 'session.prompt.v1',
           body: Buffer.from(prompt.text, 'utf8'),
           senderSessionId: from ?? null,
           idempotencyKey,
-        })
+        }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       if (!opts.deferDrain) await drainSession(id)
       return { ok: true, ...(opts.idempotency ? { replayed: !!existing } : {}) }
     } catch (error) {

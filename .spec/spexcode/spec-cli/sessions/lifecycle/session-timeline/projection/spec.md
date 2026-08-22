@@ -13,4 +13,5 @@ related:
 
 The reusable package reads the canonical durable tail without board policy. The CLI wrapper resolves a public
 record alias, refuses absent or non-governed rows on the HTTP surface, and maps authored lifecycle values to
-SpexCode's display words. It does not parse, append, segment, or cursor the log itself.
+SpexCode's display words. After the session application cutover it reads the application event stream instead of
+the retired ndjson timeline; the projection still does not append, segment, or cursor either history source.

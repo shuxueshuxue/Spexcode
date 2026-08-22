@@ -29,5 +29,10 @@ were filed as PASS at codeSha `76e66fad3`, each with the same structured transcr
 note. `resume-replays-original-launcher-not-current-default` remains unmeasured because this probe did not
 perform the stop/config-change/resume sequence.
 
+A bounded resume probe was attempted separately with inert shell launchers. It created the public records, but
+the fixture had no materialized `launch.sh` to inspect, so the stop/resume command path could not establish the
+declared pinned-command precondition. That run was setup-only and produced no verdict; its two exact tmux servers
+were stopped immediately.
+
 No product code, scenario prose, spec, or acceptance artifact was changed. `git diff --check` and
 `spex eval lint --changed` were run before committing; the two readings reduced the stale count from 41 to 39.

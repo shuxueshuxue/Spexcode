@@ -1036,6 +1036,10 @@ export function codexTurnFailureObserver(
   conn.on('close', () => finish('Codex turn observer connection closed'))
   conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
   const handle = (json: string) => {
+    // A resumed Codex thread can stream large goal/progress notifications while the turn runs. They are
+    // irrelevant to this failure observer; avoid JSON.parse on those payloads so one active turn cannot make
+    // the backend spend its memory and CPU re-materializing a transcript it does not use.
+    if (json.includes('"method"') && !json.includes('"method":"turn/started"') && !json.includes('"method":"turn/completed"')) return
     let message: JsonRpc
     try { message = JSON.parse(json) } catch { return }
     if (message.error) return finish(`Codex turn observer request failed: ${message.error.message || JSON.stringify(message.error)}`)

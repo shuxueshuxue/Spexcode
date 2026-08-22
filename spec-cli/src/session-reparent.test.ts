@@ -1,4 +1,6 @@
 import test from 'node:test'
+
+import { openProjectSessionApplication } from '@spexcode/session-application'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -169,6 +171,47 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.match(remote.err, /no backend reachable/)
     assert.equal(parentOf(childDDir), oldParent)
     assert.deepEqual(watchers(childDDir).map((entry) => [entry.watcher, entry.sources]), [[oldParent, ['parent']]])
+  } finally {
+    await stop(backend)
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('session reparent updates the canonical projection after cutover', { timeout: 60_000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-reparent-cutover-'))
+  const port = await freePort()
+  const oldParent = 'cutover-old-parent'
+  const newParent = 'cutover-new-parent'
+  const child = 'cutover-child'
+  const childDir = writeSession(home, child, oldParent)
+  writeSession(home, oldParent, null)
+  writeSession(home, newParent, null)
+  writeFileSync(join(childDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
+  const databasePath = join(home, 'sessions.sqlite')
+  const seed = openProjectSessionApplication({ databasePath, locality: () => {} })
+  seed.createSession({ sessionId: oldParent })
+  seed.createSession({ sessionId: newParent })
+  seed.createSession({ sessionId: child, parentSessionId: oldParent })
+  seed.close()
+  writeFileSync(`${databasePath}.json-migration.json`, '{}\n')
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(port) }
+  for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
+  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(port)], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  let log = ''
+  backend.stderr.setEncoding('utf8').on('data', chunk => { log += chunk })
+  try {
+    await waitFor(async () => (await fetch(`http://127.0.0.1:${port}/health`).catch(() => null))?.ok === true, `backend did not become healthy: ${log}`)
+    const response = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ children: [child], parent: newParent }),
+    })
+    assert.equal(response.status, 200, await response.text())
+    const replay = await fetch(`http://127.0.0.1:${port}/api/session-runtime/${child}/replay`)
+    assert.equal(replay.status, 200)
+    assert.equal((await replay.json() as { parentSessionId: string | null }).parentSessionId, newParent)
+    const board = await fetch(`http://127.0.0.1:${port}/api/sessions?all=1`)
+    assert.equal(board.status, 200)
+    const boardChild = (await board.json() as Array<{ id: string; parent: string | null }>).find(row => row.id === child)
+    assert.equal(boardChild?.parent, newParent)
   } finally {
     await stop(backend)
     rmSync(home, { recursive: true, force: true })

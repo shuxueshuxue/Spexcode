@@ -209,3 +209,9 @@ under launcher A regenerated the same A command after the configured default cha
 resume script contained B. The scenario contract explicitly requires the unnamed session to freeze the command that
 actually launched it, so this is a product finding rather than a setup failure. Evidence is in the failed reading at
 the current implementation commit `9fc859f59`; no product fix was made in this eval-only lane.
+
+The initial FAIL is now **retracted**. Its driver used `exit 0` launcher shims, so `stop` never made the worker
+offline, and the second case inherited the first case's switched default. That was a fixture error, not a product
+finding. A corrected run used live rendezvous wrappers, reset the default to A for each case, and measured both
+named-A and unnamed/default-A sessions: `stop=0`, switch default to B, `resume=0`, and both regenerated launch
+scripts retained A with no B. The replacement PASS is filed against `ac37a8df6`; no product change is needed.

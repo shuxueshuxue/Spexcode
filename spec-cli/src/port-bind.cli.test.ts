@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import net from 'node:net'
 import { fileURLToPath } from 'node:url'
+import { listenOrExit } from './listen.js'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -99,4 +100,37 @@ test('public ready lines follow bind and busy listeners publish none', { timeout
   } finally {
     await dashboardPort.close()
   }
+})
+
+test('backend port 0 publishes the kernel-assigned port', { timeout: 120_000 }, async () => {
+  const backend = startCli(['serve', '--port', '0'])
+  try {
+    await waitFor(() => backend.stdout().includes('spec-cli supervisor serving on http://localhost:'), backend)
+    const match = backend.stdout().match(/^spec-cli supervisor serving on http:\/\/localhost:(\d+) /m)
+    assert.ok(match, `missing supervisor ready line:\n${backend.stdout()}`)
+    const port = Number(match[1])
+    assert.ok(port > 0, `expected an assigned port, got ${port}`)
+    assert.equal((await fetch(`http://127.0.0.1:${port}/health`)).status, 200)
+  } finally {
+    await stop(backend)
+  }
+})
+
+test('listenOrExit passes the bound port to ready publication', async () => {
+  const server = net.createServer()
+  let publishedPort: number | undefined
+  await new Promise<void>((resolve) => {
+    listenOrExit(server, 0, {
+      label: 'test listener',
+      ready: (port) => {
+        publishedPort = port
+        resolve()
+        return `test listener on :${port}`
+      },
+    })
+  })
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+  assert.equal(publishedPort, address.port)
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 })

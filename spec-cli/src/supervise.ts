@@ -29,7 +29,7 @@ const packageRoot = join(here, '..')
 const sourceRoot = join(packageRoot, 'src')
 const workspaceRoot = existsSync(sourceRoot) ? join(packageRoot, '..') : null
 const entryArgs = serverEntrypointArgs(packageRoot, here)
-const publicPort = Number(process.env.PORT || 8787)
+const publicPort = Number(process.env.PORT ?? 8787)
 const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
 
 // @@@ public mode ([[public-mode]]) - with `spex serve --public`, the supervisor is NOT the internet face:
@@ -211,10 +211,10 @@ const reapChild = () => { unregisterBackendInstance(instanceId); try { current?.
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir()
-  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => recordEndpoint(childApiBase), ready: `spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})` })
+  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: (actualPort) => recordEndpoint(`http://127.0.0.1:${actualPort}`), ready: (actualPort) => `spec-cli supervisor on loopback :${actualPort} (zero-downtime reloads, backend :${first.port})` })
   startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
-  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => recordEndpoint(childApiBase), ready: `spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})` })
+  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: (actualPort) => recordEndpoint(`http://127.0.0.1:${actualPort}`), ready: (actualPort) => `spec-cli supervisor serving on http://localhost:${actualPort} (zero-downtime reloads, backend :${first.port})` })
 }
 startResourceMonitor()
 

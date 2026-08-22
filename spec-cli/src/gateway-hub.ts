@@ -331,7 +331,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
     host: opts.host,
     label: opts.label ?? 'hub gateway',
     cleanup: opts.onBindFail,
-    ready: `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${port} — /projects + /p/:projectId/*`,
+    ready: (actualPort) => `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${actualPort} — /projects + /p/:projectId/*`,
   })
   return server
 }

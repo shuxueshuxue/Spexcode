@@ -164,3 +164,20 @@ surface. An SVG preview produced the exact named 415 instruction to download; a 
 exact named 413 ceiling with the actual byte count. Neither case used the download action, and the temporary
 worktree, backend, dashboard, and browser were removed after the run. Structured evidence is `e1e023be…` in the
 files eval sidecar.
+
+### Files browser closure
+
+Three additional files scenarios are now **PASS** at the same measured commit `73f6567ef`:
+
+- `dashboard-shows-live-files-and-downloads-current-bytes`: Chromium opened the published HTML through the
+  dashboard, observed changed current bytes through a browser request, and completed the live download.
+- `markdown-previews-select-and-start-at-the-top`: the Markdown resource surface rendered the posted heading,
+  exposed no raw text block, and began at `scrollY=0`.
+- `html-previews-run-with-full-browser-capabilities`: the posted HTML ran with the intended same-origin browser
+  capabilities, updated bytes were observable, and the download completed as `live.html`.
+
+The proof used the public CLI, the real branch-local backend, Vite, and Chromium in one isolated project. The
+download result is recorded through the browser download event and a direct browser-context GET; Playwright's
+download-body restriction is not presented as a product failure. Structured evidence is `8c004b91…` in the
+files eval sidecar. The three rows were filed in commit `66cafdc85`; the `codeSha` remains `73f6567ef` because
+that is the committed tree measured before the sidecar-only filing commit.

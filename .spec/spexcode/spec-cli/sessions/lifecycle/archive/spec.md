@@ -36,6 +36,9 @@ absence, adapter cleanup, generation and descendant fences, and all failure comp
 path succeed. A native turn in flight is a loud refusal; close does not interrupt it. The refused close leaves the
 record, worktree, branch, and runtime unchanged. A queued row proves its prepared runtime absence under the same
 transition lock and is eligible without a running turn.
+An unbound launch residue is eligible for close once its bounded readiness window has expired or its exact
+host process/transport is proven absent. The close guard must not treat a stale launch artifact as perpetual
+"launch or recovery is still in progress"; only a currently progressing, live or unproven owner may refuse.
 
 After cold proof, close writes the worktree tree (tracked and untracked files) as a commit whose parent is the
 current branch tip, then atomically publishes `refs/spex-archive/<session-id>` and verifies that ref. A ref or

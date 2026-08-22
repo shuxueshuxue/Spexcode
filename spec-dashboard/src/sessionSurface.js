@@ -3,24 +3,30 @@ import { PROJECT_ID } from './project.js'
 export const SESSION_SURFACE_TERMINAL = 'terminal'
 export const SESSION_SURFACE_CONVERSATION = 'conversation'
 export const SESSION_SURFACE_DIFF = 'diff'
+export const SESSION_SURFACE_RESOURCE_PREFIX = 'resource:'
 
 const STORAGE_PREFIX = 'spexcode.session-surface.v1'
-const SURFACES = new Set([SESSION_SURFACE_TERMINAL, SESSION_SURFACE_CONVERSATION, SESSION_SURFACE_DIFF])
+const BASE_SURFACES = new Set([SESSION_SURFACE_TERMINAL, SESSION_SURFACE_CONVERSATION])
 const listeners = new Set()
 let memoryState = null
 
 export const sessionSurfaceStorageKey = (projectId = PROJECT_ID) => `${STORAGE_PREFIX}.${projectId || 'root'}`
 
 const emptyState = () => ({ defaultSurface: SESSION_SURFACE_TERMINAL, sessions: {} })
-const validSurface = (value) => SURFACES.has(value)
-export const isSessionSurface = validSurface
+const validBaseSurface = (value) => BASE_SURFACES.has(value)
+export const isBaseSessionSurface = validBaseSurface
+export const isResourceSurface = (value) => typeof value === 'string' && value.startsWith(SESSION_SURFACE_RESOURCE_PREFIX) && value.length > SESSION_SURFACE_RESOURCE_PREFIX.length
+export const isSessionSurface = (value) => validBaseSurface(value) || value === SESSION_SURFACE_DIFF || isResourceSurface(value)
+export const resourceSurfaceKey = (value) => isResourceSurface(value) ? value.slice(SESSION_SURFACE_RESOURCE_PREFIX.length) : null
+export const resourceSurface = (key) => `${SESSION_SURFACE_RESOURCE_PREFIX}${key}`
+export const resourceTabKey = (sessionId, kind, value) => `${sessionId}:${kind}:${value}`
 
 function normalizeState(value) {
   const state = emptyState()
   if (!value || typeof value !== 'object') return state
-  if (validSurface(value.defaultSurface)) state.defaultSurface = value.defaultSurface
+  if (validBaseSurface(value.defaultSurface)) state.defaultSurface = value.defaultSurface
   if (value.sessions && typeof value.sessions === 'object' && !Array.isArray(value.sessions)) {
-    state.sessions = Object.fromEntries(Object.entries(value.sessions).filter(([, surface]) => validSurface(surface)))
+    state.sessions = Object.fromEntries(Object.entries(value.sessions).filter(([, surface]) => validBaseSurface(surface)))
   }
   return state
 }
@@ -42,7 +48,7 @@ function writeState(state) {
 }
 
 function requireSurface(surface) {
-  if (!validSurface(surface)) throw new Error(`Invalid session surface: ${surface}`)
+  if (!validBaseSurface(surface)) throw new Error(`Invalid session base surface: ${surface}`)
   return surface
 }
 

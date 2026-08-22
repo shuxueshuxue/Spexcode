@@ -84,7 +84,8 @@ export function sessionSurfaceHash(hash) {
   const { page, param, query } = parseRoute(hash)
   if (page !== 'sessions' || !param || !query.surface) return null
   if (query.surface === 'evals') return routeHash('evals', null, { q: scopedEvalQuery(param) })
-  if (query.surface !== 'conversation' && query.surface !== 'terminal' && query.surface !== 'diff') return null
+  const resource = typeof query.surface === 'string' && query.surface.startsWith('resource:') && query.surface.length > 'resource:'.length
+  if (query.surface !== 'conversation' && query.surface !== 'terminal' && query.surface !== 'diff' && !resource) return null
   return null
 }
 

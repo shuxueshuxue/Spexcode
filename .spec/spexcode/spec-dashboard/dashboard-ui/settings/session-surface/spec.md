@@ -2,7 +2,7 @@
 title: session-surface
 status: active
 hue: 160
-desc: One browser- and project-local preference store resolves each pane-backed session's mutually exclusive Terminal or Conversation base surface.
+desc: The session address carries the one visible surface axis; the browser-local preference store only resolves the bare address's base default.
 code:
   - spec-dashboard/src/sessionSurface.js
 related:
@@ -14,15 +14,19 @@ related:
 
 # session-surface
 
-A pane-backed session has one visible base surface: Terminal or Conversation. This store owns that local
-presentation choice, not session state. Its scoped localStorage payload contains a default and only explicit
-per-session overrides. Valid values are exactly `terminal` and `conversation`; the default is Terminal.
+A pane-backed session has one visible surface selected by its address: `?surface=conversation|terminal|diff` or
+`?surface=resource:<resourceTabKey>`. The address is the only visible-face selector and is a pure function of
+the current URL. Only a user gesture writes it (ordinary navigation or opening/closing a tab); background board
+updates never navigate. A bare `#/sessions/<id>` resolves the browser-local base preference and is otherwise
+stable.
 
-Resolution is an explicit session URL face (`?surface=terminal|conversation`) when present, then the session
-override, then the saved default, then Terminal. An explicit URL face writes the same per-session override;
-the default URL leaves it untouched. Updating the default never rewrites session overrides. Updating a session
-override publishes the new value to the currently mounted console immediately. The storage key includes the current project scope, so one browser's choice for project A cannot
-affect project B; browser storage remains optional, with the same live in-memory result while unavailable.
+This store owns only that bare-address base default, not session state or resource selection. Its scoped
+localStorage payload contains a default and explicit per-session base overrides. Valid stored values are exactly
+`terminal` and `conversation`; the default is Terminal. Headless and read-only sessions resolve Conversation.
+The storage key includes the current project scope, so one browser's choice for project A cannot affect project B;
+browser storage remains optional, with the same live in-memory result while unavailable.
 
-Headless sessions do not consume this store: they are always Conversation. Resource tabs are likewise outside
-this store; they temporarily cover the resolved base surface and return to it when closed.
+Resource surfaces are ordinary session object tabs whose identity is their canonical address. The plus picker and
+tab deduplication form the complete open list; closing a resource closes that tab and its warm preview, while the
+session's terminal/PTY remains untouched. A new posted web resource never becomes visible automatically: it adds
+an unread signal, and only clicking that signal navigates to the resource address.

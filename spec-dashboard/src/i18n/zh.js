@@ -87,6 +87,9 @@ export default {
     surfaceConversation: '对话',
     surfaceDiff: '差异',
   },
+  documentActions: {
+    aria: '文档操作',
+  },
   nav: {
     railLabel: '主导航',
     explorer: '资源管理器',
@@ -689,6 +692,7 @@ export default {
     resourceMenuLabel: '已发布的文件和网页服务',
     resourceMenuEmpty: '所有已发布资源均已打开',
     refreshResourceTab: '刷新 {name}',
+    unreadResources: '有 {n} 个新的已发布资源',
     closeResourceTab: '关闭 {name}',
     surfaceLabel: '当前会话界面',
     toolbarToolsLabel: '会话工具',

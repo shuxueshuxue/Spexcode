@@ -1,10 +1,18 @@
 import { useT } from './i18n/index.jsx'
-import { Icon } from './icons.jsx'
-import { tabKey, useTabs } from './tabs.js'
+import { Icon, IconButton } from './icons.jsx'
+import { requestTab, tabKey, useTabs } from './tabs.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR } from './session.js'
-import { getSessionBaseSurface, isSessionSurface, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
+import { getSessionBaseSurface, isSessionSurface, isResourceSurface, resourceSurfaceKey, resourceTabKey, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
+import { useDocumentActions } from './documentActions.jsx'
+
+const resourceLabel = (url) => {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.hostname.replace(/^\[|\]$/g, '')}:${parsed.port}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  } catch { return url }
+}
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -23,9 +31,18 @@ function label(tab, { specs, sessions, t }) {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param))
     const title = s?.label || s?.title || tab.param.slice(0, 8)
+    const requestedSurface = isSessionSurface(tab.query?.surface) ? tab.query.surface : null
+    if (isResourceSurface(requestedSurface)) {
+      const key = resourceSurfaceKey(requestedSurface)
+      const resource = [
+        ...(s?.files || []).map((path) => ({ id: resourceTabKey(s.id, 'file', path), label: path.split('/').filter(Boolean).pop() || path })),
+        ...(s?.web || []).map((web) => ({ id: resourceTabKey(s.id, 'web', web.key), label: resourceLabel(web.url) })),
+      ].find((item) => item.id === key)
+      return `${title} · ${resource?.label || key}`
+    }
     const surface = s?.capabilities?.headless === true || s?.liveness === 'offline' || s?.archived
       ? SESSION_SURFACE_CONVERSATION
-      : (isSessionSurface(tab.query?.surface) ? tab.query.surface : getSessionBaseSurface(s?.id || tab.param))
+      : (requestedSurface || getSessionBaseSurface(s?.id || tab.param))
     return `${title} · ${t(`tabs.surface${surface[0].toUpperCase()}${surface.slice(1)}`)}`
   }
   return t(`tabs.${tab.page}`)
@@ -51,17 +68,24 @@ export default function TabStrip({ specs, sessions }) {
   const t = useT()
   const { tabs, activeKey, open, close, closeOthers } = useTabs()
   const { splitTo } = useWorkspaceApi()
+  const actions = useDocumentActions()
   // The strip shows even with one tab: it is where the current document's NAME lives, and chrome that
   // appears only when a second document exists jumps the layout at exactly the moment of the reader's
   // first hold.
   if (!tabs.length) return null
+  const activeActions = [...actions.values()]
+    .filter((action) => action.document === activeKey)
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
   return (
     <div className="tabstrip" role="tablist" aria-label={t('tabs.aria')}>
       {tabs.map((tab) => {
         const key = tabKey(tab)
         const active = key === activeKey
         return (
-          <div key={key} className={`tab${active ? ' on' : ''}`} role="tab" aria-selected={active}
+          <div key={key} className={`tab${active ? ' on' : ''}${tab.preview ? ' preview' : ''}`} role="tab" aria-selected={active}
+            onDoubleClick={(e) => {
+              if (tab.preview && !e.target.closest('.tab-x')) requestTab(tab.page, tab.param, tab.query)
+            }}
             onContextMenu={(e) => { e.preventDefault(); closeOthers(tab) }}
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
@@ -77,6 +101,24 @@ export default function TabStrip({ specs, sessions }) {
           </div>
         )
       })}
+      {activeActions.length > 0 && (
+        <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
+          {activeActions.map((action) => {
+            const label = action.disabled ? (action.disabledReason || action.label) : action.label
+            return (
+              <div key={action.key || `${action.document}:${action.id}`} className="document-action">
+                <IconButton icon={action.icon} size={14} label={label}
+                  className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
+                  data-action={action.id}
+                  aria-pressed={action.pressed}
+                  disabled={action.disabled}
+                  onClick={action.onClick} />
+                {action.menu}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

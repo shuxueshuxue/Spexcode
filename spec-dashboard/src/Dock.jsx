@@ -52,22 +52,10 @@ function SessionDock({ sessions, activeId }) {
   )
 }
 
-export default function Dock({ mode, setMode, specs, sessions, focusId, activeSessionId }) {
-  const t = useT()
+export default function Dock({ mode, specs, sessions, focusId, activeSessionId }) {
   const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
   return (
     <aside className="dock" style={{ width }}>
-      <div className="dock-modebar" role="tablist" aria-label={t('dockModes.aria')}>
-        <button type="button" role="tab" aria-selected={mode === 'explorer'} className={`dock-mode${mode === 'explorer' ? ' on' : ''}`}
-          data-tip={t('dockModes.explorer')} aria-label={t('dockModes.explorer')} onClick={() => setMode('explorer')}>
-          <Icon name="explorer" size={15} />
-        </button>
-        <button type="button" role="tab" aria-selected={mode === 'sessions'} className={`dock-mode${mode === 'sessions' ? ' on' : ''}`}
-          data-tip={t('dockModes.sessions')} aria-label={t('dockModes.sessions')} onClick={() => setMode('sessions')}>
-          <Icon name="sessions" size={15} />
-        </button>
-        <span className="dock-mode-title">{t(mode === 'sessions' ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
-      </div>
       {mode === 'sessions'
         ? <SessionDock sessions={sessions} activeId={activeSessionId} />
         : <FileTree specs={specs} focusId={focusId} embedded />}

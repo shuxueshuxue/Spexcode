@@ -47,6 +47,9 @@ const ICONS = {
   command: { node: <path d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z" /> },
   keyboard: { node: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" /></> },
   'git-merge': { node: <><circle cx="6" cy="6" r="3" /><circle cx="18" cy="18" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" /></> },
+  // A file-shaped diff mark is intentionally distinct from the merge graph: this opens a document surface,
+  // while git-merge acts on a review proposal.
+  'file-diff': { node: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /><path d="M9 12h6M9 16h3" /></> },
   'rotate-ccw': { node: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></> },
   'list-checks': { node: <><path d="m3 7 2 2 4-4" /><path d="m3 17 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></> },
   archive: { node: <><path d="M21 8v13H3V8" /><path d="M1 3h22v5H1z" /><path d="M10 12h4" /></> },
@@ -80,16 +83,22 @@ const ICONS = {
     node: <><path d="M9 2.2 16 5.8 9 9.4 2 5.8Z" /><path d="M2 9.4 9 13 16 9.4" /><path d="M2 12.8 9 16.4 16 12.8" /></>,
   },
 
-  // ——— the two dock toggles, drawn on the same 18-grid as the rail glyphs above ———
+  // ——— the dock/context marks, drawn on the same 18-grid as the rail glyphs above ———
   // ONE layout mark, mirrored: the same frame with the LEFT column filled for the left finding dock
-  // ([[side-nav]]'s rail explorer, [[dock-modes]]'s explorer tab) and the RIGHT column filled for the
-  // right context dock ([[context-dock]]'s toggle). They must read as a pair, because the two buttons
+  // ([[side-nav]]'s rail explorer) and the RIGHT column filled for the
+  // right context dock ([[context-dock]]'s toggle). They read as a pair, because the two buttons
   // are a few pixels apart and each one's whole message is WHICH SIDE it opens; a bare divider line left
   // both as plain frames that read as a folder or a card. Tinting the panel — not just outlining it —
   // is what makes the side unmistakable at 14–18px, so the fill is the glyph, not decoration.
   explorer: {
     vb: 18, sw: 1.4,
     node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
+  },
+  // A session finding projection: three list rows with status points. It is deliberately not a terminal
+  // prompt or a framed panel, so the rail's sessions button has one meaning wherever it appears.
+  'session-list': {
+    vb: 18, sw: 1.4,
+    node: <><circle cx="3" cy="4.5" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="9" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="13.5" r="1" fill="currentColor" stroke="none" /><path d="M6 4.5h9.5M6 9h9.5M6 13.5h9.5" /></>,
   },
   'panel-right': {
     vb: 18, sw: 1.4,

@@ -164,14 +164,14 @@ through `launch.js`, while [[launch]]'s backend owner performs the command-plugi
 including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
 background fire) and never expands a plugin body itself.
 
-An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
-base surfaces while live: its interactive tmux **Terminal** (SessionTerm), which is the default input surface,
-and the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
-liveness and is always Conversation. The selected face is navigation state on the session object address:
-`#/sessions/<id>?surface=terminal|conversation`; a bare `#/sessions/<id>` resolves the persisted base face.
-An explicit query writes the per-session preference through [[session-surface]]. There is no in-console face
-switch control or second tab rail: changing face navigates the same session parameter with a different query,
-replacing the current object slot; ctrl/⌘ holding uses the ordinary tab latch to keep a second object tab.
+An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
+published resource faces selected by the one session object address:
+`#/sessions/<id>?surface=conversation|terminal|diff|resource:<resourceTabKey>`; a bare
+`#/sessions/<id>` resolves the persisted base face. The URL is the only selector and is a pure function of the
+address; only a user gesture may navigate it. There is no in-console resource strip, dialog, or face-switch rail.
+Opening a published resource creates a normal object tab whose identity is the canonical address, dedupes and
+focuses an existing tab, and leaves the terminal tab in the strip. Closing that tab closes the resource view;
+the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
@@ -191,20 +191,18 @@ whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never 
 id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
-xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
-genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
-available commands. Terminal/Conversation and Evals are not toolbar tabs. The shell's top [[tab-strip]] names
-the session object with an i18n face suffix; Evals keeps its one canonical scoped address and is reached by
-navigation. The picker itself is a compact circular plus control, so it reads as an add/open
-action rather than an extension of Eval. It is deliberately a step smaller and quieter than a command tool — thin
-neutral ring, accent only on hover and focus: it opens a menu of things to look at, it does not act on the session,
-and a control sized and weighted like the merge/stop tools would claim authority it does not have.
+xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
+session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,
+diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
+top [[tab-strip]] names the session object with an i18n face suffix; Evals keeps its one canonical scoped address
+and is reached by navigation.
 The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
 the plus menu, never a duplicate. Clicking a filename in the top-right files dropdown uses this same open/select operation for its
-file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
-selected only when its session already is. Each resource tab exposes a close icon and a right-side **refresh** action:
+file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service
+never creates or selects a visible tab automatically. It raises the existing unread signal; clicking that signal is
+the user gesture that opens/focuses its one address tab. Each resource tab exposes a close icon and a right-side **refresh** action:
 for a file it rereads the current preview response, while for a web resource it recreates the same-origin iframe and
 requests the current local-service response. A selected file also gets **download** and **copy path**, the same actions
 offered by the files dropdown; those file-specific actions do not appear for a web resource. Removing a published
@@ -257,17 +255,14 @@ still blind-spot mark when it does not, and an accessible name naming the door i
 it. The door is already that anchor, so opening it is the whole repair; the console never fetches a summary
 of its own to fill the gap.
 
-The toolbar wears the app-chrome background with a bottom separator, so it reads
-**visibly apart from the console** below it in both light and dark themes (the old flat strip blended
-into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
-focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
-narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, its adjacent
-Eval tab, resource tab strip, picker, and every currently available icon tool inside the pane. The current surface and Eval stay as
-one fixed left anchor while resource tab labels clip and their strip scrolls horizontally rather than growing a second toolbar line.
-The bar never grows or
-overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
-all app themes, English/Chinese, lifecycle and liveness combinations, and Command Box visibility; a persisted wide session list
-yields at the desktop/mobile boundary rather than crushing the terminal lane until toolbar controls clip.
+The session document renders no internal toolbar. Its merge, menu, resource picker, diff door, Command Box,
+relaunch, and selected-resource actions register with the shell's [[document-actions]] slot at the tab row's
+right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness;
+disabled merge remains visible with the exact localized availability reason as its tooltip. The resource picker
+is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
+Surface choice is address state (`?surface=…`), not an in-document switch control; the diff door uses the distinct
+`file-diff` glyph and navigates to the diff address. Other document kinds register nothing, so their tab-row edge
+is blank.
 The TUI owns keyboard input through xterm's native IME-aware path ([[terminal-input]]), while text still
 selects and the wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
@@ -310,12 +305,12 @@ Codex and Claude inside true tmux.
 
 Around both channels, **console chrome is pointer-inert for focus** (the panel-wide blanket;
 [[terminal-input]] and [[focus-return]] carry the contract): pressing rows, zone headers, parent disclosure rows, the
-resizer, pills, toolbar buttons, or the launcher pop acts without taking focus, so the current sink — TUI,
+resizer, pills, document-action buttons, or the launcher pop acts without taking focus, so the current sink — TUI,
 Command Box, or the New composer — keeps typing focus through any pointer work on the console, and a pop
 that does take focus returns it on exit. Only the composers' own textareas, the rename input, and the xterm
 screen take pointer focus.
 
-[[command-box]] is the authored control channel, opened by its resident toolbar icon or the reserved single-
+[[command-box]] is the authored control channel, opened by its resident document-action icon or the reserved single-
 modifier `Alt+I` chord. It floats in the lower middle, never reserves terminal layout, and uses
 [[composer]]'s fixed footer with upward auto-growth. The draft belongs to the session and survives closing,
 tab switches, and routing to Evals. Escape or an outside click closes it and returns focus to xterm; an
@@ -330,7 +325,7 @@ repeat something that never landed. Once either result settles, it visibly ackno
 [[transient-notices]] stack — a short-lived delivery/failure result outside the Command Box's geometry —
 before a successful send clears the draft and closes the box. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
-operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
+operate the board. One registry (`sessionCommands.js`) feeds those rows and every document-action twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
 worktree; `/close` performs the soft terminal transition into the permanent archive place ([[archive]]),
 removing the worktree while retaining the branch, record, and conversation; `/merge` is offered
@@ -398,29 +393,27 @@ chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥
 key handling deliberately **falls through unhandled** so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
-can actually own.) The toolbar's **one right-side tool group** renders the same board-command registry. The top-right [[files]] icon is grey when the
+can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. It and the pane-backed Terminal/Conversation switch are adjacent icon controls, without a
-painted divider, wrapper boundary, or extra gutter separating them from the other right-toolbar tools: the whole
+hover tooltips. The base surface is selected by its route address; there is no pane-backed Terminal/Conversation
+switch control, painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live. The
-right-side action group is surface-specific: every selected resource shows its one refresh tool; a selected web has
-no file download/copy or merge tool, and the Terminal base surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
+document-action set is surface-specific: every selected resource shows its one refresh tool; a selected web has
+no file download/copy actions. Merge is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
 close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
 localized tooltip and accessible reason. An activation is one plain `POST /merge`: no preliminary review read,
 request body, idempotency key, Git identifier, or client-side merge authority. Disabled merge never appears as a
-typed `/merge` command and never dispatches. Command Box is the resident tool and always sits at the group's right edge; merge and relaunch
-occupy the fixed tools to its left on the Terminal surface, so proposal/lifecycle/liveness changes do not move
-merge. Every visible
+typed `/merge` command and never dispatches. Every visible
 action uses one shared compact icon-toolbutton primitive and a familiar [[icon-system]] / Lucide mark
 (command, git-merge, rotate/relaunch), with its registry identity colour; there is no emoji, visible text
-label, or toolbar-local icon/action mapping. The registry remains the single row that decides availability,
+label, or document-local icon/action mapping. The registry remains the single row that decides availability,
 colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution. Command Box exposes
 `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) also exposes the same
 primitive's relaunch action, and review is **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
-permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the toolbar entry
+permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the document-action entry
 or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
 consumed but inert for offline/queued sessions, using the same registry judgment as the button. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
@@ -487,7 +480,7 @@ SessionWindow, and phone Sessions list share this grouping + compact one-line la
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
 everywhere they appear (window row, console sidebar row, @-mention and search rows, the mobile card).
-The toolbar deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
+The document-action slot deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour

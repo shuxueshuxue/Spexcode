@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/tabs.js
 related:
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/EmptyView.jsx
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
@@ -19,8 +20,7 @@ related:
 `#/spec/<id>`, `#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/sessions/new`,
 `#/evals/<node>/<scenario>`, and `#/issues/<id>`. `#/graph` (including `#/graph/<node>` focus), bare
 `#/sessions`, bare `#/evals`, and bare `#/issues` are never tabs. This is why the strip is empty on a fresh
-`#/graph` load and why returning to the graph does not mint a tab. From a finding surface, opening an object
-with no active slot appends the first tab; that is the intended no-slot branch, not an exception.
+`#/graph` load and why returning to the graph does not mint a tab.
 
 **A tab is a route.** That is the whole design, and it is why this is not a new navigation mechanism: the
 address layer already carried `page + param + query` and already made every destination copyable and
@@ -34,24 +34,41 @@ shareable as before. The strip renders from the first tab: it is where the curre
 and chrome that only appears when a second document exists would jump the layout at exactly the moment of
 the reader's first hold.
 
-**Looking is not holding.** The strip is the working set — what the reader has deliberately kept — and
-browsing must never grow it within one page kind. The slot rule is complete:
+**There is no address-replacement semantic.** Once a resident tab exists, its address is immutable. The only
+exception is the single preview slot, and its type fence is deliberately narrow:
 
-| gesture | current active tab and destination | result |
+- only `spec` and `file` documents may be preview;
+- `sessions`, `evals`, and `issues` details are always resident;
+- opening a preview replaces only the previous preview, never a resident tab;
+- localStorage migration marks every legacy tab resident.
+
+The type fence is the strongest protection: session/terminal capability is absent from the preview type, so a
+session can never be accidentally displaced by document browsing. This follows orca's
+`canReplacePreviewContentType` principle: capability that is absent in the type is not a runtime convention
+that can drift.
+
+**Looking is not holding.** Explorer single-click opens a spec/file in preview; ctrl/⌘-click, row double-click,
+graph node double-click, and tab double-click promote/open a resident tab. Graph node single-click remains
+focus-only. Opening another document from a preview promotes the current preview first, then appends the new
+resident document. The slot rule is complete:
+
+| gesture | destination | result |
 | --- | --- | --- |
-| plain navigation | same `page` kind | replace the active tab's slot |
-| plain navigation | different `page` kind, or no active document slot | append a tab |
-| ctrl/⌘ navigation | any kind | append a tab (the one-shot `requestTab` latch) |
+| explorer single-click | spec/file | replace the one preview slot, or append it when empty |
+| resident navigation | any document kind | append a tab; never replace an existing address |
+| preview navigation | spec/file | replace only the previous preview |
+| ctrl/⌘, double-click, or promotion | any document kind | append/promote a resident tab |
 
-The latch is consumed by the strip's own route subscription, so no finding surface touches strip state.
-Before this boundary every glance became a tab and ten minutes of browsing turned the strip into a history
-list — a different, worse widget. The object-only registry still means the first opened object is always kept,
-while a fresh `#/graph` or bare list route never creates a tab.
+The mode latch is consumed by the strip's own route subscription, so finding surfaces do not touch strip state.
+The object-only registry still means a fresh `#/graph` or bare list route never creates a tab.
 
 **Identity is the canonical hash.** Two routes that print the same address *are* the same tab, so
 re-opening an already-open document activates it instead of stacking a duplicate, and nothing has to dedupe
 by hand. The current address is always in the strip — by replacement or by keep — because a strip that
 claimed to show what is open while the reader looked at something absent from it would be lying.
+
+**A preview is visibly italic and weakened.** It is still a real route and can be copied, reloaded, closed, or
+promoted; the visual treatment names its replaceable status without inventing another tab kind.
 
 **Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
 the reason every editor uses it: the reader's eye is already where the closed tab was.
@@ -79,3 +96,7 @@ names nothing is still the address the reader typed, and blanking it would hide 
 
 **Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
 the second pane. The strip only names the gesture; the pane is workspace state, not a tab.
+
+The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
+not another navigation surface: changing tabs changes the registered buttons, and a document with no registered
+actions leaves the edge blank.

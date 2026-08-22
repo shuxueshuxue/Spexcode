@@ -2,7 +2,7 @@
 title: side-nav
 status: active
 hue: 210
-desc: The modern-app skeleton — a left icon rail with one entry per top-level page (graph · sessions · evals · issues · settings), each page at its own URL (#/…, with list-page filter state in the hash's query string) so it can be bookmarked, reloaded, and history-walked; list→detail navigation is a history PUSH, browser Back the return path.
+desc: The modern-app skeleton — a left icon rail whose explorer and sessions entries are dock projection controls, while graph · evals · issues · settings remain addressable page anchors.
 code:
   - spec-dashboard/src/SideBar.jsx#SideBar
   - spec-dashboard/src/SideBar.jsx#ENTRIES
@@ -34,13 +34,14 @@ restores the list.
 ## expanded spec
 
 - **The rail carries two kinds of entry, finding before opening.** Under the project chip sit the
-  workspace's FINDING controls — the explorer-dock toggle and search, plain buttons that change what helps
-  you look, lit while their surface is up, rendered only inside a workspace (the cold review fast-path
-  mounts this rail with no WorkspaceProvider, and a dock toggle with no dock would be a lie) — and below
-  them the DOCUMENT OPENERS, each a real anchor naming an address. The order is the mockup's and VS Code's
-  alike: what helps you look, then where you can go.
-- **One rail, five openers — every opener a real anchor.** A compact, always-visible **40px** icon rail on the app's left
-  edge names the addressable kinds: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
+  workspace's FINDING controls — search plus the dock's two projection buttons, explorer and sessions.
+  Those two are plain buttons, not addresses: each changes what helps you look and is lit only while its
+  projection is up. The dock starts open in explorer; clicking the active projection collapses it, while
+  clicking the other opens the dock and selects that projection. They render only inside a workspace (the
+  cold review fast-path has no WorkspaceProvider). Below them sit the DOCUMENT OPENERS, each a real anchor
+  naming an address. The order is the mockup's and VS Code's alike: what helps you look, then where you can go.
+- **One rail, four openers — graph, evals, issues, settings.** A compact, always-visible **40px** icon rail on the app's left
+  edge names the addressable kinds: Spec Node Graph, Evals, Issues, and Settings pinned at the
   bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in
@@ -59,7 +60,8 @@ restores the list.
 - **Static graph projection preserves the silhouette, not false doors.** [[public-spec-graph]] keeps the
   familiar rail so visitors can see the product's full shape, but only Spec Node Graph is an anchor. Sessions,
   Evals, Issues, and Settings render as muted `aria-disabled` icons with no `href`, handler, or keyboard
-  route; they must neither navigate nor wake any live transport. The live dashboard retains five anchors.
+  route; they must neither navigate nor wake any live transport. The live dashboard's sessions entry is a
+  dock projection button; the live dashboard retains four anchors.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
   unknown hash lands here) or `#/graph/<node>` (a finding-surface focus, never a tab), `#/sessions` (+
   `#/sessions/<sel>` deep-linking an object tab), `#/evals` (+
@@ -71,8 +73,8 @@ restores the list.
   behind plain gateways with no index.html fallback, and a hash route needs nothing from any server.
   `route.js` is the whole route layer (parse — path + query, hash construction, navigate, one hashchange
   hook, legacy normalization); the object-level address vocabulary over it is [[address-routing]].
-- **The rail is the finding layer; the strip is the object layer.** Rail destinations remain graph, sessions,
-  evals, issues, and settings. Only an address with an object parameter enters the strip, as defined by
+- **The rail is the finding layer; the strip is the object layer.** Rail destinations remain graph, evals,
+  issues, and settings; explorer and sessions are dock projection buttons. Only an address with an object parameter enters the strip, as defined by
   [[tab-strip]]/[[view-registry]]; bare board/list routes stay navigable but never accumulate.
 - **Pages push; list→detail pushes; filter changes push; automatic echoes replace.** Switching pages
   pushes a history entry. Opening a DETAIL page from its list is ALSO a push — measured on GitHub: history
@@ -124,8 +126,9 @@ restores the list.
   the current project and becomes a single `/projects` login door; it never opens a fleet menu or leaks
   catalog rows. A direct-project guest therefore gets an explicit repair path without seeing global data.
 - **One global ⌥ vocabulary; Esc never switches pages.** Page switching is the **⌥ command family**,
-  window-global on every page: `⌥1..⌥5` jump straight to a page in rail order (graph · sessions · evals ·
-  issues · settings — the rail tooltips carry the hints), `⌥N` to the New Session composer, `⌥F` to the
+  window-global on every page: `⌥1..⌥5` jump straight to a page in the keyboard's stable address order
+  (graph · sessions · evals · issues · settings — `⌥2` deliberately navigates to the sessions launch hero,
+  even though the rail's sessions button only changes the dock projection), `⌥N` to the New Session composer, `⌥F` to the
   Evals list (the leading loss surface, so the letter door and the bare `f` agree) — matched by physical
   key (`e.code`, the mac ⌥-dead-key rule), ⌥-only so ⌘/⌃ chords stay the browser's. The family is reserved
   even over the console's raw-key nav mode (the same standing as its `⌥+I` toggle — a TUI never sees

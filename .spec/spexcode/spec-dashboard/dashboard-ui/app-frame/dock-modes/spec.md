@@ -1,12 +1,13 @@
 ---
-title: dock-modes
+title: dock-projection
 status: active
 hue: 210
-desc: The left finding dock's explorer and sessions projections.
+desc: The left finding dock's explorer and sessions projections, selected by the rail.
 code:
   - spec-dashboard/src/Dock.jsx
 related:
   - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/src/SideBar.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/SessionWindow.jsx
@@ -17,10 +18,12 @@ related:
 
 The dock is one finding surface with two projections: **explorer** finds governed files and spec nodes;
 **sessions** finds active sessions. The mode is a local workspace preference, persisted like dock visibility,
-because it answers what this window is looking for rather than naming a document in the URL.
+because it answers what this window is looking for rather than naming a document in the URL. The mode belongs
+to the rail's activity-bar buttons, not to a second control strip inside the dock.
 
-The mode switch belongs at the dock's top edge. It changes only the finding projection; it never changes the
-active document, the tab list, or session selection. Explorer rows retain [[file-tree]]'s route behavior.
+The rail mode buttons change only the finding projection; they never change the active document, the tab list,
+or session selection. Clicking the already-selected button closes the dock; clicking the other opens the dock
+in that projection. Explorer rows retain [[file-tree]]'s route behavior.
 Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]: a plain click navigates to
 `sessions/<id>` in the current slot, while ctrl/⌘-click calls `requestTab` to hold a new document.
 
@@ -41,4 +44,5 @@ four-region model made literal — FINDING on the left, HOLDING in the center, C
 the bottom — so one window cannot expose two competing navigation lists.
 
 The dock mode is not a second navigation model and does not read the global address. Shell owns the mode
-preference and passes the selected projection its board data.
+preference and passes the selected projection its board data. The dock renders content only: the explorer's
+`EXPLORER` count head or the sessions list's `+` and archive controls. There is no dock modebar.

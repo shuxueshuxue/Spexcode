@@ -25,6 +25,15 @@ test('session eval face redirects to the canonical scoped Evals address', () => 
   assert.equal(addressHash(sessionSurfaceAddress('abc', 'evals')), '#/evals?q=is%3Aeval%20scope%3Aabc')
 })
 
+test('resource faces stay on the session object address and round-trip as a normal tab identity', () => {
+  const address = sessionSurfaceAddress('abc', 'resource:abc:web:preview')
+  assert.equal(addressHash(address), '#/sessions/abc?surface=resource%3Aabc%3Aweb%3Apreview')
+  assert.deepEqual(parseRoute(addressHash(address)), {
+    page: 'sessions', param: 'abc', query: { surface: 'resource:abc:web:preview' },
+  })
+  assert.equal(sessionSurfaceHash(addressHash(address)), null)
+})
+
 // the empty workspace is an address ([[tab-strip]]): it can be landed on, reloaded and left. It names no
 // object, so like settings it never carries a selector.
 test('parseRoute knows the empty workspace and gives it no selector', () => {

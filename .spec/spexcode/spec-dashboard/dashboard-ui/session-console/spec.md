@@ -397,7 +397,20 @@ cancel affordance — so one failed item never collapses a batch into a generic 
 
 Pane-backed terminals are **warm and always connected**: every live pane mounts and opens its socket when the
 console is first entered — never lazily on focus — and stays mounted even while the console is closed, so
-switching tabs **never loses your place** (socket + last painted buffer survive), New Session included. A
+switching tabs **never loses your place** (socket + last painted buffer survive), New Session included.
+
+**A warm terminal belongs to a live pane, and a row must SAY it has one.** The mount gate asks for a
+positive live report — unarchived and online — never for the absence of a dead state. That distinction is
+the whole rule, because the console's list is the working sessions JOINED with the archive index, and an
+archive-index row is a row *summary*: an id, a title, a `closedAt`, and no liveness, harness, or
+capabilities at all. A gate phrased as "not offline" reads that **absence** as alive and mounts a terminal
+plus a socket for every session the project ever retired — measured on this project's board, 66 of 76 warm
+terminals and 66 of 76 sockets belonged to closed sessions, and their 4,290 never-painted row elements were
+the whole of the console's return-to-tab cost ([[workspace-shell]]). The paired half keeps the surface
+total: whatever has **no** live pane — archived, offline, `unknown`, headless — is shown as the
+Conversation, so no selection can land on a session with neither layer mounted.
+
+A
 pane-backed Conversation mounts only on its first visit, then remains mounted after deselection or going offline
 so its timeline cursor and rendered history survive revisits; its refresh timer runs only while selected.
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation

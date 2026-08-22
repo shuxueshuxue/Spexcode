@@ -12,6 +12,7 @@ import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
+import { locatePart } from './proseSelection.js'
 import { EVAL_QUERY_DEFAULT, setToken } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
 
@@ -94,20 +95,34 @@ function colAlign(cell) {
 // drops the leading `# title` line (the header already shows it). Exported: the issues page's detail pane
 // ([[issues-view]]) renders issue bodies/replies through this same renderer, so issue markdown and spec
 // markdown read as one dialect.
-export function SpecBody({ body }) {
+//
+// LINE PROVENANCE ([[prose-selection]]): rendering is lossy — paragraphs re-flow, markers are eaten, blank
+// lines vanish — so a reader who selects prose can never be told which lines of the file they picked by
+// measuring the rendered text. The tokenizer already knows: it walks the source line by line. So each block
+// it emits is STAMPED with the body lines it came from, and the selection layer reads the stamps back.
+// `lineBase` is the 1-based body line of this text's first line; 0 means the caller cannot vouch for one
+// (an issue body is not a spec body) and then nothing is stamped at all — a wrong line number is worse
+// than no addressing.
+export function SpecBody({ body, lineBase = 0 }) {
   if (!body) return null
-  const lines = body.replace(/^#\s+[^\n]*\n+/, '').split('\n')
+  const stripped = body.replace(/^#\s+[^\n]*\n+/, '')
+  // the dropped title line(s) shift every stamp below them; count what the strip actually consumed rather
+  // than assuming one line, since the regex also eats the blank lines that followed it.
+  const base = lineBase > 0 ? lineBase + (body.split('\n').length - stripped.split('\n').length) : 0
+  const at = (a, b) => (base ? { 'data-l0': base + a, 'data-l1': base + b } : null)
+  const lines = stripped.split('\n')
   const out = []
-  let i = 0, k = 0, inFence = false
+  let i = 0, k = 0
   while (i < lines.length) {
     const t = lines[i].trim()
+    const from = i
     if (/^```/.test(t)) {
       const buf = []; i++
       while (i < lines.length && !/^```/.test(lines[i].trim())) buf.push(lines[i++])
       i++ // closing fence
-      out.push(<pre className="doc-pre" key={k++}><code>{buf.join('\n')}</code></pre>)
+      out.push(<pre className="doc-pre" key={k++} {...at(from, Math.min(i, lines.length) - 1)}><code>{buf.join('\n')}</code></pre>)
     } else if (/^#{1,6}\s+/.test(lines[i])) {
-      out.push(<h4 className="doc-h" key={k++}>{inline(lines[i].replace(/^#+\s+/, ''))}</h4>); i++
+      out.push(<h4 className="doc-h" key={k++} {...at(from, from)}>{inline(lines[i].replace(/^#+\s+/, ''))}</h4>); i++
     } else if (t.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) {
       const head = tableCells(lines[i])
       const aligns = tableCells(lines[i + 1]).map(colAlign)
@@ -117,7 +132,7 @@ export function SpecBody({ body }) {
         rows.push(tableCells(lines[i])); i++
       }
       out.push(
-        <table className="doc-table" key={k++}>
+        <table className="doc-table" key={k++} {...at(from, i - 1)}>
           <thead><tr>{head.map((c, j) => <th key={j} style={aligns[j] ? { textAlign: aligns[j] } : undefined}>{inline(c)}</th>)}</tr></thead>
           <tbody>{rows.map((r, ri) => (
             <tr key={ri}>{head.map((_, ci) => <td key={ci} style={aligns[ci] ? { textAlign: aligns[ci] } : undefined}>{inline(r[ci] ?? '')}</td>)}</tr>
@@ -125,9 +140,15 @@ export function SpecBody({ body }) {
         </table>
       )
     } else if (/^-\s+/.test(t)) {
+      // each item is stamped on its own: a list is one block to the tokenizer but a reader selects one
+      // bullet, and the smallest addressable region should be the smallest thing the renderer can name.
       const items = []
-      while (i < lines.length && /^-\s+/.test(lines[i].trim())) items.push(lines[i++].trim().replace(/^-\s+/, ''))
-      out.push(<ul key={k++}>{items.map((it, j) => <li key={j}>{inline(it)}</li>)}</ul>)
+      while (i < lines.length && /^-\s+/.test(lines[i].trim())) { items.push({ text: lines[i].trim().replace(/^-\s+/, ''), line: i }); i++ }
+      out.push(
+        <ul key={k++} {...at(from, i - 1)}>
+          {items.map((it, j) => <li key={j} {...at(it.line, it.line)}>{inline(it.text)}</li>)}
+        </ul>
+      )
     } else if (t === '') {
       i++
     } else {
@@ -139,7 +160,7 @@ export function SpecBody({ body }) {
         if (l.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) break
         buf.push(l); i++
       }
-      out.push(<p key={k++}>{inline(buf.join(' '))}</p>)
+      out.push(<p key={k++} {...at(from, i - 1)}>{inline(buf.join(' '))}</p>)
     }
   }
   return <div className="doc-body">{out}</div>
@@ -159,15 +180,20 @@ function PartCard({ kind, title, owner, ownerLabel, note, children }) {
     </section>
   )
 }
-function TwoPart({ parts }) {
+// A part is a slice of the body with its heading removed, so its blocks must be numbered against the WHOLE
+// body or a manual edit would put lines back in the wrong place ([[prose-selection]]). `locatePart` places
+// the slice and verifies the placement; an unplaceable part renders exactly as before, just unstamped.
+function TwoPart({ parts, body }) {
   const t = useT()
+  const rawAt = locatePart(body, parts.rawSource)
+  const expandedAt = locatePart(body, parts.expandedSpec)
   return (
     <div className="spec-parts">
       <PartCard kind="raw" title={t('nodeView.rawTitle')} owner="human" ownerLabel={t('nodeView.rawOwner')} note={t('nodeView.rawNote')}>
-        <SpecBody body={parts.rawSource} />
+        <SpecBody body={parts.rawSource} lineBase={rawAt?.startLine || 0} />
       </PartCard>
       <PartCard kind="expanded" title={t('nodeView.expandedTitle')} owner="agent" ownerLabel={t('nodeView.expandedOwner')} note={t('nodeView.expandedNote')}>
-        <SpecBody body={parts.expandedSpec} />
+        <SpecBody body={parts.expandedSpec} lineBase={expandedAt?.startLine || 0} />
       </PartCard>
     </div>
   )
@@ -178,8 +204,10 @@ function TwoPart({ parts }) {
 // (id, version) so re-opening is instant, but a NEW version (the board carries the live version) misses the
 // stale entry and refetches — the detail prose can never lag the version badge above it. A non-OK response is
 // shown but never cached, so a transient 404 during a backend reload can't poison the node until a reload.
+// Exported so the prose selection layer ([[prose-selection]]) reads the SAME body the pane rendered, from
+// the same per-(id,version) cache — two fetches could disagree about the text a line number points at.
 const contentCache = new Map()
-function useSpecContent(id, version, { embedded = false, publicGraph = false } = {}) {
+export function useSpecContent(id, version, { embedded = false, publicGraph = false } = {}) {
   const key = `${publicGraph ? 'public:' : ''}${id}@${version ?? ''}`
   const [content, setContent] = useState(() => contentCache.get(key) ?? null)
   useEffect(() => {
@@ -299,7 +327,7 @@ export function SpecPane({ node, graphOnly = false, onSelection, viewer = null }
         if (content === null && node.body == null) return <div className="pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
         const body = node.body ?? content?.body ?? ''
         const parts = node.parts ?? content?.parts ?? null
-        return parts ? <TwoPart parts={parts} /> : <SpecBody body={body} />
+        return parts ? <TwoPart parts={parts} body={body} /> : <SpecBody body={body} lineBase={1} />
       })()}
     </div>
   )

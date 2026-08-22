@@ -18,6 +18,14 @@ selection is context, not an instruction and not an automatic launch. Its token 
 JSON payload contains `path`, `startLine`, `endLine`, and the exact selected `text`; JSON escaping keeps
 arbitrary source lossless while the visible metadata remains readable in a prompt transcript.
 
+A selection from a spec node's **prose** ([[prose-selection]]) is the same token with one more field: the
+node id. That is the only thing the two flavours do not share, and it is not decoration — a spec body is
+addressed by node, the address its reader resolves as `[[id]]`, while a source file is addressed by path.
+Both carry `path` regardless, so a token stays locatable without the board, and both are read by the same
+validator, so a `node` that is present but empty is not an address and its token is refused like any other
+malformed one. The chip leads with whichever address names the thing: the node for prose, the path for
+source.
+
 The composer parses valid tokens when a seeded prompt opens, renders each as a removable attachment chip,
 and leaves the surrounding text as the human's editable intent. Submission serialises the chip(s) back into
 the same prompt text and uses the existing `createSession` entry point. Malformed tokens remain visible text;

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/tabs.js
 related:
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/EmptyView.jsx
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
@@ -41,8 +42,18 @@ by hand. The current address is always in the strip — by replacement or by kee
 claimed to show what is open while the reader looked at something absent from it would be lying.
 
 **Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
-the reason every editor uses it: the reader's eye is already where the closed tab was. Closing the last one
-falls back to the board rather than leaving an empty frame.
+the reason every editor uses it: the reader's eye is already where the closed tab was.
+
+**Closing the LAST tab yields the explicit empty state**, `#/empty` — not the graph. The graph is a
+document, not the floor the workspace falls onto: navigating to it on a close meant a gesture that asked for
+nothing put a document on screen, and the board appeared to surface from underneath the reader's own work,
+which is the disorientation this rule exists to remove. An empty workspace is a real state and it says so —
+the frame stays whole (rail, dock, status bar), the content area names the state, and it offers the three
+ways back into a document: search, the explorer, and the graph as an ordinary anchor like any other
+document's. `empty` is an ADDRESS so the state can be landed on, reloaded and left, but it is not a
+document ([[view-registry]]): a tab for it would be the one address that contradicts the strip it sits in.
+Only closing the last tab mints it — a fresh load with no tabs still opens the graph, because starting with
+nothing held is not the same event as putting your last document down.
 
 `settings` is navigable but never accumulates. It is a destination people bounce off, not a document they
 keep open, and a strip that filled with visits would stop being a list of what you are working on.

@@ -53,6 +53,7 @@ const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
+const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
 const openSession = (id) => navigate('sessions', id)
 
@@ -73,6 +74,8 @@ function SettingsView() { return <Settings /> }
 // `document: true` marks a view the tab strip may accumulate. `settings` is a destination people bounce off
 // rather than a document they keep open, and the graph is the workspace's home rather than one of its
 // documents — a strip that filled with either would stop being a list of what you are working on.
+// `empty` is what the workspace shows when it holds nothing; a tab for it would be the one address that
+// contradicts its own strip, so it is emphatically not a document either.
 export const VIEWS = {
   graph:    { component: GraphView,    document: true,  className: 'view-graph' },
   spec:     { component: SpecView,     document: true,  className: 'view-spec' },
@@ -81,6 +84,7 @@ export const VIEWS = {
   evals:    { component: EvalsView,    document: true,  className: 'view-evals' },
   issues:   { component: IssuesView,   document: true,  className: 'view-issues' },
   settings: { component: SettingsView, document: false, className: 'view-settings' },
+  empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
 export const viewFor = (page) => VIEWS[page] || VIEWS.graph

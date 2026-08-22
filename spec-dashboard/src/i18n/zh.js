@@ -65,6 +65,13 @@ export default {
     noScenarios: '没有声明场景',
     states: { pass: '通过', fail: '失败', stalePass: '旧通过', staleFail: '旧失败', missing: '未测量', empty: '未测量' },
   },
+  empty: {
+    title: '当前没有打开的文档',
+    hint: '你关掉了最后一个文档。选一个打开即可——什么都没丢，只是现在标签栏是空的。',
+    search: '搜索节点',
+    explorer: '在资源管理器里浏览',
+    graph: '打开图文档',
+  },
   tabs: {
     aria: '已打开的文档',
     close: '关闭标签',

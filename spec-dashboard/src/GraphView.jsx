@@ -14,7 +14,7 @@ import { navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
-import { firesKey, keysOf } from './bindings.js'
+import { firesKey, keysOf, withShortcut } from './bindings.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
@@ -107,7 +107,8 @@ function GraphView({ param, query }) {
   // the `?` legend is the GRAPH's keymap, so the graph contributes it and it leaves the bar when the graph
   // does. The project name is workspace identity and belongs to the shell — splitting them was the first
   // thing the view boundary made obvious. `-Infinity` pins help to the far end.
-  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?', tooltip: t('hud.helpTitle'), onClick: () => setLegend((v) => !v) })
+  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
+    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: () => setLegend((v) => !v) })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)

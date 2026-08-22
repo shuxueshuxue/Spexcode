@@ -18,9 +18,11 @@ export function mergeAvailability(session = {}) {
 export const UI_COMMANDS = [
   // The resident Command Box opener pins to the toolbar's right edge. It is toolbar-only: direct xterm
   // input is the default, so there is no typed `/type` command or takeover mode.
+  // `shortcut` names the keymap action that ALSO reaches this command, by id. The tooltip reader resolves
+  // it against the live registry, so the printed chord follows a rebind and cannot be a copy that rots.
   { name: 'command', color: 'blue', icon: 'command', button: true, typed: false, pressed: true, anchor: 'right',
     when: (session) => !!session?.status && session.status !== 'offline' && session.status !== 'queued' && session.liveness !== 'offline',
-    labelKey: 'session.commandBtn', titleKey: 'session.commandTitle' },
+    labelKey: 'session.commandBtn', titleKey: 'session.commandTitle', shortcut: 'shell.commandBox' },
   // eval's surface is the session-scoped Evals page, not a console-local tab or lifecycle button — the typed
   // `/eval` navigates through the same permanent door rendered in the toolbar (`button: false`, available for
   // every session state; an offline input is disabled, but the registry still states the honest capability).

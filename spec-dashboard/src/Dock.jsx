@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import FileTree from './FileTree.jsx'
+import SessionContextMenu from './SessionContextMenu.jsx'
 import { SessionConsoleTreeRow, useFold } from './SessionWindow.jsx'
 import { sessionForest } from './session.js'
 import { navigate } from './route.js'
@@ -7,7 +8,8 @@ import { requestTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { useResizable } from './useResizable.js'
-import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useTransientNotice } from './TransientNotice.jsx'
+import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
@@ -21,7 +23,13 @@ function SessionDock({ sessions, activeId }) {
   const { expanded, toggle } = useFold()
   const { lockedSource } = useWorkspace()
   const { lockGraphTo } = useWorkspaceApi()
+  const { reload } = useBoardApi()
+  const { notify } = useTransientNotice()
   const [offlineOpen, setOfflineOpen] = useState(false)
+  // A session row's right-click menu belongs to the surface that LISTS sessions. It moved here with the
+  // rows when the console's own list was retired, and for one release nothing brought it along: the rows
+  // carried a click and nothing else, so rename/attach/lock/close had no pointer route left at all.
+  const [menu, setMenu] = useState(null)
   const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
     keepVisible: (session) => session.id === activeId,
@@ -51,9 +59,20 @@ function SessionDock({ sessions, activeId }) {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
                 ;(event.ctrlKey || event.metaKey ? requestTab : navigate)('sessions', item.s.id)
               },
+              onContextMenu: (event) => {
+                event.preventDefault()
+                setMenu({ x: event.clientX, y: event.clientY, session: item.s })
+              },
             }} />
         }) : <div className="dock-empty">—</div>}
       </div>
+      <SessionContextMenu
+        menu={menu}
+        onClose={() => setMenu(null)}
+        onChanged={reload}
+        onError={(message) => notify(message, { kind: 'error' })}
+        onLock={(s) => lockGraphTo(s.source, { toggle: false })}
+      />
     </div>
   )
 }
@@ -85,7 +104,11 @@ function DockHead({ mode, specs, sessions }) {
 }
 
 export default function Dock({ mode, specs, sessions, focusId, activeSessionId }) {
-  const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
+  // 200px is the resting width: wide enough for a session headline or a file name to read before it
+  // ellipses, narrow enough that the finding dock stays a margin beside the document rather than a second
+  // column competing with it. A reader who wants more drags it, and that choice is what persists — the
+  // default only decides what an unopinionated window looks like.
+  const [width, onDrag, reset] = useResizable('spex.ftWidth', 200, { min: 160, max: 460 })
   return (
     <aside className="dock" style={{ width }}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />

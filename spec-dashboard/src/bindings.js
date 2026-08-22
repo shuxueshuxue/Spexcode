@@ -1,5 +1,5 @@
 
-import { ACT } from './keymap.js'
+import { ACT, keyCap } from './keymap.js'
 
 const LS_KEY = 'spex.keybindings.v1'
 const byId = Object.fromEntries(ACT.map((a) => [a.id, a]))
@@ -38,6 +38,33 @@ export function eventKey(event) {
 
 export function firesEvent(id, event) {
   return keysOf(id).includes(eventKey(event)) || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey(id, event.key))
+}
+
+// THE HINT READER. A control that a key can also reach says so in its own tooltip, and it asks the registry
+// what that key is RIGHT NOW rather than carrying a copy.
+//
+// The copies were the bug. Every hint used to be typed into the translated label — `'Search (/)'`,
+// `'Evals (⌥3 / ⌥F)'`, `'…(Alt+I)'` — in two languages, in three different glyph dialects, and unreachable
+// by a rebind. So a tooltip could name a key the keyboard no longer fired, and a chord the registry held
+// could reach the reader with its modifiers stripped or not at all. Resolving here means a hint cannot be
+// stale, cannot disagree with the legend, and cannot exist for an action that has no binding.
+//
+// One cap per action — the action's PRIMARY key. Aliases (`i`/`I`/`Enter`) are the legend's business, not a
+// tooltip's. Several ids in one call is the honest way to say "these keys reach this control".
+export function shortcutHint(...ids) {
+  const caps = []
+  for (const id of ids) {
+    const cap = keyCap(keysOf(id)[0])
+    if (cap && !caps.includes(cap)) caps.push(cap)
+  }
+  return caps.join(' · ')
+}
+
+// `label (hint)`, or the bare label when nothing is bound. The label stays a pure i18n string; the hint is
+// appended by the reader, so a translator never owns a key name.
+export function withShortcut(label, ...ids) {
+  const hint = shortcutHint(...ids)
+  return hint ? `${label} (${hint})` : label
 }
 
 // save / clear an override. No notify layer: the keydown handler calls keysOf() fresh on every event,

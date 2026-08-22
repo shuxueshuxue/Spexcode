@@ -956,7 +956,7 @@ const wsText = (s: string) => encodeWsFrame(0x1, Buffer.from(s, 'utf8'))
 // `onText`; honors ping→pong and a close. Shared by every app-server WS client here. Returns the (possibly
 // shrunk) buffer + whether a close was seen, plus the running fragment state threaded back in on each call.
 type FrameState = { buf: Buffer; fragOp: number; fragBuf: Buffer }
-function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void): boolean {
+function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void, acceptPayload: (payload: Buffer) => boolean = () => true): boolean {
   for (;;) {
     if (s.buf.length < 2) return false
     const b0 = s.buf[0], b1 = s.buf[1], op = b0 & 0x0f, fin = (b0 & 0x80) !== 0, masked = (b1 & 0x80) !== 0
@@ -973,7 +973,10 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
     if (op === 0xa) continue                                          // pong
     if (op === 0x0) s.fragBuf = Buffer.concat([s.fragBuf, payload])   // continuation
     else { s.fragOp = op; s.fragBuf = payload }
-    if (fin) { if (s.fragOp === 0x1) onText(s.fragBuf.toString('utf8')); s.fragBuf = Buffer.alloc(0); s.fragOp = 0 }
+    if (fin) {
+      if (s.fragOp === 0x1 && acceptPayload(s.fragBuf)) onText(s.fragBuf.toString('utf8'))
+      s.fragBuf = Buffer.alloc(0); s.fragOp = 0
+    }
   }
 }
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
@@ -1097,7 +1100,10 @@ export function codexTurnFailureObserver(
       frames.buf = frames.buf.slice(split + 4)
       send(wsInitialize)
     }
-    if (drainWsFrames(frames, conn, handle)) finish('Codex app-server closed the turn observer')
+    if (drainWsFrames(frames, conn, handle, (payload) => {
+      const method = Buffer.from('"method"')
+      return !payload.includes(method) || payload.includes(Buffer.from('"turn/started"')) || payload.includes(Buffer.from('"turn/completed"'))
+    })) finish('Codex app-server closed the turn observer')
   })
   return { close: () => finish(null), closed }
 }

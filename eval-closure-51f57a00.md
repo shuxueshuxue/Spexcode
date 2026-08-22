@@ -215,3 +215,12 @@ offline, and the second case inherited the first case's switched default. That w
 finding. A corrected run used live rendezvous wrappers, reset the default to A for each case, and measured both
 named-A and unnamed/default-A sessions: `stop=0`, switch default to B, `resume=0`, and both regenerated launch
 scripts retained A with no B. The replacement PASS is filed against `ac37a8df6`; no product change is needed.
+
+### Clean-install recheck
+
+The earlier `packaging/clean-install-cli-starts` failure is superseded by a current-tree measurement. On Node
+`v22.21.0`, `scripts/clean-init-smoke.mjs` packed the current root, installed it offline into a clean consumer, ran
+the installed `spex --help`, and completed all four production init cases (Python/Claude, Python/Codex,
+TypeScript/Claude, TypeScript/Codex). All passed without network. The current tarball contains bundled
+`@spexcode/spec-eval`; the old missing-module result came from an older package state. Replacement PASS is filed at
+`e7e7c45a6`; no manifest change was required.

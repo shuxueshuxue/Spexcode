@@ -181,3 +181,21 @@ download result is recorded through the browser download event and a direct brow
 download-body restriction is not presented as a product failure. Structured evidence is `8c004b91…` in the
 files eval sidecar. The three rows were filed in commit `66cafdc85`; the `codeSha` remains `73f6567ef` because
 that is the committed tree measured before the sidecar-only filing commit.
+
+### Live cap-board closure
+
+The two launch-cap scenarios were remeasured through the real HTTP backend and public CLI on an isolated git
+project, with absolute Node `v22.21.0` and the repository's committed `spec-cli/dist`. The fixture launcher was the
+repository fake harness, held online long enough for board liveness to become observable; no shared backend or
+session store was used. The measured implementation commit is `b2830380e`.
+
+- `launch/cap-counts-only-the-working-set`: **PASS**. `maxActive=2` produced two `working/online` sessions and a
+  third `queued/offline`; turning one worker into `asking/online` released a slot and drained the queued session.
+  Raising the live JSON cap to 3 launched a fourth session. Lowering it to 1 did not kill the three existing workers;
+  a fifth session remained `queued/offline`.
+- `launch/cap-value-comes-from-spexcode-json`: **PASS** for the live JSON leg. The same backend observed
+  `sessions.maxActive` changes `2 -> 3 -> 1` without restart, and the queue behavior followed those values. This
+  result does not replace the earlier readings that cover env fallback, default, and floor behavior.
+
+The complete board snapshot, including session ids and liveness, is the structured evidence attached to the two
+readings. The filing itself is a sidecar-only change; no product source was changed.

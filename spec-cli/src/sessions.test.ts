@@ -204,8 +204,9 @@ test('session-create API refuses the retired JSON store while migration is fence
   const home = mkdtempSync(join(tmpdir(), 'spex-json-migration-fence-'))
   process.env.SPEXCODE_HOME = home
   try {
-    const fence = jsonMigrationFencePath(runtimeRoot())
+    const fence = jsonMigrationFencePath(join(runtimeRoot(), 'sessions'))
     mkdirSync(dirname(fence), { recursive: true })
+    mkdirSync(join(dirname(fence), 'existing-session'), { recursive: true })
     writeFileSync(fence, '{"version":1,"state":"migrating"}\n', { flag: 'wx' })
     const result = await sessionCreateRequest({ prompt: 'must not enter retired JSON store' })
     assert.equal(result.status, 409)

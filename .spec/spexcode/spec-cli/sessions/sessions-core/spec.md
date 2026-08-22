@@ -34,8 +34,8 @@ assembly (the rendezvous env + the harness's own command + the spec-pointer/prom
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
 the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop.
 During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
-before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, the JSON projection is
-retired and cannot resume as a second application-state authority.
+before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, those files may remain as
+operational metadata, but the canonical application service is the only state/event/topology authority.
 [[session-follow]]'s durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
 is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
 and uses the existing send queue to notify each watcher only after releasing the target's lock; no monitor

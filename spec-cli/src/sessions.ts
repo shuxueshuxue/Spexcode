@@ -443,8 +443,8 @@ function restoreLaunchReadinessOriginal(rec: SessRec): SessRec {
 }
 // Rebuild the full disk projection so retired keys disappear on the next write.
 function assertLegacyJsonWritesAllowed(): void {
-  const fence = jsonMigrationFencePath(runtimeRoot())
-  if (existsSync(fence)) {
+  const fence = jsonMigrationFencePath(join(runtimeRoot(), 'sessions'))
+  if (existsSync(fence) && !configuredSessionApplicationIfCutover()) {
     throw new ResourceConflict(`legacy JSON session store is fenced for one-time migration: ${fence}`)
   }
 }
@@ -2180,6 +2180,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   if (input.base !== undefined && typeof input.base !== 'string') return { status: 400, error: 'session-create base must be a string' }
   const base = typeof input.base === 'string' && input.base.trim() ? input.base.trim() : null
+  configuredSessionApplicationIfCutover()
   try { assertLegacyJsonWritesAllowed() }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)

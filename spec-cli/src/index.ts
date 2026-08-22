@@ -43,7 +43,7 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
-import { configuredSessionApplication } from './session-application.js'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
 
 installEvalHost()
 
@@ -539,7 +539,7 @@ app.post('/api/sessions', async (c) => {
     // transaction has published or cleaned up its record, release the one deferred full refresh.
     flushDeferredWorktreeRegistryChange()
     if (result.status === 201) {
-      const production = configuredSessionApplication()
+      const production = configuredSessionApplicationIfCutover()
       if (production) {
         try {
           production.createSession({
@@ -566,7 +566,11 @@ app.post('/api/sessions', async (c) => {
   }
 })
 
-const runtimeApplicationOr503 = (_c: any) => configuredSessionApplication()
+const runtimeApplicationOr503 = (_c: any) => {
+  const application = configuredSessionApplicationIfCutover()
+  if (!application) throw new ResourceConflict('session runtime is unavailable until the legacy JSON store is migrated')
+  return application
+}
 
 app.get('/api/session-runtime/:id/events', (c) => {
   const application = runtimeApplicationOr503(c)

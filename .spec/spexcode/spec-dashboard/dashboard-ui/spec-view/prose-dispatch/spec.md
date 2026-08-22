@@ -28,6 +28,7 @@ reading; hand it over and FOLLOW it, because the answer is the thing you wanted;
 yourself. The first two are the *same send* — "Jump to Session" is a navigation that happens after the send
 returns, which is why it is a second button and not a second mode. The message is byte-identical either
 way.
+The verb a reader picks is a seed, never a mode: the same box opens for all of them.
 
 **One channel, no second transport.** The passage becomes an ordinary [[code-selection]] token inside an
 ordinary prompt and travels the one input route every other surface uses ([[dispatch]]). [[code-selection]]

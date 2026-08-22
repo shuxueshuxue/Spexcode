@@ -81,7 +81,7 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
   )
 }
 
-export default function FileTree({ specs, focusId, onOpenFile }) {
+export default function FileTree({ specs, focusId, onOpenFile, embedded = false }) {
   const t = useT()
   const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
   const kids = useMemo(() => kidsOf(specs || []), [specs])
@@ -89,7 +89,7 @@ export default function FileTree({ specs, focusId, onOpenFile }) {
   const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
   if (!specs?.length) return null
   return (
-    <div className="filetree" style={{ width }}>
+    <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
       <div className="ft-head">
         <span>{t('fileTree.title')}</span>
         <span className="ft-count">{specs.length}</span>
@@ -97,7 +97,7 @@ export default function FileTree({ specs, focusId, onOpenFile }) {
       <div className="ft-body">
         {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
       </div>
-      <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
+      {!embedded && <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />}
     </div>
   )
 }

@@ -39,4 +39,5 @@ as a new tab.
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
 workspace whose only entrance is a URL is a workspace nobody enters. It is toggled from the rail's explorer
 entry ([[side-nav]]), where the other workspace-finding controls live. Its width is the shared
-resizable-pane primitive, persisted per pane like every other.
+resizable-pane primitive, persisted per pane like every other. The dock's top mode tabs select the explorer
+or sessions projection ([[dock-modes]]) without changing the document route.

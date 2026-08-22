@@ -50,6 +50,11 @@ export default {
     title: 'EXPLORER',
     aria: 'project file tree',
   },
+  dockModes: {
+    aria: 'dock mode',
+    explorer: 'Explorer',
+    sessions: 'Sessions',
+  },
   contextDock: {
     title: 'CONTEXT',
     backlinks: 'BACKLINKS',

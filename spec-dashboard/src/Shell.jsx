@@ -3,7 +3,7 @@ import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
 import TabStrip from './TabStrip.jsx'
-import FileTree from './FileTree.jsx'
+import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate } from './route.js'
@@ -93,8 +93,8 @@ export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
-  const { dock, palette } = useWorkspace()
-  const { closePalette } = useWorkspaceApi()
+  const { dock, dockMode, palette } = useWorkspace()
+  const { closePalette, setDockMode } = useWorkspaceApi()
   const [contextOpen, setContextOpen] = useState(() => {
     try { return localStorage.getItem('spexcode.ctxOpen') !== '0' } catch { return true }
   })
@@ -123,7 +123,8 @@ export default function Shell() {
         <SideBar page={page} identity={identity} catalog={catalog} />
         {dock && (
           <ViewErrorBoundary resetKey="dock">
-            <FileTree specs={specs} focusId={page === 'spec' ? param : null} />
+            <Dock mode={dockMode} setMode={setDockMode} specs={specs} sessions={sessions}
+              focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />
           </ViewErrorBoundary>
         )}
         <div className="app-main">

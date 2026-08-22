@@ -456,7 +456,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, externalSessionList = false }) {
   const t = useT()
   const { notify } = useTransientNotice()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
@@ -1552,7 +1552,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list" ref={listRef} style={{ flex: `0 0 ${listW}px` }}>
+        <aside className={`si-list${externalSessionList ? ' external-session-controls' : ''}`} ref={listRef}
+          style={{ flex: `0 0 ${externalSessionList ? 48 : listW}px` }}>
           {/* while multi-selecting ([[session-multi-select]]) the pills give way to the select bar — a pick
               count + bulk close + cancel; the rows below toggle picks instead of switching tabs. */}
           {selecting ? (
@@ -1570,7 +1571,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           )}
-          <div className="si-board-scroll" data-session-board-scroll>
+          {!externalSessionList && <div className="si-board-scroll" data-session-board-scroll>
             {sessionDrag?.parent && (
               <div className={`si-root-drop${sessionDrag.target === null ? ' on' : ''}`} data-session-root-drop
                 data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
@@ -1621,12 +1622,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <span className="sess-lead si-zone-all-lead" aria-hidden="true"><Icon name="search" size={15} /></span>
               <span className="si-zone-all-label">{t('session.archiveViewAll', { n: archivedSessions.length })}</span>
             </button>}
-          </div>
+          </div>}
         </aside>
 
         {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. */}
-        <div className="pane-resizer si-resizer" onMouseDown={listDrag} onDoubleClick={resetListW}
-          role="separator" aria-orientation="vertical" aria-valuenow={Math.round(listW)} />
+        {!externalSessionList && <div className="pane-resizer si-resizer" onMouseDown={listDrag} onDoubleClick={resetListW}
+          role="separator" aria-orientation="vertical" aria-valuenow={Math.round(listW)} />}
 
         <section className={`si-content${active === 'new' ? ' is-new' : ' is-session'}`}>
           {active === 'new' && (

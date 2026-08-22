@@ -115,6 +115,10 @@ Dropping a working row on the visible archive zone heading instead performs the 
 the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
 close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 
+When [[dock-modes]] supplies the sessions finding list, this document withdraws its duplicate sidebar and
+lets the terminal or timeline occupy the full content width. The console still owns its existing launch,
+archive, drag, rename, and terminal state; the dock is only a read-only finding projection.
+
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
 `fitTextarea` measurement path grows through each content line without a scrollbar until the host's

@@ -273,6 +273,25 @@ body {
 .ft-att .ft-label { color: var(--cyan); }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
 
+/* [[dock-modes]] — the dock is one finding surface with two compact projections. */
+.dock {
+  flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border-right: 1px solid var(--line);
+}
+.dock-modebar {
+  flex: 0 0 31px; display: flex; align-items: center; gap: 2px; padding: 3px 6px;
+  border-bottom: 1px solid var(--line); color: var(--muted);
+}
+.dock-mode {
+  width: 25px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 3px; color: var(--muted); background: transparent; cursor: pointer;
+}
+.dock-mode:hover, .dock-mode.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.dock-mode-title { margin-left: 5px; font-size: var(--type-caption); text-transform: uppercase; letter-spacing: var(--tracking-normal); }
+.dock-session-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
+.dock-session-body .si-item { padding-left: 8px; padding-right: 8px; }
+.dock-empty { padding: 12px 10px; color: var(--muted); font: var(--type-meta)/var(--leading-ui) var(--mono); }
+
 /* [[file-tree]]'s viewer layer — a bounded reading window, not a second pane. */
 .legend.fileviewer { width: min(1040px, 92vw); max-height: 86vh; }
 .fileviewer .srcview { margin: 0; }
@@ -1218,6 +1237,9 @@ a.scenario-count:hover { background: var(--panel2); }
   flex: 0 0 204px; border-right: 1px solid var(--line); background: var(--panel);
   max-width: calc(100% - 280px); min-height: 0; display: flex; flex-direction: column; overflow: hidden;
 }
+.si-list.external-session-controls { max-width: 48px; }
+.external-session-controls .si-toprow { flex-direction: column; align-items: center; padding: 6px 4px; gap: 4px; }
+.external-session-controls .si-pill { width: 30px; }
 .si-board-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;

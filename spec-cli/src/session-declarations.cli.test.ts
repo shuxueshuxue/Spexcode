@@ -12,8 +12,8 @@ const STALE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const CURRENT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const THREAD = 'codex-thread-for-current-worker'
 
-function recordPath(home: string, id: string): string {
-  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
+function recordPath(home: string, id: string, cwd = pkgRoot): string {
+  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd, encoding: 'utf8' }).trim())
   return join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id, 'session.json')
 }
 
@@ -63,4 +63,45 @@ test('the CLI hub reaches ask through the lazy declaration handler', () => {
   const source = readFileSync(cli, 'utf8')
   assert.match(source, /sub === 'done' \|\| sub === 'park' \|\| sub === 'ask'\) \{\n    const \{ runSessionDeclaration \} = await import\('\.\/session-declarations\.js'\)/)
   assert.doesNotMatch(source, /sub === 'ask'\) \{[\s\S]{0,1200}markState\('asking'/)
+})
+
+test('merge declaration records without the removed acceptance configuration', () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-merge-declaration-'))
+  const home = join(fixture, 'home')
+  const root = join(fixture, 'repo')
+  const id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  try {
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'spexcode.json'), '{}\n')
+    writeFileSync(join(root, 'README.md'), 'fixture\n')
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root })
+    execFileSync('git', ['config', 'user.email', 'merge-declaration@example.test'], { cwd: root })
+    execFileSync('git', ['config', 'user.name', 'Merge Declaration'], { cwd: root })
+    execFileSync('git', ['add', '.'], { cwd: root })
+    execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: root })
+    execFileSync('git', ['switch', '-qc', `node/${id}`], { cwd: root })
+    writeFileSync(join(root, 'landed.txt'), 'ready\n')
+    execFileSync('git', ['add', 'landed.txt'], { cwd: root })
+    execFileSync('git', ['commit', '-qm', 'landed'], { cwd: root })
+
+    const path = recordPath(home, id, root)
+    const config = JSON.parse(readFileSync(join(root, 'spexcode.json'), 'utf8')) as Record<string, unknown>
+    assert.equal(config.review, undefined, 'the project config no longer carries the removed review gate')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`, node: null,
+      title: 'merge declaration', name: '', parent: null, status: 'active', proposal: null, merges: 0, note: null,
+      sortkey: null, createdAt: Date.now(), harness: 'claude', harness_session_id: '', stopped: false,
+      archived: false, launcher: 'fixture', launch_cmd: 'true',
+    }, null, 2)}\n`)
+    const result = spawnSync('tsx', [cli, 'session', 'done', '--propose', 'merge', '--note', 'ready'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id },
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /done \(merge\).*recorded/)
+    const row = JSON.parse(readFileSync(path, 'utf8')) as { status: string; proposal: string; note: string }
+    assert.deepEqual({ status: row.status, proposal: row.proposal, note: row.note }, { status: 'awaiting', proposal: 'merge', note: 'ready' })
+  } finally { rmSync(fixture, { recursive: true, force: true }) }
 })

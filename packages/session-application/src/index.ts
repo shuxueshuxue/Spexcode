@@ -73,7 +73,7 @@ export function openSessionApplication(
 }
 
 export { openProjectSessionApplication } from './production.js'
-export { migrateJsonSessionRecords } from './migration.js'
+export { jsonMigrationFencePath, migrateJsonSessionRecords } from './migration.js'
 export type {
   CommittedSessionChange,
   CreateSessionInput,

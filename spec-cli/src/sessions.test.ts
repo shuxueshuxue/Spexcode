@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
+import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
@@ -196,6 +197,25 @@ test('session-create API rejects stale fields before entering the transaction', 
 
   const removedNode = await sessionCreateRequest({ node: 'launcher-select', prompt: 'probe', launcher: 'claude' })
   assert.deepEqual(removedNode, { status: 400, error: 'unknown session-create field: node' })
+})
+
+test('session-create API refuses the retired JSON store while migration is fenced', serial, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-json-migration-fence-'))
+  process.env.SPEXCODE_HOME = home
+  try {
+    const fence = jsonMigrationFencePath(join(runtimeRoot(), 'sessions'))
+    mkdirSync(dirname(fence), { recursive: true })
+    mkdirSync(join(dirname(fence), 'existing-session'), { recursive: true })
+    writeFileSync(fence, '{"version":1,"state":"migrating"}\n', { flag: 'wx' })
+    const result = await sessionCreateRequest({ prompt: 'must not enter retired JSON store' })
+    assert.equal(result.status, 409)
+    assert.match(result.error, /legacy JSON session store is fenced/)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('session creation exports only the bounded transaction owner', serial, async () => {

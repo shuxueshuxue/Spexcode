@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { migrateJsonSessionRecords } from './migration.js'
+import { jsonMigrationFencePath, migrateJsonSessionRecords } from './migration.js'
 import { openProjectSessionApplication } from './production.js'
 
 const record = (id: string, status: string, parent: string | null = null) => ({
@@ -31,6 +31,8 @@ test('JSON migration imports state, parent/watch topology, deterministic event, 
   assert.equal(first.records, 2)
   assert.equal(first.parentEdges, 1)
   assert.equal(first.watchEdges, 2)
+  assert.equal(existsSync(jsonMigrationFencePath(recordsRoot)), true)
+  assert.equal(JSON.parse(readFileSync(jsonMigrationFencePath(recordsRoot), 'utf8')).state, 'retired')
   const app = openProjectSessionApplication({ databasePath, locality: () => {} })
   assert.deepEqual(app.readState('child'), { sessionId: 'child', status: 'awaiting', proposal: null, note: null, parentSessionId: 'parent', updatedAtMs: 20 })
   assert.equal(app.events.read('child').length, 1)
@@ -39,6 +41,18 @@ test('JSON migration imports state, parent/watch topology, deterministic event, 
   const second = migrateJsonSessionRecords({ databasePath, recordsRoot, locality: () => {} })
   assert.equal(second.replayed, true)
   assert.equal(second.sourceDigest, first.sourceDigest)
+})
+
+test('JSON migration refuses a pre-existing fence instead of racing another cutover', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-json-migration-fenced-'))
+  const recordsRoot = join(root, 'sessions')
+  mkdirSync(join(recordsRoot, 'one'), { recursive: true })
+  writeFileSync(join(recordsRoot, 'one', 'session.json'), JSON.stringify(record('one', 'active')))
+  writeFileSync(jsonMigrationFencePath(recordsRoot), '{"version":1,"state":"migrating"}\n', { flag: 'wx' })
+  assert.throws(
+    () => migrateJsonSessionRecords({ databasePath: join(root, 'sessions.sqlite'), recordsRoot, locality: () => {} }),
+    /migration fence already exists/,
+  )
 })
 
 test('JSON migration refuses an orphan parent by default before SQLite cutover', () => {

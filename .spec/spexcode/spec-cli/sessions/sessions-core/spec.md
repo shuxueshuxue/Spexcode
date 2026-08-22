@@ -32,8 +32,15 @@ sessions-core owns `sessions.ts` — the common session layer: the global per-se
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
-the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop. [[session-follow]]'s
-durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
+the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop.
+Creation authority is checked before any fresh-project canonical store is initialized: rejected, abandoned, fenced,
+or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a successfully admitted fresh create
+may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses
+the same post-success canonical projection as the HTTP bridge rather than creating a second creation path.
+During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
+before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, those files may remain as
+operational metadata, but the canonical application service is the only state/event/topology authority.
+[[session-follow]]'s durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
 is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
 and uses the existing send queue to notify each watcher only after releasing the target's lock; no monitor
 loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed

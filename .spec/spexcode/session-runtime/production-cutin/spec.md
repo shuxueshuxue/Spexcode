@@ -6,6 +6,7 @@ desc: The explicit Spex backend composition hook for the adopter-owned session a
 code:
   - spec-cli/src/session-application.ts
 related:
+  - spec-cli/src/index.ts
   - .spec/spexcode/session-runtime/application-service/spec.md
   - .spec/spexcode/session-runtime/production-cutin-yatu/spec.md
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
@@ -17,6 +18,12 @@ The Spex backend always composes the production session application through the 
 `resolveDatabasePath` precedence (`databasePath`, `SPEX_SESSION_DATABASE_PATH`, `SPEX_SESSION_CONFIG`, then the
 per-user default). Before opening SQLite it runs the adopter locality precondition; a missing, relative, or non-local
 path fails loudly. There is no `SPEXCODE_SESSION_DATABASE_PATH` opt-in and no JSON fallback.
+
+The only pre-marker exception is a fresh project with no legacy session directories: a successful session-create request
+may initialize an empty canonical store after authority and no-side-effect validation pass. A rejected or abandoned
+request must not initialize that store. Once any legacy session directory exists, the application service and runtime
+API remain unavailable until the migration marker is present; they must not create an unmarked SQLite store beside the
+JSON source.
 
 The one-time JSON migration must complete before cutover. New `/api/sessions` records are initialized in the canonical
 application database, and after the migration marker exists the list reads lifecycle status and parent topology from
@@ -31,3 +38,8 @@ The runtime API exposes only explicit watcher, state, event/replay, native bindi
 Native identity is caller supplied, and binding generation is checked by the shared runtime component. The YATU drives
 the real HTTP backend, restarts it, replays the child state, publishes a durable watcher notification, and proves a
 stale binding is refused.
+
+Cutover is a maintenance operation, not a best-effort background import. The migration fence is taken before the
+legacy source snapshot; old JSON writers reject it, and the importer rechecks the complete source set before SQLite
+installation. Any writer that ignores the fence is evidence that the maintenance window is not quiet, so migration
+must abort rather than publish a database with a partial view of the live store.

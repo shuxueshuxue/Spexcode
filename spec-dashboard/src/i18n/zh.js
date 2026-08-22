@@ -601,6 +601,7 @@ export default {
   },
 
   session: {
+    menuLabel: '会话操作',
     opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
     lockTitle: '右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',

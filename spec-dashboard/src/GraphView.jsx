@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
-import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
+import { LockGlyph } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
@@ -21,7 +21,7 @@ import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
-import { useBoard, useBoardApi, useWorkspaceApi } from './workspace.jsx'
+import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { encodeCodeSelection } from './codeSelection.js'
 
@@ -73,7 +73,11 @@ function PagePane({ active, warm = false, className, children }) {
 function GraphView({ param, query }) {
   const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
   const { reload } = useBoardApi()
-  const { openPalette, setCompose } = useWorkspaceApi()
+  const { openPalette, setCompose, lockGraphTo } = useWorkspaceApi()
+  // WHICH SESSION OWNS THE BOARD lives in the workspace ([[workspace-shell]]) because the surface that
+  // claims it — a session row in the finding dock — is not this one. The graph only READS the claim and
+  // paints it; it no longer needs a session list of its own to have somewhere to click.
+  const { lockedSource: highlightId } = useWorkspace()
   const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
@@ -96,7 +100,6 @@ function GraphView({ param, query }) {
   const [pane, setPane] = useState('spec')
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const search = null   // the palette is the shell's ([[workspace-shell]]); the graph only asks for it
-    const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
@@ -452,7 +455,7 @@ function GraphView({ param, query }) {
         return true
       }
       if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return true }
-      if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return true }
+      if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); lockGraphTo(null, { toggle: false }); return true }
       if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return true }
       if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return true }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
@@ -553,15 +556,6 @@ function GraphView({ param, query }) {
   // toggle=true (the graph's session rows): a click on the locked session releases it. toggle=false (the
   // session-board row's context-menu action): always GRIP — switch back to the graph already locked + focused,
   // never accidentally release. Either way, locking auto-focuses the session's first changed node.
-  const onPickSession = useCallback((s, toggle = true) => {
-    const releasing = toggle && highlightId === s.source
-    setHighlightId(releasing ? null : s.source)
-    if (releasing) return
-    const ids = new Set((s.ops || []).map((op) => op.nodeId))
-    const first = specs.find((n) => ids.has(n.id))
-    if (first) focusNode(first.id)
-  }, [highlightId, specs, focusNode])
-
   return (
     <div className={kbdMode ? 'graphview kbd-mode' : 'graphview'}>
 
@@ -584,8 +578,6 @@ function GraphView({ param, query }) {
           proOptions={{ hideAttribution: true }}
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
-        {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />}
-
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
 
         {graphOnly && <PublicGraphAbout />}
@@ -616,7 +608,7 @@ function GraphView({ param, query }) {
             ) : (
               <span className="lock-hint-body">{t('lockHint.empty')}</span>
             )}
-            <button className="lock-hint-release" onClick={() => setHighlightId(null)} data-tip={t('lockHint.releaseTitle')}>
+            <button className="lock-hint-release" onClick={() => lockGraphTo(null, { toggle: false })} data-tip={t('lockHint.releaseTitle')}>
               {t('lockHint.release')}
             </button>
           </div>

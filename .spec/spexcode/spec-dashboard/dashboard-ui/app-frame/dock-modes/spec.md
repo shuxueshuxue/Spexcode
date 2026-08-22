@@ -27,12 +27,25 @@ in that projection. Explorer rows retain [[file-tree]]'s route behavior.
 Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]: a plain click navigates to
 `sessions/<id>` in the current slot, while ctrl/⌘-click calls `requestTab` to hold a new document.
 
+**THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
+its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how
+thick the dock is — which is the [[ui-state-model]] budget made structural rather than remembered. A
+projection may not mint a strip of its own; the explorer's own count row, the sessions `+` row and the
+archive door were three separate strips stacked around one list, three answers to a question this row
+already answers once.
+
 The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
-route-selected highlight (`activeSessionId`). A `+` action at the projection head navigates to `sessions/new`;
-a `View all` action at its foot navigates to the sessions document's archive overlay. Both are finding-surface
-doors, while the archive overlay and all session content remain in the holding region. Rows are read-only
-navigation: plain click replaces the current tab and ctrl/command-click holds a new one.
+route-selected highlight (`activeSessionId`). The header's `+` navigates to `sessions/new` and its archive
+door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
+overlay and all session content remain in the holding region. Rows are read-only navigation: plain click
+replaces the current tab and ctrl/command-click holds a new one.
+
+**A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
+— its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim
+while it holds. This is the ONLY place the claim is made from a list, and it is why the graph no longer
+floats a session window of its own ([[session-row]]): the claim belongs beside the sessions, and the lock
+itself is [[workspace-shell]] state so the two surfaces need not know about each other.
 
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
 document tools. Drag-to-reparent and multi-select are deliberately removed in this milestone rather than
@@ -44,5 +57,5 @@ four-region model made literal — FINDING on the left, HOLDING in the center, C
 the bottom — so one window cannot expose two competing navigation lists.
 
 The dock mode is not a second navigation model and does not read the global address. Shell owns the mode
-preference and passes the selected projection its board data. The dock renders content only: the explorer's
-`EXPLORER` count head or the sessions list's `+` and archive controls. There is no dock modebar.
+preference and passes the selected projection its board data. Below the one header row the dock renders
+content only — the tree, or the session forest. There is no dock modebar.

@@ -1,8 +1,8 @@
-import { Suspense, useCallback, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
-import TabStrip from './TabStrip.jsx'
+import TabStrip, { placeLabel } from './TabStrip.jsx'
 import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
@@ -115,6 +115,14 @@ export default function Shell() {
     return next
   })
 
+  // The browser tab is a positioning signal, not a brand plate. The shell is the only component that reads
+  // the address, so it is the only one that can say WHERE the reader is; the project keeps the suffix, so a
+  // window still says which workspace it belongs to when several are open side by side.
+  const place = placeLabel({ page, param, query }, { specs, sessions, t })
+  useEffect(() => {
+    document.title = `${place} · ${identity?.title || 'spexcode'}`
+  }, [place, identity?.title])
+
   const onShellKey = useCallback((event) => {
     // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
     if (palette) {
@@ -190,9 +198,11 @@ export default function Shell() {
           </ViewErrorBoundary>
         )}
         <div className="app-main">
-          <div className="app-main-top"><TabStrip specs={specs} sessions={sessions} />
-            {page === 'spec' && <ContextToggle visible={contextOpen} onToggle={toggleContext} />}
-          </div>
+          {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
+              without an open document, which is one band wearing two names. The context toggle is a control
+              on the current document, so it rides the strip's own trailing cluster. */}
+          <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
+            trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
           <Content page={page} param={param} query={query} />
         </div>
         <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />

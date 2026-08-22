@@ -158,6 +158,9 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress }) {
   const t = useT()
   const readOnly = state !== 'live'
+  // The composer is a SURFACE the conversation floats, not a chrome band the shell stacks — the same shape
+  // the terminal surface already gives its command box, so both session surfaces frame their content
+  // identically and the reading column keeps its full height behind it.
   return (
     <footer className={`m-composer is-${state}`} data-footer-state={state}>
       {sendErr && <div className="m-senderr">{sendErr}</div>}

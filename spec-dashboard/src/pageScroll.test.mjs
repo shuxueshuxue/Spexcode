@@ -62,8 +62,11 @@ test('document pages consume PageScroll while Graph and Sessions keep their own 
 test('scoped Evals status stays a non-scrolling sticky child without creating trunk geometry', () => {
   assert.match(css, /\.se-gates\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 40px;[^}]*height:\s*40px;/s)
   assert.match(css, /\.se-gates\s*\{[^}]*border-bottom:\s*1px solid var\(--line\);[^}]*background:\s*var\(--panel2\);/s)
-  assert.match(css, /\.se-gates\s*~\s*\.rl-content\s+\.lp-head\s*\{\s*top:\s*40px;\s*\}/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;[^}]*\}[\s\S]*\.se-gates\s*~\s*\.rl-content\s+\.lp-head\s*\{\s*top:\s*80px;/s)
+  // the gates strip is the outermost pinned row, so everything pinned inside the scroll owner offsets past
+  // it: first the query that produced the list, then the gate head below that.
+  assert.match(css, /\.se-gates\s*~\s*\.rl-content\s+\.rl-query\s*\{\s*top:\s*40px;\s*\}/s)
+  assert.match(css, /\.se-gates\s*~\s*\.rl-content\s+\.lp-head\s*\{\s*top:\s*84px;\s*\}/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;[^}]*\}[\s\S]*\.se-gates\s*~\s*\.rl-content\s+\.rl-query\s*\{\s*top:\s*80px;/s)
   assert.doesNotMatch(css, /\.se-gates\s*\{[^}]*position:\s*fixed;/s)
   assert.doesNotMatch(evalsPage, /sessionId\s*\?\s*\([\s\S]*<PageScroll/)
 })

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
@@ -86,8 +85,10 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
   )
 }
 
+// The tree names itself through the dock's one header row ([[dock-modes]]), not through a strip of its own:
+// "Explorer, 355" belongs to the dock that is currently projecting the explorer, and a projection that
+// re-declares its own name is the second answer to a question already answered one row above.
 export default function FileTree({ specs, focusId, onOpenFile, embedded = false }) {
-  const t = useT()
   const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
   const kids = useMemo(() => kidsOf(specs || []), [specs])
   const roots = kids.get('') || []
@@ -95,10 +96,6 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
   if (!specs?.length) return null
   return (
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
-      <div className="ft-head">
-        <span>{t('fileTree.title')}</span>
-        <span className="ft-count">{specs.length}</span>
-      </div>
       <div className="ft-body">
         {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
       </div>

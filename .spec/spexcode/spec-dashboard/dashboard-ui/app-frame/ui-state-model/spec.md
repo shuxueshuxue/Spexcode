@@ -103,3 +103,25 @@ axis and stays thin on the short one — so chrome the inventory has never heard
 
 B() lives once, in the gate, mirroring this body. A state's budget is not stored per-route, because a
 per-route budget is a per-route excuse: the frame is uniform or it is not a frame.
+
+## what the count bought
+
+Every visited state holds its budget. Getting there was not one fix but four different admissions, and the
+shape of each is the useful part — a band is almost never removed by deleting a feature:
+
+- **Merged into the band that already existed.** The explorer's count row, the sessions `+` row and the
+  archive door became the dock's single header ([[dock-modes]]); a file document's path became a
+  [[status-bar]] item. A projection may name itself, and a document may state a fact about itself, without
+  either being given a row.
+- **Folded into scrolling content.** The spec document's file picker is now the prose's own governed-files
+  chips ([[spec-view]]), which live below the scrollport and are therefore content by definition.
+- **Deleted, because it was a repetition.** The source viewer's footer repeated a path the address, the tab
+  and the chip already carried ([[source-view]]); what it uniquely said — whether the read had finished —
+  became a floating mark that leaves when it stops being true.
+- **Turned into a z-layer.** The Conversation's composer floats over its reading column exactly as Command
+  Box does on the terminal surface ([[session-console]]), which is what makes U genuinely a content axis
+  rather than a surface that quietly costs a row.
+
+One more was a spacer rather than a band: the shell held the tab strip inside a wrapper that drew a blank
+row on every route minting no tab. The strip is now the band itself and names the routed place when it
+holds nothing ([[tab-strip]]) — the row was always being paid for, and now it says something.

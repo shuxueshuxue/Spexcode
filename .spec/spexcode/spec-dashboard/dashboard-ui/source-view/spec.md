@@ -31,9 +31,14 @@ the agent holding the same file and would land writes that no `Session:` trailer
 
 **Loading is incremental and never yanks the reader.** The first window paints; further windows are appended
 as a plain transaction at the document end when the reader scrolls near the bottom of what is loaded, so
-scroll position and selection survive the append. The footer states the file's real size and, while windows
-remain, how much of it has arrived — a partially loaded file must never read as a complete short one. A
-refused or failed read replaces that meter with the reason.
+scroll position and selection survive the append.
+
+**The viewer shows the file and says nothing about the file.** Its path is already the address, the tab and
+the chip that opened it; a strip repeating it was a fourth copy and a chrome band ([[ui-state-model]]) to
+hold it. What is not said anywhere else is whether the read has finished — a partially loaded file must
+never read as a complete short one — so that, and only that, floats over the text as a small progress mark
+while it is still true and leaves when it stops being news. A refused or failed read shows the reason in
+the same place and keeps it.
 
 The reader also exposes a selection event for a non-empty CodeMirror selection. A small action affordance
 may call the parent with `{ path, startLine, endLine, text }`; the viewer owns neither the prompt nor any

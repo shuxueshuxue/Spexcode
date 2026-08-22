@@ -1,10 +1,14 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
-import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
+import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
+
+// [[session-row]]: ONE session row, drawn the same on every surface that lists sessions — the dock's
+// projection, the console, the phone. The module owns the row's face, its tree lead and fold control, and
+// the zone header that groups a forest; it owns no surface of its own.
 
 // the "locked / claimed by another session" indicator — the shared `lock` glyph ([[icon-system]]),
 // monochrome currentColor, no color emoji. Shared by the session row and App's lock-hint banner.
@@ -142,55 +146,8 @@ export function SessionZone({ item, baseClass, onToggle }) {
   )
 }
 
-export default function SessionWindow({ sessions, activeId, onPick, onOpenSession }) {
-  const t = useT()
-  const { expanded, toggle } = useFold()
-  // the offline zone rests folded here too ([[session-console]] — one disclosure per surface, collapsed on
-  // every fresh mount); the graph-locked session stays a visible row even while the zone is folded.
-  const [offlineOpen, setOfflineOpen] = useState(false)
-  // memoized off the exposed fold Set (stable per state), matching the console list — the forest's
-  // nest+zone-sort otherwise re-runs on every board poll AND every unrelated re-render of the glance.
-  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
-    zoneFolded: (z) => z === 'offline' && !offlineOpen,
-    keepVisible: (s) => s.source === activeId,
-  }), [sessions, expanded, offlineOpen, activeId])
-  return (
-    <div className="sesswin">
-      {sessions.length === 0 ? (
-        <div className="sesswin-empty">{t('sessionWindow.emptyBefore')}<kbd>⏎</kbd>{t('sessionWindow.emptyAfter')}</div>
-      ) : (
-        // same two-zone grouping + newest-first + compact one-line face as the console list ([[session-console]]);
-        // the ONE difference is this map-side glance KEEPS the avatar (cross-references the node avatars). Nested
-        // sessions fold under their spawner ([[session-nesting]]): the forest gives zone headers + rows, and a
-        // parent's children appear only while expanded (collapsed by default).
-        forest.map((it) => {
-          if (it.type === 'zone') {
-            return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="sesswin-zone" onToggle={() => setOfflineOpen((v) => !v)} />
-          }
-          const s = it.s
-          // activeId is the locked session's worktree path (board highlight matches overlays by source),
-          // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).
-          const locked = s.source === activeId
-          const lead = (it.expandable || it.depth)
-            ? <RowLead guides={it.guides} expandable={it.expandable} kin={it.kin} />
-            : null
-          return (
-            <div key={s.id} className="sess-tree-row sesswin-tree-row" style={{ '--sess-fold-indent': `${it.depth * 14}px` }}>
-              <button
-                type="button"
-                className={locked ? 'sess-row locked' : 'sess-row'}
-                style={{ '--ov': labelColor(s.id) }}
-                onClick={() => onPick(s)}
-                onDoubleClick={() => onOpenSession(s.id)}
-                data-tip={t('sessionWindow.rowTitle')}
-              >
-                <SessionRow s={s} locked={locked} lead={lead} />
-              </button>
-              {it.expandable && <FoldPod expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />}
-            </div>
-          )
-        })
-      )}
-    </div>
-  )
-}
+// RETIRED: the floating session glance that used to hover over the graph's top-left. The dock projects the
+// same forest, with the same rows, one pane to the left — two live copies of one list on one screen is not a
+// glance, it is a duplicate. The graph's lock and highlight are untouched: a session is still claimed from a
+// dock row or from the keyboard, and [[lock-hint]] still names the claim. What went is the second projection,
+// not the semantics; everything this file exports is what the dock, the console and the phone all draw with.

@@ -46,7 +46,6 @@ export default {
   specView: { missing: '没有这个节点：{id}' },
   fileView: { none: '未选择文件' },
   fileTree: {
-    title: '文件树',
     aria: '项目文件树',
   },
   dockModes: {
@@ -56,7 +55,8 @@ export default {
   },
   dockSessions: {
     new: '新建会话',
-    archive: '查看全部已归档会话',
+    archive: '已归档会话',
+    rowTip: '打开 · ctrl+点击固定为标签 · alt+点击把图锁定到该会话',
   },
   contextDock: {
     title: '上下文',
@@ -89,6 +89,17 @@ export default {
   },
   documentActions: {
     aria: '文档操作',
+  },
+
+  // 路由所在“地点”的名字。浏览器标签标题与空标签栏的定位标签共用这一份，二者不会各说各话。
+  place: {
+    graph: '节点图',
+    sessions: '会话',
+    evals: '评测',
+    issues: '议题',
+    settings: '设置',
+    empty: '工作区',
+    projects: '项目',
   },
   nav: {
     railLabel: '主导航',

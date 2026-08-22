@@ -47,7 +47,6 @@ export default {
   specView: { missing: 'no such node: {id}' },
   fileView: { none: 'no file selected' },
   fileTree: {
-    title: 'EXPLORER',
     aria: 'project file tree',
   },
   dockModes: {
@@ -56,13 +55,14 @@ export default {
     sessions: 'Sessions',
   },
   dockSessions: {
-    new: 'New Session',
-    archive: 'View all archived sessions',
+    new: 'New session',
+    archive: 'Archived sessions',
+    rowTip: 'open · ctrl-click holds a tab · alt-click scopes the graph to this session',
   },
   contextDock: {
-    title: 'CONTEXT',
-    backlinks: 'BACKLINKS',
-    scenarios: 'SCENARIOS',
+    title: 'Context',
+    backlinks: 'Backlinks',
+    scenarios: 'Scenarios',
     open: 'show context dock',
     close: 'hide context dock',
     loading: 'loading scenarios…',
@@ -90,6 +90,18 @@ export default {
   },
   documentActions: {
     aria: 'document actions',
+  },
+
+  // the routed PLACE, named. One list feeds both the browser tab's title and the tab strip's
+  // orientation label, so the window and the strip can never disagree about where the reader is.
+  place: {
+    graph: 'Graph',
+    sessions: 'Sessions',
+    evals: 'Evals',
+    issues: 'Issues',
+    settings: 'Settings',
+    empty: 'Workspace',
+    projects: 'Projects',
   },
   nav: {
     railLabel: 'main navigation',

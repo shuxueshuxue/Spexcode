@@ -70,11 +70,11 @@ There is ONE row face, and one thing flexes by surface: `showAvatar`. Every list
 lists and the phone's ([[mobile-ui]]) — renders the **compact one-line** face: the title followed by a
 single colour-coded status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the
 exact word kept on the hover title for a11y — grouped into the three triage zones ([[session-console]]).
-The **map-side** board window (SessionWindow) **keeps** the avatar, the
-fixed spatial anchor that lets a session be **cross-referenced against the avatars on the very nodes it
-edits**; the **console sidebar and the phone drop it** (`showAvatar={false}`, redundant beside the title).
-Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
-list, so the title still renarrates each turn without the row losing its place. (An older **two-row**
+Every list surface the product still draws — the finding dock's projection, the console sidebar and the
+phone's — **drops** it (`showAvatar={false}`, redundant beside the title); the flex remains because the face
+is one implementation and a surface that needs the avatar's cross-referencing job must be able to ask for it
+rather than fork the row. Where the avatar is gone the fixed anchor is simply the row's **slot** in the
+ordered list, so the title still renarrates each turn without the row losing its place. (An older **two-row**
 variant — status word + op tally on a second line — lived on as the mobile list's face long after both
 desktop lists folded it into the glyph; it is retired, deleted with its `compact` prop rather than kept as
 a dead second implementation.)

@@ -37,6 +37,7 @@ import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
 import { useStatusItem } from './StatusBar.jsx'
+import { useWorkspaceApi } from './workspace.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -156,16 +157,12 @@ const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 let nextAttachmentKey = 0
 
 const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
-const HERO_WORDMARK = [
-  '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
-  '██╔════╝██╔══██╗██╔════╝╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝',
-  '███████╗██████╔╝█████╗   ╚███╔╝ ██║     ██║   ██║██║  ██║█████╗  ',
-  '╚════██║██╔═══╝ ██╔══╝   ██╔██╗ ██║     ██║   ██║██║  ██║██╔══╝  ',
-  '███████║██║     ███████╗██╔╝ ██╗╚██████╗╚██████╔╝██████╔╝███████╗',
-  '╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝',
-].join('\n')
+// The launch state is the quietest surface in the product: an empty room waiting for one sentence. It used
+// to open with six lines of box-drawing pixel art — a terminal's idea of a logo, painted in a gradient, at a
+// size no other thing on the board is allowed. The name is now just the name, set once at the page's single
+// statement size and left muted, so the lit thing in the room is the input the reader came to type in.
 export function LaunchHero() {
-  return <pre className="si-hero" aria-label="SpexCode">{HERO_WORDMARK}</pre>
+  return <p className="si-hero">spexcode</p>
 }
 
 function ActionOutcome({ outcome }) {
@@ -447,6 +444,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null }) {
   const t = useT()
   const { notify } = useTransientNotice()
+  const { lockGraphTo } = useWorkspaceApi()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -1404,9 +1402,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           {active === 'new' && (
             <div className="si-new-center">
               <LaunchHero />
-              {/* the ask line was removed by human direction, but its slot stays — the wordmark keeps its
-                  breathing room above the input (an equal-height spacer, not a collapsed gap) */}
-              <div className="si-ask-gap" aria-hidden="true" />
               <div
                 className={dragTarget === 'new' ? 'si-inputwrap dragover' : 'si-inputwrap'}
                 onDragOver={(e) => onDragOverFiles(e, 'new')}
@@ -1597,7 +1592,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         }
         setActionOutcome({ owner: 'panel', phase: 'failed', message })
       }}
-      onLock={(s) => { onPickSession?.(s, false); onClose() }}
+      // claiming the graph is a WORKSPACE act ([[workspace-shell]]) — the same claim the finding dock's
+      // session rows make. It used to be handed to a callback that expected a session id and got a session,
+      // which is how a menu item can look wired and do nothing.
+      onLock={(s) => { lockGraphTo(s.source, { toggle: false }); onClose() }}
     />
     </>
   )

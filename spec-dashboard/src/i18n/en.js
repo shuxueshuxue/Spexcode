@@ -88,6 +88,9 @@ export default {
     surfaceConversation: 'conversation',
     surfaceDiff: 'diff',
   },
+  documentActions: {
+    aria: 'document actions',
+  },
   nav: {
     railLabel: 'main navigation',
     explorer: 'Explorer',

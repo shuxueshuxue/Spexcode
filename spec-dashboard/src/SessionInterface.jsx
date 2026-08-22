@@ -13,7 +13,7 @@ import SessionContextMenu from './SessionContextMenu.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { navigateAddress, sessionEvalAddress } from './address.js'
-import { navigate } from './route.js'
+import { navigate, routeHash } from './route.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
@@ -31,6 +31,7 @@ import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
+import { useDocumentAction } from './documentActions.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -187,45 +188,28 @@ const webName = (url) => {
 const resourceTabKey = (sessionId, kind, value) => `${sessionId}:${kind}:${value}`
 const webProxyUrl = (sessionId, key) => `${PROJECT_BASE}/web/${encodeURIComponent(sessionId)}/${encodeURIComponent(key)}/`
 
-function SessionFiles({ session, onPreview, onDownload, onCopy }) {
+function ResourceMenu({ options, onOpen }) {
   const t = useT()
-  const [open, setOpen] = useState(false)
-  const filesRef = useRef(null)
-  const files = Array.isArray(session?.files) ? session.files : []
-  const ready = files.length > 0
-
-  useEffect(() => { setOpen(false) }, [session?.id])
-  useKeyboardScope((event) => {
-    if (!open) return
-    const closeOutside = (event) => { if (!filesRef.current?.contains(event.target)) setOpen(false) }
-    window.addEventListener('pointerdown', closeOutside)
-    return () => window.removeEventListener('pointerdown', closeOutside)
-  }, [open])
-
-  if (!session) return null
-
-  const label = ready ? t('session.filesTitle') : t('session.filesEmptyTitle')
   return (
-    <div ref={filesRef} className="si-files">
-      <IconButton icon="folder-open" size={14} label={label}
-        className={`si-tool sc-${ready ? 'blue' : 'muted'} files`}
-        aria-expanded={ready ? open : undefined}
-        disabled={!ready}
-        onClick={() => setOpen((value) => !value)} />
-      {open && (
-        <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
-          {files.map((path) => <div key={path} className="si-files-row" role="none">
-            <button type="button" className="si-files-name" role="menuitem" aria-label={t('session.previewFile')}
-              onClick={() => { setOpen(false); onPreview(path) }}>{fileName(path)}</button>
-            <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile')}
-              onClick={() => onDownload(session.id, path)} />
-            <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}
-              onClick={() => onCopy(path)} />
-          </div>)}
-        </div>
-      )}
+    <div className="document-action-menu" role="menu" aria-label={t('session.resourceMenuLabel')}
+      onMouseDown={(event) => event.stopPropagation()}>
+      {options.length ? options.map((tab) => (
+        <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem" onClick={() => onOpen(tab)}>
+          <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
+          <span>{tab.label}</span>
+        </button>
+      )) : <span className="si-resource-menu-empty">{t('session.resourceMenuEmpty')}</span>}
     </div>
   )
+}
+
+function RegisteredDocumentAction({ document, action }) {
+  useDocumentAction(document, action)
+  return null
+}
+
+function SessionDocumentActions({ document, actions }) {
+  return actions.map((action) => <RegisteredDocumentAction key={action.id} document={document} action={action} />)
 }
 
 function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape }) {
@@ -323,7 +307,7 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
   )
 }
 
-// The toolbar consumes only the canonical graph session projection. Last-known survives input invalidation,
+// The session action projection consumes only the canonical graph session projection. Last-known survives input invalidation,
 // tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
 // `rowPresent` separates the two ways a projection can be absent. A selected row that carries none is a
 // retained record the board no longer projects at all — a closed session leaves the graph and is served from
@@ -486,7 +470,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const panelRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
-  const resourcePickerRef = useRef(null)
   const knownWebsRef = useRef(null)
   const archiveRequestRef = useRef(null)
   useEffect(() => subscribeSessionSurface(() => setSurfaceVersion((version) => version + 1)), [])
@@ -674,12 +657,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [sessions])
 
   useEscLayer(resourceMenu, () => setResourceMenu(false))
-  useEffect(() => {
-    if (!resourceMenu) return
-    const closeOutside = (event) => { if (!resourcePickerRef.current?.contains(event.target)) setResourceMenu(false) }
-    window.addEventListener('pointerdown', closeOutside)
-    return () => window.removeEventListener('pointerdown', closeOutside)
-  }, [resourceMenu])
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (value) => setDrafts((draft) => ({
@@ -1253,7 +1230,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return ok
   }
 
-  // `runners` binds each board-command name to the closure that DOES it — the SAME closure the toolbar
+  // `runners` binds each board-command name to the closure that DOES it — the SAME closure the document-action
   // tool and Command Box row call; `uiCmds` narrows the registry to current session state.
   const runners = {
     command: () => { if (commandOpen) closeCommandBox(); else setCommandOpen(true) },
@@ -1269,6 +1246,48 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
   const uiCmds = uiCommandsFor(selSession, runners)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false && command.enabled)
+  const documentKey = sessionActive
+    ? routeHash('sessions', active, requestedSurface ? { surface: requestedSurface } : null)
+    : null
+  const documentActions = sessionActive ? [
+    {
+      id: 'resource-picker', icon: 'plus', label: t('session.addResourceTab'), priority: 100,
+      pressed: resourceMenu, onClick: () => setResourceMenu((open) => !open),
+      menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
+      menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
+    },
+    {
+      id: 'session-menu', icon: 'ellipsis', label: t('session.menuLabel'), priority: 90,
+      onClick: (event) => {
+        const box = event.currentTarget.getBoundingClientRect()
+        setCtxMenu({ x: box.left, y: box.bottom, session: selSession })
+      },
+    },
+    ...uiCmds.filter((command) => command.button).map((command) => ({
+      id: command.name,
+      icon: command.icon,
+      label: t(command.enabled ? command.titleKey : command.disabledTitleKey),
+      disabled: !command.enabled,
+      disabledReason: command.enabled ? undefined : t(command.disabledTitleKey),
+      pressed: command.pressed ? commandOpen : undefined,
+      onClick: () => command.run?.(),
+      priority: command.anchor === 'right' ? -10 : 50,
+    })),
+    ...(activeResource ? [
+      {
+        id: 'refresh-resource', icon: 'rotate-ccw', label: t('session.refreshResourceTab', { name: activeResource.label }), priority: 40,
+        onClick: () => refreshResource(activeResource),
+      },
+      ...(activeResource.kind === 'file' ? [
+        { id: 'download-resource', icon: 'download', label: t('session.downloadFile'), priority: 39, onClick: () => { void downloadFile(activeResource.sessionId, activeResource.value) } },
+        { id: 'copy-resource', icon: 'copy', label: activeResource.value, priority: 38, onClick: () => { void copyFilePath(activeResource.value) } },
+      ] : []),
+    ] : []),
+    ...(!activeResource && !diffSurface ? [{
+      id: 'open-diff', icon: 'file-diff', label: t('session.diffScope'), priority: 30,
+      onClick: () => navigate('sessions', active, { query: { surface: SESSION_SURFACE_DIFF } }),
+    }] : []),
+  ] : []
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
   const stateRef = useRef({})
@@ -1395,9 +1414,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays LAID OUT under the New tab so warm terminals keep their final geometry;
-              visibility hides it without a 0x0 renderer. The compact toolbar carries terminal/resource/Eval tabs
-              and registry-filtered icon tools. Identity/state already lives in the
-              selected sidebar row and is deliberately not repeated here. */}
+              visibility hides it without a 0x0 renderer. Session chrome belongs to the shell's document-action
+              slot; this content starts directly below the top tab row. */}
           <div
             className="si-session-wrap"
             aria-hidden={!sessionActive}
@@ -1409,79 +1427,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               pointerEvents: sessionActive ? 'auto' : 'none',
             }}
           >
-              <header className="si-tabbar" aria-label={t('session.toolbarLabel')}>
-                <div className="si-surface">
-                  <div ref={resourcePickerRef} className="si-resource-picker">
-                    <IconButton icon="plus" size={11} className="si-tab-add" label={t('session.addResourceTab')}
-                      aria-expanded={resourceMenu} disabled={!sessionActive} onClick={() => setResourceMenu((open) => !open)} />
-                    {resourceMenu && (
-                      <div className="si-resource-menu" role="menu" aria-label={t('session.resourceMenuLabel')}>
-                        {resourceOptions.length ? resourceOptions.map((tab) => (
-                          <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem"
-                            onClick={() => openResource(tab)}>
-                            <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
-                            <span>{tab.label}</span>
-                          </button>
-                        )) : <span className="si-resource-menu-empty">{t('session.resourceMenuEmpty')}</span>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="si-actions" role="group" aria-label={t('session.toolbarToolsLabel')}>
-                  {sessionActive && <IconButton icon="ellipsis" size={14} className="si-tool sc-muted" label={t('session.menuLabel')}
-                    onClick={(event) => { const box = event.currentTarget.getBoundingClientRect(); setCtxMenu({ x: box.left, y: box.bottom, session: selSession }) }} />}
-                  {sessionActive && !activeResource && <IconButton icon="git-merge" size={14} className={`si-tool sc-${diffSurface ? 'blue' : 'muted'} diff-surface`}
-                    label={t('session.diffScope')} aria-pressed={diffSurface} onClick={() => navigate('sessions', active, { query: { surface: diffSurface ? SESSION_SURFACE_CONVERSATION : SESSION_SURFACE_DIFF } })} />}
-                  {activeResource && (
-                    <>
-                      <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
-                        label={t('session.refreshResourceTab', { name: activeResource.label })}
-                        onClick={() => refreshResource(activeResource)} />
-                    </>
-                  )}
-                  {activeResource?.kind === 'file' && (
-                    <>
-                      <IconButton icon="download" size={14} className="si-tool sc-blue file-download" data-resource-action="download"
-                        label={t('session.downloadFile')}
-                        onClick={() => { void downloadFile(activeResource.sessionId, activeResource.value) }} />
-                      <IconButton icon="copy" size={14} className="si-tool sc-blue file-copy" data-resource-action="copy"
-                        label={activeResource.value}
-                        onClick={() => { void copyFilePath(activeResource.value) }} />
-                    </>
-                  )}
-                  {uiCmds.filter((c) => c.button && (!activeResource && (activeBaseSurface === 'terminal' || c.name !== 'merge')))
-                    // Resident right-anchored tools (Command Box) sort to the row's right edge; transient action
-                    // buttons keep their registry order to its left. Stable sort preserves that left order.
-                    .sort((a, b) => (a.anchor === 'right' ? 1 : 0) - (b.anchor === 'right' ? 1 : 0))
-                    .map((c) => {
-                    const pressed = c.pressed ? commandOpen : undefined
-                    const state = pressed ? ' on' : ''
-                    const label = t(c.enabled ? c.titleKey : c.disabledTitleKey)
-                    return (
-                      <IconButton
-                        key={c.name}
-                        icon={c.icon}
-                        size={14}
-                        label={label}
-                        className={`si-tool sc-${c.enabled ? c.color : 'muted'} ${c.name}${state}`}
-                        data-command={c.name}
-                        aria-pressed={pressed}
-                        disabled={!c.enabled}
-                        onClick={() => { if (c.enabled) c.run() }}
-                      />
-                    )
-                  })}
-                  <SessionFiles
-                    session={selSession}
-                    onDownload={downloadFile}
-                    onCopy={copyFilePath}
-                    onPreview={(path) => openResource({
-                      id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
-                    })}
-                  />
-                </div>
-              </header>
+              <SessionDocumentActions document={documentKey} actions={documentActions} />
               {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div

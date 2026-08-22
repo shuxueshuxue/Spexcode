@@ -247,7 +247,24 @@ harness 是 `scripts/m1-conformance.mjs`（已提交，可复现）。它 `npm p
 
 `spex eval lint --changed` 现在 **0 flagged**。
 
-## 5. 仍然 OPEN
+## 5. 后续 cut-in 与隔离替换演练（当前状态）
+
+本账前文的“没有 importer / 只证明替代物自己成立”描述属于初始 M1 施工范围，**不再是当前状态**。后续 cut-in
+已把 Spex backend 的 lifecycle、parent/watch topology、canonical send queue、runtime binding 与 JSON migration
+接到 `@spexcode/session-application`；marker 之后不再读取 `session.json` 或 `pending.json` 作为应用权威，也没有
+兼容 fallback。当前实现提交链以 `b7a5aaed4` 为 head，最后一条窄 CLI YATU（真实 backend、parent/child、restart、watch
+delivery）通过，production cutover 的十条 HTTP/migration YATU 也为 **10/10**。
+
+在不触碰 live `127.0.0.1:8787` 的前提下，用 live store 的 560 份 JSON 记录复制品做了一次完整替换演练：
+
+- 一次性迁移生成 SQLite、backup 与 marker；首次迁移 `replayed=false`，第二次相同输入 `replayed=true`，source
+  digest 相同；迁移共 64 条事件，backup 114 个文件。
+- 用 committed `spec-cli/dist` 启动隔离 backend，`/health`、`/api/instance`、`/api/session-runtime/:id/replay`
+  与 `/events` 均可用；停止后重启，replay 的 state/proposal/note 完全一致。
+- 将迁移 DB 与 marker 暂时移开模拟回滚，再恢复并启动；health 与 replay 再次通过。演练只证明复制品上的切换/回滚
+  机制，**没有停止、改写或替换真实 live backend**；真实切换仍需在维护窗口按同一脚本执行并保留原 JSON backup。
+
+## 6. 初始施工阶段的 OPEN（历史边界，非当前 cut-in 的失败）
 
 - **本阶段的三个包在产品路径上没有任何 importer**，这是刻意的：它们是 M4/M5/M6 cutover 的被接入方，不是接入本身。
   因此 M1 证明的是"这套东西自己成立"，**没有**证明任何一条 legacy 路径可以被替换——那要 sabotage + 正向 YATU + 物理删除

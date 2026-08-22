@@ -312,6 +312,14 @@ body {
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
+/* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
+   is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
+   one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
+   instead of the head and the list sharing a piece of state to say "something is being carried". */
+body.is-session-dragging .dock-archive-door { color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+body.is-session-dragging .dock-archive-door:hover {
+  color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
+}
 .ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
 .ft-row {
   display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
@@ -368,7 +376,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dock, .dock.dock-closing { animation: none; }
 }
-.dock-session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
+.dock-session-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
 .dock > .filetree { flex: 1; min-height: 0; border-right: 0; background: transparent; }
 /* the row that currently owns the graph ([[workspace-shell]]'s lock) wears the claim, so the dock is where
    both the claiming and the claimed state are visible. */
@@ -1406,21 +1414,19 @@ a.scenario-count:hover { background: var(--panel2); }
   border-left-color: var(--blue); border-left-width: 3px;
   box-shadow: inset 0 0 0 1px var(--blue);
 }
-.si-root-drop {
-  height: 28px; margin: 5px 10px 2px; display: flex; align-items: center; justify-content: center;
-  border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: var(--radius);
-  color: var(--muted); transition: background .12s, border-color .12s, color .12s;
+/* THE GAP IS THE TOP LEVEL ([[dock-modes]]). While a nested row is in hand the list outlines itself, and
+   the outline goes green where the release would actually detach. An OUTLINE, never a border or an
+   inserted strip: outlines take no layout, so the rows the reader is aiming at do not move under the
+   pointer the moment the drag begins — which is exactly what a head-of-list drop strip did. */
+.dock-session-list.root-armed { outline: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); outline-offset: -3px; }
+.dock-session-list.root-on { outline-style: solid; outline-color: var(--green); }
+.dock-root-hint {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; padding: 4px 6px; z-index: 2;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  border-radius: var(--radius); background: color-mix(in srgb, var(--ground) 88%, transparent);
+  color: var(--muted); font-size: var(--type-caption);
 }
-.si-root-drop.on {
-  position: relative; z-index: 51;
-  background: color-mix(in srgb, var(--green) 12%, var(--panel2));
-  border-color: var(--green); color: var(--green);
-}
-.si-session-drag-ghost {
-  position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0;
-  box-shadow: var(--shadow);
-  opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left;
-}
+.dock-session-list.root-on ~ .dock-root-hint { color: var(--green); }
 /* the window wears the gesture ([[drag-gesture]]): one class for every movable list, so a drag reads the
    same whether it started in the tab strip or in the session dock. */
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none !important; }

@@ -71,8 +71,9 @@ derived label. Renaming an unknown session fails loudly — the endpoint answers
 success.
 
 Archive is reached from the sessions dock's bottom `View all` door and remains a document overlay; it is not
-part of this tools menu. Drag-to-reorder and multi-select are retired with the withdrawn duplicate list, so
-the read-only dock does not expose mutable list gestures.
+part of this tools menu. Multi-select is retired with the withdrawn duplicate list. Moving a session by drag
+is NOT retired and is not this node's: it lives with the list that shows the sessions ([[dock-modes]]),
+because where a session sits is the shape of that list rather than an action on one session.
 
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
@@ -92,6 +93,15 @@ decisive **close**, never the soft `/stop` — stopping-to-resume is a Command B
 Both lifecycle confirms open with their destructive commit button focused, so a plain **Enter** confirms the
 visible archive or close action. Escape, Cancel, and a backdrop click remain cancellation paths; Enter does
 not weaken the preceding right-click confirmation boundary.
+
+**The close confirm has TWO openers and one body.** The menu's own item is the first; a session row dropped
+on the dock's archive door is the second ([[dock-modes]]). The removal is byte-for-byte the same removal, so
+it is one prompt reached two ways rather than two prompts for one destruction — two dialogs would be two
+places for the wording, the destructive styling and the fire-and-forget semantics to drift apart. The second
+opener is owned by its caller rather than by this menu, so dismissing hands the request back instead of only
+clearing state here; that is what keeps a cancelled drop from leaving a dead request behind it. A drag is a
+more deliberate gesture than a right-click, which is a reason to trust the AIM, never a reason to skip the
+confirmation — what is being confirmed is the removal, not the accuracy of the pointer.
 
 A close refusal is a visible action failure, not a silent background no-op: the backend returns a non-2xx
 structured error when its ownership guard commits no removal, and the console keeps the selected row while

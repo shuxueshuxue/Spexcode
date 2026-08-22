@@ -167,20 +167,22 @@ background fire) and never expands a plugin body itself.
 An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
 base surfaces while live: its interactive tmux **Terminal** (SessionTerm), which is the default input surface,
 and the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
-liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a live
-pane-backed session between Terminal and Conversation; the icon always names the other destination, and no
-second terminal/conversation view is visible at once.
+liveness and is always Conversation. The selected face is navigation state on the session object address:
+`#/sessions/<id>?surface=terminal|conversation`; a bare `#/sessions/<id>` resolves the persisted base face.
+An explicit query writes the per-session preference through [[session-surface]]. There is no in-console face
+switch control or second tab rail: changing face navigates the same session parameter with a different query,
+replacing the current object slot; ctrl/⌘ holding uses the ordinary tab latch to keep a second object tab.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
-records, renders the same Conversation DOM: the same surface tabs, the same timeline body, and one shared footer.**
+records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
 For a live session that footer is only the enabled message composer. For an offline session it contains the
 same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
 action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
 ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
-once when selected and does not poll. A pane-backed offline or archived record keeps its Terminal tab visible but disabled, and activating
-that tab cannot leave Conversation. `queued` remains the one exception to offline relaunch: it has intentionally
+once when selected and does not poll. A pane-backed offline or archived record remains Conversation and cannot
+be switched to Terminal. `queued` remains the one exception to offline relaunch: it has intentionally
 not launched and self-starts as a slot frees.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
@@ -191,11 +193,9 @@ no nested levels, and no permanently reserved second-input strip. Its own prompt
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
-available commands. The current base tab is **Terminal** or **Conversation** for a pane-backed session, and
-Conversation for a headless session. The visual tab sequence is its current surface, the
-**Eval** navigation tab, resource tabs, then the resource picker: this is one compact tab rail, with any remaining toolbar space
-separating it from command tools. A one-pixel divider and short gutter separate the picker from Eval; there is no
-matching divider after the plus. The picker itself is a compact circular plus control, so it reads as an add/open
+available commands. Terminal/Conversation and Evals are not toolbar tabs. The shell's top [[tab-strip]] names
+the session object with an i18n face suffix; Evals keeps its one canonical scoped address and is reached by
+navigation. The picker itself is a compact circular plus control, so it reads as an add/open
 action rather than an extension of Eval. It is deliberately a step smaller and quieter than a command tool — thin
 neutral ring, accent only on hover and focus: it opens a menu of things to look at, it does not act on the session,
 and a control sized and weighted like the merge/stop tools would claim authority it does not have.

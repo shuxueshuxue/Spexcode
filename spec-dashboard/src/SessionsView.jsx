@@ -28,6 +28,7 @@ export default function SessionsView({ param, query }) {
       open
       searchOpen={!!palette}
       sel={sel}
+      surface={query?.surface}
       setSel={setSel}
       seed={seed}
       onSeedConsumed={() => setSeed(null)}

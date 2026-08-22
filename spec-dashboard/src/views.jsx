@@ -71,21 +71,21 @@ function IssuesView() {
 }
 function SettingsView() { return <Settings /> }
 
-// `document: true` marks a view the tab strip may accumulate. `settings` is a destination people bounce off
-// rather than a document they keep open, and the graph is the workspace's home rather than one of its
-// documents — a strip that filled with either would stop being a list of what you are working on.
-// `empty` is what the workspace shows when it holds nothing; a tab for it would be the one address that
-// contradicts its own strip, so it is emphatically not a document either.
+// A tab holds an OBJECT, not a board face. `document(page, param)` therefore receives the route selector:
+// graph and bare list pages are finding surfaces, while only object-shaped addresses enter the working set.
+// `empty` is what the workspace shows when it holds nothing; a tab for it would contradict its own strip.
 export const VIEWS = {
-  graph:    { component: GraphView,    document: true,  className: 'view-graph' },
-  spec:     { component: SpecView,     document: true,  className: 'view-spec' },
-  file:     { component: FileView,     document: true,  className: 'view-file' },
-  sessions: { component: SessionsView, document: true,  className: 'view-sessions' },
-  evals:    { component: EvalsView,    document: true,  className: 'view-evals' },
-  issues:   { component: IssuesView,   document: true,  className: 'view-issues' },
+  graph:    { component: GraphView,    document: false, className: 'view-graph' },
+  spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
+  file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
+  sessions: { component: SessionsView, document: (_page, param) => param != null, className: 'view-sessions' },
+  evals:    { component: EvalsView,    document: (_page, param) => param != null, className: 'view-evals' },
+  issues:   { component: IssuesView,   document: (_page, param) => param != null, className: 'view-issues' },
   settings: { component: SettingsView, document: false, className: 'view-settings' },
   empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
 export const viewFor = (page) => VIEWS[page] || VIEWS.graph
-export const isDocument = (page) => !!VIEWS[page]?.document
+export const isDocument = (page, param = null) => typeof VIEWS[page]?.document === 'function'
+  ? VIEWS[page].document(page, param)
+  : !!VIEWS[page]?.document

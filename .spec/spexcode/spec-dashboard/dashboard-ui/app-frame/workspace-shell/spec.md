@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/Shell.jsx
 related:
   - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
 ---
@@ -57,6 +58,16 @@ happens to be current.
 **A view is keyed on its address**, so a different document is a different instance and one document's
 state cannot bleed into the next. The graph is the deliberate exception — keyed on the page alone, because
 its camera and expansion are the workspace's home state rather than one address's.
+
+**A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
+error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split
+pane rendering exactly as they were — a reader who can still navigate can still get out. The boundary
+resets on the address it is keyed by: leaving a broken document is the natural recovery and must not cost
+a reload, and the panel's retry is that same reset for when the address did not change. The console keeps
+the stack; the pane shows one line. Wrapping the whole app instead would trade a broken document for a
+white screen, which is the failure this exists to prevent. The other half of the same contract is the
+stale dist: a lazy chunk that 404s after a redeploy retries twice, then reloads the page once (guarded, so
+it can only happen once per tab) before surfacing here ([[view-registry]]).
 
 **The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view. A door
 that is not built is shut more firmly than a door that closes itself, which is why that face no longer

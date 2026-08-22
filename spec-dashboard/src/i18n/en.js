@@ -179,6 +179,13 @@ export default {
     retry: 'retry',
   },
 
+  // the crash panel a single pane shows when the view inside it threw ([[workspace-shell]]). Deliberately
+  // two lines of copy: the message itself is the error's, not ours.
+  viewError: {
+    title: 'This view crashed.',
+    retry: 'Retry',
+  },
+
   evalsFeed: {
     title: 'Evals',
     kind: { video: 'video', image: 'image', all: 'all' },

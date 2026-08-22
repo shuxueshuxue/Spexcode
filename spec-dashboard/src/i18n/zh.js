@@ -178,6 +178,11 @@ export default {
     retry: '重试',
   },
 
+  viewError: {
+    title: '这个视图崩溃了。',
+    retry: '重试',
+  },
+
   evalsFeed: {
     title: '评测',
     kind: { video: '视频', image: '图片', all: '全部' },

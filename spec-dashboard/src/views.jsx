@@ -15,13 +15,44 @@ import { navigate } from './route.js'
 // itself to whichever address happens to be current. Everything else — the board, the workspace — it asks
 // for by context, so no component has to own another component's props.
 
-const GraphView = lazy(() => import('./GraphView.jsx'))
-const SpecView = lazy(() => import('./SpecView.jsx'))
-const FileView = lazy(() => import('./FileView.jsx'))
-const SessionsView = lazy(() => import('./SessionsView.jsx'))
-const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
-const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
-const Settings = lazy(() => import('./Settings.jsx'))
+const CHUNK_RELOAD_KEY = 'spexcode.chunk-reload'
+
+// Every view is lazy, and the dashboard ships as a static dist behind a gateway — so a tab can be holding
+// an index.html from before a redeploy and ask for hashed chunks that no longer exist. React.lazy caches
+// the REJECTION: one 404 and that view is permanently dead for the life of the page, however many times
+// the reader navigates back to it. That is why the retry has to live inside the IMPORTER, which is the
+// only place a second attempt is still possible. Two retries cover a chunk that is merely slow or still
+// landing; if it is genuinely gone, the new index.html is the fix, so we reload once. Once, guarded by
+// sessionStorage — a redeploy that keeps failing has to surface in [[workspace-shell]]'s error boundary
+// rather than spin the tab. A successful import clears the guard, so the next stale dist gets its reload.
+function lazyRetry(importer) {
+  return lazy(async () => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const mod = await importer()
+        try { sessionStorage.removeItem(CHUNK_RELOAD_KEY) } catch { /* private mode */ }
+        return mod
+      } catch (err) {
+        if (attempt < 2) { await new Promise((done) => setTimeout(done, 250)); continue }
+        // no sessionStorage (private mode) reads as "already reloaded" — never risk a reload loop.
+        let reloaded = true
+        try { reloaded = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1' } catch { /* keep true */ }
+        if (reloaded) throw err
+        try { sessionStorage.setItem(CHUNK_RELOAD_KEY, '1') } catch { /* unreachable: read threw first */ }
+        location.reload()
+        await new Promise(() => {})   // the reload wins; hold the Suspense fallback instead of flashing
+      }
+    }
+  })
+}
+
+const GraphView = lazyRetry(() => import('./GraphView.jsx'))
+const SpecView = lazyRetry(() => import('./SpecView.jsx'))
+const FileView = lazyRetry(() => import('./FileView.jsx'))
+const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
+const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
+const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
+const Settings = lazyRetry(() => import('./Settings.jsx'))
 
 const openSession = (id) => navigate('sessions', id)
 

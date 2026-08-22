@@ -31,7 +31,7 @@ function SessionDock({ sessions, activeId }) {
           if (item.type === 'zone') {
             const foldable = item.zone === 'offline'
             const label = t(`sessionZone.${item.zone}`)
-            return <button key={`zone-${item.zone}`} type="button" className={`dock-session-zone dock-session-zone-${item.zone}${item.folded ? '' : ' open'}`}
+            return <button key={`zone-${item.zone}`} type="button" className={`dock-session-zone dock-session-zone-${item.zone}`}
               aria-expanded={foldable ? !item.folded : undefined} onClick={foldable ? () => setOfflineOpen((open) => !open) : undefined}>
               <span>{label}</span><span className="dock-session-count">{item.count}</span>
             </button>

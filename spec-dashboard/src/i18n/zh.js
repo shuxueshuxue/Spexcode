@@ -83,6 +83,8 @@ export default {
     sessions: '会话',
     evals: '评测',
     issues: '议题',
+    surfaceTerminal: '终端',
+    surfaceConversation: '对话',
   },
   nav: {
     railLabel: '主导航',

@@ -28,6 +28,14 @@ import { runTabCommand } from './tabs.js'
 // is the rule that makes two-up possible later and that keeps a view from coupling to whichever address
 // happens to be current.
 
+// The wide boards are the one place the FINDING region stands down. Evals and Issues are finding surfaces
+// in their own right — full-width GitHub-style lists with their own query, facets and rows — so putting the
+// dock beside one puts two finding surfaces on screen at once and squeezes the board the width it was
+// designed around. While a board is routed the dock does not render at all. The rail's explorer toggle
+// still owns the stored PREFERENCE (and stays lit by it): the board suppresses the dock for as long as it
+// is the document, and never edits what the reader chose.
+const BOARD_PAGES = new Set(['evals', 'issues'])
+
 function ViewHost({ page, param, query }) {
   const t = useT()
   const { component: View, className } = viewFor(page)
@@ -167,7 +175,9 @@ export default function Shell() {
       <div className="app">
         <TooltipLayer />
         <SideBar page={page} identity={identity} catalog={catalog} />
-        {dock && (
+        {/* only the BARE board face is full-bleed — #/evals/<node>/<scenario> and #/issues/<id> are
+            object documents and keep the finding dock like any other document. */}
+        {dock && !(BOARD_PAGES.has(page) && param == null) && (
           <ViewErrorBoundary resetKey="dock">
             <Dock mode={dockMode} setMode={setDockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />

@@ -27,7 +27,9 @@ export const tabKey = (t) => routeHash(t.page, t.param, t.query)
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? raw.filter((t) => t && typeof t.page === 'string').slice(0, MAX) : []
+    return Array.isArray(raw)
+      ? raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param)).slice(0, MAX)
+      : []
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -58,10 +60,10 @@ export function useTabs() {
   const route = useRoute()
   const [tabs, setTabs] = useState(read)
 
-  // The current address is always present in the strip — but a plain navigation REPLACES the slot the
-  // reader was in rather than appending, so browsing moves the working set's cursor instead of growing it.
-  // Appending happens on exactly two grounds: the reader asked (requestTab's latch), or there is no slot to
-  // replace (first document of the session).
+  // The current address is always present in the strip. Plain navigation replaces only a slot of the same
+  // page kind; crossing from spec to file/session (or any other kind) appends a document to the working set.
+  // Appending happens on exactly three grounds: the reader asked (requestTab's latch), the current slot is a
+  // different page kind, or there is no slot to replace (first document of the session).
   //
   // The whole decision lives in the effect BODY, with the list mirrored in a ref, and setTabs receives a
   // plain value — never an updater. An updater here must be pure, and this decision is not: it consumes the
@@ -71,7 +73,7 @@ export function useTabs() {
   const tabsRef = useRef(tabs); tabsRef.current = tabs
   const prevKeyRef = useRef(null)
   useEffect(() => {
-    if (!isDocument(route.page)) return
+    if (!isDocument(route.page, route.param)) return
     const key = routeHash(route.page, route.param, route.query)
     const keep = keepNext; keepNext = false
     const prev = tabsRef.current
@@ -79,7 +81,9 @@ export function useTabs() {
     prevKeyRef.current = key
     if (prev.some((t) => tabKey(t) === key)) return
     const tab = { page: route.page, param: route.param, query: route.query }
-    const at = keep ? -1 : prev.findIndex((t) => tabKey(t) === before)
+    const current = prev.find((t) => tabKey(t) === before)
+    const sameKind = current?.page === route.page
+    const at = keep || !sameKind ? -1 : prev.findIndex((t) => tabKey(t) === before)
     const next = at < 0 ? [...prev, tab].slice(-MAX) : prev.map((t, i) => (i === at ? tab : t))
     write(next)
     setTabs(next)

@@ -61,8 +61,8 @@ restores the list.
   Evals, Issues, and Settings render as muted `aria-disabled` icons with no `href`, handler, or keyboard
   route; they must neither navigate nor wake any live transport. The live dashboard retains five anchors.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
-  unknown hash lands here) or `#/graph/<node>` (a shareable spec-node focus), `#/sessions` (+
-  `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
+  unknown hash lands here) or `#/graph/<node>` (a finding-surface focus, never a tab), `#/sessions` (+
+  `#/sessions/<sel>` deep-linking an object tab), `#/evals` (+
   `#/evals/<node>/<scenario>`, the canonical eval DETAIL address — each segment encoded on its own so the
   path shape survives), `#/issues` (+ `#/issues/<id>`), `#/settings`. A LIST page's filter state rides a
   query string INSIDE the hash — for the review lists, ONE `?q=<raw token text>` param ([[review-query]];
@@ -71,6 +71,9 @@ restores the list.
   behind plain gateways with no index.html fallback, and a hash route needs nothing from any server.
   `route.js` is the whole route layer (parse — path + query, hash construction, navigate, one hashchange
   hook, legacy normalization); the object-level address vocabulary over it is [[address-routing]].
+- **The rail is the finding layer; the strip is the object layer.** Rail destinations remain graph, sessions,
+  evals, issues, and settings. Only an address with an object parameter enters the strip, as defined by
+  [[tab-strip]]/[[view-registry]]; bare board/list routes stay navigable but never accumulate.
 - **Pages push; list→detail pushes; filter changes push; automatic echoes replace.** Switching pages
   pushes a history entry. Opening a DETAIL page from its list is ALSO a push — measured on GitHub: history
   grows by one and browser Back restores the previous list URL, filters intact; the detail is a real

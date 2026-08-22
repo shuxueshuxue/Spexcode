@@ -2,7 +2,7 @@
 title: typography
 status: active
 hue: 218
-desc: The dashboard's visual vocabulary — two font families with one rule between them, a restrained type scale, three weights, a three-tone ground ladder, and one geometry token set every rule spends instead of hand-writing.
+desc: The dashboard's visual vocabulary — two font roles with one of them swappable (the UI font, mono by default), a restrained type scale, three weights, a three-tone ground ladder, and one geometry token set every rule spends instead of hand-writing.
 code:
   - spec-dashboard/src/styles.test.mjs
 related:
@@ -20,25 +20,37 @@ why an all-caps tracked label is not a level: shape is not on the ladder, so a l
 decoration wearing hierarchy's costume. Chrome labels are sentence case, and the sheet contains no
 `text-transform: uppercase` and no letter-spacing but zero.
 
-## two families, one rule
+## two roles, one of them swappable
 
-`--sans` is the product's voice: chrome, controls, labels, prose — every word a person parses as language.
-`--mono` is reserved for the four things that are **not** language:
+Two tokens, and the split between them is by **role**, not by taste.
+
+`--mono` is fixed. It is what the machine speaks in, and it is not negotiable:
 
 - code and terminal output;
 - machine identifiers — ids, paths, hashes, keycaps;
 - a query DSL, where the input and its highlight overlay must align glyph for glyph;
 - columns that must line up (timecodes, tabular numbers).
 
-Both are system stacks; no webfont is fetched, so the vocabulary costs nothing to load and degrades to
-whatever the reader's platform has. The document defaults to `--sans`, so a surface reaching for mono is
-making a claim, and the gate holds mono to a minority of all family declarations. A surface that reaches
-for mono without one of those four reasons is reaching for a costume.
+`--ui-font` is everything a person parses as **language**: chrome, controls, labels, prose, empty states.
+It is the one token in the vocabulary a reader may retune, and it can be retuned only because every
+language surface spends the token instead of naming a family — 116 declarations, one line to flip.
 
-**This is the correction of a real failure.** The board was mono end to end — one family across forty-odd
-components, chrome included — which read as a terminal emulator wearing a product's chrome rather than as a
-product. Mono is a signal; a signal spent everywhere signals nothing, and it costs the same reader the
-legibility of every label that was never code. The split gives the signal back its meaning.
+**Today `--ui-font` resolves to `var(--mono)`, and that is the default on purpose.** The board was
+converted to a sans stack and the owner judged the result uglier than what it replaced: the terminal
+voice is what the product is supposed to feel like, and numbers and the `Running`/node labels are where
+the loss showed worst. So the default went back. `--ui-font-sans` keeps the sans stack declared and
+ready — it is the value a per-user **Settings** toggle will offer, not a stack in use.
+
+Both are system stacks; no webfont is fetched, so the vocabulary costs nothing to load and degrades to
+whatever the reader's platform has.
+
+**The machinery is the point, and it survives either default.** Before it, forty-odd components each
+hand-wrote a family, so "what font is the product" was not a question the sheet could answer, let alone
+change. Routing every language site through one token made the whole board's voice a single decision —
+which is what let it be converted to sans, what let it be converted straight back when the owner looked
+at it, and what will let a reader choose for themselves. A surface that hand-writes a family, or reaches
+for `--mono` directly for something that is language, takes itself out of that decision and out of the
+toggle's reach.
 
 ## the scale
 
@@ -95,8 +107,11 @@ the themes could not re-skin — a dozen different ideas of "above" on one scree
 
 ## the gate
 
-`styles.test.mjs` is this body in executable form: it asserts both family tokens exist, that the document
-defaults to sans and mono stays the minority, that no all-caps or tracked label survives, that exactly three
+`styles.test.mjs` is this body in executable form: it asserts both role tokens exist, that `--ui-font`
+defaults to the mono stack and `--ui-font-sans` stays declared for the future setting, that every
+`font-family` in the sheet names a role token rather than a family and that both roles are still spent
+(collapsing language onto `--mono` would weld the board to one family and leave the toggle nothing to
+flip), that no all-caps or tracked label survives, that exactly three
 weight tokens are in use, that the radius and elevation tokens own their properties, that all eight palettes
 resolve the full ground ladder and the chrome surfaces spend it — and that the chrome rows
 [[ui-state-model]]'s budget refused stay retired at the source. It runs with the unit suite, off the sheet's

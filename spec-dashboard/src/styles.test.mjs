@@ -45,23 +45,25 @@ test('dashboard typography declarations use the shared scale', () => {
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
 })
 
-test('the sheet holds TWO families and spends mono only on what is not language', () => {
-  // The split IS the modern read. Sans carries every word a person parses as language — chrome, labels,
-  // prose, empty states; mono is reserved for code, terminal output, machine identifiers (ids, paths,
-  // hashes, keycaps) and columns that must line up. Both tokens must exist, the document must default to
-  // sans, and mono must stay the minority — the failure this replaces was one family covering everything.
-  assert.match(css, /--sans:\s*ui-sans-serif/)
+test('the UI font is one swappable token, and it defaults to the terminal mono voice', () => {
+  // Two roles: --mono is fixed (code, terminal output, ids, paths, columns), --ui-font is every word a
+  // person parses as language. What makes the vocabulary retunable is that language sites spend the
+  // TOKEN and never a family — so one line changes the product's voice. That line resolves to mono
+  // today: the owner judged the sans board uglier and ruled the terminal look the default. The sans
+  // stack stays declared as --ui-font-sans, the value the future per-user Settings toggle will offer.
   assert.match(css, /--mono:\s*'JetBrains Mono'/)
-  assert.match(css, /body\s*\{[^}]*font-family:\s*var\(--sans\);/s)
+  assert.match(css, /--ui-font:\s*var\(--mono\);/, 'the UI font defaults to the mono stack')
+  assert.match(css, /--ui-font-sans:\s*ui-sans-serif/, 'the optional sans stack stays available to Settings')
+  assert.match(css, /body\s*\{[^}]*font-family:\s*var\(--ui-font\);/s)
 
-  const families = [...css.matchAll(/font-family:\s*([^;}]+)|font:\s*[^;}]*?(var\(--(?:sans|mono)\))/g)]
+  const families = [...css.matchAll(/font-family:\s*([^;}]+)|font:\s*[^;}]*?(var\(--(?:ui-font|mono)\))/g)]
     .map((m) => (m[1] || m[2]).trim())
-  const raw = families.filter((v) => !/^var\(--(?:sans|mono)\)$/.test(v) && !/^inherit$/.test(v))
-  assert.deepEqual(raw, [], 'every font-family must name one of the two family tokens')
-  const mono = families.filter((v) => v.includes('--mono')).length
-  const sans = families.filter((v) => v.includes('--sans')).length
-  assert.ok(mono > 0, 'code and terminal surfaces still need mono')
-  assert.ok(mono * 2 < sans, `mono is the exception, not the rule (mono ${mono} vs sans ${sans})`)
+  const raw = families.filter((v) => !/^var\(--(?:ui-font|mono)\)$/.test(v) && !/^inherit$/.test(v))
+  assert.deepEqual(raw, [], 'every font-family must name one of the two role tokens')
+  // both roles stay in use: collapsing language onto --mono directly would weld the board to one family
+  // again and leave the toggle nothing to flip.
+  assert.ok(families.filter((v) => v.includes('--mono')).length > 0, 'code and terminal surfaces still need mono')
+  assert.ok(families.filter((v) => v.includes('--ui-font')).length > 0, 'language surfaces must spend the UI font token')
 })
 
 test('chrome labels are sentence case — no all-caps, no tracked-out shouting', () => {

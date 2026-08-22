@@ -280,6 +280,10 @@ export type RawRecord = {
   runtime_revision?: string // caller-owned idempotency revision for runtime-state publication
   runtime_metadata?: Record<string, string> // opaque external address fields; session-core validates bytes but assigns no meaning
   base?: string // the exact fork point pinned at creation; absent/empty → the auto-detected source-of-truth branch
+  diff_comments?: Array<{
+    id: string; file_path: string; line_start: number; line_end: number; body: string
+    diff_identity: string; sent_at: string | null
+  }>
   launch_readiness_pending?: '' | RawLaunchReadinessPending
 }
 

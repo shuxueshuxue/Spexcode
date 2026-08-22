@@ -255,7 +255,12 @@ export type SessRec = {
   createPayloadHash?: string | null // exact normalized create payload bound to createRequestId
   zcodeChildSessionIds?: string[] // persistent exact ZCode child ids; never inferred from title, path, branch, or timing
   base?: string | null   // explicit fork point the creator pinned; absent/null = the auto-detected source-of-truth branch
+  diffComments?: DiffComment[]
   launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
+}
+export type DiffComment = {
+  id: string; filePath: string; lineStart: number; lineEnd: number; body: string
+  diffIdentity: string; sentAt: string | null
 }
 type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'closedAt' | 'coldProof' | 'adapterRecovery'>
 type LaunchReadinessPending = { version: 1; startedAt: number; original: LaunchReadinessOriginal }
@@ -364,6 +369,17 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     || zcodeChildSessionIds.some((id) => typeof id !== 'string' || !id || id.trim() !== id)
     || new Set(zcodeChildSessionIds).size !== zcodeChildSessionIds.length)
     throw new Error(`session '${raw.session_id}' has invalid zcode_child_session_ids`)
+  const diffComments = (raw as RawRecord & { diff_comments?: Array<{ id: string; file_path: string; line_start: number; line_end: number; body: string; diff_identity: string; sent_at: string | null }> }).diff_comments ?? []
+  if (!Array.isArray(diffComments) || diffComments.some((comment) => !comment || typeof comment !== 'object'))
+    throw new Error(`session '${raw.session_id}' has invalid diff_comments`)
+  const parsedDiffComments = diffComments.map((comment) => {
+    const c = comment as NonNullable<typeof diffComments>[number]
+    if (!c.id || typeof c.id !== 'string' || typeof c.file_path !== 'string' || !c.file_path
+      || !Number.isInteger(c.line_start) || c.line_start < 1 || !Number.isInteger(c.line_end) || c.line_end < c.line_start
+      || typeof c.body !== 'string' || !c.body.trim() || typeof c.diff_identity !== 'string'
+      || !(c.sent_at === null || typeof c.sent_at === 'string')) throw new Error(`session '${raw.session_id}' has invalid diff comment`)
+    return { id: c.id, filePath: c.file_path, lineStart: c.line_start, lineEnd: c.line_end, body: c.body, diffIdentity: c.diff_identity, sentAt: c.sent_at }
+  })
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
@@ -384,6 +400,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     createPayloadHash: raw.create_payload_hash || null,
     zcodeChildSessionIds: [...zcodeChildSessionIds],
     base: raw.base || null,             // records written before pinned bases → null → the source-of-truth branch
+    diffComments: parsedDiffComments,
     launchReadinessPending: pendingRaw ? {
       version: 1,
       startedAt: (raw.launch_readiness_pending as { startedAt: number }).startedAt,
@@ -461,6 +478,10 @@ function writeRecord(rec: SessRec): void {
     // Written only when the creator pinned one: an unpinned record keeps its exact legacy bytes, so a
     // restore-the-frozen-record path stays byte-identical instead of silently gaining a key.
     ...(rec.base ? { base: rec.base } : {}),
+    ...((rec.diffComments ?? []).length ? { diff_comments: (rec.diffComments ?? []).map((comment) => ({
+      id: comment.id, file_path: comment.filePath, line_start: comment.lineStart, line_end: comment.lineEnd,
+      body: comment.body, diff_identity: comment.diffIdentity, sent_at: comment.sentAt,
+    })) } : {}),
     launch_readiness_pending: rec.launchReadinessPending ? {
       version: 1,
       startedAt: rec.launchReadinessPending.startedAt,
@@ -2633,6 +2654,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, runtimeStartToken: randomUUID(), stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
+            diffComments: [],
             ...(base ? { base } : {}),
           }
           owned.store = true
@@ -3268,6 +3290,85 @@ export type ReviewPayload = {
   diff: ReviewDiffFile[]     // the worker's real changes, anchored at the merge-base
   gates: ReviewGates
   proposal: { kind: Proposal | null; note: string | null }   // the session's standing proposal + its note
+}
+
+export type SessionDiffFile = ReviewDiffFile & { patch: string; diffIdentity: string }
+export type SessionDiffPayload = {
+  id: string; scope: 'branch'; base: string; head: string; mergeBase: string
+  files: SessionDiffFile[]; comments: DiffComment[]
+}
+
+async function diffHeadPair(wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ base: string; head: string; mergeBase: string }> {
+  if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`)
+  const base = wt.rec.base || mainBranch()
+  const [headOut, baseOut] = await Promise.all([
+    gitA(['-C', wt.path, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`]),
+    gitA(['-C', wt.path, 'rev-parse', '--verify', `${base}^{commit}`]),
+  ])
+  const head = headOut.trim(), resolvedBase = baseOut.trim()
+  if (!isGitObjectId(wt.path, head) || !isGitObjectId(wt.path, resolvedBase))
+    throw new ResourceConflict(`session ${wt.rec.session} diff heads are unproven`)
+  const mergeBase = (await gitA(['-C', wt.path, 'merge-base', resolvedBase, head])).trim()
+  if (!isGitObjectId(wt.path, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`)
+  return { base: resolvedBase, head, mergeBase }
+}
+
+export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000): Promise<SessionDiffPayload | null> {
+  const wt = await findWorktree(id)
+  if (!wt) return null
+  const pair = await diffHeadPair(wt)
+  const files = await mergeBaseDiff(wt.path, pair.base, pair.head)
+  const selected = filePath ? files.filter((file) => file.path === filePath || file.oldPath === filePath) : files
+  const result = await Promise.all(selected.map(async (file) => {
+    const identity = createHash('sha256').update(`${pair.mergeBase}\0${pair.head}\0${file.path}\0${file.oldPath || ''}`).digest('hex')
+    if (!filePath) return { ...file, patch: '', diffIdentity: identity }
+    const patch = await gitA(['-C', wt.path, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
+    return { ...file, patch: patch.slice(offset, offset + limit), diffIdentity: identity }
+  }))
+  return { id, scope: 'branch', base: pair.base, head: pair.head, mergeBase: pair.mergeBase, files: result, comments: wt.rec.diffComments ?? [] }
+}
+
+export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' | 'sentAt'> & { id?: string }): Promise<DiffComment | null> {
+  const body = input.body.trim()
+  if (!input.filePath || !body || !Number.isInteger(input.lineStart) || input.lineStart < 1 || !Number.isInteger(input.lineEnd) || input.lineEnd < input.lineStart || !input.diffIdentity)
+    throw new ResourceConflict('diff comment needs a file, line range, body, and diff identity')
+  return withRecordLock(id, async () => {
+    const rec = readLiveRecord(id)
+    if (!rec) return null
+    const comment: DiffComment = { id: input.id || randomUUID(), filePath: input.filePath, lineStart: input.lineStart, lineEnd: input.lineEnd, body, diffIdentity: input.diffIdentity, sentAt: null }
+    const comments = (rec.diffComments ?? []).filter((candidate) => candidate.id !== comment.id)
+    writeRecord({ ...rec, diffComments: [...comments, comment] })
+    return comment
+  })
+}
+
+export async function sendDiffComments(id: string, ids?: string[]): Promise<{ ok: boolean; sentAt?: string; count?: number; error?: string }> {
+  const selected = await withRecordLock(id, async () => {
+    const rec = readLiveRecord(id)
+    if (!rec) return null
+    const wanted = ids?.length ? new Set(ids) : null
+    return (rec.diffComments ?? []).filter((comment) => !comment.sentAt && (!wanted || wanted.has(comment.id)))
+  })
+  if (!selected) return { ok: false, error: `no such session ${id}` }
+  if (!selected.length) return { ok: false, error: 'no unsent diff comments' }
+  const text = ['Review comments on the branch diff:', ...selected.map((comment) => {
+    const lines = comment.lineStart === comment.lineEnd ? `L${comment.lineStart}` : `L${comment.lineStart}-L${comment.lineEnd}`
+    return `- ${comment.filePath}:${lines}\n  ${comment.body.replace(/\n/g, '\n  ')}`
+  })].join('\n')
+  const sent = await sendText(id, text)
+  if (!sent.ok) return { ok: false, error: sent.error || 'could not send diff comments' }
+  const sentAt = new Date().toISOString()
+  await withRecordLock(id, async () => {
+    const rec = readLiveRecord(id)
+    if (!rec) return
+    const selectedById = new Map(selected.map((comment) => [comment.id, comment]))
+    writeRecord({ ...rec, diffComments: (rec.diffComments ?? []).map((comment) => {
+      const before = selectedById.get(comment.id)
+      const unchanged = before && !comment.sentAt && comment.body === before.body && comment.diffIdentity === before.diffIdentity
+      return unchanged ? { ...comment, sentAt } : comment
+    }) })
+  })
+  return { ok: true, sentAt, count: selected.length }
 }
 
 type ReviewHeadPair = { branchHead: string; baseHead: string }

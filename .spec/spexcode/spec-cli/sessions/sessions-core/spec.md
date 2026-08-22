@@ -304,3 +304,9 @@ the session list, graph, and resource projection without a special hide list. `r
 it atomically moves the byte-identical record back only while no active record exists, making the corrupt row
 visible again; it does not resurrect a runtime or infer lifecycle. CLI, HTTP, and the dashboard context control
 all call this one operation and surface refusal details.
+
+Session records may also carry `diff_comments`, the durable review conversation for the branch diff document
+([[diff-document]]). Each row has a file path, an inclusive line range, the diff identity it was authored against,
+body text, and nullable `sent_at`. The record writer owns this array under the ordinary session lock. Editing a row
+replaces its body/range/identity and clears `sent_at`; sending uses the existing `sendText` channel and marks the
+selected rows sent only after acceptance, so a changed comment cannot be silently replayed.

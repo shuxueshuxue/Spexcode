@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { navigate, routeHash, useRoute } from './route.js'
+import { navigate, parseRoute, routeHash, useRoute } from './route.js'
 import { isDocument, isResident } from './views.jsx'
 import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
@@ -82,6 +82,27 @@ export function pinTab(page, param = null, query = null) {
     pinKey = null
   }
   navigate(page, param, { query })
+}
+
+// The route an in-app hash href names, as `pinTab` wants it. A row that is a REAL anchor already holds its
+// address; nothing has to re-derive it from the data the row was built from.
+export const routeOfHash = (href) => {
+  const { page, param, query } = parseRoute(href)
+  return { page, param, query: Object.keys(query || {}).length ? query : null }
+}
+
+// THE ROW GESTURE, for every finding surface whose rows are real anchors — the review lists, the spec
+// context panels, the file tree. A plain click stays the anchor's: the browser writes the hash and the slot
+// takes it, which is the default this workspace is built on. Ctrl/⌘ is the WORKSPACE's hold rather than the
+// browser's new-window, because the reader asking for a second document beside the one they have is asking
+// for a second tab in the strip, not a second copy of the app. Shift, alt and middle-click are left alone,
+// so every window-level gesture a real anchor gives for free still works. Returns whether it took the event.
+export function holdAnchor(event, href) {
+  if (event.button !== 0 || event.shiftKey || event.altKey || !(event.ctrlKey || event.metaKey)) return false
+  event.preventDefault()
+  const route = routeOfHash(href)
+  pinTab(route.page, route.param, route.query)
+  return true
 }
 
 // Focus the most recently opened tab a predicate accepts, if there is one. The rail's sessions button is

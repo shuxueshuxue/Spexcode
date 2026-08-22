@@ -131,6 +131,16 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   buttons keep native Enter/Space while allowing `j`/`k`; a focused anchor's Enter follows its OWN href,
   not the cursor. Blind rows stay inert. One shared empty state distinguishes a vacant dataset from a
   non-empty dataset whose current view matches nothing.
+- **A row obeys the workspace's slot semantics, and stays a real anchor doing it.** A plain click is left
+  entirely to the anchor: the browser writes the hash, and the current slot takes the detail — so clicking
+  row after row reads them one after another in one tab instead of filling the strip ([[tab-strip]]). The
+  two gestures this workspace claims are the two it can answer better than the browser: **ctrl/⌘-click**
+  holds the detail as its own tab (the reader asking for a second document beside the first wants a second
+  tab, not a second copy of the app), and **right-click** offers that same hold plus copy-address. Shift,
+  alt and middle-click are untouched, so every window-level gesture a real anchor gives for free still
+  works — and copy-address is in the menu precisely because suppressing the native one would otherwise take
+  away the single thing being a real anchor was buying. The menu mints its actions from the row's OWN href
+  rather than re-deriving an address from the row's data, which would be the same address minted twice.
 - **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for eval verdicts
   (fresh/stale pass/fail and unmeasured/legacy) and issue lifecycle (open vs every concluded state). Evals
   list leading marks, detail status, and every A/B reading selector consume it; Issues list/detail and the

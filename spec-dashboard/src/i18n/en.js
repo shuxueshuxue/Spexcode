@@ -268,6 +268,8 @@ export default {
     search: 'Search',
     searchIssues: 'Search issues',
     searchEvals: 'Search evals',
+    rowMenu: 'row actions',
+    copyAddress: 'Copy address',
     clearSearch: 'Clear search',
     showing: ({ shown, total }) => `showing ${shown} of ${total}`,
     issuesTitle: 'Issues',

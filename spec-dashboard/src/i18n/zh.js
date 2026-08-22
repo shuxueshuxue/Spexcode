@@ -261,6 +261,8 @@ export default {
     search: '搜索',
     searchIssues: '搜索 issues',
     searchEvals: '搜索 evals',
+    rowMenu: '行操作',
+    copyAddress: '复制地址',
     clearSearch: '清除搜索',
     showing: ({ shown, total }) => `显示 ${shown} / ${total} 条`,
     issuesTitle: 'Issues',

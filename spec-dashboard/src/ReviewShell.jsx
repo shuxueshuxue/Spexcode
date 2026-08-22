@@ -5,6 +5,9 @@ import { useEscLayer } from './escStack.js'
 import { scanQuery, suggestAt } from '@spexcode/spec-core/review'
 import { PageScroll } from './PageScroll.jsx'
 import { paginationTokens } from './reviewPage.js'
+import { ContextMenu, ContextMenuItem } from './ContextMenu.jsx'
+import { holdAnchor, pinTab, routeOfHash } from './tabs.js'
+import { copyAddress, hashAddress } from './address.js'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
 // secondary-filter, row, and state primitives; both detail pages consume the same standalone shell.
@@ -437,9 +440,46 @@ export function Pagination({ page, pageCount, prev, next, hrefFor }) {
   )
 }
 
+// A ROW'S OWN MENU. The row is a real anchor and stays one, so the browser's own gestures (middle-click, a
+// new window, shift) are untouched — but a right-click on a row in THIS workspace should offer what this
+// workspace can do with the address, which is hold it as its own tab ([[tab-strip]]'s explicit-hold
+// whitelist). Copy address rides along because suppressing the native menu would otherwise take the one
+// thing a real anchor was giving for free, and the menu mints it from the row's OWN href rather than
+// re-deriving an address from the row's data ([[address-routing]]).
+function RowMenu({ menu, onClose }) {
+  const t = useT()
+  // the same dismissal every menu in this app uses ([[esc-layers]] for the key, a capture-phase
+  // click/contextmenu for the pointer) — a second dialect of "close the menu" is a second thing to get
+  // wrong, and this one floats over a list the reader is still scrolling.
+  useEffect(() => {
+    if (!menu) return undefined
+    window.addEventListener('click', onClose)
+    window.addEventListener('contextmenu', onClose, true)
+    return () => {
+      window.removeEventListener('click', onClose)
+      window.removeEventListener('contextmenu', onClose, true)
+    }
+  }, [menu, onClose])
+  useEscLayer(!!menu, onClose)
+  if (!menu) return null
+  const pick = (fn) => (event) => { event.stopPropagation(); onClose(); fn() }
+  return (
+    <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.href} label={t('reviewList.rowMenu')}>
+      <ContextMenuItem icon="plus" onClick={pick(() => {
+        const route = routeOfHash(menu.href)
+        pinTab(route.page, route.param, route.query)
+      })}>{t('tabs.openInNewTab')}</ContextMenuItem>
+      <ContextMenuItem icon="copy" onClick={pick(() => copyAddress(hashAddress(menu.href)))}>
+        {t('reviewList.copyAddress')}
+      </ContextMenuItem>
+    </ContextMenu>
+  )
+}
+
 export function ListPage({ notice, leading, error, loading = false, title, action, search, sections = [], sectionMode = 'tabs', facets, secondaryFilters, rows, empty, pagination, children }) {
   const t = useT()
   const [cur, setCur] = useState(null)
+  const [rowMenu, setRowMenu] = useState(null)
   const tabsId = useId()
   const stateRef = useRef({})
   stateRef.current = { rows, cur }
@@ -525,7 +565,10 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
             {rows.length === 0 && <div className="lp-empty">{loading ? t('common.loading') : emptyText}</div>}
             {rows.map((row) => (
               <div key={row.key} className={`lp-row ${row.href ? '' : 'inert'} ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`}>
-                {row.href && <a className="lp-row-link" href={row.href}><span className="sr-only">{row.label || row.key}</span></a>}
+                {row.href && <a className="lp-row-link" href={row.href}
+                  onClick={(event) => holdAnchor(event, row.href)}
+                  onContextMenu={(event) => { event.preventDefault(); setRowMenu({ x: event.clientX, y: event.clientY, href: row.href }) }}>
+                  <span className="sr-only">{row.label || row.key}</span></a>}
                 {row.content}
               </div>
             ))}
@@ -534,6 +577,7 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
         {pagination && <Pagination {...pagination} />}
       </div>
       {children}
+      <RowMenu menu={rowMenu} onClose={() => setRowMenu(null)} />
     </PageScroll>
   )
 }

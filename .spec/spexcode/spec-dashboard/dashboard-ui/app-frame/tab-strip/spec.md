@@ -106,6 +106,16 @@ why the old fence was buying safety that was never at risk.
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | close | that tab only; the slot is nothing special to close |
 
+**A row that is a real anchor gets the gesture, not a rewrite.** Finding surfaces increasingly render their
+rows as real `<a href>` — the review lists, the spec context panels, the file tree — because that is what
+makes an address copyable, middle-clickable and openable in a browser tab for free. Those rows still owe the
+strip its two claimed gestures, so the rule is ONE helper they all call rather than one hand-rolled handler
+each: a plain click is left entirely to the anchor (the browser writes the hash, the slot takes it), and
+ctrl/⌘ is intercepted into the hold. Shift, alt and middle-click are untouched — the reader asking for a
+second document beside the first wants a second tab, while the reader asking for a new window still gets
+one. The helper reads the route back out of the row's OWN href, so nothing has to re-derive the address from
+the data the row was built from.
+
 The pin mark is an ADDRESS, not a flag, and the strip's own route subscription reads it — so finding
 surfaces never touch strip state, and two subscribers of the same navigation (the strip and the session
 console both read the open list) resolve the same answer. The object-only registry still means a bare list

@@ -29,4 +29,6 @@ source.
 The composer parses valid tokens when a seeded prompt opens, renders each as a removable attachment chip,
 and leaves the surrounding text as the human's editable intent. Submission serialises the chip(s) back into
 the same prompt text and uses the existing `createSession` entry point. Malformed tokens remain visible text;
-They are never silently discarded. No API route, session field, or alternate dispatch path belongs here.
+They are never silently discarded. No API route, session field, or alternate dispatch path belongs here —
+a token sent to an ALREADY-RUNNING session ([[prose-dispatch]]) rides the ordinary session input route for
+the same reason, as one more prompt rather than a channel of its own.

@@ -632,6 +632,39 @@ export default {
     useSelection: 'use selection in a new session',
   },
 
+  // [[prose-dispatch]] — what a reader does with a selected passage of spec prose.
+  proseActions: {
+    groupLabel: 'selected passage — send to a session, or edit it here',
+    act: {
+      send: 'Send to Session',
+      editSend: 'Edit & Send',
+      explain: 'Explain',
+      manual: 'Edit Manually',
+    },
+    preset: { edit: 'edit', polish: 'polish', explain: 'explain' },
+    // the presets are the message, not a label for one — they land in the box the human can still change.
+    prompt: {
+      edit: 'Rewrite this passage of the spec so it says what it should. Commit the change with its node on your branch.',
+      polish: 'Polish the wording of this passage. Keep its meaning exactly as it is.',
+      explain: 'Explain this passage — what it means and why it is there. Answer here in the session; do not change the spec.',
+    },
+    sendLabel: 'send this passage to a session',
+    editLabel: 'edit this passage',
+    messagePlaceholder: 'a message to send with it (optional)',
+    lines: 'lines {a}–{b}',
+    target: 'to',
+    newSession: 'a new session…',
+    send: 'Send',
+    sendJump: 'Jump to Session',
+    sentTo: 'passage sent to {name}',
+    sendFailed: 'the session did not accept the message',
+    commit: 'Commit',
+    committing: 'committing…',
+    committed: 'committed {sha} — the node re-versions from it',
+    noChange: 'nothing changed, so nothing was committed',
+    editNote: 'commits to this checkout as a real change to spec.md',
+  },
+
   session: {
     // the ellipsis on the session document: it is the ONLY route to rename / tmux attach / graph
     // lock on this surface, so the tooltip says so rather than naming a shape.

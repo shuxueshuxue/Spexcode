@@ -152,6 +152,23 @@ does, so the strip speaks the board's vocabulary rather than inventing a tab-spe
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
 
+**A board's DETAIL is not the board, and its tab says so.** While `#/evals`, `#/evals/<node>/<scenario>`
+and a second reading all printed "Evals", the strip could hold three tabs with nothing to tell them apart —
+which is a strip that has stopped being a working set. A scenario tab reads *node title · scenario*: the
+scenario is the leaf, the node is the folder it sits in, and that is the same container·leaf grammar a
+session tab already uses. It wears the NODE's status dot, because the reading's own verdict is not on the
+board — knowing it costs a detail request, and a tab must never mint a fetch to draw itself. An issue tab
+reads the concern, ellipsised by the tab's own width rather than cut short in the label, and `#/issues/new`
+names the compose page it actually is.
+
+**A document with no projection names ITSELF.** An issue is the one document the board holds nothing about
+— the issues board is paged and the detail fetches its own — so the detail reports the concern it already
+loaded and the frame remembers it ([[document-actions]]). That is not the second lookup table forbidden
+above: what that rule forbids is a second SOURCE free to disagree with the first, and here there is exactly
+one writer and it is the thing being named. The name outlives its document's mount, so a tab does not lose
+its label when the pool evicts the document behind it; until the name arrives, the id shows, exactly as an
+unresolved selector does.
+
 **Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
 the second pane. The strip only names the gesture; the pane is workspace state, not a tab.
 

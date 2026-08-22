@@ -18,6 +18,7 @@ import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
+import { useDocumentNames } from './documentActions.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -250,6 +251,7 @@ export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
+  const documentNames = useDocumentNames()
   const { dock, dockMode, palette } = useWorkspace()
   const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
   const [contextOpen, setContextOpen] = useState(() => {
@@ -289,7 +291,7 @@ export default function Shell() {
   // The browser tab is a positioning signal, not a brand plate. The shell is the only component that reads
   // the address, so it is the only one that can say WHERE the reader is; the project keeps the suffix, so a
   // window still says which workspace it belongs to when several are open side by side.
-  const place = placeLabel({ page, param, query }, { specs, sessions, t })
+  const place = placeLabel({ page, param, query }, { specs, sessions, names: documentNames, t })
   useEffect(() => {
     document.title = `${place} · ${identity?.title || 'spexcode'}`
   }, [place, identity?.title])

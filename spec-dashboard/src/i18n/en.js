@@ -88,6 +88,8 @@ export default {
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
+    issueNew: 'New issue',
+    openInNewTab: 'Open in a new tab',
     surfaceTerminal: 'terminal',
     surfaceConversation: 'conversation',
     surfaceDiff: 'diff',

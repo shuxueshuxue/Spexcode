@@ -26,6 +26,7 @@ import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
+import { encodeCodeSelection } from './codeSelection.js'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -181,6 +182,9 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
   const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
+  const startFromSelection = useCallback((selection) => {
+    startNew(encodeCodeSelection(selection))
+  }, [startNew])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
@@ -670,7 +674,8 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
-      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly} onClose={() => setOverlay(false)} />}
+      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
+        onSelection={graphOnly ? undefined : startFromSelection} onClose={() => setOverlay(false)} />}
       {/* The console mounts on first entry, then remains warm while other routes are shown. */}
       {!graphOnly && <PagePane active={page === 'sessions'} warm={sessionWarm} className="page-sessions">
         <SessionInterface

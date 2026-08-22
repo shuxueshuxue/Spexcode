@@ -202,7 +202,7 @@ function useSpecContent(id, version, { embedded = false, publicGraph = false } =
 // under the spec prose that claims it, in the same scroll. A separate tab would have put the claim and the
 // claimed thing on two screens again — the exact separation this is meant to close. One file open at a time,
 // so the pane stays a reading surface rather than a stack of viewers competing for height.
-function GovernedFiles({ files, count }) {
+function GovernedFiles({ files, count, onSelection }) {
   const t = useT()
   const [open, setOpen] = useState(null)
   // a `code:` entry may name a SYMBOL inside a file (`SpecNode.jsx#SpecNode`) — several entries then point
@@ -220,7 +220,7 @@ function GovernedFiles({ files, count }) {
           )
         })}
       </div>
-      {open && <SourceView path={open} className="doc-gov-src" />}
+      {open && <SourceView path={open} className="doc-gov-src" onSelection={onSelection} />}
     </div>
   )
 }
@@ -258,7 +258,7 @@ function NodeAttachments({ nodeId, enabled }) {
   )
 }
 
-export function SpecPane({ node, graphOnly = false }) {
+export function SpecPane({ node, graphOnly = false, onSelection }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -276,7 +276,7 @@ export function SpecPane({ node, graphOnly = false }) {
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
       {node.code?.length > 0 ? (
-        <GovernedFiles files={node.code} count={node.code.length} />
+        <GovernedFiles files={node.code} count={node.code.length} onSelection={onSelection} />
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
@@ -684,7 +684,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false, onSelection }) {
   const t = useT()
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
   const updateFilter = (kind, patch) => setFilters((current) => ({
@@ -733,7 +733,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [], 
           <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
-          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} /></div>}
+          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} onSelection={onSelection} /></div>}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
           {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}

@@ -28,6 +28,7 @@ import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
+import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 const SESSION_DRAG_GHOST_SCALE = 0.75
@@ -459,6 +460,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const t = useT()
   const { notify } = useTransientNotice()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
+  const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
@@ -906,7 +908,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     if (seed == null) return
     setSel('new')
-    setPrompt(seed)
+    const decoded = decodePrompt(seed)
+    setPrompt(decoded.text)
+    setCodeSelections(decoded.selections)
     setMenu(null)
     onSeedConsumed?.()
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
@@ -952,9 +956,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // (both seconds of real work — worktree, branch, tmux) left the whole pane greyed and unfocused until they
   // returned; keeping it live makes the next launch type-ready at once. The empty-draft check guards double-fire.
   const submit = () => {
-    const raw = prompt.trim()
+    const raw = encodePrompt(prompt, codeSelections)
     if (!raw) return
     setPrompt('')
+    setCodeSelections([])
     createSession(raw, launcher).then(() => reload?.())
   }
 
@@ -1333,6 +1338,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       </div>
     )
   }
+  const codeSelectionQueue = () => {
+    if (!codeSelections.length) return null
+    return (
+      <div className="si-code-selection-queue" aria-label={t('session.codeSelectionAttachments')}>
+        {codeSelections.map((selection, index) => (
+          <div key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} className="si-code-selection-chip">
+            <Icon name="terminal" size={12} />
+            <span className="si-code-selection-label" title={selection.text}>{selectionLabel(selection)}</span>
+            <IconButton icon="x" size={12} className="si-code-selection-remove" label={t('session.removeCodeSelection')}
+              onClick={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
+          </div>
+        ))}
+      </div>
+    )
+  }
   // a paste carrying file(s) (a screenshot, a copied file) attaches them instead of pasting text; a plain
   // text paste has no files and falls through to the textarea's normal behaviour untouched.
   const onPasteFiles = (e, target) => {
@@ -1645,6 +1665,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
+              {codeSelectionQueue()}
               {attachmentQueue('new')}
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}

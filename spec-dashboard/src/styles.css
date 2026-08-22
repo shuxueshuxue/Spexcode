@@ -664,9 +664,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* [[source-view]]: a governed file opened in place, under the prose that claims it. Bounded height — it is
    a reading window inside the spec pane, never a curtain that buries the body below it. */
 .srcview { margin: 9px 0 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--paper); }
-.srcview-body { height: min(46vh, 420px); overflow: hidden; }
-.srcview-body .cm-editor { height: 100%; }
+.srcview-body { position: relative; height: min(46vh, 420px); overflow: hidden; }
+.srcview-cm, .srcview-cm .cm-editor { height: 100%; }
 .srcview-body .cm-editor.cm-focused { outline: none; }
+.srcview-select-action {
+  position: absolute; right: 10px; top: 9px; z-index: 2; display: inline-flex; align-items: center;
+  padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--blue) 55%, var(--line)); border-radius: 4px;
+  color: var(--blue); background: color-mix(in srgb, var(--paper) 94%, transparent); font-family: var(--mono);
+  font-size: var(--type-caption); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
+}
+.srcview-select-action:hover { background: var(--panel2); }
 .srcview-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 9px; border-top: 1px solid var(--line); background: var(--panel); font-size: var(--type-caption); color: var(--muted); }
 .srcview-path { background: none; padding: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .srcview-meter { white-space: nowrap; }
@@ -2010,6 +2017,16 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-attach-queue { display: grid; gap: 4px; min-width: 0; }
 .si-attach-queue.new { width: 100%; margin-top: 6px; }
 .si-attach-queue.command { padding: 5px 0 1px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
+.si-code-selection-queue { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: 6px; }
+.si-code-selection-chip {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 3px 5px 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--blue) 42%, var(--line)); border-radius: 4px;
+  color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--paper)); font-family: var(--mono);
+  font-size: var(--type-caption);
+}
+.si-code-selection-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-code-selection-remove { width: 18px; height: 18px; padding: 0; color: var(--muted); }
+.si-code-selection-remove:hover { color: var(--red); }
 .si-attach-row { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(76px, 1.2fr) minmax(0, auto) auto; align-items: center; gap: 6px; min-width: 0; min-height: 23px; font-size: var(--type-meta); color: var(--muted); }
 .si-attach-row.complete { animation: si-attach-complete-out 1.4s ease forwards; }
 .si-attach-name { display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

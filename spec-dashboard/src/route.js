@@ -78,6 +78,16 @@ export function legacyEvalHash(hash) {
   return routeHash('evals', param, { q: param ? `scope:${id}` : scopedEvalQuery(id) })
 }
 
+// Session faces are URL state, except Evals: the session-scoped Evals list already owns that
+// address family ([[session-eval]]), so a face-shaped link is one replace into the canonical list.
+export function sessionSurfaceHash(hash) {
+  const { page, param, query } = parseRoute(hash)
+  if (page !== 'sessions' || !param || !query.surface) return null
+  if (query.surface === 'evals') return routeHash('evals', null, { q: scopedEvalQuery(param) })
+  if (query.surface !== 'conversation' && query.surface !== 'terminal') return null
+  return null
+}
+
 // the LEGACY structured review params ([[review-query]]): an old '#/evals|#/issues' address carrying
 // state/concluded/store/author/node/filer/verdict/freshness/kind/live/ok/session params replays as the
 // FULL visible token text (the page default with each param surgically applied) — a DETAIL address keeps
@@ -125,7 +135,7 @@ export function navigate(page, param = null, { replace = false, query = null } =
 // review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
-  const legacy = legacyEvalHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
+  const legacy = legacyEvalHash(window.location.hash) || sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)
     return parseRoute(legacy)

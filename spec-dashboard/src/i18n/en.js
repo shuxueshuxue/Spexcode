@@ -84,6 +84,8 @@ export default {
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
+    surfaceTerminal: 'terminal',
+    surfaceConversation: 'conversation',
   },
   nav: {
     railLabel: 'main navigation',

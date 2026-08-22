@@ -12,6 +12,10 @@ related:
 # sessions-view
 
 The live console, mounted as a view. Every behaviour it had, it kept; what changed is where its state lives.
+The bare `#/sessions` route is a finding surface and is never a top-strip document; a selected session
+`#/sessions/<id>` is the object document. Its `surface` query (`conversation` or `terminal`) is passed into
+the console as route state, while `surface=evals` is normalized by the route layer to the existing scoped
+Evals address. Opening a session object from the dock with no active object slot appends its first tab.
 
 **Its selection used to be held by the component that also held the graph's camera and every other page's
 props**, so opening a session re-rendered the graph and the graph had to know which session was selected.

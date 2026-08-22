@@ -3,6 +3,8 @@ import { Icon } from './icons.jsx'
 import { tabKey, useTabs } from './tabs.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
+import { STATUS_COLOR } from './session.js'
+import { getSessionBaseSurface, isSessionSurface, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -20,18 +22,29 @@ function label(tab, { specs, sessions, t }) {
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param))
-    return s?.label || s?.title || tab.param.slice(0, 8)
+    const title = s?.label || s?.title || tab.param.slice(0, 8)
+    const surface = s?.capabilities?.headless === true || s?.liveness === 'offline' || s?.archived
+      ? SESSION_SURFACE_CONVERSATION
+      : (isSessionSurface(tab.query?.surface) ? tab.query.surface : getSessionBaseSurface(s?.id || tab.param))
+    return `${title} · ${t(`tabs.surface${surface[0].toUpperCase()}${surface.slice(1)}`)}`
   }
   return t(`tabs.${tab.page}`)
 }
 
 // The dot repeats the board's own four-state vocabulary rather than inventing a tab-specific one, so a tab
 // says the same thing about a node that its tile does.
-function TabDot({ tab, specs }) {
-  if (tab.page !== 'spec' || !tab.param) return null
-  const node = specs?.find((s) => s.id === tab.param)
-  if (!node || !STATUS[node.status]) return null
-  return <i className="tab-dot" style={{ background: STATUS[node.status].color }} />
+function TabDot({ tab, specs, sessions }) {
+  if (tab.page === 'spec' && tab.param) {
+    const node = specs?.find((s) => s.id === tab.param)
+    if (!node || !STATUS[node.status]) return null
+    return <i className="tab-dot" style={{ background: STATUS[node.status].color }} />
+  }
+  if (tab.page === 'sessions' && tab.param && tab.param !== 'new') {
+    const session = sessions?.find((s) => s.id === tab.param || s.id?.startsWith(tab.param))
+    const color = session && STATUS_COLOR[session.status]
+    return color ? <i className="tab-dot" style={{ background: color }} /> : null
+  }
+  return null
 }
 
 export default function TabStrip({ specs, sessions }) {
@@ -55,7 +68,7 @@ export default function TabStrip({ specs, sessions }) {
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
             <button type="button" className="tab-face" data-tip={key}
               onClick={(e) => (e.altKey ? splitTo(tab) : open(tab))}>
-              <TabDot tab={tab} specs={specs} />
+              <TabDot tab={tab} specs={specs} sessions={sessions} />
               <span className="tab-label">{label(tab, { specs, sessions, t })}</span>
             </button>
             <button type="button" className="tab-x" onClick={() => close(tab)} aria-label={t('tabs.close')}>

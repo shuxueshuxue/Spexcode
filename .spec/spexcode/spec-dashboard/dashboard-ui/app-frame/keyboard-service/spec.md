@@ -88,3 +88,9 @@ the next tab, select the previous tab, and send the active tab to the split pane
 Ctrl/Meta accelerators. The service calls the existing `useTabs` and workspace APIs, so closing the last tab
 still lands on the explicit empty address and split remains window state as required by [[tab-strip]] and
 [[workspace-shell]]. All labels and shortcut descriptions are present in both English and Chinese.
+
+**The typing restraint survives the hoist.** The shell scope inherits [[keyboard-nav]]'s native-control
+clause: while DOM focus sits in a typing context (input, textarea, contenteditable — the session composer
+and xterm's helper textarea above all), every unmodified key belongs to that control and the shell scope
+returns unconsumed before matching any plain-key verb. The first build without this line sent a bare comma
+typed into the composer to the settings page.

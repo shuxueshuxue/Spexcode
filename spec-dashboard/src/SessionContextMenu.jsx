@@ -7,7 +7,7 @@ import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onDetach, onError }) {
+export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onError }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -53,20 +53,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     e.stopPropagation()
     setValue((menu.session.raw?.name ?? menu.session.name) || '')   // prefill the current OVERRIDE (blank if none) — the one legit raw consumer ([[session-label]]); never the derived label
     setRenaming(menu.session)
-    onClose()
-  }
-
-  // select flips the whole list into multi-select mode ([[session-multi-select]]), pre-ticking the row that
-  // was right-clicked. The mode itself lives in the list; the menu item only turns it on and dismisses.
-  const startSelect = (e) => {
-    e.stopPropagation()
-    onMultiSelect?.(menu.session)
-    onClose()
-  }
-
-  const detach = (e) => {
-    e.stopPropagation()
-    onDetach?.(menu.session)
     onClose()
   }
 
@@ -176,8 +162,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
             {menu.session.liveness !== 'offline' && menu.session.status !== 'queued' && (
               <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>
             )}
-            <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
-            {menu.session.parent && <ContextMenuItem icon="corner-up-left" onClick={detach}>{t('sessionWindow.detach')}</ContextMenuItem>}
             {/* Resume is the cold row's non-destructive exit; filing moves to the danger group below. */}
             {menu.session.archived && <ContextMenuItem icon="star-filled" onClick={resume}>{t('sessionWindow.resume')}</ContextMenuItem>}
             {menu.session.status === 'corrupt' && (

@@ -24,11 +24,21 @@ active document, the tab list, or session selection. Explorer rows retain [[file
 Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]: a plain click navigates to
 `sessions/<id>` in the current slot, while ctrl/⌘-click calls `requestTab` to hold a new document.
 
-The dock's session projection is intentionally read-only. It consumes the board's active session set and does
-not own archive, launch, rename, drag, or terminal state. Those responsibilities remain in
-[[session-console]]'s document view. When the same list is already visible in the dock, the document view
-withdraws its internal list and gives the terminal/timeline the full content width; its New Session and archive
-entry points remain available in their existing console surface for this milestone.
+The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
+session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
+route-selected highlight (`activeSessionId`). A `+` action at the projection head navigates to `sessions/new`;
+a `View all` action at its foot navigates to the sessions document's archive overlay. Both are finding-surface
+doors, while the archive overlay and all session content remain in the holding region. Rows are read-only
+navigation: plain click replaces the current tab and ctrl/command-click holds a new one.
+
+Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
+document tools. Drag-to-reparent and multi-select are deliberately removed in this milestone rather than
+silently disappearing: they were mutable gestures whose only home was the withdrawn list, and the dock's
+finding projection must not grow mutation state. The existing keyboard fresh-session binding remains active.
+When the dock is in sessions mode, `SessionInterface` renders no `si-list`, board scrollport, list resizer, or
+48px stub: the terminal or timeline owns the entire document content region. This is the [[workspace-shell]]
+four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on the right, AMBIENT at
+the bottom — so one window cannot expose two competing navigation lists.
 
 The dock mode is not a second navigation model and does not read the global address. Shell owns the mode
 preference and passes the selected projection its board data.

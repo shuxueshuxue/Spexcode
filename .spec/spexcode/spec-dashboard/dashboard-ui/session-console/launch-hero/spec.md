@@ -10,7 +10,8 @@ related:
 
 # launch-hero
 
-The console's New-Session tab greets with a **splash in the terminal's own language** — the block-letter
+The console's New-Session tab (opened by the sessions dock's `+` door or the existing keyboard binding) greets
+with a **splash in the terminal's own language** — the block-letter
 ASCII wordmark every code CLI opens with (Codex's `>_`, Gemini's and opencode's ███ block lettering) —
 instead of an app-icon glyph. The human's direction is the contract here: the launch surface should *feel
 like a terminal*, and in a terminal identity is drawn with characters, not vector art.

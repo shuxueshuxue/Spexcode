@@ -2,7 +2,7 @@
 title: session-rename
 status: active
 hue: 300
-desc: Right-click a session row on the session board to give it a human name — a persisted override that wins over the derived label.
+desc: The selected session's document tools menu gives it a human name — a persisted override that wins over the derived label.
 code:
   - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
 related:
@@ -19,9 +19,9 @@ related:
 
 Sessions are labelled automatically — by the spec node they touch, or a few words of their launch
 prompt, or their branch. That default is fine until a human needs to fix it: two sessions on the same
-node read alike, and a node-agnostic session wears an awkward prompt fragment forever. Right-clicking a
-session row should open the session's small action menu: **lock on graph** makes the board follow it,
-**rename** gives it a human name that sticks, and **close** offers worktree removal one right-click away —
+node read alike, and a node-agnostic session wears an awkward prompt fragment forever. The selected session's
+document tools menu opens the small action menu: **lock on graph** makes the board follow it,
+**rename** gives it a human name that sticks, and **close** offers worktree removal one click away —
 the destructive twin of the typed `/close` command ([[session-console]]), distinct from `/stop`, which only
 stops the agent and keeps the worktree.
 
@@ -42,9 +42,9 @@ The CLI reaches that same write with `spex session rename <SEL> "<name>"`; insid
 shared selector for its own session ([[session-selectors]]), so a prompt preset such as [[rename]] can ask the
 agent to name itself without learning an id or creating a dashboard-only action.
 
-The gesture is a **right-click** on a session row **in the session board's left-hand session list**
-([[session-console]]) — the interactive surface where a human manages sessions: a mutation belongs on
-the board, never on a read-only at-a-glance summary. It opens a cursor-anchored pop-over (its own surface). Picking
+The gesture is the selected session's **document tools** button in [[session-console]] — the holding surface
+where a human manages the current session. The left sessions dock is a read-only finding projection and has
+no mutation menu. The tools button opens a cursor-anchored pop-over (its own surface). Picking
 **rename** swaps the menu for a centred prompt (the shared modal chrome) that **titles itself with the
 session's headline** — the same words its row shows ([[session-activity]]), not the stable rename handle,
 so the human reads the very label they right-clicked and never renames what looks like a different
@@ -56,13 +56,9 @@ write may recover through the ordinary board reload path. A
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
 success.
 
-The menu also carries a **reset order** item — shown only when the row has been dragged out of birth order —
-which belongs to the session list's drag-to-reorder gesture ([[session-console]]; it clears that row's manual
-sort-key), not to this node's rename/close contract; it rides in this pop-over because the same right-click
-is where a human reaches for it. **Archive** ([[archive]]) rides the same way, but joins close in the menu's
-danger group and opens its own confirmation: filing a session out of the active working set is a deliberate
-lifecycle boundary even though resume remains available. Its confirmation commits through the same archive
-route; it never becomes a record-only shortcut.
+Archive is reached from the sessions dock's bottom `View all` door and remains a document overlay; it is not
+part of this tools menu. Drag-to-reorder and multi-select are retired with the withdrawn duplicate list, so
+the read-only dock does not expose mutable list gestures.
 
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
@@ -104,23 +100,15 @@ rolled forward.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
-so they live on the top layer — over the board's backdrop, never beneath it. The board also suppresses
-the OS context menu everywhere inside it (the terminal-app feel of [[session-console]]) via a native
-capture-phase `contextmenu` listener, and that suppression and this gesture **coexist**: the same
-right-click that kills the browser's menu on a row ALSO opens the rename pop-over (the row's own handler
-still fires), so blocking the OS menu never costs the human theirs. Right-clicking the
-list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed
-and the current TUI or Command Box keeps focus, never a stolen-focus gap.
+so they live on the top layer — over the board's backdrop, never beneath it. The board still suppresses
+the OS context menu inside the document (the terminal-app feel of [[session-console]]) via a native
+capture-phase `contextmenu` listener. The tools button remains an ordinary focused document control, so
+opening the menu never steals focus from the current TUI or Command Box.
 
-The pop-over is the one home for row-level session actions. Its **lock on graph** item invokes the console's
+The pop-over is the one home for selected-session document actions. Its **lock on graph** item invokes the console's
 existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.
-The same menu also hosts [[session-multi-select]]'s select item and [[attach-menu]]'s live-only attach item,
-so these verbs extend one menu instead of creating parallel gestures or pop-overs. A row with a parent also
-gets **remove from parent**: it dismisses the menu and submits the console's ordinary reparent write with a
-null parent, leaving top-level rows free of a disabled or meaningless item. This is the direct counterpart to
-the console tree's root drop zone ([[session-nesting]]), not a dashboard-only record edit. It removes only
-the child relation's `parent` watch source; an independent manual observer remains a separate deliberate
-relation, never collateral damage from this menu action.
+The same menu also hosts [[attach-menu]]'s live-only attach item. List-only multi-select, drag, and reparent
+actions are not offered after the list's retirement; their removal is explicit in [[dock-modes]].
 
 Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text rows, grouped commands, and a
 separate destructive close row. This node supplies the session actions; it never forks the menu chrome.

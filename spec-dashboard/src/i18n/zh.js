@@ -54,6 +54,10 @@ export default {
     explorer: '资源管理器',
     sessions: '会话',
   },
+  dockSessions: {
+    new: '新建会话',
+    archive: '查看全部已归档会话',
+  },
   contextDock: {
     title: '上下文',
     backlinks: '反向链接',

@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, type Dirent, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
-import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch } from '@spexcode/spec-core'
+import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from '@spexcode/spec-core'
@@ -751,6 +751,7 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
     if (!e.isDirectory()) continue
     let wtPath: string
     try { wtPath = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim()) } catch { continue }
+    if (isTrashWorktreePath(wtPath)) continue
     const normalizedPath = resolve(wtPath)
     if (!wantedPaths.has(normalizedPath)) {
       if (dropWorktreeWatcher(e.name)) released = releaseSessionEvalProjectionObserver(worktreeObserver(e.name)) || released

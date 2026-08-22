@@ -50,7 +50,8 @@ TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms
 merged tmux call for window/title state plus the rendezvous tri-state), both → 'sessions'. (4) the
 `.git/worktrees` REGISTRY watcher — git's own birth-ledger for every worktree, hand-made or dispatched —
 which attaches one whole-tree observation of each live worktree's root plus one non-recursive gitdir watch,
-and detaches both on removal. The served project root is a canonical root too, even before it has a `.spec`
+and detaches both on removal. Entries whose resolved root is under `.worktrees/.trash/` are explicitly excluded:
+delayed close deletion is not a live worktree source. The served project root is a canonical root too, even before it has a `.spec`
 tree or any live session: its whole-tree observation sees a first `spex init` or agent-created spec subtree
 and invalidates the warmed empty board through this same full-scope funnel. It is the same root the graph
 revision reads, so a backend launched from a linked worktree observes that linked tree rather than the

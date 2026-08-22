@@ -24,9 +24,9 @@ open path** the chord does (the one sessions-boosted palette open threaded down 
 palette or a second search implementation; it is momentary — the palette floats above, no tab switch, no
 pressed state.
 
-**Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same four-plane matcher. Exactly three things differ, each supplied by the caller or inherited from an existing source order:
+**Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same two-plane matcher ([[paged-palette]] holds which planes those are). Exactly three things differ, each supplied by the caller or inherited from an existing source order:
 
-- **Lead weight.** You chose the session-search entry (`⌥+/` anywhere, or the Sessions Search pill), so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. The graph page's plain `/` chooses the node-search entry and still leads with nodes. This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so every plane stays reachable below its chosen lead.
+- **Lead weight.** You chose the session-search entry (`⌥+/` anywhere, or the Sessions Search pill), so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes below. The graph page's plain `/` chooses the node-search entry and still leads with nodes. This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so every plane stays reachable below its chosen lead.
 - **Empty-query order.** Before a query exists there is no relevance score to invent. Each plane therefore
   keeps its source surface's stable order. The session plane feeds the palette the SAME fully disclosed
   working-session [[session-nesting]] forest the dashboard list renders: triage zones in dashboard order, newest roots first

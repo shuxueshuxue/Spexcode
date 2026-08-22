@@ -1,37 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './specMeta.js'
-import { TagChips } from './score.jsx'
 import { STATUS_COLOR, sessionHandle, sessionHeadline, sessionPresentationOrder } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '@spexcode/spec-cli/ranker'
 import { useSpecCorpus } from './corpus.js'
-import { addressHash, evalAddress, graphNodeAddress, issueAddress, reviewListAddress, sessionAddress } from './address.js'
-import { EVAL_FILTER_KIND } from '@spexcode/spec-core/review'
-import { useReviewPage } from './reviewPage.js'
-import { Icon } from './icons.jsx'
-
-// a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
-// fresh fail · grey stale / never-measured.
-const SCEN_COLOR = { pass: 'var(--green)', fail: 'var(--red)', stalePass: 'var(--muted)', staleFail: 'var(--muted)', empty: 'var(--muted)', missing: 'var(--muted)' }
+import { graphNodeAddress, sessionAddress } from './address.js'
 
 // the breadcrumb path the rows show + match against (`.spec/a/b/<id>/spec.md` minus the shell + leaf),
 // so a row reads like the tree path it is. Mirrors SessionInterface's @-mention path.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
-// the four planes in default lead order (nodes first); equal-score ties group by plane so an empty/loose
-// query reads as an ordered jump-list rather than an interleaved jumble. `boost` lifts ONE plane to the
-// front — the SAME palette leads with whatever surface opened it (the session board boosts 'session'). This
-// is the ONLY knob a caller turns: matcher, interleave, and keys are identical; only the lead order differs.
-const BASE_PLANES = ['spec', 'session', 'issue', 'scenario']
+// TWO PLANES — the things a workspace HOLDS. A node and a session are what a tab can be, so every row here
+// is somewhere the reader can go and stay; that is what makes this a jump-list rather than a report.
+//
+// The palette used to carry two more (issues, scenarios) plus two "all results" doors into the review
+// lists, and that was a search box quietly growing a second job. An issue and a scenario are findings ABOUT
+// a node — they have real list pages built to filter and page them ([[issues-view]] / [[evals-view]]), and
+// those pages are one ⌥digit away. Restating a page-1 slice of them under the jump-list gave the reader a
+// worse version of a surface that already exists, and cost two server round-trips on every keystroke to do
+// it. Deleting the planes deletes the round-trips with them.
+//
+// `boost` lifts ONE plane to the front — the SAME palette leads with whatever surface opened it. It is the
+// ONLY knob a caller turns: matcher, interleave, and keys are identical; only the lead order differs.
+const BASE_PLANES = ['spec', 'session']
 const planeOrder = (boost) => (boost ? [boost, ...BASE_PLANES.filter((p) => p !== boost)] : BASE_PLANES)
-const SERVER_MATCHED_PLANES = new Set(['issue', 'scenario'])
 
-// fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
-// `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
-export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
+// fold both planes into one flat list of uniform entries; each carries the row's display fields, the
+// `target` App acts on, and the scorer's name/desc/body fields mapped per plane.
+export function buildEntries(specs, sessions, corpus) {
   const bodies = corpus?.bodies
   const entries = []
-  const specsById = Object.fromEntries(specs.map((spec) => [spec.id, spec]))
   for (const s of specs) {
     const path = specPath(s.path)
     entries.push({
@@ -46,28 +44,6 @@ export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
       // body is no longer on the board ([[graph-lean]]) — it comes from the lazily-fetched corpus (`bodies`),
       // falling back to any body still on the node (a fixture, or before the corpus lands).
       name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: bodies?.[s.id] ?? s.body ?? '',
-    })
-  }
-  for (const issue of issues) {
-    const nodeId = issue.nodes?.[0] || null
-    const path = specPath(specsById[nodeId]?.path)
-    entries.push({
-      kind: 'issue', key: `issue:${issue.id}`, target: issue.id, nodeId,
-      address: issueAddress(issue.id),
-      color: issue.status === 'open' ? 'var(--green)' : 'var(--muted)',
-      title: issue.concern, sub: [issue.id, path].filter(Boolean).join(' · '),
-      name: issue.concern || '', desc: issue.id, body: '',
-    })
-  }
-  for (const entry of evals) {
-    const node = specsById[entry.node]
-    const detail = entry.filterKind === EVAL_FILTER_KIND.RESULT
-    entries.push({
-      kind: 'scenario', key: `scenario:${entry.node}:${entry.scenario}`, target: entry.scenario, nodeId: entry.node,
-      address: detail ? evalAddress(entry.node, entry.scenario) : evalAddress(entry.node),
-      color: SCEN_COLOR[entry.state || 'missing'] || 'var(--cyan)',
-      title: entry.scenario, sub: specPath(node?.path), tags: entry.tags,
-      name: entry.scenario || '', desc: '', body: entry.expected || '',
     })
   }
   for (const s of sessionPresentationOrder(sessions)) {
@@ -94,11 +70,9 @@ export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
 // so the palette no longer ranks node prose more crudely than the agent. An empty query is the plain
 // jump-list: planes group in caller-selected order and each plane keeps its source surface's stable order.
 //
-// Cross-plane: rank the LOCAL node/session planes separately, preserve the SERVER-MATCHED Issue/scenario
-// planes, then INTERLEAVE them (a node, a session, an issue, a scenario, repeat). NOT one rankDocs over all
-// four — nodes carry far richer text than sparse sessions/issues, so a single relevance list buries the
-// non-node planes (a node-heavy query like "session" returns only nodes, verified in-browser). This assembly
-// keeps local scorer quality where the palette owns the corpus and keeps every remotely-matched plane visible.
+// Cross-plane: rank each plane on its own, then INTERLEAVE them (a node, a session, a node, a session).
+// NOT one rankDocs over both — nodes carry far richer text than sparse sessions, so a single relevance list
+// buries the session plane (a node-heavy query like "session" returns only nodes, verified in-browser).
 // (The floor has only nodes, so it needs none of this cross-plane work.)
 function rank(entries, query, planes) {
   const order = Object.fromEntries(planes.map((k, i) => [k, i]))
@@ -107,12 +81,8 @@ function rank(entries, query, planes) {
   const ranked = {}
   for (const k of planes) {
     const docs = entries.filter((e) => e.kind === k)
-    // Review rows already passed the server's shared matcher. Re-running corpus IDF on that match-only page
-    // drops an exact one-row result (N === df gives IDF 0), so preserve its stable server order here.
-    ranked[k] = SERVER_MATCHED_PLANES.has(k)
-      ? docs.slice(0, 15)
-      : rankDocs(query, docs.sort((a, b) => a.name.length - b.name.length || a.key.localeCompare(b.key))
-        .map((e) => ({ ref: e, name: e.name, desc: e.desc, body: e.body })), { limit: 15 }).map((r) => r.ref)
+    ranked[k] = rankDocs(query, docs.sort((a, b) => a.name.length - b.name.length || a.key.localeCompare(b.key))
+      .map((e) => ({ ref: e, name: e.name, desc: e.desc, body: e.body })), { limit: 15 }).map((r) => r.ref)
   }
   const out = []
   for (let i = 0; out.length < 15; i++) {
@@ -125,11 +95,12 @@ function rank(entries, query, planes) {
 
 export default function SpecSearch({ specs, sessions, onPick, onClose, boost = null }) {
   const t = useT()
-  // Node prose stays in the lite corpus; review planes are bounded page-1 requests, never graph rows.
+  // Node prose stays in the lite corpus, never on the graph rows. The palette makes no server request of
+  // its own now — both planes are already in the board the shell handed it.
   const corpus = useSpecCorpus()
   const [q, setQ] = useState('')
   // the RANKED query trails the typed one by a short debounce: rank() runs BM25 once per plane, so ranking
-  // on every keystroke of a fast typist burns four rankDocs per keypress for results the next key discards.
+  // on every keystroke of a fast typist burns one rankDocs per plane per keypress for results the next key discards.
   // 120ms is under the perceive-as-instant line; an emptied query resets immediately (the jump-list is cheap).
   const [dq, setDq] = useState('')
   useEffect(() => {
@@ -141,14 +112,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const planes = useMemo(() => planeOrder(boost), [boost])
-  const issueQuery = `is:issue${dq.trim() ? ` ${dq.trim()}` : ''}`
-  const evalQuery = `is:eval${dq.trim() ? ` ${dq.trim()}` : ''}`
-  const issuePage = useReviewPage('issues', issueQuery, 1, { pollMs: 0 })
-  const evalPage = useReviewPage('evals', evalQuery, 1, { pollMs: 0 })
-  const issueItems = issuePage.data?.items || []
-  const evalItems = evalPage.data?.items || []
-  const entries = useMemo(() => buildEntries(specs, sessions, corpus, issueItems, evalItems),
-    [specs, sessions, corpus, issuePage.data, evalPage.data])
+  const entries = useMemo(() => buildEntries(specs, sessions, corpus), [specs, sessions, corpus])
   const results = useMemo(() => rank(entries, dq, planes), [entries, dq, planes])
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -156,7 +120,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   // keep the highlighted row in view as ↑/↓ walk past the visible window.
   useEffect(() => { listRef.current?.querySelector('.search-item.on')?.scrollIntoView({ block: 'nearest' }) }, [sel, results])
 
-  // hand the whole entry back; App executes the entry's app address (graph node, session, issue, or eval).
+  // hand the whole entry back; App executes the entry's app address (a graph node, or a session).
   const pick = (e) => { if (e) { onPick(e); onClose() } }
 
   // the input OWNS its keys (App returns early while search is open — see onKey there), so ↑/↓ walk the
@@ -196,29 +160,10 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
               <span className="node-dot" style={{ background: e.color }} />
               <span className={`search-kind k-${e.kind}`}>{t(`search.kind.${e.kind}`)}</span>
               <span className="search-title">{e.title || e.target}</span>
-              <TagChips tags={e.tags} />
               <span className="search-path">{e.sub}</span>
             </li>
           ))}
         </ul>
-        {(issuePage.data?.total > 0 || evalPage.data?.total > 0) && (
-          <nav className="search-review-links" aria-label={t('search.allResults')}>
-            {issuePage.data?.total > 0 && (
-              <a className="search-review-link" href={addressHash(reviewListAddress('issues', issueQuery))}>
-                <Icon name="issues" size={15} />
-                <span>{t('search.allIssues', { n: issuePage.data.total })}</span>
-                <Icon name="chevron-right" size={14} />
-              </a>
-            )}
-            {evalPage.data?.total > 0 && (
-              <a className="search-review-link" href={addressHash(reviewListAddress('evals', evalQuery))}>
-                <Icon name="evals" size={15} />
-                <span>{t('search.allEvals', { n: evalPage.data.total })}</span>
-                <Icon name="chevron-right" size={14} />
-              </a>
-            )}
-          </nav>
-        )}
         <div className="search-foot">{t('search.hint')}</div>
       </div>
     </div>

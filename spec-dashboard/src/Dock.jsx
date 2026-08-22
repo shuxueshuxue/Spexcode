@@ -6,6 +6,7 @@ import { sessionForest } from './session.js'
 import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
+import { withShortcut } from './bindings.js'
 import { Icon } from './icons.jsx'
 import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -82,11 +83,18 @@ function SessionDock({ sessions, activeId }) {
 
 // The dock's one band. Left: what this projection is looking at, named in sentence case and tallied. Right:
 // the doors that projection owns — icon-only, because the row is already saying which projection it is.
+//
+// SEARCH IS ONE OF THOSE DOORS, and that is why it left the rail ([[side-nav]]). A rail search button had to
+// name a scope it could not know — it sat above both projections and opened one of them, so the reader
+// asking "search what?" got the answer "whichever the button's author picked". Here the question is already
+// answered by the row the button sits in: the sessions head searches sessions, the explorer head searches
+// nodes. Same palette, same keys, same rows — only the lead plane differs ([[node-graph]]'s palette).
 function DockHead({ mode, specs, sessions }) {
   const t = useT()
-  const { setDock } = useWorkspaceApi()
+  const { setDock, openPalette } = useWorkspaceApi()
   const sessionMode = mode === 'sessions'
   const count = sessionMode ? (sessions?.length || 0) : (specs?.length || 0)
+  const searchLabel = t(sessionMode ? 'dockModes.searchSessions' : 'dockModes.searchNodes')
   return (
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
@@ -94,6 +102,10 @@ function DockHead({ mode, specs, sessions }) {
       {/* ONE doors cluster, whatever the projection: the projection's own doors, then collapse. A second
           cluster would be a second row's worth of answers in a header that exists to give one. */}
       <span className="dock-head-acts">
+        <button type="button" className="dock-head-act" data-tip={withShortcut(searchLabel, 'graph.search')}
+          aria-label={searchLabel} onClick={() => openPalette(sessionMode ? 'sessions' : 'nodes')}>
+          <Icon name="search" size={13} />
+        </button>
         {sessionMode && (
           <>
             <button type="button" className="dock-head-act" data-tip={t('dockSessions.archive')} aria-label={t('dockSessions.archive')}

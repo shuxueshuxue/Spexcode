@@ -34,7 +34,10 @@ restores the list.
 ## expanded spec
 
 - **The rail is an ACTIVITY BAR, and it carries two kinds of entry.** Under the project chip sit the
-  workspace's FINDING controls — search plus the dock's two projection buttons, explorer and sessions.
+  workspace's FINDING controls — the dock's two projection buttons, explorer and sessions. Search is NOT
+  among them: a rail search button sits above both projections and can only open one, so it has to assert a
+  scope the rail does not know. It moved into the two dock heads, where the row it sits in already says what
+  it searches ([[dock-modes]]); the rail keeps only what it can answer for.
   Those two are plain buttons, not addresses: each selects a projection and is lit while that projection is
   the one in force. **Each wears what it LISTS**, not where its panel sits: explorer is a files mark,
   sessions a list of rows with status points. Explorer wore the left-panel frame back when the two dock

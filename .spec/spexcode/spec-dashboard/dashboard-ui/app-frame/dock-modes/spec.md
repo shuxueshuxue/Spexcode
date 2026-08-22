@@ -63,6 +63,15 @@ projection may not mint a strip of its own; the explorer's own count row, the se
 archive door were three separate strips stacked around one list, three answers to a question this row
 already answers once.
 
+**SEARCH IS ONE OF THOSE DOORS, and each head opens it on what that head LISTS.** The sessions head searches
+sessions; the explorer head searches nodes. It is the same palette either way — same rows, same keys, same
+matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). Search used to be a
+rail button ([[side-nav]]), where it had to name a scope it could not know: it sat above both projections
+and opened exactly one of them, so a reader asking "search what?" got whichever answer the button's author
+had picked. Sitting inside the head row, the button needs no answer — the row it is in has already given
+one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
+force, so the key and the visible door can never disagree.
+
 The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
 route-selected highlight (`activeSessionId`). The header's `+` navigates to `sessions/new` and its archive

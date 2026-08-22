@@ -105,19 +105,25 @@ test('bounded secondary consumers expose one real-entity page and direct full-li
   assert.match(nodeView, /reviewListAddress\('issues', query\)/)
   assert.doesNotMatch(nodeView, /\bnode\.(?:issues|openIssues|evals|scenarios)\b/)
 
-  assert.match(palette, /useReviewPage\('issues', issueQuery, 1/)
-  assert.match(palette, /useReviewPage\('evals', evalQuery, 1/)
-  assert.match(palette, /className="search-review-links"/)
-  assert.match(palette, /addressHash\(reviewListAddress\('issues', issueQuery\)\)/)
-  assert.match(palette, /addressHash\(reviewListAddress\('evals', evalQuery\)\)/)
-  assert.match(palette, /issuePage\.data\?\.total/)
-  assert.match(palette, /evalPage\.data\?\.total/)
+  // The palette is NOT one of those consumers any more. It carries two planes — nodes and sessions, the
+  // things a tab can hold — and issues/scenarios go to their own list pages, which is what those pages are
+  // for. So it makes no review request at all: no page hook, no "all results" doors, no server-matched
+  // plane to preserve an order for. Both planes now come out of the board the shell already handed it.
+  assert.match(palette, /const BASE_PLANES = \['spec', 'session'\]/)
+  assert.doesNotMatch(palette, /useReviewPage/)
+  assert.doesNotMatch(palette, /reviewListAddress/)
+  assert.doesNotMatch(palette, /search-review-link/)
+  assert.doesNotMatch(palette, /SERVER_MATCHED_PLANES/)
+  assert.doesNotMatch(palette, /\bissueQuery\b|\bevalQuery\b/)
   assert.doesNotMatch(palette, /reviewList\.showing/)
-  assert.match(palette, /const SERVER_MATCHED_PLANES = new Set\(\['issue', 'scenario'\]\)/)
-  assert.match(palette, /SERVER_MATCHED_PLANES\.has\(k\)[\s\S]*\? docs\.slice\(0, 15\)[\s\S]*: rankDocs\(query/)
+  assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues|evals|scenarios)\b/)
+  // and the dictionaries lose the rows with it — a key nothing renders is a promise nothing keeps.
+  for (const dict of [en, zh]) {
+    assert.doesNotMatch(dict, /allIssues:/)
+    assert.doesNotMatch(dict, /allEvals:/)
+  }
   assert.match(reviewPage, /const inflightPages = new Map\(\)/)
   assert.match(reviewPage, /if \(inflightPages\.has\(path\)\) return inflightPages\.get\(path\)/)
-  assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues|evals|scenarios)\b/)
 })
 
 test('the committed text replays as a continuable edit — one trailing space, parked caret, display-only', () => {

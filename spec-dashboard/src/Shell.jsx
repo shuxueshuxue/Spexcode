@@ -322,6 +322,9 @@ export default function Shell() {
       }
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
       if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); pinTab('evals'); return true }
+      // the ⌥ chord is the door that survives a TYPING context, and in this workspace a typing context is a
+      // session console: `/` above is swallowed by the composer and xterm's helper, exactly as the
+      // native-control restraint requires. So it stays session-scoped — that is where it is reachable from.
       if (!graphOnly && firesEvent('shell.search', event)) { event.preventDefault(); openPalette('sessions'); return true }
     }
     if (firesEvent('shell.dockToggle', event)) { event.preventDefault(); setDock((value) => !value); return true }
@@ -342,11 +345,18 @@ export default function Shell() {
       if (page === 'settings') navigate('sessions'); else pinTab('settings')
       return true
     }
+    // `/` IS THE KEYBOARD TWIN OF THE DOCK HEAD'S SEARCH BUTTON, so it opens the palette on the same plane
+    // that head would: the projection in force decides. A document that names its own projection (a session,
+    // a node, a governed file) answers for itself; a board that has no dock defers to the projection last in
+    // force, which is the same thing the dock does when it stops following ([[dock-modes]]).
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.search', event.key)) {
-      event.preventDefault(); openPalette('nodes'); return true
+      event.preventDefault()
+      const scope = dockKind === 'sessions' || dockKind === 'explorer' ? dockKind : dockMode
+      openPalette(scope === 'sessions' ? 'sessions' : 'nodes')
+      return true
     }
     return false
-  }, [closePalette, dockMode, graphOnly, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
+  }, [closePalette, dockKind, dockMode, graphOnly, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
   useKeyboardScope(onShellKey, -100)
 
   // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.

@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -486,6 +486,7 @@ app.delete('/api/uploads/:id', (c) => {
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all') === '1' || c.req.query('all') === 'true')))
+app.get('/api/sessions/archive-index', async (c) => c.json(await listArchivedSessionIndex()))
 app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
 app.post('/api/sessions', async (c) => {
   const requestKey = c.req.header('idempotency-key') || randomUUID()
@@ -646,7 +647,7 @@ app.post('/api/sessions/:id/resume', async (c) => {
 // A merge intent to the session's own agent (it runs the merge), never a server merge.
 app.post('/api/sessions/:id/merge', async (c) => {
   const r = await mergeSession(c.req.param('id'))
-  return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
+  return c.json(r, r.dispatched ? 200 : 409)
 })
 
 // one WS owns one native tmux client (pty-bridge): server→client = that client's rendered PTY bytes (binary);

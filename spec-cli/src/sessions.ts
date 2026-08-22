@@ -1099,6 +1099,43 @@ export async function sessionPrompt(id: string): Promise<string | null> {
   catch (e) { if (e instanceof SessionRecordUnusable) return null; throw e }
 }
 
+export type ArchiveSessionIndexRow = {
+  id: string; title: string; label: string; closedAt: string | null; node: string | null
+}
+export type ArchiveSessionIndexProbe = { promptReads?: number }
+
+// The archive overlay has no reader for the session model. Keep this projection separate from listSessions so
+// opening it skips the live tmux census, resident adapter probes, and files/web reads, and carries no full prompt bytes.
+export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe): Promise<ArchiveSessionIndexRow[]> {
+  const rows: ArchiveSessionIndexRow[] = []
+  for (const id of listSessionIds()) {
+    let entry: PublicRecordEntry
+    try { entry = readPublicRecordEntry(id) } catch { continue }
+    if (entry.kind !== 'ok') continue
+    const rec = fromRaw(entry.raw)
+    if (!rec.governed || !rec.archived) continue
+    const parts = {
+      id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
+      activity: null, note: rec.note, promptPreview: null as string | null,
+    }
+    // Name and note are ahead of the prompt in deriveTitle's precedence. Avoid touching the prompt artifact
+    // unless both are absent; only then can its preview change the visible title.
+    if (!rec.name && !rec.note?.trim()) {
+      probe && (probe.promptReads = (probe.promptReads || 0) + 1)
+      const prompt = readPromptFile(id)
+      parts.promptPreview = prompt ? oneLinePreview(prompt) : null
+    }
+    rows.push({
+      id: rec.session,
+      title: deriveTitle(parts),
+      label: deriveLabel(parts),
+      closedAt: rec.closedAt,
+      node: rec.node,
+    })
+  }
+  return rows
+}
+
 // Preserve rows through a transient record-read failure; prune after the store entry disappears.
 const lastKnownSession = new Map<string, Session>()
 
@@ -3168,22 +3205,14 @@ const MERGE_PROMPT = `Merge your branch into main, then settle the session hones
 
 export type MergeSessionResult =
   | { dispatched: true }
-  | { dispatched: false; reason: string; code?: 'session_merge_not_proposed'; status?: 409 }
+  | { dispatched: false; reason: string }
 
 export async function mergeSession(id: string): Promise<MergeSessionResult> {
   const wt = await findWorktree(id)
   if (!wt?.branch) return { dispatched: false, reason: 'no such mergeable session' }
   const r = await sendText(id, MERGE_PROMPT, undefined, {
     deferDrain: true,
-    acceptGuard: async (rec) => {
-      if (!rec.governed || rec.status !== 'awaiting' || rec.proposal !== 'merge') {
-        const error = new ResourceConflict(`session ${id} is not a governed awaiting merge proposal`)
-        Object.assign(error, { code: 'session_merge_not_proposed' })
-        throw error
-      }
-    },
   })
-  if (r.code === 'session_merge_not_proposed') return { dispatched: false, reason: r.error || 'merge dispatch refused', code: r.code, status: 409 }
   if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
   await resumeSession(id, { guard: false })
   await drainSession(id)
@@ -4133,7 +4162,7 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
-type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed'
+type DispatchAcceptCode = 'dispatch_key_reused'
 type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
 type SendTextOptions = {
   replyVia?: 'note'

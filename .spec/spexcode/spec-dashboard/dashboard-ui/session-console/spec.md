@@ -86,12 +86,13 @@ While a drag approaches an off-screen archive heading, the working-board scrollp
 sidebar still owns exactly one scroll container.
 
 `View all N` opens a transient archive index overlay, not a third right-pane mode. The overlay is scoped only to
-closed sessions, reads the complete index once, groups newest-first rows under sticky dates, filters locally, and
+closed sessions, reads the complete lean index once (the row projection is `id`, visible title, search label,
+`closedAt`, and node), groups newest-first rows under sticky dates, filters locally, and
 closes on Esc or backdrop press. Choosing an index row closes the overlay and hands selection to the ordinary
 read-only Conversation, so the right pane always represents the selected session (or New Session), never an archive
 page.
 
-The archive index overlay reads the full closed-session index in one request, renders the newest-closed-first rows
+The archive index overlay reads the full closed-session lean index in one request, renders the newest-closed-first rows
 under sticky Today / Yesterday / calendar-date headings, and owns a search field that filters that complete index
 locally. Pagination is deliberately absent: the overlay's index scrollbar represents the whole result set from its
 first paint. This overlay is the only archive-search entry; the global palette neither includes closed rows nor

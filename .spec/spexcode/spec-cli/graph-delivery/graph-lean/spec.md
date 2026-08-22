@@ -94,6 +94,11 @@ assembly's fs walks yield the event loop instead of starving the liveness probe.
 measured as a whole-app ledger: initial graph bytes/forbidden-row counts plus the first opened list response,
 never an isolated endpoint claim.
 
+The same summary-first rule applies to the dashboard's archive index ([[session-console]]): its complete one-shot
+index is an archived-only `id`/`title`/`label`/`closedAt`/`node` projection, while the selected session's complete
+record is fetched by id for the read-only conversation. The zone's preview and the overlay reuse that cached index;
+there is no second archive query and no pagination.
+
 `buildBoard` is the frozen-input composer: its CLI/server adapter reads the spec snapshot, public session
 census, resolved layout, and one issue/forge snapshot, then passes those values together. The composer does
 not enumerate sessions or read issue stores itself; the full build and the sessions-only splice both consume

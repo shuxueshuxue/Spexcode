@@ -372,21 +372,6 @@ Example:
 A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
 must stay free of machine paths.
 
-── REVIEW ACCEPTANCE (spexcode.json — portable project proof) ──
-  review.runs             repeat count for BOTH candidate and main; must be >= 2.
-  review.setup            optional preparation command run in every fresh exact-commit checkout.
-  review.timeoutMs        default timeout for each setup/suite command.
-  review.suites[]         ordered { id, command, format, timeoutMs? } rows. format is "tap" for named
-                          test outcomes or "exit" for checks such as typecheck.
-  review.flaky[]          temporary candidate-difference exemptions. Each names suite::test, paired pass/fail
-                          observations on one full SHA with timestamps + durable sources, and BOTH expiry
-                          limits: expiresAfterDays and expiresAfterBaselineCollections.
-When configured, \`spex session done --propose merge\` runs this automatically. Candidate and main each run the
-configured count; main is cached outside the repository by exact SHA + suite config + runtime. Every declaration
-states fresh/cached provenance, SHA, collection time, and run counts. Flaky failures remain printed even when
-subtracted, and expire unless a later repeated baseline records another pass/fail flip. \`ask\`, \`park\`, and
-close-pending never run or wait on this gate.
-
 ── RESOURCE GOVERNANCE (spexcode.json — portable project budgets) ──
   resources.sessionRssMiB      resident-memory budget per governed session. Default 1024.
   resources.backendRssMiB      resident-memory budget for a backend/shared runtime owner. Default 2048.

@@ -55,8 +55,8 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
   mkdirSync(join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n')
   writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
-    harnesses: ['opencode'],
-    sessions: { launchers: { fake: { harness: 'opencode', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
+    harnesses: ['claude'],
+    sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'merge-dispatch@example.test')
@@ -106,12 +106,9 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
     git(worktree, 'add', 'review-change.txt')
     git(worktree, 'commit', '-qm', 'fixture review change')
 
-    const beforeProposal = await request(base, `/api/sessions/${id}/merge`, { method: 'POST' })
-    assert.deepEqual({ status: beforeProposal.status, code: beforeProposal.body.code }, { status: 409, code: 'session_merge_not_proposed' })
-
-    execFileSync(process.execPath, [
-      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge', '--note', 'ready to land',
-    ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
+    assert.equal(detail.status, 'working')
+    const undeclared = await request(base, `/api/sessions/${id}/merge`, { method: 'POST' })
+    assert.deepEqual({ status: undeclared.status, dispatched: undeclared.body.dispatched }, { status: 200, dispatched: true }, undeclared.text)
 
     const cli = execFileSync(process.execPath, [
       tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', id,

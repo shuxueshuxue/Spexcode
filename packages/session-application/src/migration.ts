@@ -5,7 +5,9 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
@@ -184,13 +186,18 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       replayed: true,
     }
   }
+  if (existsSync(options.databasePath)) {
+    fail(`database exists without a migration marker: ${options.databasePath}; refusing to import into an ambiguous live database`)
+  }
   const orphanParentPolicy = options.orphanParentPolicy ?? 'fail'
   if (orphanParentPolicy !== 'fail' && orphanParentPolicy !== 'tombstone') fail(`unknown orphan parent policy: ${orphanParentPolicy}`)
   if (input.orphanParents.length && orphanParentPolicy === 'fail') {
     fail(`sessions name retired parents ${input.orphanParents.join(', ')}; rerun the one-time migration with orphanParentPolicy=tombstone to preserve those edges as archived addresses`)
   }
   backupInputs(options.recordsRoot, input.files, backupRoot, sourceDigest)
-  const app = openProjectSessionApplication({ databasePath: options.databasePath, locality: options.locality, now: options.now })
+  const stagingDatabasePath = `${options.databasePath}.migration-${process.pid}.tmp`
+  if (existsSync(stagingDatabasePath)) fail(`migration staging database already exists: ${stagingDatabasePath}`)
+  const app = openProjectSessionApplication({ databasePath: stagingDatabasePath, locality: options.locality, now: options.now })
   let parentEdges = 0, watchEdges = 0, events = 0
   try {
     if (orphanParentPolicy === 'tombstone') {
@@ -231,7 +238,15 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
         watchEdges++
       }
     }
-  } finally { app.close() }
+    app.close()
+    renameSync(stagingDatabasePath, options.databasePath)
+  } catch (error) {
+    try { app.close() } catch { /* preserve the import failure */ }
+    for (const sidecar of [`${stagingDatabasePath}-journal`, `${stagingDatabasePath}-wal`, `${stagingDatabasePath}-shm`, stagingDatabasePath]) {
+      try { if (existsSync(sidecar)) unlinkSync(sidecar) } catch { /* cleanup is best effort; the original error wins */ }
+    }
+    throw error
+  }
   const report: JsonSessionMigrationReport = {
     version: VERSION,
     sourceDigest,

@@ -16,6 +16,9 @@ related:
 and watcher files in stable lexical order, validates ids, statuses, parent references, watcher sources, duplicates, and
 cycles before opening SQLite, and fails loudly on corrupt or ambiguous input. The source bytes receive a SHA-256
 content digest, are copied to an auditable backup, and are fenced by a marker containing the digest and import counts.
+The importer never writes a partially populated target: it builds a sibling staging SQLite file, closes it, and atomically
+renames it into the requested database path only after every record, edge, event, and tombstone succeeds. An existing
+database without a matching migration marker is ambiguous and is refused rather than appended to.
 
 Legacy `parent: ""` is the historical spelling of a root and is normalized to `null` before validation. A child may
 also point at a parent whose record was already retired from the JSON root. The default remains fail-closed for that

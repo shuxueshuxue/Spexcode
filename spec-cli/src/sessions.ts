@@ -253,7 +253,7 @@ export type SessRec = {
   createPayloadHash?: string | null // exact normalized create payload bound to createRequestId
   zcodeChildSessionIds?: string[] // persistent exact ZCode child ids; never inferred from title, path, branch, or timing
   base?: string | null   // explicit fork point the creator pinned; absent/null = the auto-detected source-of-truth branch
-  diffComments: DiffComment[]
+  diffComments?: DiffComment[]
   launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
 export type DiffComment = {
@@ -474,7 +474,7 @@ function writeRecord(rec: SessRec): void {
     // Written only when the creator pinned one: an unpinned record keeps its exact legacy bytes, so a
     // restore-the-frozen-record path stays byte-identical instead of silently gaining a key.
     ...(rec.base ? { base: rec.base } : {}),
-    ...(rec.diffComments.length ? { diff_comments: rec.diffComments.map((comment) => ({
+    ...((rec.diffComments ?? []).length ? { diff_comments: (rec.diffComments ?? []).map((comment) => ({
       id: comment.id, file_path: comment.filePath, line_start: comment.lineStart, line_end: comment.lineEnd,
       body: comment.body, diff_identity: comment.diffIdentity, sent_at: comment.sentAt,
     })) } : {}),
@@ -3212,7 +3212,7 @@ export async function sessionDiff(id: string, filePath?: string, offset = 0, lim
     const patch = await gitA(['-C', wt.path, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
     return { ...file, patch: patch.slice(offset, offset + limit), diffIdentity: identity }
   }))
-  return { id, scope: 'branch', base: pair.base, head: pair.head, mergeBase: pair.mergeBase, files: result, comments: wt.rec.diffComments }
+  return { id, scope: 'branch', base: pair.base, head: pair.head, mergeBase: pair.mergeBase, files: result, comments: wt.rec.diffComments ?? [] }
 }
 
 export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' | 'sentAt'> & { id?: string }): Promise<DiffComment | null> {
@@ -3223,7 +3223,7 @@ export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' 
     const rec = readLiveRecord(id)
     if (!rec) return null
     const comment: DiffComment = { id: input.id || randomUUID(), filePath: input.filePath, lineStart: input.lineStart, lineEnd: input.lineEnd, body, diffIdentity: input.diffIdentity, sentAt: null }
-    const comments = rec.diffComments.filter((candidate) => candidate.id !== comment.id)
+    const comments = (rec.diffComments ?? []).filter((candidate) => candidate.id !== comment.id)
     writeRecord({ ...rec, diffComments: [...comments, comment] })
     return comment
   })
@@ -3234,7 +3234,7 @@ export async function sendDiffComments(id: string, ids?: string[]): Promise<{ ok
     const rec = readLiveRecord(id)
     if (!rec) return null
     const wanted = ids?.length ? new Set(ids) : null
-    return rec.diffComments.filter((comment) => !comment.sentAt && (!wanted || wanted.has(comment.id)))
+    return (rec.diffComments ?? []).filter((comment) => !comment.sentAt && (!wanted || wanted.has(comment.id)))
   })
   if (!selected) return { ok: false, error: `no such session ${id}` }
   if (!selected.length) return { ok: false, error: 'no unsent diff comments' }
@@ -3249,7 +3249,7 @@ export async function sendDiffComments(id: string, ids?: string[]): Promise<{ ok
     const rec = readLiveRecord(id)
     if (!rec) return
     const selectedById = new Map(selected.map((comment) => [comment.id, comment]))
-    writeRecord({ ...rec, diffComments: rec.diffComments.map((comment) => {
+    writeRecord({ ...rec, diffComments: (rec.diffComments ?? []).map((comment) => {
       const before = selectedById.get(comment.id)
       const unchanged = before && !comment.sentAt && comment.body === before.body && comment.diffIdentity === before.diffIdentity
       return unchanged ? { ...comment, sentAt } : comment

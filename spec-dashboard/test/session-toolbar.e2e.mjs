@@ -43,6 +43,10 @@ const sessionState = await page.evaluate(() => {
 check('session document has one shell action slot and no internal chrome', !sessionState.hasRetiredToolbar && sessionState.hasSlot, sessionState)
 check('merge and session actions are registered in the slot', sessionState.actions.some((item) => item.action === 'merge') && sessionState.actions.some((item) => item.action === 'session-menu'), sessionState.actions)
 check('disabled merge keeps its reason in the accessible label', sessionState.actions.some((item) => item.action === 'merge' && item.disabled && item.label?.includes('merge unavailable')), sessionState.actions.find((item) => item.action === 'merge'))
+await page.keyboard.press('Alt+I')
+const commandOpen = await page.locator('.si-command-layer').isVisible().catch(() => false)
+check('Alt+I opens the Command Box through the console keyboard scope', commandOpen)
+await page.keyboard.press('Alt+I')
 await page.screenshot({ path: join(OUT, 'session-document-actions.png'), fullPage: true })
 
 await page.goto(`${BASE}/#/spec/spexcode`)

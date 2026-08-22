@@ -32,6 +32,8 @@ import { fileHumanOk } from '@spexcode/spec-eval/humanok'
 import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnavailableError } from '@spexcode/spec-eval/sessioneval'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
+import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
+import { loadConfig as loadLintConfig } from './lint.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
@@ -136,6 +138,27 @@ app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.
 // worktree's working tree. An untracked brand-new node is invisible to `git diff <base>`, so when the base
 // diff is empty AND status is `??` synthesize an all-additions view via `diff --no-index` (gitTry — --no-index
 // exits 1, which gitA would swallow). Gated on `??` so a tracked file with no pending change stays empty.
+// [[source-read]]: a governed source file, read as a byte WINDOW. The spec tree names the files it governs
+// but the board could never open one — this is the read half of "spec and code on one screen". The policy
+// gate is `isSourceFile`, the SAME predicate the coverage walk uses, so the set of files the board can show
+// is by construction the set the project governs. Query: path (repo-relative), offset, limit; the response
+// carries the file's total size so the client can page without a second HEAD.
+app.get('/api/source', (c) => {
+  try {
+    const root = repoRoot()
+    const slice = readSourceSlice(
+      root,
+      c.req.query('path') || '',
+      loadLintConfig(root),
+      Number(c.req.query('offset') ?? 0),
+      Number(c.req.query('limit') ?? SOURCE_SLICE_MAX_BYTES),
+    )
+    return c.json(slice)
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
 app.get('/api/edit', async (c) => {
   const source = c.req.query('source') || '', path = c.req.query('path') || ''
   if (!source || !path) return c.json({ patch: '' })

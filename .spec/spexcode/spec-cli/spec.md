@@ -149,7 +149,9 @@ line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body r
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
 (a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
-node shows its body not nothing), `/api/settings` (the resolved
+node shows its body not nothing), `/api/source` (one **byte window** of a governed source file, gated by the
+same policy predicate the coverage walk uses — [[source-read]] owns the contract; the route only resolves the
+root, compiles the policy, and maps a refusal onto its status), `/api/settings` (the resolved
 [[portable-layout]]), and `/api/plugins` + `/api/slash-commands` (the
 `/` dropdown — config-root plugins declaring `surface: command`, plus the Claude-Code command union).
 The read-only guidance catalog ([[guidance-catalog]]) is exposed at `/api/guidance` and by the deterministic

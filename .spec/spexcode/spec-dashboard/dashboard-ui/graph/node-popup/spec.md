@@ -34,7 +34,10 @@ the **spec doc** — an information board. A **stat bar** carries the
 node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **eval
 score** ([[eval-score-badge]]), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
-files, then the body as a living current-state document (the two
+files — each one a **door, not a label**: a `code:` entry opens the file itself in place ([[source-view]]),
+under the prose that claims it and inside the same scroll, one at a time. A separate tab would have put the
+claim and the claimed thing back on two screens, which is the separation the affordance exists to close.
+Then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
 an agent-authored *current state* — what's-done is read from the derived status, never narrated, because
 agents hallucinate completion. The proof and

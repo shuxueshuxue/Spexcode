@@ -6,6 +6,7 @@ import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { loadPublicSpecContent, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
+import SourceView from './SourceView.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { Icon } from './icons.jsx'
@@ -197,6 +198,33 @@ function useSpecContent(id, version, { embedded = false, publicGraph = false } =
   return content
 }
 
+// The `code:` list stops being a list of NAMES and becomes a list of DOORS: a governed file opens in place,
+// under the spec prose that claims it, in the same scroll. A separate tab would have put the claim and the
+// claimed thing on two screens again — the exact separation this is meant to close. One file open at a time,
+// so the pane stays a reading surface rather than a stack of viewers competing for height.
+function GovernedFiles({ files, count }) {
+  const t = useT()
+  const [open, setOpen] = useState(null)
+  // a `code:` entry may name a SYMBOL inside a file (`SpecNode.jsx#SpecNode`) — several entries then point
+  // at one file. The chip keeps the claim's own wording; the door behind it is the file.
+  const pathOf = (entry) => entry.split('#')[0]
+  return (
+    <div className="doc-gov">
+      <span className="doc-gov-h">{t('nodeView.governs')} <b>{count}</b></span>
+      <div className="doc-gov-files">
+        {files.map((f) => {
+          const path = pathOf(f)
+          return (
+            <button key={f} type="button" className={`gov-f${open === path ? ' on' : ''}`}
+              aria-expanded={open === path} onClick={() => setOpen(open === path ? null : path)}>{f}</button>
+          )
+        })}
+      </div>
+      {open && <SourceView path={open} className="doc-gov-src" />}
+    </div>
+  )
+}
+
 export function SpecPane({ node, graphOnly = false }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
@@ -215,10 +243,7 @@ export function SpecPane({ node, graphOnly = false }) {
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
       {node.code?.length > 0 ? (
-        <div className="doc-gov">
-          <span className="doc-gov-h">{t('nodeView.governs')} <b>{node.code.length}</b></span>
-          <div className="doc-gov-files">{node.code.map((f) => <code key={f} className="gov-f">{f}</code>)}</div>
-        </div>
+        <GovernedFiles files={node.code} count={node.code.length} />
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}

@@ -112,6 +112,11 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.viewhost\s*\{[^}]*background:\s*var\(--paper\);/s)
   // the active tab is painted the CONTENT tone so the tab and its document read as one plane
   assert.match(css, /\.tab\.on\s*\{[^}]*background:\s*var\(--paper\);/s)
+  // A SEAM IS A STEP, NOT A LINE: ground · the --edge hairline · one pixel of --panel · paper. The middle
+  // rung is what makes the document read as raised, and it is why no panel here needs a drop shadow.
+  assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
+  // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
+  assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
 })
 
 test('the chrome bands the budget does not allow are gone from the sheet', () => {

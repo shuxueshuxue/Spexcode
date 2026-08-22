@@ -339,6 +339,17 @@ body.is-session-dragging .dock-archive-door:hover {
 .ft-dir .ft-label { color: var(--ink); }
 .ft-code, .ft-dir { text-decoration: none; }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+/* THE SEAM IS ALSO A GRIP, and it says so the way the split's own resizer already does. These two hid a 6px
+   grab strip with no feedback at all while [[resizable-panes]]'s divider lit under the pointer — two
+   dividers with two answers to the same question. One answer now: the seam thickens into the accent under
+   the pointer and while dragging, and shows nothing at rest, so a resting window gains no visible handle. */
+.ft-resize::after, .ctx-resize::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent;
+}
+.ft-resize:hover::after, .ctx-resize:hover::after,
+body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
+  background: color-mix(in srgb, var(--blue) 55%, transparent);
+}
 
 /* the explorer's two DISCLOSURES ([[files-tree]]): Specs, the spec tree, open by default because it is the
    explorer's main body; Files, the disk, closed. A head borrows the DOCK HEADER's register exactly — muted
@@ -419,7 +430,16 @@ body.is-session-dragging .dock-archive-door:hover {
 
 /* [[workspace-shell]] — the content area. One view at a time today; the host is the seam a second one
    would mount into, which is why it is a box of its own rather than the view being the child of the frame. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; }
+/* DEPTH IS THE LADDER, NOT A SHADOW. The three tones already say where the document is; what a single
+   hairline could not say is that the document sits ABOVE the chrome rather than beside it. The seam is
+   therefore a STEP made of the ladder's own middle rung: chrome (--ground) · the hairline (--edge) · one
+   pixel of --panel · the content plane (--paper). Four values in three pixels, and it works in every theme
+   by construction, because the ladder is ordered in every theme.
+   It also continues the tab strip: the strip IS --panel, so the middle rung runs unbroken across the top of
+   the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
+   thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
+   genuinely float (menus, the palette), never stacked to fake a surface. */
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -1907,7 +1927,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .fv-send:disabled { opacity: 0.45; cursor: default; }
 
-.si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+/* THE TERMINAL IS A DARK CARD ON THE CONTENT PLANE, not a wall butted against the seam. A gutter of --paper
+   down its leading edge is what makes it read that way, and it is the same step the rest of the window
+   uses — the terminal keeps its own --term-bg (the one surface that is legitimately dark in every theme),
+   and the plane it sits on shows beside it. Leading edge only: the pane's other three sides already meet
+   chrome that steps for them. */
+.si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; padding-left: var(--space-3); background: var(--paper); }
 
 .si-archive-backdrop {
   position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;

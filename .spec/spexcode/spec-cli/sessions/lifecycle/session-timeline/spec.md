@@ -13,6 +13,7 @@ related:
   - packages/spec-core/src/layout.ts
   - spec-cli/src/session-timeline.test.ts
   - spec-cli/src/session-timeline.api.test.ts
+  - spec-cli/src/session-application-timeline.test.ts
   - spec-dashboard/src/TimelineChat.jsx
 ---
 
@@ -22,12 +23,12 @@ related:
 
 A session's record ([[state]]) holds only its CURRENT status. Everything else a session *is* to the outside
 world — what it declared, what was said to it — is a sequence of events, and a sequence belongs in a log.
-`timeline.ndjson`, in the session's global store dir, is that log: the **record**, and the **conversation** a
-terminal-free surface renders, which are the same sequence read for two purposes. A message is accepted when
-its bytes are in this file — that is what a sender is told and what any later reader can prove. And because
-the log is only files, it is the one thing about a session that any process may observe without owning
-anything — which is how a supervisor, a CI, or any external orchestrator watches a fleet without being
-granted access to it.
+Historically `timeline.ndjson`, in the session's global store dir, was that log. After the one-time application
+cutover, the same public sequence is held by `session-events` in the adopter-owned SQLite database; the HTTP
+projection reads that event stream and does not recreate a second ndjson feed. A message is accepted when
+its bytes are in the canonical store — that is what a sender is told and what any later reader can prove. Because
+the log is an application-owned durable sequence, it is the one thing about a session that any process may observe without owning anything —
+which is how a supervisor, a CI, or any external orchestrator watches a fleet without being granted access to it.
 
 What this log is NOT is a work list. It is never read to decide what a session is still owed; that debt is a
 small ordered queue of its own ([[delivery-queue]]) whose resting state is empty. A record grows forever and a
@@ -76,8 +77,8 @@ but no live cursor authorizes semantic deletion: archive preserves every segment
 physical deletion boundary.
 
 **The append is what ACCEPTS an admissible message; the queue is what owes it.** `sendText` appends the `sent`
-line and enqueues the same message in one hold of the session's record lock ([[dispatch]]), and reports success
-on that write. Before that append, a resolved adapter may prove its native transport unreachable; joined with a
+fact and enqueues the same message in one application transaction ([[dispatch]]), and reports success on that write.
+Before that append, a resolved adapter may prove its native transport unreachable; joined with a
 still-live registered agent this is a stranded worker, not a transport race, so the send fails loud without
 creating a `sent` line or new debt. An unproven transport remains admissible and keeps the queue retry. This
 exception preserves the dissolution of the "delivered but unconfirmed" state — the append is not itself the

@@ -89,6 +89,32 @@ test('production composition refuses missing locality and relative database path
   )
 })
 
+test('conversation enqueue records the public message fact beside protocol debt in one transaction', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-conversation-'))
+  const databasePath = join(root, 'sessions.sqlite')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: 'conversation' })
+
+  const queued = app.enqueueConversationMessage('conversation', {
+    kind: 'session.prompt.v1',
+    body: Buffer.from('transport-only-hint'),
+    senderSessionId: null,
+    idempotencyKey: 'conversation-message-1',
+  }, { text: 'the visible prompt', from: null, replyVia: 'note' })
+
+  assert.equal(app.protocol.listPending('conversation').length, 1)
+  const events = app.events.read('conversation')
+  const messageEvent = events.find(event => event.type === 'session.message.sent.v1')
+  assert.ok(messageEvent)
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(messageEvent.payload)), {
+    from: null,
+    messageId: queued.messageId,
+    replyVia: 'note',
+    text: 'the visible prompt',
+  })
+  app.close()
+})
+
 test('protocol addresses without migrated application state are absent and read-only', () => {
   const root = mkdtempSync(join(tmpdir(), 'session-application-unmigrated-'))
   const databasePath = join(root, 'sessions.sqlite')

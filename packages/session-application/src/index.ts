@@ -76,6 +76,7 @@ export { openProjectSessionApplication } from './production.js'
 export { jsonMigrationFencePath, migrateJsonSessionRecords } from './migration.js'
 export type {
   CommittedSessionChange,
+  ConversationMessageInput,
   CreateSessionInput,
   LocalityPrecondition,
   NativeRuntimeIdentity,

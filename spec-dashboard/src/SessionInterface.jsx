@@ -14,6 +14,7 @@ import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { navigateAddress, sessionEvalAddress } from './address.js'
 import { navigate, routeHash } from './route.js'
+import { requestTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
@@ -22,7 +23,10 @@ import {
   SESSION_SURFACE_DIFF,
   getSessionBaseSurface,
   isSessionSurface,
-  setSessionBaseSurface,
+  isResourceSurface,
+  resourceSurface,
+  resourceSurfaceKey,
+  resourceTabKey,
   subscribeSessionSurface,
 } from './sessionSurface.js'
 import { inertChromePress } from './focus.js'
@@ -32,6 +36,7 @@ import { useTransientNotice } from './TransientNotice.jsx'
 import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
+import { useStatusItem } from './StatusBar.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -185,7 +190,6 @@ const webName = (url) => {
     return `${parsed.hostname.replace(/^\[|\]$/g, '')}:${parsed.port}${parsed.pathname === '/' ? '' : parsed.pathname}`
   } catch { return url }
 }
-const resourceTabKey = (sessionId, kind, value) => `${sessionId}:${kind}:${value}`
 const webProxyUrl = (sessionId, key) => `${PROJECT_BASE}/web/${encodeURIComponent(sessionId)}/${encodeURIComponent(key)}/`
 
 function ResourceMenu({ options, onOpen }) {
@@ -461,7 +465,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [dragTarget, setDragTarget] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [resourceTabs, setResourceTabs] = useState([])
-  const [resourceSurface, setResourceSurface] = useState({})
+  const { tabs: openTabs } = useTabs()
+  const [unreadResources, setUnreadResources] = useState(() => new Set())
   const [openedConversations, setOpenedConversations] = useState(() => new Set())
   const [surfaceVersion, setSurfaceVersion] = useState(0)
   const [resourceMenu, setResourceMenu] = useState(false)
@@ -556,6 +561,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const archivedSel = !!selSession?.archived
   const readOnlyPane = noLivePane || archivedSel
   const requestedSurface = isSessionSurface(surface) ? surface : null
+  const requestedResourceId = isResourceSurface(requestedSurface) ? resourceSurfaceKey(requestedSurface) : null
   const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : requestedSurface || getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
   const diffSurface = activeBaseSurface === SESSION_SURFACE_DIFF
@@ -563,39 +569,38 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const session = allSessions.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
   }
-  useEffect(() => {
-    // An explicit face in the address is a user choice, so it becomes the session's next bare default.
-    // Headless and read-only records cannot expose Terminal and keep Conversation regardless of the query.
-    if (sessionActive && requestedSurface && !terminalFree && !readOnlyPane) setSessionBaseSurface(active, requestedSurface)
-  }, [active, requestedSurface, sessionActive, terminalFree, readOnlyPane])
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive, !!selSession)
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
   const footerState = sessionFooterState(selSession)
-  const activeResourceId = sessionActive ? resourceSurface[active] || null : null
-  const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId) || null
-  const resourceOptions = selSession ? [
+  const resourceCatalog = selSession ? [
     ...(selSession.files || []).map((path) => ({
       id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
     })),
     ...(selSession.web || []).map((web) => ({
       id: resourceTabKey(active, 'web', web.key), sessionId: active, kind: 'web', key: web.key, value: web.url, label: webName(web.url), revision: 0,
     })),
-  ].filter((option) => !resourceTabs.some((tab) => tab.id === option.id)) : []
+  ] : []
+  const activeResourceId = sessionActive ? requestedResourceId : null
+  const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId)
+    || resourceCatalog.find((tab) => tab.id === activeResourceId)
+    || null
+  const resourceOptions = resourceCatalog.filter((option) => !openTabs.some((tab) =>
+    tab.page === 'sessions' && tab.param === active && tab.query?.surface === resourceSurface(option.id)))
 
   const activateResource = (tab) => {
-    setResourceSurface((surfaces) => ({ ...surfaces, [tab.sessionId]: tab.id }))
     setResourceFocusRequest((request) => request + 1)
     closeCommandBox()
   }
-  const openResource = (tab, select = true) => {
+  const openResource = (tab) => {
     setResourceTabs((tabs) => tabs.some((current) => current.id === tab.id) ? tabs : [...tabs, tab])
-    if (select) activateResource(tab)
+    setUnreadResources((unread) => {
+      if (!unread.has(tab.id)) return unread
+      const next = new Set(unread); next.delete(tab.id); return next
+    })
+    activateResource(tab)
     setResourceMenu(false)
-  }
-  const closeResource = (tab) => {
-    setResourceTabs((tabs) => tabs.filter((current) => current.id !== tab.id))
-    setResourceSurface((surfaces) => surfaces[tab.sessionId] === tab.id ? { ...surfaces, [tab.sessionId]: null } : surfaces)
+    requestTab('sessions', tab.sessionId, { surface: resourceSurface(tab.id) })
   }
   const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
     current.id === tab.id ? { ...current, revision: current.revision + 1 } : current,
@@ -640,11 +645,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!previous) return
     const added = [...published].filter(([id]) => !previous.has(id)).map(([, tab]) => tab)
     if (!added.length) return
-    const admitted = added.filter((tab) => !resourceTabs.some((current) => current.id === tab.id))
-    setResourceTabs((tabs) => [...tabs, ...admitted.filter((tab) => !tabs.some((current) => current.id === tab.id))])
-    const selected = admitted.find((tab) => tab.sessionId === active)
-    if (selected) activateResource(selected)
-  }, [sessions, active, resourceTabs])
+    setUnreadResources((unread) => new Set([...unread, ...added.map((tab) => tab.id)]))
+  }, [sessions])
 
   useEffect(() => {
     const published = new Set()
@@ -653,8 +655,37 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       for (const web of session.web || []) published.add(resourceTabKey(session.id, 'web', web.key))
     }
     setResourceTabs((tabs) => tabs.filter((tab) => published.has(tab.id)))
-    setResourceSurface((surfaces) => Object.fromEntries(Object.entries(surfaces).filter(([, id]) => !id || published.has(id))))
   }, [sessions])
+
+  // Resource previews are warm only while their ordinary object tab remains open. The active route is kept
+  // as a one-render grace period while useTabs records a newly opened address.
+  useEffect(() => {
+    const openResourceIds = new Set(openTabs
+      .filter((tab) => tab.page === 'sessions' && isResourceSurface(tab.query?.surface))
+      .map((tab) => resourceSurfaceKey(tab.query.surface)))
+    if (activeResourceId) openResourceIds.add(activeResourceId)
+    setResourceTabs((tabs) => tabs.filter((tab) => openResourceIds.has(tab.id)))
+  }, [openTabs, activeResourceId])
+
+  useEffect(() => {
+    if (!activeResourceId || !activeResource) return
+    setResourceTabs((tabs) => tabs.some((tab) => tab.id === activeResourceId) ? tabs : [...tabs, activeResource])
+  }, [activeResourceId, activeResource])
+
+  const unreadTabs = useMemo(() => {
+    const tabs = []
+    for (const session of sessions) for (const web of session.web || []) {
+      const tab = { id: resourceTabKey(session.id, 'web', web.key), sessionId: session.id, kind: 'web', key: web.key, value: web.url, label: webName(web.url), revision: 0 }
+      if (unreadResources.has(tab.id)) tabs.push(tab)
+    }
+    return tabs
+  }, [sessions, unreadResources])
+  useStatusItem(unreadTabs.length ? {
+    id: 'session-resource-unread', side: 'right', priority: 20, kind: 'standard',
+    text: t('session.unreadResources', { n: unreadTabs.length }),
+    tooltip: t('session.unreadResources', { n: unreadTabs.length }),
+    onClick: () => openResource(unreadTabs[0]),
+  } : null)
 
   useEscLayer(resourceMenu, () => setResourceMenu(false))
   // the active session's Command Box draft (per-session, see `drafts`).
@@ -670,18 +701,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
   }
-  // A resource is temporary; this restores the resolved base surface. Explicit face changes are URL
-  // navigation; returning from a resource merely clears the local overlay.
+  // Escape from a resource is a user navigation back to the session's resolved base address.
   const showBaseSurface = (id, surface, remember = false) => {
     if (id === 'new') return
     selectSession(id)
-    setResourceSurface((surfaces) => ({ ...surfaces, [id]: null }))
     if (surface === SESSION_SURFACE_CONVERSATION) {
       setOpenedConversations((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     } else {
       setTerminalFocusRequest((request) => request + 1)
     }
-    if (remember) navigate('sessions', id, { query: { surface } })
+    if (remember || id === active) navigate('sessions', id, { query: { surface } })
   }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
@@ -1263,7 +1292,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setCtxMenu({ x: box.left, y: box.bottom, session: selSession })
       },
     },
-    ...uiCmds.filter((command) => command.button).map((command) => ({
+    ...uiCmds.filter((command) => command.button && !activeResource && (activeBaseSurface === 'terminal' || command.name !== 'merge')).map((command) => ({
       id: command.name,
       icon: command.icon,
       label: t(command.enabled ? command.titleKey : command.disabledTitleKey),
@@ -1438,7 +1467,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <div
                 className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${diffSurface ? ' is-diff' : ''}${activeResource ? ' is-resource' : ''}`}
                 id={activeResource ? `si-resource-panel-${activeResource.id}` : `si-${activeBaseSurface}-panel-${active}`}
-                role={activeResource ? 'dialog' : undefined}
                 aria-label={activeResource?.label || t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}
                 style={{ position: 'relative' }}
               >
@@ -1489,7 +1517,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     }}>
                       <SessionResourcePanel tab={tab} active={open && shown}
                         focusRequest={shown ? resourceFocusRequest : 0}
-                        onEscape={() => showBaseSurface(tab.sessionId, baseSurfaceForSession(tab.sessionId))} />
+                        onEscape={() => showBaseSurface(tab.sessionId, baseSurfaceForSession(tab.sessionId), true)} />
                     </div>
                   )
                 })}

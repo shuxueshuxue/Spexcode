@@ -2004,15 +2004,6 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 }
 .si-tab.on { color: var(--ink); border-bottom-color: var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .si-tab svg { flex: none; }
-.si-resource-tab { flex: none; min-width: 0; height: 32px; display: flex; align-items: stretch; border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); color: var(--muted); }
-.si-resource-tab.on { color: var(--ink); background: color-mix(in srgb, var(--blue) 5%, transparent); box-shadow: inset 0 -2px var(--blue); }
-.si-resource-tab-main { min-width: 0; max-width: 180px; display: inline-flex; align-items: center; gap: 5px; padding: 0 5px 0 8px; color: inherit; background: transparent; border: 0; font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
-.si-resource-tab-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-resource-tab-main svg { flex: none; }
-.si-resource-tab-action { flex: none; width: 25px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
-.si-resource-tab-action:hover, .si-resource-tab-action:focus-visible { color: var(--blue); background: var(--panel2); }
-.si-resource-tab-action:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-.si-resource-picker { position: relative; flex: none; display: flex; align-items: center; padding: 0 6px; border-left: 1px solid var(--line); }
 /* Unlike the flat tab actions above, this focus ring sits OUTSIDE the box: inset on a 20px circle it would
    crowd the glyph. 20 + offset + ring = 26px, still contained by the 32px bar. */
 .si-resource-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 12%, transparent); }
@@ -2069,7 +2060,6 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   .si-eval-label, .si-eval-stats .secondary { display: none; }
   .si-eval-tab { gap: 4px; padding-inline: 6px; }
   .si-actions { gap: 2px; padding-inline: 4px; }
-  .si-resource-tab-main { max-width: 110px; }
 }
 @container (max-width: 390px) {
   .si-tab-label { display: none; }

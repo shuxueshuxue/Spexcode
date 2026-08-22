@@ -4,6 +4,10 @@ import test from 'node:test'
 import {
   SESSION_SURFACE_CONVERSATION,
   SESSION_SURFACE_TERMINAL,
+  isResourceSurface,
+  resourceSurface,
+  resourceSurfaceKey,
+  resourceTabKey,
   getDefaultSessionSurface,
   getSessionBaseSurface,
   hasSessionBaseSurface,
@@ -60,6 +64,16 @@ test('session surface writes publish immediately', () => {
     unsubscribe()
   }
   assert.equal(seen.at(-1)?.sessions.charlie, SESSION_SURFACE_CONVERSATION)
+})
+
+test('resource faces are URL values, never persisted base preferences', () => {
+  const key = resourceTabKey('alpha', 'web', 'preview')
+  const value = resourceSurface(key)
+  assert.equal(value, 'resource:alpha:web:preview')
+  assert.equal(isResourceSurface(value), true)
+  assert.equal(resourceSurfaceKey(value), key)
+  assert.equal(isResourceSurface('resource:'), false)
+  assert.equal(isResourceSurface('terminal'), false)
 })
 
 test('Settings exposes the default surface as a segmented preference', () => {

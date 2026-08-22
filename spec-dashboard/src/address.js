@@ -3,6 +3,8 @@ import { nodeEvalQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
+// A session face is one URL axis. Resource faces use the existing resourceTabKey as their value
+// (`resource:<sessionId>:<kind>:<key>`), so they remain ordinary session object addresses.
 export const sessionSurfaceAddress = (sessionId, surface) => ({ kind: 'session-surface', sessionId, surface })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
 export const reviewListAddress = (page, query) => ({ kind: 'review-list', page, query })

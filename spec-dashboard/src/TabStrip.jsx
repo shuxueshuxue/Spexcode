@@ -4,8 +4,15 @@ import { tabKey, useTabs } from './tabs.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR } from './session.js'
-import { getSessionBaseSurface, isSessionSurface, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
+import { getSessionBaseSurface, isSessionSurface, isResourceSurface, resourceSurfaceKey, resourceTabKey, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
 import { useDocumentActions } from './documentActions.jsx'
+
+const resourceLabel = (url) => {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.hostname.replace(/^\[|\]$/g, '')}:${parsed.port}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  } catch { return url }
+}
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -24,9 +31,18 @@ function label(tab, { specs, sessions, t }) {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param))
     const title = s?.label || s?.title || tab.param.slice(0, 8)
+    const requestedSurface = isSessionSurface(tab.query?.surface) ? tab.query.surface : null
+    if (isResourceSurface(requestedSurface)) {
+      const key = resourceSurfaceKey(requestedSurface)
+      const resource = [
+        ...(s?.files || []).map((path) => ({ id: resourceTabKey(s.id, 'file', path), label: path.split('/').filter(Boolean).pop() || path })),
+        ...(s?.web || []).map((web) => ({ id: resourceTabKey(s.id, 'web', web.key), label: resourceLabel(web.url) })),
+      ].find((item) => item.id === key)
+      return `${title} · ${resource?.label || key}`
+    }
     const surface = s?.capabilities?.headless === true || s?.liveness === 'offline' || s?.archived
       ? SESSION_SURFACE_CONVERSATION
-      : (isSessionSurface(tab.query?.surface) ? tab.query.surface : getSessionBaseSurface(s?.id || tab.param))
+      : (requestedSurface || getSessionBaseSurface(s?.id || tab.param))
     return `${title} · ${t(`tabs.surface${surface[0].toUpperCase()}${surface.slice(1)}`)}`
   }
   return t(`tabs.${tab.page}`)

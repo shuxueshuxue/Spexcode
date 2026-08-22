@@ -122,6 +122,12 @@ export default function Shell() {
       return false
     }
     if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
+    // [[keyboard-nav]]'s native-control restraint, kept across the hoist to the shell scope: while real
+    // DOM focus sits in a typing context — an input, a textarea (the session composer, xterm's helper),
+    // anything contenteditable — every UNMODIFIED key belongs to that control. A bare comma must type a
+    // comma, never navigate to settings. Modifier-carrying chords (the ⌥ page jumps) still pass.
+    if (!event.altKey && !event.ctrlKey && !event.metaKey
+      && event.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return false
     if (event.altKey && !event.metaKey && !event.ctrlKey) {
       const pageOf = [
         ['shell.pageGraph', 'graph'], ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],

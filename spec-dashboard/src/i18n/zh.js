@@ -87,6 +87,9 @@ export default {
     surfaceConversation: '对话',
     surfaceDiff: '差异',
   },
+  documentActions: {
+    aria: '文档操作',
+  },
   nav: {
     railLabel: '主导航',
     explorer: '资源管理器',

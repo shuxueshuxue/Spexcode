@@ -130,6 +130,14 @@ originating `prompt` bytes remain a separate display/audit artifact and never pa
 The receipt is atomically no-replace and consumption is record-first, payload-second, receipt-last: every
 crash boundary is retryable without forgetting or replaying the first turn, while malformed or cross-bound
 receipts fail rather than repairing themselves from weaker input.
+Readiness is a bounded launch transaction, not an advisory note. If the native identity/first-turn receipt or
+post-receipt liveness fence misses its deadline, the launch owner publishes one explicit terminal failure on the
+record: lifecycle `error`, stopped/offline liveness, and the complete `queued launch readiness failed: ...`
+reason. That write uses the ordinary transition/watch path, so a parent watcher is notified and the row cannot
+remain queued/active while claiming launch is still in progress. A backend restart reconciles every durable
+launch residue: a live registered runtime gets its readiness observer rebuilt without replaying the first turn;
+an expired or provably dead residue is failed closed with the same terminal record. No launch residue may remain
+an indefinitely in-progress row.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],
@@ -196,6 +204,10 @@ target identity. That adapter capability, not the presence of the storage alias 
 ordinary exact cold-stop/close path; no lifecycle branch names a harness or treats lifecycle status or
 liveness as identity. A record with no derivable native target remains on the narrower unbound-residue retirement
 path and fails closed while any local worker ownership is live or unproven.
+The unbound-residue close guard is time- and liveness-bounded. It may refuse only while readiness is still within
+its recorded deadline, or while a host process/transport is live or unproven. Once that deadline has passed, or
+the exact host process/transport is proven absent, `close` proceeds through the normal archive and worktree
+cleanup path even when the first-turn payload or launch artifact remains for audit/retry.
 
 Close may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through archive-ref publication. This shared layer forwards that one in-memory

@@ -54,20 +54,27 @@ export function useTabs() {
   // reader was in rather than appending, so browsing moves the working set's cursor instead of growing it.
   // Appending happens on exactly two grounds: the reader asked (requestTab's latch), or there is no slot to
   // replace (first document of the session).
+  //
+  // The whole decision lives in the effect BODY, with the list mirrored in a ref, and setTabs receives a
+  // plain value — never an updater. An updater here must be pure, and this decision is not: it consumes the
+  // one-shot latch, advances the previous-slot cursor, and persists. StrictMode double-invokes updaters to
+  // expose exactly that, and under it the impure version consumed its own cursor and appended instead of
+  // replacing.
+  const tabsRef = useRef(tabs); tabsRef.current = tabs
   const prevKeyRef = useRef(null)
   useEffect(() => {
     if (!isDocument(route.page)) return
     const key = routeHash(route.page, route.param, route.query)
     const keep = keepNext; keepNext = false
-    setTabs((prev) => {
-      if (prev.some((t) => tabKey(t) === key)) { prevKeyRef.current = key; return prev }
-      const tab = { page: route.page, param: route.param, query: route.query }
-      const at = prev.findIndex((t) => tabKey(t) === prevKeyRef.current)
-      const next = keep || at < 0 ? [...prev, tab].slice(-MAX) : prev.map((t, i) => (i === at ? tab : t))
-      write(next)
-      prevKeyRef.current = key
-      return next
-    })
+    const prev = tabsRef.current
+    const before = prevKeyRef.current
+    prevKeyRef.current = key
+    if (prev.some((t) => tabKey(t) === key)) return
+    const tab = { page: route.page, param: route.param, query: route.query }
+    const at = keep ? -1 : prev.findIndex((t) => tabKey(t) === before)
+    const next = at < 0 ? [...prev, tab].slice(-MAX) : prev.map((t, i) => (i === at ? tab : t))
+    write(next)
+    setTabs(next)
   }, [route.page, route.param, route.query])
 
   const activeKey = routeHash(route.page, route.param, route.query)

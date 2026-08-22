@@ -53,3 +53,59 @@ The first serial run reported one failure in `session-reparent.test.ts` only
 because three zero-byte test-created markers (`node`, `npm`,
 `spexcode@0.6.7`) made the fixture's dirty-tree guard fire; removing those
 artifacts and rerunning the same test passed. It is not a product failure.
+
+## First stale batch (Session: 51f57a00)
+
+All filed readings in this section use codeSha `8650d4b657f514e152b47ba2dc421907ccd7fa25`, the committed
+code that was measured. Commands used `/home/jeffry/.nvm/versions/node/v22.21.0/bin/node` (`v22.21.0`) and
+npm `10.9.4`; test-created projects used isolated `SPEXCODE_HOME`, `CODEX_HOME`, and unique tmux/ports where
+the surface creates them. No review-acceptance run was started by this batch.
+
+### Filed
+
+- `behavioral-benchmark`: no readings filed. The five requested benchmark scenarios
+  (`weak-instruction-single-session`, `forced-swarm-write-collection`, `layered-session-delivery`,
+  `slopcodebench-file-backup`, `slopcodebench-code-search`) have declarations and historical transcripts only;
+  this checkout has no runnable Terminal-Bench/SlopCodeBench driver for them. The existing `m5-zswarm-adopter.mjs`
+  is a different adopter loop and was not substituted.
+- `packaging/clean-install-cli-starts`: **fail**, filed from `/tmp/eval-clean-init-smoke.d4g3pt/run.txt`.
+  `scripts/clean-init-smoke.mjs` packed and installed a clean consumer under Node22, then installed `spex --help`
+  exited 1 because `@spexcode/spec-eval` could not resolve from `@spexcode/spec-cli/dist/eval-host.js`. A normal
+  offline tarball install reproduced the same layout (`/tmp/spex-normal-install.d3Xope`); this is a deterministic
+  packaging defect, not a fixture omission. No product code was changed.
+- `packaging/cli-package-install-resolves-core`: **pass**, `/tmp/eval-closure-51f57a00/packaging-cli-package-install-resolves-core.txt`.
+  Root `npm ci`, package-local `npm ci`, and `npm run -s lint` all exited 0 under Node22.
+- `packaging/omit-optional-l0-adopter`: not measured. The existing clean-install YATU surface stopped at the
+  failed installed `spex --help` prerequisite, so no L0 verb or optional-daemon refusal was exercised.
+- `packaging/dev-loop-launch-no-prefix-leak`: **pass**, `/tmp/eval-closure-51f57a00/packaging-dev-loop-launch-no-prefix-leak.txt`.
+  The existing `launcher-tsx.test.ts` `npm run api` process-tree surface reached health and passed the scrub check.
+- `spex-init`: **pass** for all five requested scenarios (`honest-plant-message`, `no-vote-adoption`,
+  `retired-field-notice`, `selected-harness-artifact-report`, `selected-harness-reachable-hook-seed`) from the
+  real `spec-cli/src/init.test.ts` suite (11/11), `/tmp/eval-closure-51f57a00/spex-init-suite.txt`.
+- `mentions/passive-session-reference`: **pass**, `/tmp/eval-closure-51f57a00/mentions-passive-session-reference-node22.txt`.
+- `mentions/command-box-new-launcher`: **pass**, `/tmp/eval-closure-51f57a00/mentions-command-box-new-node22-repro.txt`.
+  This is the only valid reproduction used: it prints Node22/npm10.9.4 and passes 1/1 in an isolated home.
+- `sessions/zcode-child-eval-identity`: **pass**, `/tmp/eval-closure-51f57a00/sessions-zcode-child-eval-identity.txt` (1/1).
+- `session-new/create-name-reuses-the-session-name-chain`: **pass**, `/tmp/eval-session-new-final.aQP8ww/run.txt`.
+  The real dashboard/CLI e2e passed with isolated backend/UI ports and home.
+- `launcher-select/clean-init-launchers-preserve-permissions`: **pass**, covered by the same Node22 init suite.
+
+### Not measured / blocked
+
+- `sessions/launch-node-binding`: no declared test or existing YATU runner in this checkout; not substituted with an
+  internal helper.
+- `launch/cap-counts-only-the-working-set` and `launch/cap-value-comes-from-spexcode-json`: no existing real-board
+  cap driver; the declarations require a live multi-session board and drain observation.
+- `launcher-select/launcher-dropdown-replaces-harness-picker` and `launcher-select/dropdown-honors-default-launcher`:
+  no existing dashboard test drives the declared `.si-launcher-pop` picker contract; autocomplete tests are a
+  different surface and were not counted.
+- `state/session-verb-chain-v030`: no runnable end-to-end CLI/TUI chain driver is present in this checkout.
+
+### Invalid / flaky evidence retained but excluded
+
+The first full `mentions-command.api.test.ts` run under the Node22 PATH passed `@session` but timed out waiting for
+the `@new` source prompt; its complete output is `/tmp/eval-closure-51f57a00/mentions-command-box-api.txt`. The
+later isolated absolute-Node22 reproduction passed 1/1 and is the filed reading. A separate attempted reproduction
+printed `environment: node=v24.15.0 npm=11.12.1` and exited 124 (`/tmp/eval-closure-51f57a00/mentions-command-box-new-repro.txt`);
+that v24 result is explicitly **void**, is not a reading, and is not used as load/flakiness evidence. No process from
+that attempt remains.

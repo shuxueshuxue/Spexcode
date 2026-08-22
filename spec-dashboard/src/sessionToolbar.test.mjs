@@ -135,8 +135,9 @@ test('archive is the fourth foldable zone and has no retired sidebar controls', 
   assert.match(source, /zone: 'archive', count: archivedSessions\.length, folded: !archiveZoneOpen/)
   assert.match(source, /<SessionZone key=\{`zone-\$\{it\.zone\}`\}/)
   assert.match(source, /className="si-item si-zone-all" onClick=\{openArchivePage\}/)
+  assert.match(source, /si-zone-all-lead[\s\S]{0,100}Icon name="search" size=\{15\}/)
   assert.match(source, /si-zone-all-label/)
-  assert.match(source, /si-zone-all-meta/)
+  assert.doesNotMatch(source, /si-zone-all-meta/)
   assert.doesNotMatch(source, /className="si-archive-(?:bar|toggle|preview-row|all)"/)
   assert.match(css, /\.si-zone-archive\s*\{[^}]*--zh:\s*var\(--blue\)/s)
 })
@@ -182,6 +183,16 @@ test('archive index is a transient overlay and archive zone fold is persisted', 
   assert.match(source, /data-session-archive-zone/)
   assert.match(source, /zoneBox\.bottom > boardBox\.bottom[\s\S]{0,420}board\.scrollTop \+=/)
   assert.doesNotMatch(source, /active === 'archive'|is-archive|\[\s*'new',\s*'archive'/)
+})
+
+test('offline and archive headers own the disclosure target without nested controls', () => {
+  assert.match(sessionWindow, /<button type="button" className=\{classes\} aria-expanded=\{!item\.folded\}/)
+  assert.match(sessionWindow, /className="si-zone-count" aria-hidden="true"/)
+  assert.doesNotMatch(sessionWindow, /className="si-zone-count"[\s\S]{0,220}aria-expanded/)
+  assert.match(source, /onMouseDownCapture=\{inertChromePress\}/)
+  assert.match(source, /Native buttons own Enter\/Space activation/)
+  assert.match(source, /e\.target\?\.closest\?\.\('button, a\[href\]'\)/)
+  assert.doesNotMatch(source, /si-zone-need[^\n]*onClick|si-zone-run[^\n]*onClick/)
 })
 
 test('close refusals remain visible instead of being swallowed by the background action', () => {

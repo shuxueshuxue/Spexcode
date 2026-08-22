@@ -78,6 +78,25 @@
         ],
         "expiresAfterDays": 30,
         "expiresAfterBaselineCollections": 10
+      },
+      {
+        "test": "spec-cli::backend watcher plateaus and delivers three consecutive ref changes exactly once",
+        "observations": [
+          {
+            "sha": "df8e8c649f96bbfc8aa04bcd1738ef34d93e0454",
+            "observedAt": "2026-08-22T00:40:16.000Z",
+            "outcome": "fail",
+            "source": "session 086f3c0c: five isolated runs of spec-cli/src/graphStream.api.test.ts on main df8e8c649 under normal host load — 4 pass, 1 fail (run 3). Timestamps are the window end; individual run times were not captured."
+          },
+          {
+            "sha": "df8e8c649f96bbfc8aa04bcd1738ef34d93e0454",
+            "observedAt": "2026-08-22T00:40:16.000Z",
+            "outcome": "pass",
+            "source": "session 086f3c0c: same five-run window on main df8e8c649 — runs 1, 2, 4, 5 passed."
+          }
+        ],
+        "expiresAfterDays": 30,
+        "expiresAfterBaselineCollections": 10
       }
     ]
   }

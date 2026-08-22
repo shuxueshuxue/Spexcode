@@ -180,7 +180,7 @@ function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
 }
 
 // the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
-// with count-only disclosure pods, and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
+// with full-width zone disclosure headers, and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
 // beyond the touch-sized wrapper row and the create entry above the list (its own screen, MobileNewSession).
 function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreating, newDraft, setNewDraft }) {
   const t = useT()

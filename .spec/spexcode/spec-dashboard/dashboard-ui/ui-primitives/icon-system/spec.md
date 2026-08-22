@@ -23,7 +23,8 @@ the accessible name impossible to forget.
 - **One file, one contract.** `icons.jsx` is the single home of every dashboard glyph. `<Icon name
   size/>` renders from an inlined registry — Lucide-derived paths (Obsidian's icon family, MIT,
   copied in so there is zero runtime dependency) plus the dashboard's own hand-drawn marks (the side
-  rail's 18-grid page glyphs, the 16-grid utility set). Every stroke icon obeys the same contract:
+  rail's 18-grid page and dock-projection glyphs, including the sessions list with status points, and
+  the 16-grid utility set). Every stroke icon obeys the same contract:
   `fill=none`, `stroke=currentColor`, round caps/joins, ~1.4–2 stroke width, `aria-hidden` — so any
   glyph inherits its host's color and hover exactly like text. A definition may declare its official
   fill/stroke geometry as data when fidelity is the point — notably Primer's MIT-licensed 16px

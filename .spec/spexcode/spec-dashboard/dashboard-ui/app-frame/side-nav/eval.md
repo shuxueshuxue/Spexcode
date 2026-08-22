@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: rail-sessions-is-a-mode-button
+    description: >-
+      In the running desktop dashboard, inspect the rail on the graph page and then open the bare
+      `#/sessions` launch hero directly and with the physical Alt+2 shortcut. Inspect the rail DOM in each
+      state and take a settled screenshot of the one-layer icon rail.
+    expected: >-
+      The live rail has Explorer, Sessions, and Search buttons, plus graph/evals/issues/settings anchors;
+      it has no `href="#/sessions"` anchor. Clicking Sessions changes only dock visibility/projection and
+      never the hash. A direct `#/sessions` load and Alt+2 still reach the sessions launch hero, preserving
+      keyboard/address navigation's deliberate asymmetry. The rail remains one 40px icon strip with no dock
+      modebar duplicated beside it.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/styles.css]
   - name: rail-routes-pages
     tags: [frontend-e2e, desktop]
     description: >

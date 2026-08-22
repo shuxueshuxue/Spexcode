@@ -295,12 +295,33 @@ body {
 .dock-session-new:hover, .dock-session-archive:hover { color: var(--blue); background: var(--panel2); }
 .dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 .dock-session-list .si-item { padding-left: 8px; padding-right: 8px; }
-.dock-session-zone { display: flex; align-items: center; gap: 5px; width: 100%; padding: 5px 9px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; font: var(--type-caption)/var(--leading-ui) var(--mono); text-align: left; text-transform: uppercase; }
-.dock-session-zone:hover, .dock-session-zone.open { background: var(--panel2); color: var(--ink2); }
-.dock-session-zone-need { color: var(--yellow); }
-.dock-session-zone-run { color: var(--green); }
-.dock-session-zone-archive { color: var(--blue); }
-.dock-session-count { margin-left: auto; }
+/* the zone heading — the session list's own group grammar (.si-zone below) at dock density: a small-caps
+   label in the zone's hue, a bordered count pod, and a trailing hairline that separates the group WITHOUT
+   drawing a full-width divider (a divider reads as one more row; a rule that runs off the label reads as a
+   heading). The hue lives in `--zh` rather than on `color`, because the flat-looking header was exactly
+   this: `.dock-session-zone.open` — set on every unfoldable zone, so always — repainted `color` over the
+   per-zone accent, and needs-you lost the attention colour that is the whole point of the zone. A state may
+   repaint the BACKGROUND; the hue is meaning and belongs to the zone alone.
+   Only a foldable zone (offline) carries aria-expanded, so the attribute — not a second class — is what
+   says a header is actually a control. */
+.dock-session-zone {
+  --zh: var(--muted);
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 9px 8px 3px;
+  border: 0; background: none; cursor: default; text-align: left; text-transform: uppercase;
+  color: var(--zh); font: var(--type-caption)/var(--leading-ui) var(--mono);
+  font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal);
+}
+.dock-session-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.dock-session-zone[aria-expanded] { cursor: pointer; }
+.dock-session-zone[aria-expanded]:hover { background: var(--panel2); }
+.dock-session-zone-need { --zh: var(--yellow); }
+.dock-session-zone-run { --zh: var(--green); }
+.dock-session-zone-offline { --zh: var(--muted); }
+.dock-session-zone-archive { --zh: var(--blue); }
+.dock-session-count {
+  order: 1; flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px;
+  color: inherit; font: inherit; line-height: var(--line-badge); opacity: .8;
+}
 .dock-session-archive { flex: none; width: 100%; justify-content: flex-start; padding: 8px 9px; border-top: 1px solid var(--line); }
 .dock-empty { padding: 12px 10px; color: var(--muted); font: var(--type-meta)/var(--leading-ui) var(--mono); }
 

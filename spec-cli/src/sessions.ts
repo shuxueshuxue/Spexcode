@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
@@ -27,6 +28,58 @@ const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-cre
 const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
 const DEFAULT_MAX_ACTIVE = 8
+
+const worktreeTrashDir = (root: string): string => join(root, '.worktrees', '.trash')
+const pendingTrashDeletes: string[] = []
+let trashDeleteRunning = false
+let trashDeleteScheduled = false
+
+async function drainWorktreeTrash(): Promise<void> {
+  while (pendingTrashDeletes.length) {
+    const path = pendingTrashDeletes.shift()!
+    try {
+      await rmAsync(path, { recursive: true, force: true })
+      if (existsSync(path)) throw new Error('path remains after recursive removal')
+    } catch (error) {
+      console.error(`spex: deferred worktree deletion failed for ${path}; retained for next backend startup: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+  trashDeleteRunning = false
+}
+
+function queueWorktreeTrash(path: string): void {
+  pendingTrashDeletes.push(path)
+  if (trashDeleteRunning || trashDeleteScheduled) return
+  trashDeleteScheduled = true
+  setImmediate(() => {
+    trashDeleteScheduled = false
+    trashDeleteRunning = true
+    void drainWorktreeTrash()
+  })
+}
+
+/** Start the one process-local serial reaper and resume any crash leftovers. */
+export function startWorktreeTrashReaper(): void {
+  const dir = worktreeTrashDir(mainRoot())
+  readdirAsync(dir, { withFileTypes: true }).then((entries) => {
+    for (const entry of entries) queueWorktreeTrash(join(dir, entry.name))
+  }).catch((error: NodeJS.ErrnoException) => {
+    if (error?.code !== 'ENOENT') console.error(`spex: deferred worktree trash scan failed for ${dir}; retrying next startup: ${error instanceof Error ? error.message : error}`)
+  })
+}
+
+function moveWorktreeToTrash(root: string, path: string): string {
+  const worktrees = resolve(join(root, '.worktrees'))
+  const source = resolve(path)
+  // Session creation uses <root>/.worktrees/<name>. Keep an adjacent trash for legacy/manual records whose
+  // recorded path predates that layout; the normal product path always lands in the governed .worktrees/.trash.
+  const parent = dirname(source)
+  const dir = parent === worktrees ? worktreeTrashDir(root) : join(parent, '.trash')
+  mkdirSync(dir, { recursive: true })
+  const target = join(dir, `wt-${Date.now()}-${randomUUID().slice(0, 12)}`)
+  renameSync(source, target)
+  return target
+}
 function maxActive(): number {
   let v: number | undefined
   try {
@@ -3827,9 +3880,10 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   let slot: string | null = null
   try { slot = existsSync(wt.path) ? treeSlotDir(wt.path) : null } catch { /* tree already unresolvable — nothing to key the slot by */ }
   if (existsSync(wt.path)) {
-    const removed = await gitTry(['-C', root, 'worktree', 'remove', '--force', wt.path])
-    if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: worktree removal failed; record and archive ref remain`)
-    if (existsSync(wt.path)) throw new ResourceConflict(`refusing to finish close for ${id}: worktree remains after removal`)
+    const trashed = moveWorktreeToTrash(root, wt.path)
+    const pruned = await gitTry(['-C', root, 'worktree', 'prune'])
+    if (!pruned.ok) console.error(`spex: deferred worktree ${id} was renamed to ${trashed}, but git worktree prune failed: ${pruned.stderr.trim() || pruned.failure}`)
+    queueWorktreeTrash(trashed)
   }
   if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
   requestQueueDrain()   // a close frees a slot — start the next queued session if any

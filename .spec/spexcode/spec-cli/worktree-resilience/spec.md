@@ -42,6 +42,11 @@ than returning an empty list. The caller surfaces it — a layout request fails 
 own catch simply skips that tick with its prior state intact — instead of fabricating a mass removal from a
 momentary outage.
 
+The close reaper's `.worktrees/.trash/` is not a worktree census. Every worktree enumeration and registry walk
+must explicitly exclude paths below that directory, even while a delayed recursive delete is still running. A
+trash entry therefore cannot become a live overlay, a watcher source, or a degraded row; its failed deletion is
+reported by the reaper and retried on the next backend start.
+
 **Last-resort guard.** The server and the supervisor each install a process-level net for anything the
 per-read layer didn't foresee. An uncaught exception or unhandled rejection is logged and the process keeps
 serving instead of exiting. The supervisor owns the public port, so its survival is what keeps the port —

@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -49,6 +49,7 @@ installEvalHost()
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
 installProcessGuards()
+startWorktreeTrashReaper()
 
 const app = new Hono()
 startUploadReaper()

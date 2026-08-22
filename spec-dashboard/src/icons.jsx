@@ -37,6 +37,7 @@ const ICONS = {
   eye: { node: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></> },
   clock: { node: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></> },
   explorer: { node: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></> },
+  'panel-right': { node: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></> },
   search: { node: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></> },
   // Star variants are generic status-action glyphs; navigation has its own labelled controls.
   star: { node: <path d="m12 3 2.9 5.9 6.6.9-4.8 4.6 1.2 6.5L12 17.8 6.1 20.9l1.2-6.5L2.5 9.8l6.6-.9Z" /> },

@@ -103,6 +103,11 @@ theatre is invented for a model that has none. An actually empty issue store say
   an inert tag; label chips are their own filter controls beside the row-detail anchor. At 390px those facts join the secondary line and the
   title may wrap without horizontal overflow. **The store is metadata, never identity**: it never leads a
   row and never sits on a title.
+- **The detail page NAMES ITS OWN TAB.** An issue is the one document the board carries no projection of —
+  the list is paged, the detail is a single addressed read — so the frame cannot label its tab and drew the
+  raw id where the reader had written a sentence. The detail reports the concern it already loaded
+  ([[document-actions]]'s name registry) and the strip keeps it. It reports nothing while composing:
+  `#/issues/new` is a form, and it has no issue to name.
 - **The detail page is [[review-chrome]]'s GitHub-grammar skeleton.** Header: the concern ALONE as the
   title, led by the shared compact **back anchor** — a REAL `#/issues` href derived from the canonical
   address ([[address-routing]]'s one back helper), never `history.back`, identical on a pushed visit and

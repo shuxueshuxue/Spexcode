@@ -47,6 +47,11 @@ export default {
   fileView: { none: '未选择文件' },
   fileTree: {
     aria: '项目文件树',
+    specs: '规格',
+    files: '文件',
+  },
+  filesTree: {
+    loading: '正在加载…',
   },
   dockModes: {
     collapse: '收起侧边栏',
@@ -63,13 +68,14 @@ export default {
   },
   contextDock: {
     title: '上下文',
-    backlinks: '反向链接',
     scenarios: '场景',
+    issues: '议题',
     open: '显示上下文栏',
     close: '隐藏上下文栏',
     loading: '正在加载场景…',
-    noBacklinks: '没有反向链接',
+    loadingIssues: '正在加载议题…',
     noScenarios: '没有声明场景',
+    noIssues: '没有未关闭的议题',
     states: { pass: '通过', fail: '失败', stalePass: '旧通过', staleFail: '旧失败', missing: '未测量', empty: '未测量' },
   },
   empty: {
@@ -85,6 +91,8 @@ export default {
     sessions: '会话',
     evals: '评测',
     issues: '议题',
+    issueNew: '新建议题',
+    openInNewTab: '在新标签打开',
     surfaceTerminal: '终端',
     surfaceConversation: '对话',
     surfaceDiff: '差异',
@@ -259,6 +267,8 @@ export default {
     search: '搜索',
     searchIssues: '搜索 issues',
     searchEvals: '搜索 evals',
+    rowMenu: '行操作',
+    copyAddress: '复制地址',
     clearSearch: '清除搜索',
     showing: ({ shown, total }) => `显示 ${shown} / ${total} 条`,
     issuesTitle: 'Issues',

@@ -66,11 +66,14 @@ restores the list.
   binding no rebind can reach, and both dictionaries had drifted into three glyph dialects for the same
   modifier while the rail advertised a bare `/` for a chord that had moved. Each entry is an `<a>`
   carrying its page's address (`href="#/…"`), so middle-click/new-tab/copy-address come free and every
-  modified click stays the browser's. The PLAIN click is **create-or-focus**: it holds the board's
-  singleton tab if the workspace does not have one and focuses it if it does ([[tab-strip]]), rather than
-  spending the current slot on a place the reader asked for by name. That interception chooses the SLOT,
-  not the route — the address it lands on is the same one the `href` names, so the address bar, a bookmark,
-  ⌥digit and this click all still produce one hash navigation. Clicking Evals twice is one tab. The
+  modified click stays the browser's. The PLAIN click is **create-or-focus** — and it gets that for free
+  from an ORDINARY navigation, because a singleton board is resident by ADDRESS ([[view-registry]]): the
+  strip holds it and never spends the slot on it, whoever asked. The rail used to pin it by hand, and that
+  is precisely how residency became a property of this button instead of the board — the status tally and a
+  pasted link reached the same address and got the slot, so the board's own first row click evicted it. The
+  interception that remains chooses nothing but the timing: the address it lands on is the same one the
+  `href` names, so the address bar, a bookmark, ⌥digit and this click all still produce one hash
+  navigation. Clicking Evals twice is one tab. The
   rail is chrome, not a page — it never scrolls away and never overlays content. And it is **inert chrome for pointer
   focus** ([[focus-return]]'s acquisition-side guard): a press on a rail entry or the project chip
   acts — the link navigates, the chip menu opens — without moving DOM focus, so the rail never

@@ -48,6 +48,11 @@ export default {
   fileView: { none: 'no file selected' },
   fileTree: {
     aria: 'project file tree',
+    specs: 'Specs',
+    files: 'Files',
+  },
+  filesTree: {
+    loading: 'loading…',
   },
   dockModes: {
     collapse: 'Collapse sidebar',
@@ -66,13 +71,14 @@ export default {
   },
   contextDock: {
     title: 'Context',
-    backlinks: 'Backlinks',
     scenarios: 'Scenarios',
+    issues: 'Issues',
     open: 'show context dock',
     close: 'hide context dock',
     loading: 'loading scenarios…',
-    noBacklinks: 'no backlinks',
+    loadingIssues: 'loading issues…',
     noScenarios: 'no scenarios declared',
+    noIssues: 'no open issues',
     states: { pass: 'pass', fail: 'fail', stalePass: 'stale pass', staleFail: 'stale fail', missing: 'unmeasured', empty: 'unmeasured' },
   },
   empty: {
@@ -88,6 +94,8 @@ export default {
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
+    issueNew: 'New issue',
+    openInNewTab: 'Open in a new tab',
     surfaceTerminal: 'terminal',
     surfaceConversation: 'conversation',
     surfaceDiff: 'diff',
@@ -266,6 +274,8 @@ export default {
     search: 'Search',
     searchIssues: 'Search issues',
     searchEvals: 'Search evals',
+    rowMenu: 'row actions',
+    copyAddress: 'Copy address',
     clearSearch: 'Clear search',
     showing: ({ shown, total }) => `showing ${shown} of ${total}`,
     issuesTitle: 'Issues',

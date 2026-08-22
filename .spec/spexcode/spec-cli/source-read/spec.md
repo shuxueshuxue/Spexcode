@@ -47,6 +47,11 @@ node's own folder, which this policy deliberately excludes — and reuses the sa
 "read a byte window and stop on a line" is one behaviour. Two surfaces may disagree about what may be read;
 a second copy of the windowing is how they would come to disagree about what `bytes` means.
 
+**Opening a file is half of a surface; the other half is [[source-list]]**, which names what is there to
+open one directory at a time. It shares this gate rather than merely resembling it, and that is the sharper
+form of the invariant above: what the product LISTS and what it can OPEN are the same set by construction,
+so no row can be drawn that clicking would 404.
+
 The route is a thin caller: it resolves the project root, compiles the policy, and hands both to the reader.
 It holds no cache. A source file is read from the worktree at request time, so what the board shows is the
 working tree as it is now, which is the only reading that can be compared against a spec's claim about it.

@@ -61,6 +61,12 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   text (the default view + the `node` qualifier, minted via `nodeEvalQuery`) — the address every aggregate
   score/count affordance ([[eval-score-badge]]) mints. The list-filter grammar lives in this one projection
   and nowhere else.
+- `hash` is the address a caller ALREADY HOLDS. It is the one kind that names no object, and it exists for
+  the surface that received a canonical href from one of the kinds above and must now act on it — a review
+  row hands its own `href` to its context menu, and the menu copies THAT. The alternative is to rebuild an
+  address object from the row's data, which mints the same address a second way: two paths that agree today
+  and are free to disagree tomorrow, which is exactly what this closed vocabulary exists to prevent. It is
+  a pass-through, never a parser: nothing here inspects or rewrites the hash it was given.
 
 `addressHash(address)` is the href side: real anchors and copyable links get the canonical hash without
 hand-rolled string assembly in components. `navigateAddress(address, callbacks)` is the SPA side: it follows

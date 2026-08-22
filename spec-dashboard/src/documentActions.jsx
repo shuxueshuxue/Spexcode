@@ -59,3 +59,44 @@ export function useDocumentActions() {
 }
 
 export const documentActionKey = actionKey
+
+// ---------------------------------------------------------------------------------------------------
+
+// THE DOCUMENT'S OWN NAME, for chrome that has to draw a document it is not rendering. [[tab-strip]] labels
+// every tab from the board's resident projections — a node's title, a session's headline — and that covers
+// every document whose name is already in memory. An ISSUE's is not: the issues board is paged and the
+// detail fetches itself, so the strip had nothing but the id and drew `#7f3a1b2c` where the reader had put
+// a sentence.
+//
+// This is NOT the second lookup table the strip forbids. That rule forbids a second SOURCE, free to
+// disagree with the first; here there is exactly one writer and it is the document being named. It is a
+// module store rather than a context value for the same reason the open list is one: a name has to outlive
+// its document's mount, or a tab would lose its label the moment the pool evicted the document behind it.
+// Keyed by the OBJECT address (page + selector, no query), because the name belongs to the thing, not to
+// the view state some address variant carries.
+const names = new Map()
+const nameListeners = new Set()
+
+export function reportDocumentName(document, name) {
+  const text = typeof name === 'string' ? name.trim() : ''
+  if (!document || !text || names.get(document) === text) return
+  names.set(document, text)
+  const snapshot = new Map(names)
+  for (const listener of [...nameListeners]) listener(snapshot)
+}
+
+export function useDocumentNames() {
+  const [snapshot, setSnapshot] = useState(() => new Map(names))
+  useEffect(() => {
+    nameListeners.add(setSnapshot)
+    setSnapshot(new Map(names))
+    return () => { nameListeners.delete(setSnapshot) }
+  }, [])
+  return snapshot
+}
+
+// The writer's side, as a hook so a document reports its name the way it registers an action.
+export function useReportDocumentName(document, name) {
+  useEffect(() => { reportDocumentName(document, name) }, [document, name])
+  return null
+}

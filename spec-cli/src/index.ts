@@ -33,6 +33,7 @@ import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnava
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
+import { listSourceDir } from './source-list.js'
 import { loadConfig as loadLintConfig } from './lint.js'
 import { listNodeAttachments, readNodeAttachment } from './spec-attachments.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -157,6 +158,20 @@ app.get('/api/source', (c) => {
       Number(c.req.query('limit') ?? SOURCE_SLICE_MAX_BYTES),
     )
     return c.json(slice)
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
+// [[source-list]]: the LISTING half of the same surface. /api/source opens a file the caller can already
+// name; this names what is there to open, one directory at a time, so the explorer can browse ordinary code
+// the way any editor does. Same `isSourceFile` gate and the same refusals — a row the reader clicks and gets
+// a 404 from is worse than a row that was never drawn. `dir` empty lists the governed roots themselves.
+app.get('/api/files', (c) => {
+  try {
+    const root = repoRoot()
+    const cfg = loadLintConfig(root)
+    return c.json(listSourceDir(root, c.req.query('dir') || '', cfg, cfg.governedRoots))
   } catch (e) {
     if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
     throw e

@@ -2,11 +2,12 @@
 title: document-actions
 status: active
 hue: 215
-desc: The shell-owned registry for actions belonging to the active document.
+desc: The shell-owned registries for what a document tells the frame about itself — its actions, and its name.
 code:
   - spec-dashboard/src/documentActions.jsx
 related:
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/StatusBar.jsx
   - .spec/spexcode/spec-dashboard/dashboard-ui/app-frame/workspace-shell/spec.md
@@ -35,3 +36,26 @@ a11y contract and the one thing an outside-press dismissal needs to know: a pres
 that opener's own, so pressing it again toggles the menu instead of the dismissal closing it and the click
 reopening it. Dismissal listens for the PRESS, not the click — the press that opened a menu is over before
 the menu exists, so it can never close what it just opened.
+
+## a document's own name
+
+The other thing a document knows and the frame cannot work out is what it is CALLED. [[tab-strip]] labels
+every tab from the board's resident projections, and that covers everything the board holds — a node's
+title, a session's headline. An issue is the exception: the issues board is paged and a detail fetches its
+own, so the strip had the id and nothing else, and drew `#7f3a1b2c` where the reader had written a
+sentence.
+
+So the document reports its name and the frame keeps it. Two properties make this a name registry rather
+than a cache:
+
+- **One writer per name, and it is the thing named.** That is why this is not the second lookup table the
+  strip forbids — that rule forbids a second SOURCE free to disagree with the first, and there is no second
+  source here. A document that never reports leaves its tab on the raw selector, which is the same honest
+  fallback an unresolvable selector already gets.
+- **A name outlives its document's mount**, so it is a module store rather than a context value with
+  unmount cleanup. The mounted-document pool evicts documents the strip is still holding tabs for
+  ([[workspace-shell]]); a name that died with the mount would blank a label the reader is still looking at.
+
+Keyed by the OBJECT address — page plus selector, no query — because the name belongs to the thing, not to
+whichever view state an address variant carries. Actions key on the full canonical hash for the opposite
+reason: two faces of one session are two action sets and one name.

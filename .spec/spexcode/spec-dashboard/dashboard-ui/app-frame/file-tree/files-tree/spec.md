@@ -1,0 +1,45 @@
+---
+title: files-tree
+status: active
+hue: 205
+desc: The explorer's ordinary-file projection — governed roots as a real directory tree, one level fetched per expand, closed until asked for.
+code:
+  - spec-dashboard/src/FilesTree.jsx
+related:
+  - spec-dashboard/src/FileTree.jsx
+  - spec-dashboard/src/data.js
+  - spec-dashboard/src/tabs.js
+  - spec-cli/src/source-list.ts
+  - spec-dashboard/src/styles.css
+---
+# files-tree
+
+[[file-tree]] navigates the project the way the SPEC tree is shaped: a node is a folder, and a governed file
+hangs off whichever node claims it. That is the right shape for the work this product is about, and it is
+the wrong shape for the other thing a reader does constantly — **open a file whose location they already
+know**. In the spec tree a path exists only if some node happens to claim it, so finding a particular file
+means first knowing which node governs it. That is a question about the spec graph, asked by someone who
+only wanted a file.
+
+So this is the disk, listed as the disk: governed roots at the top, real directories under them, ordinary
+code inside. Two projections of one project, each honest about which one it is — nothing here re-derives the
+spec graph, and nothing there re-derives the filesystem.
+
+**It reads [[source-list]] and nothing else.** The listing gate is the read gate, so every row this draws is
+a row that opens; the browser never re-implements a policy and never has to guess whether a file it can see
+is a file it can show.
+
+**A level per expand.** A branch fetches once, on the expand that reveals it, and keeps what it got —
+re-opening is instant, and a reader who never opens a branch never pays for its listing. That is the same
+bargain [[file-tree]]'s attachments make, and it keeps the cost of the tree proportional to what the reader
+looks at rather than to how large the repository is. A failed listing is HELD as the failure it was: a
+branch that cannot be read says why, rather than looking like a folder with nothing in it. A truncated
+listing shows that it was truncated, because a client that cannot tell "this is everything" from "this is
+the first 500" is showing the reader a lie.
+
+**A directory only discloses; a file is a document.** There is no `#/dir/<path>` and there should not be
+one — a folder has nothing to show — so clicking a directory opens its branch and changes no address. A file
+row is a real anchor at `#/file/<path>` on the workspace's ordinary slot semantics ([[tab-strip]]): plain
+click reads it in the current slot, ctrl/⌘ holds it as its own tab, through the same helper every other
+anchor-row surface calls. It is the same address the node tree's governed-file rows open, because one file
+has one address however the reader found it.

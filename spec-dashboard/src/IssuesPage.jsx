@@ -15,6 +15,7 @@ import { addressHash, detailBackHash, graphNodeAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import IssueLabels from './IssueLabels.jsx'
 import { useLaunchers } from './launch.js'
+import { useReportDocumentName } from './documentActions.jsx'
 import { usePaneActive } from './workspace.jsx'
 
 const EMPTY_QUERY = {}
@@ -326,6 +327,9 @@ export default function IssuesPage({ param = null, query = EMPTY_QUERY, onOpenSe
   // a hidden pane does not fetch: the pool keeps documents WARM, not busy ([[workspace-shell]]).
   const list = useReviewPage('issues', text, page, { enabled: (!param || composing) && showing, refreshKey: `${issuesStamp ?? ''}|${presenceKey}` })
   const detail = useIssueDetail(composing ? null : param, issuesStamp)
+  // An issue is the one document the board holds no projection of, so the strip cannot name its tab
+  // ([[tab-strip]]'s labels). The detail already has the concern; it reports it once and the frame keeps it.
+  useReportDocumentName(param && !composing ? routeHash('issues', param) : null, detail.issue?.concern)
   const flash = (outcomes) => { if (outcomes) notify(outcomes) }
   const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }
 

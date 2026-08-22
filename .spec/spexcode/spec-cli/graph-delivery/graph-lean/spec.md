@@ -36,11 +36,13 @@ the hot poll: the **detail view** fetches `{body, parts}` from `/api/specs/:id/c
 **search palette** ([[spec-search]]) fetches the body corpus from `/api/specs/lite` on open and ranks nodes
 over full prose — `body` is load-bearing for search, so the corpus keeps ranking whole. Both endpoints are filesystem-only (no git);
 `loadSpecs`/`/api/specs` still expose `body`+`parts` verbatim, [[three-part-body]]'s contract untouched.
-What the prose CONTAINED that the overview needs is projected instead of shipped: a node carries `mentions`,
-the resolved node ids its body references, so a backlink surface draws that edge without the body it came
-from. An id list is the summary of a reference the way a count is the summary of a row list — the cut this
-node exists for, not an exception to it. A ghost node (added by a worktree, not yet on main) carries the
-same field empty, so no consumer branches on its absence.
+The overview needs nothing the prose CONTAINED. It carried a `mentions` projection for a while — the
+resolved node ids a body references, kept so a backlink surface could draw that edge without the body —
+and it went out with the surface ([[context-dock]]): a prose mention is a fact about the graph, not about
+the node the reader has open, so the cut this node exists for was paying to ship an answer to a question
+the node was not being asked. A projection defended by exactly one consumer dies with that consumer; the
+alternative is a lean payload carrying a field nothing reads, which is the fat this node removed wearing
+a smaller name.
 Where a payload is in flight the detail view shows a **loading spinner** (not an empty pane), so a slow
 `/content` read shows as loading, not a bodyless node; a failed fetch resolves to an empty body,
 never a spinner that never stops. **No minimum display time** — the body lands the instant

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { navigate, routeHash, useRoute } from './route.js'
-import { isDocument } from './views.jsx'
+import { navigate, parseRoute, routeHash, useRoute } from './route.js'
+import { isDocument, isResident } from './views.jsx'
 import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 export { placeTab, tabKey }
@@ -27,7 +27,7 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param))) : []
+    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param)), isResident) : []
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -84,6 +84,27 @@ export function pinTab(page, param = null, query = null) {
   navigate(page, param, { query })
 }
 
+// The route an in-app hash href names, as `pinTab` wants it. A row that is a REAL anchor already holds its
+// address; nothing has to re-derive it from the data the row was built from.
+export const routeOfHash = (href) => {
+  const { page, param, query } = parseRoute(href)
+  return { page, param, query: Object.keys(query || {}).length ? query : null }
+}
+
+// THE ROW GESTURE, for every finding surface whose rows are real anchors — the review lists, the spec
+// context panels, the file tree. A plain click stays the anchor's: the browser writes the hash and the slot
+// takes it, which is the default this workspace is built on. Ctrl/⌘ is the WORKSPACE's hold rather than the
+// browser's new-window, because the reader asking for a second document beside the one they have is asking
+// for a second tab in the strip, not a second copy of the app. Shift, alt and middle-click are left alone,
+// so every window-level gesture a real anchor gives for free still works. Returns whether it took the event.
+export function holdAnchor(event, href) {
+  if (event.button !== 0 || event.shiftKey || event.altKey || !(event.ctrlKey || event.metaKey)) return false
+  event.preventDefault()
+  const route = routeOfHash(href)
+  pinTab(route.page, route.param, route.query)
+  return true
+}
+
 // Focus the most recently opened tab a predicate accepts, if there is one. The rail's sessions button is
 // the caller: asking for sessions when a session is already held should return the reader to it rather
 // than to a launch page they did not ask for. Returns whether anything was focused.
@@ -110,7 +131,9 @@ export function useTabs() {
   useEffect(() => {
     if (!isDocument(route.page, route.param)) return
     const key = routeHash(route.page, route.param, route.query)
-    const mode = pinKey === key ? 'pin' : 'slot'
+    // a SINGLETON BOARD is held however it was reached ([[view-registry]]'s residency): it is a place, not
+    // something the reader spends the slot on, so opening a detail from one of its rows cannot evict it.
+    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
     if (pinKey && pinKey !== key) pinKey = null
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])

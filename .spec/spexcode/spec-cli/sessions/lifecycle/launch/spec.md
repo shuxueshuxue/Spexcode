@@ -85,6 +85,11 @@ receipt refusal records the narrow failure and releases the boot slot before ret
 has started, the asynchronous readiness observer catches and records any receipt/readiness rejection and releases
 that slot in all outcomes. Correcting the receipt therefore makes the same queued record retryable, and no
 rejected receipt can permanently consume capacity or escape as an unhandled background rejection.
+When the bounded readiness window expires, the record is terminalized as `error`/offline with the complete
+`queued launch readiness failed: ...` reason and its normal parent-watch transition. It is never left as a
+queued or active row that still claims launch/recovery is in progress. On backend restart, an existing launch
+residue is either reattached to a live runtime's readiness observer (without replaying the first turn) or
+terminalized by the same deadline/death rule.
 
 **A queued launch carries a stable public-backend authority lease.** Its identity is the normalized
 `SPEXCODE_API_URL` the supervisor injects — the stable loopback proxy URL agents use, stripped of credentials,

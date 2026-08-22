@@ -251,6 +251,7 @@ export type SessRec = {
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
+  launchReadinessStartedAt?: number | null // durable bounded readiness window for queued launches
   createRequestId?: string | null // digest of the public Idempotency-Key; binds retry without storing the bearer
   createPayloadHash?: string | null // exact normalized create payload bound to createRequestId
   zcodeChildSessionIds?: string[] // persistent exact ZCode child ids; never inferred from title, path, branch, or timing
@@ -396,6 +397,8 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
     launchOwner: launchOwner || null,
+    launchReadinessStartedAt: Number.isFinite(Number((raw as RawRecord & { launch_readiness_started_at?: unknown }).launch_readiness_started_at))
+      ? Number((raw as RawRecord & { launch_readiness_started_at?: unknown }).launch_readiness_started_at) : null,
     createRequestId: raw.create_request_id || null,
     createPayloadHash: raw.create_payload_hash || null,
     zcodeChildSessionIds: [...zcodeChildSessionIds],
@@ -471,6 +474,7 @@ function writeRecord(rec: SessRec): void {
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    ...(rec.launchReadinessStartedAt ? { launch_readiness_started_at: rec.launchReadinessStartedAt } : {}),
     ...(rec.runtimeStartToken ? { runtime_start_token: rec.runtimeStartToken } : {}),
     create_request_id: rec.createRequestId ?? '',
     create_payload_hash: rec.createPayloadHash ?? '',
@@ -1728,14 +1732,22 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
-function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true): void {
   const reason = error instanceof Error ? error.message : String(error)
   const note = `queued launch readiness failed: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
-  if (rec && !retirementReason(rec) && rec.note !== note) {
-    publishCanonicalLifecycle(rec, rec.status, rec.proposal, note)
-    writeRecord({ ...rec, note })
+  if (rec && !retirementReason(rec) && (rec.note !== note || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null)))) {
+    // Readiness failure is terminal for this launch attempt. Keep the exact reason on the record,
+    // publish an offline/error transition, and clear every durable/in-memory ownership marker so close
+    // and a later explicit resume have an honest starting point.
+    if (terminal) {
+      publishCanonicalLifecycle(rec, 'error', null, note)
+      writeRecord({ ...rec, status: 'error', proposal: null, stopped: true, note, launchOwner: null, launchReadinessStartedAt: null })
+    } else {
+      publishCanonicalLifecycle(rec, rec.status, rec.proposal, note)
+      writeRecord({ ...rec, note, launchReadinessStartedAt: null })
+    }
   }
 }
 
@@ -1744,8 +1756,8 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
   if (application) application.transitionSession(rec.session, { status, proposal, note })
 }
 
-function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
-  void waitForReady(id, harness)
+function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): void {
+  void waitForReady(id, harness, undefined, timeoutMs)
     .then(async (readiness) => {
       if (!readiness) {
         const committed = !!readRecord(id)?.harnessSessionId
@@ -1768,8 +1780,8 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
         if (!current) return
         if (current.status === 'queued') {
           publishCanonicalLifecycle(current, 'active', null, null)
-          writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null })
-        }
+          writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null, launchReadinessStartedAt: null })
+        } else if (current.launchReadinessStartedAt != null) writeRecord({ ...current, launchReadinessStartedAt: null })
         readyToPublish = true
       })
       if (!readyToPublish) return
@@ -1777,9 +1789,11 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
       await drainSession(id)
     })
     .catch(async (error) => {
-      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error)) }
+      const reason = error instanceof Error ? error.message : String(error)
+      const terminal = /timed out|did not become ready/i.test(reason)
+      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error, terminal)) }
       catch (recordError) {
-        console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${error instanceof Error ? error.message : String(error)}`)
+        console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${reason}`)
       }
       await clearPendingWatchSnapshots(id)
     })
@@ -1803,12 +1817,13 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
     try {
       try { consumeHarnessLaunchProofUnlocked(id) }
       catch (error) {
-        noteQueuedLaunchFailureUnlocked(id, error)
+        noteQueuedLaunchFailureUnlocked(id, error, false)
         throw error
       }
       const recovered = readRecord(id) || wt.rec
+      const readinessStartedAt = Date.now()
       publishCanonicalLifecycle(recovered, 'active', null, null)
-      writeRecord({ ...recovered, status: 'active', proposal: null, note: null, launchOwner: null })
+      writeRecord({ ...recovered, status: 'active', proposal: null, note: null, launchOwner: null, launchReadinessStartedAt: readinessStartedAt })
       observeQueuedLaunchReadiness(id, h)
       readinessOwnsSlot = true
       return 'started'
@@ -1839,10 +1854,15 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   let readinessOwnsSlot = false
   try {
+    const readinessStartedAt = Date.now()
+    const stamped = readRecord(id) || wt.rec
+    writeRecord({ ...stamped, launchReadinessStartedAt: readinessStartedAt })
     try {
       const sq = shQuote(launchPrompt)
       await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
     } catch {
+      const failedLaunch = readRecord(id)
+      if (failedLaunch) writeRecord({ ...failedLaunch, launchReadinessStartedAt: null })
       return 'retryable'   // launch failed → stays `queued`, with its initial debt, for the next drain tick
     }
     // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
@@ -1851,7 +1871,7 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
     // headline precedence stands on.
     const launched = readRecord(id) || wt.rec
     publishCanonicalLifecycle(launched, 'active', null, null)
-    writeRecord({ ...launched, status: 'active', proposal: null, note: null, launchOwner: null })
+    writeRecord({ ...launched, status: 'active', proposal: null, note: null, launchOwner: null, launchReadinessStartedAt: readinessStartedAt })
     if (!h.launchPayloadProof) removeLaunchFile(id)
     // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
     // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
@@ -1873,7 +1893,30 @@ async function drainQueueUnlocked(): Promise<void> {
       const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
       for (const session of sessions) {
         const rec = readRecord(session.id)
-        if (!rec || launching.has(session.id) || !readWatchEntries(session.id).some((entry) => entry.snapshotPending)) continue
+        if (!rec || launching.has(session.id)) continue
+        // Older timed-out rows predate the durable readiness timestamp. Reconcile their recorded failure
+        // before any queue/watch work so a backend restart cannot resurrect the old active/limbo projection.
+        if (rec.status !== 'queued' && /^queued launch readiness failed:/.test(rec.note || '') && (rec.status !== 'error' || !rec.stopped)) {
+          const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
+          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(session.id, priorReason))
+          continue
+        }
+        // A pre-fix active row may still carry the authoritative launch artifact without a timestamp. Its
+        // mtime is the only durable age witness available; seed the new field so the same bounded recovery
+        // rule applies on this and later restarts.
+        if (rec.status === 'active' && !rec.stopped && existsSync(sessionArtifactPath(session.id, 'launch')) && rec.launchReadinessStartedAt == null) {
+          let startedAt = Date.now()
+          try { startedAt = statSync(sessionArtifactPath(session.id, 'launch')).mtimeMs } catch { /* race: observer below will fail loud */ }
+          writeRecord({ ...rec, launchReadinessStartedAt: startedAt })
+        }
+        const refreshed = readRecord(session.id) || rec
+        if (refreshed.launchReadinessStartedAt && !refreshed.stopped && !refreshed.archived) {
+          launching.add(session.id)
+          const remaining = Math.max(0, SOCKET_READY_TIMEOUT_MS - (Date.now() - refreshed.launchReadinessStartedAt))
+          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id), remaining)
+          continue
+        }
+        if (!readWatchEntries(session.id).some((entry) => entry.snapshotPending)) continue
         if (rec.status === 'queued') continue
         if (rec.status === 'active' && !rec.stopped && !rec.archived) {
           launching.add(session.id)
@@ -3952,7 +3995,12 @@ async function assertQueuedCloseSafe(id: string, rec: SessRec): Promise<void> {
 async function assertUnboundCloseSafe(id: string, rec: SessRec): Promise<void> {
   if (harnessById(rec.harness || defaultHarness.id).exactNativeTargetId(rec) || rec.status === 'queued' || rec.archived)
     throw new ResourceConflict(`refusing to close unbound session ${id}: it is not an unbound live-record residue`)
-  if (rec.adapterRecovery || rec.launchReadinessPending || launching.has(id) || existsSync(sessionArtifactPath(id, 'launch')))
+  const failureStamped = /^queued launch readiness failed:/.test(rec.note || '') || rec.status === 'error' || rec.stopped
+  const readinessStartedAt = rec.launchReadinessStartedAt ?? rec.launchReadinessPending?.startedAt ?? null
+  const readinessInProgress = !failureStamped && (readinessStartedAt != null
+    ? Date.now() - readinessStartedAt < SOCKET_READY_TIMEOUT_MS
+    : launching.has(id))
+  if (rec.adapterRecovery || readinessInProgress)
     throw new ResourceConflict(`refusing to close unbound session ${id}: launch or recovery is still in progress`)
 
   const [snap, socket] = await Promise.all([liveSnapshot(id), rendezvousListening(id)])

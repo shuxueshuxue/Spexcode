@@ -18,16 +18,15 @@ function readPanels() {
   } catch { return { backlinks: true, scenarios: true } }
 }
 
+// What points HERE: a node whose prose names this one ([[id]], the board's `mentions` projection) and a
+// node this one parents. Those are the two edges that actually address a node. `related:` was matched here
+// once and could never hit: its entries are FILE PATHS, so the panel silently showed children only while
+// claiming to show references too.
 function Backlinks({ specs, id }) {
   const t = useT()
-  const rows = useMemo(() => (specs || []).filter((node) => {
-    if (node.id === id) return false
-    if (node.parent === id) return true
-    return (node.related || []).some((edge) => {
-      const value = String(edge).replace(/^\[\[|\]\]$/g, '').split('#')[0]
-      return value === id
-    })
-  }), [specs, id])
+  const rows = useMemo(() => (specs || []).filter((node) => (
+    node.id !== id && (node.parent === id || (node.mentions || []).includes(id))
+  )), [specs, id])
   return rows.length
     ? <div className="ctx-list">{rows.map((node) => <a key={node.id} className="ctx-row" href={routeHash('spec', node.id)}>
       <span className="ctx-row-mark">↗</span><span className="ctx-row-label">{node.title || node.id}</span><code>{node.id}</code>

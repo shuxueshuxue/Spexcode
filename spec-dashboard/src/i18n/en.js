@@ -70,6 +70,13 @@ export default {
     noScenarios: 'no scenarios declared',
     states: { pass: 'pass', fail: 'fail', stalePass: 'stale pass', staleFail: 'stale fail', missing: 'unmeasured', empty: 'unmeasured' },
   },
+  empty: {
+    title: 'Nothing open',
+    hint: 'You closed the last document. Pick one to open — nothing is lost, the tabs simply hold nothing right now.',
+    search: 'Search for a node',
+    explorer: 'Browse the explorer',
+    graph: 'Open the graph document',
+  },
   tabs: {
     aria: 'open documents',
     close: 'close tab',

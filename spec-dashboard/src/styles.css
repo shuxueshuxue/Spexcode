@@ -315,6 +315,16 @@ body {
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
+/* the workspace holding nothing ([[tab-strip]]). Quiet on purpose — muted ink, no panel, no border: it is
+   the absence of a document, not a document about absence. The doors are the only lit thing in it. */
+.empty-view { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 24px; }
+.empty-card { max-width: 380px; text-align: center; }
+.empty-title { margin: 0; color: var(--ink2); font-size: var(--type-subtitle); font-weight: var(--weight-medium); line-height: var(--leading-tight); }
+.empty-hint { margin: 8px 0 0; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
+.empty-doors { display: flex; flex-direction: column; gap: 4px; margin-top: 18px; }
+.empty-door { display: flex; align-items: center; gap: 8px; padding: 7px 10px; color: var(--ink); text-decoration: none; background: transparent; border: 1px solid var(--line); border-radius: 4px; font: inherit; font-size: var(--type-meta); text-align: left; cursor: pointer; }
+.empty-door:hover { color: var(--ink2); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+
 /* two views at once. The divider is the shared resizable primitive every other pane uses. */
 .content-split { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .content-split > .viewhost { flex: 1; min-width: 0; }

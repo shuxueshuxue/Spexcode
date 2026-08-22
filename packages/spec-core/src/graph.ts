@@ -93,7 +93,7 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
           id: op.nodeId, parent: resolveParent(op.path, byDir), path: op.path,
           title: op.nodeId, status: deriveStatus({ version: 0, drift: 0, hasOverlay: true }),
           version: 0, session: null, fmStatus: null,
-          desc: '', code: [], related: [], body: '', drift: 0, driftFiles: [], ghost: true, overlays: [ov],
+          desc: '', code: [], related: [], mentions: [], body: '', drift: 0, driftFiles: [], ghost: true, overlays: [ov],
         }
       } else {
         (overlaysByNode[op.nodeId] ??= []).push(ov)

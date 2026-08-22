@@ -20,13 +20,11 @@ Everything else it needs — the board, the workspace — it asks for by context
 another component's props. That is what dissolved the god component: its size was not the problem, its
 *ownership* was.
 
-**`document: true` marks a view [[tab-strip]] may accumulate**, and the strip asks the registry rather than
-keeping its own list. It kept its own list for exactly one commit, and in that commit the strip could not
-hold the document addresses the registry had already declared — two sources of truth disagreeing precisely
-where they were meant to agree. The graph is the workspace's home rather than one of its documents,
-`settings` is a place people bounce off, and `empty` is what shows when nothing is held at all
-([[tab-strip]]) — none of the three accumulates. `empty` is the sharpest case: a tab for it would be the one
-address that contradicts the strip it would sit in.
+**`document(page, param)` marks an object address [[tab-strip]] may accumulate**, and the strip asks the
+registry rather than keeping its own list. Only parameterized objects are documents: spec/file/session
+(including `/sessions/new`), eval detail, and issue detail. Graph (including its focused node), bare sessions,
+bare evals, and bare issues are finding surfaces and never accumulate. `settings` is a place people bounce
+off, and `empty` is what shows when nothing is held at all — none of those addresses accumulates.
 
 **A rail destination is not the same thing as an addressable kind.** `spec` and `file` are addresses you
 arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. The rail

@@ -33,7 +33,13 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   usable as local, transient graph navigation and leave the address unchanged. A new explicit address
   navigation or a copy action names the target node; high-frequency board movement never makes the address
   bar flicker.
-- `session` opens `#/sessions/<id>`.
+- `session` opens `#/sessions/<id>`; a session face is the query axis on that same document address:
+  `#/sessions/<id>?surface=conversation|terminal`. A bare session address keeps its existing meaning — the
+  per-session base-surface preference — while an explicit face is URL authority and writes that choice back
+  to the browser/project/session-local [[session-surface]] store. `surface=evals` is deliberately not a new
+  session face: route arrival REPLACES it with the canonical scoped Evals list `#/evals?q=scope:<id>` (the
+  same projection as [[session-eval]]), so one session reading has one Evals address family. Unknown face
+  values are ignored and the bare session resolution applies.
 - `session-eval` opens the scoped default list `#/evals?q=is:eval scope:<id>` — or, with
   a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /
   [[evals-view]]). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,

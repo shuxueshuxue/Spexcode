@@ -3,6 +3,7 @@ import { nodeEvalQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
+export const sessionSurfaceAddress = (sessionId, surface) => ({ kind: 'session-surface', sessionId, surface })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
 export const reviewListAddress = (page, query) => ({ kind: 'review-list', page, query })
 // with a scenario: the canonical full-page eval DETAIL (path only — the detail hash carries no list
@@ -20,6 +21,10 @@ export function addressHash(address) {
   if (!address) return routeHash('graph')
   if (address.kind === 'graph-node') return routeHash('graph', address.nodeId)
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
+  if (address.kind === 'session-surface') {
+    if (address.surface === 'evals') return routeHash('evals', null, { q: scopedEvalQuery(address.sessionId) })
+    return routeHash('sessions', address.sessionId, { surface: address.surface })
+  }
   if (address.kind === 'session-eval') {
     const param = address.nodeId && address.scenario ? `${address.nodeId}/${address.scenario}` : null
     return routeHash('evals', param, { q: param ? `scope:${address.sessionId}` : scopedEvalQuery(address.sessionId) })

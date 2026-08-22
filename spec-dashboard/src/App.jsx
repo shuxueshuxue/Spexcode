@@ -153,10 +153,14 @@ export default function App() {
     : hub
       ? selectGatewayIdentity(projAccess)
       : boardIdentity
+  // the WORKSPACE face names its own place ([[workspace-shell]] reads the address; nothing above it does),
+  // so this writes the plain project title only for the faces that have no address to report — the hub, the
+  // phone, and every pre-board state. Both writing it would race, and a parent effect runs last.
+  const shellFace = !!board && !isMobile
   useEffect(() => {
-    if (!identity) return
+    if (!identity || shellFace) return
     document.title = tabTitle(identity)
-  }, [identity?.title]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [identity?.title, shellFace]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!identity) return
     const fallback = hub ? DEFAULT_GATEWAY_ICON : DEFAULT_PROJECT_ICON

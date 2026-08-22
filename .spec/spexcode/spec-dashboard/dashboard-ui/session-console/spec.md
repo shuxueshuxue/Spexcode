@@ -33,7 +33,7 @@ related:
 
 ## raw source
 
-`Enter` on the board opens the session interface; the always-on top-left window (SessionWindow) is the
+`Enter` on the board opens the session interface; the finding dock's session projection is the
 at-a-glance summary. Both are **thin views of `/api/graph`** (i.e. `spex graph --json`): the dashboard renders only
 what the backend reports and never invents session state, so a human watching the dashboard and an agent
 driving the same sessions through the CLI see identical state.
@@ -291,7 +291,14 @@ web frame cannot lock the dashboard controls, and one Escape never skips an over
 TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
 IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
-mechanism. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+mechanism.
+
+**Both session surfaces frame their content identically.** The Conversation's composer FLOATS over its
+reading column, the same shape Command Box already has on the terminal surface, and the timeline pads its
+tail so the newest entry is never parked behind it. That is what makes the surface a property of the
+content and not of the frame: choosing Terminal or Conversation changes what fills the document area, never
+how many chrome rows sit around it, which is exactly the claim [[ui-state-model]]'s budget measures. The
+composer's card IS its field — one frame, not an input bordered inside a bordered bar. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.
@@ -425,9 +432,9 @@ land. Still on the closed tab → New Session; already moved to another valid ta
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
 board no longer has.
 
-**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face
-([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the console list — but
-KEEPING the **avatar** (its cross-referencing job) and the board's warm paper: the avatar + the session
+**The finding dock's session projection** ([[dock-modes]]) is the read-only glance, built from the shared
+**`SessionRow`** face ([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the
+console list: the session
 **headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
 always wins) + a single colour-coded status **glyph** + pending-op count; the session's `launcher` remains
 durable data on the API payload but is not rendered as a per-row badge, keeping the glance clean. On one line,
@@ -445,8 +452,7 @@ hidden double-click gesture. The console renders the row in its **compact, avata
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with
 a 204px default width (15% below the former 240px) and caption-size row text; the selected headline may expand
 in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
-status is a single colour glyph, not a word. The avatar is dropped ONLY here — its cross-referencing job (matching a
-session to the avatars on the nodes it edits) belongs to the map-side SessionWindow, which keeps it. The
+status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
 over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), a dim
 header leading each — and within a zone the **newest** session sits on top. The **offline** zone is keyed on
@@ -464,7 +470,7 @@ The COUNT pod is only a visual marker inside it. A parent
 row with sub sessions uses the same grammar: its child-count pod is the first content before the title/status
 body, never a trailing action, and that pod alone toggles its children and carries `aria-expanded`. Clicking
 the rest of the parent row performs that surface's ordinary row action (select/open in the console or phone,
-graph lock/open in SessionWindow) without changing the fold. The disclosure pod and row action are sibling
+graph claim from a dock row) without changing the fold. The disclosure pod and row action are sibling
 controls in the DOM, never a button nested inside another button. Neither surface renders a directional glyph
 for parent disclosure; hierarchy is communicated only by the count's leading slot, indentation, and the
 resulting row structure.
@@ -473,9 +479,8 @@ fresh mount; no session record is touched), it applies to **no other zone** — 
 can never be hidden by any fold — and the **selected session stays revealed**: a row chosen by URL,
 search, an originator chip, or the graph's node menu renders even while its zone is folded, so a deep link
 into history always lands on its visible row. ↑/↓ walk only the visible rows, as with every fold. The
-selected row is marked by the **highlight wash alone**, no caret. The SessionInterface sidebar,
-SessionWindow, and phone Sessions list share this grouping + compact one-line layout; only the avatar differs
-(the map-side window keeps it, the console and phone lists drop it).
+selected row is marked by the **highlight wash alone**, no caret. The SessionInterface sidebar, the finding
+dock's projection, and the phone Sessions list share this grouping + compact one-line layout.
 
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue

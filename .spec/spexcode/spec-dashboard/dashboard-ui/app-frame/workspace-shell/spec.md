@@ -44,6 +44,27 @@ A control belongs to the region whose question it answers, and to exactly one ow
 explorer/sessions mode buttons sit on the rail with the other finding controls, not in a second dock modebar
 or on the status bar. The dock itself is content-only.
 
+**Each region gets ONE band, and a band is a row that earns its place.** [[ui-state-model]] states the
+budget and measures it; the shell's obligation is to have no spacer that stands in for a band it does not
+draw. The tab strip is the top band itself, not a wrapper holding it: the strip renders unconditionally and
+names the routed place when no document is held, so the row is either a working set or an answer to where
+the reader is, and never 29 empty pixels. A control that belongs to the current DOCUMENT — the context
+dock's toggle — rides the strip's trailing cluster beside the document actions rather than opening a
+region of its own.
+
+**The window says where it is.** The shell is the only component that reads the address, so it is the only
+one that can name the place, and it writes `<place> · <project>` into the document title on every route.
+The place is the same projection the tab strip draws: a document's own name, or the routed surface's name
+from the shared place list, translated like every other label. Faces without an address to report — the
+projects hub, the phone, every pre-board state — keep writing the plain project title; both writing it
+would race, and a parent's effect lands last.
+
+**Which session owns the graph is workspace state**, held here beside the dock preference and the split,
+because the surface that CLAIMS a session (a row in the finding dock) is never the surface that shows the
+claim (the graph). Holding it inside the graph is what forced the graph to grow a session list of its own
+just to have somewhere to click. It is not persisted: a lock is a way of looking at the board right now,
+not a preference to inherit on the next boot.
+
 ## Document actions
 
 The tab row's right edge is the shell's **document-actions slot**. It is a registry, not a second navigation

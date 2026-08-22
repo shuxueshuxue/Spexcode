@@ -19,6 +19,10 @@ const issues = readFileSync(join(here, 'IssuesPage.jsx'), 'utf8')
 const resizable = readFileSync(join(here, 'useResizable.js'), 'utf8')
 const xtermRuntime = readFileSync(join(dirname(require.resolve('@xterm/xterm/package.json')), 'lib/xterm.mjs'), 'utf8')
 
+// A declaration and its value, for every rule in the sheet — the shared reader every gate below counts on.
+const declarations = (property) => [...css.matchAll(new RegExp(`(?<![\\w-])${property}\\s*:\\s*([^;}]+)`, 'g'))]
+  .map((match) => match[1].trim())
+
 test('dashboard typography declarations use the shared scale', () => {
   const contracts = {
     'font-size': /^var\(--type-/,
@@ -28,8 +32,7 @@ test('dashboard typography declarations use the shared scale', () => {
   }
 
   for (const [property, token] of Object.entries(contracts)) {
-    const values = [...css.matchAll(new RegExp(`${property}\\s*:\\s*([^;}]+)`, 'g'))]
-      .map((match) => match[1].trim())
+    const values = declarations(property)
     assert.ok(values.length > 0, `${property} declarations should exist`)
     assert.deepEqual(
       values.filter((value) => !token.test(value)),
@@ -40,6 +43,88 @@ test('dashboard typography declarations use the shared scale', () => {
 
   assert.match(terminalFont, /getPropertyValue\('--type-terminal'\)/)
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
+})
+
+test('the sheet holds TWO families and spends mono only on what is not language', () => {
+  // The split IS the modern read. Sans carries every word a person parses as language — chrome, labels,
+  // prose, empty states; mono is reserved for code, terminal output, machine identifiers (ids, paths,
+  // hashes, keycaps) and columns that must line up. Both tokens must exist, the document must default to
+  // sans, and mono must stay the minority — the failure this replaces was one family covering everything.
+  assert.match(css, /--sans:\s*ui-sans-serif/)
+  assert.match(css, /--mono:\s*'JetBrains Mono'/)
+  assert.match(css, /body\s*\{[^}]*font-family:\s*var\(--sans\);/s)
+
+  const families = [...css.matchAll(/font-family:\s*([^;}]+)|font:\s*[^;}]*?(var\(--(?:sans|mono)\))/g)]
+    .map((m) => (m[1] || m[2]).trim())
+  const raw = families.filter((v) => !/^var\(--(?:sans|mono)\)$/.test(v) && !/^inherit$/.test(v))
+  assert.deepEqual(raw, [], 'every font-family must name one of the two family tokens')
+  const mono = families.filter((v) => v.includes('--mono')).length
+  const sans = families.filter((v) => v.includes('--sans')).length
+  assert.ok(mono > 0, 'code and terminal surfaces still need mono')
+  assert.ok(mono * 2 < sans, `mono is the exception, not the rule (mono ${mono} vs sans ${sans})`)
+})
+
+test('chrome labels are sentence case — no all-caps, no tracked-out shouting', () => {
+  // calm-ui: an all-caps tracked label is decoration wearing the costume of hierarchy. Hierarchy here is
+  // spent on space, then colour, then weight, then size — never on shape.
+  assert.doesNotMatch(css, /text-transform:\s*uppercase/)
+  assert.equal(declarations('letter-spacing').filter((v) => v !== 'var(--tracking-normal)').length, 0)
+})
+
+test('three weights, one radius token, one elevation — the geometry is spendable, not hand-written', () => {
+  // Every extra weight is another way to say "important" competing with the ones that already work; every
+  // hand-written radius is a number nobody can re-tune. The sheet declares the ladder and then uses it.
+  const weights = new Set(declarations('font-weight'))
+  assert.deepEqual([...weights].sort(), ['var(--weight-medium)', 'var(--weight-regular)', 'var(--weight-semibold)'])
+  assert.doesNotMatch(css, /--weight-(?:bold|black)/)
+
+  assert.match(css, /--radius:\s*6px;/)
+  assert.match(css, /--radius-full:\s*999px;/)
+  // a circle is a shape, not a step on a radius scale; everything else spends the token.
+  const radii = declarations('border-radius')
+    .filter((v) => !v.includes('var(--radius') && v !== '0' && !v.includes('50%'))
+  assert.deepEqual([...new Set(radii)].sort(), ['1px', '2px'], 'only the sub-pixel marks may set a raw radius')
+
+  assert.match(css, /--shadow:\s*0 4px 16px/)
+  const drops = [...css.matchAll(/box-shadow:\s*([^;}]+)/g)].map((m) => m[1].trim())
+    .filter((v) => !v.startsWith('inset') && !v.startsWith('var(--shadow)') && !v.startsWith('none'))
+    .filter((v) => !/^0 0 0 /.test(v))    // rings (focus, avatar liveness) are borders drawn as shadows
+  assert.deepEqual(drops.filter((v) => !/^0 1px 4px/.test(v)), [], 'one elevation token owns every real drop shadow')
+})
+
+test('the ground ladder is three tones deep and every theme carries all three', () => {
+  // chrome recedes (--ground: rail, dock, status bar, context dock), toolbars sit between (--panel), and
+  // the ONE content plane is the brightest (--paper). The whole point is that a reader can see where the
+  // document is without a border telling them; two tones five values apart could not do that.
+  const themes = [...css.matchAll(/:root(?:\[data-theme=\w+\])?\s*\{([\s\S]*?)\n\}/g)].map((m) => m[1])
+  assert.equal(themes.length, 8, 'the default plus seven presets')
+  for (const block of themes) {
+    for (const token of ['--paper', '--panel', '--ground']) {
+      assert.match(block, new RegExp(`${token}:\\s*#[0-9a-f]{6};`), `${token} must be a resolved value in every theme`)
+    }
+  }
+  assert.match(css, /\.side-rail\s*\{[^}]*background:\s*var\(--ground\);/s)
+  assert.match(css, /\.dock\s*\{[^}]*background:\s*var\(--ground\);/s)
+  assert.match(css, /\.statusbar\s*\{[^}]*background:\s*var\(--ground\);/s)
+  assert.match(css, /\.tabstrip\s*\{[^}]*background:\s*var\(--panel\);/s)
+  assert.match(css, /\.viewhost\s*\{[^}]*background:\s*var\(--paper\);/s)
+  // the active tab is painted the CONTENT tone so the tab and its document read as one plane
+  assert.match(css, /\.tab\.on\s*\{[^}]*background:\s*var\(--paper\);/s)
+})
+
+test('the chrome bands the budget does not allow are gone from the sheet', () => {
+  // [[ui-state-model]]'s band budget is the structural gate; these are the strips it named. Each one is
+  // removed at the source — merged into the band that already existed, folded into scrolling content, or
+  // deleted — so no rule here can quietly bring one back.
+  for (const retired of [
+    'app-main-top', 'ft-head', 'dock-session-head', 'dock-session-archive',
+    'specview-files', 'fileview-head', 'srcview-foot', 'sesswin',
+  ]) assert.doesNotMatch(css, new RegExp(`\\.${retired}\\b`), `${retired} is a retired band`)
+  // the dock is ONE band, and the source viewer's progress floats instead of banding
+  assert.match(css, /\.dock-head\s*\{[^}]*border-bottom:\s*1px solid var\(--edge\);/s)
+  assert.match(css, /\.srcview-progress\s*\{[^}]*position:\s*absolute;/s)
+  // the conversation composer floats over its reading column, exactly like the terminal's command box
+  assert.match(css, /\.m-composer\s*\{[^}]*position:\s*absolute;/s)
 })
 
 test('wheel is xterm-native — no browser quantizer, ledger, or synthetic bottoming', () => {
@@ -190,7 +275,8 @@ test('sessions document has no duplicate sidebar or scrollport', () => {
   assert.match(css, /\.si-page\s*\{[^}]*min-height:\s*0;/s)
   assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
   assert.match(css, /\.dock-session-list\s*\{[^}]*overflow:\s*auto;/s)
-  assert.match(css, /\.dock-session-archive\s*\{[^}]*border-top:/s)
+  // the archive door moved into the dock's ONE header row rather than keeping a strip under the list
+  assert.match(css, /\.dock-head-acts\s*\{[^}]*margin-left:\s*auto;/s)
 })
 
 test('sessions dock keeps the tree list geometry', () => {

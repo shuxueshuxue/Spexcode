@@ -61,31 +61,39 @@ await page.route('**/api/graph*', (route) => route.fulfill({
 
 const observations = []
 const observe = (step, value) => observations.push({ step, value })
-const sessionRow = () => page.locator('.sesswin .sess-row').filter({ hasText: headline })
+// A session is claimed from the FINDING DOCK's session row — the graph's floating glance is retired and
+// the dock projects the same forest. Alt-click is the claim; the row wears it while the graph is scoped.
+const sessionRow = () => page.locator('.dock-session-list .si-item').filter({ hasText: headline })
+const claim = async () => sessionRow().click({ modifiers: ['Alt'] })
+const locked = () => sessionRow().evaluate((row) => row.hasAttribute('data-locked'))
+await context.addInitScript(() => {
+  try { localStorage.setItem('spexcode.dock', '1'); localStorage.setItem('spexcode.dockMode', 'sessions') } catch { /* private mode */ }
+})
 
 try {
   await page.goto(`${BASE}/#/graph`, { waitUntil: 'domcontentloaded' })
+  assert.equal(await page.locator('.sesswin').count(), 0, 'the map-side session glance is retired')
   await sessionRow().waitFor({ state: 'visible' })
-  await sessionRow().click()
+  await claim()
 
   const banner = page.locator('.lock-hint')
   await banner.waitFor({ state: 'visible' })
   assert.match((await banner.locator('.lock-hint-lead').textContent()) || '', /lock hint browser proof/)
   assert.deepEqual(await banner.locator('kbd').allTextContents(), ['o', 'O'])
   assert.match((await banner.locator('.lock-hint-body').textContent()) || '', /2 changed nodes/)
-  assert.equal(await sessionRow().evaluate((row) => row.classList.contains('locked')), true)
+  assert.equal(await locked(), true)
   observe('two-node lock banner', { keys: await banner.locator('kbd').allTextContents(), text: await banner.textContent() })
   await page.screenshot({ path: `${OUT}/two-node-lock.png`, fullPage: true })
 
   await banner.getByRole('button', { name: 'release' }).click()
   await banner.waitFor({ state: 'hidden' })
-  assert.equal(await sessionRow().evaluate((row) => row.classList.contains('locked')), false)
+  assert.equal(await locked(), false)
   observe('release lock', 'banner hidden and session row unlocked')
 
   fixture = graphFor(1)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await sessionRow().waitFor({ state: 'visible' })
-  await sessionRow().click()
+  await claim()
   await banner.waitFor({ state: 'visible' })
   assert.match((await banner.locator('.lock-hint-body').textContent()) || '', /this session changed 1 node/)
   assert.equal(await banner.locator('kbd').count(), 0)

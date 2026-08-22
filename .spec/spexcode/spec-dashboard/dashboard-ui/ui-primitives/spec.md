@@ -13,6 +13,8 @@ and icon buttons with no accessible name. Per-overlay Escape handlers whose winn
 registration order. Three textareas measuring growth three ways. Three markdown parsers rendering the same
 prose three ways. The pattern is the point: the second copy is where the defect enters.
 
+- [[typography]] — the one visual vocabulary: two font families with one rule between them, a short type
+  scale, three weights, the three-tone ground ladder, and the geometry tokens every rule spends.
 - [[icon-system]] — the one glyph vocabulary, and the icon-only button that cannot ship without a tooltip
   and an accessible name.
 - [[tooltip]] — the one themed singleton bubble any `data-tip` element participates in.

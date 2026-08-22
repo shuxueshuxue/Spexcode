@@ -34,6 +34,12 @@ shareable as before. The strip renders from the first tab: it is where the curre
 and chrome that only appears when a second document exists would jump the layout at exactly the moment of
 the reader's first hold.
 
+**The row is always there, and it always says something.** On the routes that mint no tab — the graph, the
+bare boards, settings, the empty workspace — the strip names the PLACE instead: the same projection the
+document title uses, drawn quiet, because orientation is not a title. This is what makes the row honest
+rather than reserved: the shell used to hold the space with a wrapper that drew a blank band on exactly
+those routes, which is a band that says nothing while costing the budget the same as one that does.
+
 **There is no address-replacement semantic.** Once a resident tab exists, its address is immutable. The only
 exception is the single preview slot, and its type fence is deliberately narrow:
 

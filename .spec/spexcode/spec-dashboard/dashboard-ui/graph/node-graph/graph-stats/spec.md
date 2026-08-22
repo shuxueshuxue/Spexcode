@@ -26,7 +26,7 @@ that says the whole-tree figures at a glance. Keep it honest and cheap: it **cou
 The tally is the **focused view's** state, so it lives in the right group of the [[status-bar]] rather than
 floating over the canvas. Its whole output is **one registered item**: the component renders nothing itself,
 which is what lets it stop knowing where on the screen it lands. That is not cosmetic — while this was a
-pinned strip, the session window had to cap its own height to keep clear of it, one widget's geometry
+pinned strip, the graph's floating session glance had to cap its own height to keep clear of it, one widget's geometry
 encoded inside an unrelated component. Registering removed that coupling along with the position.
   It reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
   frontend derivation** over each node's explicit [[graph-lean]] `reviewSummary` — no row array, new endpoint,

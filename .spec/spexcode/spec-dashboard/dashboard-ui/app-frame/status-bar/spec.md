@@ -52,7 +52,12 @@ tidiness: the shared-typography guard rejects a hardcoded `line-height`, and it 
 of the bar is a shared geometry that other components will eventually measure against, and a literal is
 exactly how the 112px coupling started.
 
-**What is registered today** is coarse: the project name and the help key as two left items, the whole
-graph tally as one right item, the public-graph disclosure as another. Per-chip items would give the user
-finer hiding, and the registry already supports it; that is an unclaimed improvement, not a hidden
-limitation.
+**What is registered today** is coarse: the project name and the help key as two left items, the routed
+file's path when [[file-view]] is the document, the whole graph tally as one right item, the public-graph
+disclosure as another. Per-chip items would give the user finer hiding, and the registry already supports
+it; that is an unclaimed improvement, not a hidden limitation.
+
+**A document contributing a fact about itself is the registry working as designed.** A file document's path
+belongs to the bar for the same reason the project name does — it is persistently true of what the window
+is showing — and the alternative was a title strip of its own, which is a chrome band [[ui-state-model]]
+does not allot. The bar is where a persistent readout goes precisely so that no surface has to grow one.

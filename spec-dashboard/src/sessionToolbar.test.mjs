@@ -64,9 +64,11 @@ test('file previews use one selectable resource tab, keep Markdown restricted, e
   assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)
   assert.match(css, /\.si-file-html\s*\{[^}]*height:\s*100%;[^}]*border:\s*0;/s)
-  assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
-  assert.match(css, /\.si-files-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
-  assert.match(css, /\.sess-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
+  // the three pop-overs float on the ONE shared elevation ([[typography]]'s --shadow), not three
+  // hand-written drops that can drift apart into three different ideas of "above".
+  assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
+  assert.match(css, /\.si-files-menu\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
+  assert.match(css, /\.sess-menu\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
 })
 
 test('pane-backed and headless consoles share one warm TimelineChat Conversation surface', () => {

@@ -70,10 +70,13 @@ function enumerateStates() {
 // (a composer, a wrapping picker row) is still caught by name; the geometry rule below then catches
 // chrome this list has never heard of.
 const KNOWN_BANDS = [
-  'side-rail', 'dock', 'dock-modebar', 'dock-session-head', 'dock-session-archive',
-  'app-main-top', 'tabstrip', 'statusbar', 'ft-head', 'fileview-head', 'srcview-foot',
-  'specview-files', 'context-dock', 'ctx-head', 'si-tabbar', 'si-selbar', 'si-toolbar',
+  'side-rail', 'dock', 'dock-head', 'tabstrip', 'statusbar',
+  'context-dock', 'ctx-head', 'si-tabbar', 'si-selbar', 'si-toolbar',
   'diff-toolbar', 'm-composer', 'lp-head', 'ds-head',
+  // strips this gate named and the shell then retired. They stay listed so a reintroduction is caught by
+  // NAME on its first frame, before anyone has to argue about its geometry.
+  'dock-modebar', 'dock-session-head', 'dock-session-archive', 'app-main-top', 'ft-head',
+  'fileview-head', 'srcview-foot', 'specview-files',
 ]
 
 // Never a band, whatever its geometry: resize handles (a grab strip, not a row), the overlay z-layers,
@@ -161,9 +164,9 @@ function measureBands(cfg) {
 
       const inner = scan(kid, depth + 1)
       if (isBand && inner.length === 0) {
-        // leaf-most chrome. A wrapper whose only job is to hold a band (app-main-top around the tab row)
-        // collapses into the band it holds — that is ONE band, which is what the model claims. But two
-        // sibling rows in one region (a dock modebar above a dock header) are TWO, which is the point.
+        // leaf-most chrome. A wrapper whose only job is to hold a band collapses into the band it holds —
+        // that is ONE band, which is what the model claims. But two sibling rows in one region (a dock
+        // header above an archive strip) are TWO, which is the point.
         found.push({
           cls: classOf(kid) || `<${kid.tagName.toLowerCase()}>`,
           tag: kid.tagName.toLowerCase(),

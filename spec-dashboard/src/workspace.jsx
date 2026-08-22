@@ -28,8 +28,8 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 
 // ---------------------------------------------------------------------------------------------------
 
-const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split }
-const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, splitTo, closeSplit }
+const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split, lockedSource }
+const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, splitTo, closeSplit, lockGraphTo }
 
 const DOCK_KEY = 'spexcode.dock'
 const DOCK_MODE_KEY = 'spexcode.dockMode'
@@ -55,6 +55,13 @@ export function WorkspaceProvider({ children }) {
   const [split, setSplitState] = useState(() => {
     try { const raw = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return raw?.page ? raw : null } catch { return null }
   })
+  // WHICH SESSION OWNS THE GRAPH. A lock scopes the board to one worktree: its nodes stay lit and every
+  // other node dims. It is workspace state for the same reason the split is — it is true of the WINDOW, and
+  // the surface that SETS it (a session row in the finding dock) is never the surface that shows it (the
+  // graph). Holding it inside the graph is what forced the graph to grow a second session list of its own
+  // just to have somewhere to click, and that list is what this replaces. Not persisted: a lock is a way of
+  // looking at the board right now, not a preference to inherit on the next boot.
+  const [lockedSource, setLockedSource] = useState(null)
   // A one-shot handoff between views: a board chord composes text that the sessions view should open with.
   // It lives here rather than in either view because neither should have to be mounted for the other to
   // hand it something. A ref, not state — writing it must not re-render the shell.
@@ -84,9 +91,11 @@ export function WorkspaceProvider({ children }) {
       try { localStorage.removeItem(SPLIT_KEY) } catch { /* private mode */ }
       return null
     }),
+    // toggle: asking again for the session that already owns the graph releases it.
+    lockGraphTo: (source, { toggle = true } = {}) => setLockedSource((prev) => (toggle && prev === source ? null : source || null)),
   }), [])
 
-  const state = useMemo(() => ({ dock, dockMode, palette, split }), [dock, dockMode, palette, split])
+  const state = useMemo(() => ({ dock, dockMode, palette, split, lockedSource }), [dock, dockMode, palette, split, lockedSource])
   return (
     <WorkspaceApi.Provider value={api}>
       <WorkspaceState.Provider value={state}>{children}</WorkspaceState.Provider>

@@ -144,6 +144,11 @@ export default function SourceView({ path, read, className = '', onSelection }) 
   }, [path, read])
 
   const pct = status.size > 0 ? Math.min(100, Math.round((status.loaded / status.size) * 100)) : 0
+  // The viewer shows the file, and nothing about the file. Its path is already the address, the tab and the
+  // chip that opened it; a permanent strip repeating it was a fourth copy and a whole chrome band. What is
+  // NOT said elsewhere is whether the read finished — so that, and only that, floats over the text while it
+  // is still true, and leaves when it stops being news.
+  const reading = !status.error && (status.phase === 'loading' || (status.size > 0 && pct < 100))
   return (
     <div className={`srcview ${className}`.trim()}>
       <div className="srcview-body">
@@ -154,15 +159,11 @@ export default function SourceView({ path, read, className = '', onSelection }) 
             {t('sourceView.useSelection')}
           </button>
         )}
-      </div>
-      <div className="srcview-foot">
-        <code className="srcview-path">{path}</code>
-        {status.error
-          ? <span className="srcview-err">{status.error}</span>
-          : <span className="srcview-meter">
-              {status.phase === 'loading' ? t('common.loading') : `${(status.size / 1024).toFixed(1)} KB`}
-              {status.size > 0 && pct < 100 ? ` · ${pct}%` : ''}
-            </span>}
+        {(status.error || reading) && (
+          <div className={`srcview-progress${status.error ? ' is-error' : ''}`} role="status">
+            {status.error || (status.phase === 'loading' ? t('common.loading') : `${pct}%`)}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -26,9 +26,15 @@ its place as a quick lens on board focus; this is where a node is READ.
 
 **The right side opens on the node's first governed file**, and a `code:` entry naming a symbol resolves to
 its file — several such entries open one viewer, because the reader wants the file, not three views of it.
-A node's attachments ([[node-attachments]]) sit in the same chip row: the reader is not asked to learn that
+A node's attachments ([[node-attachments]]) are picked the same way: the reader is not asked to learn that
 bytes from the spec tree behave differently from bytes from the worktree, even though the gate that admits
 them is not the same gate.
+
+**The chips that pick the file are the DOCUMENT'S OWN chips.** The prose already lists what the node
+governs and carries; handing that list the code column makes it the picker, so the file is named once, in
+the sentence that claims it. A picker strip welded above the code was the same list a second time and a
+chrome band to hold it — and with the viewer no longer repeating the path underneath ([[source-view]]),
+the code column is now nothing but code.
 
 **A prose-only node gets no right side at all**, rather than an empty frame apologising for itself.
 

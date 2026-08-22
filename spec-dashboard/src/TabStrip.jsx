@@ -64,20 +64,27 @@ function TabDot({ tab, specs, sessions }) {
   return null
 }
 
-export default function TabStrip({ specs, sessions }) {
+// WHERE AM I is the same question whether or not a document is open, so the strip answers it in both cases:
+// tabs when there are tabs, the routed place's own name when there are none. Naming the place is also what
+// earns the strip its unconditional row — the shell used to wrap it in a spacer div that rendered a blank
+// 29px band on every non-document route, which is a band that says nothing.
+export function placeLabel(route, ctx) {
+  const { page, param } = route || {}
+  if (page === 'spec' || page === 'file' || (page === 'sessions' && param)) return label(route, ctx)
+  return ctx.t(`place.${page}`)
+}
+
+export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const t = useT()
   const { tabs, activeKey, open, close, closeOthers } = useTabs()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
-  // The strip shows even with one tab: it is where the current document's NAME lives, and chrome that
-  // appears only when a second document exists jumps the layout at exactly the moment of the reader's
-  // first hold.
-  if (!tabs.length) return null
   const activeActions = [...actions.values()]
     .filter((action) => action.document === activeKey)
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
   return (
     <div className="tabstrip" role="tablist" aria-label={t('tabs.aria')}>
+      {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, t })}</span>}
       {tabs.map((tab) => {
         const key = tabKey(tab)
         const active = key === activeKey
@@ -101,7 +108,7 @@ export default function TabStrip({ specs, sessions }) {
           </div>
         )
       })}
-      {activeActions.length > 0 && (
+      {(activeActions.length > 0 || trailing) && (
         <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
           {activeActions.map((action) => {
             const label = action.disabled ? (action.disabledReason || action.label) : action.label
@@ -117,6 +124,7 @@ export default function TabStrip({ specs, sessions }) {
               </div>
             )
           })}
+          {trailing}
         </div>
       )}
     </div>

@@ -48,28 +48,21 @@ export default function SpecView({ param }) {
   if (!specs?.length) return <div className="doc-empty">{t('hud.loading')}</div>
   if (!node) return <div className="doc-empty">{t('specView.missing', { id: param })}</div>
 
-  const files = [
-    ...paths.map((p) => ({ key: p, label: p, kind: 'code' })),
-    ...attachments.map((a) => ({ key: a.name, label: a.name, kind: 'att' })),
-  ]
+  const hasFiles = paths.length > 0 || attachments.length > 0
 
+  // The document's OWN prose already lists what the node governs and carries. Handing those chips the code
+  // column ([[node-popup]]'s `viewer` seam) makes them the picker, so the code column is nothing but code —
+  // no picker strip above it, no path strip below it, and one place in the document where a file is named.
   return (
     <div className="specview">
       <div className="specview-prose">
-        <SpecPane node={node} />
+        <SpecPane node={node} viewer={hasFiles ? { open: shown, pick: setShown } : null} />
       </div>
-      {files.length > 0 && (
+      {hasFiles && (
         <>
           <div className="specview-split" onMouseDown={onDrag} onDoubleClick={reset}
             role="separator" aria-orientation="vertical" />
           <div className="specview-code" style={{ width }}>
-            <div className="specview-files">
-              {files.map((f) => (
-                <button key={f.key} type="button"
-                  className={`gov-f${f.kind === 'att' ? ' gov-att' : ''}${shown === f.key ? ' on' : ''}`}
-                  onClick={() => setShown(f.key)}>{f.label}</button>
-              ))}
-            </div>
             {shown && <SourceView key={shown} path={shown} read={isAttachment ? read : undefined} />}
           </div>
         </>

@@ -36,6 +36,11 @@ clicking a tab now reach the same place by the same address. A plain click opens
 ctrl/⌘-click or double-click HOLDS the document as a resident tab. The preview slot is the only replaceable
 address and is fenced to spec/file by [[tab-strip]].
 
+**The tree names itself through the dock, not through a strip of its own.** "Explorer" and the node tally
+live in [[dock-modes]]' single header row, because they describe the dock that is currently projecting the
+explorer; a projection that re-declares its own name is a second answer to a question answered one row
+above, and it cost a chrome band to give.
+
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
 workspace whose only entrance is a URL is a workspace nobody enters. Its explorer and sessions projections
 are selected from the rail's activity-bar buttons ([[side-nav]], [[dock-modes]]). On by default is not beside

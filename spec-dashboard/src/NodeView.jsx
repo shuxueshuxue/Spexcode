@@ -203,12 +203,18 @@ function useSpecContent(id, version, { embedded = false, publicGraph = false } =
 // under the spec prose that claims it, in the same scroll. A separate tab would have put the claim and the
 // claimed thing on two screens again — the exact separation this is meant to close. One file open at a time,
 // so the pane stays a reading surface rather than a stack of viewers competing for height.
-function GovernedFiles({ files, count, onSelection }) {
+// A `viewer` is a place the document already has to PUT a file — the spec document's code column. Given
+// one, these chips address it; without one (the popup, the phone) they expand a viewer of their own. Either
+// way the claim is listed exactly once, inside the prose that makes it, and never repeated as a picker strip
+// welded above the code.
+function GovernedFiles({ files, count, onSelection, viewer }) {
   const t = useT()
   const [open, setOpen] = useState(null)
   // a `code:` entry may name a SYMBOL inside a file (`SpecNode.jsx#SpecNode`) — several entries then point
   // at one file. The chip keeps the claim's own wording; the door behind it is the file.
   const pathOf = (entry) => entry.split('#')[0]
+  const shown = viewer ? viewer.open : open
+  const pick = (path) => (viewer ? viewer.pick(path) : setOpen(open === path ? null : path))
   return (
     <div className="doc-gov">
       <span className="doc-gov-h">{t('nodeView.governs')} <b>{count}</b></span>
@@ -216,12 +222,12 @@ function GovernedFiles({ files, count, onSelection }) {
         {files.map((f) => {
           const path = pathOf(f)
           return (
-            <button key={f} type="button" className={`gov-f${open === path ? ' on' : ''}`}
-              aria-expanded={open === path} onClick={() => setOpen(open === path ? null : path)}>{f}</button>
+            <button key={f} type="button" className={`gov-f${shown === path ? ' on' : ''}`}
+              aria-expanded={shown === path} onClick={() => pick(path)}>{f}</button>
           )
         })}
       </div>
-      {open && <SourceView path={open} className="doc-gov-src" onSelection={onSelection} />}
+      {!viewer && open && <SourceView path={open} className="doc-gov-src" onSelection={onSelection} />}
     </div>
   )
 }
@@ -231,7 +237,7 @@ function GovernedFiles({ files, count, onSelection }) {
 // board could see exactly one file in it. These open in the same viewer, with the same one-at-a-time rule,
 // as a governed file: the reader should not have to learn that bytes from the spec tree behave differently
 // from bytes from the worktree, even though the gate that admits them is not the same gate.
-function NodeAttachments({ nodeId, enabled }) {
+function NodeAttachments({ nodeId, enabled, viewer }) {
   const t = useT()
   const [files, setFiles] = useState(null)
   const [open, setOpen] = useState(null)
@@ -244,22 +250,24 @@ function NodeAttachments({ nodeId, enabled }) {
   }, [nodeId, enabled])
   const read = useCallback((offset) => fetchNodeFileSlice(nodeId, open, offset), [nodeId, open])
   if (!files?.length) return null
+  const shown = viewer ? viewer.open : open
+  const pick = (name) => (viewer ? viewer.pick(name) : setOpen(open === name ? null : name))
   return (
     <div className="doc-gov doc-att">
       <span className="doc-gov-h">{t('nodeView.carries')} <b>{files.length}</b></span>
       <div className="doc-gov-files">
         {files.map((f) => (
-          <button key={f.name} type="button" className={`gov-f${open === f.name ? ' on' : ''}`}
-            aria-expanded={open === f.name} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
-            onClick={() => setOpen(open === f.name ? null : f.name)}>{f.name}</button>
+          <button key={f.name} type="button" className={`gov-f${shown === f.name ? ' on' : ''}`}
+            aria-expanded={shown === f.name} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
+            onClick={() => pick(f.name)}>{f.name}</button>
         ))}
       </div>
-      {open && <SourceView key={open} path={open} read={read} className="doc-gov-src" />}
+      {!viewer && open && <SourceView key={open} path={open} read={read} className="doc-gov-src" />}
     </div>
   )
 }
 
-export function SpecPane({ node, graphOnly = false, onSelection }) {
+export function SpecPane({ node, graphOnly = false, onSelection, viewer = null }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -277,11 +285,11 @@ export function SpecPane({ node, graphOnly = false, onSelection }) {
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
       {node.code?.length > 0 ? (
-        <GovernedFiles files={node.code} count={node.code.length} onSelection={onSelection} />
+        <GovernedFiles files={node.code} count={node.code.length} onSelection={onSelection} viewer={viewer} />
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
-      {!graphOnly && <NodeAttachments nodeId={node.id} enabled />}
+      {!graphOnly && <NodeAttachments nodeId={node.id} enabled viewer={viewer} />}
       {(() => {
         // body/parts are lazy-loaded ([[graph-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
         // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an

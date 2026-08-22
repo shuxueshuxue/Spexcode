@@ -163,3 +163,8 @@ snapshot may rebase the epoch, while a chained delta may not regress it. Stream 
 liveness only. An error or dead-man breach marks resident summaries last-known without clearing their values;
 only the next authoritative `graph-full` certifies them current again. This is client state over the existing
 graph subscription, not a summary-specific EventSource, WebSocket, REST poll, or timer.
+
+**The browser tab's title has one writer per face.** The workspace face names its own place — the shell is
+the address reader, so it writes `place · project`; App stays silent there. App writes the plain project
+title only for the faces with no address to speak of: the hub, the phone, and every pre-board state. Both
+writing would race, and the parent effect runs last.

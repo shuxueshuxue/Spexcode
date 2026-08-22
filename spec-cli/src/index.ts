@@ -34,6 +34,7 @@ import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBy
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
 import { loadConfig as loadLintConfig } from './lint.js'
+import { listNodeAttachments, readNodeAttachment } from './spec-attachments.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
@@ -150,6 +151,33 @@ app.get('/api/source', (c) => {
       root,
       c.req.query('path') || '',
       loadLintConfig(root),
+      Number(c.req.query('offset') ?? 0),
+      Number(c.req.query('limit') ?? SOURCE_SLICE_MAX_BYTES),
+    )
+    return c.json(slice)
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
+// [[node-attachments]]: what a node carries in its own folder besides its body and its readings. The board
+// showed exactly one file per node folder; these are the rest — eval contracts, evidence dirs, raw captures.
+// A different gate from /api/source on purpose (the spec tree is the product's own data, deliberately outside
+// the coverage policy), the same windowed read underneath.
+app.get('/api/specs/:id/files', (c) => {
+  try {
+    return c.json({ files: listNodeAttachments(repoRoot(), c.req.param('id')) })
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
+app.get('/api/specs/:id/files/content', (c) => {
+  try {
+    const slice = readNodeAttachment(
+      repoRoot(),
+      c.req.param('id'),
+      c.req.query('name') || '',
       Number(c.req.query('offset') ?? 0),
       Number(c.req.query('limit') ?? SOURCE_SLICE_MAX_BYTES),
     )

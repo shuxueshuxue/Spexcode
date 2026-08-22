@@ -44,6 +44,18 @@ export default {
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
+  fileTree: {
+    title: 'EXPLORER',
+    aria: 'project file tree',
+  },
+  tabs: {
+    aria: 'open documents',
+    close: 'close tab',
+    graph: 'Graph',
+    sessions: 'Sessions',
+    evals: 'Evals',
+    issues: 'Issues',
+  },
   nav: {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph (⌥1)',
@@ -152,6 +164,10 @@ export default {
     unlock: 'unlock',
   },
 
+  statusBar: {
+    hidden: 'hidden — restore from the bar',
+    restore: 'restore hidden status items',
+  },
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     loading: 'loading specs from git…',
@@ -417,6 +433,7 @@ export default {
   },
 
   nodeView: {
+    carries: 'carries',
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',

@@ -42,6 +42,11 @@ Escape is refused before any file is touched: an absolute path, a `..` segment, 
 outside the worktree is a 400, and everything the policy declines is a 404. Both are loud — a refusal never
 degrades into an empty body, because a viewer cannot tell "you may not read this" from "this file is blank".
 
+The **window read is shared, the gate is not.** [[node-attachments]] serves a different surface — a spec
+node's own folder, which this policy deliberately excludes — and reuses the same slice-and-snap because
+"read a byte window and stop on a line" is one behaviour. Two surfaces may disagree about what may be read;
+a second copy of the windowing is how they would come to disagree about what `bytes` means.
+
 The route is a thin caller: it resolves the project root, compiles the policy, and hands both to the reader.
 It holds no cache. A source file is read from the worktree at request time, so what the board shows is the
 working tree as it is now, which is the only reading that can be compared against a spec's claim about it.

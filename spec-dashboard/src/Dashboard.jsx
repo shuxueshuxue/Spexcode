@@ -8,6 +8,10 @@ import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import GraphStats from './GraphStats.jsx'
+import StatusBar, { useStatusItem } from './StatusBar.jsx'
+import TabStrip from './TabStrip.jsx'
+import FileTree from './FileTree.jsx'
+import FileViewer from './FileViewer.jsx'
 import SideBar from './SideBar.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
 import TooltipLayer from './Tooltip.jsx'
@@ -100,6 +104,19 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
+  // the project name and the help key were a floating HUD in the canvas's top-left corner. They are
+  // workspace state, so they belong to the bar's LEFT group — and once they are items, the canvas stops
+  // having a reserved corner at all. `-Infinity` pins help to the far end, the slot VS Code keeps for its
+  // own always-last entry.
+  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', text: `$ ${project || 'spec-dashboard'}` })
+  const [treeOpen, setTreeOpen] = useState(() => { try { return localStorage.getItem('spexcode.tree') === '1' } catch { return false } })
+  const [viewFile, setViewFile] = useState(null)
+  useStatusItem({
+    id: 'explorer', side: 'left', priority: 900, kind: treeOpen ? 'info' : 'standard',
+    text: '▤', tooltip: t('fileTree.aria'),
+    onClick: () => setTreeOpen((v) => { try { localStorage.setItem('spexcode.tree', v ? '0' : '1') } catch {} ; return !v }),
+  })
+  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?', tooltip: t('hud.helpTitle'), onClick: () => setLegend((v) => !v) })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
@@ -581,10 +598,13 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   }, [highlightId, specs, focusNode])
 
   return (
+    <div className="app-shell">
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
       <SideBar page={page} identity={identity} catalog={catalog} graphOnly={graphOnly} />
+      {!graphOnly && treeOpen && <FileTree specs={specs} focusId={focusId} onOpenFile={setViewFile} />}
       <div className="app-main">
+      {!graphOnly && <TabStrip specs={specs} sessions={sessions} />}
       <PagePane active={graphOnly || page === 'graph'} warm className="page-graph">
       <div className="graph" ref={graphRef}>
         <ReactFlow
@@ -605,11 +625,6 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
           proOptions={{ hideAttribution: true }}
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
-        <div className="hud">
-          <span className="brand">$ {project || 'spec-dashboard'}</span>
-          <button className="hud-help" onClick={() => setLegend((v) => !v)} data-tip={t('hud.helpTitle')}>?</button>
-        </div>
-
         {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />}
 
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
@@ -692,6 +707,9 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
           ⌥+/ and Search pill), and a page's display:none must never swallow it. */}
       {!graphOnly && search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
+    </div>
+    {viewFile && <FileViewer file={viewFile} onClose={() => setViewFile(null)} />}
+    <StatusBar />
     </div>
   )
 }

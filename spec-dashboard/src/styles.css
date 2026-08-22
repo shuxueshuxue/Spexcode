@@ -49,7 +49,7 @@
   --leading-body: 1.6;
   --line-input: 20px;
   --line-badge: 16px;
-  --line-session-row: 18px;
+  --line-session-row: 18px; --line-status: 22px;
   --tracking-normal: 0;
 }
 
@@ -217,8 +217,100 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.app { display: flex; height: 100vh; }
-.app-main { flex: 1; min-width: 0; display: flex; position: relative; }
+.app-shell { display: flex; flex-direction: column; height: 100vh; }
+.app { flex: 1; min-height: 0; display: flex; }
+.app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+
+/* [[file-tree]] — the left dock. A spec node is a folder, so the tree that navigates the project is the
+   folder tree: the same shape on disk, on the board, and here. */
+.filetree {
+  flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border-right: 1px solid var(--line);
+}
+.ft-head {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 10px; border-bottom: 1px solid var(--line);
+  color: var(--muted); font-size: var(--type-caption); text-transform: uppercase; letter-spacing: var(--tracking-normal);
+}
+.ft-count { color: var(--ink2); }
+.ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
+.ft-row {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
+  background: none; border: 0; cursor: pointer; text-align: left;
+  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink);
+}
+.ft-row:hover { background: color-mix(in srgb, var(--line) 35%, transparent); }
+.ft-row.on { background: color-mix(in srgb, var(--blue) 15%, transparent); color: var(--ink2); }
+.ft-caret { flex: 0 0 8px; color: var(--muted); font-size: var(--type-caption); }
+.ft-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 2px; }
+.ft-dot.ft-none { background: none; }
+.ft-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a governed file and an attachment keep the colours their chips use in the popup, so the same thing looks
+   the same wherever it is listed. */
+.ft-code .ft-label { color: var(--blue); }
+.ft-att .ft-label { color: var(--cyan); }
+.ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+
+/* [[file-tree]]'s viewer layer — a bounded reading window, not a second pane. */
+.legend.fileviewer { width: min(1040px, 92vw); max-height: 86vh; }
+.fileviewer .srcview { margin: 0; }
+.fileviewer .srcview-body { height: min(64vh, 620px); }
+
+/* [[tab-strip]] — the address grammar in the plural. It appears only past one open document, so a reader
+   who never opens a second tab sees the frame the board always had. */
+.tabstrip {
+  flex: 0 0 auto; display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden;
+  background: var(--panel); border-bottom: 1px solid var(--line); scrollbar-width: none;
+}
+.tabstrip::-webkit-scrollbar { height: 0; }
+.tab {
+  display: flex; align-items: center; min-width: 0; max-width: 220px;
+  border-right: 1px solid var(--line); color: var(--muted);
+}
+.tab.on { background: var(--paper); color: var(--ink2); box-shadow: inset 0 2px 0 var(--blue); }
+.tab-face {
+  display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 4px 0 11px; height: 28px;
+  background: none; border: 0; color: inherit; cursor: pointer;
+  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui);
+}
+.tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 2px; }
+.tab-x {
+  display: inline-flex; align-items: center; padding: 0 8px 0 3px; height: 28px;
+  background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
+}
+.tab:hover .tab-x, .tab.on .tab-x { opacity: 1; }
+.tab-x:hover { color: var(--ink2); }
+.tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* [[status-bar]] — a full-width strip, not a floating chip. Numbers are VS Code's, which Zed's 4px padding
+   plus 8px group gap reproduces in visual weight: 22px content box, 12px text, 0 5px per item. */
+.statusbar {
+  flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
+  background: var(--panel); border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: var(--type-control); line-height: var(--line-status); color: var(--ink);
+  overflow: hidden;
+}
+.sb-group { display: flex; align-items: center; min-width: 0; }
+/* the right group renders OUTWARD-IN: appended items land at the outer edge, so a higher priority sits
+   nearer the centre without the contributor computing a position. */
+.sb-right { flex-direction: row-reverse; }
+.sb-left { overflow: hidden; }
+.sb-item {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; max-width: 100%;
+  font-family: var(--mono); font-size: var(--type-control); line-height: var(--line-status); color: inherit;
+  background: none; border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+button.sb-item { cursor: pointer; }
+button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transparent); }
+button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* `kind` is the ONLY colour a contributor may spend — a raw hex cannot re-theme, which is the mistake the
+   node status dots made and the one thing this registry refuses to let a new item repeat. */
+.sb-prominent { color: var(--ink2); font-weight: var(--weight-bold); }
+.sb-info { color: var(--blue); }
+.sb-warning { color: var(--yellow); }
+.sb-error { color: var(--red); }
+.sb-restore { color: var(--muted); }
 
 /* ---- left navigation rail ---- */
 .side-rail {
@@ -279,13 +371,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    while a `moved` overlay is uncommitted. Subtle — it hints at the move without rivalling tree edges. */
 .move-edge .react-flow__edge-path { stroke-linecap: round; }
 
-.hud {
-  position: absolute; top: 16px; left: 18px; z-index: 5;
-  display: flex; flex-direction: row; align-items: center; gap: 8px; pointer-events: none;
-}
 .brand { color: var(--ink2); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); }
-/* the HUD button sits on ONE horizontal line beside the brand (align-items centres it against it). */
-.hud .hud-help { align-self: center; }
 /* discreet `?` affordance — the only HUD hint; opens the full keymap/legend modal. The HUD itself is
    pointer-events:none so the board stays draggable; the button re-enables pointer events for itself. */
 .hud-help {
@@ -298,7 +384,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* Public graph disclosure is a separate static reading surface, placed away from graph stats and the
    HUD. It is intentionally lazy: opening it is the only action that reads release metadata. */
-.public-about-shell { position: absolute; right: 18px; bottom: 14px; z-index: 8; }
+.public-about-shell { position: relative; display: inline-flex; }
 .public-about-trigger {
   display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 9px;
   border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink2);
@@ -362,11 +448,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
 
 .graph-stats {
-  position: absolute; bottom: 14px; left: 18px; z-index: 5;
-  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
-  max-width: calc(100% - 36px); padding: 4px 9px;
-  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 4px 18px rgba(101,123,131,.12);
+  display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
 }
 .bstat-total { font-weight: var(--weight-bold); color: var(--ink); padding-right: 1px; }
@@ -572,6 +654,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .gov-f:hover { border-color: var(--blue); }
 .gov-f.on { background: color-mix(in srgb, var(--blue) 18%, var(--panel2)); border-color: var(--blue); color: var(--ink2); }
 .doc-gov.prose .doc-gov-h { font-style: italic; }
+/* [[node-attachments]] — the rest of the node's folder, sharing the governed-file chip so a reader learns
+   one affordance, not two, for opening what a node holds. */
+.doc-att { margin-top: -8px; }
+.doc-att .gov-f { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 22%, var(--line)); }
+.doc-att .gov-f:hover, .doc-att .gov-f.on { border-color: var(--cyan); }
+.doc-att .gov-f.on { background: color-mix(in srgb, var(--cyan) 16%, var(--panel2)); color: var(--ink2); }
 
 /* [[source-view]]: a governed file opened in place, under the prose that claims it. Bounded height — it is
    a reading window inside the spec pane, never a curtain that buries the body below it. */
@@ -741,11 +829,11 @@ a.scenario-count:hover { background: var(--panel2); }
 /* ---- top-right session window (always-on glance) ---- */
 .sesswin {
   position: absolute; top: 48px; left: 16px; z-index: 6; width: 232px;
-  /* a bounded glance, never a curtain: cap the height at ~80% of the viewport AND keep it clear of
-     the bottom .graph-stats strip — top:48px offset + ~64px reserved for that strip and a gap — so
-     a long session list reveals its overflow by wheel/scrollbar inside the window instead of
-     extending down over the stats bar below. overflow-x stays hidden to keep the rounded corners. */
-  max-height: min(80vh, calc(100vh - 112px));
+  /* a bounded glance, never a curtain: cap the height at ~80% of the viewport so a long session list
+     reveals its overflow by wheel/scrollbar inside the window. It no longer reserves height for a strip
+     below it — the status bar is a sibling of the whole canvas now, not something floating over it.
+     overflow-x stays hidden to keep the rounded corners. */
+  max-height: min(80vh, calc(100vh - 64px));
   background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 22px rgba(101,123,131,.16);
   overflow-y: auto; overflow-x: hidden;

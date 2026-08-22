@@ -41,3 +41,6 @@ graph-changed 在一次 commit 轮次里可发两次，测试的等值断言因�
 ### 复现
 
 在 main 上重复跑 `spec-cli/src/graphStream.api.test.ts`，负载越高越易命中，实测约 1/5–2/7。失败恒定是第一个用例 `backend watcher plateaus and delivers three consecutive ref changes exactly once`。
+
+<!-- reply: ded4b563-50b9-4146-b860-e98e0d073700 @ 2026-08-22T22:12:32.900Z -->
+越会话存续：graph-stream 的 changed 溢报属后端图流 lane，与本次前端重构无涉且未在本会话修复；保持开放待其归属 lane 处理。

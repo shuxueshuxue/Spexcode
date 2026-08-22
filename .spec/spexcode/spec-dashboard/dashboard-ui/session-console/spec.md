@@ -169,8 +169,10 @@ published resource faces selected by the one session object address:
 `#/sessions/<id>?surface=conversation|terminal|diff|resource:<resourceTabKey>`; a bare
 `#/sessions/<id>` resolves the persisted base face. The URL is the only selector and is a pure function of the
 address; only a user gesture may navigate it. There is no in-console resource strip, dialog, or face-switch rail.
-Opening a published resource creates a normal object tab whose identity is the canonical address, dedupes and
-focuses an existing tab, and leaves the terminal tab in the strip. Closing that tab closes the resource view;
+Opening a published resource is an ORDINARY navigation to that address: it lands in the strip's current slot
+like every other plain click, dedupes onto an already-open tab, and mints a tab of its own only from the
+gestures that mint any tab ([[tab-strip]]). It used to force a resident tab, which is exactly the reflex that
+filled the strip with things nobody decided to keep. Closing that tab closes the resource view;
 the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived

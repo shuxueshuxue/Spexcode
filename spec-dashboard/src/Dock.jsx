@@ -3,7 +3,7 @@ import FileTree from './FileTree.jsx'
 import { SessionConsoleTreeRow, useFold } from './SessionWindow.jsx'
 import { sessionForest } from './session.js'
 import { navigate } from './route.js'
-import { requestTab } from './tabs.js'
+import { pinTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { useResizable } from './useResizable.js'
@@ -38,8 +38,10 @@ function SessionDock({ sessions, activeId }) {
               <span>{label}</span><span className="dock-session-count">{item.count}</span>
             </button>
           }
-          // This row is the one place a session is claimed. Plain click reads it, ctrl/⌘ holds it as a tab,
-          // and ⌥ scopes the graph to its worktree — the gesture the retired map-side glance used to own.
+          // This row is the one place a session is claimed. Plain click reads it IN THE CURRENT SLOT — a
+          // session is a document like any other, and tmux holds the terminal state, so nothing is lost
+          // when the slot moves on. Ctrl/⌘ or a double-click holds it as its own tab, and ⌥ scopes the
+          // graph to its worktree — the gesture the retired map-side glance used to own.
           const locked = !!item.s.source && item.s.source === lockedSource
           return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId} selecting={false} picked={new Set()}
             onToggleFold={() => toggle(item.s.id)}
@@ -49,8 +51,9 @@ function SessionDock({ sessions, activeId }) {
               'data-tip': t('dockSessions.rowTip'),
               onClick: (event) => {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
-                ;(event.ctrlKey || event.metaKey ? requestTab : navigate)('sessions', item.s.id)
+                ;(event.ctrlKey || event.metaKey ? pinTab : navigate)('sessions', item.s.id)
               },
+              onDoubleClick: () => pinTab('sessions', item.s.id),
             }} />
         }) : <div className="dock-empty">—</div>}
       </div>

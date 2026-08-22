@@ -24,7 +24,10 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /const requestedSurface = isSessionSurface\(surface\) \? surface : null/)
   assert.match(source, /const activeBaseSurface = terminalFree \|\| readOnlyPane \? SESSION_SURFACE_CONVERSATION : requestedSurface \|\| getSessionBaseSurface\(active\)/)
   assert.doesNotMatch(source, /setSessionBaseSurface\(active, requestedSurface\)/)
-  assert.match(source, /requestTab\('sessions', tab\.sessionId, \{ surface: resourceSurface\(tab\.id\) \}\)/)
+  // opening a resource is an ordinary navigation: it lands in the strip's current slot like every other
+  // plain click, and never mints a tab of its own ([[tab-strip]]).
+  assert.match(source, /navigate\('sessions', tab\.sessionId, \{ query: \{ surface: resourceSurface\(tab\.id\) \} \}\)/)
+  assert.doesNotMatch(source, /requestTab|pinTab/)
   assert.match(source, /const activeResourceId = sessionActive \? requestedResourceId : null/)
   assert.doesNotMatch(source, /role=\{activeResource \? 'dialog'/)
   assert.match(source, /setUnreadResources\(\(unread\) => new Set\(\[\.\.\.unread, \.\.\.added\.map\(\(tab\) => tab\.id\)\]\)\)/)

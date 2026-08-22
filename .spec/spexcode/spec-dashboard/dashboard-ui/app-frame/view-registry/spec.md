@@ -21,10 +21,13 @@ another component's props. That is what dissolved the god component: its size wa
 *ownership* was.
 
 **`document(page, param)` marks an object address [[tab-strip]] may accumulate**, and the strip asks the
-registry rather than keeping its own list. Only parameterized objects are documents: spec/file/session
-(including `/sessions/new`), eval detail, and issue detail. Graph (including its focused node), bare sessions,
-bare evals, and bare issues are finding surfaces and never accumulate. `settings` is a place people bounce
-off, and `empty` is what shows when nothing is held at all — none of those addresses accumulates.
+registry rather than keeping its own list. Only parameterized objects are documents: spec/file/session,
+eval detail, and issue detail. Graph (including its focused node), bare sessions, bare evals, and bare
+issues are whole-page surfaces and never accumulate. **`/sessions/new` was a document and is not one now**:
+it names no session, so the predicate takes the selector's VALUE and not merely its presence — the launch
+page is a form, and the session it starts becomes a document the moment it has an id. `settings` is a place
+people bounce off, and `empty` is what shows when nothing is held at all — none of those addresses
+accumulates.
 
 **A rail destination is not the same thing as an addressable kind.** `spec` and `file` are addresses you
 arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. The rail

@@ -71,8 +71,9 @@ function IssuesView() {
 }
 function SettingsView() { return <Settings /> }
 
-// A tab holds an OBJECT, not a board face. `document(page, param)` therefore receives the route selector:
-// graph and bare list pages are finding surfaces, while only object-shaped addresses enter the working set.
+// A tab holds an OBJECT, not a board face and not a form. `document(page, param)` therefore receives the
+// route selector: graph, bare list pages and the sessions launch page are whole-page surfaces, while only
+// object-shaped addresses enter the working set.
 // `empty` is what the workspace shows when it holds nothing; a tab for it would contradict its own strip.
 export const VIEWS = {
   // `graph` is still registered and still renders at its own address; it is simply no longer anywhere the
@@ -80,7 +81,9 @@ export const VIEWS = {
   graph:    { component: GraphView,    document: false, className: 'view-graph' },
   spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
   file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
-  sessions: { component: SessionsView, document: (_page, param) => param != null, className: 'view-sessions' },
+  // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
+  // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
+  sessions: { component: SessionsView, document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
   evals:    { component: EvalsView,    document: (_page, param) => param != null, className: 'view-evals' },
   issues:   { component: IssuesView,   document: (_page, param) => param != null, className: 'view-issues' },
   settings: { component: SettingsView, document: false, className: 'view-settings' },

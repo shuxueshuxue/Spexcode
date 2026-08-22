@@ -3093,3 +3093,21 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }
 }
+/* branch diff document ([[diff-document]]) */
+.diff-document { display:flex; flex-direction:column; min-height:0; height:100%; overflow:auto; background:var(--paper); color:var(--ink); }
+.diff-toolbar { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:9px; min-height:34px; padding:0 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-toolbar-spacer { flex:1; }
+.diff-file { border-bottom:1px solid var(--line); }
+.diff-file-head { display:flex; width:100%; gap:12px; align-items:center; padding:7px 12px; border:0; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 28%, var(--paper)); color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
+.diff-file-head span { color:var(--muted); }
+.diff-editor { min-height:80px; max-height:58vh; overflow:auto; }
+.diff-editor .cm-line { cursor:pointer; }
+.diff-editor .cm-line:hover { background:color-mix(in srgb, var(--blue) 14%, transparent); }
+.diff-comment { display:flex; align-items:flex-start; gap:10px; padding:7px 14px 7px 58px; border-top:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
+.diff-comment.sent { opacity:.7; }
+.diff-comment-line { color:var(--blue); font-family:var(--mono); white-space:nowrap; }
+.diff-state { padding:24px; color:var(--muted); }
+.diff-state.error { color:var(--red); }
+.diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--paper); box-shadow:0 8px 24px color-mix(in srgb, var(--ink) 20%, transparent); }
+.diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
+.diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }

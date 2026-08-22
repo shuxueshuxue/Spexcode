@@ -2,9 +2,10 @@ import { PROJECT_ID } from './project.js'
 
 export const SESSION_SURFACE_TERMINAL = 'terminal'
 export const SESSION_SURFACE_CONVERSATION = 'conversation'
+export const SESSION_SURFACE_DIFF = 'diff'
 
 const STORAGE_PREFIX = 'spexcode.session-surface.v1'
-const SURFACES = new Set([SESSION_SURFACE_TERMINAL, SESSION_SURFACE_CONVERSATION])
+const SURFACES = new Set([SESSION_SURFACE_TERMINAL, SESSION_SURFACE_CONVERSATION, SESSION_SURFACE_DIFF])
 const listeners = new Set()
 let memoryState = null
 

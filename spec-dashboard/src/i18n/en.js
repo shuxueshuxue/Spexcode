@@ -591,6 +591,7 @@ export default {
   },
 
   session: {
+    menuLabel: 'session actions',
     opsTitle: 'nodes this session is changing — right-click for session actions',
     lockTitle: 'right-click for session actions, including lock on graph',
     newSession: 'New Session',

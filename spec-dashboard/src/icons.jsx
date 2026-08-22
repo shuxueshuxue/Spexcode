@@ -97,10 +97,6 @@ const ICONS = {
   // They are the LAYOUT vocabulary — which side a dock opens — and read as a pair wherever both appear.
   // Only the right context dock ([[context-dock]]'s toggle) draws one today; the mirror stays declared
   // beside it, because half a mirrored pair is a glyph nobody can read the meaning of.
-  'panel-left': {
-    vb: 18, sw: 1.4,
-    node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
-  },
   // A session finding projection: three list rows with status points. It is deliberately not a terminal
   // prompt or a framed panel, so the rail's sessions button has one meaning wherever it appears.
   'session-list': {

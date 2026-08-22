@@ -9,12 +9,11 @@ export { moveTab, placeTab, tabKey }
 // navigation model laid beside it.
 //
 // A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. The strip holds the documents the reader asked it to hold,
-// plus ONE current slot that ordinary navigation lands in and reuses. Every plain click — an explorer row,
-// a dock session row, a board row, a link inside a document — replaces the slot's address; it never grows
-// the strip. Holding is explicit: ctrl/⌘-click, a double-click, or a document's own "open in a new tab"
-// action. That is the whole rule, and it is deliberately independent of WHAT is being opened: the old
-// version fenced replacement to spec/file documents by type, which meant browsing sessions or board rows
-// minted a tab per click and the strip filled with things nobody had decided to keep.
+// plus one current slot per document kind that ordinary navigation lands in and reuses. Every plain click —
+// an explorer row, a dock session row, a board row, a link inside a document — replaces the same-kind slot;
+// an address of another kind gets its own slot rather than evicting a different kind. Holding is explicit:
+// ctrl/⌘-click, a double-click, or a document's own "open in a new tab" action. That is the whole rule, and
+// it keeps the old anti-proliferation guarantee without allowing cross-kind eviction.
 //
 // The split of truth is deliberate and follows what every workspace editor settled on: the OPEN LIST is a
 // local layout preference (it survives reloads, it is not worth putting in a link, and two people opening

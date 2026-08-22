@@ -84,13 +84,12 @@ the strip does not reshuffle under the reader. A tab is born only from this whit
 4. a deep link into a workspace that has no slot yet;
 5. arriving at a RESIDENT address (a singleton board), which is held by what it is rather than by a gesture.
 
-Everything else reuses the slot, **regardless of what kind of document it is**. That last clause is the
-correction. The rule used to be fenced by TYPE — only `spec` and `file` could be replaceable, sessions and
-board details were always resident — and the fence was defended as a capability argument (a type that
-cannot be a preview cannot be displaced). What it actually produced was a strip that filled itself:
-clicking three session rows in the dock left three tabs, and opening any resident document while browsing
-PROMOTED the preview first, so a reader who clicked around had a working set of things nobody decided to
-keep. A protection that mints tabs is not protecting the reader.
+Everything else reuses the unpinned slot **within the route's page kind**. The two human rules sit beside
+each other: "弹新 tab 需用户准许" prevents kind-internal browsing from proliferating tabs, while
+"session 不许被 spec 顶掉 / session→session 原位切换" prevents a different kind from evicting the
+reader's session and keeps same-kind session clicks in place. One-slot-any-kind satisfies the first rule
+only by breaking the second: a spec click can drive out a session. When no unpinned slot exists for the
+requested kind, the address is appended as another unpinned slot for that kind; pinned tabs remain held.
 
 **What replaced the type fence is a smaller pair of guarantees**: a pinned tab is never passively replaced
 (only its own close button removes it), and a session's persisted default face can only ever be a BASE
@@ -101,7 +100,7 @@ why the old fence was buying safety that was never at risk.
 
 | gesture | result |
 | --- | --- |
-| plain click / plain navigation | the slot takes that address (or one slot is opened if none exists) |
+| plain click / plain navigation | that page kind's slot takes the address (or one is opened if none exists) |
 | ctrl/⌘-click | a new pinned tab |
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | close | that tab only; the slot is nothing special to close |
@@ -123,7 +122,7 @@ route, `#/graph`, or the sessions launch page never creates a tab.
 
 **The semantics are a pure function** (`tabModel.js`: `placeTab`, `normalizeTabs`), separate from the hook
 that owns storage and the route subscription. The law above is therefore checkable without a browser, which
-is what the previous version lacked when it drifted: five plain clicks must leave exactly one slot, and a
+is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
 pinned tab must survive them all.
 
 **Identity is the canonical hash.** Two routes that print the same address *are* the same tab, so
@@ -141,9 +140,9 @@ keep in step with the list — the strip renders the array, so moving a tab is o
 persists through the same local storage the open list already uses. Two consequences fall out rather than
 being arranged: the arrangement survives a reload for free, and a drag *changes nothing else* — the active
 document stays active, no address is written, and a release that lands where the tab started writes nothing
-at all. **The slot is not exempt.** It is an ordinary entry that happens to be unpinned, found by that flag
-and never by position, so it may be dragged anywhere and ordinary navigation still lands in it exactly
-where the reader put it.
+at all. **A slot is not exempt.** It is an ordinary entry that happens to be unpinned, found by its kind and
+that flag rather than by position, so it may be dragged anywhere and ordinary navigation still lands in it
+exactly where the reader put it.
 
 The gesture is the workspace's shared pointer drag ([[drag-gesture]]) and it is deliberately not native
 HTML5 drag-and-drop: a tab face is a button, which swallows `dragstart`, and the browser's drop protocol
@@ -158,7 +157,7 @@ the order. Nothing lifts and nothing casts a shadow: the strip stays one plane w
 A horizontal scroller hides the working set behind a gesture — the documents you are holding sit off-screen
 with nothing saying so, which is a strip that has stopped answering the question it exists to answer.
 Wrapping keeps the whole set legible and pays for it in a thickness the reader can see, and the payment is
-self-limiting: the current-slot rule means the strip only grows when someone decides it should, so a tall
+self-limiting: the current-slot-per-kind rule means the strip only grows when someone enters another kind or explicitly holds one, so a tall
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 

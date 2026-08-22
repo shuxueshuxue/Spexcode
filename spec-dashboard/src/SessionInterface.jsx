@@ -1295,7 +1295,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
     commandAvailable, setCommandOpen, closeCommandBox,
   }
-  useEffect(() => {
+  // The console's whole keyboard contract, registered as ONE service scope (priority 10 — above the
+  // shell's globals, below any modal). Consumption is signalled the way the branches always did — via
+  // stopPropagation, which the service reads as consumed. A botched conversion once left this in a
+  // useEffect whose body called onKey(window.event): no listener, no scope, every console key dead.
+  useKeyboardScope((event) => {
     const onKey = (e) => {
       const {
         active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
@@ -1334,7 +1338,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       }
       if (e.key === 'Enter' && !e.shiftKey && !composingKey(e) && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
     }
-    return onKey(event)
+    onKey(event)
+    return event.cancelBubble
   }, 10)
 
   useEffect(() => {

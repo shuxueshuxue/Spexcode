@@ -51,7 +51,7 @@ export default {
     specs: 'Specs',
     files: 'Files',
   },
-  filesTree: {
+  diskTree: {
     loading: 'loading…',
   },
   dockModes: {

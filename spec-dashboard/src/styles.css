@@ -332,7 +332,7 @@ body {
 .ft-code, .ft-dir { text-decoration: none; }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
 
-/* the explorer's two DISCLOSURES ([[files-tree]]): Specs, the spec tree, open by default because it is the
+/* the explorer's two DISCLOSURES ([[disk-tree]]): Specs, the spec tree, open by default because it is the
    explorer's main body; Files, the disk, closed. A head borrows the DOCK HEADER's register exactly — muted
    meta size, the name in --ink2 at medium weight, sentence case — so the sidebar reads as one column with
    a hierarchy in it rather than two panels bolted together. Sentence case is not a detail: an all-caps

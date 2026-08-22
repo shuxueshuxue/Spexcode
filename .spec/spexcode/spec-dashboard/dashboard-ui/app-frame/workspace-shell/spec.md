@@ -41,8 +41,13 @@ whole shell hangs off, re-derived from what the product is rather than from what
   center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
   the reader's own answer.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
-  [[context-dock]]: a spec node's scenarios and open issues, collapsed until asked for. Context is about the
-  current document, which is why it is not a finding surface and not a tab.
+  [[context-dock]]: a spec node's scenarios and open issues. Context is about the current document, which is
+  why it is not a finding surface and not a tab. **The frame owns its resting state, and that state is
+  closed** — the shell reads the preference, so the default belongs here rather than inside the dock that
+  would be arguing for its own existence. It is closed because opening it costs the spec prose 383px of 575
+  at 1440: a question about the document does not get to spend the document's width until it is asked. The
+  toggle rides the tab strip's trailing cluster and the choice persists, so this decides only what an
+  unopinionated window looks like.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content. The frame itself is what fills it: the workspace identity
   and the BOARD TALLIES — spec nodes by state, fresh eval verdicts, open issues, live sessions — are true of

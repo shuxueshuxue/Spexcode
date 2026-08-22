@@ -10,7 +10,7 @@ related:
   - spec-cli/src/source-read.ts
   - spec-cli/src/source-files.ts
   - spec-cli/src/index.ts
-  - spec-dashboard/src/FilesTree.jsx
+  - spec-dashboard/src/DiskTree.jsx
 ---
 # source-list
 

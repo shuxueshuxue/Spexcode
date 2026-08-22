@@ -483,7 +483,8 @@ try {
   await focusedGraphWaiting
   const focusedNode = page.locator('.react-flow__node').filter({ hasText: 'session-console' })
   await focusedNode.waitFor({ state: 'visible', timeout: 45_000 })
-  await focusedNode.dblclick()
+  await focusedNode.click()
+  await page.keyboard.press('i')   // dblclick now opens the document; `i` is the popup's door
   const nodeTimelineWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('view') === 'timeline'
     && url.searchParams.get('q')?.includes('node:session-console') && url.searchParams.get('page') === '1')
   await page.locator('.ov-tab').filter({ hasText: /eval/i }).click()

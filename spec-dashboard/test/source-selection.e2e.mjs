@@ -96,7 +96,8 @@ try {
   await page.goto(`http://127.0.0.1:${uiPort}/#/graph/fixture`, { waitUntil: 'domcontentloaded' })
   const node = page.locator('.react-flow__node.selected')
   await node.waitFor({ state: 'visible', timeout: 90_000 })
-  await node.dblclick()
+  await node.click()
+  await page.keyboard.press('i')   // dblclick now opens the document; `i` is the popup's door
   await page.locator('.gov-f').first().waitFor({ state: 'visible', timeout: 90_000 })
   await page.locator('.gov-f').first().click()
   await page.locator('.srcview .cm-line').nth(1).waitFor({ state: 'visible', timeout: 90_000 })

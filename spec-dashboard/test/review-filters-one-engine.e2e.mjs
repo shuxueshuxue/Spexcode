@@ -160,7 +160,8 @@ await page.reload({ waitUntil: 'domcontentloaded' })
 await settle(1600)
 const nodeCard = page.locator('.react-flow__node').filter({ hasText: NODE }).first()
 await nodeCard.waitFor({ state: 'visible', timeout: 45_000 })
-await nodeCard.dblclick()
+await nodeCard.click()
+await page.keyboard.press('i')   // dblclick now opens the document; `i` is the popup's door
 await page.waitForSelector('.ov-panel')
 const hashAtOpen = await hash()
 

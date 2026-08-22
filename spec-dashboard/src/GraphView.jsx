@@ -544,8 +544,12 @@ function GraphView({ param, query }) {
   // leaves it.
   const onNodeDoubleClick = useCallback((e, n) => {
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    focusNode(n.id); (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', n.id)
-  }, [focusNode])
+    focusNode(n.id)
+    // The sealed public face has no document area — the popup IS its reading surface, so the gesture
+    // keeps its old meaning there.
+    if (graphOnly) setOverlay(true)
+    else (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', n.id)
+  }, [focusNode, graphOnly])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
   // focusing the node first (in place, no pan, same as click) so the menu and the board agree on the target.
@@ -636,6 +640,12 @@ function GraphView({ param, query }) {
         )}
 
         {legend && <Legend onClose={() => setLegend(false)} />}
+
+        {/* the `i`/Enter lens ([[node-popup]]): follows the focus, remounts per node. The surgery that
+            extracted this view once dropped this line entirely while keeping all its key handling — a
+            popup with working keys and no body. */}
+        {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
+          onSelection={graphOnly ? undefined : startFromSelection} onClose={() => setOverlay(false)} />}
       </div>
     </div>
   )

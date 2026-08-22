@@ -26,6 +26,20 @@ export function firesKey(id, key) {
   return keysOf(id).includes(key)
 }
 
+// Chords use physical codes so Option dead-key glyphs and keyboard layouts do not change their meaning.
+export function eventKey(event) {
+  const mods = []
+  if (event.altKey) mods.push('Alt')
+  if (event.ctrlKey) mods.push('Ctrl')
+  if (event.metaKey) mods.push('Meta')
+  if (event.shiftKey) mods.push('Shift')
+  return `${mods.length ? `${mods.join('+')}+` : ''}${event.code || event.key}`
+}
+
+export function firesEvent(id, event) {
+  return keysOf(id).includes(eventKey(event)) || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey(id, event.key))
+}
+
 // save / clear an override. No notify layer: the keydown handler calls keysOf() fresh on every event,
 // and the settings editor re-renders from its own interaction state.
 export function setBinding(id, patch) {

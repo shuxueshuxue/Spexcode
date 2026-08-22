@@ -10,6 +10,7 @@ import {
 } from './IdentityIcon.jsx'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { BoardProvider, WorkspaceProvider } from './workspace.jsx'
+import { KeyboardServiceProvider } from './KeyboardService.jsx'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
@@ -201,10 +202,10 @@ export default function App() {
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {PUBLIC_GRAPH_ONLY
-        ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, boardLive: false, graphOnly: true }}><WorkspaceProvider><Shell /></WorkspaceProvider></BoardProvider>
+      ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, boardLive: false, graphOnly: true }}><KeyboardServiceProvider><WorkspaceProvider><Shell /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>
         : isMobile
         ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
-        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, boardLive, graphOnly: false }}><WorkspaceProvider><Shell /></WorkspaceProvider></BoardProvider>}
+        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, boardLive, graphOnly: false }}><KeyboardServiceProvider><WorkspaceProvider><Shell /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>}
     </Suspense>
   )
 }

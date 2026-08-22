@@ -30,6 +30,7 @@ import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
+import { useKeyboardScope } from './KeyboardService.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -194,7 +195,7 @@ function SessionFiles({ session, onPreview, onDownload, onCopy }) {
   const ready = files.length > 0
 
   useEffect(() => { setOpen(false) }, [session?.id])
-  useEffect(() => {
+  useKeyboardScope((event) => {
     if (!open) return
     const closeOutside = (event) => { if (!filesRef.current?.contains(event.target)) setOpen(false) }
     window.addEventListener('pointerdown', closeOutside)
@@ -1314,9 +1315,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       }
       if (e.key === 'Enter' && !e.shiftKey && !composingKey(e) && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [setSel])
+    return onKey(event)
+  }, 10)
 
   useEffect(() => {
     if (!open) return

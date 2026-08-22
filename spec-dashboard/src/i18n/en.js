@@ -55,6 +55,10 @@ export default {
     explorer: 'Explorer',
     sessions: 'Sessions',
   },
+  dockSessions: {
+    new: 'New Session',
+    archive: 'View all archived sessions',
+  },
   contextDock: {
     title: 'CONTEXT',
     backlinks: 'BACKLINKS',

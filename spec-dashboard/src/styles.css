@@ -288,8 +288,20 @@ body {
 }
 .dock-mode:hover, .dock-mode.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
 .dock-mode-title { margin-left: 5px; font-size: var(--type-caption); text-transform: uppercase; letter-spacing: var(--tracking-normal); }
-.dock-session-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
-.dock-session-body .si-item { padding-left: 8px; padding-right: 8px; }
+.dock-session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 0 0; }
+.dock-session-head { flex: none; display: flex; justify-content: flex-end; padding: 0 7px 4px; }
+.dock-session-new, .dock-session-archive { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--muted); cursor: pointer; font: var(--type-caption)/var(--leading-ui) var(--mono); }
+.dock-session-new { width: 24px; height: 24px; justify-content: center; border: 1px solid var(--line); border-radius: 3px; }
+.dock-session-new:hover, .dock-session-archive:hover { color: var(--blue); background: var(--panel2); }
+.dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.dock-session-list .si-item { padding-left: 8px; padding-right: 8px; }
+.dock-session-zone { display: flex; align-items: center; gap: 5px; width: 100%; padding: 5px 9px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; font: var(--type-caption)/var(--leading-ui) var(--mono); text-align: left; text-transform: uppercase; }
+.dock-session-zone:hover, .dock-session-zone.open { background: var(--panel2); color: var(--ink2); }
+.dock-session-zone-need { color: var(--yellow); }
+.dock-session-zone-run { color: var(--green); }
+.dock-session-zone-archive { color: var(--blue); }
+.dock-session-count { margin-left: auto; }
+.dock-session-archive { flex: none; width: 100%; justify-content: flex-start; padding: 8px 9px; border-top: 1px solid var(--line); }
 .dock-empty { padding: 12px 10px; color: var(--muted); font: var(--type-meta)/var(--leading-ui) var(--mono); }
 
 /* [[file-tree]]'s viewer layer — a bounded reading window, not a second pane. */
@@ -433,7 +445,6 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 }
 .pane-resizer:hover::after, body.is-resizing .pane-resizer::after { background: color-mix(in srgb, var(--blue) 55%, transparent); }
 /* the session board's divider sits in the flex row, straddling the list border via negative margins */
-.si-resizer { flex: 0 0 7px; margin: 0 -3.5px; }
 /* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
 body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-select: none !important; }
 /* React Flow restores pointer events on child layers, so keyboard mode blocks the canvas and descendants. */
@@ -1229,18 +1240,6 @@ a.scenario-count:hover { background: var(--panel2); }
   background: var(--paper); border: none; border-radius: 0;
   overflow: clip; display: flex;   /* clip, not hidden: never a caret-reveal scroll target (see .st-host) */
 }
-.si-list {
-  /* a dense INDEX, not where a title lives — kept narrow so it doesn't steal width from the terminal
-     beside it; full headlines are read on demand per row (the :hover/.on reveal below), not by widening.
-     A persisted wide list yields at the viewport edge: desktop never squeezes the terminal below the toolbar's
-     280px minimum usable lane. */
-  flex: 0 0 204px; border-right: 1px solid var(--line); background: var(--panel);
-  max-width: calc(100% - 280px); min-height: 0; display: flex; flex-direction: column; overflow: hidden;
-}
-.si-list.external-session-controls { max-width: 48px; }
-.external-session-controls .si-toprow { flex-direction: column; align-items: center; padding: 6px 4px; gap: 4px; }
-.external-session-controls .si-pill { width: 30px; }
-.si-board-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);

@@ -65,12 +65,10 @@ toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
-dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
-with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds two equal compact pills above the session rows,
-kept out of the `↑/↓` path down to a session: `＋` New Session and Search, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract). The list is bounded by the routed page's viewport. Its working-board
-region owns the sidebar's only vertical scrollbar when the rows exceed the available height.
+dark terminal, whatever the app theme. The document has one right area that
+**morphs** by what's focused. Search remains available through the shell palette and the existing ⌥+/ binding;
+the sessions dock owns the list's `＋` New Session door. The document is bounded by the routed page's viewport
+and owns the terminal/timeline surface without a second navigation scrollbar.
 
 The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
 when `N` is zero and carries the complete count of closed records. Like offline, its whole header is one keyboard-
@@ -115,9 +113,12 @@ Dropping a working row on the visible archive zone heading instead performs the 
 the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
 close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 
-When [[dock-modes]] supplies the sessions finding list, this document withdraws its duplicate sidebar and
-lets the terminal or timeline occupy the full content width. The console still owns its existing launch,
-archive, drag, rename, and terminal state; the dock is only a read-only finding projection.
+The [[dock-modes]] sessions projection is the desktop's sole session list. This document therefore never
+renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
+the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
+while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
+dock remains read-only: drag-to-reparent and multi-select are explicitly retired with the duplicate list because
+their mutable state cannot belong to a finding projection. The keyboard fresh-session binding remains unchanged.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one

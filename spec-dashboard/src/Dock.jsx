@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import FileTree from './FileTree.jsx'
-import { SessionConsoleTreeRow } from './SessionWindow.jsx'
+import { SessionConsoleTreeRow, useFold } from './SessionWindow.jsx'
+import { sessionForest } from './session.js'
 import { navigate } from './route.js'
 import { requestTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
@@ -10,19 +11,43 @@ import { useResizable } from './useResizable.js'
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
 function SessionDock({ sessions, activeId }) {
-  const rows = useMemo(() => (sessions || []).map((s) => ({
-    type: 'row', s, depth: 0, expandable: false, expanded: false, rollup: null, kin: 0, guides: [],
-  })), [sessions])
+  const t = useT()
+  const { expanded, toggle } = useFold()
+  const [offlineOpen, setOfflineOpen] = useState(false)
+  const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
+    zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
+    keepVisible: (session) => session.id === activeId,
+  }), [sessions, expanded, offlineOpen, activeId])
   return (
     <div className="dock-session-body">
-      {rows.length ? rows.map((item) => (
-        <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId} selecting={false} picked={new Set()}
-          onToggleFold={() => {}}
-          rowProps={{
-            'data-sid': item.s.id,
-            onClick: (event) => (event.ctrlKey || event.metaKey ? requestTab : navigate)('sessions', item.s.id),
-          }} />
-      )) : <div className="dock-empty">—</div>}
+      <div className="dock-session-head">
+        <button type="button" className="dock-session-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
+          onClick={() => navigate('sessions', 'new')}>
+          <Icon name="plus" size={14} />
+        </button>
+      </div>
+      <div className="dock-session-list">
+        {rows.length ? rows.map((item) => {
+          if (item.type === 'zone') {
+            const foldable = item.zone === 'offline'
+            const label = t(`sessionZone.${item.zone}`)
+            return <button key={`zone-${item.zone}`} type="button" className={`dock-session-zone dock-session-zone-${item.zone}${item.folded ? '' : ' open'}`}
+              aria-expanded={foldable ? !item.folded : undefined} onClick={foldable ? () => setOfflineOpen((open) => !open) : undefined}>
+              <span>{label}</span><span className="dock-session-count">{item.count}</span>
+            </button>
+          }
+          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId} selecting={false} picked={new Set()}
+            onToggleFold={() => toggle(item.s.id)}
+            rowProps={{
+              'data-sid': item.s.id,
+              onClick: (event) => (event.ctrlKey || event.metaKey ? requestTab : navigate)('sessions', item.s.id),
+            }} />
+        }) : <div className="dock-empty">—</div>}
+      </div>
+      <button type="button" className="dock-session-archive" data-tip={t('dockSessions.archive')} aria-label={t('dockSessions.archive')}
+        onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
+        <Icon name="archive" size={13} /><span>{t('dockSessions.archive')}</span>
+      </button>
     </div>
   )
 }

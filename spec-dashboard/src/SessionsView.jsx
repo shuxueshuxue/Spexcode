@@ -6,10 +6,10 @@ import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspac
 // [[sessions-view]]: the live console as a view. It kept every behaviour it had; what changed is where its
 // state lives. `sel` used to be held by the component that also held the graph's camera and every other
 // page's props — so opening a session re-rendered the graph. Now it is the view's own.
-export default function SessionsView({ param }) {
+export default function SessionsView({ param, query }) {
   const { specs, sessions, boardLive } = useBoard()
   const { reload } = useBoardApi()
-  const { palette, dockMode } = useWorkspace()
+  const { palette } = useWorkspace()
   const { openPalette, takeCompose } = useWorkspaceApi()
   const [sel, setSel] = useState(() => param || 'new')
   // a board chord may have composed text for this view before it existed; collect it on arrival — in an
@@ -36,7 +36,7 @@ export default function SessionsView({ param }) {
       onOpenSearch={() => openPalette('sessions')}
       boardLive={boardLive}
       reload={reload}
-      externalSessionList={dockMode === 'sessions'}
+      archiveRequested={query?.archive === '1'}
     />
   )
 }

@@ -39,7 +39,8 @@ test('session toolbar keeps Eval docked to the Terminal or Conversation base bef
   const files = source.indexOf('<SessionFiles', actions)
   const surfaceSwitch = source.indexOf('surface-switch', files)
   assert.ok(actions > 0 && actions < files && files < surfaceSwitch, 'commands, Files, and the base-surface switch must share one right-side tool group')
-  assert.match(source, /onClick: \(\) => \{[\s\S]{0,420}selectSession\(s\.id\)/)
+  assert.doesNotMatch(source, /<aside className=\{`si-list/)
+  assert.doesNotMatch(source, /externalSessionList|si-board-scroll|si-resizer/)
   assert.match(source, /activeResource &&[\s\S]{0,240}data-resource-action="refresh"[\s\S]{0,160}refreshResource\(activeResource\)/)
   assert.match(source, /activeResource\?\.kind === 'file'[\s\S]{0,240}data-resource-action="download"[\s\S]{0,220}downloadFile\(activeResource\.sessionId, activeResource\.value\)[\s\S]{0,360}data-resource-action="copy"[\s\S]{0,180}copyFilePath\(activeResource\.value\)/)
   assert.match(source, /icon="x"[\s\S]{0,160}closeResource\(tab\)/)
@@ -125,24 +126,18 @@ test('live offline and archived conversations share one footer with cold input a
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
 })
 
-test('archive is the fourth foldable zone and has no retired sidebar controls', () => {
-  const topStart = source.indexOf('<div className="si-toprow">')
-  const topRow = source.slice(topStart, source.indexOf('</div>', topStart) + 6)
-  assert.equal((topRow.match(/<button /g) || []).length, 2)
-  assert.match(topRow, /si-pill new/)
-  assert.match(topRow, /si-pill search/)
-  assert.doesNotMatch(topRow, /star|shelf|archive/)
-  assert.match(source, /zone: 'archive', count: archivedSessions\.length, folded: !archiveZoneOpen/)
-  assert.match(source, /<SessionZone key=\{`zone-\$\{it\.zone\}`\}/)
-  assert.match(source, /className="si-item si-zone-all" onClick=\{openArchivePage\}/)
-  assert.match(source, /si-zone-all-lead[\s\S]{0,100}Icon name="search" size=\{15\}/)
-  assert.match(source, /si-zone-all-label/)
-  assert.doesNotMatch(source, /si-zone-all-meta/)
-  assert.doesNotMatch(source, /className="si-archive-(?:bar|toggle|preview-row|all)"/)
-  assert.match(css, /\.si-zone-archive\s*\{[^}]*--zh:\s*var\(--blue\)/s)
+test('archive overlay remains document-side while the duplicate session list is gone', () => {
+  assert.match(source, /archiveRequested = false/)
+  assert.match(source, /if \(archiveRequested\) setArchiveIndexOpen\(true\)/)
+  assert.match(source, /<ArchivePage sessions=\{archivedSessions\}/)
+  assert.doesNotMatch(source, /si-list|si-board-scroll|archiveZoneOpen|SessionZone/)
 })
 
-test('session tree drag moves the whole row and can detach a nested session', () => {
+test('session tree drag is explicitly retired with the withdrawn document list', () => {
+  assert.doesNotMatch(source, /sessionDrag|startSessionDrag|\/api\/sessions\/reparent|data-session-root-drop/)
+  assert.doesNotMatch(contextMenu, /onDetach|startSelect|list-checks|corner-up-left/)
+  return
+/*
   assert.match(source, /const \[sessionDrag, setSessionDrag\] = useState\(null\)/)
   assert.match(source, /apiFetch\('\/api\/sessions\/reparent', \{[\s\S]{0,220}children: \[childId\], parent/)
   assert.match(source, /import \{ SessionConsoleTreeRow, SessionZone, useFold \} from '\.\/SessionWindow\.jsx'/)
@@ -170,18 +165,15 @@ test('session tree drag moves the whole row and can detach a nested session', ()
   assert.match(source, /top: sessionDrag\.y - sessionDrag\.offsetY \* SESSION_DRAG_GHOST_SCALE/)
   assert.match(css, /\.si-session-drag-ghost \{[\s\S]{0,520}z-index: 52;[\s\S]{0,520}pointer-events: none; transform: translate\(10px, -8px\) rotate\(-1deg\) scale\(var\(--si-session-drag-ghost-scale\)\); transform-origin: top left;/)
   assert.doesNotMatch(css, /\.si-session-drag-ghost > \.si-item/)
+*/
 })
 
-test('archive index is a transient overlay and archive zone fold is persisted', () => {
-  assert.match(source, /fetch\(apiUrl\('\/api\/sessions\?all=1'\)\)/)
+test('archive index is a transient overlay opened by the dock route door', () => {
+  assert.match(source, /fetch\(apiUrl\('\/api\/sessions\/archive-index'\)\)/)
   assert.match(source, /if \(archiveRequestRef\.current\) return archiveRequestRef\.current/)
-  assert.match(source, /const \[archiveZoneOpen, setArchiveZoneOpen\] = useState\(\(\) =>/)
-  assert.match(source, /localStorage\.getItem\('spex\.archiveZoneOpen'\)/)
-  assert.match(source, /setArchiveZoneOpen\(\(value\) =>/)
   assert.match(source, /const \[archiveIndexOpen, setArchiveIndexOpen\] = useState\(false\)/)
   assert.match(source, /<ArchivePage sessions=\{archivedSessions\}/)
-  assert.match(source, /data-session-archive-zone/)
-  assert.match(source, /zoneBox\.bottom > boardBox\.bottom[\s\S]{0,420}board\.scrollTop \+=/)
+  assert.match(source, /archiveRequested = false/)
   assert.doesNotMatch(source, /active === 'archive'|is-archive|\[\s*'new',\s*'archive'/)
 })
 
@@ -207,7 +199,10 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>\s*<ActionOutcome/)
 })
 
-test('bulk close returns every refusal to the shared action outcome', () => {
+test('bulk close is retired with multi-select', () => {
+  assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|onBulkClosed/)
+  return
+/*
   assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
   assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
@@ -215,9 +210,13 @@ test('bulk close returns every refusal to the shared action outcome', () => {
   assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/close`/)
   assert.doesNotMatch(selectBar, /setConfirming\('archive'\)|\/archive/)
   assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
+*/
 })
 
-test('select mode reuses the whole-row pointer drag', () => {
+test('select mode is retired with multi-select', () => {
+  assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|startSessionDrag|draggable/)
+  return
+/*
   assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
   assert.match(source, /if \(event\.button !== 0\) return/)
   assert.match(source, /onMouseDown: \(e\) => startSessionDrag\(e, s\)/)
@@ -227,6 +226,7 @@ test('select mode reuses the whole-row pointer drag', () => {
   assert.match(css, /\.si-item:has\(> \.si-check\) ~ \.sess-fold-control \{ margin-left: 20px; \}/)
   assert.doesNotMatch(icons, /'grip-vertical':/)
   assert.doesNotMatch(focus, /DRAG_PRESS_TARGETS/)
+*/
 })
 
 test('close remains the only right-click lifecycle removal and asks for confirmation', () => {
@@ -341,7 +341,7 @@ test('toolbar is a fixed compact row with no identity track and stable tool geom
   assert.match(css, /\.si-tool\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*flex:\s*0 0 24px;/s)
   assert.match(css, /\.si-tool:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--sc\);[^}]*outline-offset:\s*1px;/s)
   assert.match(css, /@container \(max-width:\s*390px\)/)
-  assert.match(css, /\.si-list\s*\{[^}]*max-width:\s*calc\(100% - 280px\);/s)
+  assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
 })
 
 assert.ok(here.endsWith('/src/'))

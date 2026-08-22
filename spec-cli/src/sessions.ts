@@ -1099,6 +1099,36 @@ export async function sessionPrompt(id: string): Promise<string | null> {
   catch (e) { if (e instanceof SessionRecordUnusable) return null; throw e }
 }
 
+export type ArchiveSessionIndexRow = {
+  id: string; title: string; label: string; closedAt: string | null; node: string | null
+}
+
+// The archive overlay has no reader for the session model. Keep this projection separate from listSessions so
+// opening it skips the live tmux census, resident adapter probes, and files/web reads, and carries no full prompt bytes.
+export async function listArchivedSessionIndex(): Promise<ArchiveSessionIndexRow[]> {
+  const rows: ArchiveSessionIndexRow[] = []
+  for (const id of listSessionIds()) {
+    let entry: PublicRecordEntry
+    try { entry = readPublicRecordEntry(id) } catch { continue }
+    if (entry.kind !== 'ok') continue
+    const rec = fromRaw(entry.raw)
+    if (!rec.governed || !rec.archived) continue
+    const prompt = readPromptFile(id)
+    const parts = {
+      id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
+      activity: null, note: rec.note, promptPreview: prompt ? oneLinePreview(prompt) : null,
+    }
+    rows.push({
+      id: rec.session,
+      title: deriveTitle(parts),
+      label: deriveLabel(parts),
+      closedAt: rec.closedAt,
+      node: rec.node,
+    })
+  }
+  return rows
+}
+
 // Preserve rows through a transient record-read failure; prune after the store entry disappears.
 const lastKnownSession = new Map<string, Session>()
 

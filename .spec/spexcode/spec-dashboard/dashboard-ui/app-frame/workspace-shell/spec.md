@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/documentActions.jsx
 ---
 # workspace-shell
 
@@ -41,6 +42,20 @@ whole shell hangs off, re-derived from what the product is rather than from what
 A control belongs to the region whose question it answers, and to exactly one owner there — the dock
 toggle sits on the rail with the other finding controls, not on the status bar, however convenient the bar
 was to reach from code.
+
+## Document actions
+
+The tab row's right edge is the shell's **document-actions slot**. It is a registry, not a second navigation
+bar: the active document registers icon actions through [[document-actions]], and the shell renders only the
+entries whose document key is the active route. Switching tabs therefore replaces the actions as one atomic
+projection; a document that registers nothing leaves the slot empty. Registration and state are split like the
+status bar, the registry API is identity-stable, and disposing a registration removes it immediately.
+
+Every action supplies an accessible label and may supply an availability state. An unavailable action remains
+visible when the document owns that capability, is disabled rather than hidden, and uses its exact disabled
+reason as the tooltip. The slot owns no document content, route parsing, or action semantics; it only invokes
+the registered callback and provides the one icon-button chrome for it. A registered popup is positioned by the
+slot's action wrapper, so a document can expose a picker without growing an internal toolbar.
 
 **What it replaced was not a component but a missing layer.** The board used to be one ~710-line component
 that *was* the graph, with every other page hung off it as a hidden pane and every page's state held in

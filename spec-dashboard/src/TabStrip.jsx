@@ -1,10 +1,11 @@
 import { useT } from './i18n/index.jsx'
-import { Icon } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { requestTab, tabKey, useTabs } from './tabs.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR } from './session.js'
 import { getSessionBaseSurface, isSessionSurface, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
+import { useDocumentActions } from './documentActions.jsx'
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -51,10 +52,14 @@ export default function TabStrip({ specs, sessions }) {
   const t = useT()
   const { tabs, activeKey, open, close, closeOthers } = useTabs()
   const { splitTo } = useWorkspaceApi()
+  const actions = useDocumentActions()
   // The strip shows even with one tab: it is where the current document's NAME lives, and chrome that
   // appears only when a second document exists jumps the layout at exactly the moment of the reader's
   // first hold.
   if (!tabs.length) return null
+  const activeActions = [...actions.values()]
+    .filter((action) => action.document === activeKey)
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
   return (
     <div className="tabstrip" role="tablist" aria-label={t('tabs.aria')}>
       {tabs.map((tab) => {
@@ -80,6 +85,24 @@ export default function TabStrip({ specs, sessions }) {
           </div>
         )
       })}
+      {activeActions.length > 0 && (
+        <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
+          {activeActions.map((action) => {
+            const label = action.disabled ? (action.disabledReason || action.label) : action.label
+            return (
+              <div key={action.key || `${action.document}:${action.id}`} className="document-action">
+                <IconButton icon={action.icon} size={14} label={label}
+                  className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
+                  data-action={action.id}
+                  aria-pressed={action.pressed}
+                  disabled={action.disabled}
+                  onClick={action.onClick} />
+                {action.menu}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -96,3 +96,7 @@ names nothing is still the address the reader typed, and blanking it would hide 
 
 **Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
 the second pane. The strip only names the gesture; the pane is workspace state, not a tab.
+
+The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
+not another navigation surface: changing tabs changes the registered buttons, and a document with no registered
+actions leaves the edge blank.

@@ -69,6 +69,24 @@ function parseParts(body: string): SpecParts | null {
   return { rawSource: t(acc.rawSource), expandedSpec: t(acc.expandedSpec) }
 }
 
+// the `[[id]]` reference grammar as a spec BODY writes it — ONE reader, shared by the lint rule that
+// rejects a dangling reference and the projection that ships the surviving ones. A second regex would let
+// the two disagree about what counts as a reference, which is exactly the disagreement the mention rule
+// exists to catch. Prose only: a fenced block or an inline `code span` is sample text (`[[node]]`,
+// `[[<id>]]` placeholders live there), not a reference. Distinct, in first-appearance order; whether a name
+// resolves to a real node is the caller's judgement — lint reports the miss, the projection drops it.
+const MENTION_RE = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/gu
+export function bodyMentions(body: string): string[] {
+  const out = new Set<string>()
+  let inFence = false
+  for (const rawLine of body.split('\n')) {
+    if (/^\s*```/.test(rawLine)) { inFence = !inFence; continue }
+    if (inFence) continue
+    for (const m of rawLine.replace(/`[^`]*`/g, '').matchAll(MENTION_RE)) out.add(m[1])
+  }
+  return [...out]
+}
+
 export type DerivedStatus = 'pending' | 'active' | 'merged' | 'drift'
 
 export function deriveStatus(d: { version: number; drift: number; hasOverlay?: boolean; hasCode?: boolean; fmStatus?: string }): DerivedStatus {
@@ -265,6 +283,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       options.drift === null ? Promise.resolve(null) : options.drift ?? driftIndex(root, tip),
     ])
   const [[idx, didx], allRaws] = await Promise.all([indexes, rawsAsync(root, tip, options.snapshot)])
+  const nodeIds = new Set(allRaws.map((r) => r.id))
   const prepared = allRaws.map((r) => ({
     r,
     h: idx ? rowsFor(idx, r.relPath) : [],
@@ -339,6 +358,11 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       relatedEntries,
       relatedScoped,
       relationProblems,
+      // the node ids this body REFERENCES ([[id]] prose links), resolved against the same universe every
+      // other id surface resolves and with self dropped — a node naming itself is not an edge. It is
+      // derived in the pass that already holds the body, so no consumer has to fetch prose to learn the
+      // edge; it stays a list of ids, never the prose it came from.
+      mentions: bodyMentions(r.body).filter((id) => id !== r.id && nodeIds.has(id)),
       version: h.length,
       reason: h[0]?.reason || '',
       // ISO date of the node's latest version commit (h is newest-first), or null if unversioned.

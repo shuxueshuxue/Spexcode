@@ -23,11 +23,15 @@ the second pane is an independently held document.
 The dock exists only for `#/spec/<id>`. Other route kinds have no context projection, so they render no dock
 and no empty placeholder. A node document gets two independently collapsible panels:
 
-- **BACKLINKS** lists board nodes whose existing hierarchy or `related` edge points at the current node. It
-  is derived from the board's resident `specs` projection, the same parent/relationship source the graph and
-  file tree already use; it does not introduce a content fetch or a second edge store. Each row is a real
-  `#/spec/<id>` anchor, so ordinary navigation, middle-click, and browser history keep their existing
-  meaning.
+- **BACKLINKS** lists board nodes that point at the current node: one whose spec body MENTIONS it (`[[id]]`
+  prose, the board's `mentions` projection) and one whose hierarchy parents to it, as one deduplicated list.
+  Those are the two edges that name a NODE. `related:` was matched here once and was dead by construction —
+  its entries are file paths, never node ids, so the comparison could not match and the panel showed
+  children only while its own contract claimed references too. The rows are still derived from the board's
+  resident `specs` projection; they do not introduce a content fetch or a second edge store, because the
+  mention edge arrives already resolved on the node rather than as prose to re-parse in the browser. Each
+  row is a real `#/spec/<id>` anchor, so ordinary navigation, middle-click, and browser history keep their
+  existing meaning.
 - **SCENARIOS** joins the current node's declared scenario names with the latest result rows from the shared
   eval review projection. The join uses `scenarioStates` and the existing score badge vocabulary. Each row
   is a real `#/evals/<node>/<scenario>` anchor. An unmeasured declaration remains visible with the missing

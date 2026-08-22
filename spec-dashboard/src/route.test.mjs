@@ -17,6 +17,14 @@ test('parseRoute splits path and query inside the hash', () => {
   assert.deepEqual(parseRoute('#/nope'), { page: 'graph', param: null, query: {} })
 })
 
+// the empty workspace is an address ([[tab-strip]]): it can be landed on, reloaded and left. It names no
+// object, so like settings it never carries a selector.
+test('parseRoute knows the empty workspace and gives it no selector', () => {
+  assert.deepEqual(parseRoute('#/empty'), { page: 'empty', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/empty/anything'), { page: 'empty', param: null, query: {} })
+  assert.equal(routeHash('empty'), '#/empty')
+})
+
 test('routeHash round-trips through parseRoute, q leading and the rest sorted', () => {
   const h = routeHash('evals', 'node-a/scenario b', { q: 'state:reviewed' })
   assert.equal(h, '#/evals/node-a/scenario%20b?q=state%3Areviewed')

@@ -36,6 +36,14 @@ version. Every other `Spec-OK` commit acknowledges only itself, never older debt
 self-only even when an `ours` strategy leaves its first-parent tree unchanged, because it introduces new
 reachable history.
 
+**A body reference is an edge, and the loader resolves it here.** A node's `mentions` are the distinct node
+ids its own prose names with `[[id]]`, minus itself, minus every name that resolves to nothing — read by the
+shared `bodyMentions` parser in the same pass that already holds the body, against the same minted universe
+([[id-url-safe]]) every other id surface resolves. It is derived like every other observable above: no
+stored edge list, no second index, nothing to fall out of date with the prose. The frontmatter relations are
+a different axis and stay one — `code:`/`related:` claim FILE paths, so neither can name a node, and a
+consumer that wants "what points at this node" reads `mentions` plus hierarchy, never a relation list.
+
 An explicit local commit candidate is the one exception to the filesystem content source: lint reads raw
 specs and governed current content from that candidate's immutable tree and derives both indices at the
 same candidate tip. This keeps `commit --only`, partial staging and linked-worktree commits honest; an

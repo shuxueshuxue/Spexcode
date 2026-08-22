@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
-import { loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
+import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { readJsonConfig } from '@spexcode/spec-core'
 import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
@@ -293,20 +293,15 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
 
   // mention: a `[[id]]` in a body must name a real node (ERROR — a dangling mention is a broken edge in
   // the very graph the tree exists to keep honest). Checked against the SAME minted ids every other
-  // surface resolves ([[id-url-safe]]). Prose only: a fenced block or inline `code span` is sample text
-  // (`[[node]]`, `[[<id>]]` placeholders live there), not a reference.
+  // surface resolves ([[id-url-safe]]). The body reader is `bodyMentions`, shared with the projection that
+  // ships the resolving mentions as edges — including its judgement of what is prose and what is sample
+  // text — so the references lint rejects and the references the graph draws can never be different sets.
+  // One finding per distinct dangling name: a name repeated in one body is still one broken edge.
   const idSet = new Set(specs.map((s) => s.id))
-  const MENTION_RE = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/gu
   for (const s of specs) {
-    let inFence = false
-    for (const rawLine of s.body.split('\n')) {
-      if (/^\s*```/.test(rawLine)) { inFence = !inFence; continue }
-      if (inFence) continue
-      const line = rawLine.replace(/`[^`]*`/g, '')
-      for (const m of line.matchAll(MENTION_RE)) {
-        if (!idSet.has(m[1]))
-          out.push({ level: 'error', rule: 'mention', spec: s.id, msg: `'${s.id}' mentions [[${m[1]}]] — no such node; retarget or drop it (backtick it if it is sample text)` })
-      }
+    for (const id of bodyMentions(s.body)) {
+      if (!idSet.has(id))
+        out.push({ level: 'error', rule: 'mention', spec: s.id, msg: `'${s.id}' mentions [[${id}]] — no such node; retarget or drop it (backtick it if it is sample text)` })
     }
   }
 

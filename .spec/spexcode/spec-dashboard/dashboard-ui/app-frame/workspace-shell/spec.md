@@ -147,10 +147,23 @@ it, which the console already did for its own list.
 The SECOND pane is not a pool: it holds one document the reader deliberately sent there, so keying it on
 the address is the whole contract.
 
-Measured with six documents mounted (`test/keep-alive.e2e.mjs`): every warm switch under 0.2s, a document's
-own DOM node surviving a round trip through two other tabs, and **0.012 seconds of script per 10 idle
-seconds** — 0.021s with a live session console hidden among them, whose cost is terminal output arriving
-rather than the pool.
+Measured with six documents mounted (`test/keep-alive.e2e.mjs`): a document's own DOM node survives a round
+trip through two other tabs, warm switches between flowing documents land at **0.03–0.12s**, and the pool
+costs **0.019 seconds of script per 10 idle seconds** — 0.028s with a live session console hidden among
+them, whose cost is terminal output arriving rather than the pool.
+
+**The return to the session console is the measured exception, and it is the console's DOM rather than the
+pool's hiding.** That switch costs about **0.5s** against the 0.25s the others meet, and the long task
+inside it is laying out the console's terminal rows the moment they are rendered again — the probe counts
+**~4,500 row elements** across the console's warm layers, so the cost scales with how much terminal a reader
+has accumulated, not with the pool. Three hidden states were measured against exactly that switch and none
+of them moved it, which is the useful result: `display:none` pays ~0.5s on return; keeping the box laid out
+(`position:absolute` + `visibility:hidden`, the pattern the console uses internally) pays ~0.31s on EVERY
+switch instead, because the dock's width follows the focused tab so the box changes size while hidden and
+re-lays those rows out each time; `content-visibility:hidden` restores the other switches but still pays
+~0.37s on return. A property that takes a subtree out of rendering cannot make rendering it again cheap.
+So the pool keeps `display:none` — the cheapest of the three everywhere it differs — and the residual belongs
+to [[session-console]]'s warm-layer contract, where the row count is decided.
 
 **A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
 error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split

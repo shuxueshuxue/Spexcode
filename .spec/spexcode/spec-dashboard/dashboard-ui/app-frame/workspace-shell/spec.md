@@ -42,6 +42,15 @@ its camera and expansion are the workspace's home state rather than one address'
 that is not built is shut more firmly than a door that closes itself, which is why that face no longer
 redirects away from live addresses — it never renders one.
 
+**Two views at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second view
+is a second route and a place to put it; not one view changed to make it possible, because a view was
+already receiving its route rather than reading it. The second pane is workspace state, true of the window
+rather than of either document in it, and it survives a reload like the dock does. A reader sends a
+document right by alt-clicking its tab: they are already pointing at the document they mean, so the gesture
+asks for no new vocabulary and no new surface.
+
+Measured with two live spec documents open: 0.02 seconds of script per 10 idle seconds.
+
 **The palette is the shell's**, not a view's, because it floats above whichever view is showing; a hidden
 view must never be able to swallow it. The dock toggle and the project identity are the shell's for the
 same reason: they are true of the window, not of what it currently displays.

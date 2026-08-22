@@ -9,6 +9,8 @@ import { useRoute, navigate } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor } from './views.jsx'
+import { useResizable } from './useResizable.js'
+import { Icon } from './icons.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -53,6 +55,30 @@ function ShellStatus() {
   return null
 }
 
+// One view, or two. The second is a second route and a place to put it — nothing in any view changes,
+// because a view was already receiving its route rather than reading it. That is the whole return on the
+// hinge: two-up stopped being a rewrite and became a layout.
+function Content({ page, param, query }) {
+  const t = useT()
+  const { split } = useWorkspace()
+  const { closeSplit } = useWorkspaceApi()
+  const [width, onDrag, reset] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
+  if (!split) return <ViewHost page={page} param={param} query={query} />
+  return (
+    <div className="content-split">
+      <ViewHost page={page} param={param} query={query} />
+      <div className="content-divider" onMouseDown={onDrag} onDoubleClick={reset}
+        role="separator" aria-orientation="vertical" />
+      <div className="content-second" style={{ width }}>
+        <button type="button" className="content-close" onClick={closeSplit} aria-label={t('tabs.close')}>
+          <Icon name="x" size={12} />
+        </button>
+        <ViewHost page={split.page} param={split.param} query={split.query} />
+      </div>
+    </div>
+  )
+}
+
 export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
@@ -80,7 +106,7 @@ export default function Shell() {
         {dock && <FileTree specs={specs} focusId={page === 'spec' ? param : null} />}
         <div className="app-main">
           <TabStrip specs={specs} sessions={sessions} />
-          <ViewHost page={page} param={param} query={query} />
+          <Content page={page} param={param} query={query} />
         </div>
       </div>
       <ShellStatus />

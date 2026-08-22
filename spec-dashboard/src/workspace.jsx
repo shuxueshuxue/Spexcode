@@ -28,10 +28,11 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 
 // ---------------------------------------------------------------------------------------------------
 
-const WorkspaceState = createContext(null)  // { dock, palette }
-const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, compose, takeCompose }
+const WorkspaceState = createContext(null)  // { dock, palette, split }
+const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, splitTo, closeSplit }
 
 const DOCK_KEY = 'spexcode.dock'
+const SPLIT_KEY = 'spexcode.split'
 
 export function WorkspaceProvider({ children }) {
   const [dock, setDockState] = useState(() => {
@@ -40,6 +41,13 @@ export function WorkspaceProvider({ children }) {
   // The search palette floats above whichever view is showing, so it is the shell's, not a view's. A view
   // that wants it says so; it does not own it, and a view being hidden can never swallow it.
   const [palette, setPalette] = useState(null)   // null | 'nodes' | 'sessions'
+  // The SECOND view. Two documents at once was the thing the old shape could not express at any price: every
+  // page read the global address, so there was only ever one answer to "what is showing". Now a view is
+  // handed its route, so a second one is a second route and a place to put it — a layout change, not a
+  // rewrite. It is workspace state because it is true of the window, not of either document in it.
+  const [split, setSplitState] = useState(() => {
+    try { const raw = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return raw?.page ? raw : null } catch { return null }
+  })
   // A one-shot handoff between views: a board chord composes text that the sessions view should open with.
   // It lives here rather than in either view because neither should have to be mounted for the other to
   // hand it something. A ref, not state — writing it must not re-render the shell.
@@ -55,9 +63,18 @@ export function WorkspaceProvider({ children }) {
     closePalette: () => setPalette(null),
     setCompose: (text) => { compose.current = text },
     takeCompose: () => { const t = compose.current; compose.current = null; return t },
+    splitTo: (route) => setSplitState(() => {
+      const next = route?.page ? { page: route.page, param: route.param ?? null, query: route.query ?? null } : null
+      try { localStorage.setItem(SPLIT_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+      return next
+    }),
+    closeSplit: () => setSplitState(() => {
+      try { localStorage.removeItem(SPLIT_KEY) } catch { /* private mode */ }
+      return null
+    }),
   }), [])
 
-  const state = useMemo(() => ({ dock, palette }), [dock, palette])
+  const state = useMemo(() => ({ dock, palette, split }), [dock, palette, split])
   return (
     <WorkspaceApi.Provider value={api}>
       <WorkspaceState.Provider value={state}>{children}</WorkspaceState.Provider>

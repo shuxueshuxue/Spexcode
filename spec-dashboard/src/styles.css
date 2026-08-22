@@ -262,6 +262,16 @@ body {
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
+/* two views at once. The divider is the shared resizable primitive every other pane uses. */
+.content-split { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.content-split > .viewhost { flex: 1; min-width: 0; }
+.content-divider { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .55; }
+.content-divider:hover { opacity: 1; background: var(--blue); }
+.content-second { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; position: relative; border-left: 1px solid var(--line); }
+.content-second > .viewhost { flex: 1; min-height: 0; }
+.content-close { position: absolute; top: 4px; right: 6px; z-index: 3; display: inline-flex; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; color: var(--muted); cursor: pointer; }
+.content-close:hover { color: var(--ink2); border-color: var(--blue); }
+
 /* [[spec-view]] — the document: prose on the left, the code it governs on the right, both on open. */
 .specview { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .specview-prose { flex: 1; min-width: 0; overflow: auto; padding: 0 4px 0 0; scrollbar-gutter: stable; }

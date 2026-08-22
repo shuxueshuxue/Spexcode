@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
@@ -12,6 +12,7 @@ import { useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
+import ContextDock from './ContextDock.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -80,12 +81,28 @@ function Content({ page, param, query }) {
   )
 }
 
+function ContextToggle({ visible, onToggle }) {
+  const t = useT()
+  return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
+    aria-label={t(visible ? 'contextDock.close' : 'contextDock.open')} data-tip={t(visible ? 'contextDock.close' : 'contextDock.open')}>
+    <Icon name="panel-right" size={14} />
+  </button>
+}
+
 export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
   const { dock, palette } = useWorkspace()
   const { closePalette } = useWorkspaceApi()
+  const [contextOpen, setContextOpen] = useState(() => {
+    try { return localStorage.getItem('spexcode.ctxOpen') !== '0' } catch { return true }
+  })
+  const toggleContext = () => setContextOpen((value) => {
+    const next = !value
+    try { localStorage.setItem('spexcode.ctxOpen', next ? '1' : '0') } catch {}
+    return next
+  })
 
   // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.
   if (graphOnly) {
@@ -110,9 +127,12 @@ export default function Shell() {
           </ViewErrorBoundary>
         )}
         <div className="app-main">
-          <TabStrip specs={specs} sessions={sessions} />
+          <div className="app-main-top"><TabStrip specs={specs} sessions={sessions} />
+            {page === 'spec' && <ContextToggle visible={contextOpen} onToggle={toggleContext} />}
+          </div>
           <Content page={page} param={param} query={query} />
         </div>
+        <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
       </div>
       <ShellStatus />
       <StatusBar />

@@ -80,7 +80,7 @@ default with its fold choice persisted locally. When open it shows the newest
 closed rows (bounded to a small fixed number so it cannot drown the working list), then one `View all N` row. The
 closed rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
 Conversation. `View all N` is a keyboard-reachable button that follows the same row geometry, ink, bottom rule, and
-hover wash as a session row, with its `›` in the right-side status-marker column; it has no selected state. Dropping
+hover wash as a session row, with the shared search glyph in the nesting-lead column; it has no selected state. Dropping
 a working row on the visible archive heading performs the one reversible close transition without confirmation.
 While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
 sidebar still owns exactly one scroll container.

@@ -20,6 +20,9 @@ needs **zero** desktop-specific code.
 and window load work: the window loads first try in about two seconds, and the load retry never fires. The two
 spike failures are now repaired by selecting the existing gateway origin and adding Linux process containment.
 
+The dashboard proof used a one-node demo project, so the real project's roughly 90-second cold `/api/graph` build
+was not covered; a long initial "loading specs from git…" state is graph cost, not a desktop-shell defect.
+
 **Which origin serves the dashboard was got wrong, and the correction is not a detail.** `spex serve`'s `/`
 is a plain-text index of API routes; the backend serves no static bundle, so a shell pointed at it renders a
 line of text where a board should be. The dashboard dist is served by the **gateway** — `spex serve ui`, and

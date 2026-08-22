@@ -101,6 +101,12 @@ Close retains that record as the one archived session source and records its `cl
 the same atomic record publication. The public projection carries the timestamp without a timeline read, so a
 complete archive index remains proportional only to record count. Older archived records with no timestamp project
 `null`; creation time, manual sort order, and filesystem metadata never impersonate the missing close fact.
+Close preserves its ordering fence: dirty work is committed to `refs/spex-archive/<id>` before the worktree is
+touched. Once that ref and the archived record are published, the linked tree is atomically renamed on the same
+volume from `.worktrees/<name>` into `.worktrees/.trash/wt-<epoch>-<nonce>`, then `git worktree prune` invalidates
+the old registration. The close path never recursively removes the renamed tree. A process-local serial reaper
+does that work asynchronously; it scans `.trash` when the backend starts so a crash leaves a retryable residue.
+Each removal failure is logged with its path and retained for the next startup rather than being swallowed.
 The archive index has its own lean projection, following [[graph-lean]]'s summary-first pattern: one archived-only
 read returns only `id`, visible `title`, stable search `label`, `closedAt`, and `node`. It never enumerates live
 rows, reads the prompt into a public object, or carries files, web resources, notes, or lifecycle state; id-addressed

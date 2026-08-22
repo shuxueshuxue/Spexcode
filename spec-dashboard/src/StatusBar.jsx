@@ -19,8 +19,15 @@ import { useT } from './i18n/index.jsx'
 //     different order can never shuffle the bar.
 //   · visibility is a set the USER owns, keyed by id and stored outside the item, so hiding a readout is
 //     not a negotiation with whoever contributed it.
+//
+// @@@ two contexts, not one - the WRITE api is stable forever; the READ state changes on every
+// registration. Putting both in one value made the api's identity change whenever any item registered,
+// which put every registrant's effect back in the queue, which registered again: an unbounded render loop
+// that pinned a core and grew memory for as long as the tab stayed open. A registry whose api identity
+// changes with its contents cannot be depended on by the things it registers.
 
-const StatusContext = createContext(null)
+const StatusApi = createContext(null)      // { register, dispose, toggleHidden } — identity never changes
+const StatusState = createContext(null)    // { items, hidden } — changes freely; only the bar reads it
 const HIDDEN_KEY = 'spexcode.statusHidden'
 
 const readHidden = () => {
@@ -32,15 +39,26 @@ const readHidden = () => {
 // the bar is a pure function of what is registered.
 const order = (a, b) => (b.priority - a.priority) || (hash(b.id) - hash(a.id)) || (a.id < b.id ? -1 : 1)
 
+// what actually changes the rendered item. A fresh `node` element every paint must not count as a change,
+// or the bar would re-render itself for as long as its contributor keeps painting.
+const itemKey = (i) => i && `${i.id}|${i.side}|${i.priority}|${i.kind ?? ''}|${typeof i.text === 'string' ? i.text : ''}|${i.tooltip ?? ''}`
+
 export function StatusBarProvider({ children }) {
   const [items, setItems] = useState(() => new Map())
   const [hidden, setHidden] = useState(readHidden)
 
   const register = useCallback((item) => {
-    setItems((prev) => new Map(prev).set(item.id, item))
+    setItems((prev) => {
+      // Identical re-registration is a no-op on the STATE, so a contributor that re-renders does not make
+      // the bar re-render. Belt as well as braces: the stable api already stops the loop, and this stops
+      // the churn.
+      const before = prev.get(item.id)
+      if (before && itemKey(before) === itemKey(item) && before.node === item.node && before.onClick === item.onClick) return prev
+      return new Map(prev).set(item.id, item)
+    })
   }, [])
   const dispose = useCallback((id) => {
-    setItems((prev) => { const next = new Map(prev); next.delete(id); return next })
+    setItems((prev) => (prev.has(id) ? (() => { const next = new Map(prev); next.delete(id); return next })() : prev))
   }, [])
   const toggleHidden = useCallback((id) => {
     setHidden((prev) => {
@@ -51,31 +69,44 @@ export function StatusBarProvider({ children }) {
     })
   }, [])
 
-  const value = useMemo(() => ({ items, hidden, register, dispose, toggleHidden }), [items, hidden, register, dispose, toggleHidden])
-  return <StatusContext.Provider value={value}>{children}</StatusContext.Provider>
+  // deliberately NOT memoised on items/hidden: these three are stable for the provider's whole life, which
+  // is the property every registrant depends on.
+  const api = useMemo(() => ({ register, dispose, toggleHidden }), [register, dispose, toggleHidden])
+  const state = useMemo(() => ({ items, hidden }), [items, hidden])
+  return (
+    <StatusApi.Provider value={api}>
+      <StatusState.Provider value={state}>{children}</StatusState.Provider>
+    </StatusApi.Provider>
+  )
 }
 
-// Register one item for as long as the caller is mounted. The item is re-registered whenever its own fields
-// change, so a contributor updates by re-rendering — there is no imperative update handle to keep in sync
-// with React's own. Outside a provider this is a no-op, which is what keeps the phone face and the static
-// public build from needing a bar they do not draw.
+// Register one item for as long as the caller is mounted. It re-registers only when its own rendered
+// fields change — never because some other item registered. Outside a provider this is a no-op, which is
+// what keeps the phone face and the static public build from needing a bar they do not draw.
 export function useStatusItem(item) {
-  const ctx = useContext(StatusContext)
+  const api = useContext(StatusApi)
   const { id } = item || {}
   const latest = useRef(item)
   latest.current = item
-  // the fields that change the RENDERED item; a new `node` element each paint must not re-register.
-  const key = item ? `${item.id}|${item.side}|${item.priority}|${item.kind ?? ''}|${item.text ?? ''}|${item.tooltip ?? ''}` : null
+  const key = itemKey(item)
   useEffect(() => {
-    if (!ctx || !id) return undefined
-    ctx.register(latest.current)
-    return () => ctx.dispose(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx, id, key])
+    if (!api || !id) return undefined
+    api.register(latest.current)
+    return () => api.dispose(id)
+  }, [api, id, key])
+  // a node-bearing item still needs its node refreshed when the node changes, without the identity churn
+  // of putting an element in the dependency list: register again only when the element actually differs.
+  const lastNode = useRef(item?.node)
+  useEffect(() => {
+    if (!api || !id) return
+    if (lastNode.current !== latest.current?.node) {
+      lastNode.current = latest.current?.node
+      api.register(latest.current)
+    }
+  })
 }
 
-function StatusItem({ item, hidden, onToggleHidden }) {
-  const t = useT()
+function StatusItem({ item, onToggleHidden }) {
   const cls = `sb-item${item.kind && item.kind !== 'standard' ? ` sb-${item.kind}` : ''}${item.onClick ? ' sb-act' : ''}`
   const body = item.node ?? item.text
   const common = {
@@ -83,7 +114,6 @@ function StatusItem({ item, hidden, onToggleHidden }) {
     'data-tip': item.tooltip || undefined,
     // right-click hides — the user owns visibility, and the contributor is never asked.
     onContextMenu: (e) => { e.preventDefault(); onToggleHidden(item.id) },
-    title: hidden ? t('statusBar.hidden') : undefined,
   }
   return item.onClick
     ? <button type="button" {...common} onClick={item.onClick}>{body}</button>
@@ -91,23 +121,24 @@ function StatusItem({ item, hidden, onToggleHidden }) {
 }
 
 export default function StatusBar() {
-  const ctx = useContext(StatusContext)
+  const api = useContext(StatusApi)
+  const state = useContext(StatusState)
   const t = useT()
-  if (!ctx) return null
-  const all = [...ctx.items.values()].filter((i) => !ctx.hidden.has(i.id))
+  if (!api || !state) return null
+  const all = [...state.items.values()].filter((i) => !state.hidden.has(i.id))
   const left = all.filter((i) => i.side !== 'right').sort(order)
   const right = all.filter((i) => i.side === 'right').sort(order)
-  const hiddenCount = ctx.items.size - all.length
+  const hiddenCount = state.items.size - all.length
   return (
     <footer className="statusbar" role="status">
       <div className="sb-group sb-left">
-        {left.map((i) => <StatusItem key={i.id} item={i} onToggleHidden={ctx.toggleHidden} />)}
+        {left.map((i) => <StatusItem key={i.id} item={i} onToggleHidden={api.toggleHidden} />)}
       </div>
       <div className="sb-group sb-right">
-        {right.map((i) => <StatusItem key={i.id} item={i} onToggleHidden={ctx.toggleHidden} />)}
+        {right.map((i) => <StatusItem key={i.id} item={i} onToggleHidden={api.toggleHidden} />)}
         {hiddenCount > 0 && (
           <button type="button" className="sb-item sb-restore" data-tip={t('statusBar.restore')}
-            onClick={() => [...ctx.items.keys()].filter((id) => ctx.hidden.has(id)).forEach(ctx.toggleHidden)}>
+            onClick={() => [...state.items.keys()].filter((id) => state.hidden.has(id)).forEach(api.toggleHidden)}>
             +{hiddenCount}
           </button>
         )}

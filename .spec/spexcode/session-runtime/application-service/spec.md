@@ -36,6 +36,10 @@ binding generation fence. A stale generation fails loudly.
 The original `notifyRecipients` and `attachAndNotify` operations remain as small protocol/topology-only helpers for
 callers that do not use lifecycle state. They share the same transaction boundary but do not claim a state event.
 
+The package entry also exposes the pure `jsonMigrationFencePath(recordsRoot)` path helper. It is shared by the
+one-time importer and the legacy writer gate so both sides name exactly the same durable cutover fence; it does not
+open a database, read session state, or provide a compatibility path.
+
 State events use the closed `session.state.changed.v1` envelope with JSON payload bytes, including the lifecycle
 proposal and note fields. Replay folds the append-only
 event stream on restart and validates sequence gaps and unknown required event types through [[session-events]].

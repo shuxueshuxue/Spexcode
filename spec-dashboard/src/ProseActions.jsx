@@ -75,6 +75,13 @@ export default function ProseActions({ node, hostRef }) {
   const dismiss = useCallback(() => { setPanel(null); setError(null); setBusy(false) }, [])
   const clear = useCallback(() => { setHit(null); dismiss() }, [dismiss])
 
+  // An open card FREEZES the passage it was opened on. The cards are rendered inside the prose pane, so
+  // clicking into the message box is a press inside the tracked host and the browser drops the document
+  // selection the moment the caret lands in a textarea — tracking through that would pull the passage out
+  // from under the card mid-sentence. Read through a ref so the listeners below stay registered once.
+  const frozen = useRef(false)
+  frozen.current = !!panel
+
   // WHERE THE LINE NUMBERS COME FROM. The renderer stamped each block with its body lines
   // ([[prose-selection]]); a selection is read back through those stamps on mouse-up, never by measuring
   // text. No stamps under the selection (the title, the meta row, a node whose parts could not be placed)
@@ -83,6 +90,7 @@ export default function ProseActions({ node, hostRef }) {
     const host = hostRef?.current
     if (!host) return undefined
     const read = () => {
+      if (frozen.current) return
       const sel = document.getSelection()
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setHit(null); return }
       const range = sel.getRangeAt(0)
@@ -103,6 +111,7 @@ export default function ProseActions({ node, hostRef }) {
     const host = hostRef?.current
     if (!host) return undefined
     const onMenu = (event) => {
+      if (frozen.current) return
       const sel = document.getSelection()
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
       const lines = stampedRange(sel.getRangeAt(0), host)

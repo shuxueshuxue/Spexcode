@@ -12,8 +12,8 @@ scenarios:
     expected: >-
       The external fixture exits 0 only after POST creates one session, derived liveness is online and backed by a
       live rendezvous listener, the terminal route upgrades with HTTP 101, real PTY bytes contain READY/TICK and
-      the control reply marker, and close leaves no tmux session, rendezvous socket, fake process, worktree, or
-      branch. No session.json is edited and no model or network is used.
+      the control reply marker, and close leaves no tmux session, rendezvous socket, fake process, or worktree while
+      retaining the archived session record and branch. No model or network is used.
     code: spec-cli/test/session-terminal-fixture.ts
 ---
 

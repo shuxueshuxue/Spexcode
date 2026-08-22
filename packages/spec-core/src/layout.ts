@@ -264,6 +264,7 @@ export type RawRecord = {
   node: string | null; title: string | null; name: string | null; parent?: string | null
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
+  runtime_start_token?: string
   stopped?: boolean
   archived?: boolean  // the human ARCHIVED this session ([[archive]]) — only a proven cold/offline row; absent → false on old records
   closed_at?: string   // ISO close publication time; absent on archived records created before the retained-record archive index
@@ -279,6 +280,10 @@ export type RawRecord = {
   runtime_revision?: string // caller-owned idempotency revision for runtime-state publication
   runtime_metadata?: Record<string, string> // opaque external address fields; session-core validates bytes but assigns no meaning
   base?: string // the exact fork point pinned at creation; absent/empty → the auto-detected source-of-truth branch
+  diff_comments?: Array<{
+    id: string; file_path: string; line_start: number; line_end: number; body: string
+    diff_identity: string; sent_at: string | null
+  }>
   launch_readiness_pending?: '' | RawLaunchReadinessPending
 }
 

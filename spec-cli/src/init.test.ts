@@ -190,9 +190,9 @@ test('--harness seeds hook nodes only when a selected native adapter can emit th
   const pluginNodeCount = (proj: string) => readdirSync(join(proj, '.spec', 'project', '.plugins'), { recursive: true })
     .filter((path) => path === 'spec.md' || String(path).endsWith('/spec.md')).length
   const cases: ReadonlyArray<readonly [string, number]> = [
-    ['zcode', 20],
-    ['claude', 22],
-    ['zcode,claude', 22],
+    ['zcode', 21],
+    ['claude', 23],
+    ['zcode,claude', 23],
   ]
   for (const [selected, expectedNodes] of cases) {
     const { proj, spex } = freshRepo()

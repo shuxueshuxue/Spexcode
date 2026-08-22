@@ -6,7 +6,7 @@ test('HookPromptCatalog is frozen, deterministic, and exposes every lifecycle ho
   const first = new HookPromptCatalog()
   const second = new HookPromptCatalog()
   assert.deepEqual(first.entries, second.entries)
-  assert.equal(first.entries.length, 6)
+  assert.equal(first.entries.length, 7)
   assert.ok(Object.isFrozen(first.entries))
   for (const entry of first.entries) {
     assert.ok(Object.isFrozen(entry))

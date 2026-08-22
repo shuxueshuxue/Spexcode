@@ -161,7 +161,7 @@ async function main(): Promise<void> {
     if (created.path) assert.equal(existsSync(created.path), false, 'close removed the worker worktree')
     if (created.branch) {
       const branches = await pexec('git', ['branch', '--list', created.branch])
-      assert.equal(branches.stdout.trim(), '', 'close removed the worker branch')
+      assert.notEqual(branches.stdout.trim(), '', 'close retains the archived worker branch')
     }
     console.log(`PASS: POST /api/sessions -> online -> 101 -> PTY output -> close; no tmux/socket/process residue (${id})`)
   } finally {

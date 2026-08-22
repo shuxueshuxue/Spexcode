@@ -4,7 +4,7 @@ scenarios:
     tags: [backend-api, cli]
     code:
       - .spec/spexcode/.plugins/core/session-fail/fail.sh
-      - spec-cli/src/sessions.ts#markTurnFailure
+      - spec-cli/src/sessions.test.ts
     description: >-
       Against real governed session records, invoke the shipped Claude StopFailure machine entry and the
       generic native/headless failure writer in three states: an undeclared active turn, an already-authored

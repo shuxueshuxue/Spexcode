@@ -27,7 +27,7 @@ foundation owner: the features govern their own surfaces and REFERENCE this modu
 
 ## expanded spec
 
-sessions-core owns `sessions.ts` — the common session layer: the global per-session record read/write
+sessions-core owns `sessions.ts` — the common session layer: the global per-session operational metadata read/write
 (`session.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
@@ -56,6 +56,12 @@ replays neither an accepted initial snapshot nor an accepted catch-up, while sti
 review, or error that raced acceptance. Parent-only `active`/working is the suppressed terminal of that comparison;
 manual includes it. Thus creation ordering does not weaken routine-working suppression, and manual+parent yields the
 complete later-state feed without a duplicate or a second mechanism.
+The ordinary stranded-transport refusal applies to a caller's new prompt, not to an already-installed managed
+watch. A parent watch transition is accepted into the parent's normal timeline and delivery queue even when its
+registered process is alive but its native transport is temporarily absent; the queue debt is the wake/resume
+contract, and the next transport sweep drains it. This durable watch path never treats `asking`, `parked`, `error`,
+or either `awaiting` proposal (`review`/`close-pending`) as terminal or requires a dashboard poll, and it does not
+change the lifecycle or cutover rules of either session.
 Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
@@ -101,6 +107,12 @@ Close retains that record as the one archived session source and records its `cl
 the same atomic record publication. The public projection carries the timestamp without a timeline read, so a
 complete archive index remains proportional only to record count. Older archived records with no timestamp project
 `null`; creation time, manual sort order, and filesystem metadata never impersonate the missing close fact.
+Close preserves its ordering fence: dirty work is committed to `refs/spex-archive/<id>` before the worktree is
+touched. Once that ref and the archived record are published, the linked tree is atomically renamed on the same
+volume from `.worktrees/<name>` into `.worktrees/.trash/wt-<epoch>-<nonce>`, then `git worktree prune` invalidates
+the old registration. The close path never recursively removes the renamed tree. A process-local serial reaper
+does that work asynchronously; it scans `.trash` when the backend starts so a crash leaves a retryable residue.
+Each removal failure is logged with its path and retained for the next startup rather than being swallowed.
 The archive index has its own lean projection, following [[graph-lean]]'s summary-first pattern: one archived-only
 read returns only `id`, visible `title`, stable search `label`, `closedAt`, and `node`. It never enumerates live
 rows, reads the prompt into a public object, or carries files, web resources, notes, or lifecycle state; id-addressed
@@ -292,3 +304,9 @@ the session list, graph, and resource projection without a special hide list. `r
 it atomically moves the byte-identical record back only while no active record exists, making the corrupt row
 visible again; it does not resurrect a runtime or infer lifecycle. CLI, HTTP, and the dashboard context control
 all call this one operation and surface refusal details.
+
+Session records may also carry `diff_comments`, the durable review conversation for the branch diff document
+([[diff-document]]). Each row has a file path, an inclusive line range, the diff identity it was authored against,
+body text, and nullable `sent_at`. The record writer owns this array under the ordinary session lock. Editing a row
+replaces its body/range/identity and clears `sent_at`; sending uses the existing `sendText` channel and marks the
+selected rows sent only after acceptance, so a changed comment cannot be silently replayed.

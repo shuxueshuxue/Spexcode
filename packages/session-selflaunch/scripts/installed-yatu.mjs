@@ -49,6 +49,7 @@ const pack = packagePath => {
 }
 
 const protocolPack = pack(join(repositoryRoot, 'packages/session-protocol'))
+const runtimePack = pack(join(repositoryRoot, 'packages/session-runtime'))
 const selfLaunchPack = pack(join(repositoryRoot, 'packages/session-selflaunch'))
 for (const file of selfLaunchPack.files.map(entry => entry.path)) {
   assert.ok(!file.startsWith('src/'), `source leaked into packed artifact: ${file}`)
@@ -59,13 +60,15 @@ writeFileSync(join(consumerRoot, 'package.json'), JSON.stringify({ name: 'selfla
 requireSuccess(invoke(npm, [
   'install', '--no-audit', '--no-fund',
   join(packRoot, protocolPack.filename),
+  join(packRoot, runtimePack.filename),
   join(packRoot, selfLaunchPack.filename),
 ]), 'install tarballs')
 
 const resolution = requireSuccess(invoke(process.execPath, ['-e', `
   const protocol = require.resolve('@spexcode/session-protocol/package.json')
+  const runtime = require.resolve('@spexcode/session-runtime/package.json')
   const selflaunch = require.resolve('@spexcode/session-selflaunch/package.json')
-  process.stdout.write(JSON.stringify({ protocol, selflaunch }))
+  process.stdout.write(JSON.stringify({ protocol, runtime, selflaunch }))
 `]), 'resolve installed packages')
 const resolved = JSON.parse(resolution.stdout)
 for (const path of Object.values(resolved)) {
@@ -76,7 +79,14 @@ for (const path of Object.values(resolved)) {
 const entry = requireSuccess(invoke(process.execPath, ['-e', `
   import('@spexcode/session-selflaunch').then(entry => process.stdout.write(JSON.stringify(Object.keys(entry).sort())))
 `]), 'import installed package')
-assert.deepEqual(JSON.parse(entry.stdout), ['LocalityError', 'requireLocalDatabasePath', 'resolveDatabasePath'])
+assert.deepEqual(JSON.parse(entry.stdout), [
+  'LocalityError',
+  'bindSelfLaunchRuntime',
+  'requireLocalDatabasePath',
+  'resolveDatabasePath',
+  'resolveSelfLaunchRuntime',
+  'unbindSelfLaunchRuntime',
+])
 
 const bin = join(consumerRoot, 'node_modules/.bin/spex-session')
 assert.ok(existsSync(bin), 'installed bin is missing')
@@ -160,6 +170,23 @@ const sessionArgs = ['--session-id', 'offline-target', ...databaseArgs]
 const address = parsed(runCli(['initialize', ...sessionArgs]))
 assert.equal(address.sessionId, 'offline-target')
 
+const bindingProof = requireSuccess(invoke(process.execPath, ['--input-type=module', '-e', `
+  import { openProtocol } from '@spexcode/session-protocol'
+  import { bindSelfLaunchRuntime, resolveSelfLaunchRuntime } from '@spexcode/session-selflaunch'
+  const protocol = openProtocol(${JSON.stringify(databasePath)})
+  try {
+    const binding = bindSelfLaunchRuntime(protocol, 'offline-target', {
+      nativeSessionId: 'installed-harness-1',
+      nativeStartToken: 'installed-start-1',
+    })
+    const resolved = resolveSelfLaunchRuntime(protocol, 'offline-target')
+    process.stdout.write(JSON.stringify({ binding, resolved }))
+  } finally { protocol.close() }
+`]), 'bind installed self-launch runtime')
+const installedBinding = JSON.parse(bindingProof.stdout)
+assert.equal(installedBinding.binding.bindingGeneration, 1)
+assert.equal(installedBinding.resolved.nativeSessionId, 'installed-harness-1')
+
 const first = parsed(runCli(['enqueue', '--session-id', 'offline-target', '--kind', 'letter.v1', '--body', 'A', ...databaseArgs]))
 const second = parsed(runCli(['enqueue', '--session-id', 'offline-target', '--kind', 'letter.v1', '--body', 'B', ...databaseArgs]))
 assert.equal(first.bodyBase64, 'QQ==')
@@ -207,8 +234,10 @@ transcript.unshift(
   `node ${process.version} sqlite ${process.versions.sqlite}`,
   `consumer ${consumerRoot}`,
   `tarball @spexcode/session-protocol ${protocolPack.filename} shasum=${protocolPack.shasum} integrity=${protocolPack.integrity}`,
+  `tarball @spexcode/session-runtime ${runtimePack.filename} shasum=${runtimePack.shasum} integrity=${runtimePack.integrity}`,
   `tarball @spexcode/session-selflaunch ${selfLaunchPack.filename} shasum=${selfLaunchPack.shasum} integrity=${selfLaunchPack.integrity}`,
   `resolve protocol ${resolved.protocol}`,
+  `resolve runtime ${resolved.runtime}`,
   `resolve selflaunch ${resolved.selflaunch}`,
   `resolve bin ${realpathSync(bin)}`,
   `public exports ${entry.stdout}`,

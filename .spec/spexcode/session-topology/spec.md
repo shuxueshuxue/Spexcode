@@ -33,3 +33,6 @@ with no topology at all.
 Spex-specific parent watch sources (`manual`/`parent`), initial-working suppression, proposal/actionable policy,
 board scope, and manager handoff are product topology policy above this neutral relation model. ZSwarm task roles,
 root/worker declaration rules, and swarm status projection are likewise ZSwarm policy.
+
+Native runtime attachment is not topology. An adopter may compose topology with [[runtime-bindings]], but
+topology does not own or resolve harness identity and does not change a binding when an edge changes.

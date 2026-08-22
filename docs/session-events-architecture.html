@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Events Architecture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17231d;
+      --muted: #5b6a62;
+      --line: #d2dbd5;
+      --paper: #f4f7f4;
+      --surface: #ffffff;
+      --navy: #18324a;
+      --navy-bg: #edf3f8;
+      --teal: #116466;
+      --teal-bg: #e7f5f3;
+      --amber: #87500a;
+      --amber-bg: #fff5df;
+      --red: #992d2d;
+      --red-bg: #fbecec;
+      --code: #1c2722;
+      --code-ink: #ecf5ef;
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; color: var(--ink); background: var(--paper); font: 16px/1.65 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    a { color: var(--teal); text-underline-offset: 3px; }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    code { font-size: .91em; }
+    .topbar { position: sticky; top: 0; z-index: 5; background: rgba(244,247,244,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px); }
+    .topbar-inner { width: min(var(--max), calc(100% - 32px)); min-height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { color: var(--ink); text-decoration: none; font-weight: 760; white-space: nowrap; }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+    header { background: var(--surface); border-bottom: 1px solid var(--line); }
+    .hero, main { width: min(var(--max), calc(100% - 32px)); margin: 0 auto; }
+    .hero { padding: 68px 0 54px; }
+    .eyebrow { margin: 0 0 10px; color: var(--teal); font-size: 13px; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
+    h1, h2, h3 { line-height: 1.2; letter-spacing: 0; }
+    h1 { max-width: 900px; margin: 0; font-size: clamp(2.4rem, 6vw, 4.25rem); font-weight: 790; }
+    h2 { margin: 0 0 18px; font-size: 1.55rem; }
+    h3 { margin: 26px 0 10px; font-size: 1.08rem; }
+    .lede { max-width: 850px; margin: 22px 0 0; color: var(--muted); font-size: 1.12rem; }
+    .statusbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
+    .status { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--paper); font-size: 13px; }
+    .status.current { color: var(--teal); border-color: #8ccfc9; background: var(--teal-bg); }
+    .status.next { color: var(--amber); border-color: #e7c681; background: var(--amber-bg); }
+    main { padding: 28px 0 72px; }
+    section { padding: 30px; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+    .callout { padding: 15px 17px; margin: 16px 0; border-left: 4px solid var(--navy); background: var(--navy-bg); }
+    .callout.next { border-color: var(--amber); background: var(--amber-bg); }
+    .callout.warn { border-color: var(--red); background: var(--red-bg); }
+    .diagram { overflow-x: auto; margin: 18px -5px 2px; padding: 8px 5px 3px; }
+    svg { display: block; width: 100%; min-width: 760px; height: auto; }
+    .svg-label { font: 700 15px Inter, sans-serif; fill: var(--ink); }
+    .svg-small { font: 13px Inter, sans-serif; fill: var(--muted); }
+    .svg-code { font: 12px "SFMono-Regular", monospace; fill: var(--navy); }
+    .layer { stroke-width: 1.5; }
+    .layer.protocol { fill: #e8f1f8; stroke: #7ca6c2; }
+    .layer.topology { fill: #e7f5f3; stroke: #76bdb7; }
+    .layer.events { fill: #f0ebfa; stroke: #a78bd0; }
+    .layer.application { fill: #fff2d9; stroke: #d2a14c; }
+    .layer.adopter { fill: #f6eeee; stroke: #c28b8b; }
+    .arrow { fill: none; stroke: #52645b; stroke-width: 2; marker-end: url(#arrow); }
+    .arrow.dashed { stroke-dasharray: 7 6; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; color: var(--muted); font-size: 13px; }
+    .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid currentColor; border-radius: 3px; background: currentColor; opacity: .55; }
+    .legend .current::before { color: #76bdb7; }
+    .legend .planned::before { color: #d2a14c; }
+    .legend .boundary::before { color: #c28b8b; }
+    .sequence { overflow-x: auto; margin: 18px -5px 2px; padding: 8px 5px 3px; }
+    .sequence svg { min-width: 900px; }
+    pre { overflow-x: auto; margin: 14px 0; padding: 18px 20px; border-radius: 5px; background: var(--code); color: var(--code-ink); font-size: 13px; line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { padding: 18px; border: 1px solid var(--line); border-radius: 6px; background: #fbfcfb; }
+    .card h3 { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: .95rem; }
+    th, td { padding: 10px 11px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #eef3ef; }
+    .yes { color: #146b49; font-weight: 700; }
+    .no { color: var(--red); font-weight: 700; }
+    .open { color: var(--amber); font-weight: 700; }
+    footer { padding: 10px 2px; color: var(--muted); font-size: .88rem; }
+    @media (max-width: 760px) { .topbar-inner { align-items: flex-start; padding: 12px 0; flex-direction: column; gap: 8px; } section { padding: 21px 18px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="topbar-inner">
+    <a class="brand" href="session-platform-architecture.html">Session Platform</a>
+    <nav aria-label="Document sections">
+      <a href="#layers">分层</a><a href="#transaction">事务</a><a href="#events">事件</a><a href="#replay">回放</a><a href="#code">代码形态</a>
+    </nav>
+  </div></div>
+
+  <header><div class="hero">
+    <p class="eyebrow">Architecture proposal · review draft</p>
+    <h1>从 Action 到 Event，再到可回放的 Session</h1>
+    <p class="lede">这张图把 session-protocol、session-topology、session-events 和 session-application 放在同一个可检查的模型里。当前已经有事件 append/read/replay、runtime bindings、self-launch 与 Spex adapter seams；<code>session-application</code> 当前明确是 Stage 1 notification transaction facade。最终的 state → event → watcher application service 仍是目标形态，不把 adopter 的生产接入说成已经完成。</p>
+    <div class="statusbar"><span class="status current">当前：protocol + topology + events/replay + runtime seams</span><span class="status next">目标：state → event → watcher application service</span><span class="status">Spex / ZSwarm production cut-in：未接入</span></div>
+  </div></header>
+
+  <main>
+    <section id="layers">
+      <h2>1. 依赖方向</h2>
+      <p>底层包只提供自己的事实和能力；跨模块的业务动作由 application layer 编排。箭头表示依赖，虚线表示 adopter 注入的实现。当前的 application 是 Stage 1 notification transaction facade，不是 state store 或 event projection；最终 application 仍是向下编排者，不是 topology 的并列兄弟。</p>
+      <div class="diagram">
+        <svg viewBox="0 0 1080 390" role="img" aria-labelledby="layers-title layers-desc">
+          <title id="layers-title">Session package dependency graph</title>
+          <desc id="layers-desc">Protocol at the bottom, topology and events above it, application service above both, and adopters at the top.</desc>
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#52645b"/></marker></defs>
+          <rect class="layer protocol" x="355" y="286" width="370" height="70" rx="8"/>
+          <text class="svg-label" x="540" y="316" text-anchor="middle">session-protocol</text>
+          <text class="svg-small" x="540" y="340" text-anchor="middle">SQLite transaction · address · message delivery</text>
+
+          <rect class="layer topology" x="95" y="178" width="280" height="72" rx="8"/>
+          <text class="svg-label" x="235" y="209" text-anchor="middle">session-topology</text>
+          <text class="svg-small" x="235" y="233" text-anchor="middle">edges · subscriptions · recipients</text>
+          <rect class="layer events" x="400" y="178" width="280" height="72" rx="8"/>
+          <text class="svg-label" x="540" y="209" text-anchor="middle">session-events</text>
+          <text class="svg-small" x="540" y="233" text-anchor="middle">append-only facts · schema · replay</text>
+          <rect class="layer application" x="705" y="178" width="280" height="72" rx="8"/>
+          <text class="svg-label" x="845" y="209" text-anchor="middle">session-application</text>
+          <text class="svg-small" x="845" y="233" text-anchor="middle">actions · Unit of Work · orchestration</text>
+
+          <rect class="layer adopter" x="205" y="42" width="280" height="70" rx="8"/>
+          <text class="svg-label" x="345" y="72" text-anchor="middle">Spex adopter</text>
+          <text class="svg-small" x="345" y="96" text-anchor="middle">state store · runtime adapter · policy</text>
+          <rect class="layer adopter" x="595" y="42" width="280" height="70" rx="8"/>
+          <text class="svg-label" x="735" y="72" text-anchor="middle">ZSwarm adopter</text>
+          <text class="svg-small" x="735" y="96" text-anchor="middle">state store · worker runtime · policy</text>
+
+          <path class="arrow" d="M235 250 L425 286"/>
+          <path class="arrow" d="M540 250 L540 286"/>
+          <path class="arrow" d="M845 250 L655 286"/>
+          <path class="arrow" d="M705 214 L680 214"/>
+          <path class="arrow" d="M705 178 C640 134 435 134 375 178"/>
+          <path class="arrow" d="M345 112 L785 178"/>
+          <path class="arrow" d="M735 112 L880 178"/>
+          <path class="arrow dashed" d="M345 112 L540 178"/>
+          <path class="arrow dashed" d="M735 112 L540 178"/>
+          <text class="svg-code" x="540" y="128" text-anchor="middle">application → topology / events / protocol</text>
+          <text class="svg-code" x="540" y="145" text-anchor="middle">adopter injects state semantics</text>
+          <text class="svg-code" x="540" y="379" text-anchor="middle">protocol never calls topology or application</text>
+        </svg>
+      </div>
+      <div class="callout"><strong>依赖的准确说法：</strong>当前 Stage 1 <code>session-application</code> 依赖 <code>session-topology</code> 与 <code>session-protocol</code>，在同一个 Unit of Work 中完成关系变更、recipient 解析和消息入队。最终 state → event → watcher 服务还会组合 adopter-owned state store 与 <code>session-events</code>；反向关系全部禁止：topology、events、protocol 不调用 application。</div>
+      <div class="legend"><span class="current">当前已落地/验证的基础</span><span class="planned">下一版共享层</span><span class="boundary">adopter-owned 边界</span></div>
+    </section>
+
+    <section id="transaction">
+      <h2>2. Stage 1 notification transaction（当前实现）</h2>
+      <p>Stage 1 facade 只负责 topology mutation、recipient 查询和 protocol message enqueue；它不更新 adopter state，也不 append event。状态语义属于 adopter，最终 state → event → watcher 服务才会把 state store、事件和 watcher delivery 组合在一个 SQLite transaction 中。</p>
+      <div class="sequence">
+        <svg viewBox="0 0 1120 430" role="img" aria-labelledby="sequence-title sequence-desc">
+          <title id="sequence-title">State change transaction sequence</title>
+          <desc id="sequence-desc">The planned final application service updates adopter state, appends an event, expands recipients, and enqueues messages before commit.</desc>
+          <defs><marker id="arrow-seq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#52645b"/></marker></defs>
+          <rect x="35" y="20" width="190" height="48" rx="6" fill="#fff2d9" stroke="#d2a14c"/><text class="svg-label" x="130" y="50" text-anchor="middle">Action / Command</text>
+          <rect x="270" y="20" width="190" height="48" rx="6" fill="#fff2d9" stroke="#d2a14c"/><text class="svg-label" x="365" y="50" text-anchor="middle">Application Service</text>
+          <rect x="505" y="20" width="190" height="48" rx="6" fill="#f6eeee" stroke="#c28b8b"/><text class="svg-label" x="600" y="50" text-anchor="middle">Adopter State Store</text>
+          <rect x="740" y="20" width="150" height="48" rx="6" fill="#e7f5f3" stroke="#76bdb7"/><text class="svg-label" x="815" y="50" text-anchor="middle">Topology</text>
+          <rect x="935" y="20" width="150" height="48" rx="6" fill="#e8f1f8" stroke="#7ca6c2"/><text class="svg-label" x="1010" y="50" text-anchor="middle">Protocol</text>
+          <path d="M130 68V395M365 68V395M600 68V395M815 68V395M1010 68V395" stroke="#c8d1cb" stroke-dasharray="5 7"/>
+          <rect x="246" y="92" width="795" height="282" rx="8" fill="#fffaf0" stroke="#d2a14c" stroke-dasharray="8 6"/>
+          <text class="svg-small" x="266" y="116">one synchronous SQLite transaction</text>
+          <path class="arrow" marker-end="url(#arrow-seq)" d="M130 145H355"/><text class="svg-code" x="242" y="137" text-anchor="middle">execute(action)</text>
+          <path class="arrow" marker-end="url(#arrow-seq)" d="M365 175H590"/><text class="svg-code" x="477" y="167" text-anchor="middle">stateStore.update(tx)</text>
+          <path class="arrow" marker-end="url(#arrow-seq)" d="M365 215H800"/><text class="svg-code" x="580" y="207" text-anchor="middle">events.append(tx, fact)</text>
+          <path class="arrow" marker-end="url(#arrow-seq)" d="M365 255H800"/><text class="svg-code" x="580" y="247" text-anchor="middle">topology.recipients(tx)</text>
+          <path class="arrow" marker-end="url(#arrow-seq)" d="M365 305H995"/><text class="svg-code" x="680" y="297" text-anchor="middle">tx.enqueue(recipient, reference)</text>
+          <path class="arrow" marker-end="url(#arrow-seq)" d="M1010 345H365"/><text class="svg-code" x="690" y="337" text-anchor="middle">COMMIT or ROLLBACK</text>
+          <text class="svg-small" x="260" y="410">No network, file copy, provider call, or user callback inside the transaction.</text>
+        </svg>
+      </div>
+      <div class="callout"><strong>事务边界：</strong>当前 Stage 1 facade 的 topology mutation 与 notification enqueue 在同一数据库内提交。最终服务若把状态事实、domain event 和 protocol message 放进同一数据库，仍不需要 outbox；只有跨数据库或外部 broker 时，transactional outbox 才重新成为独立组件。</div>
+    </section>
+
+    <section id="events">
+      <h2>3. Event、Message、Action 的区别</h2>
+      <div class="grid">
+        <article class="card"><h3>Action / Command</h3><p>请求系统做某件事，例如“把 child 变成 <code>review</code>”。它可以被拒绝；尚未进入 handler 的输入不产生持久 event。</p><pre><code>application.execute({
+  actionId,
+  name: "session.state.change",
+  args: { sessionId, next: "review" },
+})</code></pre></article>
+        <article class="card"><h3>Domain Event</h3><p>已经发生的不可变事实。它是审计和 replay 的权威来源，不携带活对象，不依赖当前进程是否仍在运行。</p><pre><code>eventStore.append(tx, {
+  eventId,
+  type: "session.state.changed",
+  schemaVersion: 1,
+  subjectSessionId: sessionId,
+  payload: encode({ next: "review" }),
+})</code></pre></article>
+        <article class="card"><h3>Protocol Message</h3><p>发给特定 recipient 的投递物。它是 event 的 delivery projection，不应与 domain event 再形成第二个事实源。</p><pre><code>tx.enqueue(recipientId, {
+  kind: "event.reference",
+  body: encode({ eventId }),
+  idempotencyKey: `${eventId}:${recipientId}`,
+})</code></pre></article>
+        <article class="card"><h3>Live Signal</h3><p>wake hint、agent handle、进程状态和 observer 回调都是瞬时信号，不进入 domain event。丢掉它们不能改变 durable correctness。</p><pre><code>wakeHint.notify(recipientId)
+// optional latency optimization only
+// next sweep can still call dequeue()</code></pre></article>
+      </div>
+      <div class="callout warn"><strong>单一事实源：</strong>不要让 timeline、protocol_messages 和 session_events 同时记录同一个 domain fact。一个事实只能有一个 canonical feed。</div>
+    </section>
+
+    <section id="replay">
+      <h2>4. Replay 需要什么</h2>
+      <p>确定性回放不是“再调用一次 provider”。它是用固定事件、固定引用对象和固定代码版本，重新计算 session projection。</p>
+      <div class="diagram">
+        <svg viewBox="0 0 1080 285" role="img" aria-labelledby="replay-title replay-desc">
+          <title id="replay-title">Deterministic replay inputs</title>
+          <desc id="replay-desc">Event log, content addressed artifacts, and pinned code version flow into a pure replay fold to produce projections.</desc>
+          <defs><marker id="arrow-replay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#52645b"/></marker></defs>
+          <rect class="layer events" x="45" y="30" width="250" height="68" rx="8"/><text class="svg-label" x="170" y="60" text-anchor="middle">session_events</text><text class="svg-small" x="170" y="84" text-anchor="middle">immutable facts + schema version</text>
+          <rect class="layer protocol" x="45" y="125" width="250" height="68" rx="8"/><text class="svg-label" x="170" y="155" text-anchor="middle">content-addressed objects</text><text class="svg-small" x="170" y="179" text-anchor="middle">attachments / large payload refs</text>
+          <rect class="layer adopter" x="45" y="220" width="250" height="48" rx="8"/><text class="svg-label" x="170" y="250" text-anchor="middle">pinned code version</text>
+          <rect class="layer application" x="440" y="92" width="260" height="84" rx="8"/><text class="svg-label" x="570" y="126" text-anchor="middle">pure replay fold</text><text class="svg-small" x="570" y="151" text-anchor="middle">replay(events, initialState)</text>
+          <rect class="layer topology" x="845" y="58" width="190" height="68" rx="8"/><text class="svg-label" x="940" y="88" text-anchor="middle">state projection</text><text class="svg-small" x="940" y="112" text-anchor="middle">current query model</text>
+          <rect class="layer topology" x="845" y="165" width="190" height="68" rx="8"/><text class="svg-label" x="940" y="195" text-anchor="middle">audit / time travel</text><text class="svg-small" x="940" y="219" text-anchor="middle">state at event_seq N</text>
+          <path class="arrow" marker-end="url(#arrow-replay)" d="M295 64H430"/><path class="arrow" marker-end="url(#arrow-replay)" d="M295 159H430"/><path class="arrow" marker-end="url(#arrow-replay)" d="M295 244H430"/><path class="arrow" marker-end="url(#arrow-replay)" d="M700 120H835"/><path class="arrow" marker-end="url(#arrow-replay)" d="M700 150H835"/>
+        </svg>
+      </div>
+      <pre><code>type ReplayInput = {
+  events: readonly SessionEvent[]
+  artifacts: ContentAddressedStore
+  codeVersion: string
+}
+
+function replay(input: ReplayInput): SessionProjection {
+  let state = emptyProjection()
+  for (const event of input.events) {
+    state = reduce(state, resolvePayload(event, input.artifacts))
+  }
+  return state
+}</code></pre>
+      <table>
+        <thead><tr><th>规则</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>未知 event 默认拒绝；显式 <code>ignorable</code> 才可跳过</td><td>避免“能解析但静默漏掉状态”的假回放</td></tr>
+          <tr><td>writer bump schema version</td><td>写入方知道旧 reader 是否还能保留语义</td></tr>
+          <tr><td>replay 不自动重做外部副作用</td><td>重建状态和再次发送邮件、写 Git、调用 provider 是两种完全不同的行为</td></tr>
+          <tr><td>projection 可重建，event 不可修改</td><td>修正用补偿 event，而不是改历史事实</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="code">
+      <h2>5. 当前 API 与目标代码形态</h2>
+      <p>前两个片段对应当前公开 API；最后一个片段是仍待实现的 state → event → watcher application service，不是当前 package contract。</p>
+      <pre><code>// @spexcode/session-events (current)
+const events = openSessionEvents(protocol)
+const event = protocol.withTransaction(tx => events.append(tx, {
+  eventId, type: "session.state.changed", schemaVersion: 1,
+  subjectSessionId: sessionId, payload, occurredAtMs: Date.now(),
+}))
+const history = events.read(sessionId, { afterSequence: 0 })
+const projection = events.replay(sessionId, { initialState, reducers })</code></pre>
+      <pre><code>// @spexcode/session-application (Stage 1 notification transaction facade)
+const app = openSessionApplication(protocol, topology)
+app.attachAndNotify(parentId, subjectId, "watch", message)
+app.notifyRecipients(subjectId, message)
+// state, event meaning, and dequeue remain adopter-owned</code></pre>
+      <pre><code>// planned final application service
+// session_runtime_bindings is adopter-owned; protocol does not read it
+export function createSessionApplication(deps: {
+  protocol: SessionProtocol
+  topology: SessionTopology
+  events: EventStore
+  stateStore: StateStore       // adopter-owned semantics
+  bindings: RuntimeBindings    // validate before dequeue, never part of protocol schema
+}) {
+  return {
+    execute(action: SessionAction): ActionReceipt {
+      return deps.protocol.withTransaction((tx) => {
+        const change = deps.stateStore.apply(tx, action)
+        const event = deps.events.append(tx, change.event)
+        const recipients = deps.topology.recipients(change.subjectSessionId, tx)
+
+        for (const recipient of recipients) {
+          tx.enqueue(recipient, {
+            kind: "session.event.reference",
+            body: encode({ eventId: event.eventId }),
+            idempotencyKey: `${event.eventId}:${recipient}`,
+          })
+        }
+        return { actionId: action.actionId, eventId: event.eventId }
+      })
+    },
+  }
+}</code></pre>
+      <pre><code>// adopter code: event meaning stays outside the core packages
+const app = createSessionApplication({ protocol, topology, events, stateStore })
+
+app.execute({
+  actionId: crypto.randomUUID(),
+  name: "session.state.change",
+  args: { sessionId: childId, next: "review" },
+})
+
+// a listener remains a consumer, not part of the transaction
+const binding = bindings.resolve(parentId)
+if (!binding || !adapter.isReady(binding)) throw new Error("runtime binding unavailable")
+const message = protocol.dequeue(parentId)
+if (message) handleEventReference(message)
+</code></pre>
+      <div class="callout next"><strong>Implementation order:</strong> (1) keep the shipped protocol, topology, event store, runtime bindings, self-launch seam, and Spex adapter seam as separate foundations; (2) use the shipped Stage 1 facade for same-transaction topology notifications; (3) implement and prove the adopter-owned state → event → watcher service as a separate target; (4) pursue Spex and ZSwarm production cut-ins only in their owning repositories with explicit importer and approval evidence. Do not retrofit the current v1 protocol silently.</div>
+    </section>
+
+    <section>
+      <h2>6. Current vs target</h2>
+      <table>
+        <thead><tr><th>Layer</th><th>Current status</th><th>Target status</th></tr></thead>
+        <tbody>
+          <tr><td><code>session-protocol</code></td><td class="yes">Implemented and tested</td><td>Keep transaction and delivery authority</td></tr>
+          <tr><td><code>session-topology</code></td><td class="yes">Implemented and tested</td><td>Keep relation authority; no state semantics</td></tr>
+          <tr><td><code>session-events</code></td><td class="yes">Implemented: append, ordered read, replay</td><td>Keep canonical facts and deterministic replay; projections remain adopter-owned</td></tr>
+          <tr><td><code>session-application</code></td><td class="yes">Implemented Stage 1 notification transaction facade</td><td>Planned final state → event → watcher service; add adopter state semantics without changing protocol</td></tr>
+          <tr><td><code>session-runtime-bindings</code></td><td class="yes">Implemented with generation fencing</td><td>Keep adopter-owned logical-address to native-runtime binding</td></tr>
+          <tr><td>self-launch / Spex adapter seams</td><td class="yes">Implemented seams; no production cut-in</td><td>Adopter-owned runtime integration and proof</td></tr>
+          <tr><td>Spex / ZSwarm production adopters</td><td class="open">No production importer or wiring in this base</td><td>Separate owner-approved cut-ins; clean consumer proofs do not imply landing</td></tr>
+        </tbody>
+      </table>
+      <footer>Review artifact. Source context: <a href="session-platform-architecture.html">platform architecture</a>, <a href="session-management-refactor.html">session refactor</a>, and <a href="session-behavior-findings.html">behavior findings</a>. The DeepSeek Harness comparison was source-only research, not an executed proof.</footer>
+    </section>
+  </main>
+</body>
+</html>

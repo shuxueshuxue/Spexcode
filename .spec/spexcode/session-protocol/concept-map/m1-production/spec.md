@@ -31,10 +31,15 @@ choice that lets construction proceed, states what it would cost to reverse, and
 public vocabulary, or the roadmap while doing so. Where a lower document's wording was derived from a superseded
 experiment, the ledger records the correction and which frozen rule outranks it, rather than implementing both.
 
-Construction adds nothing to the legacy path. The new packages have no production importer in this stage, because
-the adopters that will import them are later cutovers with their own sabotage and deletion gates. A stage that
-quietly wired the new implementation beside the old one would have created the second authority this whole refactor
-exists to remove, and it would have spent the deletion gate's evidence before that gate ran.
+The initial construction stage added nothing to the legacy path. At that stage the new packages had no production
+importer because the adopters needed their own sabotage and deletion gates. That historical boundary is now closed by
+the subsequent Spex cut-in: the application composition, canonical queue/topology/runtime binding, and one-time JSON
+migration are the current production path. After the migration marker there is no legacy application-state reader or
+compatibility fallback; the initial-stage paragraph must not be read as current truth.
+
+The cut-in still keeps the authority boundary explicit: JSON remains only operational worktree metadata, native
+runtime identity remains adapter-owned, and a missing runtime binding leaves durable canonical debt pending rather than
+silently routing through the retired queue.
 
 Ownership is exclusive and serialized where capability depends on capability. Each lane holds a file surface no
 other lane writes, the schema-providing lane lands before the lanes that compose on it, and the integrating session

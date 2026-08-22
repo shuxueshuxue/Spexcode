@@ -39,8 +39,12 @@ transition lock and is eligible without a running turn.
 
 After cold proof, close writes the worktree tree (tracked and untracked files) as a commit whose parent is the
 current branch tip, then atomically publishes `refs/spex-archive/<session-id>` and verifies that ref. A ref or
-commit failure aborts before worktree removal. Only after publication does it remove the worktree and its
-materialize slot. The branch and the global session store remain. The record is retained with `archived: true`,
+commit failure aborts before any directory mutation. Only after publication does it rename the worktree on the
+same volume from `.worktrees/<name>` to `.worktrees/.trash/wt-<epoch>-<nonce>`, run `git worktree prune` to
+invalidate Git's old registration, and enqueue the renamed tree for serial asynchronous deletion. The close
+request never recursively removes the worktree; a backend-start scan resumes `.trash/` leftovers, and every
+deletion failure is logged and left for the next startup retry. The materialize slot is removed after enqueueing.
+The branch and the global session store remain. The record is retained with `archived: true`,
 `stopped: true`, a cold proof, and the same close transaction's ISO `closedAt`; list projection omits it from the
 working board while id-addressed record, timeline, transcript, and conversation reads remain available. Public
 session projection exposes that timestamp for a cheap complete archive index. Records closed before this field

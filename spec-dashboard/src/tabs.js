@@ -43,6 +43,14 @@ const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) 
 // consumes the mark. Same shape as the workspace's compose handoff — a ref between surfaces that must not
 // couple.
 let keepNext = false
+let tabCommands = null
+export function registerTabCommands(commands) {
+  tabCommands = commands
+  return () => { if (tabCommands === commands) tabCommands = null }
+}
+export function runTabCommand(name, ...args) {
+  return tabCommands?.[name]?.(...args)
+}
 export function requestTab(page, param = null, query = null) {
   keepNext = true
   navigate(page, param, { query })
@@ -115,6 +123,20 @@ export function useTabs() {
     })
     if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
   }, [activeKey])
+
+  useEffect(() => registerTabCommands({
+    closeActive: () => {
+      const active = tabs.find((tab) => tabKey(tab) === activeKey)
+      if (active) close(active)
+    },
+    move: (dir) => {
+      const index = tabs.findIndex((tab) => tabKey(tab) === activeKey)
+      if (index < 0 || tabs.length < 2) return
+      const next = tabs[(index + dir + tabs.length) % tabs.length]
+      open(next)
+    },
+    active: () => tabs.find((tab) => tabKey(tab) === activeKey) || null,
+  }), [tabs, activeKey, open, close])
 
   return useMemo(() => ({ tabs, activeKey, open, close, closeOthers }), [tabs, activeKey, open, close, closeOthers])
 }

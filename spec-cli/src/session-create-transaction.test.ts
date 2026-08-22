@@ -328,7 +328,10 @@ esac
     assert.equal(JSON.parse(readFileSync(recordPath(degraded.id), 'utf8')).stopped, true)
     const closed = await close(degraded.id)
     assert.equal(closed.status, 200, 'close can still prove and retire the record owner')
-    assert.equal((await fetch(`${base}/api/sessions/${degraded.id}`)).status, 404)
+    const archived = await fetch(`${base}/api/sessions/${degraded.id}`)
+    assert.equal(archived.status, 200)
+    assert.equal((await archived.json() as any).archived, true)
+    assert.ok(git(project, 'show-ref', '--verify', `refs/heads/${degraded.branch}`), 'close retains the archived branch')
 
     git(project, 'config', '--unset-all', 'filter.spexcode.clean')
     const configLock = join(project, '.git', 'config.lock')

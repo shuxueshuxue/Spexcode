@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useCallback, useState } from 'react'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
@@ -13,6 +13,9 @@ import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import ContextDock from './ContextDock.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
+import { firesEvent, firesKey } from './bindings.js'
+import { runTabCommand } from './tabs.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -102,7 +105,7 @@ export default function Shell() {
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
   const { dock, dockMode, palette } = useWorkspace()
-  const { closePalette, setDockMode } = useWorkspaceApi()
+  const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
   const [contextOpen, setContextOpen] = useState(() => {
     try { return localStorage.getItem('spexcode.ctxOpen') !== '0' } catch { return true }
   })
@@ -111,6 +114,49 @@ export default function Shell() {
     try { localStorage.setItem('spexcode.ctxOpen', next ? '1' : '0') } catch {}
     return next
   })
+
+  const onShellKey = useCallback((event) => {
+    // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
+    if (palette) {
+      if (event.key === 'Escape') { event.preventDefault(); closePalette(); return true }
+      return false
+    }
+    if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
+    if (event.altKey && !event.metaKey && !event.ctrlKey) {
+      const pageOf = [
+        ['shell.pageGraph', 'graph'], ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],
+        ['shell.pageIssues', 'issues'], ['shell.pageSettings', 'settings'],
+      ]
+      const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
+      if (target) {
+        event.preventDefault(); closePalette()
+        if (!graphOnly || target === 'graph') navigate(target)
+        return true
+      }
+      if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
+      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); navigate('evals'); return true }
+      if (!graphOnly && firesEvent('shell.search', event)) { event.preventDefault(); openPalette('sessions'); return true }
+    }
+    if (firesEvent('shell.dockToggle', event)) { event.preventDefault(); setDock((value) => !value); return true }
+    if (firesEvent('shell.dockMode', event)) { event.preventDefault(); setDockMode(dockMode === 'explorer' ? 'sessions' : 'explorer'); return true }
+    if (!graphOnly && firesEvent('shell.contextToggle', event)) { event.preventDefault(); toggleContext(); return true }
+    if (!graphOnly && firesEvent('shell.tabClose', event)) { event.preventDefault(); runTabCommand('closeActive'); return true }
+    if (!graphOnly && firesEvent('shell.tabNext', event)) { event.preventDefault(); runTabCommand('move', 1); return true }
+    if (!graphOnly && firesEvent('shell.tabPrevious', event)) { event.preventDefault(); runTabCommand('move', -1); return true }
+    if (!graphOnly && firesEvent('shell.tabSplit', event)) {
+      event.preventDefault(); const active = runTabCommand('active'); if (active) splitTo(active); return true
+    }
+    // Settings is a shell destination even when the graph view is not mounted. The graph keeps its own
+    // rebindable slash/info verbs; this global fallback is what restores comma on every routed surface.
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.settings', event.key)) {
+      event.preventDefault(); navigate(page === 'settings' ? 'graph' : 'settings'); return true
+    }
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.search', event.key)) {
+      event.preventDefault(); openPalette('nodes'); return true
+    }
+    return false
+  }, [closePalette, dockMode, graphOnly, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
+  useKeyboardScope(onShellKey, -100)
 
   // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.
   if (graphOnly) {

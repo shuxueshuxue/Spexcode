@@ -61,6 +61,7 @@ Adopter config resolver
           |
           +-- adopter runtime
           |     +-- dequeue loop / reconciliation / wake hint
+          |     +-- session_runtime_bindings (address -> native runtime identity)
           |     +-- handler journal only when downstream retry is required
           |     +-- HarnessRuntimeAdapter
           |

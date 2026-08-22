@@ -3,7 +3,7 @@ scenarios:
   - name: merge-dispatch-keeps-landing-local
     tags: [backend-api, cli]
     test: { path: spec-cli/src/session-merge-dispatch.api.test.ts, name: "merge dispatch gives the agent the short local landing flow" }
-    code: [spec-cli/src/sessions.ts#mergeSession]
+    code: [spec-cli/src/session-merge-dispatch.api.test.ts]
     related: [spec-cli/src/index.ts, spec-cli/src/client.ts, spec-cli/src/cli.ts]
     description: >
       Through the real backend and real CLI, create a governed fake-harness session. Verify a merge request is

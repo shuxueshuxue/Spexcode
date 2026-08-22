@@ -6,12 +6,14 @@ desc: The human-reviewable top-level view of the proposed SQLite-backed session 
 code:
   - docs/session-platform-architecture.html
 related:
+  - docs/session-events-architecture.html
   - .spec/spexcode/session-protocol/concept-map/spec.md
   - .spec/spexcode/session-protocol/concept-map/session-management-refactor/spec.md
   - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
   - .spec/spexcode/session-protocol/spec.md
   - .spec/spexcode/session-topology/spec.md
   - .spec/spexcode/session-runtime/spec.md
+  - .spec/spexcode/session-runtime/runtime-bindings/spec.md
 ---
 # session-platform-architecture-review
 
@@ -19,6 +21,14 @@ This node owns the linked HTML review view that presents the proposed session pl
 architecture: a fixed communication protocol, adopter-owned topology and runtime composition, separate harness
 runtime and configuration adapters, explicit storage placement, and the ZSwarm, self-launch, and Spex-governed
 adoption paths.
+
+The related `docs/session-events-architecture.html` is a review artifact for the session-events and
+session-application layers. It must distinguish the current protocol/topology/events-replay/runtime-seam foundation
+and Stage 1 notification transaction facade from the planned state → event → watcher application service. It must not
+claim Spex or ZSwarm production wiring. In the target dependency direction, the final `session-application` service is
+the downward orchestration layer: it may depend on `session-topology`, `session-events`, and `session-protocol` to
+execute one use case. None of those lower layers may call back into the application layer; topology and events may use
+protocol storage/transaction capabilities without becoming application-aware.
 
 The document is a decision surface, not an accepted runtime contract. It must label the proposal as a review draft,
 distinguish current behavior from target behavior, and link to both the implementation-level refactor view and the

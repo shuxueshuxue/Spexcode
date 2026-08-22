@@ -7,7 +7,9 @@ scenarios:
       adapter readiness after the parent relation is installed. Inspect the parent's timeline before readiness,
       after an early active hook, and after readiness succeeds. Repeat with the active cap already full, with
       deterministic and retryable launch failures, and with restart/replay at both durable receipt boundaries.
-      Then have the child declare review and return to working. Add an independent manual watch, repeat the
+      Then have the child declare asking, parked, review, error, and close-pending from working in turn, and
+      verify each event reaches the parent even while the parent's native transport is unavailable; restore the
+      transport and verify the parent queue drains/resumes. Add an independent manual watch, repeat the
       working transition, then cancel or reparent that source combination.
     expected: >-
       The relation exists immediately but neither queued nor an early active hook reaches the parent before the
@@ -15,8 +17,10 @@ scenarios:
       capacity decision yields exactly one queued snapshot. Deterministic or readiness failure never fabricates
       either outcome, while a retryable failure keeps the same debt until success. Restart reclaims readiness
       without relaunching or replaying the prompt. Re-entry after the initial receipt, or after a raced asking,
-      review, or error receipt, produces exactly one of each accepted state and clears the debt only after the
-      latest state is accepted; a later parent-only working state remains suppressed. Removing the parent source
+      review, error, parked, asking, or close-pending receipt, produces exactly one of each accepted state and
+      clears the debt only after the latest state is accepted; a temporarily unavailable parent keeps those
+      accepted watch events in its normal queue until transport returns and then wakes/resumes. A later parent-only
+      working state remains suppressed. Removing the parent source
       removes its debt without silencing a retained manual source. A temporarily unavailable parent keeps every
       accepted message in its normal delivery queue. A shell with no governed parent records no subscription and
       is instead given the background `spex session wait <child>` fallback.

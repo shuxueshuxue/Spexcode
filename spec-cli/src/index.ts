@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -43,12 +43,14 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
+import { configuredSessionApplication } from './session-application.js'
 
 installEvalHost()
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
 installProcessGuards()
+startWorktreeTrashReaper()
 
 const app = new Hono()
 startUploadReaper()
@@ -537,6 +539,22 @@ app.post('/api/sessions', async (c) => {
     // transaction has published or cleaned up its record, release the one deferred full refresh.
     flushDeferredWorktreeRegistryChange()
     if (result.status === 201) {
+      const production = configuredSessionApplication()
+      if (production) {
+        try {
+          production.createSession({
+            sessionId: result.session.id,
+            status: result.session.lifecycle,
+            parentSessionId: result.session.parent,
+          })
+          if (result.session.parent) production.attachWatcher(result.session.parent, result.session.id, 'watch:parent')
+        } catch (error) {
+          const state = production.readState(result.session.id)
+          const sameProjection = state?.status === result.session.lifecycle
+            && state.parentSessionId === (result.session.parent ?? null)
+          if (!sameProjection) throw error
+        }
+      }
       c.header('Idempotency-Key', requestKey)
       return c.json(result.session, 201)
     }
@@ -547,11 +565,116 @@ app.post('/api/sessions', async (c) => {
     outgoing?.off('close', cancel)
   }
 })
+
+const runtimeApplicationOr503 = (_c: any) => configuredSessionApplication()
+
+app.get('/api/session-runtime/:id/events', (c) => {
+  const application = runtimeApplicationOr503(c)
+  return c.json(application.events.read(c.req.param('id')))
+})
+app.get('/api/session-runtime/:id/replay', (c) => {
+  const application = runtimeApplicationOr503(c)
+  return c.json(application.replayState(c.req.param('id')))
+})
+app.post('/api/session-runtime/:id/state', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  const body = await c.req.json().catch(() => null) as { status?: unknown; proposal?: unknown; note?: unknown; parentSessionId?: unknown; reason?: unknown } | null
+  if (body?.status !== undefined && typeof body.status !== 'string') return c.json({ error: 'status must be a string' }, 400)
+  if (body?.proposal !== undefined && body.proposal !== null && typeof body.proposal !== 'string') return c.json({ error: 'proposal must be a string or null' }, 400)
+  if (body?.note !== undefined && body.note !== null && typeof body.note !== 'string') return c.json({ error: 'note must be a string or null' }, 400)
+  if (body?.parentSessionId !== undefined && body.parentSessionId !== null && typeof body.parentSessionId !== 'string') return c.json({ error: 'parentSessionId must be a string or null' }, 400)
+  try {
+    return c.json(application.transitionSession(c.req.param('id'), {
+      status: body?.status as string | undefined,
+      proposal: body?.proposal as string | null | undefined,
+      note: body?.note as string | null | undefined,
+      parentSessionId: body?.parentSessionId as string | null | undefined,
+      reason: typeof body?.reason === 'string' ? body.reason : null,
+    }))
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)
+  }
+})
+app.post('/api/session-runtime/:id/watch', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  const body = await c.req.json().catch(() => null) as { watcherSessionId?: unknown; channel?: unknown } | null
+  if (typeof body?.watcherSessionId !== 'string' || !body.watcherSessionId.trim()) return c.json({ error: 'watcherSessionId is required; identity is never inferred' }, 400)
+  const edge = application.attachWatcher(body.watcherSessionId, c.req.param('id'), typeof body.channel === 'string' ? body.channel : undefined)
+  return c.json(edge, 201)
+})
+app.post('/api/session-runtime/:id/bind', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  const body = await c.req.json().catch(() => null) as Record<string, unknown> | null
+  if (!body || typeof body.namespace !== 'string' || typeof body.runtimeKind !== 'string' || typeof body.nativeSessionId !== 'string' || typeof body.nativeStartToken !== 'string') {
+    return c.json({ error: 'namespace, runtimeKind, nativeSessionId, and nativeStartToken are required; identity is never inferred' }, 400)
+  }
+  try {
+    const binding = application.bindRuntime(c.req.param('id'), {
+      namespace: body.namespace,
+      runtimeKind: body.runtimeKind,
+      nativeSessionId: body.nativeSessionId,
+      nativeStartToken: body.nativeStartToken,
+      metadata: body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata) ? body.metadata as Record<string, unknown> : undefined,
+    }, typeof body.expectedGeneration === 'number' ? body.expectedGeneration : undefined)
+    return c.json(binding, 200)
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)
+  }
+})
+app.post('/api/session-runtime/:id/publish', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  const body = await c.req.json().catch(() => null) as { kind?: unknown; body?: unknown; senderSessionId?: unknown } | null
+  if (typeof body?.kind !== 'string' || typeof body.body !== 'string') return c.json({ error: 'kind and UTF-8 body are required' }, 400)
+  const result = application.notifyRecipients(c.req.param('id'), {
+    kind: body.kind,
+    body: Buffer.from(body.body, 'utf8'),
+    senderSessionId: typeof body.senderSessionId === 'string' ? body.senderSessionId : undefined,
+  })
+  return c.json(result, 201)
+})
+app.post('/api/session-runtime/:id/dequeue', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  const body = await c.req.json().catch(() => null) as { namespace?: unknown; expectedGeneration?: unknown } | null
+  if (typeof body?.namespace !== 'string') return c.json({ error: 'namespace is required' }, 400)
+  try {
+    const message = application.dequeueForRuntime(c.req.param('id'), body.namespace, typeof body.expectedGeneration === 'number' ? body.expectedGeneration : undefined)
+    return c.json(message, 200)
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)
+  }
+})
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await cockpitReview(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
+})
+// Per-worktree branch diff. Metadata is cheap and patches are fetched per file, with an explicit byte window
+// so a large review never materializes the whole tree in one response.
+app.get('/api/sessions/:id/diff', async (c) => {
+  const offset = Math.max(0, Number(c.req.query('offset')) || 0)
+  const limit = Math.min(240_000, Math.max(1, Number(c.req.query('limit')) || 120_000))
+  const result = await sessionDiff(c.req.param('id'), c.req.query('path') || undefined, offset, limit)
+  return result ? c.json(result) : c.json({ error: 'no such session' }, 404)
+})
+app.post('/api/sessions/:id/diff-comments', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  try {
+    const comment = await saveDiffComment(c.req.param('id'), {
+      id: typeof body?.id === 'string' ? body.id : undefined,
+      filePath: typeof body?.filePath === 'string' ? body.filePath : '',
+      lineStart: Number(body?.lineStart), lineEnd: Number(body?.lineEnd),
+      body: typeof body?.body === 'string' ? body.body : '',
+      diffIdentity: typeof body?.diffIdentity === 'string' ? body.diffIdentity : '',
+    })
+    return comment ? c.json(comment, 201) : c.json({ error: 'no such session' }, 404)
+  } catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 400) }
+})
+app.post('/api/sessions/:id/diff-comments/send', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const ids = Array.isArray(body?.ids) ? body.ids.filter((id: unknown): id is string => typeof id === 'string') : undefined
+  const result = await sendDiffComments(c.req.param('id'), ids)
+  return c.json(result, result.ok ? 200 : 409)
 })
 // The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,
 // use /api/evals pages; a bare request fails loudly rather than reopening a hidden full JSON path.

@@ -199,3 +199,13 @@ session store was used. The measured implementation commit is `b2830380e`.
 
 The complete board snapshot, including session ids and liveness, is the structured evidence attached to the two
 readings. The filing itself is a sidecar-only change; no product source was changed.
+
+### Launcher resume pinning recheck
+
+`launcher-select/resume-replays-original-launcher-not-current-default` was measured through the real HTTP backend
+and public CLI on an isolated project with absolute Node `v22.21.0`. The named-launcher half passed: a session created
+under launcher A regenerated the same A command after the configured default changed to B. The unnamed/default half
+**failed**: its pre-resume launch script did not contain the original A command, and after the default switch its
+resume script contained B. The scenario contract explicitly requires the unnamed session to freeze the command that
+actually launched it, so this is a product finding rather than a setup failure. Evidence is in the failed reading at
+the current implementation commit `9fc859f59`; no product fix was made in this eval-only lane.

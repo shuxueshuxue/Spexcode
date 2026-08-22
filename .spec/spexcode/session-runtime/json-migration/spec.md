@@ -51,5 +51,7 @@ runner refuses a missing or unhealthy old server, stops only that pid, runs the 
 proves `/health` plus `/api/sessions?all=1` against the new process before reporting success. A failed migration or
 smoke check never deletes the source or target: it quarantines target/marker artifacts under the run directory and
 restarts the named old argv, then reports the rollback result. It must not guess a process, kill a process tree, or
-start a compatibility server. The old and new commands are explicit plan data; normal runtime has no knowledge of
-this operation.
+start a compatibility server. The plan carries `orphanParentPolicy` explicitly (default `fail`); `tombstone` is only
+valid after the inventory has identified retired-parent edges and preserves those edges with archived addresses. The
+runner never infers this policy from the source data. The old and new commands are explicit plan data; normal runtime
+has no knowledge of this operation.

@@ -49,7 +49,7 @@ function seed(root) {
   return recordsRoot
 }
 
-function plan(root, port, oldPid, newCommand) {
+function plan(root, port, oldPid, newCommand, extra = {}) {
   return {
     serverPid: oldPid,
     port,
@@ -61,6 +61,7 @@ function plan(root, port, oldPid, newCommand) {
     cwd: repo,
     env: { FAKE_PORT: String(port) },
     timeoutMs: 1_500,
+    ...extra,
   }
 }
 
@@ -73,6 +74,27 @@ async function startOld(port) {
   await waitHealth(port)
   return child
 }
+
+test('live cutover passes an explicit orphan parent policy to the importer', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-live-cutover-orphan-'))
+  const port = 39_900 + Math.floor(Math.random() * 100)
+  try {
+    const recordsRoot = join(root, 'sessions')
+    mkdirSync(join(recordsRoot, 'child'), { recursive: true })
+    writeFileSync(join(recordsRoot, 'child', 'session.json'), JSON.stringify({ session_id: 'child', status: 'queued', parent: 'retired-parent' }) + '\n')
+    const old = await startOld(port)
+    const planPath = join(root, 'plan.json')
+    writeFileSync(planPath, JSON.stringify(plan(root, port, old.pid, command(healthyServer), { orphanParentPolicy: 'tombstone' })) + '\n')
+    const output = execFileSync(process.execPath, [runner, '--plan', planPath], { cwd: repo, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } })
+    const report = JSON.parse(output)
+    assert.equal(report.status, 'success')
+    assert.deepEqual(report.migration.orphanParents, ['retired-parent'])
+    assert.equal(report.migration.records, 1)
+    process.kill(report.newPid, 'SIGTERM')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('live cutover stops the named server, migrates, starts new server, and records success', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-live-cutover-success-'))

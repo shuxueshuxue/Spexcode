@@ -18,7 +18,7 @@ const HELP = `Usage: node scripts/session-live-cutover.mjs --plan ABSOLUTE_JSON
 
 The plan must contain:
   serverPid, port, oldCommand[], newCommand[], recordsRoot, databasePath, runRoot
-  optional: backupRoot, cwd, env, timeoutMs
+  optional: backupRoot, cwd, env, timeoutMs, orphanParentPolicy ('fail'|'tombstone')
 
 The runner stops only serverPid, migrates once, starts newCommand, and checks /health
 and /api/sessions?all=1. On failure it quarantines new artifacts and restarts oldCommand.`
@@ -65,6 +65,7 @@ function validatePlan(plan) {
   validateCommand(plan.newCommand, 'newCommand')
   if (plan.env !== undefined && (!plan.env || typeof plan.env !== 'object' || Array.isArray(plan.env))) fail('env must be an object')
   if (plan.timeoutMs !== undefined && (!Number.isInteger(plan.timeoutMs) || plan.timeoutMs < 1000)) fail('timeoutMs must be at least 1000')
+  if (plan.orphanParentPolicy !== undefined && plan.orphanParentPolicy !== 'fail' && plan.orphanParentPolicy !== 'tombstone') fail('orphanParentPolicy must be fail or tombstone')
   mkdirSync(plan.runRoot, { recursive: true })
   return { timeoutMs: plan.timeoutMs ?? 30_000 }
 }
@@ -169,6 +170,7 @@ async function main() {
       recordsRoot: plan.recordsRoot,
       databasePath: plan.databasePath,
       ...(plan.backupRoot ? { backupRoot: plan.backupRoot } : {}),
+      ...(plan.orphanParentPolicy ? { orphanParentPolicy: plan.orphanParentPolicy } : {}),
       locality: path => requireLocalDatabasePath(path),
     })
     newPid = start(plan.newCommand, plan)

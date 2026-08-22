@@ -17,6 +17,7 @@ must be the release being installed. `serverPid` must be the actual listener pro
   "backupRoot": "/abs/.spexcode/sessions.sqlite.json-migration-backup",
   "runRoot": "/abs/.spexcode/session-cutover-runs/2026-08-22",
   "cwd": "/abs/new-release",
+  "orphanParentPolicy": "fail",
   "timeoutMs": 30000
 }
 ```
@@ -31,6 +32,11 @@ The runner first proves the old `/health` and `/api/sessions?all=1`, sends `SIGT
 that process and port to close, runs the fenced importer, starts `newCommand`, and checks the same two HTTP surfaces
 against the new process. Success writes `runRoot/success.json` and leaves the new server running. It never guesses a
 process, kills a process tree, or starts a compatibility server.
+
+`orphanParentPolicy` is explicit plan data and defaults to `fail`. Use `tombstone` only after reviewing the migration
+inventory: it creates archived application addresses for retired parents and preserves the child-to-parent edges. The
+runner does not infer this policy from the source data, because silently choosing it would turn an operator decision
+into a hidden data migration.
 
 If migration or the new smoke fails, the runner stops the new process, moves the new database, marker, fence, and
 staging files into a timestamped `failed-*` directory below `runRoot`, and starts `oldCommand` again. The source JSON

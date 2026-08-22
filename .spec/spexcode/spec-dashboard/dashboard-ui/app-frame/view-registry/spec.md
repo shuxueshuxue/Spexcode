@@ -33,6 +33,14 @@ detail. And the SINGLETON boards — evals, issues, settings — whose bare addr
 keeps rather than one they bounce off; they are singletons only because their address carries no selector,
 so the strip's own identity rule resolves a second opening to the same tab.
 
+**`resident` is the second answer the registry owes the strip**, and it is asked of the ADDRESS, not of the
+gesture: a singleton board is `resident` and therefore never occupies the current slot, while the same
+page's DETAIL address (`#/evals/<node>/<scenario>`, `#/issues/<id>`) is an ordinary object that does.
+`param == null` is the entire difference, so the two answers cannot drift apart the way they did while
+residency lived in the rail button's click handler — a board opened from anywhere else got the slot, and
+its own first row click evicted it. Registering it here is the same reason `document` is here: what the
+strip may hold and how it holds it are one fact about an address, in one place.
+
 Left out: graph (including its focused node — a legacy address), bare sessions, and `empty`, which is what
 shows when nothing is held at all. **`/sessions/new` was a document and is not one now**: it names no
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a

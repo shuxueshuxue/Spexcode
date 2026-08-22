@@ -12,10 +12,15 @@ export const tabKey = (t) => routeHash(t.page, t.param, t.query)
 // At most ONE tab is unpinned — the current slot. Legacy entries carried a `preview` marker with a
 // narrower meaning (spec/file documents only); a legacy preview becomes the slot and every other entry is
 // pinned, because those tabs were minted under rules that kept them.
-export function normalizeTabs(raw) {
+//
+// `resident(page, param)` is [[view-registry]]'s residency answer, passed in rather than imported: the
+// registry is JSX and this module is the part that must stay checkable without a browser. A stored slot
+// entry for a resident address is promoted here, so a store written before residency existed — or edited by
+// hand — cannot hand the boot a singleton board sitting in the slot.
+export function normalizeTabs(raw, resident = () => false) {
   const tabs = raw.map((t) => ({
     page: t.page, param: t.param ?? null, query: t.query ?? null,
-    pinned: t.pinned != null ? t.pinned !== false : t.preview !== true,
+    pinned: (t.pinned != null ? t.pinned !== false : t.preview !== true) || resident(t.page, t.param ?? null),
   }))
   const slot = tabs.map((t) => t.pinned).lastIndexOf(false)
   return tabs.map((t, i) => (t.pinned || i === slot ? t : { ...t, pinned: true }))

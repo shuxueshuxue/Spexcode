@@ -293,9 +293,11 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
 
   // mention: a `[[id]]` in a body must name a real node (ERROR — a dangling mention is a broken edge in
   // the very graph the tree exists to keep honest). Checked against the SAME minted ids every other
-  // surface resolves ([[id-url-safe]]). The body reader is `bodyMentions`, shared with the projection that
-  // ships the resolving mentions as edges — including its judgement of what is prose and what is sample
-  // text — so the references lint rejects and the references the graph draws can never be different sets.
+  // surface resolves ([[id-url-safe]]). The body reader is `bodyMentions`, and this rule is now its ONLY
+  // consumer: the loader used to ship the surviving names as a per-node edge, and that projection is gone
+  // ([[context-dock]]) because a prose mention is a fact about the graph, never about the node the reader
+  // has open. The parser stays where it is — judging what is prose and what is sample text is the same
+  // judgement whoever asks, and this rule is the one place a name must be resolved at all.
   // One finding per distinct dangling name: a name repeated in one body is still one broken edge.
   const idSet = new Set(specs.map((s) => s.id))
   for (const s of specs) {

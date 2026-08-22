@@ -27,6 +27,16 @@ but a consequence of the identity rule: the address carries no selector, so open
 same address twice, which the strip already resolves to one tab. The rail button is therefore
 create-or-focus without needing to know it is ([[side-nav]]).
 
+**A singleton board is RESIDENT, and residency belongs to the address.** A board never takes the current
+slot: it is a place, and a place is not something the reader spends the slot on. This is the other half of
+"singleton", and leaving it out cost exactly what the whole-address reasoning predicts — a board reached by
+an ordinary navigation (the status-bar tally, a pasted link) sat in the slot, so its own first row click
+replaced the list with the detail. The reader asked to read one scenario and lost the list they were
+reading it from. The rail button used to hold the board by hand, which made residency a property of that
+button rather than of the board; every other door got the slot. [[view-registry]] answers residency for the
+address (`resident`, and only while the address carries no selector), so no door has to remember. The
+DETAIL addresses of those same pages are ordinary objects and land in the slot like everything else.
+
 What the strip does NOT hold is what has neither an object nor residency: `#/graph` (including
 `#/graph/<node>` focus — a legacy address, [[node-graph]]), bare `#/sessions`, and **`#/sessions/new`** —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
@@ -70,8 +80,9 @@ the strip does not reshuffle under the reader. A tab is born only from this whit
 
 1. ctrl/⌘-click on a row;
 2. a double-click, on a row or on the slot tab itself;
-3. a document's own explicit "open in a new tab" action;
-4. a deep link into a workspace that has no slot yet.
+3. a document's own explicit "open in a new tab" action — including a review row's context menu;
+4. a deep link into a workspace that has no slot yet;
+5. arriving at a RESIDENT address (a singleton board), which is held by what it is rather than by a gesture.
 
 Everything else reuses the slot, **regardless of what kind of document it is**. That last clause is the
 correction. The rule used to be fenced by TYPE — only `spec` and `file` could be replaceable, sessions and
@@ -94,6 +105,16 @@ why the old fence was buying safety that was never at risk.
 | ctrl/⌘-click | a new pinned tab |
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | close | that tab only; the slot is nothing special to close |
+
+**A row that is a real anchor gets the gesture, not a rewrite.** Finding surfaces increasingly render their
+rows as real `<a href>` — the review lists, the spec context panels, the file tree — because that is what
+makes an address copyable, middle-clickable and openable in a browser tab for free. Those rows still owe the
+strip its two claimed gestures, so the rule is ONE helper they all call rather than one hand-rolled handler
+each: a plain click is left entirely to the anchor (the browser writes the hash, the slot takes it), and
+ctrl/⌘ is intercepted into the hold. Shift, alt and middle-click are untouched — the reader asking for a
+second document beside the first wants a second tab, while the reader asking for a new window still gets
+one. The helper reads the route back out of the row's OWN href, so nothing has to re-derive the address from
+the data the row was built from.
 
 The pin mark is an ADDRESS, not a flag, and the strip's own route subscription reads it — so finding
 surfaces never touch strip state, and two subscribers of the same navigation (the strip and the session
@@ -140,6 +161,23 @@ second lookup table that could drift from them. A tab for a node carries the sam
 does, so the strip speaks the board's vocabulary rather than inventing a tab-specific one. When a selector
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
+
+**A board's DETAIL is not the board, and its tab says so.** While `#/evals`, `#/evals/<node>/<scenario>`
+and a second reading all printed "Evals", the strip could hold three tabs with nothing to tell them apart —
+which is a strip that has stopped being a working set. A scenario tab reads *node title · scenario*: the
+scenario is the leaf, the node is the folder it sits in, and that is the same container·leaf grammar a
+session tab already uses. It wears the NODE's status dot, because the reading's own verdict is not on the
+board — knowing it costs a detail request, and a tab must never mint a fetch to draw itself. An issue tab
+reads the concern, ellipsised by the tab's own width rather than cut short in the label, and `#/issues/new`
+names the compose page it actually is.
+
+**A document with no projection names ITSELF.** An issue is the one document the board holds nothing about
+— the issues board is paged and the detail fetches its own — so the detail reports the concern it already
+loaded and the frame remembers it ([[document-actions]]). That is not the second lookup table forbidden
+above: what that rule forbids is a second SOURCE free to disagree with the first, and here there is exactly
+one writer and it is the thing being named. The name outlives its document's mount, so a tab does not lose
+its label when the pool evicts the document behind it; until the name arrives, the id shows, exactly as an
+unresolved selector does.
 
 **Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
 the second pane. The strip only names the gesture; the pane is workspace state, not a tab.

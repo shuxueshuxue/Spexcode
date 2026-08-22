@@ -17,7 +17,8 @@ import { sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { pinTab, runTabCommand } from './tabs.js'
+import { runTabCommand } from './tabs.js'
+import { useDocumentNames } from './documentActions.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -250,10 +251,18 @@ export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
+  const documentNames = useDocumentNames()
   const { dock, dockMode, palette } = useWorkspace()
   const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
+  // explorer docked, opening it leaves the spec prose 383px — under a readable measure, and it takes the
+  // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the
+  // same document reads at 575px. Context is a question the reader ASKS about the node they are reading; it
+  // is not the reading itself, so it does not get to spend the reading's width until it is asked for. The
+  // toggle is one click away in the strip and the choice persists, so a reader who wants it always open has
+  // it always open — what changed is only what an unopinionated window looks like ([[context-dock]]).
   const [contextOpen, setContextOpen] = useState(() => {
-    try { return localStorage.getItem('spexcode.ctxOpen') !== '0' } catch { return true }
+    try { return localStorage.getItem('spexcode.ctxOpen') === '1' } catch { return false }
   })
   const toggleContext = () => setContextOpen((value) => {
     const next = !value
@@ -289,7 +298,7 @@ export default function Shell() {
   // The browser tab is a positioning signal, not a brand plate. The shell is the only component that reads
   // the address, so it is the only one that can say WHERE the reader is; the project keeps the suffix, so a
   // window still says which workspace it belongs to when several are open side by side.
-  const place = placeLabel({ page, param, query }, { specs, sessions, t })
+  const place = placeLabel({ page, param, query }, { specs, sessions, names: documentNames, t })
   useEffect(() => {
     document.title = `${place} · ${identity?.title || 'spexcode'}`
   }, [place, identity?.title])
@@ -315,13 +324,14 @@ export default function Shell() {
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        // the keyboard twin of the rail button, so it is the same create-or-focus: a singleton board is
-        // held, not spent through the current slot. The sealed face has one view and no destinations.
-        if (!graphOnly) pinTab(target)
+        // the keyboard twin of the rail button, and the same ordinary navigation: a singleton board is
+        // resident by address ([[view-registry]]), so it is held rather than spent through the current
+        // slot without this chord asking for it. The sealed face has one view and no destinations.
+        if (!graphOnly) navigate(target)
         return true
       }
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
-      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); pinTab('evals'); return true }
+      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); navigate('evals'); return true }
       // the ⌥ chord is the door that survives a TYPING context, and in this workspace a typing context is a
       // session console: `/` above is swallowed by the composer and xterm's helper, exactly as the
       // native-control restraint requires. So it stays session-scoped — that is where it is reachable from.
@@ -342,7 +352,7 @@ export default function Shell() {
     // address resolves to now that the graph is only an address ([[node-graph]]).
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.settings', event.key)) {
       event.preventDefault()
-      if (page === 'settings') navigate('sessions'); else pinTab('settings')
+      if (page === 'settings') navigate('sessions'); else navigate('settings')
       return true
     }
     // `/` IS THE KEYBOARD TWIN OF THE DOCK HEAD'S SEARCH BUTTON, so it opens the palette on the same plane

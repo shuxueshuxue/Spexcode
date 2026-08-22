@@ -9,6 +9,10 @@ export const EVAL_QUERY_DEFAULT = 'is:eval'
 export const scopedEvalQuery = (sessionId) => setToken(EVAL_QUERY_DEFAULT, 'scope', sessionId)
 // the aggregate score/count doors' address ([[eval-score-badge]]): the default view, node-filtered.
 export const nodeEvalQuery = (nodeId) => setToken(EVAL_QUERY_DEFAULT, 'node', nodeId)
+// a node's OPEN issues ([[context-dock]]): the issue list's default view, node-filtered. Same shape and
+// same reason as the eval twin — a surface that wants "this node's issues" asks for a text, never for a
+// second filter path, so the panel and the list it links to are literally the same query.
+export const nodeIssueQuery = (nodeId) => setToken(ISSUE_QUERY_DEFAULT, 'node', nodeId)
 
 const KEY_RE = /^([A-Za-z][A-Za-z0-9-]*):(.*)$/s
 const unquote = (v) => (v.length >= 2 && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v)

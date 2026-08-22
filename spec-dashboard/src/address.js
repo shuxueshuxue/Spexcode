@@ -19,8 +19,14 @@ export const evalAddress = (nodeId, scenario = null) => ({ kind: 'eval', nodeId,
 // filters) — the address an MR/CI note pastes for one-click review.
 export const sessionEvalAddress = (sessionId, nodeId, scenario) => ({ kind: 'session-eval', sessionId, nodeId, scenario })
 
+// An address a caller ALREADY HOLDS as a hash — a list row's own `href`, minted through the projections
+// below and then handed to a menu that has to act on it. Re-deriving an address object from the row's data
+// would mint the same address a second way, which is exactly the drift these helpers exist to prevent.
+export const hashAddress = (hash) => ({ kind: 'hash', hash })
+
 export function addressHash(address) {
   if (!address) return routeHash('graph')
+  if (address.kind === 'hash') return address.hash
   if (address.kind === 'graph-node') return routeHash('graph', address.nodeId)
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-surface') {

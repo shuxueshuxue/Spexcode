@@ -1,11 +1,12 @@
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { pinTab, tabKey, useTabs } from './tabs.js'
+import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR } from './session.js'
 import { getSessionBaseSurface, isSessionSurface, isResourceSurface, resourceSurfaceKey, resourceTabKey, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
-import { useDocumentActions } from './documentActions.jsx'
+import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 
 const resourceLabel = (url) => {
   try {
@@ -18,15 +19,47 @@ const resourceLabel = (url) => {
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
 
 // A tab's label comes from the SAME projections the rest of the board reads, never from a second lookup
-// table that could disagree: a node's own title, a session's own headline. When neither resolves (a node
-// that has since been deleted, a session closed in another tab) the raw selector shows rather than a blank
-// chip — an address that names nothing is still an address the reader typed.
-function label(tab, { specs, sessions, t }) {
+// table that could disagree: a node's own title, a session's own headline — or, where no projection holds
+// the name at all, the document's own report of it ([[document-actions]]), which has one writer and so
+// cannot disagree with anything. When nothing resolves (a node that has since been deleted, a session
+// closed in another tab, an issue not yet loaded) the raw selector shows rather than a blank chip — an
+// address that names nothing is still an address the reader typed.
+
+// The eval detail's two halves, as the address carries them: `#/evals/<node>/<scenario>`.
+export const evalDetailParts = (param) => {
+  const i = String(param || '').indexOf('/')
+  return i > 0 ? { node: param.slice(0, i), scenario: param.slice(i + 1) } : { node: param || '', scenario: '' }
+}
+
+// an issue id printed the way its own row prints it, for the tab that has not learned the title yet.
+const issueNumber = (id) => {
+  const parts = String(id || '').split('#')
+  const value = parts.length > 1 ? parts.at(-1) : parts[0]
+  return `#${value.length > 16 ? `${value.slice(0, 13)}…` : value}`
+}
+
+function label(tab, { specs, sessions, names, t }) {
   if (tab.page === 'graph') return t('tabs.graph')
   // a document names itself: a node by its own title, a file by its basename. The strip does not invent a
   // naming scheme for documents it does not own.
   if (tab.page === 'spec') return specs?.find((s) => s.id === tab.param)?.title || tab.param
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
+  // a DETAIL of a board is not the board: `#/evals` is the list and `#/evals/<node>/<scenario>` is one
+  // reading, and while both said "Evals" the strip could hold three tabs nothing distinguished. The
+  // scenario is the leaf and the node is the folder it sits in, so the tab reads container · leaf — the
+  // same grammar a session tab uses, and both halves come from the address plus the resident node title.
+  if (tab.page === 'evals' && tab.param) {
+    const { node, scenario } = evalDetailParts(tab.param)
+    const title = specs?.find((s) => s.id === node)?.title || node
+    return scenario ? `${title} · ${scenario}` : title
+  }
+  if (tab.page === 'issues' && tab.param) {
+    if (tab.param === 'new') return t('tabs.issueNew')
+    // an issue has no resident projection to be named from ([[document-actions]]): the detail reports the
+    // concern it already loaded, and until it has, the id is shown rather than a blank chip. The 220px tab
+    // does the truncating, so the label stays the whole sentence and the ellipsis lands where it fits.
+    return names?.get(routeHash('issues', tab.param)) || issueNumber(tab.param)
+  }
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param))
@@ -51,8 +84,12 @@ function label(tab, { specs, sessions, t }) {
 // The dot repeats the board's own four-state vocabulary rather than inventing a tab-specific one, so a tab
 // says the same thing about a node that its tile does.
 function TabDot({ tab, specs, sessions }) {
-  if (tab.page === 'spec' && tab.param) {
-    const node = specs?.find((s) => s.id === tab.param)
+  // an eval detail wears the dot of the NODE it measures. Its own verdict is not on the board — it takes a
+  // detail request to know — and a tab must never mint a fetch to draw itself; the node it belongs to is
+  // resident, is what the reader navigated through to get here, and is the same dot that node's tile wears.
+  const specId = tab.page === 'spec' ? tab.param : (tab.page === 'evals' && tab.param ? evalDetailParts(tab.param).node : null)
+  if (specId) {
+    const node = specs?.find((s) => s.id === specId)
     if (!node || !STATUS[node.status]) return null
     return <i className="tab-dot" style={{ background: STATUS[node.status].color }} />
   }
@@ -71,12 +108,16 @@ function TabDot({ tab, specs, sessions }) {
 export function placeLabel(route, ctx) {
   const { page, param } = route || {}
   if (page === 'spec' || page === 'file' || (page === 'sessions' && param)) return label(route, ctx)
+  // a board DETAIL names its object here too, so the window title says which reading is open rather than
+  // repeating the board's name at every one of its details.
+  if ((page === 'evals' || page === 'issues') && param) return label(route, ctx)
   return ctx.t(`place.${page}`)
 }
 
 export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const t = useT()
   const { tabs, activeKey, open, close, closeOthers } = useTabs()
+  const names = useDocumentNames()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
   const activeActions = [...actions.values()]
@@ -90,7 +131,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   return (
     <div className="tabstrip">
       <div className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
-      {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, t })}</span>}
+      {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
       {tabs.map((tab) => {
         const key = tabKey(tab)
         const active = key === activeKey
@@ -106,7 +147,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
             <button type="button" className="tab-face" data-tip={key}
               onClick={(e) => (e.altKey ? splitTo(tab) : open(tab))}>
               <TabDot tab={tab} specs={specs} sessions={sessions} />
-              <span className="tab-label">{label(tab, { specs, sessions, t })}</span>
+              <span className="tab-label">{label(tab, { specs, sessions, names, t })}</span>
             </button>
             <button type="button" className="tab-x" onClick={() => close(tab)} aria-label={t('tabs.close')}>
               <Icon name="x" size={11} />

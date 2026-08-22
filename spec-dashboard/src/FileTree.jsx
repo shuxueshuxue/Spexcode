@@ -4,6 +4,8 @@ import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
+import FilesTree from './FilesTree.jsx'
+import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
 
 // [[file-tree]]: the left dock. A spec node is a FOLDER, so the tree that navigates the project is the
@@ -87,19 +89,64 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
   )
 }
 
+// THE EXPLORER HAS TWO DISCLOSURES, and they are two PROJECTIONS of one project rather than two features.
+// SPECS is the tree above — the project shaped the way this product is about it, and it stays open by
+// default because it is the main body of the explorer, not one option among two. FILES is the disk, listed
+// as the disk ([[files-tree]]), closed by default: it answers the other thing a reader does constantly —
+// open a file whose location they know — which the spec tree cannot answer, because a path only appears
+// there if some node happens to claim it.
+//
+// A SECTION IS NOT A BAND. Each is a `<section>` whose head is its own disclosure control, which is what
+// [[ui-state-model]]'s classifier calls a collapsible payload rather than chrome: the dock stays one band
+// ([[dock-modes]]) however many projections it discloses, because these rows scroll with the content they
+// head instead of standing between the window edge and it.
+const SECTION_KEY = 'spexcode.ftSections'
+const readSections = () => {
+  try {
+    const value = JSON.parse(localStorage.getItem(SECTION_KEY) || 'null')
+    return { specs: value?.specs !== false, files: value?.files === true }
+  } catch { return { specs: true, files: false } }
+}
+
+function Section({ name, open, onToggle, children }) {
+  return (
+    <section className="ft-section">
+      <button type="button" className="ft-section-head" aria-expanded={open} onClick={onToggle}>
+        <span className="ft-caret">{open ? '▾' : '▸'}</span>
+        <span className="ft-section-name">{name}</span>
+      </button>
+      {open && <div className="ft-section-body">{children}</div>}
+    </section>
+  )
+}
+
 // The tree names itself through the dock's one header row ([[dock-modes]]), not through a strip of its own:
 // "Explorer, 355" belongs to the dock that is currently projecting the explorer, and a projection that
-// re-declares its own name is the second answer to a question already answered one row above.
+// re-declares its own name is the second answer to a question already answered one row above. The two
+// SECTION heads below are a different thing: they name a disclosure inside the list, not the list.
 export default function FileTree({ specs, focusId, onOpenFile, embedded = false }) {
+  const t = useT()
   const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
+  const [sections, setSections] = useState(readSections)
   const kids = useMemo(() => kidsOf(specs || []), [specs])
   const roots = kids.get('') || []
   const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
+  const toggle = (key) => setSections((prev) => {
+    const next = { ...prev, [key]: !prev[key] }
+    try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+    return next
+  })
   if (!specs?.length) return null
   return (
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
       <div className="ft-body">
-        {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
+        <Section name={t('fileTree.specs')} open={sections.specs} onToggle={() => toggle('specs')}>
+          {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
+        </Section>
+        {/* mounted only while open, so a reader who never opens it never costs the backend a listing */}
+        <Section name={t('fileTree.files')} open={sections.files} onToggle={() => toggle('files')}>
+          <FilesTree />
+        </Section>
       </div>
       {!embedded && <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />}
     </div>

@@ -59,6 +59,30 @@ test('a query is part of the identity, so two faces of one session are two addre
   assert.deepEqual(keys(tabs), ['*#/sessions/s1?surface=terminal', '~#/sessions/s1?surface=conversation'])
 })
 
+// A SINGLETON BOARD IS A PLACE. The regression this catches is the one the browser found: a board reached
+// by a plain navigation took the slot, so its own first row click replaced the list with the detail — the
+// reader asked to read one scenario and lost the list they were reading it from.
+test('a resident board is never the slot, and its details still are', () => {
+  const resident = (page, param) => (page === 'evals' || page === 'issues') && param == null
+  const board = { page: 'evals', param: null, query: null }
+  const detail = (name) => ({ page: 'evals', param: `node/${name}`, query: null })
+  // however the board was reached, the strip holds it — the caller passes 'pin' for a resident address.
+  let tabs = placeTab([], board, 'pin')
+  tabs = placeTab(tabs, detail('a'))
+  tabs = placeTab(tabs, detail('b'))
+  tabs = placeTab(tabs, detail('c'))
+  assert.deepEqual(keys(tabs), ['*#/evals', '~#/evals/node/c'])
+  // ctrl/⌘ on a row still holds a second detail beside the reused slot
+  tabs = placeTab(tabs, detail('d'), 'pin')
+  assert.deepEqual(keys(tabs), ['*#/evals', '~#/evals/node/c', '*#/evals/node/d'])
+  // a store written before residency existed cannot boot a board into the slot
+  const migrated = normalizeTabs([{ page: 'evals', param: null, pinned: false }], resident)
+  assert.deepEqual(migrated.map((t) => t.pinned), [true])
+  // …and the same store's DETAIL entry keeps the slot it was holding
+  const kept = normalizeTabs([{ page: 'evals', param: null, pinned: false }, { page: 'evals', param: 'n/s', pinned: false }], resident)
+  assert.deepEqual(kept.map((t) => t.pinned), [true, false])
+})
+
 test('legacy storage migrates to exactly one slot', () => {
   // old entries: an unmarked one is resident, a `preview` one is the slot
   assert.deepEqual(normalizeTabs([{ page: 'spec', param: 'a' }, { page: 'spec', param: 'b', preview: true }]),

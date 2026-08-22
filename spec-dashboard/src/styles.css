@@ -568,8 +568,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-gov-h { display: block; font-size: var(--type-meta); color: var(--muted); margin-bottom: 6px; }
 .doc-gov-h b { color: var(--ink2); font-weight: var(--weight-bold); }
 .doc-gov-files { display: flex; flex-wrap: wrap; gap: 5px; }
-.gov-f { font-size: var(--type-meta); color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: 3px; }
+.gov-f { font-family: var(--mono); font-size: var(--type-meta); color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: 3px; cursor: pointer; }
+.gov-f:hover { border-color: var(--blue); }
+.gov-f.on { background: color-mix(in srgb, var(--blue) 18%, var(--panel2)); border-color: var(--blue); color: var(--ink2); }
 .doc-gov.prose .doc-gov-h { font-style: italic; }
+
+/* [[source-view]]: a governed file opened in place, under the prose that claims it. Bounded height — it is
+   a reading window inside the spec pane, never a curtain that buries the body below it. */
+.srcview { margin: 9px 0 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--paper); }
+.srcview-body { height: min(46vh, 420px); overflow: hidden; }
+.srcview-body .cm-editor { height: 100%; }
+.srcview-body .cm-editor.cm-focused { outline: none; }
+.srcview-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 9px; border-top: 1px solid var(--line); background: var(--panel); font-size: var(--type-caption); color: var(--muted); }
+.srcview-path { background: none; padding: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srcview-meter { white-space: nowrap; }
+.srcview-err { color: var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
 .doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: var(--type-body); line-height: var(--leading-body); color: var(--ink); }

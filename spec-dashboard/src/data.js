@@ -114,6 +114,20 @@ export async function loadPublicSpecContent(id) {
 export const specUrl = (id, ...parts) =>
   apiUrl(`/api/specs/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`)
 
+// one WINDOW of a governed source file ([[source-read]]). The board never asks for a whole file: it asks
+// for a byte range and gets back `{size, offset, bytes, text, eof}`, so the next window starts at
+// `offset + bytes` and the total `size` is known from the first response. A refusal (outside the worktree,
+// or not a source file under the project's policy) arrives as `{error}` with a 400/404 — surfaced, never
+// swallowed into an empty view that reads as "this file is blank".
+export async function fetchSourceSlice(path, offset = 0, limit) {
+  const q = new URLSearchParams({ path, offset: String(offset) })
+  if (limit != null) q.set('limit', String(limit))
+  const res = await apiFetch(`/api/source?${q}`)
+  const body = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(body?.error || `source read failed (${res.status})`)
+  return body
+}
+
 // subscribe to the graph's push channel in DELTA mode ([[graph-stream]]/[[graph-delta]]): the server sends a
 // full snapshot on connect (`graph-full {to, graph}`), then hash-chained patches (`graph-delta {from, to,
 // set, del}`) — a few KB per change instead of a full refetch. This is the client mirror of the server's

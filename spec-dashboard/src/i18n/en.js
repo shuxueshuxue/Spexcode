@@ -50,6 +50,7 @@ export default {
     aria: 'project file tree',
   },
   dockModes: {
+    collapse: 'Collapse sidebar',
     aria: 'dock mode',
     explorer: 'Explorer',
     sessions: 'Sessions',

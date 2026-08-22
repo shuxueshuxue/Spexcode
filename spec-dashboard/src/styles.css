@@ -60,6 +60,10 @@
   --line-session-row: 18px; --line-status: 24px;
   --tracking-normal: 0;
 
+  /* MOTION. One duration for a panel opening or closing. Long enough to read as a movement rather than a
+     jump, short enough that nobody waits for it — and a token, so the whole frame moves at one speed
+     instead of each panel picking its own. */
+  --dur-panel: 170ms;
   /* GEOMETRY. One corner radius for every box that is not a circle, and one spacing ladder. New rules
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
@@ -323,6 +327,19 @@ body {
 .dock {
   flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
   background: var(--ground); border-right: 1px solid var(--edge);
+  overflow: hidden; max-width: 640px; animation: dock-in var(--dur-panel) ease;
+}
+/* the sidebar SLIDES rather than blinking: opening animates from nothing, and closing keeps the element on
+   screen for exactly one duration ([[dock-modes]]) so the reverse is visible too. The animated property is
+   MAX-WIDTH, not width: the dock's width is an inline style (the reader's own resize) and a keyframe
+   cannot outrank one — `!important` inside a keyframe is ignored by the spec, so the first version of this
+   animated nothing at all. Children keep their laid-out size so the tree slides instead of reflowing. */
+.dock.dock-closing { animation: dock-out var(--dur-panel) ease forwards; pointer-events: none; }
+.dock > * { flex-shrink: 0; }
+@keyframes dock-in { from { max-width: 0; opacity: 0; } }
+@keyframes dock-out { to { max-width: 0; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .dock, .dock.dock-closing { animation: none; }
 }
 .dock-session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
 .dock > .filetree { flex: 1; min-height: 0; border-right: 0; background: transparent; }

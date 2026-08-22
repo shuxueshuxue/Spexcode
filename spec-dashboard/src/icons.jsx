@@ -104,6 +104,11 @@ const ICONS = {
     vb: 18, sw: 1.4,
     node: <><path d="M11.6 2.5h3.3a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6h-3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M11.6 2.5v13" /></>,
   },
+  // the same panel glyph mirrored: the left dock's own collapse control ([[dock-modes]]).
+  'panel-left': {
+    vb: 18, sw: 1.4,
+    node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
+  },
 
   // GitHub Primer Octicons `issue-opened-16` (MIT) — preserve the official filled ring + centre.
   'issue-opened': {

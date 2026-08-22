@@ -47,6 +47,15 @@ the dock; clicking the other opens the dock in that projection. Explorer rows re
 behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]: a plain click navigates
 to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it as its own tab.
 
+**The dock closes from its own header, and the closing is a movement.** The rail button that opened a
+projection still collapses it; the header carries the same door for the reader who is done with the panel
+they are looking at — one state, two doors, never two states. Opening and closing SLIDE, for one shared
+`--dur-panel` token rather than a duration invented per panel, and the element outlives the state that
+hides it by exactly that long so the reverse is visible too. The animated property is max-width: the dock's
+width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
+inside a keyframe is ignored by the spec, which is how the first version of this animated nothing at all.
+Reduced-motion drops the animation and keeps both doors.
+
 **THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
 its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how
 thick the dock is — which is the [[ui-state-model]] budget made structural rather than remembered. A

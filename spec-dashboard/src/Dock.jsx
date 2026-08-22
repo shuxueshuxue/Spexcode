@@ -65,32 +65,44 @@ function SessionDock({ sessions, activeId }) {
 // the doors that projection owns — icon-only, because the row is already saying which projection it is.
 function DockHead({ mode, specs, sessions }) {
   const t = useT()
+  const { setDock } = useWorkspaceApi()
   const sessionMode = mode === 'sessions'
   const count = sessionMode ? (sessions?.length || 0) : (specs?.length || 0)
   return (
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
       <span className="dock-head-count">{count}</span>
-      {sessionMode && (
-        <span className="dock-head-acts">
-          <button type="button" className="dock-head-act" data-tip={t('dockSessions.archive')} aria-label={t('dockSessions.archive')}
-            onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
-            <Icon name="archive" size={13} />
-          </button>
-          <button type="button" className="dock-head-act" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
-            onClick={() => navigate('sessions', 'new')}>
-            <Icon name="plus" size={14} />
-          </button>
-        </span>
-      )}
+      {/* ONE doors cluster, whatever the projection: the projection's own doors, then collapse. A second
+          cluster would be a second row's worth of answers in a header that exists to give one. */}
+      <span className="dock-head-acts">
+        {sessionMode && (
+          <>
+            <button type="button" className="dock-head-act" data-tip={t('dockSessions.archive')} aria-label={t('dockSessions.archive')}
+              onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
+              <Icon name="archive" size={13} />
+            </button>
+            <button type="button" className="dock-head-act" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
+              onClick={() => navigate('sessions', 'new')}>
+              <Icon name="plus" size={14} />
+            </button>
+          </>
+        )}
+        {/* collapsing belongs on the thing being collapsed as well as on the rail button that opened it:
+            the rail is where you ASK for a projection, and this is where you are done with it. One state,
+            two doors — never two states. */}
+        <button type="button" className="dock-head-act dock-collapse" data-tip={t('dockModes.collapse')}
+          aria-label={t('dockModes.collapse')} onClick={() => setDock(false)}>
+          <Icon name="panel-left" size={13} />
+        </button>
+      </span>
     </div>
   )
 }
 
-export default function Dock({ mode, specs, sessions, focusId, activeSessionId }) {
+export default function Dock({ mode, specs, sessions, focusId, activeSessionId, closing = false }) {
   const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
   return (
-    <aside className="dock" style={{ width }}>
+    <aside className={closing ? 'dock dock-closing' : 'dock'} style={{ width }} aria-hidden={closing ? 'true' : undefined}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />
       {mode === 'sessions'
         ? <SessionDock sessions={sessions} activeId={activeSessionId} />

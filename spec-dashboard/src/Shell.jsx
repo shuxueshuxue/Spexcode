@@ -52,6 +52,9 @@ const poolKey = (page, param) => (POOL_PAGES.has(page) ? page : `${page}/${param
 // How many documents stay mounted. Small enough that an idle workspace is idle, large enough that the tab
 // strip's usual working set is entirely warm — a bound that fits the strip, not a guess about memory.
 const POOL_LIMIT = 6
+// mirrors --dur-panel in the stylesheet: the shell has to outlive the CSS animation by the same amount it
+// lasts, and one of the two has to name the number.
+const DOCK_ANIMATION_MS = 170
 
 // [[workspace-shell]]'s MOUNTED-DOCUMENT POOL. Switching tabs used to remount the document from scratch —
 // every switch re-ran a view's whole boot, which is what "why does clicking a tab reload it" was naming.
@@ -196,6 +199,19 @@ export default function Shell() {
   // not the address, so switching a session's own face is not a focus change.
   const dockKind = dockFor(page)
   const documentKey = `${page}/${param ?? ''}`
+  // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
+  // slides out ([[dock-modes]]). One timer, cleared on reopen; the reader can never end up with a ghost
+  // panel, because the flag only ever survives its own timeout.
+  const [closingDock, setClosingDock] = useState(false)
+  const wasDocked = useRef(dock)
+  useEffect(() => {
+    if (wasDocked.current === dock) return undefined
+    wasDocked.current = dock
+    if (dock) { setClosingDock(false); return undefined }
+    setClosingDock(true)
+    const timer = setTimeout(() => setClosingDock(false), DOCK_ANIMATION_MS)
+    return () => clearTimeout(timer)
+  }, [dock])
   useEffect(() => {
     if (dockKind === 'sessions' || dockKind === 'explorer') setDockMode(dockKind)
   }, [documentKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -280,9 +296,9 @@ export default function Shell() {
       <div className="app">
         <TooltipLayer />
         <SideBar page={page} identity={identity} catalog={catalog} />
-        {dock && dockKind !== 'none' && (
+        {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
-            <Dock mode={dockMode} specs={specs} sessions={sessions}
+            <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />
           </ViewErrorBoundary>
         )}

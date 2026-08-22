@@ -49,6 +49,7 @@ export default {
     aria: '项目文件树',
   },
   dockModes: {
+    collapse: '收起侧边栏',
     aria: '停靠栏模式',
     explorer: '资源管理器',
     sessions: '会话',

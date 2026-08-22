@@ -71,10 +71,13 @@ function IssuesView() {
 }
 function SettingsView() { return <Settings /> }
 
-// A tab holds an OBJECT, not a board face and not a form. `document(page, param)` therefore receives the
-// route selector: graph, bare list pages and the sessions launch page are whole-page surfaces, while only
-// object-shaped addresses enter the working set.
-// `empty` is what the workspace shows when it holds nothing; a tab for it would contradict its own strip.
+// `document(page, param)` marks what the working set may hold. Two kinds qualify: an OBJECT (a node, a
+// file, a session, an eval detail, an issue detail) and a SINGLETON board — evals, issues and settings,
+// whose bare address names a place the reader keeps open rather than one they bounce off. A singleton is a
+// tab like any other; it is a singleton only because its address carries no selector, so opening it twice
+// is opening the same address twice, which the strip already resolves to one tab.
+// What is left out is what has no object and no residency: the graph (a legacy address), bare sessions and
+// the sessions launch page (a form), and `empty` — a tab for it would contradict its own strip.
 export const VIEWS = {
   // `graph` is still registered and still renders at its own address; it is simply no longer anywhere the
   // workspace SENDS a reader ([[node-graph]]). A retired entrance is not a deleted view.
@@ -84,9 +87,9 @@ export const VIEWS = {
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
   sessions: { component: SessionsView, document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
-  evals:    { component: EvalsView,    document: (_page, param) => param != null, className: 'view-evals' },
-  issues:   { component: IssuesView,   document: (_page, param) => param != null, className: 'view-issues' },
-  settings: { component: SettingsView, document: false, className: 'view-settings' },
+  evals:    { component: EvalsView,    document: true, className: 'view-evals' },
+  issues:   { component: IssuesView,   document: true, className: 'view-issues' },
+  settings: { component: SettingsView, document: true, className: 'view-settings' },
   empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 

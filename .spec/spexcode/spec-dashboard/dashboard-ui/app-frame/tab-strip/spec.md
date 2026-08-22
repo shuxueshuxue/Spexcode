@@ -19,19 +19,26 @@ related:
 ---
 # tab-strip
 
-**A tab is an object route.** Whole-page surfaces are not objects; the strip holds only object-shaped
-addresses: `#/spec/<id>`, `#/file/<path>`, `#/sessions/<id>[?surface=…]`,
-`#/evals/<node>/<scenario>`, and `#/issues/<id>`. `#/graph` (including `#/graph/<node>` focus), bare
-`#/sessions`, bare `#/evals`, bare `#/issues` and `#/settings` are never tabs. Neither is
-**`#/sessions/new`**: the launch page names no session — it is where one is STARTED — and a tab for it is a
-tab for a form. The session it launches becomes a tab the moment it has an id, which is the moment there is
-an object to hold. This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's
-address does not mint a tab.
+**The strip holds objects and singletons.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
+`#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A SINGLETON
+tab is a bare board — `#/evals`, `#/issues`, `#/settings` — a place the reader keeps open rather than one
+they bounce off. It is a tab like any other, closable like any other; "singleton" is not a second tab kind
+but a consequence of the identity rule: the address carries no selector, so opening it twice is opening the
+same address twice, which the strip already resolves to one tab. The rail button is therefore
+create-or-focus without needing to know it is ([[side-nav]]).
 
-**The strip is the workspace itself, so it is on every route.** Even where the dock stands down — a bare
-board, settings — the working set stays visible and one click returns to it: *"应该被保留的是各个 tab，各个
-tab 才相当于是工作区，而不是左侧边栏。"* The left rail is a way to change destination; the strip is what you
-are working on, and the two are not interchangeable.
+What the strip does NOT hold is what has neither an object nor residency: `#/graph` (including
+`#/graph/<node>` focus — a legacy address, [[node-graph]]), bare `#/sessions`, and **`#/sessions/new`** —
+the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
+session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
+This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
+nothing.
+
+**The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a board
+tab has none ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
+各个 tab，各个 tab 才相当于是工作区，而不是左侧边栏。"* The left rail is a way to change destination and the
+dock only describes the current tab; the strip is what you are working on, and none of the three is
+interchangeable with another.
 
 **A tab is a route.** That is the whole design, and it is why this is not a new navigation mechanism: the
 address layer already carried `page + param + query` and already made every destination copyable and
@@ -46,7 +53,7 @@ and chrome that only appears when a second document exists would jump the layout
 the reader's first hold.
 
 **The row is always there, and it always says something.** On the routes that mint no tab — the graph, the
-bare boards, settings, the empty workspace — the strip names the PLACE instead: the same projection the
+sessions launch page, the empty workspace — the strip names the PLACE instead: the same projection the
 document title uses, drawn quiet, because orientation is not a title. This is what makes the row honest
 rather than reserved: the shell used to hold the space with a wrapper that drew a blank band on exactly
 those routes, which is a band that says nothing while costing the budget the same as one that does.
@@ -121,8 +128,11 @@ document ([[view-registry]]): a tab for it would be the one address that contrad
 Only closing the last tab mints it — a fresh load with no tabs opens `#/sessions`, because starting with
 nothing held is not the same event as putting your last document down.
 
-`settings` is navigable but never accumulates. It is a destination people bounce off, not a document they
-keep open, and a strip that filled with visits would stop being a list of what you are working on.
+`settings` used to be described as a destination people bounce off, and was therefore kept out of the
+strip. Two things were true at once and only one of them was the reason: a strip that filled with *visits*
+would stop being a list of what you are working on — but that is what the current slot solves, for every
+kind of address at once. Settings is a singleton tab now, held when it is asked for by name and closed like
+anything else.
 
 **Labels come from the board's own projections** — a node's title, a session's headline plus its i18n face
 suffix — never from a

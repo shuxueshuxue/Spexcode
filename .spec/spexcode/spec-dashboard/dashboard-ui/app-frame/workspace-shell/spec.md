@@ -20,23 +20,22 @@ It knows there is an address, that an address names a view, and where on the scr
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-- **Where is everything? — FINDING, on the left.** The rail (the activity bar: explorer and sessions mode
-  buttons, search, then the document openers) and the dock (the explorer — the spec tree, open by default).
-  Looking must be free:
-  browsing a finding surface never grows any state but the camera's. A **full-bleed page** is where the
-  region stands down: the bare boards (Evals and Issues ARE finding surfaces) and Settings (a whole-page
-  form) take the window's width, so while one of them is routed the dock does not render — two finding
-  surfaces side by side buys nothing, and framing a form with a tree nobody is reading wastes the same
-  width. The rail's explorer toggle still owns the stored preference and stays lit by it; a full-bleed page
-  suppresses the dock while it is routed and never edits the reader's choice ([[file-tree]]). Their
-  parameterized addresses are not full-bleed: an eval detail and an issue detail are documents like any
-  other and keep the dock.
+- **Where is everything? — FINDING, on the left.** The rail is an **activity bar**: the explorer and
+  sessions projection buttons, search, then the singleton boards (evals, issues, settings pinned at the
+  bottom). The dock beside it is one finding surface with two projections. Looking must be free: browsing a
+  finding surface never grows any state but the camera's.
+  **The dock is a property of the focused tab** — both its projection and its existence. A session document
+  brings the session list, a node or a governed file brings the explorer, and a singleton board brings no
+  sidebar at all, taking the full width instead of inheriting the tree the last tab was showing. So the
+  sidebar describes the working set rather than being a setting maintained beside it, and the rail's lit
+  button reads as *where this document belongs* ([[dock-modes]]). A rail click overrides the derivation by
+  hand and the override lapses at the next focus change ([[file-tree]]).
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
   active tab; everything readable is a document with an address — a node, a file, a session, an eval, an
-  issue. **The strip is the workspace itself**, which is why it is on every route including the full-bleed
-  ones: *"应该被保留的是各个 tab，各个 tab 才相当于是工作区，而不是左侧边栏。"* The dock can stand down and
-  the rail is only a way to change destination; what the reader is working on stays on screen and one click
-  away, whatever is routed. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
+  issue, and the **singleton boards** (evals, issues, settings), which are tabs you keep rather than places
+  you bounce off. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
+  区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
+  current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the
   center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
   the reader's own answer.

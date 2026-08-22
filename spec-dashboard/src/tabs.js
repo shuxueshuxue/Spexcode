@@ -84,6 +84,17 @@ export function pinTab(page, param = null, query = null) {
   navigate(page, param, { query })
 }
 
+// Focus the most recently opened tab a predicate accepts, if there is one. The rail's sessions button is
+// the caller: asking for sessions when a session is already held should return the reader to it rather
+// than to a launch page they did not ask for. Returns whether anything was focused.
+export function focusLatestTab(match) {
+  const held = getTabs().filter(match)
+  const last = held[held.length - 1]
+  if (!last) return false
+  navigate(last.page, last.param, { query: last.query })
+  return true
+}
+
 export function useTabs() {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)

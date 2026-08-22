@@ -82,14 +82,15 @@ says the dock is ONE band, so a mode row stacked above its header is a breach th
 
 Rail, tab strip and status bar are unconditional: one persistent way to change destination
 ([[side-nav]]), one place the open documents are named ([[tab-strip]]), one line of ambient state
-([[status-bar]]). The tab strip is unconditional in the strongest sense — it is the workspace itself, and
-it stays on every route including the full-bleed ones, so the working set is always in reach
-([[tab-strip]]). The dock and the context dock are the only conditional bands. **The full-bleed family is
-the bare boards and settings** — a finding surface beside a finding surface squeezes both, and a
-whole-page form framed by a tree nobody is reading wastes the same width — so while a bare `#/evals`, a
-bare `#/issues`, or `#/settings` is routed the dock does not render, and the rail toggle keeps the stored
-preference without editing it. Split adds a **column**, never a band. U picks what fills the content area,
-never how much chrome frames it.
+([[status-bar]]). The tab strip is unconditional in the strongest sense — it is the workspace itself and
+it stays on every route, so the working set is always in reach ([[tab-strip]]). The dock and the context
+dock are the only conditional bands, and the dock's condition has **two** factors because the sidebar is a
+property of the focused tab and not a window-wide setting ([[dock-modes]]): the reader's own open/closed
+choice, and whether the focused tab has a natural sidebar at all. Evals, issues and settings do not — they
+are singleton tabs with their own whole surface — so they render none and the main area takes the full
+width. The rule is ISOLATION, not suppression: a board never inherits the dock the previous tab was showing,
+which is what kept the sidebar feeling like a setting to maintain rather than a fact about what is held.
+Split adds a **column**, never a band. U picks what fills the content area, never how much chrome frames it.
 
 **Theorem: 3 ≤ B ≤ 5 over every reachable state.** The floor is a closed dock on a non-spec route
 (rail + strip + status); the ceiling is a spec document with both docks open. There is no state in which

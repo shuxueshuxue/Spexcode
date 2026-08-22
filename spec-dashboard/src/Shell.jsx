@@ -15,7 +15,7 @@ import { Icon } from './icons.jsx'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey } from './bindings.js'
-import { runTabCommand } from './tabs.js'
+import { pinTab, runTabCommand } from './tabs.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -28,18 +28,19 @@ import { runTabCommand } from './tabs.js'
 // is the rule that makes two-up possible later and that keeps a view from coupling to whichever address
 // happens to be current.
 
-// The FULL-BLEED family is where the finding region stands down: a surface that is already a whole page of
-// its own gets the window's full width. Evals and Issues are finding surfaces in their own right —
-// full-width GitHub-style lists with their own query, facets and rows — and Settings is a whole-page form.
-// Putting the dock beside one of them puts two finding surfaces on screen at once, or frames a form with a
-// tree nobody is reading, and squeezes the page the width it was drawn for. The rail's projection buttons
-// still own the stored PREFERENCE (and stay lit only when their projection is active): a full-bleed page
-// suppresses the dock for as long as it is routed, and never edits what the reader chose.
-//
-// The parameterized addresses in these families are NOT full-bleed: #/evals/<node>/<scenario> and
-// #/issues/<id> are object documents and keep the dock like any other document.
-const BOARD_PAGES = new Set(['evals', 'issues'])
-const isFullBleed = (page, param) => page === 'settings' || (BOARD_PAGES.has(page) && param == null)
+// THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]) — which projection it shows, and whether
+// it exists at all. A session document belongs with the session list; a node or a governed file belongs
+// with the explorer. The singleton boards have NO natural sidebar, so they render none and the main area
+// takes the whole width: a board must not inherit the previous tab's dock, because inheriting it is what
+// makes a sidebar feel like a setting the reader is maintaining instead of a fact about what they hold.
+// `keep` is the third answer — the graph and the empty workspace have no opinion and change nothing.
+const SIDEBARLESS = new Set(['evals', 'issues', 'settings'])
+const dockFor = (page) => {
+  if (SIDEBARLESS.has(page)) return 'none'
+  if (page === 'sessions') return 'sessions'
+  if (page === 'spec' || page === 'file') return 'explorer'
+  return 'keep'
+}
 
 function ViewHost({ page, param, query }) {
   const t = useT()
@@ -120,6 +121,18 @@ export default function Shell() {
     return next
   })
 
+  // THE DOCK FOLLOWS THE FOCUSED TAB. The projection is derived from what the reader is holding, not
+  // chosen once and left behind: moving to a session tab brings the session list, moving to a node or a
+  // governed file brings the explorer, and a sidebar-less board renders no dock at all. A rail click still
+  // selects a projection by hand — that override simply lasts until the reader moves to another DOCUMENT,
+  // which is what makes it an override rather than a second setting. The effect is keyed on the document,
+  // not the address, so switching a session's own face is not a focus change.
+  const dockKind = dockFor(page)
+  const documentKey = `${page}/${param ?? ''}`
+  useEffect(() => {
+    if (dockKind === 'sessions' || dockKind === 'explorer') setDockMode(dockKind)
+  }, [documentKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // The browser tab is a positioning signal, not a brand plate. The shell is the only component that reads
   // the address, so it is the only one that can say WHERE the reader is; the project keeps the suffix, so a
   // window still says which workspace it belongs to when several are open side by side.
@@ -149,12 +162,13 @@ export default function Shell() {
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        // the sealed face has one view and no destinations; every page jump is inert there.
-        if (!graphOnly) navigate(target)
+        // the keyboard twin of the rail button, so it is the same create-or-focus: a singleton board is
+        // held, not spent through the current slot. The sealed face has one view and no destinations.
+        if (!graphOnly) pinTab(target)
         return true
       }
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
-      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); navigate('evals'); return true }
+      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); pinTab('evals'); return true }
       if (!graphOnly && firesEvent('shell.search', event)) { event.preventDefault(); openPalette('sessions'); return true }
     }
     if (firesEvent('shell.dockToggle', event)) { event.preventDefault(); setDock((value) => !value); return true }
@@ -171,7 +185,9 @@ export default function Shell() {
     // Leaving settings lands on sessions — the workspace's daily face, and the same place an unknown
     // address resolves to now that the graph is only an address ([[node-graph]]).
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.settings', event.key)) {
-      event.preventDefault(); navigate(page === 'settings' ? 'sessions' : 'settings'); return true
+      event.preventDefault()
+      if (page === 'settings') navigate('sessions'); else pinTab('settings')
+      return true
     }
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.search', event.key)) {
       event.preventDefault(); openPalette('nodes'); return true
@@ -197,7 +213,7 @@ export default function Shell() {
       <div className="app">
         <TooltipLayer />
         <SideBar page={page} identity={identity} catalog={catalog} />
-        {dock && !isFullBleed(page, param) && (
+        {dock && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />

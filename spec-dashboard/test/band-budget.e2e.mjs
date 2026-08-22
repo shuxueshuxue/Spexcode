@@ -35,14 +35,14 @@ const CONTEXTS = ['closed', 'open']
 const SPLITS = ['none', 'open']
 const SURFACES = ['conversation', 'terminal', 'diff', 'resource']
 
-// The FULL-BLEED family is full width: a finding surface beside a finding surface squeezes both, and a
-// whole-page form framed by a tree nobody is reading is the same waste. While a bare #/evals, a bare
-// #/issues, or #/settings is routed, the dock does not render at all.
+// THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]): a session tab brings the session list, a
+// node or governed file brings the explorer, and the singleton boards have no natural sidebar — they render
+// none and the main area takes the full width, rather than inheriting whatever the last tab was showing.
 // `graph` is still in R: the address is still reachable and still measurable, it is simply no longer a
 // rail destination ([[node-graph]]) — a retired entrance does not shrink the state space.
-const FULL_BLEED_ROUTES = new Set(['evals', 'issues', 'settings'])
+const SIDEBARLESS_ROUTES = new Set(['evals', 'issues', 'settings'])
 
-const dockBand = (state) => (state.D !== 'closed' && !FULL_BLEED_ROUTES.has(state.R) ? 1 : 0)
+const dockBand = (state) => (state.D !== 'closed' && !SIDEBARLESS_ROUTES.has(state.R) ? 1 : 0)
 const contextBand = (state) => (state.R === 'spec' && state.C === 'open' ? 1 : 0)
 
 // B(state) — the whole budget. Rail, tabstrip and statusbar are unconditional; the dock and the context

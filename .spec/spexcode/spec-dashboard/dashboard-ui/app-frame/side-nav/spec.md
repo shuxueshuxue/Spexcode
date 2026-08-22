@@ -33,13 +33,17 @@ restores the list.
 
 ## expanded spec
 
-- **The rail carries two kinds of entry, finding before opening.** Under the project chip sit the
+- **The rail is an ACTIVITY BAR, and it carries two kinds of entry.** Under the project chip sit the
   workspace's FINDING controls — search plus the dock's two projection buttons, explorer and sessions.
-  Those two are plain buttons, not addresses: each changes what helps you look and is lit only while its
-  projection is up. The dock starts open in explorer; clicking the active projection collapses it, while
-  clicking the other opens the dock and selects that projection. They render only inside a workspace (the
-  cold review fast-path has no WorkspaceProvider). Below them sit the DOCUMENT OPENERS, each a real anchor
-  naming an address. The order is the mockup's and VS Code's alike: what helps you look, then where you can go.
+  Those two are plain buttons, not addresses: each selects a projection and is lit while that projection is
+  the one in force. The lit button is a statement about the focused tab, not a memory of the last click:
+  the dock follows what the reader holds ([[dock-modes]]), and a manual selection is a temporary override
+  that lapses at the next focus change. Clicking the active projection collapses the dock, while clicking
+  the other opens it on that projection; asking for sessions returns to the most recently held session tab
+  when there is one, and otherwise arms the projection without minting anything. They render only inside a
+  workspace (the cold review fast-path has no WorkspaceProvider). Below them sit the SINGLETON BOARDS, each
+  a real anchor naming an address. The order is the mockup's and VS Code's alike: what helps you look, then
+  where you can go.
 - **One rail, three openers — evals, issues, settings.** A compact, always-visible **40px** icon rail on the app's left
   edge names the addressable kinds: Evals, Issues, and Settings pinned at the
   bottom. The spec-node graph is NOT among them: it is still addressable at `#/graph`, but the workspace
@@ -48,10 +52,11 @@ restores the list.
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in
   tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. Each entry is an `<a>`
-  carrying its page's address (`href="#/…"`): a click is a native hash navigation — the *same transaction*
-  the address bar, a bookmark, ⌥digit, or any in-page door produces — so middle-click/new-tab/copy-address
-  come free and no click handler re-implements routing. The rail is chrome, not a
-  page — it never scrolls away and never overlays content. And it is **inert chrome for pointer
+  carrying its page's address (`href="#/…"`), so middle-click/new-tab/copy-address come free and every
+  modified click stays the browser's. The PLAIN click is **create-or-focus**: it holds the board's
+  singleton tab if the workspace does not have one and focuses it if it does ([[tab-strip]]), rather than
+  spending the current slot on a place the reader asked for by name. Clicking Evals twice is one tab. The
+  rail is chrome, not a page — it never scrolls away and never overlays content. And it is **inert chrome for pointer
   focus** ([[focus-return]]'s acquisition-side guard): a press on a rail entry or the project chip
   acts — the link navigates, the chip menu opens — without moving DOM focus, so the rail never
   becomes the focus-return ticket and closing an overlay can never land focus on the top-left chip
@@ -76,9 +81,9 @@ restores the list.
   behind plain gateways with no index.html fallback, and a hash route needs nothing from any server.
   `route.js` is the whole route layer (parse — path + query, hash construction, navigate, one hashchange
   hook, legacy normalization); the object-level address vocabulary over it is [[address-routing]].
-- **The rail is the finding layer; the strip is the object layer.** Rail destinations are evals,
-  issues, and settings; explorer and sessions are dock projection buttons. Only an address with an object parameter enters the strip, as defined by
-  [[tab-strip]]/[[view-registry]]; bare board/list routes stay navigable but never accumulate.
+- **The rail is the finding layer; the strip is the working set.** Rail destinations are evals, issues and
+  settings; explorer and sessions are dock projection buttons. What enters the strip is defined by
+  [[tab-strip]]/[[view-registry]]: object addresses, plus those three boards as singleton tabs.
 - **Pages push; list→detail pushes; filter changes push; automatic echoes replace.** Switching pages
   pushes a history entry. Opening a DETAIL page from its list is ALSO a push — measured on GitHub: history
   grows by one and browser Back restores the previous list URL, filters intact; the detail is a real

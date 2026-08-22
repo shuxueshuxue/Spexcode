@@ -37,10 +37,9 @@ ctrl/⌘-click or double-click HOLDS the document as a resident tab. The preview
 address and is fenced to spec/file by [[tab-strip]].
 
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
-workspace whose only entrance is a URL is a workspace nobody enters. It is toggled from the rail's explorer
-entry ([[side-nav]]), where the other workspace-finding controls live. On by default is not beside the
-content always: while a full-bleed board (Evals, Issues) is the routed document the dock does not render at
-all ([[workspace-shell]]) — the preference stays on and the rail entry stays lit, because what the reader
+workspace whose only entrance is a URL is a workspace nobody enters. Its explorer and sessions projections
+are selected from the rail's activity-bar buttons ([[side-nav]], [[dock-modes]]). On by default is not beside
+the content always: while a full-bleed board (Evals, Issues) is the routed document the dock does not render
+at all ([[workspace-shell]]) — the preference stays on and the rail entry stays lit, because what the reader
 chose is not what the board is doing. Its width is the shared resizable-pane primitive, persisted per pane
-like every other. The dock's top mode tabs select the explorer or sessions projection ([[dock-modes]])
-without changing the document route.
+like every other.

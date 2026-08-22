@@ -8,8 +8,8 @@ import { IdentityIcon } from './IdentityIcon.jsx'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
 // The workspace's rail ([[side-nav]]) — one slim icon strip with two kinds of entry, in this order:
-// FINDING controls (the explorer-dock toggle, search — they change what helps you look, and are buttons),
-// then DOCUMENT OPENERS (graph · sessions · evals · issues, settings pinned at the bottom — they name an
+// FINDING controls (explorer/sessions dock projections, search — they change what helps you look, and are
+// buttons), then DOCUMENT OPENERS (graph · evals · issues, settings pinned at the bottom — they name an
 // address, and are REAL ANCHORS carrying it, so a click is a native hash navigation — the same transaction
 // the address bar, a bookmark, or ⌥digit produces — and middle-click/new-tab/copy-address come free; the
 // active document kind wears the accent). Glyphs come from the shared icon vocabulary ([[icon-system]],
@@ -20,20 +20,36 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 // chip still names the current project and becomes the explicit /projects login door, without revealing
 // the catalog.
 
-const ENTRIES = RAIL_PAGES.filter((page) => page !== 'settings')
+const ENTRIES = RAIL_PAGES.filter((page) => !['sessions', 'settings'].includes(page))
 
 // The finding controls render only inside a workspace: the cold review fast-path mounts this rail with no
-// WorkspaceProvider above it, and a dock toggle with no dock is a lie, not a disabled button.
+// WorkspaceProvider above it, and projection buttons with no dock state would be a lie, not disabled chrome.
 function WorkspaceControls() {
   const t = useT()
-  const { dock, palette } = useWorkspace()
-  const { setDock, openPalette } = useWorkspaceApi()
-  if (!setDock) return null
+  const { dock, dockMode, palette } = useWorkspace()
+  const { setDock, setDockMode, openPalette } = useWorkspaceApi()
+  if (!setDock || !setDockMode) return null
+  const selectMode = (mode) => {
+    if (!dock) {
+      setDock(true)
+      setDockMode(mode)
+    } else if (dockMode === mode) {
+      setDock(false)
+    } else {
+      setDockMode(mode)
+    }
+  }
   return (
     <>
-      <button type="button" className={dock ? 'rail-btn on' : 'rail-btn'} data-tip={t('nav.explorer')}
-        aria-label={t('nav.explorer')} aria-pressed={!!dock} onClick={() => setDock((v) => !v)}>
+      <button type="button" className={dock && dockMode === 'explorer' ? 'rail-btn on' : 'rail-btn'}
+        data-tip={t('dockModes.explorer')} aria-label={t('dockModes.explorer')}
+        aria-pressed={dock && dockMode === 'explorer'} onClick={() => selectMode('explorer')}>
         <Icon name="explorer" size={18} />
+      </button>
+      <button type="button" className={dock && dockMode === 'sessions' ? 'rail-btn on' : 'rail-btn'}
+        data-tip={t('dockModes.sessions')} aria-label={t('dockModes.sessions')}
+        aria-pressed={dock && dockMode === 'sessions'} onClick={() => selectMode('sessions')}>
+        <Icon name="session-list" size={18} />
       </button>
       <button type="button" className={palette ? 'rail-btn on' : 'rail-btn'} data-tip={t('nav.search')}
         aria-label={t('nav.search')} onClick={() => openPalette('nodes')}>

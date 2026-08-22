@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -552,6 +552,33 @@ app.post('/api/sessions', async (c) => {
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await cockpitReview(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
+})
+// Per-worktree branch diff. Metadata is cheap and patches are fetched per file, with an explicit byte window
+// so a large review never materializes the whole tree in one response.
+app.get('/api/sessions/:id/diff', async (c) => {
+  const offset = Math.max(0, Number(c.req.query('offset')) || 0)
+  const limit = Math.min(240_000, Math.max(1, Number(c.req.query('limit')) || 120_000))
+  const result = await sessionDiff(c.req.param('id'), c.req.query('path') || undefined, offset, limit)
+  return result ? c.json(result) : c.json({ error: 'no such session' }, 404)
+})
+app.post('/api/sessions/:id/diff-comments', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  try {
+    const comment = await saveDiffComment(c.req.param('id'), {
+      id: typeof body?.id === 'string' ? body.id : undefined,
+      filePath: typeof body?.filePath === 'string' ? body.filePath : '',
+      lineStart: Number(body?.lineStart), lineEnd: Number(body?.lineEnd),
+      body: typeof body?.body === 'string' ? body.body : '',
+      diffIdentity: typeof body?.diffIdentity === 'string' ? body.diffIdentity : '',
+    })
+    return comment ? c.json(comment, 201) : c.json({ error: 'no such session' }, 404)
+  } catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 400) }
+})
+app.post('/api/sessions/:id/diff-comments/send', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const ids = Array.isArray(body?.ids) ? body.ids.filter((id: unknown): id is string => typeof id === 'string') : undefined
+  const result = await sendDiffComments(c.req.param('id'), ids)
+  return c.json(result, result.ok ? 200 : 409)
 })
 // The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,
 // use /api/evals pages; a bare request fails loudly rather than reopening a hidden full JSON path.

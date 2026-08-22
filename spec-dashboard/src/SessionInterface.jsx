@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
+import DiffDocument from './DiffDocument.jsx'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionFooterState, sessionHeadline } from './session.js'
 import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
@@ -18,6 +19,7 @@ import { apiFetch } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
+  SESSION_SURFACE_DIFF,
   getSessionBaseSurface,
   isSessionSurface,
   setSessionBaseSurface,
@@ -572,6 +574,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const requestedSurface = isSessionSurface(surface) ? surface : null
   const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : requestedSurface || getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
+  const diffSurface = activeBaseSurface === SESSION_SURFACE_DIFF
   const baseSurfaceForSession = (id) => {
     const session = allSessions.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
@@ -1428,6 +1431,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 <div className="si-actions" role="group" aria-label={t('session.toolbarToolsLabel')}>
                   {sessionActive && <IconButton icon="ellipsis" size={14} className="si-tool sc-muted" label={t('session.menuLabel')}
                     onClick={(event) => { const box = event.currentTarget.getBoundingClientRect(); setCtxMenu({ x: box.left, y: box.bottom, session: selSession }) }} />}
+                  {sessionActive && !activeResource && <IconButton icon="git-merge" size={14} className={`si-tool sc-${diffSurface ? 'blue' : 'muted'} diff-surface`}
+                    label={t('session.diffScope')} aria-pressed={diffSurface} onClick={() => navigate('sessions', active, { query: { surface: diffSurface ? SESSION_SURFACE_CONVERSATION : SESSION_SURFACE_DIFF } })} />}
                   {activeResource && (
                     <>
                       <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
@@ -1480,7 +1485,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
-                className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${activeResource ? ' is-resource' : ''}`}
+                className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${diffSurface ? ' is-diff' : ''}${activeResource ? ' is-resource' : ''}`}
                 id={activeResource ? `si-resource-panel-${activeResource.id}` : `si-${activeBaseSurface}-panel-${active}`}
                 role={activeResource ? 'dialog' : undefined}
                 aria-label={activeResource?.label || t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}
@@ -1522,6 +1527,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     </div>
                   )
                 })}
+                {diffSurface && <DiffDocument sessionId={active} />}
                 {resourceTabs.map((tab) => {
                   const shown = activeResource?.id === tab.id
                   return (

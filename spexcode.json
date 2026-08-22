@@ -64,16 +64,35 @@
         "test": "spec-cli::a launch failure the harness itself called settled is attempted exactly once",
         "observations": [
           {
-            "sha": "62602add7af48f288daa8a36ddb23271844fcb24",
-            "observedAt": "2026-08-20T12:10:05.521Z",
-            "outcome": "pass",
-            "source": "session 086f3c0c timeline: four-file run 79/79"
+            "sha": "40acf890397e2d70860c2e80b9a4d7646f3d584b",
+            "observedAt": "2026-08-22T03:13:33.000Z",
+            "outcome": "fail",
+            "source": "session 9ed9801b/90394319 review acceptance: exclusive gate run on candidate 40acf8903 reported this as candidate-only"
           },
           {
-            "sha": "62602add7af48f288daa8a36ddb23271844fcb24",
-            "observedAt": "2026-08-20T12:12:52.919Z",
+            "sha": "40acf890397e2d70860c2e80b9a4d7646f3d584b",
+            "observedAt": "2026-08-22T03:13:33.000Z",
+            "outcome": "pass",
+            "source": "session 086f3c0c: two isolated runs of spec-cli/src/sessions.test.ts on candidate 40acf8903 with the host quiet (tsx --test process count 2, cpu PSI full avg10 0.19%) — 33 pass / 0 fail both times. Timestamps are the window end; individual run times were not captured."
+          }
+        ],
+        "expiresAfterDays": 30,
+        "expiresAfterBaselineCollections": 10
+      },
+      {
+        "test": "spec-cli::no-thread resume replays the authoritative launch payload before later durable sends",
+        "observations": [
+          {
+            "sha": "40acf890397e2d70860c2e80b9a4d7646f3d584b",
+            "observedAt": "2026-08-22T03:13:33.000Z",
             "outcome": "fail",
-            "source": "session 086f3c0c timeline: same four files 77/79"
+            "source": "session 9ed9801b/90394319 review acceptance: exclusive gate run on candidate 40acf8903 reported this as candidate-only"
+          },
+          {
+            "sha": "40acf890397e2d70860c2e80b9a4d7646f3d584b",
+            "observedAt": "2026-08-22T03:13:33.000Z",
+            "outcome": "pass",
+            "source": "session 086f3c0c: same two isolated runs of spec-cli/src/sessions.test.ts on candidate 40acf8903 — 33 pass / 0 fail both times."
           }
         ],
         "expiresAfterDays": 30,

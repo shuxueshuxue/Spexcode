@@ -1751,7 +1751,13 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
 
 function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
   const application = configuredSessionApplicationIfCutover()
-  if (application) application.transitionSession(rec.session, { status, proposal, note })
+  if (!application) return
+  if (!application.readState(rec.session)) {
+    application.createSession({ sessionId: rec.session, status, proposal, note, parentSessionId: rec.parent })
+    if (rec.parent) application.attachWatcher(rec.parent, rec.session, 'watch:parent')
+    return
+  }
+  application.transitionSession(rec.session, { status, proposal, note, parentSessionId: rec.parent })
 }
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
@@ -2185,11 +2191,6 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   if (cutoverState === 'fenced') return { status: 409, error: 'legacy JSON session store is fenced for one-time migration', code: 'session_create_failed', phase: 'request' }
   if (cutoverState === 'migration-required') return { status: 409, error: 'legacy JSON session store must be migrated before creating sessions', code: 'session_create_failed', phase: 'request' }
   if (cutoverState === 'ambiguous') return { status: 409, error: 'session database exists without a migration marker', code: 'session_create_failed', phase: 'request' }
-  try { assertLegacyJsonWritesAllowed() }
-  catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { status: 409, error: message, code: 'session_create_failed', phase: 'request' }
-  }
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {
@@ -2209,6 +2210,12 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
     freshStoreOwned = acquired.owned
   } catch (error) {
     return { status: 409, error: error instanceof Error ? error.message : String(error), code: 'session_create_failed', phase: 'request' }
+  }
+  try { assertLegacyJsonWritesAllowed() }
+  catch (error) {
+    releaseFreshSessionApplicationForCreate(freshStoreOwned, false)
+    const message = error instanceof Error ? error.message : String(error)
+    return { status: 409, error: message, code: 'session_create_failed', phase: 'request' }
   }
   const controller = new AbortController()
   const cancel = () => controller.abort(new SessionCreateError('session_create_cancelled', 'request', 'session creation caller disconnected', 408))
@@ -2320,6 +2327,8 @@ export function projectCreatedSession(session: Session): void {
       sessionId: session.id,
       status: session.lifecycle,
       parentSessionId: session.parent,
+      proposal: session.proposal,
+      note: session.note,
     })
     if (session.parent) application.attachWatcher(session.parent, session.id, 'watch:parent')
   } catch (error) {
@@ -2723,6 +2732,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           const gitMismatch = await proveSessionCandidate(path, branch, signal)
           if (gitMismatch) throw new SessionCreateError('session_create_failed', phase, `refusing session publication: ${gitMismatch}`, 500)
           throwIfCreateAborted(signal, phase)
+          publishCanonicalLifecycle(rec, rec.status, rec.proposal, rec.note)
           writeRecord(rec)
           if (rec.parent && readRecord(rec.parent)?.governed) {
             const watchers = readWatchEntries(id)

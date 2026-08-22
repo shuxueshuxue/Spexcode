@@ -88,7 +88,7 @@ scenarios:
       the auxiliary symbolic-ref control rejects before publication. Neither becomes zero impact or fake current.
   - name: session-summary-coherence
     tags: [backend-api, frontend-e2e, desktop]
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx#EvalsPage]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/GraphView.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx#EvalsPage]
     description: >
       Start from a cold graph projection and drive a real Chromium session toolbar through first paint,
       A→B→A session switching, an input-generation change, graph disconnect/reconnect, the scoped Evals
@@ -192,7 +192,8 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/route.js, spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage]
     related:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/address.js
     description: >
       In a fresh browser tab (a cold app load — the MR-reviewer path), open

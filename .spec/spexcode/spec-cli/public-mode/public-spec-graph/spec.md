@@ -12,7 +12,8 @@ related:
   - spec-cli/src/cli.ts
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/Root.jsx
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/SideBar.jsx
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/PublicGraphAbout.jsx

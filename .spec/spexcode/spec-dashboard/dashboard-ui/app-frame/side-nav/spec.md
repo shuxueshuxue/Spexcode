@@ -15,6 +15,13 @@ related:
 
 ## raw source
 
+**A rail destination is not the same thing as an addressable kind**, and the rail now says so by reading
+its own list. It read the full address list for as long as every address was a page; the moment documents
+became addressable ([[view-registry]]), that stopped being true — `spec` and `file` are places you arrive
+at by opening something, and there is no "go to the spec page" the way there is a sessions page. The first
+version without the split threw `unknown icon: spec` while faithfully trying to draw a destination that
+does not exist.
+
 The dashboard grew top-level surfaces — the spec graph, the session board, the evals feed, the issues
 page, settings — but they were organized as one page with overlays: the board a full-screen modal over the
 graph, the review surfaces tabs inside that modal, settings a popup. A user couldn't bookmark the session

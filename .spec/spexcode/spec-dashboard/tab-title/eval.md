@@ -17,7 +17,8 @@ scenarios:
     related:
       - spec-dashboard/src/App.jsx
       - spec-dashboard/src/SideBar.jsx
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
 ---
 # tab-title loss
 

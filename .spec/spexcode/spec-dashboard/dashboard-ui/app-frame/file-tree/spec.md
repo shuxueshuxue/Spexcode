@@ -6,7 +6,8 @@ desc: The left dock — a spec node is a folder, so the tree that navigates the 
 code:
   - spec-dashboard/src/FileTree.jsx
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/useResizable.js
   - spec-dashboard/src/styles.css
 ---
@@ -28,12 +29,10 @@ built for scanning.
 **Files keep the colours their chips have in the popup**, so a governed file and an attachment look the same
 wherever they are listed rather than teaching the reader two vocabularies for one thing.
 
-**What a file opens into is a layer, not a second pane** ([[file-viewer]]). Two documents side by side is
-not reachable yet: every page component reads the global route, so rendering two at once means changing all
-of them to take a route instead. That is a real refactor with real risk, and naming it is better than a
-half-split that works for one document type. The dock and the layer are useful without it, and the inline
-expansion of a governed file under its spec ([[source-view]]) already covers the case the split was first
-wanted for.
+**A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]; a governed file row opens
+[[file-view]]. The dock used to open a layer over the frame, because the frame had no content area to open
+anything into — that limitation is gone with [[workspace-shell]], and with it the layer. Clicking here and
+clicking a tab now reach the same place by the same address.
 
 The dock is off by default and toggled from the status bar, where a workspace control belongs now that
 [[status-bar]] exists. Its width is the shared resizable-pane primitive, persisted per pane like every other.

@@ -6,7 +6,8 @@ desc: Event detail regression guardrails: eval remark drafts are scoped to the s
 code:
   - spec-dashboard/src/evalsPage.test.mjs
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/src/SessionInterface.jsx

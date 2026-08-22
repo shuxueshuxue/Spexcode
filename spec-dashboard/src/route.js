@@ -12,7 +12,14 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 // the QUERY carries view state (a list's filters, the evals session scope) — so a filtered list is a
 // copyable, Back-restorable address and every consumer re-derives its whole state from the URL.
 
-export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
+// `spec` and `file` are DOCUMENT addresses — a node read as a document, a governed file read on its own.
+// They are why the address list grew: the board used to have pages and no documents, so a document had
+// nowhere to be addressed from and reading one meant opening a popup over whatever page was showing.
+export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings']
+// The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
+// opening something (a node, a governed file); there is no "go to the spec page" the way there is a
+// sessions page, and a rail icon for one would name a place that does not exist.
+export const RAIL_PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
@@ -42,9 +49,10 @@ export function parseRoute(hash) {
   const query = Object.fromEntries(new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : ''))
   const parts = path.split('/').filter(Boolean)
   const page = PAGES.includes(parts[0]) ? parts[0] : 'graph'
-  const param = page === 'graph' || page === 'sessions' || page === 'evals' || page === 'issues'
-    ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
-    : null
+  // every page but settings carries a selector; `file` carries a repo path, so the tail rejoins on '/'.
+  const param = page === 'settings'
+    ? null
+    : (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
   return { page, param, query }
 }
 

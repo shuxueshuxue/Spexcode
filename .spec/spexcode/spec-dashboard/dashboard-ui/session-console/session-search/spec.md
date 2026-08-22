@@ -6,7 +6,8 @@ desc: Global ⌥+/ opens the shared palette with sessions first; the graph's pla
 related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/App.jsx
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/address.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css

@@ -15,7 +15,8 @@ scenarios:
       alias — the node-info popup must not open instead. Tabbing to a control and pressing Enter must
       always equal clicking it (keyboard reachability).
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
   - name: enter-opens-info-not-session-board
     tags: [frontend-e2e, desktop]
     description: >-
@@ -31,7 +32,8 @@ scenarios:
       enter-in-info-popup-is-inert). Crossing into a node's live session is now a right-click node-menu
       action ([[node-menu]]), never a keystroke.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/keymap.js
   - name: lens-follows-focus
     tags: [frontend-e2e, desktop]
@@ -52,7 +54,8 @@ scenarios:
       pane, h/l/Tab switch panes, Esc closes, Enter stays inert. Across a lens move the selected pane
       persists, falling back to the new node's own default pane when it lacks the selected one.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/keymap.js
   - name: enter-in-info-popup-is-inert
     tags: [frontend-e2e, desktop]
@@ -68,7 +71,8 @@ scenarios:
       Enter no longer crosses from the popup into the node's live Session Board; that crossing moved to
       the right-click node-menu ([[node-menu]]).
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
   - name: click-does-not-pan-keyboard-does
     tags: [frontend-e2e, desktop]
     description: >-
@@ -84,7 +88,8 @@ scenarios:
       embedding. A keyboard focus move (arrow/vim) DOES pan the camera to recentre the new focus. The
       camera follows the keyboard, not the mouse.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
   - name: remote-graph-delta-does-not-pan-camera
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
@@ -101,7 +106,8 @@ scenarios:
       and after the dashboard receives the delta. This is distinct from the aggregate's static A/B
       comparison: it proves the existing camera invariant holds while live graph data actually changes.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
   - name: slash-search-spans-four-planes
     tags: [frontend-e2e, desktop]
     description: >-
@@ -161,7 +167,8 @@ scenarios:
       shortcuts the graph claims are the explicit app accelerators: Alt+/ for session-boosted search
       and the Alt page jumps.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
   - name: rail-chip-never-steals-focus-or-keys
     tags: [frontend-e2e, desktop]
     description: >-
@@ -180,7 +187,8 @@ scenarios:
       after the popup closes focus does not land on the project chip; it stays with the real prior
       holder. A chip focused by real keyboard Tab still owns Enter/Space activation.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/SideBar.jsx
   - name: palette-fits-screen-and-truncates-rows
     tags: [frontend-e2e, desktop]

@@ -6,7 +6,8 @@ desc: The locked-session banner projects the current overlay-cycle bindings into
 code:
   - spec-dashboard/src/lockHint.js
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
 ---
 # lock-hint
 

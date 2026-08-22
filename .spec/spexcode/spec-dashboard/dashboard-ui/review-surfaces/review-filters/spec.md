@@ -14,7 +14,8 @@ related:
   - spec-dashboard/src/EvalsFeed.jsx
   - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/NodeView.jsx
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/session.js
   - packages/spec-core/src/review/reviewQuery.js

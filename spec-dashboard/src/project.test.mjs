@@ -45,7 +45,7 @@ test('cross-scope hrefs land on their canonical project and global surfaces', ()
 })
 
 test('project navigation contains only project-owned pages', () => {
-  assert.deepEqual(PAGES, ['graph', 'sessions', 'evals', 'issues', 'settings'])
+  assert.deepEqual(PAGES, ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings'])
   assert.deepEqual(parseRoute('#/projects'), { page: 'graph', param: null, query: {} })
   assert.equal(parseRoute('#/nonsense').page, 'graph') // unknown still lands home
 })

@@ -181,7 +181,9 @@ surface:
   active-turn-id cache. A
   cached id is the only basis for `turn/steer`; otherwise delivery uses `turn/start` and reports a native
   rejection promptly, leaving the durable message pending rather than replaying history or hiding an unobserved
-  active turn.
+  active turn. The failure observer gives native `thread/resume` subscription up to 30 seconds because the
+  measured app-server can take 15–17 seconds under load; a shorter timeout would turn a slow but valid response
+  into a retry storm and resource leak.
 - **contract file(s)** — where the `surface: system` block is materialized ([[harness-delivery]]): Claude
   `./CLAUDE.md` or `./.claude/CLAUDE.md`; Codex ONLY the repo-root `./AGENTS.md`.
 - **artifact dirs** — the auto-discovered dirs the on-demand surfaces materialize into, or null when the harness

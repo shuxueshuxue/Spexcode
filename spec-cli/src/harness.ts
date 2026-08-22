@@ -978,6 +978,9 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
 }
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
+// Native Codex can take 15-17s to answer thread/resume under a loaded app-server. A shorter
+// deadline creates a retry storm in the session reconciler, not a useful failure signal.
+export const CODEX_TURN_OBSERVER_SUBSCRIBE_MS = 30_000
 
 // Codex has no StopFailure hook, but its app-server has the stronger native signal: every subscribed turn ends
 // with turn/completed and a final completed/interrupted/failed status. Rejoin is atomic with subscription, so
@@ -1017,7 +1020,7 @@ export function codexTurnFailureObserver(
     try { conn.destroy() } catch {}
     resolveClosed(reason)
   }
-  const timer = setTimeout(() => finish('Codex turn observer did not subscribe within 5000ms'), 5000)
+  const timer = setTimeout(() => finish(`Codex turn observer did not subscribe within ${CODEX_TURN_OBSERVER_SUBSCRIBE_MS}ms`), CODEX_TURN_OBSERVER_SUBSCRIBE_MS)
   timer.unref?.()
   const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
   const report = (turn: unknown, fallbackMessage?: string) => {

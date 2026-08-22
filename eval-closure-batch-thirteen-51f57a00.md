@@ -34,5 +34,9 @@ the fixture had no materialized `launch.sh` to inspect, so the stop/resume comma
 declared pinned-command precondition. That run was setup-only and produced no verdict; its two exact tmux servers
 were stopped immediately.
 
+Adding a minimal `.spec/fixture/spec.md` and repeating the same bounded probe did not change the absence of a
+materialized `launch.sh`; that second attempt was also discarded. This confirms the limitation is in the inert
+fixture's launch/materialize precondition, not a single missing directory lookup.
+
 No product code, scenario prose, spec, or acceptance artifact was changed. `git diff --check` and
 `spex eval lint --changed` were run before committing; the two readings reduced the stale count from 41 to 39.

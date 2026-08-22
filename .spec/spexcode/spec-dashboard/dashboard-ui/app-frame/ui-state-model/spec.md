@@ -40,7 +40,10 @@ A workspace state is a point in the product of five axes. [[workspace-shell]] ow
 - **D — left dock** ∈ {closed, explorer, sessions}. Open/closed and the projection are one axis, because
   a dock with no projection is not a state ([[dock-modes]]).
 - **C — right context** ∈ {closed, open}. Meaningful only when R = spec; forced closed everywhere else,
-  because [[context-dock]] renders for a spec document and nothing else.
+  because [[context-dock]] renders for a spec document and nothing else. `closed` is the RESTING value: the
+  dock renders nothing at all when closed — no rail, no collapsed spine — so the axis's default costs the
+  budget zero. That matters to the theorem's floor as much as to the reader: a "collapsed" dock that still
+  drew a hairline spine would be a band by any honest classifier while claiming not to be one.
 - **S — split** ∈ {none, open}. A second route beside the first ([[tab-strip]]).
 - **U — session surface** ∈ {conversation, terminal, diff, resource}. Meaningful only when R = session.
   This is **the one surface axis** — a session's face is a value of U, never a second dock, a second

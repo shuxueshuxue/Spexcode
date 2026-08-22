@@ -54,12 +54,27 @@ in the current slot; ctrl/⌘ holds it as its own tab ([[tab-strip]]). No row op
 inside the dock: everything listed here has a real detail address, and a document with an address belongs in
 the strip rather than nested inside a sidebar.
 
+**The dock starts CLOSED, and the number is the argument.** Measured at 1440 with the explorer docked:
+opening it leaves the spec prose **383px** and forces the code column down from 620 to 536; closed, the same
+document reads at **575px**. 383px is under a readable measure, and it is taken out of the column that was
+already the scarce one. Context is a question the reader ASKS about the node they are reading — it is not
+the reading — so it does not spend the reading's width until it is asked for.
+
+That measurement is also why the two sections are a PANE and not an inline strip inside the prose. The
+alternative considered was a paper-divider block appended to the document's own column, borrowing the review
+lists' row rhythm; it looks lighter and is not, because it spends the prose column PERMANENTLY instead of on
+demand — the same 383px problem with no toggle. A pane that is closed costs nothing, and when it is opened
+its rows get a full 276px of their own rather than competing with the sentence beside them.
+
 The dock width uses `useResizable('spex.ctxWidth', ...)` and keeps the same min/max and release-time
-localStorage persistence as the other shell panes. Panel disclosure and the dock's open state are also
-local preferences in localStorage, defaulting open. The open/close control lives in the document-area
-top bar beside the tabs: the workspace-shell rule says a control belongs to the region whose question it
-answers, and context is neither the left finding rail nor ambient status, so a document-level context control
-is the least surprising owner while still remaining reachable when the dock is closed.
+localStorage persistence as the other shell panes. Panel disclosure and the dock's open state are local
+preferences in localStorage; the dock defaults CLOSED and each section defaults expanded, so asking for
+context once gets the reader everything rather than a second round of clicks. A closed dock renders nothing
+— no rail, no collapsed spine — so it adds no band to [[ui-state-model]]'s budget when it is not showing.
+The open/close control lives in the document-area top bar beside the tabs: the workspace-shell rule says a
+control belongs to the region whose question it answers, and context is neither the left finding rail nor
+ambient status, so a document-level context control is the least surprising owner while still remaining
+reachable when the dock is closed.
 
 The component receives `{page, param}` from `Shell`; it never reads the global address. Its API context and
 state context remain separate by using the existing board/workspace hooks rather than introducing a mixed

@@ -254,8 +254,15 @@ export default function Shell() {
   const documentNames = useDocumentNames()
   const { dock, dockMode, palette } = useWorkspace()
   const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
+  // explorer docked, opening it leaves the spec prose 383px — under a readable measure, and it takes the
+  // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the
+  // same document reads at 575px. Context is a question the reader ASKS about the node they are reading; it
+  // is not the reading itself, so it does not get to spend the reading's width until it is asked for. The
+  // toggle is one click away in the strip and the choice persists, so a reader who wants it always open has
+  // it always open — what changed is only what an unopinionated window looks like ([[context-dock]]).
   const [contextOpen, setContextOpen] = useState(() => {
-    try { return localStorage.getItem('spexcode.ctxOpen') !== '0' } catch { return true }
+    try { return localStorage.getItem('spexcode.ctxOpen') === '1' } catch { return false }
   })
   const toggleContext = () => setContextOpen((value) => {
     const next = !value

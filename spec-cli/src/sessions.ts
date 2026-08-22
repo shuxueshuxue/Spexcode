@@ -530,7 +530,7 @@ function scheduleWatchNotifications(target: SessRec): void {
   if (!watchers.length) return
   queueMicrotask(() => {
     for (const watcher of watchers) {
-      void sendText(watcher, watchMessage(target), target.session).then((result) => {
+      void sendText(watcher, watchMessage(target), target.session, { allowStranded: true }).then((result) => {
         if (!result.ok) console.error(`spex session watch: could not deliver ${target.session} state to ${watcher}: ${result.error}`)
       })
     }
@@ -573,6 +573,7 @@ async function deliverPendingWatchSnapshots(targetId: string, forceCurrent = tru
 
       const identity = `${targetId}\0${entry.watcher}\0${token}\0${state}`
       const delivered = await sendText(entry.watcher, watchMessage(target), targetId, {
+        allowStranded: true,
         idempotency: {
           operation: 'watch-initial-snapshot',
           requestDigest: digest(identity),
@@ -645,7 +646,7 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
     if (pending) {
       if (source === 'manual') await deliverPendingWatchSnapshots(target)
     } else if (source === 'manual' || added) {
-      const delivered = await sendText(watcher, watchMessage(targetRecord!), target)
+      const delivered = await sendText(watcher, watchMessage(targetRecord!), target, { allowStranded: true })
       if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
     }
     watched.push(target)
@@ -756,7 +757,7 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
   })
   const notified: string[] = []
   if (parent) for (const child of notify) {
-    const delivered = await sendText(parent, watchMessage(child), child.session)
+    const delivered = await sendText(parent, watchMessage(child), child.session, { allowStranded: true })
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
     notified.push(child.session)
   }
@@ -4140,6 +4141,9 @@ type SendTextOptions = {
   idempotency?: DispatchIdempotency
   acceptGuard?: (record: SessRec) => Promise<void>
   deferDrain?: boolean
+  // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
+  // temporarily absent, the normal queue must retain the event so the parent's next runtime can wake and drain it.
+  allowStranded?: boolean
 }
 class StrandedDeliveryError extends Error {}
 async function strandedDeliveryError(rec: SessRec): Promise<StrandedDeliveryError | null> {
@@ -4173,7 +4177,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       },
       prepare: async () => {
         await opts.acceptGuard?.(rec!)
-        const stranded = await strandedDeliveryError(rec!)
+        const stranded = opts.allowStranded ? null : await strandedDeliveryError(rec!)
         if (stranded) throw stranded
         // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
         // the queue keeps the transport form. Composing again at handover would let a later send change the hints on

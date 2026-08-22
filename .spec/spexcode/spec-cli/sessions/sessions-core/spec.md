@@ -56,6 +56,12 @@ replays neither an accepted initial snapshot nor an accepted catch-up, while sti
 review, or error that raced acceptance. Parent-only `active`/working is the suppressed terminal of that comparison;
 manual includes it. Thus creation ordering does not weaken routine-working suppression, and manual+parent yields the
 complete later-state feed without a duplicate or a second mechanism.
+The ordinary stranded-transport refusal applies to a caller's new prompt, not to an already-installed managed
+watch. A parent watch transition is accepted into the parent's normal timeline and delivery queue even when its
+registered process is alive but its native transport is temporarily absent; the queue debt is the wake/resume
+contract, and the next transport sweep drains it. This durable watch path never treats `asking`, `parked`, `error`,
+or either `awaiting` proposal (`review`/`close-pending`) as terminal or requires a dashboard poll, and it does not
+change the lifecycle or cutover rules of either session.
 Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.

@@ -13,7 +13,7 @@ import { pendingMessages } from '@spexcode/session-core'
 import { appendSent, enqueue, sentDispatchReceipt, settleSentDispatch } from '@spexcode/session-core/internal'
 import { opencodeHarness, rvSock, stampRvSock } from './harness.js'
 import { mainRoot, projectPublicRecordEntry, readConfig, sessionArtifactPath, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/spec-core'
-import { cancelSessionWatch, composeSessionPrompt, drainQueue, listSessionWatches, markState, reparentSessionRecords, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { cancelSessionWatch, composeSessionPrompt, drainQueue, drainSession, listSessionWatches, markState, reparentSessionRecords, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
 // explicit note-sends and every headless target carry the note insert, and the first terminal send after
@@ -540,6 +540,57 @@ test('watch delivery distinguishes relation snapshots from routine working trans
     await new Promise((resolve) => setTimeout(resolve, 10))
     assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 6, 'parent supervision still skips working after manual cancellation')
   })
+})
+
+test('managed parent watch keeps every non-working child declaration durable while the parent transport is down', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-managed-watch-wake-'))
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT)
+  const delivered: string[] = []
+  const listener = createServer((socket) => socket.on('data', (chunk) => delivered.push(chunk.toString())))
+  const agent = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  assert.ok(agent.pid)
+  try {
+    await withHomeAsync(home, async () => {
+      const sock = stampRvSock(PARENT)
+      await new Promise<void>((resolve, reject) => { listener.once('error', reject); listener.listen(sock, resolve) })
+      await subscribeSessionWatch(PARENT, [ID], 'parent')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      delivered.length = 0
+      await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()))
+      rmSync(sock, { force: true })
+      writeFileSync(sessionArtifactPath(PARENT, 'agent.pid'), `${agent.pid}\n`)
+      assert.equal(markState('parked', { sessionId: PARENT }), true)
+
+      const declarations = [
+        ['asking', { note: 'needs a human answer' }],
+        ['parked', { note: 'waiting for the managed child wake' }],
+        ['awaiting', { proposal: 'merge', note: 'ready for review' }],
+        ['error', { note: 'turn failed' }],
+        ['awaiting', { proposal: 'close', note: 'ready to close' }],
+      ] as const
+      for (const [status, options] of declarations) {
+        assert.equal(markState('active', { sessionId: ID }), true)
+        assert.equal(markState(status, { ...options, sessionId: ID }), true)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+
+      const parentEvents = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(parentEvents.length, 1 + declarations.length, 'each child declaration is appended to the parent timeline')
+      assert.equal(pendingMessages(PARENT).length, declarations.length, 'the parked parent retains every wake as durable debt')
+
+      await new Promise<void>((resolve, reject) => listener.listen(sock, resolve).once('error', reject))
+      await drainSession(PARENT)
+      assert.equal(pendingMessages(PARENT).length, 0, 'the parent retry drains after its transport resumes')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      assert.equal(delivered.join('').match(/"type":"reply"/g)?.length ?? 0, declarations.length,
+        'resumption hands every queued child state to the parent')
+    })
+  } finally {
+    try { listener.close() } catch { /* already closed */ }
+    agent.kill()
+    await once(agent, 'exit')
+  }
 })
 
 test('lastHumanSendVia: no timeline at all → null (a fresh session never gets the counter-insert)', () => {

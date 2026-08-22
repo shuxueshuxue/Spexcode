@@ -53,6 +53,11 @@ a parent-only watch suppresses routine working, while a `manual` source explicit
 includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
 manual's complete-feed policy winning for later state changes. Thus a one-shot `ls` remains a current-state read,
 but a parent is not woken every time a known child resumes ordinary work.
+Every authored child transition out of working into `asking`, `parked`, `error`, `review`, or `close-pending` is
+one such parent delivery. The managed-watch append is accepted even if the parent's live process has a temporarily
+absent native transport: the normal parent queue retains the event and a later retry wakes/resumes that parent.
+The ordinary stranded-send refusal remains in force for caller-originated prompts; watch supervision does not
+silently turn those prompts into a second transport or alter lifecycle cutover.
 
 `spex session watch list` scans targets' `watchers.json` files to show the caller's relations, and
 `spex session watch cancel <SEL...>` removes only that caller's `manual` source from the selected targets.

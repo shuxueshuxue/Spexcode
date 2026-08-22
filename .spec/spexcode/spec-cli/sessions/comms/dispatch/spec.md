@@ -42,6 +42,10 @@ message is drained immediately so a live agent sees it in its current turn; what
 over stays queued and is retried by the serve that owns the project root. The channel is the ONLY way a message
 enters an agent, so it arrives in exactly the shape a human prompt does. There is no send-keys fallback, no PTY
 prompt typing, and no hook-injected copy — a turn-boundary hook reports freshness and never carries conversation.
+The one exception is an already-installed managed parent-watch notification: its authored child-state event must
+cross the append boundary even when the parent's registered process is alive but its native transport is absent.
+That notification still uses the ordinary parent queue and retry path; it is not reported as handed over until an
+adapter accepts it, and it never weakens the stranded refusal for a caller's new prompt.
 
 Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,

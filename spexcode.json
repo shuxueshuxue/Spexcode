@@ -78,25 +78,6 @@
         ],
         "expiresAfterDays": 30,
         "expiresAfterBaselineCollections": 10
-      },
-      {
-        "test": "spec-cli::backend watcher plateaus and delivers three consecutive ref changes exactly once",
-        "observations": [
-          {
-            "sha": "b8bd72fdeb0db2bd656429ace3132354ac24901b",
-            "observedAt": "2026-08-20T12:20:00.000Z",
-            "outcome": "fail",
-            "source": "session 086f3c0c: main full spec-cli suite 726 pass / 3 fail; this test among the three. SHA is the main head recorded contemporaneously in that session and was not captured with the run itself; timestamp is approximate to the run window."
-          },
-          {
-            "sha": "df8e8c649f96bbfc8aa04bcd1738ef34d93e0454",
-            "observedAt": "2026-08-22T00:03:28.315Z",
-            "outcome": "pass",
-            "source": "session 9ed9801b review acceptance: main df8e8c649 two-run baseline, this test green in both runs"
-          }
-        ],
-        "expiresAfterDays": 30,
-        "expiresAfterBaselineCollections": 10
       }
     ]
   }

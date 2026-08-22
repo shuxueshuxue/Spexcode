@@ -59,6 +59,8 @@ export default {
   },
   nav: {
     railLabel: '主导航',
+    explorer: '资源管理器',
+    search: '搜索（/）',
     graph: '规格节点图（⌥1）',
     sessions: '会话面板（⌥2）',
     evals: 'Evals（⌥3 / ⌥F）',
@@ -173,6 +175,11 @@ export default {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',
     loadError: '无法连接后端 —— 看板加载失败。',
+    retry: '重试',
+  },
+
+  viewError: {
+    title: '这个视图崩溃了。',
     retry: '重试',
   },
 

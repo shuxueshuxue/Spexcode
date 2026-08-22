@@ -35,8 +35,11 @@ const DOCK_KEY = 'spexcode.dock'
 const SPLIT_KEY = 'spexcode.split'
 
 export function WorkspaceProvider({ children }) {
+  // The dock starts OPEN. It is how a reader finds a document without already knowing its address, and a
+  // workspace whose only entrance is a URL is a workspace nobody enters — which is exactly what shipping
+  // the document view behind a closed dock produced.
   const [dock, setDockState] = useState(() => {
-    try { return localStorage.getItem(DOCK_KEY) === '1' } catch { return false }
+    try { return localStorage.getItem(DOCK_KEY) !== '0' } catch { return true }
   })
   // The search palette floats above whichever view is showing, so it is the shell's, not a view's. A view
   // that wants it says so; it does not own it, and a view being hidden can never swallow it.

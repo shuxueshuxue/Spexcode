@@ -21,6 +21,13 @@ interface is where that intent is changed in place.
 
 ## expanded spec
 
+**The popup is the keyboard's lens; the document is the mouse's destination.** Since the workspace gained
+a real document area ([[spec-view]]), the popup is no longer the only reading surface — it is the *skim*
+surface, kept because its Shift+nav follow-the-focus walk (ten sibling docs in ten keypresses,
+[[keyboard-nav]]) has no document-area equivalent. The gestures that mean "take me to read this properly" —
+a node **double-click** on the board, the node menu's *view details* — leave the board and open the node as
+a document instead of raising the popup. `i`/Enter keep the lens.
+
 The node popup is the `i` surface: a fixed pop-out (`min(900px,90vw) × min(600px,84vh)`) with tabs, opened
 over the board and dismissed with `Esc`. It is **reference-only** (`NodeView.jsx`) — no `work` pane, no
 embedded terminal — and it is a **lens on the focus, not a pinned document**: the popup renders whichever

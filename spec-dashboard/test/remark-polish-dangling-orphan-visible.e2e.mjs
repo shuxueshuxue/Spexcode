@@ -232,7 +232,8 @@ try {
   await page.goto(`${base}/#/graph/${nodeId}`, { waitUntil: 'domcontentloaded' })
   const selected = page.locator(`.react-flow__node.selected[data-id="${nodeId}"]`)
   await selected.waitFor({ state: 'visible', timeout: 15_000 })
-  await selected.dblclick()
+  await selected.click()
+  await page.keyboard.press('i')   // dblclick now opens the document; `i` is the popup's door
   await page.locator('.ov-panel').waitFor({ state: 'visible', timeout: 10_000 })
   const timelineRequest = page.waitForResponse((res) => {
     const url = new URL(res.url())

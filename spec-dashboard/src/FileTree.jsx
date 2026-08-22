@@ -3,6 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
+import { requestTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import { useResizable } from './useResizable.js'
 
@@ -58,13 +59,14 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
         dot={STATUS[node.status]?.color} hasKids={hasKids} open={open}
         // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
         // discloses its contents. Splitting them into two hit targets would make the common move — look
-        // inside this node — cost two clicks in a list built for scanning.
-        onClick={() => { setOpen((v) => !v); navigate('spec', node.id) }} />
+        // inside this node — cost two clicks in a list built for scanning. Ctrl/⌘ holds the document as a
+        // NEW tab ([[tab-strip]]'s looking-vs-holding boundary); a plain click follows in place.
+        onClick={(e) => { setOpen((v) => !v); (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', node.id) }} />
       {open && (
         <>
           {governed.map((f) => (
             <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()}
-              onClick={() => navigate('file', f)} />
+              onClick={(e) => (e.ctrlKey || e.metaKey ? requestTab : navigate)('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}

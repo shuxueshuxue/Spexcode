@@ -9,6 +9,7 @@ import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
+import { requestTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
@@ -538,12 +539,17 @@ function GraphView({ param, query }) {
     focusNode(n.id)
   }, [focusNode])
 
-  // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup — still no pan
-  // (mouse never moves the camera; only the keyboard does).
-  const onNodeDoubleClick = useCallback((_e, n) => {
+  // double-click is the mouse parallel to `i`: OPEN the node as a document. Single click still only
+  // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
+  // leaves it.
+  const onNodeDoubleClick = useCallback((e, n) => {
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    focusNode(n.id); setOverlay(true)
-  }, [focusNode])
+    focusNode(n.id)
+    // The sealed public face has no document area — the popup IS its reading surface, so the gesture
+    // keeps its old meaning there.
+    if (graphOnly) setOverlay(true)
+    else (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', n.id)
+  }, [focusNode, graphOnly])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
   // focusing the node first (in place, no pan, same as click) so the menu and the board agree on the target.
@@ -603,7 +609,7 @@ function GraphView({ param, query }) {
 
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
-          onInfo={() => setOverlay(true)}
+          onInfo={() => navigate('spec', focusRef.current.id)}
           onFresh={(id) => startNew(`[[${id}]] `)}
           onNewChild={(id) => startNew(CHORDS.nn(id))}
           onDelete={(id) => startNew(CHORDS.dd(id))}
@@ -634,6 +640,12 @@ function GraphView({ param, query }) {
         )}
 
         {legend && <Legend onClose={() => setLegend(false)} />}
+
+        {/* the `i`/Enter lens ([[node-popup]]): follows the focus, remounts per node. The surgery that
+            extracted this view once dropped this line entirely while keeping all its key handling — a
+            popup with working keys and no body. */}
+        {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
+          onSelection={graphOnly ? undefined : startFromSelection} onClose={() => setOverlay(false)} />}
       </div>
     </div>
   )

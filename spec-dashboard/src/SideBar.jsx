@@ -5,13 +5,15 @@ import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
 import { RAIL_PAGES, routeHash } from './route.js'
 import { IdentityIcon } from './IdentityIcon.jsx'
+import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
-// The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
-// always visible, one entry per top-level page (graph · sessions · evals · issues, settings pinned at the
-// bottom). Every entry is a REAL ANCHOR carrying its page's address, so a click is a native hash
-// navigation — the same transaction the address bar, a bookmark, or ⌥digit produces — and
-// middle-click/new-tab/copy-address come free; the active page wears the accent. Glyphs come from
-// the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria — the rail stays slim.
+// The workspace's rail ([[side-nav]]) — one slim icon strip with two kinds of entry, in this order:
+// FINDING controls (the explorer-dock toggle, search — they change what helps you look, and are buttons),
+// then DOCUMENT OPENERS (graph · sessions · evals · issues, settings pinned at the bottom — they name an
+// address, and are REAL ANCHORS carrying it, so a click is a native hash navigation — the same transaction
+// the address bar, a bookmark, or ⌥digit produces — and middle-click/new-tab/copy-address come free; the
+// active document kind wears the accent). Glyphs come from the shared icon vocabulary ([[icon-system]],
+// icons.jsx); labels live in tooltips/aria — the rail stays slim.
 // Under the multi-project gateway ([[projects-hub]]) a scoped page adds the persistent current-project
 // selector chip at the top. A successful catalog probe gives it same-tab switching plus the global
 // /projects door; it never adds project management to the scoped rail. When the catalog is denied the
@@ -19,6 +21,27 @@ import { IdentityIcon } from './IdentityIcon.jsx'
 // the catalog.
 
 const ENTRIES = RAIL_PAGES.filter((page) => page !== 'settings')
+
+// The finding controls render only inside a workspace: the cold review fast-path mounts this rail with no
+// WorkspaceProvider above it, and a dock toggle with no dock is a lie, not a disabled button.
+function WorkspaceControls() {
+  const t = useT()
+  const { dock, palette } = useWorkspace()
+  const { setDock, openPalette } = useWorkspaceApi()
+  if (!setDock) return null
+  return (
+    <>
+      <button type="button" className={dock ? 'rail-btn on' : 'rail-btn'} data-tip={t('nav.explorer')}
+        aria-label={t('nav.explorer')} aria-pressed={!!dock} onClick={() => setDock((v) => !v)}>
+        <Icon name="explorer" size={18} />
+      </button>
+      <button type="button" className={palette ? 'rail-btn on' : 'rail-btn'} data-tip={t('nav.search')}
+        aria-label={t('nav.search')} onClick={() => openPalette('nodes')}>
+        <Icon name="search" size={18} />
+      </button>
+    </>
+  )
+}
 
 function RailLink({ page, active, label, disabled = false }) {
   if (disabled) return (
@@ -126,6 +149,7 @@ export default function SideBar({ page, identity, catalog, graphOnly = false }) 
         denied={catalogDenied}
         t={t}
       />}
+      <WorkspaceControls />
       {ENTRIES.map((p) => (
         <RailLink key={p} page={p} active={page === p} label={t(`nav.${p}`)} disabled={graphOnly && p !== 'graph'} />
       ))}

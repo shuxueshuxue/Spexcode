@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/Shell.jsx
 related:
   - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
 ---
@@ -14,6 +15,26 @@ related:
 
 The frame, and only the frame. It does not know what a spec is, what a session is, or what any view needs.
 It knows there is an address, that an address names a view, and where on the screen that view goes.
+
+**The window answers four different questions, and each gets its own region.** This is the hierarchy the
+whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
+
+- **Where is everything? — FINDING, on the left.** The rail (the mode strip: explorer toggle, search, then
+  the document openers) and the dock (the explorer — the spec tree, open by default). Looking must be free:
+  browsing a finding surface never grows any state but the camera's.
+- **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
+  active tab; everything readable is a document with an address — the graph, a node, a file, a session, the
+  boards. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
+  ([[tab-strip]]).
+- **What surrounds this thing? — CONTEXT, on the right.** The second pane today (a document sent right);
+  the mockup's backlinks/scenarios panel when it earns its keep. Context is about the current document,
+  which is why it is not a finding surface and not a tab.
+- **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
+  land above its right end, never over content.
+
+A control belongs to the region whose question it answers, and to exactly one owner there — the dock
+toggle sits on the rail with the other finding controls, not on the status bar, however convenient the bar
+was to reach from code.
 
 **What it replaced was not a component but a missing layer.** The board used to be one ~710-line component
 that *was* the graph, with every other page hung off it as a hidden pane and every page's state held in
@@ -37,6 +58,16 @@ happens to be current.
 **A view is keyed on its address**, so a different document is a different instance and one document's
 state cannot bleed into the next. The graph is the deliberate exception — keyed on the page alone, because
 its camera and expansion are the workspace's home state rather than one address's.
+
+**A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
+error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split
+pane rendering exactly as they were — a reader who can still navigate can still get out. The boundary
+resets on the address it is keyed by: leaving a broken document is the natural recovery and must not cost
+a reload, and the panel's retry is that same reset for when the address did not change. The console keeps
+the stack; the pane shows one line. Wrapping the whole app instead would trade a broken document for a
+white screen, which is the failure this exists to prevent. The other half of the same contract is the
+stale dist: a lazy chunk that 404s after a redeploy retries twice, then reloads the page once (guarded, so
+it can only happen once per tab) before surfacing here ([[view-registry]]).
 
 **The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view. A door
 that is not built is shut more firmly than a door that closes itself, which is why that face no longer

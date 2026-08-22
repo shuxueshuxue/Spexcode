@@ -33,4 +33,6 @@ the rail had faithfully tried to draw a destination that does not exist.
 
 **Each view is lazy and pays for its own libraries.** The graph carries xyflow and mounts its own
 ReactFlowProvider; hoisting that into the shell would drag the whole graph library into every face's entry
-chunk, including the phone's and the sealed public build's.
+chunk, including the phone's and the sealed public build's. The retry that survives a stale dist lives here too, wrapped
+around every importer, because `React.lazy` caches the rejection — a chunk that 404s once is a dead view
+for the life of the page, and the importer is the only place a second attempt is still possible.

@@ -38,9 +38,10 @@ export default function TabStrip({ specs, sessions }) {
   const t = useT()
   const { tabs, activeKey, open, close, closeOthers } = useTabs()
   const { splitTo } = useWorkspaceApi()
-  // One tab is not a strip — it is the same single-document frame the board has always been, so the chrome
-  // stays out of the way until a second document actually exists.
-  if (tabs.length < 2) return null
+  // The strip shows even with one tab: it is where the current document's NAME lives, and chrome that
+  // appears only when a second document exists jumps the layout at exactly the moment of the reader's
+  // first hold.
+  if (!tabs.length) return null
   return (
     <div className="tabstrip" role="tablist" aria-label={t('tabs.aria')}>
       {tabs.map((tab) => {

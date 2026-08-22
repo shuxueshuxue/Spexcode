@@ -33,8 +33,14 @@ restores the list.
 
 ## expanded spec
 
-- **One rail, five pages — every entry a real anchor.** A compact, always-visible **40px** icon rail on the app's left
-  edge is the page switch: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
+- **The rail carries two kinds of entry, finding before opening.** Under the project chip sit the
+  workspace's FINDING controls — the explorer-dock toggle and search, plain buttons that change what helps
+  you look, lit while their surface is up, rendered only inside a workspace (the cold review fast-path
+  mounts this rail with no WorkspaceProvider, and a dock toggle with no dock would be a lie) — and below
+  them the DOCUMENT OPENERS, each a real anchor naming an address. The order is the mockup's and VS Code's
+  alike: what helps you look, then where you can go.
+- **One rail, five openers — every opener a real anchor.** A compact, always-visible **40px** icon rail on the app's left
+  edge names the addressable kinds: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
   bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in

@@ -5,6 +5,7 @@ import StatusBar, { useStatusItem } from './StatusBar.jsx'
 import TabStrip from './TabStrip.jsx'
 import FileTree from './FileTree.jsx'
 import SpecSearch from './SpecSearch.jsx'
+import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -26,32 +27,32 @@ import { Icon } from './icons.jsx'
 function ViewHost({ page, param, query }) {
   const t = useT()
   const { component: View, className } = viewFor(page)
+  // keyed on the address: a different document is a different instance, so one document's state can never
+  // bleed into the next. Views are cheap to remount; a stale scroll position is not worth a shared
+  // instance. The graph is the exception it earns by keying on page alone — its camera and expansion are
+  // the workspace's home state, not one address's.
+  const key = page === 'graph' ? 'graph' : `${page}/${param ?? ''}`
   return (
     <div className={`viewhost ${className}`}>
-      <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-        {/* keyed on the address: a different document is a different instance, so one document's state can
-            never bleed into the next. Views are cheap to remount; a stale scroll position is not worth a
-            shared instance. The graph is the exception it earns by keying on page alone — its camera and
-            expansion are the workspace's home state, not one address's. */}
-        <View key={page === 'graph' ? 'graph' : `${page}/${param ?? ''}`} param={param} query={query} />
-      </Suspense>
+      {/* the boundary wraps the whole host, Suspense included, so a lazy chunk that will not load is
+          contained the same way a render that throws is. The same key resets it: leaving a broken
+          document is the reader's own recovery, and it must not need a reload. */}
+      <ViewErrorBoundary resetKey={key}>
+        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+          <View key={key} param={param} query={query} />
+        </Suspense>
+      </ViewErrorBoundary>
     </div>
   )
 }
 
-// The dock toggle is a workspace control, so it lives on the bar rather than inside any view.
+// The shell's own status contribution: the workspace identity.
 function ShellStatus() {
-  const t = useT()
-  const { dock } = useWorkspace()
   const { identity } = useBoard()
-  const { setDock } = useWorkspaceApi()
   // workspace identity: which project this window is looking at. It belongs to the shell because it is
-  // true of the window, not of whatever view happens to be showing.
+  // true of the window, not of whatever view happens to be showing. The dock toggle moved to the rail
+  // ([[side-nav]]) — the finding controls live together, and one control has one owner.
   useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', text: `$ ${identity?.title || 'spexcode'}` })
-  useStatusItem({
-    id: 'explorer', side: 'left', priority: 900, kind: dock ? 'info' : 'standard',
-    text: '▤', tooltip: t('fileTree.aria'), onClick: () => setDock((v) => !v),
-  })
   return null
 }
 
@@ -103,7 +104,11 @@ export default function Shell() {
       <div className="app">
         <TooltipLayer />
         <SideBar page={page} identity={identity} catalog={catalog} />
-        {dock && <FileTree specs={specs} focusId={page === 'spec' ? param : null} />}
+        {dock && (
+          <ViewErrorBoundary resetKey="dock">
+            <FileTree specs={specs} focusId={page === 'spec' ? param : null} />
+          </ViewErrorBoundary>
+        )}
         <div className="app-main">
           <TabStrip specs={specs} sessions={sessions} />
           <Content page={page} param={param} query={query} />

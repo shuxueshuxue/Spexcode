@@ -60,6 +60,8 @@ export default {
   },
   nav: {
     railLabel: 'main navigation',
+    explorer: 'Explorer',
+    search: 'Search (/)',
     graph: 'Spec Node Graph (⌥1)',
     sessions: 'Sessions (⌥2)',
     evals: 'Evals (⌥3 / ⌥F)',
@@ -175,6 +177,13 @@ export default {
     loading: 'loading specs from git…',
     loadError: 'backend unreachable — the graph failed to load.',
     retry: 'retry',
+  },
+
+  // the crash panel a single pane shows when the view inside it threw ([[workspace-shell]]). Deliberately
+  // two lines of copy: the message itself is the error's, not ours.
+  viewError: {
+    title: 'This view crashed.',
+    retry: 'Retry',
   },
 
   evalsFeed: {

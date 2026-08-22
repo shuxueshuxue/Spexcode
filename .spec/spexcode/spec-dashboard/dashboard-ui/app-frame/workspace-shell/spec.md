@@ -21,7 +21,11 @@ whole shell hangs off, re-derived from what the product is rather than from what
 
 - **Where is everything? — FINDING, on the left.** The rail (the mode strip: explorer toggle, search, then
   the document openers) and the dock (the explorer — the spec tree, open by default). Looking must be free:
-  browsing a finding surface never grows any state but the camera's.
+  browsing a finding surface never grows any state but the camera's. A wide board is where the region stands
+  down: Evals and Issues ARE finding surfaces, full-bleed by design, so while one of them is the routed
+  document the dock does not render — two finding surfaces side by side buys nothing and costs the board the
+  width it was drawn for. The rail's explorer toggle still owns the stored preference and stays lit by it;
+  a board suppresses the dock while it is the document and never edits the reader's choice ([[file-tree]]).
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
   active tab; everything readable is a document with an address — the graph, a node, a file, a session, the
   boards. Entering a document from a finding surface follows in place; holding it is the deliberate gesture

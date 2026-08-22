@@ -960,6 +960,34 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
   }
 })
 
+test('expired launch readiness residue becomes terminal error/offline during queue recovery', serial, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-launch-limbo-'))
+  process.env.SPEXCODE_HOME = home
+  const id = `launch-limbo-${process.pid}`
+  const worktree = process.cwd()
+  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionArtifactPath(id, 'launch'), 'authoritative first turn')
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch, node: 'launch', title: '', name: '', parent: '',
+    status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex',
+    harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex',
+    launch_cmd: 'codex', launch_owner: '', launch_readiness_started_at: Date.now() - 31_000, launch_readiness_pending: '',
+  }, null, 2)}\n`)
+  try {
+    await drainQueue()
+    await waitUntil(() => JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).status === 'error', 'terminal launch readiness error')
+    const settled = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(settled.stopped, true, 'terminal readiness failure is offline')
+    assert.match(settled.note, /^queued launch readiness failed: native identity and first-turn rollout receipt/)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('stop revalidates the exact leaf after every shared guard before TERM and KILL', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = claudeHarness.sharedRuntimes

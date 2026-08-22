@@ -33,4 +33,3 @@ export function resetConfiguredSessionApplicationForTest(): void {
   cached?.close()
   cached = undefined
 }
-

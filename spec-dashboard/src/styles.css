@@ -328,7 +328,27 @@ body {
    the same wherever it is listed. */
 .ft-code .ft-label { color: var(--blue); }
 .ft-att .ft-label { color: var(--cyan); }
+.ft-dir .ft-label { color: var(--ink); }
+.ft-code, .ft-dir { text-decoration: none; }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+
+/* the explorer's two DISCLOSURES ([[files-tree]]): Specs, the spec tree, open by default because it is the
+   explorer's main body; Files, the disk, closed. A head borrows the DOCK HEADER's register exactly — muted
+   meta size, the name in --ink2 at medium weight, sentence case — so the sidebar reads as one column with
+   a hierarchy in it rather than two panels bolted together. Sentence case is not a detail: an all-caps
+   tracked label is decoration wearing the costume of hierarchy ([[typography]]), and hierarchy here is
+   spent on space, then colour, then weight. It is NOT a band either: it scrolls with the list it heads,
+   inside `.ft-body`'s scrollport, and carries its own aria-expanded ([[ui-state-model]]). */
+.ft-section + .ft-section { border-top: 1px solid var(--edge); margin-top: var(--space-2); }
+.ft-section-head {
+  display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  background: none; border: 0; cursor: pointer; text-align: left;
+  font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--muted);
+}
+.ft-section-head:hover { background: color-mix(in srgb, var(--line) 35%, transparent); }
+.ft-section-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); font-weight: var(--weight-medium); }
+.ft-note { padding: 3px 8px 3px 6px; color: var(--muted); font-size: var(--type-caption); }
+.ft-note-error { color: var(--red); }
 
 /* [[dock-modes]] — the dock is one finding surface with two compact projections; mode controls live on the rail. */
 .dock {

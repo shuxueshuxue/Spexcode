@@ -48,6 +48,11 @@ export default {
   fileView: { none: 'no file selected' },
   fileTree: {
     aria: 'project file tree',
+    specs: 'Specs',
+    files: 'Files',
+  },
+  filesTree: {
+    loading: 'loading…',
   },
   dockModes: {
     collapse: 'Collapse sidebar',

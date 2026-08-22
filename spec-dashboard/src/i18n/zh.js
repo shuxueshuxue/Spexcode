@@ -47,6 +47,11 @@ export default {
   fileView: { none: '未选择文件' },
   fileTree: {
     aria: '项目文件树',
+    specs: '规格',
+    files: '文件',
+  },
+  filesTree: {
+    loading: '正在加载…',
   },
   dockModes: {
     collapse: '收起侧边栏',

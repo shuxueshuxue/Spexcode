@@ -147,6 +147,18 @@ export async function fetchSourceSlice(path, offset = 0, limit) {
   return body
 }
 
+// one LEVEL of a governed directory ([[source-list]]). The listing half of the same surface `fetchSourceSlice`
+// reads from, and it pages the same way that one does — by asking again rather than by asking for everything:
+// the tree fetches a level when the reader expands it, so a repository's size is never a cost the explorer
+// pays up front. A refusal (an escape, a directory outside the governed roots) arrives as `{error}` with a
+// 400/404 and is surfaced, never swallowed into an empty branch that reads as "this folder is empty".
+export async function fetchDirEntries(dir = '') {
+  const res = await apiFetch(`/api/files?${new URLSearchParams({ dir })}`)
+  const body = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(body?.error || `directory list failed (${res.status})`)
+  return { entries: body?.entries || [], truncated: !!body?.truncated }
+}
+
 // subscribe to the graph's push channel in DELTA mode ([[graph-stream]]/[[graph-delta]]): the server sends a
 // full snapshot on connect (`graph-full {to, graph}`), then hash-chained patches (`graph-delta {from, to,
 // set, del}`) — a few KB per change instead of a full refetch. This is the client mirror of the server's

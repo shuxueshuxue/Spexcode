@@ -19,6 +19,13 @@ related:
 The dock is one finding surface with two projections: **explorer** finds governed files and spec nodes;
 **sessions** finds active sessions.
 
+The explorer itself discloses two SECTIONS — the spec tree ([[file-tree]], open by default) and the real
+directory tree ([[files-tree]], closed). That is not a third projection: a projection decides what the dock
+is FOR right now and is chosen from the rail, while a section is a disclosure inside the one list the
+explorer already is. The distinction survives the band rule below because a section head owns its own
+disclosure control and scrolls with its list, so the dock is still exactly one band with either section
+open, both, or neither.
+
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
 projection it shows and whether it exists at all. A session document belongs with the session list; a node
 or a governed file belongs with the explorer. **Evals, issues and settings have no natural sidebar, so they

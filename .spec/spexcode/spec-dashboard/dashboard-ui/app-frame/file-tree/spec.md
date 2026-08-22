@@ -6,6 +6,7 @@ desc: The left dock — a spec node is a folder, so the tree that navigates the 
 code:
   - spec-dashboard/src/FileTree.jsx
 related:
+  - spec-dashboard/src/FilesTree.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/useResizable.js
@@ -40,6 +41,21 @@ address and is fenced to spec/file by [[tab-strip]].
 live in [[dock-modes]]' single header row, because they describe the dock that is currently projecting the
 explorer; a projection that re-declares its own name is a second answer to a question answered one row
 above, and it cost a chrome band to give.
+
+**The explorer discloses TWO sections, and they are two projections of one project.** SPECS is this tree —
+open by default, because it is the explorer's main body rather than one option among two. FILES is the disk
+listed as the disk ([[files-tree]]) — closed by default, because it answers a question this tree cannot: a
+path exists here only if some node claims it, so a reader who knows where a file lives but not which node
+governs it has nowhere to look. Closed also means unmounted, so a reader who never opens it never costs the
+backend a listing.
+
+A section head is NOT a band, and the distinction is structural rather than a matter of taste about
+thickness: each is a `<section>` whose head owns its own disclosure control, so it scrolls inside the list
+it heads instead of standing between the window edge and the content ([[ui-state-model]]'s classifier reads
+exactly that shape). The dock therefore stays one band however many projections it discloses. The heads
+borrow [[dock-modes]]' header register — muted meta, the name in ink at medium weight, **sentence case** —
+because an all-caps tracked label is decoration wearing the costume of hierarchy ([[typography]]), and the
+collapsed state of each is a localStorage preference like every other pane's.
 
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
 workspace whose only entrance is a URL is a workspace nobody enters. Its explorer and sessions projections

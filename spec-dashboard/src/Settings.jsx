@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { ACT, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
@@ -25,17 +26,13 @@ function Shortcuts({ t }) {
   const refresh = () => setTick((n) => n + 1)
 
   // keyboard capture: grab the next real keypress as the binding (Esc cancels, bare modifiers ignored).
-  useEffect(() => {
-    if (!cap) return
-    const onKey = (e) => {
-      e.preventDefault(); e.stopPropagation()
-      if (e.key === 'Escape') { setCap(null); return }
-      if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
-      setBinding(cap, { keys: [e.key] }); setCap(null); refresh()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [cap])
+  useKeyboardScope((event) => {
+    if (!cap) return false
+    event.preventDefault(); event.stopPropagation()
+    if (event.key === 'Escape') { setCap(null); return true }
+    if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return true
+    setBinding(cap, { keys: [event.key] }); setCap(null); refresh(); return true
+  }, 20)
 
   return (
     <section className="legend-sec">

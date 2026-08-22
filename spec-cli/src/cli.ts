@@ -1495,15 +1495,6 @@ if (cmd === 'serve') {
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)
-  } else if (sub === 'review-gate') {
-    const { runReviewAcceptance } = await import('./review-acceptance.js')
-    const result = await runReviewAcceptance({
-      candidate: flag('candidate'),
-      base: flag('base'),
-      onProgress: (line) => console.error(`[review acceptance] ${line}`),
-    })
-    console.log(has('json') ? JSON.stringify(result, null, 2) : result.report)
-    process.exit(result.ok ? 0 : 1)
   } else if (sub === 'hook-prompt') {
     // The internal render seam shared by hook handlers and GuidanceCatalog. The hooks call it only on branches
     // that already emit model-facing text; their hot no-op paths remain pure shell.

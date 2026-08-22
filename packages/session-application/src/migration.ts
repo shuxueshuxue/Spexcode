@@ -219,7 +219,24 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       const state = app.readState(record.session_id)
       const parent = record.parent ?? null
       if (!state) {
-        app.createSession({ sessionId: record.session_id, status: record.status, proposal: typeof record.proposal === 'string' ? record.proposal : null, note: typeof record.note === 'string' ? record.note : null, parentSessionId: parent, updatedAtMs: record.createdAt ?? 0, eventId: createHash('sha256').update(`migration\0${sourceDigest}\0${record.session_id}`).digest('hex').slice(0, 32) })
+        const nativeSessionId = typeof record.harness_session_id === 'string' && record.harness_session_id ? record.harness_session_id : null
+        app.createSession({
+          sessionId: record.session_id,
+          status: record.status,
+          proposal: typeof record.proposal === 'string' ? record.proposal : null,
+          note: typeof record.note === 'string' ? record.note : null,
+          parentSessionId: parent,
+          updatedAtMs: record.createdAt ?? 0,
+          eventId: createHash('sha256').update(`migration\0${sourceDigest}\0${record.session_id}`).digest('hex').slice(0, 32),
+          ...(nativeSessionId ? {
+            runtime: {
+              namespace: 'spex-governed',
+              runtimeKind: typeof record.harness === 'string' && record.harness ? record.harness : 'legacy',
+              nativeSessionId,
+              nativeStartToken: `migration:${sourceDigest}:${record.session_id}`,
+            },
+          } : {}),
+        })
         events++
       } else if (state.status !== record.status || state.parentSessionId !== parent) {
         fail(`existing SQLite state for ${record.session_id} conflicts with JSON source`)

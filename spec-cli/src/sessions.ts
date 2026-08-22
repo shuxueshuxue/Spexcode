@@ -44,7 +44,7 @@ function maxActive(): number {
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
-const rvEnv = (id: string, harness = HARNESS) => {
+const rvEnv = (id: string, harness = HARNESS, nativeStartToken?: string | null) => {
   // SPEXCODE_SESSION_ID is the governed record id, and it is the SESSION'S OWN — so the launch STRIPS every
   // session-identity variable it may have inherited (the pane inherits the tmux SERVER's env, which may carry
   // a foreign session's ids from whoever started it) before setting this one. Identity is established HERE,
@@ -62,6 +62,7 @@ const rvEnv = (id: string, harness = HARNESS) => {
     `SPEXCODE_SESSION_ID=${id}`,
     `SPEXCODE_SESSION_IDENTITY_VARS=${shQuote(sessionIdentityEnvVars().join(','))}`,
     `SPEXCODE_PROJECT_ROOT=${shQuote(mainRoot())}`,
+    ...(nativeStartToken ? [`SPEXCODE_NATIVE_START_TOKEN=${shQuote(nativeStartToken)}`] : []),
     ...harness.launchEnv(id), ...homeVars].join(' ')
 }
 
@@ -188,7 +189,7 @@ export type SessRec = {
   node: string | null; title: string | null; name: string | null
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
-  sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
+  sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null; runtimeStartToken: string | null
   stopped: boolean       // explicit human stop; liveness metadata, never an agent-authored lifecycle value
   archived: boolean      // closed by the human ([[archive]]) — only clean after coldProof is written
   closedAt: string | null // written atomically with archived:true; old archived records read as null
@@ -317,6 +318,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
+    runtimeStartToken: raw.runtime_start_token || null,
     stopped: !!raw.stopped,             // records written before explicit stop tracking were not stopped
     archived: !!raw.archived,           // records written before close retention → absent → working
     closedAt: typeof raw.closed_at === 'string' && raw.closed_at ? raw.closed_at : null,
@@ -399,6 +401,7 @@ function writeRecord(rec: SessRec): void {
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    ...(rec.runtimeStartToken ? { runtime_start_token: rec.runtimeStartToken } : {}),
     create_request_id: rec.createRequestId ?? '',
     create_payload_hash: rec.createPayloadHash ?? '',
     ...(rec.zcodeChildSessionIds?.length ? { zcode_child_session_ids: rec.zcodeChildSessionIds } : {}),
@@ -1500,7 +1503,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
   // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
   // ambient default so resume reuses the same auth. Undefined is only for old records before launch_cmd existed.
-  const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
+  const invocation = `${rvEnv(id, harness, readRecord(id)?.runtimeStartToken)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
   // @@@ birth registration - record the AGENT's real pid BEFORE exec, the anchor of the 100ms hot death tier
   // ([[state]]). Each attempt runs `sh -c '<pid-write>; exec env <invocation>'`: the sh writes its own `$$` to
   // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
@@ -2525,7 +2528,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
             session: id, governed: true, worktreePath: path, branch,
             node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-            harness: h.id, harnessSessionId: null, stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
+            harness: h.id, harnessSessionId: null, runtimeStartToken: randomUUID(), stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
             ...(base ? { base } : {}),
           }
@@ -2912,6 +2915,17 @@ function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, ge
   }
   try {
     writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
+    const application = configuredSessionApplicationIfCutover()
+    if (application) {
+      const nativeStartToken = rec.runtimeStartToken || process.env.SPEXCODE_NATIVE_START_TOKEN?.trim()
+      if (!nativeStartToken) throw new ResourceConflict(`refusing to bind runtime for ${id}: native start token is missing`)
+      application.bindRuntime(id, {
+        namespace: 'spex-governed',
+        runtimeKind: rec.harness || defaultHarness.id,
+        nativeSessionId: harnessSessionId,
+        nativeStartToken,
+      })
+    }
   } catch (error) {
     if (codex && generationId && registrationPrepared) {
       try { bindCodexGeneration(root, id, harnessSessionId, null) }
@@ -4237,6 +4251,29 @@ async function strandedDeliveryError(rec: SessRec): Promise<StrandedDeliveryErro
 }
 export async function sendText(id: string, text: string, from?: string, opts: SendTextOptions = {}): Promise<AcceptedDispatch> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
+  const application = configuredSessionApplicationIfCutover()
+  if (application) {
+    try {
+      const rec = readRecord(id)
+      if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+      await opts.acceptGuard?.(rec)
+      const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
+      const idempotencyKey = opts.idempotency?.requestDigest ?? null
+      const existing = idempotencyKey
+        ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
+        : undefined
+      const message = existing ?? application.enqueueMessage(id, {
+          kind: 'session.prompt.v1',
+          body: Buffer.from(prompt.text, 'utf8'),
+          senderSessionId: from ?? null,
+          idempotencyKey,
+        })
+      if (!opts.deferDrain) await drainSession(id)
+      return { ok: true, ...(opts.idempotency ? { replayed: !!existing } : {}) }
+    } catch (error) {
+      return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
+    }
+  }
   let replayed = false
   try {
     // Taking a declared sender's record lock makes close a real outgoing fence even across backend processes:
@@ -4287,6 +4324,32 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
 // at any time: the queue's own lock serializes concurrent passes, and an empty queue costs one existsSync.
 // The retry sweep in `serve` calls this for the sessions whose queues an earlier pass could not empty.
 export async function drainSession(id: string): Promise<void> {
+  const application = configuredSessionApplicationIfCutover()
+  if (application) {
+    const rec = readRecord(id)
+    if (!rec) return
+    const binding = application.resolveRuntime(id, 'spex-governed')
+    if (!binding || binding.status !== 'bound') return
+    const h = harnessById(rec.harness || defaultHarness.id)
+    await withDeliveryLocks([id], async () => {
+      for (;;) {
+        const pending = application.protocol.listPending(id)
+        const msg = pending[0]
+        if (!msg) return
+        const text = canonicalMessageText(msg, rec)
+        if (h.deliveryBlockedBy) {
+          try {
+            if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+          } catch { /* no pane to consult — let the adapter decide */ }
+        }
+        const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
+        if (!delivered.ok) return
+        const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration)
+        if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+      }
+    })
+    return
+  }
   if (!owesDelivery(id)) return
   const rec = readRecord(id)
   if (!rec) return
@@ -4304,6 +4367,17 @@ export async function drainSession(id: string): Promise<void> {
     const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.mid }, msg.text)
     return delivered.ok
   })
+}
+
+function canonicalMessageText(message: { kind: string; body: Uint8Array }, target: SessRec): string {
+  if (message.kind === 'session.prompt.v1') return Buffer.from(message.body).toString('utf8')
+  if (message.kind === 'session.state.changed.v1') {
+    try {
+      const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as Partial<SessRec> & { status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }
+      return watchMessage({ ...target, status: (change.status ?? target.status) as Lifecycle, proposal: change.proposal ?? null, note: change.note ?? null, parent: change.parentSessionId ?? target.parent })
+    } catch { throw new ResourceConflict(`canonical state message for ${target.session} is not valid JSON`) }
+  }
+  throw new ResourceConflict(`canonical message kind ${message.kind} cannot be delivered as session text`)
 }
 
 // Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a

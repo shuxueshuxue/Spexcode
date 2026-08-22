@@ -281,6 +281,7 @@ export type RawRecord = {
   node: string | null; title: string | null; name: string | null; parent?: string | null
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
+  runtime_start_token?: string
   stopped?: boolean
   archived?: boolean  // the human ARCHIVED this session ([[archive]]) — only a proven cold/offline row; absent → false on old records
   closed_at?: string   // ISO close publication time; absent on archived records created before the retained-record archive index

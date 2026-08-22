@@ -431,7 +431,7 @@ function writeRecord(rec: SessRec): void {
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
   const previousPublic = previous ? publicRecord(previous) : null
   const nextPublic = publicRecord(rec)
-  if (rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
+  if (!configuredSessionApplicationIfCutover() && rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
     || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
     recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
     scheduleWatchNotifications(rec)
@@ -1622,7 +1622,15 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
   const note = `queued launch readiness failed: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
-  if (rec && !retirementReason(rec) && rec.note !== note) writeRecord({ ...rec, note })
+  if (rec && !retirementReason(rec) && rec.note !== note) {
+    publishCanonicalLifecycle(rec, rec.status, rec.proposal, note)
+    writeRecord({ ...rec, note })
+  }
+}
+
+function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
+  const application = configuredSessionApplicationIfCutover()
+  if (application) application.transitionSession(rec.session, { status, proposal, note })
 }
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
@@ -1647,7 +1655,10 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
         if (!stillReady) throw new ResourceConflict('launch readiness changed before queued publication')
         const current = readRecord(id)
         if (!current) return
-        if (current.status === 'queued') writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null })
+        if (current.status === 'queued') {
+          publishCanonicalLifecycle(current, 'active', null, null)
+          writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null })
+        }
         readyToPublish = true
       })
       if (!readyToPublish) return
@@ -1685,6 +1696,7 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
         throw error
       }
       const recovered = readRecord(id) || wt.rec
+      publishCanonicalLifecycle(recovered, 'active', null, null)
       writeRecord({ ...recovered, status: 'active', proposal: null, note: null, launchOwner: null })
       observeQueuedLaunchReadiness(id, h)
       readinessOwnsSlot = true
@@ -1727,6 +1739,7 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
     // belongs to the state currently declared" true for every writer — the invariant [[session-label]]'s
     // headline precedence stands on.
     const launched = readRecord(id) || wt.rec
+    publishCanonicalLifecycle(launched, 'active', null, null)
     writeRecord({ ...launched, status: 'active', proposal: null, note: null, launchOwner: null })
     if (!h.launchPayloadProof) removeLaunchFile(id)
     // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
@@ -2835,8 +2848,12 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
       }
     }
     const published = readRecord(id) || candidate
+    publishCanonicalLifecycle(published, published.status, published.proposal, published.note)
     writeRecord({ ...published, launchReadinessPending: null })
-  } else writeRecord(resumed)
+  } else {
+    publishCanonicalLifecycle(current, resumed.status, resumed.proposal, resumed.note)
+    writeRecord(resumed)
+  }
   return { ok: true }
 }
 export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
@@ -2913,11 +2930,13 @@ function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, ge
       registrationPrepared = true
     }
   }
+  const application = configuredSessionApplicationIfCutover()
+  const nativeStartToken = rec.runtimeStartToken || process.env.SPEXCODE_NATIVE_START_TOKEN?.trim()
+  if (application && !nativeStartToken)
+    throw new ResourceConflict(`refusing to bind runtime for ${id}: native start token is missing`)
   try {
     writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
-    const application = configuredSessionApplicationIfCutover()
     if (application) {
-      const nativeStartToken = rec.runtimeStartToken || process.env.SPEXCODE_NATIVE_START_TOKEN?.trim()
       if (!nativeStartToken) throw new ResourceConflict(`refusing to bind runtime for ${id}: native start token is missing`)
       application.bindRuntime(id, {
         namespace: 'spex-governed',
@@ -3111,6 +3130,7 @@ export function markIdle(sessionId?: string): boolean {
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
+    publishCanonicalLifecycle(rec, 'idle', null, null)
     writeRecord({ ...rec, status: 'idle' })
     return true
   })

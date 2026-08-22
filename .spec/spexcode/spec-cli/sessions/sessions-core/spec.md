@@ -101,6 +101,12 @@ Close retains that record as the one archived session source and records its `cl
 the same atomic record publication. The public projection carries the timestamp without a timeline read, so a
 complete archive index remains proportional only to record count. Older archived records with no timestamp project
 `null`; creation time, manual sort order, and filesystem metadata never impersonate the missing close fact.
+The archive index has its own lean projection, following [[graph-lean]]'s summary-first pattern: one archived-only
+read returns only `id`, visible `title`, stable search `label`, `closedAt`, and `node`. It never enumerates live
+rows, reads the prompt into a public object, or carries files, web resources, notes, or lifecycle state; id-addressed
+session detail remains the demand path for a selected row. Title derivation is lazy at the prompt-file boundary:
+records with a name or usable note do not read their prompt at all; a prompt is read only when those earlier title
+sources are absent and the prompt can affect the visible title.
 An archived record is a retained, read-only fact: lifecycle writers reject it with an explicit closed/read-only
 reason rather than attempting to read its removed worktree and leaking a materialization error.
 The sibling `launch` artifact is the authoritative resolved first-turn payload, not a best-effort prompt cache.

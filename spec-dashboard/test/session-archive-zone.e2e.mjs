@@ -174,7 +174,7 @@ try {
   })
   page.on('request', (request) => {
     const url = new URL(request.url())
-    if (request.method() === 'GET' && url.pathname === '/api/sessions' && url.searchParams.has('all')) {
+    if (request.method() === 'GET' && url.pathname === '/api/sessions/archive-index') {
       archiveRequests.push({ href: url.href, params: [...url.searchParams.entries()] })
     }
   })
@@ -203,7 +203,7 @@ try {
   assert.equal(await archiveZone.getAttribute('aria-expanded'), 'false', 'archive Space did not toggle the header')
   assert.equal(await page.locator('.si-zone-archive ~ .si-tree-row .si-item').count(), 0, 'empty archive zone was not folded')
   assert.equal(archiveRequests.length, 1, 'the initial archive index was not fetched exactly once')
-  assert.deepEqual(archiveRequests[0].params, [['all', '1']], 'the archive index request carried pagination parameters')
+  assert.deepEqual(archiveRequests[0].params, [], 'the archive index request carried unexpected query parameters')
   await page.screenshot({ path: join(out, 'archive-zone-zero.png'), fullPage: true })
   step('permanent Archive 0 place visible with no star pill')
 
@@ -352,7 +352,7 @@ try {
   mkdirSync(join(sessionsRoot, legacyId), { recursive: true })
   writeFileSync(join(sessionsRoot, legacyId, 'session.json'), `${JSON.stringify(legacyRecord, null, 2)}\n`)
   writeFileSync(join(sessionsRoot, legacyId, 'prompt'), 'archive-only-legacy-needle\n')
-  const seededIndex = await json('/api/sessions?all=1')
+  const seededIndex = await json('/api/sessions/archive-index')
   assert.equal(seededIndex.find((session) => session.id === legacyId)?.closedAt, null,
     'pre-field archived record did not project closedAt:null')
 
@@ -360,7 +360,7 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => document.querySelector('.si-zone-archive')?.dataset.archiveCount === '32')
   assert.equal(archiveRequests.length, beforeReloadRequests + 1, 'one page load issued more than one archive index request')
-  assert.deepEqual(archiveRequests.at(-1).params, [['all', '1']], 'full archive read was paginated')
+  assert.deepEqual(archiveRequests.at(-1).params, [], 'archive index read carried unexpected query parameters')
   if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive').click()
   await page.locator('.si-zone-all').click()
   await archivePage.waitFor({ state: 'visible' })

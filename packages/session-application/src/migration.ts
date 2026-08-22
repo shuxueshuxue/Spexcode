@@ -37,6 +37,7 @@ export interface JsonSessionMigrationOptions {
   locality: LocalityPrecondition
   backupRoot?: string
   now?: () => number
+  orphanParentPolicy?: 'fail' | 'tombstone'
 }
 
 export interface JsonSessionMigrationReport {
@@ -46,6 +47,7 @@ export interface JsonSessionMigrationReport {
   parentEdges: number
   watchEdges: number
   events: number
+  orphanParents: string[]
   backupRoot: string
   markerPath: string
   replayed: boolean
@@ -65,9 +67,9 @@ function parseJson(path: string): unknown {
   catch (error) { fail(`cannot read JSON migration input ${path}: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
-function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watches: Map<string, WatchEntry[]>; files: string[] } {
+function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watches: Map<string, WatchEntry[]>; files: string[]; orphanParents: string[] } {
   if (!isAbsolute(recordsRoot)) fail('recordsRoot must be an absolute directory')
-  if (!existsSync(recordsRoot)) return { records: [], watches: new Map(), files: [] }
+  if (!existsSync(recordsRoot)) return { records: [], watches: new Map(), files: [], orphanParents: [] }
   if (!statSync(recordsRoot).isDirectory()) fail(`recordsRoot is not a directory: ${recordsRoot}`)
   const dirs = readdirSync(recordsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
   const records: JsonMigrationRecord[] = []
@@ -86,13 +88,14 @@ function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watc
       fail(`ambiguous session id in ${recordPath}`)
     }
     if (typeof record.status !== 'string' || !STATUS.test(record.status)) fail(`invalid status in ${recordPath}`)
-    if (record.parent !== undefined && record.parent !== null && (typeof record.parent !== 'string' || !SESSION_ID.test(record.parent))) {
+    if (record.parent !== undefined && record.parent !== null && record.parent !== '' && (typeof record.parent !== 'string' || !SESSION_ID.test(record.parent))) {
       fail(`invalid parent in ${recordPath}`)
     }
     if (record.createdAt !== undefined && (!Number.isSafeInteger(record.createdAt) || record.createdAt < 0)) fail(`invalid createdAt in ${recordPath}`)
     if (ids.has(id)) fail(`duplicate session record: ${id}`)
     ids.add(id)
-    records.push(record)
+    // Empty was the legacy root marker; normalize it without changing the source digest.
+    records.push(record.parent === '' ? { ...record, parent: null } : record)
     files.push(recordPath)
     const watchPath = join(dir, 'watchers.json')
     if (existsSync(watchPath)) {
@@ -121,9 +124,7 @@ function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watc
     }
   }
   const byId = new Set(records.map(record => record.session_id))
-  for (const record of records) {
-    if (record.parent && !byId.has(record.parent)) fail(`session ${record.session_id} names missing parent ${record.parent}`)
-  }
+  const orphanParents = [...new Set(records.flatMap(record => record.parent && !byId.has(record.parent) ? [record.parent] : []))].sort()
   for (const [target, entries] of watches) {
     for (const entry of entries) if (!byId.has(entry.watcher)) fail(`session ${target} names missing watcher ${entry.watcher}`)
   }
@@ -137,7 +138,7 @@ function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watc
       current = records.find(candidate => candidate.session_id === current)?.parent
     }
   }
-  return { records: records.sort((a, b) => a.session_id.localeCompare(b.session_id)), watches, files: files.sort() }
+  return { records: records.sort((a, b) => a.session_id.localeCompare(b.session_id)), watches, files: files.sort(), orphanParents }
 }
 
 function digestInputs(recordsRoot: string, files: string[]): string {
@@ -170,12 +171,41 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
     const marker = parseJson(markerPath) as Partial<JsonSessionMigrationReport>
     if (marker.version !== VERSION || marker.sourceDigest !== sourceDigest) fail(`migration marker ${markerPath} does not match current JSON source`)
     if (!existsSync(options.databasePath)) fail(`migration marker exists but database is missing: ${options.databasePath}`)
-    return { version: VERSION, sourceDigest, records: Number(marker.records) || 0, parentEdges: Number(marker.parentEdges) || 0, watchEdges: Number(marker.watchEdges) || 0, events: Number(marker.events) || 0, backupRoot, markerPath, replayed: true }
+    return {
+      version: VERSION,
+      sourceDigest,
+      records: Number(marker.records) || 0,
+      parentEdges: Number(marker.parentEdges) || 0,
+      watchEdges: Number(marker.watchEdges) || 0,
+      events: Number(marker.events) || 0,
+      orphanParents: Array.isArray(marker.orphanParents) ? marker.orphanParents.filter((value): value is string => typeof value === 'string') : [],
+      backupRoot,
+      markerPath,
+      replayed: true,
+    }
+  }
+  const orphanParentPolicy = options.orphanParentPolicy ?? 'fail'
+  if (orphanParentPolicy !== 'fail' && orphanParentPolicy !== 'tombstone') fail(`unknown orphan parent policy: ${orphanParentPolicy}`)
+  if (input.orphanParents.length && orphanParentPolicy === 'fail') {
+    fail(`sessions name retired parents ${input.orphanParents.join(', ')}; rerun the one-time migration with orphanParentPolicy=tombstone to preserve those edges as archived addresses`)
   }
   backupInputs(options.recordsRoot, input.files, backupRoot, sourceDigest)
   const app = openProjectSessionApplication({ databasePath: options.databasePath, locality: options.locality, now: options.now })
   let parentEdges = 0, watchEdges = 0, events = 0
   try {
+    if (orphanParentPolicy === 'tombstone') {
+      for (const parent of input.orphanParents) {
+        if (!app.readState(parent)) {
+          app.createSession({
+            sessionId: parent,
+            status: 'archived',
+            updatedAtMs: 0,
+            eventId: createHash('sha256').update(`migration\0${sourceDigest}\0orphan-parent\0${parent}`).digest('hex').slice(0, 32),
+          })
+          events++
+        }
+      }
+    }
     for (const record of input.records) {
       const state = app.readState(record.session_id)
       const parent = record.parent ?? null
@@ -202,7 +232,18 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       }
     }
   } finally { app.close() }
-  const report: JsonSessionMigrationReport = { version: VERSION, sourceDigest, records: input.records.length, parentEdges, watchEdges, events, backupRoot, markerPath, replayed: false }
+  const report: JsonSessionMigrationReport = {
+    version: VERSION,
+    sourceDigest,
+    records: input.records.length,
+    parentEdges,
+    watchEdges,
+    events,
+    orphanParents: input.orphanParents,
+    backupRoot,
+    markerPath,
+    replayed: false,
+  }
   mkdirSync(dirname(markerPath), { recursive: true })
   writeFileSync(markerPath, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' })
   return report

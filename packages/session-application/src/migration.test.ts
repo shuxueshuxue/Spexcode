@@ -41,10 +41,39 @@ test('JSON migration imports state, parent/watch topology, deterministic event, 
   assert.equal(second.sourceDigest, first.sourceDigest)
 })
 
-test('JSON migration refuses corrupt, missing, duplicate, and cyclic facts before SQLite cutover', () => {
+test('JSON migration refuses an orphan parent by default before SQLite cutover', () => {
   const root = mkdtempSync(join(tmpdir(), 'session-json-migration-fail-'))
   const recordsRoot = join(root, 'sessions')
   mkdirSync(join(recordsRoot, 'a'), { recursive: true })
   writeFileSync(join(recordsRoot, 'a', 'session.json'), JSON.stringify(record('a', 'active', 'missing')))
-  assert.throws(() => migrateJsonSessionRecords({ databasePath: join(root, 'sessions.sqlite'), recordsRoot, locality: () => {} }), /missing parent/)
+  assert.throws(() => migrateJsonSessionRecords({ databasePath: join(root, 'sessions.sqlite'), recordsRoot, locality: () => {} }), /retired parents.*missing.*orphanParentPolicy=tombstone/)
+})
+
+test('JSON migration tombstones an orphan parent and normalizes empty root markers', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-json-migration-tombstone-'))
+  const recordsRoot = join(root, 'sessions')
+  const databasePath = join(root, 'sessions.sqlite')
+  mkdirSync(join(recordsRoot, 'root'), { recursive: true })
+  mkdirSync(join(recordsRoot, 'child'), { recursive: true })
+  writeFileSync(join(recordsRoot, 'root', 'session.json'), JSON.stringify(record('root', 'active', '')))
+  writeFileSync(join(recordsRoot, 'child', 'session.json'), JSON.stringify(record('child', 'awaiting', 'retired-parent')))
+  const first = migrateJsonSessionRecords({
+    databasePath,
+    recordsRoot,
+    orphanParentPolicy: 'tombstone',
+    locality: () => {},
+  })
+  assert.deepEqual(first.orphanParents, ['retired-parent'])
+  assert.equal(first.records, 2)
+  assert.equal(first.parentEdges, 1)
+  assert.equal(first.events, 3)
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  assert.deepEqual(app.readState('root'), { sessionId: 'root', status: 'active', parentSessionId: null, updatedAtMs: 20 })
+  assert.deepEqual(app.readState('retired-parent'), { sessionId: 'retired-parent', status: 'archived', parentSessionId: null, updatedAtMs: 0 })
+  assert.deepEqual(app.readState('child'), { sessionId: 'child', status: 'awaiting', parentSessionId: 'retired-parent', updatedAtMs: 20 })
+  assert.equal(app.topology.recipients('child').includes('retired-parent'), true)
+  app.close()
+  const second = migrateJsonSessionRecords({ databasePath, recordsRoot, orphanParentPolicy: 'tombstone', locality: () => {} })
+  assert.equal(second.replayed, true)
+  assert.deepEqual(second.orphanParents, ['retired-parent'])
 })

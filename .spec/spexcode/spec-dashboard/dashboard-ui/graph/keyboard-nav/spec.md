@@ -15,6 +15,7 @@ related:
   - spec-dashboard/src/scroll.js
   - spec-dashboard/src/cycle.js
   - spec-dashboard/src/bindings.js
+  - spec-dashboard/src/KeyboardService.jsx
 ---
 # keyboard-nav
 

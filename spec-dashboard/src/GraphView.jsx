@@ -15,6 +15,7 @@ import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf } from './bindings.js'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
@@ -364,62 +365,43 @@ function GraphView({ param, query }) {
     hadOverlay.current = anyOverlay
   }, [anyOverlay])
 
-  // capture phase so we beat react-flow; while a modal is open it owns the keys (guards below)
-  useEffect(() => {
+  // Register the graph's active-view vocabulary with the shell service; the shell owns the only window listener.
+  useKeyboardScope((event) => {
     // the focused node's actual tabs (panesFor), so pane-nav matches what NodeView renders for THIS node
     const paneKeys = panesFor(focus, graphOnly).map((p) => p.key)
     const cyclePane = (dir) => setPane((p) => { const i = paneKeys.indexOf(p); return paneKeys[((i < 0 ? 0 : i) + dir + paneKeys.length) % paneKeys.length] })
     // nav just moves focus; the follow-focus effect recenters once the tree has re-plotted around the new
     // focus (passing the stale pre-re-plot node straight to centerOn would aim at its OLD coordinates).
-    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setKbdMode(true); focusNode(t.id) } }
+    const go = (t, e) => { if (!t) return false; e.preventDefault(); e.stopPropagation(); setKbdMode(true); focusNode(t.id); return true }
     // only one pane is mounted, so the first matching `.ov-body` descendant is the scroller (scroll.js drops a stale target)
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      // the GLOBAL ⌥ page vocabulary ([[side-nav]]): ⌥1..⌥5 jump straight to a page in rail order, ⌥N to the
-      // New Session composer, ⌥F to the Evals page (the leading loss surface) — from ANY page, matched by
-      // e.code (⌥-digit/letter on a mac emits dead-key glyphs for e.key). The console yields these before
-      // xterm so app navigation never becomes terminal input. Firing one also dismisses the search palette.
-      if (e.altKey && !e.metaKey && !e.ctrlKey) {
-        const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'evals', Digit4: 'issues', Digit5: 'settings' }
-        const target = pageOf[e.code]
-        if (target) {
-          e.preventDefault(); e.stopPropagation(); openPalette(null)
-          if (!graphOnly || target === 'graph') navigate(target)
-          return
-        }
-        if (!graphOnly && e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); navigate('sessions', 'new'); return }
-        if (!graphOnly && e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); openPalette(null); navigate('evals'); return }
-      }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
       // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
       // sessionUI return so it holds when the palette is opened over the session board.
       if (search) {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); openPalette(null) }
-        return
+        return e.key === 'Escape'
       }
-      // ⌥+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
-      // reachable even while the session interface owns its keys. Match the physical slash key because
-      // Option+/ emits a platform-specific glyph on macOS. Plain `/` on the board stays nodes-first (below).
-      if (!graphOnly && e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'Slash') { e.preventDefault(); e.stopPropagation(); openPalette('sessions'); return }
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
-      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return false
       // A focused native control owns its activation keys: Enter/Space on a button, link, or form field is
       // that control's click — tabbing to the HUD `?` and pressing Enter must equal clicking it — so the
       // board vocabulary (board.info's Enter alias included) steps aside and lets the default action fire.
       // Graph tiles never collide: nodesFocusable is off, so board focus is never DOM focus on a control.
-      if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href], input, select, textarea, summary')) return
-      if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
+      if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
+      if (page === 'sessions') return false // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // the Evals and Issues pages own their own keys (j/k list-walk, their inputs, their own Esc stack) —
       // EvalsPage / IssuesPage handle them. Esc does NOT route pages anywhere ([[side-nav]]) — leaving is
       // ⌥1..⌥5, the rail, or history.
-      if (page === 'evals' || page === 'issues') return
+      if (page === 'evals' || page === 'issues') return false
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
-        if (firesKey('graph.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
-        return
+        if (firesKey('graph.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph'); return true }
+        return false
       }
       if (overlay) {
         // a focused form field, an OPEN MENU, or a menu TRIGGER inside the popup owns its unmodified keys
@@ -429,8 +411,8 @@ function GraphView({ param, query }) {
         // closes the popup. Scoped to controls INSIDE the popup: stray DOM focus on a control elsewhere
         // (the rail's project chip is also [aria-haspopup]) must not swallow the popup's j/k.
         const keyOwner = e.key === 'Escape' ? null : e.target?.closest?.('input, textarea, select, [role="menu"], [role="menuitemradio"], [aria-haspopup="menu"]')
-        if (keyOwner?.closest('[data-focus-overlay]')) return
-        if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
+        if (keyOwner?.closest('[data-focus-overlay]')) return false
+        if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return true }
         // the popup is a LENS, not a modal ([[keyboard-nav]]): Shift+nav (⇧h/j/k/l, ⇧arrows) walks the
         // tree exactly like the bare board — the popup stays open and follows the new focus (NodeView is
         // keyed by focus.id; the pane survives via NodeView's own fallback). Shift+Tab stays pane-cycling:
@@ -441,49 +423,49 @@ function GraphView({ param, query }) {
           if (firesKey('nav.parent', e.key)) return go(parent, e)
           if (firesKey('nav.child', e.key))  return go(rightTarget, e)
         }
-        if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
+        if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return true }
         // ←/→ or h/l cycle the panes (like Tab and 1/2)
-        if (e.key === 'ArrowLeft'  || e.key === 'h') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
-        if (e.key === 'ArrowRight' || e.key === 'l') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
-        if (/^[1-9]$/.test(e.key) && +e.key <= paneKeys.length) { e.preventDefault(); e.stopPropagation(); setPane(paneKeys[+e.key - 1]); return }
+        if (e.key === 'ArrowLeft'  || e.key === 'h') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return true }
+        if (e.key === 'ArrowRight' || e.key === 'l') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return true }
+        if (/^[1-9]$/.test(e.key) && +e.key <= paneKeys.length) { e.preventDefault(); e.stopPropagation(); setPane(paneKeys[+e.key - 1]); return true }
         // j/k and ↑/↓ scroll the open pane; in the history pane reaching the end also reveals the next version (see HistoryPane)
         if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault(); e.stopPropagation()
           bumpScroll(e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
-          return
+          return true
         }
         // Enter is INERT here: the info popup is a pure reading surface, not a launchpad. Crossing into
         // the node's live session is a right-click node-menu action ([[node-menu]]), never a keystroke —
         // so Enter (like any other key) is swallowed and does nothing, leaving the popup open.
-        return // anything else does NOT move the board behind the popup
+        return true // anything else does NOT move the board behind the popup
       }
       // graph mode. The help modal owns its keys while open (only ?/Esc close it)
       if (legend) {
-        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setLegend(false); return }
+        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setLegend(false); return true }
         // j/k and ↑/↓ scroll the (often taller-than-viewport) help body — same momentum glide as the
         // popup pane, via the legend's own scroller instance. The `.legend` panel is the overflow box.
         if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault(); e.stopPropagation()
           legendScroll(document.querySelector('.legend'), e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
-          return
+          return true
         }
-        return
+        return true
       }
-      if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return }
-      if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
-      if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
-      if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return }
+      if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return true }
+      if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return true }
+      if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return true }
+      if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return true }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!graphOnly && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
         const cur = chordRef.current
         if (cur.buf || CHORD_LEADERS.has(e.key)) {
           clearTimeout(cur.timer)
           const buf = cur.buf + e.key
-          if (CHORDS[buf]) { e.preventDefault(); e.stopPropagation(); chordRef.current = { buf: '', timer: 0 }; startNew(CHORDS[buf](focus.id)); return }
+          if (CHORDS[buf]) { e.preventDefault(); e.stopPropagation(); chordRef.current = { buf: '', timer: 0 }; startNew(CHORDS[buf](focus.id)); return true }
           if (CHORD_KEYS.some((c) => c.startsWith(buf))) {
             e.preventDefault(); e.stopPropagation()
             chordRef.current = { buf, timer: setTimeout(() => { chordRef.current = { buf: '', timer: 0 } }, 700) }
-            return
+            return true
           }
           chordRef.current = { buf: '', timer: 0 }   // dead end → reset, fall through to single-key handling
         }
@@ -495,29 +477,30 @@ function GraphView({ param, query }) {
       if (firesKey('nav.parent', e.key)) return go(parent, e)
       if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
-      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
-      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
-      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
-      else if (firesKey('graph.info', e.key)) { e.preventDefault(); setOverlay(true) }
+      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160); return true }
+      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160); return true }
+      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200); return true }
+      else if (firesKey('graph.info', e.key)) { e.preventDefault(); setOverlay(true); return true }
       // overlay cycle: o / O walk focus through changed nodes (scope follows the lock), wrapping
       else if (firesKey('graph.cycle', e.key) || firesKey('graph.cycleRev', e.key)) {
         e.preventDefault()
-        if (!cycleNodes.length) return
+        if (!cycleNodes.length) return true
         setKbdMode(true)
         const next = cycleNext(cycleNodes, focus.id, firesKey('graph.cycleRev', e.key) ? -1 : 1, (n) => n.id)
         if (next) focusNode(next.id)
+        return true
       }
       // Enter is folded into board.info above — from the graph it opens the node-info popup, the same as `i`;
       // crossing into an existing session is the right-click node-menu's job ([[node-menu]]), not a keystroke.
       // [-key (the [[node]] mention opener): jump to a
       // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
-      else if (!graphOnly && firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
+      else if (!graphOnly && firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `); return true }
       // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
-      else if (!graphOnly && firesKey('graph.evals', e.key)) { e.preventDefault(); navigate('evals') }
+      else if (!graphOnly && firesKey('graph.evals', e.key)) { e.preventDefault(); navigate('evals'); return true }
+      return false
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openSession, startNew, focusNode, popupScroll, legendScroll, graphOnly])
+    return onKey(event)
+  })
 
   // wake only on a real coordinate change — a pan under a still cursor can emit a synthetic mousemove with unchanged x/y
   useEffect(() => {

@@ -4,6 +4,7 @@ import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/spec
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { fetchNodeFiles, fetchNodeFileSlice, loadPublicSpecContent, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import SourceView from './SourceView.jsx'
@@ -393,15 +394,15 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
       prevTop = top
       if (down) revealNext()
     }
-    const onKey = (e) => {
-      if (e.key !== 'j' && e.key !== 'ArrowDown') return
-      if (sc.scrollHeight - sc.clientHeight - sc.scrollTop > 1) return  // room to scroll → (1) handles it
-      revealNext()
-    }
     sc.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('keydown', onKey, true)   // capture: App stopPropagation()s j/k but same-target listeners still run
-    return () => { sc.removeEventListener('scroll', onScroll); window.removeEventListener('keydown', onKey, true) }
+    return () => sc.removeEventListener('scroll', onScroll)
   }, [revealNext])
+  useKeyboardScope((event) => {
+    if (event.key !== 'j' && event.key !== 'ArrowDown') return false
+    const sc = scRef.current
+    if (!sc || sc.scrollHeight - sc.clientHeight - sc.scrollTop > 1) return false
+    event.preventDefault(); revealNext(); return true
+  }, 5)
   return (
     <div className={classes.pane} ref={scRef}>
       {leading}

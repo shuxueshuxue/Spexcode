@@ -3,12 +3,15 @@ title: keyboard-service
 status: active
 hue: 215
 desc: One shell-owned capture listener that arbitrates overlays, active-view keys, and window-global shortcuts.
+code:
+  - spec-dashboard/src/KeyboardService.jsx#KeyboardServiceProvider
 related:
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/src/keymap.js
   - spec-dashboard/src/bindings.js
   - spec-dashboard/src/GraphView.jsx
+  - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/SideBar.jsx

@@ -647,7 +647,7 @@ app.post('/api/sessions/:id/resume', async (c) => {
 // A merge intent to the session's own agent (it runs the merge), never a server merge.
 app.post('/api/sessions/:id/merge', async (c) => {
   const r = await mergeSession(c.req.param('id'))
-  return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
+  return c.json(r, r.dispatched ? 200 : 409)
 })
 
 // one WS owns one native tmux client (pty-bridge): server→client = that client's rendered PTY bytes (binary);

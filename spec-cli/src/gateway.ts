@@ -176,8 +176,11 @@ export function startGateway(opts: GatewayOpts): void {
   const scheme = secure ? 'https' : 'http'
   const label = opts.label ?? 'public mode'
   const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
-  const ready = [...(opts.readyLines ?? []), `[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`]
-  if (!secure && !isLoopback && !opts.host) ready.push('[gateway] (TLS off — --http)')
+  const ready = (port: number) => {
+    const lines = [...(opts.readyLines ?? []), `[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${port}${gate}, proxying /api to :${opts.upstreamPort}`]
+    if (!secure && !isLoopback && !opts.host) lines.push('[gateway] (TLS off — --http)')
+    return lines
+  }
   // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
   // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex serve ui` fail a port clash identically.
   listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, ready })

@@ -81,9 +81,9 @@ and never carry plugin bodies or a second interpreter. Raw-key input bypasses th
 terminal control, not an agent prompt.
 
 **Merge is a dispatch, not a script.** `POST /api/sessions/:id/merge` and `spex session merge <id>` carry no
-body, Git identifier, retry authority, or shell program. The server never runs Git. It accepts only a governed
-session currently `awaiting` with `proposal=merge`, appends one ordinary prompt through `sendText`, then resumes
-and drains the session. Any other lifecycle is a loud HTTP 409.
+body, Git identifier, retry authority, or shell program. The server never runs Git. It appends one ordinary prompt
+through `sendText`, then resumes and drains the session. The prompt is accepted for any existing governed session
+with a branch; the agent's landing procedure owns the actual merge safety checks.
 
 The prompt is deliberately short: merge the latest `main` into the session's branch in that session's own
 worktree, resolve any conflict there and re-run the proof; land the completed branch atomically as one `--no-ff`

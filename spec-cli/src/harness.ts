@@ -737,7 +737,9 @@ export function codexHandshakeMessages(threadId: string): JsonRpc[] {
     },
     { method: 'initialized', params: {} },
     { id: 2, method: 'thread/loaded/list', params: {} },
-    { id: 3, method: 'thread/read', params: { threadId, includeTurns: true } },
+    // A full turn history can be megabytes and is not a transport primitive. The failure observer below
+    // supplies the active turn id from native notifications; delivery only needs the lightweight thread state.
+    { id: 3, method: 'thread/read', params: { threadId, includeTurns: false } },
   ]
 }
 
@@ -755,7 +757,9 @@ export function codexInjectMessage(threadId: string, text: string, cwd: string |
   return { id, method: 'turn/start', params: { threadId, input: codexTextInput(text), ...(cwd ? { cwd } : {}), ...marker } }
 }
 
-// the in-progress turn id from a `thread/read{includeTurns}` result, or null when the thread is idle. With
+// the in-progress turn id from a `thread/read{includeTurns}` result, or null when the thread is idle. This is
+// retained for ownership/replay probes; delivery uses codexObservedActiveTurnId because it must not request the
+// full history. With
 // includeTurns the Thread carries its turns, each with a TurnStatus ("completed"|"interrupted"|"failed"|
 // "inProgress"); the live turn is the `inProgress` one and its id is exactly what turn/steer's precondition needs.
 export function activeTurnIdFromThread(readResult: unknown): string | null {
@@ -763,6 +767,19 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
   const turns = Array.isArray(thread?.turns) ? thread.turns : []
   const active = turns.find((t) => t?.status === 'inProgress')
   return active?.id ?? null
+}
+
+// The app-server's lightweight thread/read intentionally omits the turn list. Keep the native active id
+// observed by the failure subscription so a send can steer without replaying the whole conversation.
+const codexActiveTurns = new Map<string, string>()
+export function codexObservedActiveTurnId(threadId: string): string | null {
+  return codexActiveTurns.get(threadId) || null
+}
+function rememberCodexActiveTurn(threadId: string, turnId: unknown): void {
+  if (typeof turnId === 'string' && turnId) codexActiveTurns.set(threadId, turnId)
+}
+function forgetCodexActiveTurn(threadId: string, turnId?: unknown): void {
+  if (turnId === undefined || codexActiveTurns.get(threadId) === turnId) codexActiveTurns.delete(threadId)
 }
 
 // The app-server and the visible `--remote … resume` TUI share ONE socket, so they MUST be the SAME codex
@@ -1033,9 +1050,13 @@ export function codexTurnFailureObserver(
     if (message.id === 2 && message.result) {
       clearTimeout(timer)
       const result = message.result as { thread?: { status?: { type?: unknown } }; initialTurnsPage?: { data?: unknown } }
+      const initialTurns = result.initialTurnsPage?.data
+      const initialActive = Array.isArray(initialTurns)
+        ? initialTurns.find((turn) => (turn as { status?: unknown })?.status === 'inProgress')
+        : null
+      rememberCodexActiveTurn(threadId, (initialActive as { id?: unknown } | null)?.id)
       if (result.thread?.status?.type === 'systemError') {
-        const turns = result.initialTurnsPage?.data
-        const latest = Array.isArray(turns) ? turns[0] : null
+        const latest = Array.isArray(initialTurns) ? initialTurns[0] : null
         // Give a concurrently-starting turn's native notification precedence over this historical snapshot.
         reconciliationTimer = setTimeout(() => {
           reconciliationTimer = null
@@ -1046,12 +1067,16 @@ export function codexTurnFailureObserver(
       return
     }
     if (message.method === 'turn/started') {
-      const params = message.params as { threadId?: unknown } | undefined
-      if (params?.threadId === threadId) cancelReconciliation()
+      const params = message.params as { threadId?: unknown; turn?: { id?: unknown } } | undefined
+      if (params?.threadId === threadId) {
+        rememberCodexActiveTurn(threadId, params.turn?.id)
+        cancelReconciliation()
+      }
     }
     if (message.method === 'turn/completed') {
       const params = message.params as { threadId?: unknown; turn?: unknown } | undefined
       if (params?.threadId === threadId) {
+        forgetCodexActiveTurn(threadId, (params.turn as { id?: unknown } | undefined)?.id)
         cancelReconciliation()
         report(params.turn)
       }
@@ -2064,7 +2089,7 @@ const codexTurnConfirmMs = () => {
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string, clientUserMessageId?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
-    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2), thread/read(3)]
+    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2), lightweight thread/read(3)]
     let buf = Buffer.alloc(0), upgraded = false, settled = false
     let fragOp = 0, fragBuf = Buffer.alloc(0)
     let steering = false   // the id-4 message we sent was a steer → an expectedTurnId race may retry as start(5)
@@ -2103,8 +2128,8 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
           return done({ ok: false, error: `Codex thread ${threadId} is not loaded in the app-server (loaded: ${loaded.join(', ') || 'none'}) — immediate poke not accepted` })
         return send(hs[3])                                                 // thread is live → read it to decide steer-vs-start
       }
-      if (m.id === 3 && m.result) {                                        // thread read → in-progress turn? steer into it; else start a new one
-        const turnId = activeTurnIdFromThread(m.result)
+      if (m.id === 3 && m.result) {                                        // lightweight thread read → observer cache decides steer-vs-start
+        const turnId = codexObservedActiveTurnId(threadId)
         steering = !!turnId
         return send(codexInjectMessage(threadId, text, cwd, turnId, 4, clientUserMessageId)) // id 4: turn/steer the live turn, or turn/start
       }

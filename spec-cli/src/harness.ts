@@ -722,8 +722,8 @@ type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknow
 // 0.142.3 (`codex app-server generate-ts` → ClientRequest.ts / v2/*Params.ts): the visible TUI is launched with
 // `codex --remote unix://<sock>`, so its thread is ALREADY loaded in this server — we must NOT `thread/resume`
 // it (that re-loads a thread the live TUI already owns). Instead `thread/loaded/list` PROVES the captured thread
-// is the one the pane is showing, then `thread/read{includeTurns}` reveals whether a turn is in progress (and
-// its id). The 4th, injecting message is CHOSEN from that read — see codexInjectMessage.
+// is the one the pane is showing. The failure observer owns the active native turn id from app-server
+// notifications; delivery does not read the thread or replay its history — see codexInjectMessage.
 const codexTextInput = (text: string) => [{ type: 'text', text, text_elements: [] }]
 export function codexHandshakeMessages(threadId: string): JsonRpc[] {
   return [
@@ -737,9 +737,6 @@ export function codexHandshakeMessages(threadId: string): JsonRpc[] {
     },
     { method: 'initialized', params: {} },
     { id: 2, method: 'thread/loaded/list', params: {} },
-    // A full turn history can be megabytes and is not a transport primitive. The failure observer below
-    // supplies the active turn id from native notifications; delivery only needs the lightweight thread state.
-    { id: 3, method: 'thread/read', params: { threadId, includeTurns: false } },
   ]
 }
 
@@ -2089,7 +2086,7 @@ const codexTurnConfirmMs = () => {
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string, clientUserMessageId?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
-    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2), lightweight thread/read(3)]
+    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2)]
     let buf = Buffer.alloc(0), upgraded = false, settled = false
     let fragOp = 0, fragBuf = Buffer.alloc(0)
     let steering = false   // the id-4 message we sent was a steer → an expectedTurnId race may retry as start(5)
@@ -2122,13 +2119,10 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
       // JSON-RPC initialization is ordered. Under a quiet server the premature notification happened to win;
       // under shared app-server load it was ignored and every later turn waited until the old 5s wall expired.
       if (m.id === 1 && m.result) { send(hs[1]); return send(hs[2]) }      // initialize ack → initialized → ask which threads are loaded
-      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then read it
+      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then inject
         const loaded = (m.result as { data?: unknown })?.data
         if (Array.isArray(loaded) && !loaded.includes(threadId))
           return done({ ok: false, error: `Codex thread ${threadId} is not loaded in the app-server (loaded: ${loaded.join(', ') || 'none'}) — immediate poke not accepted` })
-        return send(hs[3])                                                 // thread is live → read it to decide steer-vs-start
-      }
-      if (m.id === 3 && m.result) {                                        // lightweight thread read → observer cache decides steer-vs-start
         const turnId = codexObservedActiveTurnId(threadId)
         steering = !!turnId
         return send(codexInjectMessage(threadId, text, cwd, turnId, 4, clientUserMessageId)) // id 4: turn/steer the live turn, or turn/start

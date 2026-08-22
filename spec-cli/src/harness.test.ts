@@ -1015,12 +1015,12 @@ test('launchEnv keeps rendezvous bootstrap knowledge in the owning adapters', ()
   }
 })
 
-test('codex handshake initializes, confirms the loaded thread, then reads only lightweight state', () => {
+test('codex handshake initializes and confirms the loaded thread without a transcript read', () => {
   const msgs = codexHandshakeMessages('thr_1')
   assert.equal(msgs[0].method, 'initialize')
   assert.deepEqual(msgs[1], { method: 'initialized', params: {} })
   assert.deepEqual(msgs[2], { id: 2, method: 'thread/loaded/list', params: {} })
-  assert.deepEqual(msgs[3], { id: 3, method: 'thread/read', params: { threadId: 'thr_1', includeTurns: false } })
+  assert.equal(msgs.length, 3)
 })
 
 test('codex lightweight residency census performs initialize then paginated loaded/list without thread reads', async () => {
@@ -1700,10 +1700,6 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
   const server = codexRpcFixture((message) => {
     calls.push(message.method)
     if (message.method === 'thread/loaded/list') return { data: ['thread-1'] }
-    if (message.method === 'thread/read') {
-      assert.equal(message.params.includeTurns, false, 'delivery must not fetch the full native history')
-      return { thread: { status: { type: 'idle' } } }
-    }
     if (message.method === 'turn/start') {
       marker = message.params.clientUserMessageId
       return new Promise((resolve) => setTimeout(() => resolve({ turn: { id: 'turn-1' } }), 60))
@@ -1720,7 +1716,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const result = await codexTurn(socket, 'thread-1', 'delayed prompt', '/worktree', 'delivery-marker-1')
     assert.deepEqual(result, { ok: true })
-    assert.deepEqual(calls, ['thread/loaded/list', 'thread/read', 'turn/start'])
+    assert.deepEqual(calls, ['thread/loaded/list', 'turn/start'])
     assert.equal(marker, 'delivery-marker-1')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))

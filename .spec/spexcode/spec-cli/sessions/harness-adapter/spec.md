@@ -176,8 +176,9 @@ surface:
   `observeTurnFailures` capability subscribes to the app-server's native `turn/completed` notifications and
   reports only structured `failed` outcomes to the shared session layer. Codex delivery must not read the native
   conversation history to choose between `turn/start` and `turn/steer`: that history is an unbounded transcript
-  and can make a durable send wait past its confirmation budget. The adapter reads only lightweight thread state
-  and uses the observer's native `turn/started`/`turn/completed` notifications as the active-turn-id cache. A
+  and can make a durable send wait past its confirmation budget. The adapter uses loaded/list only to prove the
+  target is resident, then uses the observer's native `turn/started`/`turn/completed` notifications as the
+  active-turn-id cache. A
   cached id is the only basis for `turn/steer`; otherwise delivery uses `turn/start` and reports a native
   rejection promptly, leaving the durable message pending rather than replaying history or hiding an unobserved
   active turn.

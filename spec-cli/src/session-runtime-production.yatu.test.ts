@@ -43,7 +43,6 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
   const fixture = mkdtempSync(join(tmpdir(), 'spex-runtime-production-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
-  const databasePath = join(home, 'session-runtime.sqlite')
   const port = await freePort()
   const base = `http://127.0.0.1:${port}`
   const tmuxDir = join(fixture, 'bin')
@@ -67,7 +66,6 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
     ...process.env,
     PATH: `${tmuxDir}:${process.env.PATH || ''}`,
     SPEXCODE_HOME: home,
-    SPEXCODE_SESSION_DATABASE_PATH: databasePath,
     PORT: String(port),
     SPEXCODE_TMUX: `runtime-production-${port}`,
     FAKE_HARNESS_INTERVAL_MS: '30',

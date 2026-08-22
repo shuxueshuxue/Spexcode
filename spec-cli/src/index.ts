@@ -505,25 +505,18 @@ app.post('/api/sessions', async (c) => {
   }
 })
 
-const runtimeApplicationOr503 = (c: any) => {
-  const application = configuredSessionApplication()
-  if (application) return application
-  return c.json({ error: 'session runtime composition is disabled; set SPEXCODE_SESSION_DATABASE_PATH to an absolute local database path' }, 503)
-}
+const runtimeApplicationOr503 = (_c: any) => configuredSessionApplication()
 
 app.get('/api/session-runtime/:id/events', (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   return c.json(application.events.read(c.req.param('id')))
 })
 app.get('/api/session-runtime/:id/replay', (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   return c.json(application.replayState(c.req.param('id')))
 })
 app.post('/api/session-runtime/:id/state', async (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   const body = await c.req.json().catch(() => null) as { status?: unknown; parentSessionId?: unknown; reason?: unknown } | null
   if (body?.status !== undefined && typeof body.status !== 'string') return c.json({ error: 'status must be a string' }, 400)
   if (body?.parentSessionId !== undefined && body.parentSessionId !== null && typeof body.parentSessionId !== 'string') return c.json({ error: 'parentSessionId must be a string or null' }, 400)
@@ -539,7 +532,6 @@ app.post('/api/session-runtime/:id/state', async (c) => {
 })
 app.post('/api/session-runtime/:id/watch', async (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   const body = await c.req.json().catch(() => null) as { watcherSessionId?: unknown; channel?: unknown } | null
   if (typeof body?.watcherSessionId !== 'string' || !body.watcherSessionId.trim()) return c.json({ error: 'watcherSessionId is required; identity is never inferred' }, 400)
   const edge = application.attachWatcher(body.watcherSessionId, c.req.param('id'), typeof body.channel === 'string' ? body.channel : undefined)
@@ -547,7 +539,6 @@ app.post('/api/session-runtime/:id/watch', async (c) => {
 })
 app.post('/api/session-runtime/:id/bind', async (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null
   if (!body || typeof body.namespace !== 'string' || typeof body.runtimeKind !== 'string' || typeof body.nativeSessionId !== 'string' || typeof body.nativeStartToken !== 'string') {
     return c.json({ error: 'namespace, runtimeKind, nativeSessionId, and nativeStartToken are required; identity is never inferred' }, 400)
@@ -567,7 +558,6 @@ app.post('/api/session-runtime/:id/bind', async (c) => {
 })
 app.post('/api/session-runtime/:id/publish', async (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   const body = await c.req.json().catch(() => null) as { kind?: unknown; body?: unknown; senderSessionId?: unknown } | null
   if (typeof body?.kind !== 'string' || typeof body.body !== 'string') return c.json({ error: 'kind and UTF-8 body are required' }, 400)
   const result = application.notifyRecipients(c.req.param('id'), {
@@ -579,7 +569,6 @@ app.post('/api/session-runtime/:id/publish', async (c) => {
 })
 app.post('/api/session-runtime/:id/dequeue', async (c) => {
   const application = runtimeApplicationOr503(c)
-  if (application instanceof Response) return application
   const body = await c.req.json().catch(() => null) as { namespace?: unknown; expectedGeneration?: unknown } | null
   if (typeof body?.namespace !== 'string') return c.json({ error: 'namespace is required' }, 400)
   try {

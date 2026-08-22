@@ -1,27 +1,15 @@
-import { isAbsolute } from 'node:path'
-
 import {
   openProjectSessionApplication,
   type ProductionSessionApplication,
 } from '@spexcode/session-application'
-import { requireLocalDatabasePath } from '@spexcode/session-selflaunch'
+import { requireLocalDatabasePath, resolveDatabasePath } from '@spexcode/session-selflaunch'
 
-let cached: ProductionSessionApplication | null | undefined
+let cached: ProductionSessionApplication | undefined
 
-/**
- * The backend cut-in is deliberately opt-in through one explicit absolute path. Existing JSON-backed records are
- * left alone when the setting is absent; a configured but invalid path/locality result fails during backend use.
- */
-export function configuredSessionApplication(): ProductionSessionApplication | null {
+/** The backend's sole session application composition. Path selection is shared with self-launch. */
+export function configuredSessionApplication(): ProductionSessionApplication {
   if (cached !== undefined) return cached
-  const databasePath = process.env.SPEXCODE_SESSION_DATABASE_PATH?.trim()
-  if (!databasePath) {
-    cached = null
-    return cached
-  }
-  if (!isAbsolute(databasePath)) {
-    throw new Error('SPEXCODE_SESSION_DATABASE_PATH must be an explicit absolute filesystem path')
-  }
+  const databasePath = resolveDatabasePath()
   cached = openProjectSessionApplication({
     databasePath,
     locality: path => { requireLocalDatabasePath(path) },

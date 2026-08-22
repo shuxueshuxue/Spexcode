@@ -12,4 +12,5 @@ related:
 
 The application component owns one strict state row per initialized protocol address. It stores only the current
 status, explicit parent address, and update time. Parent/child relations remain in the neutral topology component;
-legacy JSON records are never copied into this table without the composition's explicit compatibility mode.
+existing JSON records enter this table only through the one-time deterministic migration, after which JSON is never a
+read source for application state.

@@ -17,10 +17,10 @@ related:
 # session application service
 
 The application service is the adopter-owned production composition above protocol, topology, events, and runtime
-bindings. One composition is opened for one explicit absolute database path and one positively established local
-filesystem locality verdict. It opens each component once, owns a small state table, and never invents a path or a
-native identity. An explicit compatibility mode is required to read legacy records that have no state row; normal
-writes never silently fall back to those records.
+bindings. One composition is opened for one absolute database path selected by the self-launch resolver and one
+positively established local filesystem locality verdict. It opens each component once, owns a small state table,
+and never invents a path or a native identity. SQLite is the sole authoritative state, event, topology, and watcher
+store; there is no runtime compatibility mode or JSON read fallback.
 
 ## Responsibility
 
@@ -57,4 +57,5 @@ runtime bindings, lifecycle state, event persistence, or harness materialization
 2. A forced error after state/topology mutation but before commit leaves no state, edge, event, or pending message.
 3. Missing or relative database paths and a failed locality precondition refuse before any component opens.
 4. Native identity is never inferred; a stale binding generation is rejected and cannot replace the current binding.
-5. Legacy state is read only when the caller explicitly enables compatibility mode.
+5. A migrated session has state, topology, events, and watcher facts in SQLite; a missing application row is a loud
+   unmigrated/corrupt condition, never a legacy projection.

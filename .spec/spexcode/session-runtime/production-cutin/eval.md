@@ -3,14 +3,14 @@ scenarios:
   - name: configured-backend-composition
     tags: [backend-api]
     description: >
-      Start a Spex backend with SPEXCODE_SESSION_DATABASE_PATH set to an absolute local path and exercise the
-      runtime API against the newly created parent/child records.
+      Start a Spex backend with only SPEXCODE_HOME and exercise the canonical runtime HTTP API plus the one-time
+      migration CLI against isolated records.
     expected: >
-      The configured composition opens once, leaves legacy records untouched when disabled, and exposes explicit
-      state/event/replay, binding, publish, and dequeue boundaries without inferring a native identity.
+      Ten distinct stories pass individually: parent/child, multiple watchers, reparent, state replay, restart,
+      generation fencing, ordered delivery, publish ordering, independent pairs, and migration marker idempotence.
     test:
-      path: spec-cli/src/session-runtime-production.yatu.test.ts
-      name: "YATU: CLI-created parent/child state survives backend restart and delivers a fenced watcher notification"
+      path: spec-cli/src/session-production-cutover.yatu.test.ts
+      name: "YATU cutover matrix: ten distinct stories through the backend HTTP and migration CLI surfaces"
     code: spec-cli/src/session-application.ts
 ---
 # session runtime production cut-in loss

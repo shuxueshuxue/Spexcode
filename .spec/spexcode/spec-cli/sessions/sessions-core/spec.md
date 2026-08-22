@@ -27,7 +27,7 @@ foundation owner: the features govern their own surfaces and REFERENCE this modu
 
 ## expanded spec
 
-sessions-core owns `sessions.ts` — the common session layer: the global per-session record read/write
+sessions-core owns `sessions.ts` — the common session layer: the global per-session operational metadata read/write
 (`session.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree

@@ -1374,7 +1374,10 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     const projected = projectedRecord.archived && !cleanCold ? { ...projectedRecord, archived: false, stopped: false } : projectedRecord
     const projectedLv = projected === projectedRecord ? liveness(projectedRecord, snap) : physical!
     const s = boardRow(toSession(projected, reconcile(projected, snap), projectedLv, activity))
-    if (projected !== rec) s.archiveHazard = changedDuringCensus.has(id)
+    // Canonical projection deliberately creates a fresh object for every governed row. That identity change is not
+    // an archive failure: a hazard belongs only to a record that was actually archived and then had its cold proof
+    // rejected. Otherwise every live row would inherit the missing-cold-witness message after cutover.
+    if (projectedRecord.archived && !cleanCold) s.archiveHazard = changedDuringCensus.has(id)
       ? 'archived runtime hazard: record changed while adapter residency was being reconciled; retry exact archive'
       : hasValidColdProof(rec)
         ? residentRequired && !resident
@@ -2050,7 +2053,10 @@ export function reconcileTurnFailureObservers(): void {
   for (const id of listSessionIds()) {
     let rec: SessRec | null = null
     try { rec = readRecord(id) } catch { continue }
-    if (!rec?.governed || rec.stopped || rec.archived || !rec.harnessSessionId) continue
+    // Native turn failure observation is for an executing turn, not a durable roster census. Asking, awaiting,
+    // and parked records have no turn to observe; subscribing them creates one expensive app-server resume per
+    // idle record and lets stale observers accumulate after a backend restart.
+    if (!rec?.governed || rec.stopped || rec.archived || rec.status !== 'active' || !rec.harnessSessionId) continue
     const harness = harnessById(rec.harness || defaultHarness.id)
     if (!harness.observeTurnFailures) continue
     wanted.set(id, { rec, harness, fingerprint: `${harness.id}:${rec.harnessSessionId}:${runtimeRoot()}` })

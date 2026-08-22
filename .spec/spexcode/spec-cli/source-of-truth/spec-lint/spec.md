@@ -108,10 +108,11 @@ worktree state to inspect and continue with the immutable candidate tree.
 - **mention** (error): every `[[id]]` in body PROSE names a real node — a dangling mention is a broken
   edge in the very graph the tree keeps honest. Retarget it or drop it; a placeholder (`[[node]]`,
   `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text. The rule does
-  not own the grammar: it reads bodies through the same `bodyMentions` parser the loader's mention
-  projection uses ([[source-of-truth]]), so the set of references lint judges and the set the graph draws
-  are the same set by construction. One finding per distinct dangling name — a name repeated in one body is
-  still one broken edge.
+  not own the grammar: it reads bodies through the shared `bodyMentions` parser ([[source-of-truth]]), and
+  it is now that parser's ONLY consumer — the loader's per-node mention projection is gone, so this is the
+  one place a `[[name]]` is resolved against the node universe at all. That makes the rule load-bearing
+  rather than redundant: nothing else would notice a dangling reference. One finding per distinct dangling
+  name — a name repeated in one body is still one broken edge.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
   project. The source set is one explicit algebra: current regular text under those roots, selected by

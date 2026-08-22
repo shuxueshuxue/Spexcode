@@ -66,13 +66,14 @@ export default {
   },
   contextDock: {
     title: 'Context',
-    backlinks: 'Backlinks',
     scenarios: 'Scenarios',
+    issues: 'Issues',
     open: 'show context dock',
     close: 'hide context dock',
     loading: 'loading scenarios…',
-    noBacklinks: 'no backlinks',
+    loadingIssues: 'loading issues…',
     noScenarios: 'no scenarios declared',
+    noIssues: 'no open issues',
     states: { pass: 'pass', fail: 'fail', stalePass: 'stale pass', staleFail: 'stale fail', missing: 'unmeasured', empty: 'unmeasured' },
   },
   empty: {

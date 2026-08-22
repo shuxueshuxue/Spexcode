@@ -277,8 +277,10 @@ body {
 .ctx-list { display: flex; flex-direction: column; padding: 0 5px 7px; }
 .ctx-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 5px; color: var(--ink); text-decoration: none; font-size: var(--type-meta); }
 .ctx-row:hover { color: var(--ink2); background: color-mix(in srgb, var(--blue) 10%, transparent); }
-.ctx-row-mark { flex: 0 0 12px; color: var(--blue); }
 .ctx-row-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* an issue row leads with the SAME state primitive its list row leads with ([[review-chrome]]) rather than
+   a dock-local glyph, so open/closed says one thing everywhere it is said. */
+.ctx-issue-state { flex: 0 0 auto; }
 .ctx-row code, .ctx-state { flex: 0 0 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--type-caption); }
 .ctx-score { flex: 0 0 16px; text-align: center; font-weight: var(--weight-semibold); }
 .ctx-score.pass { color: var(--green); }.ctx-score.fail { color: var(--red); }.ctx-score.stalePass, .ctx-score.staleFail, .ctx-score.empty, .ctx-score.missing { color: var(--muted); }

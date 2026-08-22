@@ -40,9 +40,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the
   center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
   the reader's own answer.
-- **What surrounds this thing? — CONTEXT, on the right.** The second pane today (a document sent right);
-  the mockup's backlinks/scenarios panel when it earns its keep. Context is about the current document,
-  which is why it is not a finding surface and not a tab.
+- **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
+  [[context-dock]]: a spec node's scenarios and open issues, collapsed until asked for. Context is about the
+  current document, which is why it is not a finding surface and not a tab.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content. The frame itself is what fills it: the workspace identity
   and the BOARD TALLIES — spec nodes by state, fresh eval verdicts, open issues, live sessions — are true of

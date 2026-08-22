@@ -224,3 +224,21 @@ the installed `spex --help`, and completed all four production init cases (Pytho
 TypeScript/Claude, TypeScript/Codex). All passed without network. The current tarball contains bundled
 `@spexcode/spec-eval`; the old missing-module result came from an older package state. Replacement PASS is filed at
 `e7e7c45a6`; no manifest change was required.
+
+### Current cutover recheck
+
+The committed-head HTTP YATU was rerun on `2e03a38f4` with absolute Node `v22.21.0`, an isolated project/home,
+and no inherited backend URL or port. The real backend and public HTTP surface completed all ten stories:
+parent/child replay, multiple watchers, reparenting, state-transition replay, restart recovery, generation
+fencing, ordered delivery, publish-before/after-watch ordering, independent session pairs, and the twice-run
+JSON migration marker. Result: **10/10 PASS**; transcript evidence is `760ab1b38457…`.
+
+The same run exercised the active `SPEXCODE_HOME` database path rather than a database override. The first migration
+created the marker and backup and reported `replayed=false`; the second reported `replayed=true`; the live backend
+then replayed the migrated session and exposed its event through `/events`.
+
+The Node22 workspace build also passed all eleven workspace builds. A dry-run root package contained 399 files,
+including bundled `@spexcode/session-application` and `@spexcode/spec-eval` runtime distributions. `spex spec lint`
+remains `0 error(s) / 21 warning(s)` with existing drift only. `spex eval lint --changed` remains advisory at
+`0 malformed / 0 missing / 0 coverage gap / 30 stale`; the stale rows are explicitly unmeasured contracts, not
+green readings. No production source changed in this recheck.

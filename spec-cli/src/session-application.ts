@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import {
   openProjectSessionApplication,
   type ProductionSessionApplication,
@@ -15,6 +16,13 @@ export function configuredSessionApplication(): ProductionSessionApplication {
     locality: path => { requireLocalDatabasePath(path) },
   })
   return cached
+}
+
+/** The JSON-to-SQLite marker is the explicit cutover fence; before it exists, do not initialize a new store as a side effect of a read. */
+export function configuredSessionApplicationIfCutover(): ProductionSessionApplication | undefined {
+  const databasePath = resolveDatabasePath()
+  if (!existsSync(`${databasePath}.json-migration.json`)) return undefined
+  return configuredSessionApplication()
 }
 
 export function resetConfiguredSessionApplicationForTest(): void {

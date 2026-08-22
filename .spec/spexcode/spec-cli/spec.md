@@ -157,7 +157,10 @@ The read-only guidance catalog ([[guidance-catalog]]) is exposed at `/api/guidan
 prose.
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
-`/api/sessions` list + spawn; per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
+`/api/sessions` list + spawn; after the one-time JSON migration marker exists, list rows take lifecycle status and
+parent topology from the canonical session application database and fail loudly for a governed record with no row;
+before that explicit cutover fence, the list does not initialize a database as a read side effect. Per-session
+`resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
 bundle), `capture` (the live pane as text), `prompt`, and id-addressed `closure` (the durable terminal-close
 audit answer after record removal). `closure` returns only its target id and close time or 404; it is not a
 second historical session collection. Every closure response carries its capability marker, including a 404,

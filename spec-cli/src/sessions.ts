@@ -12,6 +12,7 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
 import { stripRefSigil } from './mentions.js'
@@ -1126,6 +1127,16 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
       snapshots.set(id, { entry, rec: entry.kind === 'ok' ? fromRaw(entry.raw) : null })
     } catch { /* guardSession below preserves the last-known row for a transient read failure */ }
   }
+  const canonical = configuredSessionApplicationIfCutover()
+  const canonicalStates = new Map<string, ReturnType<NonNullable<typeof canonical>['readState']>>()
+  if (canonical) {
+    for (const [id, snapshot] of snapshots) {
+      if (!snapshot.rec?.governed) continue
+      const state = canonical.readState(id)
+      if (!state) throw new ResourceConflict(`session ${id} has no canonical application state after JSON cutover`)
+      canonicalStates.set(id, state)
+    }
+  }
   // Only archived adapter records need the resident-ID join. If there are none, this read path performs zero
   // control-plane probes; resources still owns the full turn/read probe for its detailed report.
   const censusRecords = [...snapshots.values()].flatMap(({ entry, rec }) => entry.kind === 'ok' && entry.liveness === null && rec && rec.governed && rec.archived && rec.harnessSessionId
@@ -1155,33 +1166,37 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
     const rec = snapshot.rec
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
+    const canonicalState = canonicalStates.get(id)
+    const projectedRecord = canonicalState
+      ? { ...rec, status: canonicalState.status as Lifecycle, parent: canonicalState.parentSessionId }
+      : rec
     // A forced public liveness comes only from the shared record projection. Do not let live process/thread
     // evidence punch through it (including archive hazard repair).
     if (entry.kind === 'ok' && entry.liveness === 'offline') {
-      const pending = boardRow(toSession(rec, 'offline', 'offline'))
+      const pending = boardRow(toSession(projectedRecord, 'offline', 'offline'))
       lastKnownSession.set(id, pending)
       return pending
     }
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
     // is its task self-summary (used); codex's is the cwd folder name (refused → headline falls to the prompt).
     const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), snap.titles.get(id))
-    const sessionHarness = harnessById(rec.harness || defaultHarness.id)
-    const resident = rec.harnessSessionId
-      ? residentCensus.get(`${rec.harness || defaultHarness.id}:${rec.harnessSessionId}`)
+    const sessionHarness = harnessById(projectedRecord.harness || defaultHarness.id)
+    const resident = projectedRecord.harnessSessionId
+      ? residentCensus.get(`${projectedRecord.harness || defaultHarness.id}:${projectedRecord.harnessSessionId}`)
       : undefined
-    const residentRequired = sessionHarness.runtimeOwnership === 'adapter' && !!rec.harnessSessionId && !!sessionHarness.sharedRuntimes?.(runtimeRoot()).length
-    const physical = rec.archived
+    const residentRequired = sessionHarness.runtimeOwnership === 'adapter' && !!projectedRecord.harnessSessionId && !!sessionHarness.sharedRuntimes?.(runtimeRoot()).length
+    const physical = projectedRecord.archived
       ? (sessionHarness.runtimeOwnership === 'adapter'
         ? (resident && !resident.healthy ? 'unknown' : resident?.loaded ? 'online' : snap.windows.has(id) ? 'online' : 'offline')
-        : liveness({ ...rec, archived: false, stopped: false }, snap))
+        : liveness({ ...projectedRecord, archived: false, stopped: false }, snap))
       : null
     // Only a physically-offline record projects as archived. A legacy archived+live/unknown record is exposed
     // as ordinary working-set state with its real liveness/status and one backend-owned hazard marker. A
     // missing durable cold proof is also legacy: leaf liveness alone cannot prove a Codex loaded thread was
     // unloaded, so it remains visible until an explicit archive repair.
-    const cleanCold = rec.archived && !changedDuringCensus.has(id) && hasValidColdProof(rec) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
-    const projected = rec.archived && !cleanCold ? { ...rec, archived: false, stopped: false } : rec
-    const projectedLv = projected === rec ? liveness(rec, snap) : physical!
+    const cleanCold = projectedRecord.archived && !changedDuringCensus.has(id) && hasValidColdProof(projectedRecord) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
+    const projected = projectedRecord.archived && !cleanCold ? { ...projectedRecord, archived: false, stopped: false } : projectedRecord
+    const projectedLv = projected === projectedRecord ? liveness(projectedRecord, snap) : physical!
     const s = boardRow(toSession(projected, reconcile(projected, snap), projectedLv, activity))
     if (projected !== rec) s.archiveHazard = changedDuringCensus.has(id)
       ? 'archived runtime hazard: record changed while adapter residency was being reconciled; retry exact archive'

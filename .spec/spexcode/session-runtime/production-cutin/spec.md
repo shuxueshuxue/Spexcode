@@ -19,8 +19,9 @@ per-user default). Before opening SQLite it runs the adopter locality preconditi
 path fails loudly. There is no `SPEXCODE_SESSION_DATABASE_PATH` opt-in and no JSON fallback.
 
 The one-time JSON migration must complete before cutover. New `/api/sessions` records are initialized in the canonical
-application database; `session.json` and `watchers.json`, when retained, are operational worktree metadata only and
-are not read as application state, events, topology, or watcher authority.
+application database, and after the migration marker exists the list reads lifecycle status and parent topology from
+that database, refusing a governed record with no canonical row; `session.json` and `watchers.json`, when retained,
+are operational worktree metadata only and are not read as application state, events, topology, or watcher authority.
 Concurrent or retried accepted creates may publish the same idempotency receipt more than once; the HTTP bridge
 initializes its canonical row at most once and accepts a duplicate only when the existing projection matches.
 The runtime API exposes only explicit watcher, state, event/replay, native binding, publish, and dequeue operations.

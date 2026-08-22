@@ -70,4 +70,6 @@ native close interrupt are not part of the current protocol.
 
 The board is a projection, not a second store: closed rows are hidden from the working projection but remain in the
 session record enumeration used by `--all` and id-addressed reads. Their branch is deliberately not deleted, so a
-human can inspect or merge it explicitly while the product supplies no permanent cleanup action.
+human can inspect or merge it explicitly while the product supplies no permanent cleanup action. Canonical state
+projection may create a fresh in-memory record for an ordinary live row; that is not an archive hazard. The hazard
+marker is reserved for an input record marked `archived` whose cold proof or physical unload is not established.

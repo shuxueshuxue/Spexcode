@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { navigate, routeHash, useRoute } from './route.js'
-import { isDocument } from './views.jsx'
+import { isDocument, isResident } from './views.jsx'
 import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 export { placeTab, tabKey }
@@ -27,7 +27,7 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param))) : []
+    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param)), isResident) : []
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -110,7 +110,9 @@ export function useTabs() {
   useEffect(() => {
     if (!isDocument(route.page, route.param)) return
     const key = routeHash(route.page, route.param, route.query)
-    const mode = pinKey === key ? 'pin' : 'slot'
+    // a SINGLETON BOARD is held however it was reached ([[view-registry]]'s residency): it is a place, not
+    // something the reader spends the slot on, so opening a detail from one of its rows cannot evict it.
+    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
     if (pinKey && pinKey !== key) pinKey = null
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])

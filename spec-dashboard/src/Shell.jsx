@@ -17,7 +17,7 @@ import { sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { pinTab, runTabCommand } from './tabs.js'
+import { runTabCommand } from './tabs.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -315,13 +315,14 @@ export default function Shell() {
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        // the keyboard twin of the rail button, so it is the same create-or-focus: a singleton board is
-        // held, not spent through the current slot. The sealed face has one view and no destinations.
-        if (!graphOnly) pinTab(target)
+        // the keyboard twin of the rail button, and the same ordinary navigation: a singleton board is
+        // resident by address ([[view-registry]]), so it is held rather than spent through the current
+        // slot without this chord asking for it. The sealed face has one view and no destinations.
+        if (!graphOnly) navigate(target)
         return true
       }
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
-      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); pinTab('evals'); return true }
+      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); navigate('evals'); return true }
       // the ⌥ chord is the door that survives a TYPING context, and in this workspace a typing context is a
       // session console: `/` above is swallowed by the composer and xterm's helper, exactly as the
       // native-control restraint requires. So it stays session-scoped — that is where it is reachable from.
@@ -342,7 +343,7 @@ export default function Shell() {
     // address resolves to now that the graph is only an address ([[node-graph]]).
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.settings', event.key)) {
       event.preventDefault()
-      if (page === 'settings') navigate('sessions'); else pinTab('settings')
+      if (page === 'settings') navigate('sessions'); else navigate('settings')
       return true
     }
     // `/` IS THE KEYBOARD TWIN OF THE DOCK HEAD'S SEARCH BUTTON, so it opens the palette on the same plane

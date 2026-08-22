@@ -90,9 +90,9 @@ export const VIEWS = {
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
   sessions: { component: SessionsView, document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
-  evals:    { component: EvalsView,    document: true, className: 'view-evals' },
-  issues:   { component: IssuesView,   document: true, className: 'view-issues' },
-  settings: { component: SettingsView, document: true, className: 'view-settings' },
+  evals:    { component: EvalsView,    document: true, resident: true, className: 'view-evals' },
+  issues:   { component: IssuesView,   document: true, resident: true, className: 'view-issues' },
+  settings: { component: SettingsView, document: true, resident: true, className: 'view-settings' },
   empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
@@ -100,3 +100,13 @@ export const viewFor = (page) => VIEWS[page] || VIEWS.sessions
 export const isDocument = (page, param = null) => typeof VIEWS[page]?.document === 'function'
   ? VIEWS[page].document(page, param)
   : !!VIEWS[page]?.document
+
+// A SINGLETON BOARD IS A PLACE, not a document the reader bounces off — so it never takes the current slot.
+// Its bare address carries no selector, which already resolves a second opening to one tab; residency is the
+// other half of the same fact. Without it, a board reached by a plain navigation (the status tally, a pasted
+// link) SAT in the slot, and its own first row click evicted it — the reader asked to read one scenario and
+// lost the list they were reading it from. Residency is a property of the ADDRESS, not of the gesture that
+// opened it, so no door has to remember to hold the board on the strip's behalf.
+// The DETAIL addresses of the same pages (`#/evals/<node>/<scenario>`, `#/issues/<id>`) are ordinary objects
+// and land in the slot like every other document: `param == null` is exactly the difference.
+export const isResident = (page, param = null) => !!VIEWS[page]?.resident && param == null

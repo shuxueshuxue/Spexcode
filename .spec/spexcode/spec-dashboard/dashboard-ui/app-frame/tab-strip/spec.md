@@ -27,6 +27,16 @@ but a consequence of the identity rule: the address carries no selector, so open
 same address twice, which the strip already resolves to one tab. The rail button is therefore
 create-or-focus without needing to know it is ([[side-nav]]).
 
+**A singleton board is RESIDENT, and residency belongs to the address.** A board never takes the current
+slot: it is a place, and a place is not something the reader spends the slot on. This is the other half of
+"singleton", and leaving it out cost exactly what the whole-address reasoning predicts — a board reached by
+an ordinary navigation (the status-bar tally, a pasted link) sat in the slot, so its own first row click
+replaced the list with the detail. The reader asked to read one scenario and lost the list they were
+reading it from. The rail button used to hold the board by hand, which made residency a property of that
+button rather than of the board; every other door got the slot. [[view-registry]] answers residency for the
+address (`resident`, and only while the address carries no selector), so no door has to remember. The
+DETAIL addresses of those same pages are ordinary objects and land in the slot like everything else.
+
 What the strip does NOT hold is what has neither an object nor residency: `#/graph` (including
 `#/graph/<node>` focus — a legacy address, [[node-graph]]), bare `#/sessions`, and **`#/sessions/new`** —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
@@ -70,8 +80,9 @@ the strip does not reshuffle under the reader. A tab is born only from this whit
 
 1. ctrl/⌘-click on a row;
 2. a double-click, on a row or on the slot tab itself;
-3. a document's own explicit "open in a new tab" action;
-4. a deep link into a workspace that has no slot yet.
+3. a document's own explicit "open in a new tab" action — including a review row's context menu;
+4. a deep link into a workspace that has no slot yet;
+5. arriving at a RESIDENT address (a singleton board), which is held by what it is rather than by a gesture.
 
 Everything else reuses the slot, **regardless of what kind of document it is**. That last clause is the
 correction. The rule used to be fenced by TYPE — only `spec` and `file` could be replaceable, sessions and

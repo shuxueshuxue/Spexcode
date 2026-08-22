@@ -71,3 +71,16 @@ export function openSessionApplication(
     },
   }
 }
+
+export { openProjectSessionApplication } from './production.js'
+export type {
+  CommittedSessionChange,
+  CreateSessionInput,
+  LocalityPrecondition,
+  NativeRuntimeIdentity,
+  ProductionSessionApplication,
+  ProjectSessionApplicationOptions,
+  SessionState,
+  SessionStateChange,
+  TransitionSessionInput,
+} from './production.js'

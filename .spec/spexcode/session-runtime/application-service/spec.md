@@ -2,42 +2,48 @@
 title: session application service
 status: active
 hue: 280
-desc: Stage 1 adopter-owned notification transaction facade over protocol and optional topology.
+desc: Adopter-owned production composition for durable session state, topology, events, watcher publication, and runtime bindings.
 related:
   - .spec/spexcode/session-protocol/spec.md
   - .spec/spexcode/session-topology/spec.md
   - .spec/spexcode/session-runtime/spec.md
+code:
+  - packages/session-application/src/index.ts
+related:
+  - .spec/spexcode/session-runtime/application-state-schema/spec.md
+  - .spec/spexcode/session-runtime/application-composition/spec.md
 ---
 # session application service
 
-At this base, the application service is the Stage 1 notification transaction facade above the protocol and optional
-topology packages. It owns no new durable authority. Its job is to turn one adopter notification action into one
-synchronous protocol transaction: optionally mutate a topology edge, resolve the deterministic recipient set, and
-enqueue the complete immutable messages before commit.
-
-The final state → event → watcher application service remains planned. That later service may compose an
-adopter-owned state store with [[session-events]] and this notification facade, but the current package does not apply
-state, append events, or own a projection.
+The application service is the adopter-owned production composition above protocol, topology, events, and runtime
+bindings. One composition is opened for one explicit absolute database path and one positively established local
+filesystem locality verdict. It opens each component once, owns a small state table, and never invents a path or a
+native identity. An explicit compatibility mode is required to read legacy records that have no state row; normal
+writes never silently fall back to those records.
 
 ## Responsibility
 
-`notifyRecipients(subjectSessionId, message)` resolves the current topology recipients and enqueues one copy of
-the supplied message for each recipient. `attachAndNotify(fromSessionId, subjectSessionId, relationType, message)`
-attaches one edge, resolves the subject's recipients after the mutation, and enqueues the same message for each
-recipient. Both return the edge (when one was created), the recipient addresses, and the messages committed by the
-transaction. An empty recipient set is a successful no-op after any requested topology mutation.
+`createSession`, `transitionSession`, and `attachWatcher` initialize exact protocol addresses and mutate the service
+state/topology in one synchronous transaction. A parent/child transition appends a typed event before resolving
+durable watcher recipients and enqueueing immutable notifications. The commit result is returned only after the
+transaction commits; an optional post-commit notifier receives that result as a wake hint and is never part of the
+transaction. `bindRuntime` requires the adopter-supplied harness kind, native id, and start token and forwards the
+binding generation fence. A stale generation fails loudly.
 
-The Stage 1 service accepts opaque protocol message bodies and does not inspect lifecycle, harness, event, or runtime
-fields. The caller chooses the message kind, body, headers, sender, and idempotency key. The service does not
-invent an event log, replay cursor, wake mechanism, callback, outbox, or consumer acknowledgement.
+The original `notifyRecipients` and `attachAndNotify` operations remain as small protocol/topology-only helpers for
+callers that do not use lifecycle state. They share the same transaction boundary but do not claim a state event.
+
+State events use the closed `session.state.changed.v1` envelope with JSON payload bytes. Replay folds the append-only
+event stream on restart and validates sequence gaps and unknown required event types through [[session-events]].
+Successful dequeue remains the protocol transfer boundary; runtime binding resolution occurs before dequeue and is not
+an acknowledgement or a second queue.
 
 ## Transaction and failure contract
 
-Every operation uses `protocol.withTransaction`. Topology mutation, recipient resolution, and all `tx.enqueue`
-calls are inside that one transaction. If validation, topology, or enqueue fails, the relation and every message
-roll back together. No adapter, network call, runtime binding lookup, or user callback runs inside the transaction.
-The service never calls protocol `dequeue`; delivery remains a runtime-owned operation after commit. It is not the
-final state → event → watcher application service and does not claim a Spex or ZSwarm production importer.
+Every state operation uses `protocol.withTransaction`. State mutation, topology mutation, event append, recipient
+resolution, and all `tx.enqueue` calls roll back together. No adapter, network call, locality probe, runtime callback,
+or user callback runs inside the transaction. Post-commit notification is a best-effort wake hint over already
+durable messages. The service never calls protocol `dequeue` for a consumer.
 
 `session-application` imports protocol and topology. Protocol and topology never import it. Topology remains usable
 without the service, and self-launch may use protocol directly without topology. The service is not a replacement for
@@ -45,8 +51,9 @@ runtime bindings, lifecycle state, event persistence, or harness materialization
 
 ## Proof obligations
 
-1. A real consumer can attach a parent/subject relation and observe one durable message at every recipient after the
-   process exits.
-2. A forced error after the relation mutation but before commit leaves no edge and no pending message.
-3. A recipient set is resolved inside the transaction; no later read or callback can change the committed result.
-4. The package's dependency graph contains protocol and topology only, with no Spex lifecycle or harness package.
+1. A real consumer can create a parent and child, attach a watcher, observe a typed state event, close and reopen the
+   backend, replay the event, publish one durable notification, and receive it in the watching session.
+2. A forced error after state/topology mutation but before commit leaves no state, edge, event, or pending message.
+3. Missing or relative database paths and a failed locality precondition refuse before any component opens.
+4. Native identity is never inferred; a stale binding generation is rejected and cannot replace the current binding.
+5. Legacy state is read only when the caller explicitly enables compatibility mode.

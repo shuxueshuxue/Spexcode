@@ -15,7 +15,9 @@
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
+    "@spexcode/session-events": "0.6.7",
     "@spexcode/session-protocol": "0.6.7",
+    "@spexcode/session-runtime": "0.6.7",
     "@spexcode/session-topology": "0.6.7"
   },
   "devDependencies": {

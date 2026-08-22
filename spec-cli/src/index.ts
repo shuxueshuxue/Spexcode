@@ -40,6 +40,7 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
+import { configuredSessionApplication } from './session-application.js'
 
 installEvalHost()
 
@@ -485,6 +486,14 @@ app.post('/api/sessions', async (c) => {
     // transaction has published or cleaned up its record, release the one deferred full refresh.
     flushDeferredWorktreeRegistryChange()
     if (result.status === 201) {
+      const production = configuredSessionApplication()
+      if (production) {
+        production.createSession({
+          sessionId: result.session.id,
+          status: result.session.lifecycle,
+          parentSessionId: result.session.parent,
+        })
+      }
       c.header('Idempotency-Key', requestKey)
       return c.json(result.session, 201)
     }
@@ -493,6 +502,91 @@ app.post('/api/sessions', async (c) => {
     flushDeferredWorktreeRegistryChange()
     rawSignal.removeEventListener('abort', cancelFromRequest)
     outgoing?.off('close', cancel)
+  }
+})
+
+const runtimeApplicationOr503 = (c: any) => {
+  const application = configuredSessionApplication()
+  if (application) return application
+  return c.json({ error: 'session runtime composition is disabled; set SPEXCODE_SESSION_DATABASE_PATH to an absolute local database path' }, 503)
+}
+
+app.get('/api/session-runtime/:id/events', (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  return c.json(application.events.read(c.req.param('id')))
+})
+app.get('/api/session-runtime/:id/replay', (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  return c.json(application.replayState(c.req.param('id')))
+})
+app.post('/api/session-runtime/:id/state', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  const body = await c.req.json().catch(() => null) as { status?: unknown; parentSessionId?: unknown; reason?: unknown } | null
+  if (body?.status !== undefined && typeof body.status !== 'string') return c.json({ error: 'status must be a string' }, 400)
+  if (body?.parentSessionId !== undefined && body.parentSessionId !== null && typeof body.parentSessionId !== 'string') return c.json({ error: 'parentSessionId must be a string or null' }, 400)
+  try {
+    return c.json(application.transitionSession(c.req.param('id'), {
+      status: body?.status as string | undefined,
+      parentSessionId: body?.parentSessionId as string | null | undefined,
+      reason: typeof body?.reason === 'string' ? body.reason : null,
+    }))
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)
+  }
+})
+app.post('/api/session-runtime/:id/watch', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  const body = await c.req.json().catch(() => null) as { watcherSessionId?: unknown; channel?: unknown } | null
+  if (typeof body?.watcherSessionId !== 'string' || !body.watcherSessionId.trim()) return c.json({ error: 'watcherSessionId is required; identity is never inferred' }, 400)
+  const edge = application.attachWatcher(body.watcherSessionId, c.req.param('id'), typeof body.channel === 'string' ? body.channel : undefined)
+  return c.json(edge, 201)
+})
+app.post('/api/session-runtime/:id/bind', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  const body = await c.req.json().catch(() => null) as Record<string, unknown> | null
+  if (!body || typeof body.namespace !== 'string' || typeof body.runtimeKind !== 'string' || typeof body.nativeSessionId !== 'string' || typeof body.nativeStartToken !== 'string') {
+    return c.json({ error: 'namespace, runtimeKind, nativeSessionId, and nativeStartToken are required; identity is never inferred' }, 400)
+  }
+  try {
+    const binding = application.bindRuntime(c.req.param('id'), {
+      namespace: body.namespace,
+      runtimeKind: body.runtimeKind,
+      nativeSessionId: body.nativeSessionId,
+      nativeStartToken: body.nativeStartToken,
+      metadata: body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata) ? body.metadata as Record<string, unknown> : undefined,
+    }, typeof body.expectedGeneration === 'number' ? body.expectedGeneration : undefined)
+    return c.json(binding, 200)
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)
+  }
+})
+app.post('/api/session-runtime/:id/publish', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  const body = await c.req.json().catch(() => null) as { kind?: unknown; body?: unknown; senderSessionId?: unknown } | null
+  if (typeof body?.kind !== 'string' || typeof body.body !== 'string') return c.json({ error: 'kind and UTF-8 body are required' }, 400)
+  const result = application.notifyRecipients(c.req.param('id'), {
+    kind: body.kind,
+    body: Buffer.from(body.body, 'utf8'),
+    senderSessionId: typeof body.senderSessionId === 'string' ? body.senderSessionId : undefined,
+  })
+  return c.json(result, 201)
+})
+app.post('/api/session-runtime/:id/dequeue', async (c) => {
+  const application = runtimeApplicationOr503(c)
+  if (application instanceof Response) return application
+  const body = await c.req.json().catch(() => null) as { namespace?: unknown; expectedGeneration?: unknown } | null
+  if (typeof body?.namespace !== 'string') return c.json({ error: 'namespace is required' }, 400)
+  try {
+    const message = application.dequeueForRuntime(c.req.param('id'), body.namespace, typeof body.expectedGeneration === 'number' ? body.expectedGeneration : undefined)
+    return c.json(message, 200)
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)
   }
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;

@@ -460,8 +460,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
             return {
               sessionId: decoded.sessionId,
               status: decoded.status,
-              proposal: decoded.proposal,
-              note: decoded.note,
+              proposal: decoded.proposal ?? null,
+              note: decoded.note ?? null,
               parentSessionId: decoded.parentSessionId,
               updatedAtMs: event.occurredAtMs,
             }

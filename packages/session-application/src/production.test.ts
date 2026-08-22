@@ -38,16 +38,27 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
   assert.equal(first.protocol.dequeue('parent')?.kind, 'fixture.direct.v1')
   assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
+  first.transitionSession('child', { status: 'awaiting', proposal: 'merge', note: 'ready' })
+  const transitioned = first.readState('child')!
+  assert.equal(transitioned.sessionId, 'child')
+  assert.equal(transitioned.status, 'awaiting')
+  assert.equal(transitioned.proposal, 'merge')
+  assert.equal(transitioned.note, 'ready')
+  assert.equal(transitioned.parentSessionId, 'parent')
+  assert.equal(first.listWatchers('parent').length, 1)
+  first.detachWatcher('parent', 'child')
+  assert.equal(first.listWatchers('parent').length, 0)
+  assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
   first.close()
 
   const restarted = openProjectSessionApplication({ databasePath, locality })
   assert.deepEqual(restarted.replayState('child'), {
     sessionId: 'child',
-    status: 'active',
-    proposal: null,
-    note: null,
+    status: 'awaiting',
+    proposal: 'merge',
+    note: 'ready',
     parentSessionId: 'parent',
-    updatedAtMs: childEvents[1]!.occurredAtMs,
+    updatedAtMs: transitioned.updatedAtMs,
   })
   const watcherBinding = restarted.bindRuntime('parent', identity('parent-native', 'parent-start-2'), 1)
   assert.equal(watcherBinding.bindingGeneration, 2)

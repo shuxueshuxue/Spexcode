@@ -11,6 +11,7 @@ related:
 # session application state schema
 
 The application component owns one strict state row per initialized protocol address. It stores only the current
-status, explicit parent address, and update time. Parent/child relations remain in the neutral topology component;
+status, proposal, note, explicit parent address, and update time. State changes append the typed application event
+before notifying topology recipients. Parent/child relations remain in the neutral topology component;
 existing JSON records enter this table only through the one-time deterministic migration, after which JSON is never a
 read source for application state.

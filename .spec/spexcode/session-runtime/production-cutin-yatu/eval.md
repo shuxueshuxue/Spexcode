@@ -9,7 +9,8 @@ scenarios:
     expected: >
       Parent/child state changes append session.state.changed.v1 events atomically; replay after restart returns the
       active child; the stale binding is HTTP 409; and the watching parent receives the exact durable notification
-      once through the runtime dequeue boundary.
+      once through the runtime dequeue boundary. Sixteen concurrent same-key creates all return 201 with one session
+      id and one canonical creation event.
     test:
       path: spec-cli/src/session-runtime-production.yatu.test.ts
       name: "YATU: CLI-created parent/child state survives backend restart and delivers a fenced watcher notification"

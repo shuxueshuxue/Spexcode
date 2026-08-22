@@ -95,6 +95,20 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
       assert.equal(response.status, 201, text)
       return JSON.parse(text) as { id: string; parent: string | null }
     }
+    const sameKeyResponses = await Promise.all(Array.from({ length: 16 }, () => request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'runtime-same-key-create' },
+      body: JSON.stringify({ prompt: 'runtime same-key create', launcher: 'fake' }),
+    })))
+    const sameKeyBodies = await Promise.all(sameKeyResponses.map(async response => {
+      const text = await response.text()
+      assert.equal(response.status, 201, text)
+      return JSON.parse(text) as { id: string }
+    }))
+    assert.equal(new Set(sameKeyBodies.map(body => body.id)).size, 1)
+    const sameKeyEvents = await request(`/api/session-runtime/${encodeURIComponent(sameKeyBodies[0].id)}/events`)
+    assert.equal(sameKeyEvents.status, 200)
+    assert.equal((await sameKeyEvents.json() as Array<unknown>).length, 1)
     const parent = await create({ prompt: 'runtime parent', launcher: 'fake' })
     const child = await create({ prompt: 'runtime child', parent: parent.id, launcher: 'fake' })
     assert.equal(child.parent, parent.id)

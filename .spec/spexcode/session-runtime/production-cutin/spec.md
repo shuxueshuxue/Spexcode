@@ -21,6 +21,8 @@ path fails loudly. There is no `SPEXCODE_SESSION_DATABASE_PATH` opt-in and no JS
 The one-time JSON migration must complete before cutover. New `/api/sessions` records are initialized in the canonical
 application database; `session.json` and `watchers.json`, when retained, are operational worktree metadata only and
 are not read as application state, events, topology, or watcher authority.
+Concurrent or retried accepted creates may publish the same idempotency receipt more than once; the HTTP bridge
+initializes its canonical row at most once and accepts a duplicate only when the existing projection matches.
 The runtime API exposes only explicit watcher, state, event/replay, native binding, publish, and dequeue operations.
 Native identity is caller supplied, and binding generation is checked by the shared runtime component. The YATU drives
 the real HTTP backend, restarts it, replays the child state, publishes a durable watcher notification, and proves a

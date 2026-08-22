@@ -12,4 +12,6 @@ related:
 
 The fixture starts the actual Spex backend with an explicit local database path, creates a parent and child through
 `/api/sessions`, changes child state, reads its typed event, restarts the backend, replays the event, binds an explicit
-native identity, rejects a stale generation, publishes a notification, and dequeues it through the watching session.
+native identity, rejects a stale generation, publishes a notification, and dequeues it through the watching session. It
+also submits concurrent same-key `/api/sessions` requests and proves every accepted response references one canonical
+projection and one creation event.

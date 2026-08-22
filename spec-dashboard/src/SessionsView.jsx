@@ -18,7 +18,11 @@ export default function SessionsView({ param, query }) {
   // null-guard makes the double-run effect idempotent instead.
   const [seed, setSeed] = useState(null)
   useEffect(() => { const t = takeCompose(); if (t != null) setSeed(t) }, [takeCompose])
-  useEffect(() => { if (param) setSel(param) }, [param])
+  // The console is ONE mounted document for every session ([[workspace-shell]]'s pool keys it by page), so
+  // the selection has to follow the route in both directions: an id selects that session, and the bare or
+  // `new` address selects the launch face. Only the first was needed while every session switch remounted
+  // this view — and that remount is exactly what made a switch cost a cold boot.
+  useEffect(() => { setSel(param && param !== 'new' ? param : 'new') }, [param])
 
   return (
     <SessionInterface

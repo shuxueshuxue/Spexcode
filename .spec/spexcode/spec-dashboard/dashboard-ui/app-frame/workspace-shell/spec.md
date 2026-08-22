@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/Shell.jsx
 related:
   - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/test/keep-alive.e2e.mjs
   - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
@@ -103,9 +104,43 @@ props ([[view-registry]]). That one rule is the hinge: it is what makes renderin
 layout change rather than a rewrite, and what stops a view from silently coupling to whichever address
 happens to be current.
 
-**A view is keyed on its address**, so a different document is a different instance and one document's
-state cannot bleed into the next. The graph is the deliberate exception — keyed on the page alone, because
-its camera and expansion are the workspace's home state rather than one address's.
+## the mounted-document pool
+
+**Switching tabs does not reload the document.** Views used to be keyed on the address, so leaving a
+document unmounted it and returning ran its whole boot again — which is what *"为什么每次点击一个顶上打开
+的横 tab 都要重新加载"* was naming. The shell keeps a bounded pool of **mounted** documents (six, sized to
+the strip's usual working set) and shows one: the rest are `display:none`, not unmounted, exactly as the
+session console has always kept its terminals ([[session-console]]'s warm layers). Only exceeding the bound
+unmounts anything, and then it is the least recently shown.
+
+Three properties make that safe rather than merely fast:
+
+- **Render order is insertion order, never recency.** Reordering keyed children moves real DOM nodes, and a
+  moved node re-attaches its iframes and canvases — a reload wearing a different name. Recency lives in a
+  counter used only to choose which entry to drop.
+- **A pane knows two things a view cannot work out for itself once it can be hidden**: the address THIS
+  pane holds — which is not the window's address while it is hidden — and whether it is the one showing.
+  Anything keyed per address (a scroll position, [[page-scroll]]) keys on the pane, or a hidden pane writes
+  its state over the visible one's. A hidden document holds no keyboard scope ([[keyboard-service]]) and
+  does not fetch: it is kept WARM, not busy.
+- **A hidden pane does not re-render.** The shell re-renders on every board push, so the pool is memoised
+  per pane AND a hidden pane reads the board it was hidden with. Either alone does nothing — a subtree
+  re-renders if props or context moved — and together they are what stops an idle workspace from costing
+  more the more tabs it holds. A pane catches up in the render that reveals it.
+
+**What is "the same mounted document" is per view, not per address.** Most views are one per address. Two
+are one per PAGE: the graph, whose camera and expansion are the workspace's state rather than one address's,
+and the session console, which holds every live terminal's socket and scrollback — keying it per session id
+is precisely what made every session switch a cold boot. Those two receive their object as props and follow
+it, which the console already did for its own list.
+
+The SECOND pane is not a pool: it holds one document the reader deliberately sent there, so keying it on
+the address is the whole contract.
+
+Measured with six documents mounted (`test/keep-alive.e2e.mjs`): every warm switch under 0.2s, a document's
+own DOM node surviving a round trip through two other tabs, and **0.012 seconds of script per 10 idle
+seconds** — 0.021s with a live session console hidden among them, whose cost is terminal output arriving
+rather than the pool.
 
 **A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
 error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split

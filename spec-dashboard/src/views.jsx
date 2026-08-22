@@ -59,15 +59,18 @@ const openSession = (id) => navigate('sessions', id)
 
 // The three review-side pages already take everything they need as props and hold their own state; they
 // become views by reading the board from context instead of from whoever rendered them. No rewrite, and no
-// second copy of their data path.
-function EvalsView() {
+// second copy of their data path. The ROUTE comes down the same way — the two boards used to call
+// `useRoute` and were the only views breaking the contract above. It went unnoticed while every view was
+// unmounted the moment it stopped showing; once documents stay mounted ([[workspace-shell]]'s pool), a
+// board still reading the global address would follow the reader into whatever they opened next.
+function EvalsView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
   const { reload } = useBoardApi()
-  return <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
+  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
 }
-function IssuesView() {
+function IssuesView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
-  return <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
+  return <IssuesPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
 }
 function SettingsView() { return <Settings /> }
 

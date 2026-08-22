@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
+import { usePaneAddress } from './workspace.jsx'
 
 const STORAGE_PREFIX = 'spex.page-scroll:'
 
@@ -22,13 +23,20 @@ const writePosition = (key, top) => {
   try { sessionStorage.setItem(`${STORAGE_PREFIX}${key}`, String(top)) } catch { /* storage may be walled off */ }
 }
 
-export function PageScroll({ className = '', scrollKey = pageScrollAddress(), children, ...props }) {
+// A scroll position belongs to a DOCUMENT, and the document is the pane's address — not the window's.
+// Once documents stay mounted while hidden ([[workspace-shell]]), reading the window's address here let a
+// hidden page re-key onto whatever the reader had just opened and write its own (zero) position over that
+// document's remembered one. The window's address remains the answer where there is no pane: the phone,
+// the projects hub, the cold review entry each render one page and are that page.
+export function PageScroll({ className = '', scrollKey, children, ...props }) {
+  const paneAddress = usePaneAddress()
+  const key = scrollKey ?? paneAddress ?? pageScrollAddress()
   const ref = useRef(null)
 
   useLayoutEffect(() => {
     const element = ref.current
     if (!element) return undefined
-    const targetTop = readPosition(scrollKey)
+    const targetTop = readPosition(key)
     let lastTop = targetTop
     let restoring = targetTop > 0
     let stableFrames = 0
@@ -53,7 +61,7 @@ export function PageScroll({ className = '', scrollKey = pageScrollAddress(), ch
         return
       }
       lastTop = element.scrollTop
-      writePosition(scrollKey, lastTop)
+      writePosition(key, lastTop)
       // Chromium may apply its native history position after React's layout effect. Require the target
       // to survive a paint before yielding, so that temporary zero never becomes the remembered value.
       if (++stableFrames < 2) frame = requestAnimationFrame(restore)
@@ -62,7 +70,7 @@ export function PageScroll({ className = '', scrollKey = pageScrollAddress(), ch
     const remember = () => {
       if (restoring) return
       lastTop = element.scrollTop
-      writePosition(scrollKey, lastTop)
+      writePosition(key, lastTop)
     }
     const snapshot = () => {
       stopRestoring()
@@ -87,9 +95,9 @@ export function PageScroll({ className = '', scrollKey = pageScrollAddress(), ch
       element.removeEventListener('wheel', snapshot, true)
       element.removeEventListener('keydown', snapshot, true)
       stopRestoring()
-      writePosition(scrollKey, lastTop)
+      writePosition(key, lastTop)
     }
-  }, [scrollKey])
+  }, [key])
 
   return (
     <div ref={ref} className={`page-scroll${className ? ` ${className}` : ''}`} {...props}>

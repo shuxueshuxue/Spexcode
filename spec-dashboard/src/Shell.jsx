@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
@@ -6,9 +6,9 @@ import TabStrip, { placeLabel } from './TabStrip.jsx'
 import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
-import { useRoute, navigate } from './route.js'
+import { useRoute, navigate, routeHash } from './route.js'
 import { useT } from './i18n/index.jsx'
-import { useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
@@ -42,23 +42,90 @@ const dockFor = (page) => {
   return 'keep'
 }
 
+// WHAT COUNTS AS "THE SAME MOUNTED DOCUMENT". Most views are one per address. Two are one per PAGE,
+// because they hold their object internally and re-mounting them per object throws away the very thing
+// they exist to keep warm: the graph's camera and expansion are the workspace's state rather than one
+// address's, and the session console holds every live terminal's socket and scrollback behind its own
+// layers ([[session-console]]) — keying it per session id is what made every session switch a cold boot.
+const POOL_PAGES = new Set(['graph', 'sessions'])
+const poolKey = (page, param) => (POOL_PAGES.has(page) ? page : `${page}/${param ?? ''}`)
+// How many documents stay mounted. Small enough that an idle workspace is idle, large enough that the tab
+// strip's usual working set is entirely warm — a bound that fits the strip, not a guess about memory.
+const POOL_LIMIT = 6
+
+// [[workspace-shell]]'s MOUNTED-DOCUMENT POOL. Switching tabs used to remount the document from scratch —
+// every switch re-ran a view's whole boot, which is what "why does clicking a tab reload it" was naming.
+// A pool keeps the recent documents mounted and shows one; the others are display-hidden, exactly as the
+// session console has always kept its terminals ([[session-console]]'s warm layers). Nothing is unmounted
+// until the pool is over its limit, and then the least recently shown one goes.
+//
+// RENDER ORDER IS INSERTION ORDER, never recency. Reordering keyed children moves real DOM nodes, and a
+// moved node re-attaches its iframes and canvases — which is a reload wearing a different name. Recency
+// lives in a counter used only to pick the victim.
+function ViewPool({ page, param, query }) {
+  const key = poolKey(page, param)
+  const address = routeHash(page, param, query)
+  const seq = useRef(0)
+  const [pool, setPool] = useState(() => [{ key, address, page, param, query, seq: 0 }])
+  useEffect(() => {
+    setPool((prev) => {
+      const stamp = ++seq.current
+      const held = prev.find((entry) => entry.key === key)
+      // an entry that is shown again takes the CURRENT route: a pool keyed by page (the console) is one
+      // instance being handed a new object, which is the whole point of keying it that way.
+      let next = held
+        ? prev.map((entry) => (entry.key === key ? { ...entry, address, page, param, query, seq: stamp } : entry))
+        : [...prev, { key, address, page, param, query, seq: stamp }]
+      if (next.length > POOL_LIMIT) {
+        const victim = next.reduce((oldest, entry) => (entry.seq < oldest.seq ? entry : oldest))
+        next = next.filter((entry) => entry !== victim)
+      }
+      return next
+    })
+  }, [key, address])
+  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={entry.key === key} />)
+}
+
+// One mounted document. It is MEMOISED, and that is not a micro-optimization: the shell re-renders on
+// every board push, and without this each push would re-render every document in the pool — the idle cost
+// of a workspace would scale with how many tabs the reader keeps, which is the one thing a pool must not
+// do. Pane props are stable between route changes, so a hidden pane re-renders only when it is shown or
+// its address moves. Its other half is the frozen board a hidden pane reads ([[workspace-shell]]).
+const PoolPane = memo(function PoolPane({ entry, showing }) {
+  const t = useT()
+  const { component: View, className } = viewFor(entry.page)
+  const pane = useMemo(() => ({ address: entry.address, active: showing }), [entry.address, showing])
+  return (
+    <div className={`viewhost ${className}`} aria-hidden={showing ? undefined : 'true'}
+      style={showing ? undefined : { display: 'none' }}>
+      {/* the boundary wraps the whole host, Suspense included, so a lazy chunk that will not load is
+          contained the same way a render that throws is. The address resets it: leaving a broken
+          document is the reader's own recovery, and it must not need a reload. */}
+      <ViewErrorBoundary resetKey={entry.address}>
+        <PaneProvider value={pane}>
+          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+            <View param={entry.param} query={entry.query} />
+          </Suspense>
+        </PaneProvider>
+      </ViewErrorBoundary>
+    </div>
+  )
+})
+
+// The SECOND pane is not a pool. It holds one document the reader deliberately sent there, so it is the
+// one place where keying on the address is the whole contract — there is no browsing history to keep warm.
 function ViewHost({ page, param, query }) {
   const t = useT()
   const { component: View, className } = viewFor(page)
-  // keyed on the address: a different document is a different instance, so one document's state can never
-  // bleed into the next. Views are cheap to remount; a stale scroll position is not worth a shared
-  // instance. The graph is the exception it earns by keying on page alone — its camera and expansion are
-  // the workspace's home state, not one address's.
-  const key = page === 'graph' ? 'graph' : `${page}/${param ?? ''}`
+  const address = routeHash(page, param, query)
   return (
     <div className={`viewhost ${className}`}>
-      {/* the boundary wraps the whole host, Suspense included, so a lazy chunk that will not load is
-          contained the same way a render that throws is. The same key resets it: leaving a broken
-          document is the reader's own recovery, and it must not need a reload. */}
-      <ViewErrorBoundary resetKey={key}>
-        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-          <View key={key} param={param} query={query} />
-        </Suspense>
+      <ViewErrorBoundary resetKey={address}>
+        <PaneProvider value={{ address, active: true }}>
+          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+            <View key={poolKey(page, param)} param={param} query={query} />
+          </Suspense>
+        </PaneProvider>
       </ViewErrorBoundary>
     </div>
   )
@@ -82,7 +149,7 @@ function Content({ page, param, query }) {
   const { split } = useWorkspace()
   const { closeSplit } = useWorkspaceApi()
   const [width, onDrag, reset] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
-  if (!split) return <ViewHost page={page} param={param} query={query} />
+  if (!split) return <ViewPool page={page} param={param} query={query} />
   return (
     <div className="content-split">
       <ViewHost page={page} param={param} query={query} />

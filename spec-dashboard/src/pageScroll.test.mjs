@@ -22,7 +22,10 @@ test('one page scroll primitive owns address-keyed restoration', () => {
   assert.match(scroll, /const STORAGE_PREFIX = 'spex\.page-scroll:'/)
   assert.match(scroll, /sessionStorage\.getItem\(`/)
   assert.match(scroll, /sessionStorage\.setItem\(`/)
-  assert.match(scroll, /const targetTop = readPosition\(scrollKey\)/)
+  // the key is the PANE's address, not the window's: a hidden mounted document must not re-key onto
+  // whatever the reader just opened and write its own position over that document's ([[workspace-shell]]).
+  assert.match(scroll, /const key = scrollKey \?\? paneAddress \?\? pageScrollAddress\(\)/)
+  assert.match(scroll, /const targetTop = readPosition\(key\)/)
   assert.match(scroll, /element\.scrollTop = Math\.min\(targetTop, maxTop\)/)
   assert.match(scroll, /new MutationObserver/)
   assert.match(scroll, /requestAnimationFrame\(restore\)/)
@@ -34,7 +37,7 @@ test('one page scroll primitive owns address-keyed restoration', () => {
   assert.match(scroll, /element\.addEventListener\('pointerdown', snapshot, true\)/)
   assert.match(scroll, /element\.addEventListener\('wheel', snapshot, \{ passive: true, capture: true \}\)/)
   assert.match(scroll, /element\.addEventListener\('keydown', snapshot, true\)/)
-  assert.match(scroll, /let lastTop = targetTop[\s\S]*writePosition\(scrollKey, lastTop\)/)
+  assert.match(scroll, /let lastTop = targetTop[\s\S]*writePosition\(key, lastTop\)/)
   assert.match(scroll, /element\.removeEventListener\('scroll', remember\)/)
   assert.match(scroll, /className=\{`page-scroll/)
 })

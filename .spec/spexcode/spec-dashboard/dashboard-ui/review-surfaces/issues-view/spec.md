@@ -27,7 +27,9 @@ related:
 Issues are one object over every store ([[issues]]), and a human wants **one place** to read them — an
 agent's local taste issue and a GitHub issue on the same node belong on the same page. The human's
 directive names the navigation model: **GitHub's own issues UI**, verified live — a LIST page whose whole
-state lives in its URL, rows that are plain copyable links, a click that PUSHES history onto a standalone
+state lives in its URL — read from the page's PROPS rather than the window, because the page can be
+mounted in a hidden pane ([[view-registry]] / [[workspace-shell]]), and a hidden page stops fetching —
+rows that are plain copyable links, a click that PUSHES history onto a standalone
 full-page DETAIL, and browser Back that restores the exact filtered list. The earlier master-detail split
 pane is gone; so is any in-page selection echo. **Writing an issue is a place too**: a cramped pop-out over
 the list said "this is a small aside", when opening an issue is one of the two things a human does here —

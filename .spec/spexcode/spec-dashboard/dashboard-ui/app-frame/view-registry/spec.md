@@ -20,6 +20,13 @@ Everything else it needs — the board, the workspace — it asks for by context
 another component's props. That is what dissolved the god component: its size was not the problem, its
 *ownership* was.
 
+**The contract stopped being optional the day documents began outliving their turn on screen.** Two views
+— the evals and issues boards — read the global address instead of their props, and nothing broke while
+every view was unmounted the moment it stopped showing. Under [[workspace-shell]]'s mounted-document pool a
+view that reads the global address follows the reader out of its own pane: a hidden board would re-derive
+itself from whatever was opened next. Both now take `{ param, query }` like everything else, and the cold
+review entry hands them the same props the shell does.
+
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
 keeping its own list. Two kinds qualify. Parameterized OBJECTS: spec, file, session, eval detail, issue
 detail. And the SINGLETON boards — evals, issues, settings — whose bare address names a place the reader

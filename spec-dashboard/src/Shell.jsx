@@ -31,9 +31,9 @@ import { runTabCommand } from './tabs.js'
 // The wide boards are the one place the FINDING region stands down. Evals and Issues are finding surfaces
 // in their own right — full-width GitHub-style lists with their own query, facets and rows — so putting the
 // dock beside one puts two finding surfaces on screen at once and squeezes the board the width it was
-// designed around. While a board is routed the dock does not render at all. The rail's explorer toggle
-// still owns the stored PREFERENCE (and stays lit by it): the board suppresses the dock for as long as it
-// is the document, and never edits what the reader chose.
+// designed around. While a board is routed the dock does not render at all. The rail's projection buttons
+// still own the stored PREFERENCE (and stay lit only when their projection is active): the board suppresses
+// the dock for as long as it is the document, and never edits what the reader chose.
 const BOARD_PAGES = new Set(['evals', 'issues'])
 
 function ViewHost({ page, param, query }) {
@@ -185,7 +185,7 @@ export default function Shell() {
             object documents and keep the finding dock like any other document. */}
         {dock && !(BOARD_PAGES.has(page) && param == null) && (
           <ViewErrorBoundary resetKey="dock">
-            <Dock mode={dockMode} setMode={setDockMode} specs={specs} sessions={sessions}
+            <Dock mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />
           </ViewErrorBoundary>
         )}

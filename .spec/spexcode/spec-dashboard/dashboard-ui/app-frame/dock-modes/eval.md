@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: rail-owns-dock-projection-cycle
+    description: >-
+      In the running desktop dashboard, click the rail's Explorer and Sessions projection buttons through
+      the three states: explorer open, dock closed, and sessions open. Reload, then inspect the persisted
+      projection and verify the dock has no modebar.
+    expected: >-
+      Explorer is initially pressed with the dock open; clicking it closes the dock and clears both pressed
+      states; clicking Sessions reopens the dock in sessions mode and presses only Sessions. Reload preserves
+      the open sessions projection. The dock begins directly with its EXPLORER count head or sessions list
+      head, and `.dock-modebar` never renders. No document hash changes during the cycle.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Dock.jsx, spec-dashboard/src/workspace.jsx]
   - name: sessions-dock-is-the-one-list
     description: >-
       Through the running desktop dashboard, open the sessions dock projection, inspect its real rendered

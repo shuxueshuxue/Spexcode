@@ -13,7 +13,7 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState } from './session-application.js'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
@@ -2126,6 +2126,7 @@ type SessionCreateRequestOptions = {
   requestKey?: string
   signal?: AbortSignal
   timeoutMs?: number
+  onPublished?: (session: Session) => void | Promise<void>
 }
 export type SessionCreateRequestResult =
   | { status: 201; session: Session }
@@ -2180,7 +2181,10 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   if (input.base !== undefined && typeof input.base !== 'string') return { status: 400, error: 'session-create base must be a string' }
   const base = typeof input.base === 'string' && input.base.trim() ? input.base.trim() : null
-  configuredSessionApplicationIfCutover()
+  const cutoverState = sessionApplicationCutoverState()
+  if (cutoverState === 'fenced') return { status: 409, error: 'legacy JSON session store is fenced for one-time migration', code: 'session_create_failed', phase: 'request' }
+  if (cutoverState === 'migration-required') return { status: 409, error: 'legacy JSON session store must be migrated before creating sessions', code: 'session_create_failed', phase: 'request' }
+  if (cutoverState === 'ambiguous') return { status: 409, error: 'session database exists without a migration marker', code: 'session_create_failed', phase: 'request' }
   try { assertLegacyJsonWritesAllowed() }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -2198,6 +2202,14 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   // immutable creation input because it publishes the record's existing display override. `base` joins them
   // for the same reason and with the same shape: absent, it must not perturb an existing receipt's bytes.
   const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}), ...(base ? { base } : {}) }))
+  let freshStoreOwned = false
+  let freshStoreCommitted = false
+  try {
+    const acquired = acquireFreshSessionApplicationForCreate()
+    freshStoreOwned = acquired.owned
+  } catch (error) {
+    return { status: 409, error: error instanceof Error ? error.message : String(error), code: 'session_create_failed', phase: 'request' }
+  }
   const controller = new AbortController()
   const cancel = () => controller.abort(new SessionCreateError('session_create_cancelled', 'request', 'session creation caller disconnected', 408))
   if (options.signal?.aborted) cancel()
@@ -2208,6 +2220,8 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   try {
     try {
       const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, base, signal: controller.signal })
+      await options.onPublished?.(session)
+      freshStoreCommitted = true
       traceSessionCreate(id, requestDigest, 'request', 'finish')
       return { status: 201, session }
     } catch (error) {
@@ -2219,6 +2233,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
       return { status: failure.status, error: failure.message, code: failure.code, phase: failure.phase }
     }
   } finally {
+    releaseFreshSessionApplicationForCreate(freshStoreOwned, freshStoreCommitted)
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', cancel)
   }
@@ -2265,7 +2280,7 @@ export async function createSession(prompt: string, launcher?: string, name?: st
   const refused = await probeSessionCreateAuthority(target)
   if (refused) {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    const fallback = await sessionCreateRequest(body, { requestKey })
+    const fallback = await sessionCreateRequest(body, { requestKey, onPublished: projectCreatedSession })
     if (fallback.status === 201) return fallback.session
     const error = new Error(`${fallback.code || 'session_create_failed'}: ${fallback.error}`)
     error.name = 'BackendError'
@@ -2296,6 +2311,23 @@ export async function createSession(prompt: string, launcher?: string, name?: st
     throw err
   }
   return await res.json() as Session
+}
+
+export function projectCreatedSession(session: Session): void {
+  const application = initializeFreshSessionApplication()
+  try {
+    application.createSession({
+      sessionId: session.id,
+      status: session.lifecycle,
+      parentSessionId: session.parent,
+    })
+    if (session.parent) application.attachWatcher(session.parent, session.id, 'watch:parent')
+  } catch (error) {
+    const state = application.readState(session.id)
+    const sameProjection = state?.status === session.lifecycle
+      && state.parentSessionId === (session.parent ?? null)
+    if (!sameProjection) throw error
+  }
 }
 
 export function spawnerClause(p: SessRec | null): string {

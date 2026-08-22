@@ -38,7 +38,9 @@ callers that do not use lifecycle state. They share the same transaction boundar
 
 The package entry also exposes the pure `jsonMigrationFencePath(recordsRoot)` path helper. It is shared by the
 one-time importer and the legacy writer gate so both sides name exactly the same durable cutover fence; it does not
-open a database, read session state, or provide a compatibility path.
+open a database, read session state, or provide a compatibility path. The backend composition layer separately exposes
+an explicit fresh-store initializer; it is called only after a successful create has crossed authority and no-side-effect
+checks, while ordinary reads remain side-effect free.
 
 State events use the closed `session.state.changed.v1` envelope with JSON payload bytes, including the lifecycle
 proposal and note fields. Replay folds the append-only

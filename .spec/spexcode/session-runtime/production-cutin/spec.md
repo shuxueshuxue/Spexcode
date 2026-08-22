@@ -19,9 +19,11 @@ The Spex backend always composes the production session application through the 
 per-user default). Before opening SQLite it runs the adopter locality precondition; a missing, relative, or non-local
 path fails loudly. There is no `SPEXCODE_SESSION_DATABASE_PATH` opt-in and no JSON fallback.
 
-The only pre-marker exception is a fresh project with no legacy session directories: it may initialize an empty
-canonical store. Once any legacy session directory exists, the application service and runtime API remain unavailable
-until the migration marker is present; they must not create an unmarked SQLite store beside the JSON source.
+The only pre-marker exception is a fresh project with no legacy session directories: a successful session-create request
+may initialize an empty canonical store after authority and no-side-effect validation pass. A rejected or abandoned
+request must not initialize that store. Once any legacy session directory exists, the application service and runtime
+API remain unavailable until the migration marker is present; they must not create an unmarked SQLite store beside the
+JSON source.
 
 The one-time JSON migration must complete before cutover. New `/api/sessions` records are initialized in the canonical
 application database, and after the migration marker exists the list reads lifecycle status and parent topology from

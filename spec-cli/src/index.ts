@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -531,7 +531,7 @@ app.post('/api/sessions', async (c) => {
   outgoing?.once('close', cancel)
   try {
     const body = await c.req.json().catch(() => null)
-    const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal })
+    const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal, onPublished: projectCreatedSession })
     // The durable row is now public. Nudge the cheap session projection explicitly so a dashboard does not
     // wait for the best-effort store watcher; any held candidate worktree event remains a separate full claim.
     if (result.status === 201) notifyBoardChanged('sessions')
@@ -539,22 +539,6 @@ app.post('/api/sessions', async (c) => {
     // transaction has published or cleaned up its record, release the one deferred full refresh.
     flushDeferredWorktreeRegistryChange()
     if (result.status === 201) {
-      const production = configuredSessionApplicationIfCutover()
-      if (production) {
-        try {
-          production.createSession({
-            sessionId: result.session.id,
-            status: result.session.lifecycle,
-            parentSessionId: result.session.parent,
-          })
-          if (result.session.parent) production.attachWatcher(result.session.parent, result.session.id, 'watch:parent')
-        } catch (error) {
-          const state = production.readState(result.session.id)
-          const sameProjection = state?.status === result.session.lifecycle
-            && state.parentSessionId === (result.session.parent ?? null)
-          if (!sameProjection) throw error
-        }
-      }
       c.header('Idempotency-Key', requestKey)
       return c.json(result.session, 201)
     }

@@ -33,6 +33,10 @@ assembly (the rendezvous env + the harness's own command + the spec-pointer/prom
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
 the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop.
+Creation authority is checked before any fresh-project canonical store is initialized: rejected, abandoned, fenced,
+or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a successfully admitted fresh create
+may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses
+the same post-success canonical projection as the HTTP bridge rather than creating a second creation path.
 During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
 before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, those files may remain as
 operational metadata, but the canonical application service is the only state/event/topology authority.

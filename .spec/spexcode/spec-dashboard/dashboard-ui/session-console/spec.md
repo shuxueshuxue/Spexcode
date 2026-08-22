@@ -167,8 +167,14 @@ background fire) and never expands a plugin body itself.
 An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
 published resource faces selected by the one session object address:
 `#/sessions/<id>?surface=conversation|terminal|diff|resource:<resourceTabKey>`; a bare
-`#/sessions/<id>` resolves the persisted base face. The URL is the only selector and is a pure function of the
+`#/sessions/<id>` resolves the persisted base face, which is always Terminal or Conversation and never a diff
+or resource ([[session-surface]]). The URL is the only selector and is a pure function of the
 address; only a user gesture may navigate it. There is no in-console resource strip, dialog, or face-switch rail.
+**What the console MOUNTS follows the resolved surface, never the stored preference.** Consulting the stored
+base to decide whether to mount the conversation left `?surface=conversation` showing an empty pane on any
+session whose stored base was Terminal — terminal layer hidden, conversation layer never created, and with it
+the composer that is the human's only way to speak to a running session. The address decides what is on
+screen; the store decides only what a bare address means.
 Opening a published resource is an ORDINARY navigation to that address: it lands in the strip's current slot
 like every other plain click, dedupes onto an already-open tab, and mints a tab of its own only from the
 gestures that mint any tab ([[tab-strip]]). It used to force a resident tab, which is exactly the reflex that
@@ -218,10 +224,12 @@ budget lets one live session starve another while terminals themselves remain un
 session's resources shorter-lived than its terminal for no product reason. Each session may therefore retain every resource tab it
 opens during that session's lifetime, independently of every other session. A selected resource tab is a
 temporary browser-local overlay of that session's base surface: closing it, pressing the base tab, or Esc from
-the resource returns to the same Terminal/Conversation base without changing that preference. The browser
+the resource returns to the same Terminal/Conversation base without changing that preference. The diff face is
+an overlay on the same terms — Esc and its own lit door both return to the bare address. The browser
 persists the pane-backed base choice per session and project; a session without an explicit choice resolves the
 Settings default, then Terminal. Switching sessions may restore its still-open resource overlay, but resource
-selection is never persisted or written to the session/backend. Neither console adds a second native-event view. Session identity, lifecycle,
+selection is never persisted or written to the session/backend, and a bare session address always opens the
+persisted base rather than whatever overlay was last on screen. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval tab is a REAL anchor whose href is
@@ -263,8 +271,20 @@ right edge. The slot keeps one compact icon-button geometry across themes, local
 disabled merge remains visible with the exact localized availability reason as its tooltip. The resource picker
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
 Surface choice is address state (`?surface=…`), not an in-document switch control; the diff door uses the distinct
-`file-diff` glyph and navigates to the diff address. Other document kinds register nothing, so their tab-row edge
+`file-diff` glyph and navigates to the diff address, and on the diff face that same door stays in the slot,
+LIT, and navigates back to the bare session address — an overlay's door opens and closes, because a door that
+only opens makes the surface a trap for a reader whose tab strip holds one deep link and whose dock is closed.
+The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
+to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
+is the right-click on a finding-dock session row ([[dock-modes]]) — one menu, two ways in, the slot for the
+session you are reading and the dock for any other. Other document kinds register nothing, so their tab-row edge
 is blank.
+
+**The console cancels the native context menu nowhere.** It once cancelled it for the whole panel, which was
+survivable while a session list filled most of that panel and did own a right-click menu of its own; with the
+list withdrawn the panel is conversation text, diff text and a terminal, and the blanket cancel bought nothing
+while taking copy, paste and search-selection away from all three. A surface may suppress the native menu only
+where it offers one in its place.
 The TUI owns keyboard input through xterm's native IME-aware path ([[terminal-input]]), while text still
 selects and the wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal

@@ -42,14 +42,33 @@ export const ACT = [
   { id: 'shell.tabNext',      keys: ['Alt+Shift+ArrowRight'],    rebind: false, desc: 'legend.shell.tabNext' },
   { id: 'shell.tabPrevious',  keys: ['Alt+Shift+ArrowLeft'],     rebind: false, desc: 'legend.shell.tabPrevious' },
   { id: 'shell.tabSplit',     keys: ['Alt+Shift+Enter'],         rebind: false, desc: 'legend.shell.tabSplit' },
+  // The console's Command Box chord was matched inline in the session console's own key handler and was
+  // therefore invisible to every reader of this table — the legend, the settings editor, and (since a
+  // tooltip became one) the hint the console printed for it. A binding the registry does not hold is a
+  // binding nothing can render truthfully.
+  { id: 'shell.commandBox',   keys: ['Alt+KeyI'],                rebind: false, desc: 'legend.shell.commandBox' },
 ]
 
-// KeyboardEvent.key → display glyph for the keymap chips (shared by the legend and the settings editor).
-export const KEY_GLYPH = {
+// display glyph for one binding token. Single keys that need a name of their own are listed; every CHORD is
+// DERIVED — `Alt+Shift+ArrowRight` → `⌥⇧→` — because a per-chord table is a second place a modifier can go
+// missing, and one did: a chord absent from it printed its raw `Alt+KeyI` spelling, or nothing at all.
+const KEY_GLYPH_SINGLE = {
   ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '⏎', Escape: 'esc', ' ': '␣', '-': '−',
-  'Alt+Shift+KeyE': '⌥⇧E', 'Alt+Shift+KeyM': '⌥⇧M', 'Alt+Shift+KeyC': '⌥⇧C', 'Alt+Shift+KeyX': '⌥⇧X',
-  'Alt+Shift+ArrowRight': '⌥⇧→', 'Alt+Shift+ArrowLeft': '⌥⇧←', 'Alt+Shift+Enter': '⌥⇧⏎',
-  'Alt+Digit1': '⌥1', 'Alt+Digit2': '⌥2', 'Alt+Digit3': '⌥3', 'Alt+Digit4': '⌥4',
-  'Alt+KeyN': '⌥N', 'Alt+KeyF': '⌥F', 'Alt+Slash': '⌥/',
 }
-export const keyCap = (k) => KEY_GLYPH[k] || k
+const MOD_GLYPH = { Alt: '⌥', Ctrl: '⌃', Meta: '⌘', Shift: '⇧' }
+// KeyboardEvent.code → the character that key prints, for the codes a chord can name. `KeyX`/`DigitN` fold
+// to their own letter/digit; the punctuation codes have to be spelled out.
+const CODE_GLYPH = {
+  Slash: '/', Backslash: '\\', Comma: ',', Period: '.', Semicolon: ';', Quote: "'", Backquote: '`',
+  Minus: '−', Equal: '=', BracketLeft: '[', BracketRight: ']', Space: '␣',
+}
+const capOne = (token) => KEY_GLYPH_SINGLE[token] || CODE_GLYPH[token]
+  || token.replace(/^Key([A-Z])$/, '$1').replace(/^Digit(\d)$/, '$1')
+
+export const keyCap = (k) => {
+  if (typeof k !== 'string' || !k) return ''
+  if (!k.includes('+')) return capOne(k)
+  const parts = k.split('+')
+  const key = parts.pop()
+  return parts.map((mod) => MOD_GLYPH[mod] || `${mod}+`).join('') + capOne(key)
+}

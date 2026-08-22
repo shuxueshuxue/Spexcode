@@ -36,14 +36,19 @@ restores the list.
 - **The rail is an ACTIVITY BAR, and it carries two kinds of entry.** Under the project chip sit the
   workspace's FINDING controls — search plus the dock's two projection buttons, explorer and sessions.
   Those two are plain buttons, not addresses: each selects a projection and is lit while that projection is
-  the one in force. The lit button is a statement about the focused tab, not a memory of the last click:
-  the dock follows what the reader holds ([[dock-modes]]), and a manual selection is a temporary override
-  that lapses at the next focus change. Clicking the active projection collapses the dock, while clicking
-  the other opens it on that projection; asking for sessions returns to the most recently held session tab
-  when there is one, and otherwise arms the projection without minting anything. They render only inside a
-  workspace (the cold review fast-path has no WorkspaceProvider). Below them sit the SINGLETON BOARDS, each
-  a real anchor naming an address. The order is the mockup's and VS Code's alike: what helps you look, then
-  where you can go.
+  the one in force. **Each wears what it LISTS**, not where its panel sits: explorer is a files mark,
+  sessions a list of rows with status points. Explorer wore the left-panel frame back when the two dock
+  toggles sat a few pixels apart and their whole message was which side they opened; on a rail of
+  projections that frame reads as a card or a folder and says nothing about a file tree
+  ([[icon-system]] keeps the mirrored panel pair for the dock toggles that actually mean a side). The lit
+  button is a statement about the focused tab, not a memory of the last click: the dock follows what the
+  reader holds ([[dock-modes]]), and a manual selection is a temporary override that lapses at the next
+  focus change. Clicking the active projection collapses the dock, while clicking the other opens it on
+  that projection; asking for sessions returns to the most recently held session tab when there is one, and
+  otherwise arms the projection without minting anything. They render only inside a workspace (the cold
+  review fast-path has no WorkspaceProvider). Below them sit the SINGLETON BOARDS, each a real anchor
+  naming an address. The order is the mockup's and VS Code's alike: what helps you look, then where you
+  can go.
 - **One rail, three openers — evals, issues, settings.** A compact, always-visible **40px** icon rail on the app's left
   edge names the addressable kinds: Evals, Issues, and Settings pinned at the
   bottom. The spec-node graph is NOT among them: it is still addressable at `#/graph`, but the workspace
@@ -51,11 +56,18 @@ restores the list.
   that retirement means to withdraw. The dock's explorer tree is the path to a node now. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in
-  tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. Each entry is an `<a>`
+  tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. **A tooltip names the key,
+  and reads it from the keymap.** An entry declares the action id a key also reaches it by, and the printed
+  chord is resolved at render from [[keyboard-nav]]'s registry — user rebinds included, all modifiers
+  present, nothing if nothing is bound. It is never typed into the translated label: that is a copy of a
+  binding no rebind can reach, and both dictionaries had drifted into three glyph dialects for the same
+  modifier while the rail advertised a bare `/` for a chord that had moved. Each entry is an `<a>`
   carrying its page's address (`href="#/…"`), so middle-click/new-tab/copy-address come free and every
   modified click stays the browser's. The PLAIN click is **create-or-focus**: it holds the board's
   singleton tab if the workspace does not have one and focuses it if it does ([[tab-strip]]), rather than
-  spending the current slot on a place the reader asked for by name. Clicking Evals twice is one tab. The
+  spending the current slot on a place the reader asked for by name. That interception chooses the SLOT,
+  not the route — the address it lands on is the same one the `href` names, so the address bar, a bookmark,
+  ⌥digit and this click all still produce one hash navigation. Clicking Evals twice is one tab. The
   rail is chrome, not a page — it never scrolls away and never overlays content. And it is **inert chrome for pointer
   focus** ([[focus-return]]'s acquisition-side guard): a press on a rail entry or the project chip
   acts — the link navigates, the chip menu opens — without moving DOM focus, so the rail never

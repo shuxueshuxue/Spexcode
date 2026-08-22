@@ -27,7 +27,7 @@ export default function EmptyView() {
             <Icon name="search" size={14} /><span>{t('empty.search')}</span>
           </button>
           <button type="button" className="empty-door" onClick={showExplorer}>
-            <Icon name="explorer" size={14} /><span>{t('empty.explorer')}</span>
+            <Icon name="files" size={14} /><span>{t('empty.explorer')}</span>
           </button>
         </div>
       </div>

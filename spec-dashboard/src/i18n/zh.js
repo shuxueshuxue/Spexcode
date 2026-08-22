@@ -104,11 +104,12 @@ export default {
   nav: {
     railLabel: '主导航',
     explorer: '资源管理器',
-    search: '搜索（/）',
-    sessions: '会话面板（⌥1）',
-    evals: 'Evals（⌥2 / ⌥F）',
-    issues: '议题（⌥3）',
-    settings: '设置（⌥4）',
+    // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
+    search: '搜索',
+    sessions: '会话面板',
+    evals: 'Evals',
+    issues: '议题',
+    settings: '设置',
     projectChip: '项目：{name} — 切换项目',
     projectChipLogin: '项目：{name} — 登录管理项目',
     projectOnline: '在线',
@@ -213,9 +214,14 @@ export default {
   statusBar: {
     hidden: '已隐藏 —— 从状态栏恢复',
     restore: '恢复隐藏的状态项',
+    // 环境态的看板计数；每一项本身就是它命名的那扇门。
+    nodes: ({ n }) => `${n} 个规格节点 —— 已合并 · 进行中 · 漂移 · 待建。打开节点图`,
+    evals: ({ pass, fail }) => `新鲜评测：${pass} 通过，${fail} 失败 —— 打开评测看板`,
+    issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
+    sessions: ({ run, need }) => `${run} 个在跑，${need} 个等你 —— 打开会话面板`,
   },
   hud: {
-    helpTitle: '帮助 — 按键与图例（?）',
+    helpTitle: '帮助 — 按键与图例',
     loading: '正在从 git 加载规格…',
     loadError: '无法连接后端 —— 看板加载失败。',
     retry: '重试',
@@ -377,7 +383,7 @@ export default {
 
   legend: {
     title: '帮助 · 按键与图例',
-    close: '关闭（esc 或 ?）',
+    close: '关闭（esc）',
     secBoard: '面板按键',
     secPopup: '节点信息弹窗',
     secStatus: '状态点',
@@ -415,6 +421,7 @@ export default {
       tabNext: '选择下一个页签',
       tabPrevious: '选择上一个页签',
       tabSplit: '将当前页签送入分屏',
+      commandBox: '开关会话 Command Box',
     },
     popup: {
       switch: '切换页签（规格 / 历史）',
@@ -613,12 +620,13 @@ export default {
   },
 
   session: {
-    menuLabel: '会话操作',
+    // 会话文档上的省略号：这个面上只有它能走到重命名 / tmux attach / 锁定到图谱，所以直接把内容写出来。
+    menuLabel: '会话操作 —— 重命名、attach、锁定到图谱、关闭',
     opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
     lockTitle: '右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
-    newSessionTitle: '新建会话（⌥+N）',
-    searchTitle: '搜索（⌥+/）',
+    newSessionTitle: '新建会话',
+    searchTitle: '搜索',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
     issuesOff: 'issues 工作流已关闭。',
     issuesEmpty: '暂无 issue。',
@@ -670,6 +678,7 @@ export default {
     diffEmpty: '没有分支改动',
     diffFailed: '差异不可用：{message}',
     diffScope: '分支差异',
+    diffClose: '离开分支差异，回到会话',
     diffComment: '评论这些行',
     diffCommentPlaceholder: '留下评审评论',
     diffCommentSave: '保存评论',
@@ -724,7 +733,7 @@ export default {
       `打开此会话的 Evals 页 — 新鲜通过 ${pass}，新鲜失败 ${fail}，待人工复核 ${review}，未评测 ${blind}，覆盖未知 ${unknown}`,
     commandBox: 'Command Box',
     commandBtn: 'Command Box',
-    commandTitle: '打开 Command Box，发送完整指令或执行面板命令（Alt+I）',
+    commandTitle: '打开 Command Box，发送完整指令或执行面板命令',
     commandClose: '关闭 Command Box',
     commandPlaceholder: '发送完整指令或执行面板命令',
     commandSend: '从 Command Box 发送',
@@ -785,7 +794,7 @@ export default {
 
   settings: {
     title: '设置',
-    close: '关闭（esc 或 ,）',
+    close: '关闭（esc）',
     secLanguage: '语言',
     secTheme: '主题',
     secTerminal: '终端',

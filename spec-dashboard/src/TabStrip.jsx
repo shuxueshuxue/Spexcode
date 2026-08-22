@@ -82,8 +82,14 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const activeActions = [...actions.values()]
     .filter((action) => action.document === activeKey)
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
+  // The band and the SCROLLER are two jobs, and they were one element. A strip that scrolls its tabs must
+  // clip, and a clipping band cannot let an action's dropdown out — the resource picker rendered correctly
+  // and was cut off at the strip's own 30px. Splitting them gives the tabs their scroller, leaves the band
+  // itself unclipped so a menu can hang below it, and stops a long tab list from scrolling the action
+  // cluster off the right edge.
   return (
-    <div className="tabstrip" role="tablist" aria-label={t('tabs.aria')}>
+    <div className="tabstrip">
+      <div className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, t })}</span>}
       {tabs.map((tab) => {
         const key = tabKey(tab)
@@ -108,6 +114,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
           </div>
         )
       })}
+      </div>
       {(activeActions.length > 0 || trailing) && (
         <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
           {activeActions.map((action) => {
@@ -118,6 +125,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
                   className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
                   data-action={action.id}
                   aria-pressed={action.pressed}
+                  aria-haspopup={action.haspopup ? 'menu' : undefined}
                   disabled={action.disabled}
                   onClick={action.onClick} />
                 {action.menu}

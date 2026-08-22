@@ -29,6 +29,7 @@ import {
   resourceTabKey,
   subscribeSessionSurface,
 } from './sessionSurface.js'
+import { firesEvent, withShortcut } from './bindings.js'
 import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
@@ -470,7 +471,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [resourceMenu, setResourceMenu] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
-  const panelRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const knownWebsRef = useRef(null)
@@ -688,6 +688,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   } : null)
 
   useEscLayer(resourceMenu, () => setResourceMenu(false))
+  // Outside-press dismissal, the shape the project chip already uses. It listens for MOUSEDOWN rather than
+  // click because the press that opens the menu has already happened by the time this effect binds, so the
+  // opening gesture can never close what it just opened. The toggle keeps its own press: routing it here
+  // too would close and reopen in one click.
+  useEffect(() => {
+    if (!resourceMenu) return undefined
+    const onDown = (event) => {
+      if (event.target?.closest?.('.document-action-menu, [data-action="resource-picker"]')) return
+      setResourceMenu(false)
+    }
+    window.addEventListener('mousedown', onDown, true)
+    return () => window.removeEventListener('mousedown', onDown, true)
+  }, [resourceMenu])
+  // Esc leaves the diff overlay for the session's own base address, the same exit a resource surface has.
+  // Diff is never a base surface, so the address it returns to is the bare one.
+  useEscLayer(diffSurface, () => navigate('sessions', active))
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (value) => setDrafts((draft) => ({
@@ -756,17 +772,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     })
   }, [allSessions, active])
 
+  // What gets MOUNTED must follow what is SHOWN. This gate used to consult the stored base preference
+  // (`getSessionBaseSurface`) while the visible face is `activeBaseSurface`, which already folds in the
+  // address's `?surface=` and the headless/read-only resolutions. On a pane-backed session whose stored
+  // base is Terminal, `#/sessions/<id>?surface=conversation` therefore hid the terminal layer and never
+  // mounted the conversation one: an empty pane with no composer, which is the human's send channel gone.
   useEffect(() => {
     setOpenedConversations((prev) => {
       const valid = new Set(allSessions.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
       const selected = active === 'new' ? null : allSessions.find((s) => s.id === active)
       if (selected && (selected.archived || selected.liveness === 'offline' || isHeadlessSession(selected)
-        || getSessionBaseSurface(selected.id) === SESSION_SURFACE_CONVERSATION)) next.add(selected.id)
+        || conversationSurface)) next.add(selected.id)
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
       return next
     })
-  }, [allSessions, active, surfaceVersion])
+  }, [allSessions, active, conversationSurface, surfaceVersion])
 
   // a board chord (nn/dd) seeds this surface with an @-directive. Apply ONCE to the New draft, then clear it
   // upstream so a later reopen restores the user's own draft. Clobbering the draft is intended here.
@@ -1281,21 +1302,30 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const documentActions = sessionActive ? [
     {
       id: 'resource-picker', icon: 'plus', label: t('session.addResourceTab'), priority: 100,
-      pressed: resourceMenu, onClick: () => setResourceMenu((open) => !open),
+      pressed: resourceMenu, haspopup: true,
+      onClick: () => setResourceMenu((open) => { if (!open) setCtxMenu(null); return !open }),
       menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
       menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
     },
+    // The session's own lifecycle menu, at the document that IS that session. It is the only place on this
+    // surface that reaches rename, tmux attach and the graph lock; the toolbar tools next to it act on the
+    // running work, not on the record. Its twin is the right-click on the finding dock's row — one menu,
+    // two ways in.
     {
       id: 'session-menu', icon: 'ellipsis', label: t('session.menuLabel'), priority: 90,
+      pressed: !!ctxMenu, haspopup: true,
       onClick: (event) => {
         const box = event.currentTarget.getBoundingClientRect()
-        setCtxMenu({ x: box.left, y: box.bottom, session: selSession })
+        setResourceMenu(false)
+        setCtxMenu((current) => (current ? null : { x: box.left, y: box.bottom, session: selSession }))
       },
     },
     ...uiCmds.filter((command) => command.button && !activeResource && (activeBaseSurface === 'terminal' || command.name !== 'merge')).map((command) => ({
       id: command.name,
       icon: command.icon,
-      label: t(command.enabled ? command.titleKey : command.disabledTitleKey),
+      label: command.enabled
+        ? withShortcut(t(command.titleKey), ...(command.shortcut ? [command.shortcut] : []))
+        : t(command.disabledTitleKey),
       disabled: !command.enabled,
       disabledReason: command.enabled ? undefined : t(command.disabledTitleKey),
       pressed: command.pressed ? commandOpen : undefined,
@@ -1312,9 +1342,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         { id: 'copy-resource', icon: 'copy', label: activeResource.value, priority: 38, onClick: () => { void copyFilePath(activeResource.value) } },
       ] : []),
     ] : []),
-    ...(!activeResource && !diffSurface ? [{
-      id: 'open-diff', icon: 'file-diff', label: t('session.diffScope'), priority: 30,
-      onClick: () => navigate('sessions', active, { query: { surface: SESSION_SURFACE_DIFF } }),
+    // The diff face is an OVERLAY of the session's base surface, never a base surface of its own. One door,
+    // lit while it is open, and pressing it again returns to the BARE session address — which always
+    // resolves the stored base. A one-way door left the tab strip and the finding dock as the only ways
+    // back, and neither is guaranteed to be showing.
+    ...(!activeResource ? [{
+      id: 'open-diff', icon: 'file-diff', priority: 30, pressed: diffSurface,
+      label: t(diffSurface ? 'session.diffClose' : 'session.diffScope'),
+      onClick: () => {
+        setResourceMenu(false)   // one surface, one open menu: navigating must not leave a picker hanging
+        navigate('sessions', active, diffSurface ? undefined : { query: { surface: SESSION_SURFACE_DIFF } })
+      },
     }] : []),
   ] : []
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
@@ -1339,11 +1377,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // Native buttons own Enter/Space activation even while the New Session tab is selected. Keep the
       // console router from cancelling a fold header's default click; text inputs still reach the menu/send paths below.
       if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href]')) return
-      // Reserved Alt+I toggles Command Box before xterm. Matched by
-      // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
-      // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.
-      const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new') {
+      // Reserved ⌥I toggles Command Box before xterm — resolved through the keymap registry
+      // (`shell.commandBox`) rather than matched inline, so the legend, the settings editor and the tool's
+      // own tooltip all read the SAME binding. `firesEvent` matches on e.code (the physical I key) because
+      // ⌥I on a mac prints a dead-key glyph, not 'i'. Command/Ctrl variants remain browser shortcuts.
+      if (firesEvent('shell.commandBox', e) && !e.metaKey && !e.ctrlKey && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
@@ -1371,14 +1409,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return event.cancelBubble
   }, 10)
 
-  useEffect(() => {
-    if (!open) return
-    const suppressNativeMenu = (event) => {
-      if (panelRef.current?.contains(event.target)) event.preventDefault()
-    }
-    window.addEventListener('contextmenu', suppressNativeMenu, true)
-    return () => window.removeEventListener('contextmenu', suppressNativeMenu, true)
-  }, [open])
+  // A surface may cancel the native menu only where it offers one of its own. The console once cancelled it
+  // for the WHOLE panel, which was survivable while a session list occupied most of that panel and did own a
+  // right-click menu; with the list retired the panel is conversation text, diff text and a terminal, and
+  // the blanket cancel bought nothing while taking copy/paste/search-selection away from all three. The
+  // session's own right-click menu now lives where the session rows do — the finding dock.
 
   return (
     <>
@@ -1390,7 +1425,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through
           any chrome interaction. Capture phase so no child's stopPropagation can leak a press. */}
-      <div className="si-panel" ref={panelRef} onMouseDownCapture={inertChromePress}>
+      <div className="si-panel" onMouseDownCapture={inertChromePress}>
         {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
             surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}
         <input

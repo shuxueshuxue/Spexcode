@@ -2024,6 +2024,7 @@ type TurnFailureObserverState = {
 }
 const turnFailureObservers = new Map<string, TurnFailureObserverState>()
 let supervisingTurnFailures = false
+let startingTurnFailureObserver = false
 const TURN_FAILURE_OBSERVER_STABLE_MS = 5000
 
 export function turnFailureNote(harness: string, failure: TurnFailure): string {
@@ -2053,7 +2054,10 @@ export function reconcileTurnFailureObservers(): void {
   for (const id of listSessionIds()) {
     let rec: SessRec | null = null
     try { rec = readRecord(id) } catch { continue }
-    if (!rec?.governed || rec.stopped || rec.archived || !rec.harnessSessionId) continue
+    // Native turn failure observation is for an executing turn, not a durable roster census. Asking, awaiting,
+    // and parked records have no turn to observe; subscribing them creates one expensive app-server resume per
+    // idle record and lets stale observers accumulate after a backend restart.
+    if (!rec?.governed || rec.stopped || rec.archived || rec.status !== 'active' || !rec.harnessSessionId) continue
     const harness = harnessById(rec.harness || defaultHarness.id)
     if (!harness.observeTurnFailures) continue
     wanted.set(id, { rec, harness, fingerprint: `${harness.id}:${rec.harnessSessionId}:${runtimeRoot()}` })
@@ -2074,10 +2078,14 @@ export function reconcileTurnFailureObservers(): void {
       }
       continue
     }
+    // Codex thread/resume is an expensive native subscription under load. Admit one observer at a time so a
+    // backend restart cannot fan out N concurrent history reconciliations and exhaust CPU/RSS before any can settle.
+    if (startingTurnFailureObserver) continue
     if (state && now < state.retryAt) continue
     state ??= { fingerprint: target.fingerprint, subscription: null, startedAt: 0, failures: 0, retryAt: 0, lastReason: null }
     state.startedAt = now
     turnFailureObservers.set(id, state)
+    startingTurnFailureObserver = true
     try {
       const subscription = target.harness.observeTurnFailures!({
         session: id,
@@ -2091,12 +2099,16 @@ export function reconcileTurnFailureObservers(): void {
         catch (error) { console.error(`[spex ${target.harness.id}] could not record native turn failure for ${id}: ${error instanceof Error ? error.message : String(error)}`) }
       })
       state.subscription = subscription
+      if (subscription.ready) void subscription.ready.then(() => { startingTurnFailureObserver = false }, () => { startingTurnFailureObserver = false })
+      else startingTurnFailureObserver = false
       void subscription.closed.then((reason) => {
+        startingTurnFailureObserver = false
         if (turnFailureObservers.get(id) !== state) return
         if (reason) deferTurnFailureObserver(id, target.harness.id, state, reason)
         else turnFailureObservers.delete(id)
       })
     } catch (error) {
+      startingTurnFailureObserver = false
       deferTurnFailureObserver(id, target.harness.id, state, error instanceof Error ? error.message : String(error))
     }
   }

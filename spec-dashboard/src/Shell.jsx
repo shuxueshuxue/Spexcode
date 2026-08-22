@@ -12,9 +12,11 @@ import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspa
 import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
+import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
+import { sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
-import { firesEvent, firesKey } from './bindings.js'
+import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { pinTab, runTabCommand } from './tabs.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
@@ -144,6 +146,73 @@ function ShellStatus() {
   return null
 }
 
+// The BOARD's own numbers, as ambient state.
+//
+// They used to hang off the graph, so the moment the graph stopped being where a reader lands, the window
+// stopped saying how the work was doing at all — a status bar with one item on it, which is a band that
+// says nothing. These four are true of the WORKSPACE rather than of whichever document is open, and each
+// one is a door to the board that can act on it: nodes → the graph, the eval verdicts → the evals list,
+// open issues → the issues list, the live sessions → the sessions console.
+//
+// Restraint is the point: the resting state is muted text and the board's own status dots, and an item
+// spends a `kind` colour ONLY where a number is asking for something — a failing eval, a session waiting
+// on a human. A count that is merely large stays quiet.
+//
+// On the graph itself they stand down: [[graph-stats]] registers the same tallies there with a focus-walk
+// the ambient copy cannot offer, and one bar must never print the same number twice.
+function BoardStatus({ specs, sessions, quiet }) {
+  const t = useT()
+  const tally = useMemo(() => summarizeBoard(specs || []), [specs])
+  // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
+  // idea of "live" invented for the bar.
+  const live = useMemo(() => {
+    const zones = { need: 0, run: 0 }
+    for (const session of sessions || []) {
+      const zone = sessionZone(session)
+      if (zone in zones) zones[zone] += 1
+    }
+    return zones
+  }, [sessions])
+  const { pass, fail } = tally.scoreCount
+
+  useStatusItem(quiet ? null : {
+    id: 'board-nodes', side: 'right', priority: 41,
+    tooltip: t('statusBar.nodes', { n: tally.total }),
+    onClick: () => navigate('graph'),
+    node: (
+      <span className="sb-tally">
+        <span className="sb-tally-lead">{tally.total}</span>
+        {STATUS_ORDER.map((k) => (
+          <span key={k} className="sb-tally-part">
+            <i className="bstat-dot" style={{ background: STATUS[k].color }} />{tally.status[k].length}
+          </span>
+        ))}
+      </span>
+    ),
+  })
+  useStatusItem(quiet ? null : {
+    id: 'board-evals', side: 'right', priority: 42,
+    kind: fail > 0 ? 'error' : undefined,
+    tooltip: t('statusBar.evals', { pass, fail }),
+    onClick: () => navigate('evals'),
+    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span></span>,
+  })
+  useStatusItem(quiet ? null : {
+    id: 'board-issues', side: 'right', priority: 43,
+    tooltip: t('statusBar.issues', { n: tally.issueCount }),
+    onClick: () => navigate('issues'),
+    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span></span>,
+  })
+  useStatusItem({
+    id: 'board-sessions', side: 'right', priority: 44,
+    kind: live.need > 0 ? 'warning' : undefined,
+    tooltip: t('statusBar.sessions', { run: live.run, need: live.need }),
+    onClick: () => navigate('sessions'),
+    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span></span>,
+  })
+  return null
+}
+
 // One view, or two. The second is a second route and a place to put it — nothing in any view changes,
 // because a view was already receiving its route rather than reading it. That is the whole return on the
 // hinge: two-up stopped being a rewrite and became a layout.
@@ -170,8 +239,9 @@ function Content({ page, param, query }) {
 
 function ContextToggle({ visible, onToggle }) {
   const t = useT()
+  const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
   return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
-    aria-label={t(visible ? 'contextDock.close' : 'contextDock.open')} data-tip={t(visible ? 'contextDock.close' : 'contextDock.open')}>
+    aria-label={label} data-tip={label}>
     <Icon name="panel-right" size={14} />
   </button>
 }
@@ -313,6 +383,7 @@ export default function Shell() {
         <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
       </div>
       <ShellStatus />
+      <BoardStatus specs={specs} sessions={sessions} quiet={page === 'graph'} />
       <StatusBar />
       {/* the one shared palette: it floats above whichever view is showing, so it is the shell's. A view
           being hidden must never be able to swallow it — the reason it was hoisted here in the first place. */}

@@ -76,6 +76,14 @@ while it holds. This is the ONLY place the claim is made from a list, and it is 
 floats a session window of its own ([[session-row]]): the claim belongs beside the sessions, and the lock
 itself is [[workspace-shell]] state so the two surfaces need not know about each other.
 
+**Right-click on a session row opens that session's own menu** — rename, tmux attach, lock on graph, close —
+the same menu the selected session's document tools open from the actions slot. One menu, two ways in: the
+dock reaches ANY row, the actions slot reaches the one you are reading. The menu moved here with the rows
+when the console's own list was withdrawn; for one release it did not, and the rows carried a click and
+nothing else, which left rename and attach with no pointer route anywhere in the window. A finding row
+being a menu's anchor is not mutation state living in the dock: the row still only navigates, and every
+action the menu offers is performed by the menu.
+
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
 document tools. Drag-to-reparent and multi-select are deliberately removed in this milestone rather than
 silently disappearing: they were mutable gestures whose only home was the withdrawn list, and the dock's
@@ -90,3 +98,8 @@ derives the projection from the focused document and passes it down, exactly as 
 Whether the dock renders is therefore two facts and not one — the reader's open/closed choice, and whether
 the focused tab has a sidebar at all ([[ui-state-model]] counts the band from exactly those two). Below the one header row the dock renders
 content only — the tree, or the session forest. There is no dock modebar.
+
+**Its resting width is a margin, not a column.** The dock opens at 200px and will not be dragged below
+160px: wide enough that a session headline or a file name reads before it ellipses, narrow enough that the
+finding surface stays beside the document rather than competing with it. A reader who wants more drags it
+and that choice is what persists, so the default only decides what an unopinionated window looks like.

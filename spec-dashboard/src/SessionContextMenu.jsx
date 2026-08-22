@@ -23,12 +23,24 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   // RIGHT server; the built-in default stands in until it lands and is harmless if the fetch never returns.
   useEffect(() => { loadSettings().then((s) => { if (s?.tmuxSocket) setTmuxSocket(s.tmuxSocket) }).catch(() => { /* keep the default */ }) }, [])
 
-  // standard context-menu dismissal: any click outside closes the popped menu. The menu div stops its own
-  // clicks (below) so picking an item never trips this. Bound only while it's open.
+  // Standard outside-press dismissal, bound only while the menu is open — on MOUSEDOWN, and on a target
+  // test rather than on "any event at all".
+  //
+  // It listened for `click` and closed unconditionally, which works exactly as long as every opener is a
+  // RIGHT-click: a contextmenu press emits no click, so nothing arrived to close what had just opened. The
+  // moment a plain button opened this menu (the session document's actions slot), the opening click itself
+  // reached this listener and shut the menu in the same gesture — the button visibly toggled and no menu
+  // ever appeared. Mousedown cannot do that: the press that opens is over before this effect binds.
   useEffect(() => {
-    if (!menu) return
-    window.addEventListener('click', onClose)
-    return () => window.removeEventListener('click', onClose)
+    if (!menu) return undefined
+    // A control that DECLARES it owns a menu keeps its own press, so pressing the opener again toggles
+    // rather than closing here and reopening in the click that follows.
+    const onDown = (event) => {
+      if (event.target?.closest?.('.sess-menu, [aria-haspopup="menu"]')) return
+      onClose()
+    }
+    window.addEventListener('mousedown', onDown, true)
+    return () => window.removeEventListener('mousedown', onDown, true)
   }, [menu, onClose])
 
   // Esc dismissal goes through the shared [[esc-layers]] stack so each surface this component floats above

@@ -5,13 +5,17 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
+
+test('Codex observer subscription budget covers measured slow native resume', () => {
+  assert.ok(CODEX_TURN_OBSERVER_SUBSCRIBE_MS >= 30_000)
+})
 
 test('adapter native target identity distinguishes pinned, captured, and absent conversations', () => {
   const pinned = { session: 'governed-id', harnessSessionId: null }
@@ -264,6 +268,7 @@ test('Codex turn observer drops restart reconciliation when a new turn starts', 
     observer = codexTurnFailureObserver({ session: 'reconcile-race-session', harnessSessionId: threadId, runtimeDir: root }, (value) => failures.push(value))
     await new Promise((resolve) => setTimeout(resolve, 200))
     assert.deepEqual(failures, [], 'the new native turn supersedes the historical systemError snapshot')
+    assert.equal(codexObservedActiveTurnId(threadId), 'new-turn', 'observer publishes the id used for a later steer')
   } finally {
     observer?.close()
     await observer?.closed
@@ -1014,12 +1019,12 @@ test('launchEnv keeps rendezvous bootstrap knowledge in the owning adapters', ()
   }
 })
 
-test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
+test('codex handshake initializes and confirms the loaded thread without a transcript read', () => {
   const msgs = codexHandshakeMessages('thr_1')
   assert.equal(msgs[0].method, 'initialize')
   assert.deepEqual(msgs[1], { method: 'initialized', params: {} })
   assert.deepEqual(msgs[2], { id: 2, method: 'thread/loaded/list', params: {} })
-  assert.deepEqual(msgs[3], { id: 3, method: 'thread/read', params: { threadId: 'thr_1', includeTurns: true } })
+  assert.equal(msgs.length, 3)
 })
 
 test('codex lightweight residency census performs initialize then paginated loaded/list without thread reads', async () => {
@@ -1699,7 +1704,6 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
   const server = codexRpcFixture((message) => {
     calls.push(message.method)
     if (message.method === 'thread/loaded/list') return { data: ['thread-1'] }
-    if (message.method === 'thread/read') return { thread: { turns: [] } }
     if (message.method === 'turn/start') {
       marker = message.params.clientUserMessageId
       return new Promise((resolve) => setTimeout(() => resolve({ turn: { id: 'turn-1' } }), 60))
@@ -1716,7 +1720,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const result = await codexTurn(socket, 'thread-1', 'delayed prompt', '/worktree', 'delivery-marker-1')
     assert.deepEqual(result, { ok: true })
-    assert.deepEqual(calls, ['thread/loaded/list', 'thread/read', 'turn/start'])
+    assert.deepEqual(calls, ['thread/loaded/list', 'turn/start'])
     assert.equal(marker, 'delivery-marker-1')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))

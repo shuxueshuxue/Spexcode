@@ -43,7 +43,7 @@ export type HarnessLaunchReadinessFence = {
   validate(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
 }
 export type TurnFailure = { message: string; completedAt: number | null }
-export type FailureSubscription = { close(): void; readonly closed: Promise<string | null> }
+export type FailureSubscription = { close(): void; readonly closed: Promise<string | null>; readonly ready?: Promise<boolean> }
 // An adapter's native input transport can be ready, temporarily inconclusive, or proven unreachable. This is
 // deliberately separate from agent liveness: sessions.ts joins an unreachable transport with its independent
 // registered-pid witness before it calls the conversation stranded.
@@ -722,8 +722,8 @@ type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknow
 // 0.142.3 (`codex app-server generate-ts` → ClientRequest.ts / v2/*Params.ts): the visible TUI is launched with
 // `codex --remote unix://<sock>`, so its thread is ALREADY loaded in this server — we must NOT `thread/resume`
 // it (that re-loads a thread the live TUI already owns). Instead `thread/loaded/list` PROVES the captured thread
-// is the one the pane is showing, then `thread/read{includeTurns}` reveals whether a turn is in progress (and
-// its id). The 4th, injecting message is CHOSEN from that read — see codexInjectMessage.
+// is the one the pane is showing. The failure observer owns the active native turn id from app-server
+// notifications; delivery does not read the thread or replay its history — see codexInjectMessage.
 const codexTextInput = (text: string) => [{ type: 'text', text, text_elements: [] }]
 export function codexHandshakeMessages(threadId: string): JsonRpc[] {
   return [
@@ -737,7 +737,6 @@ export function codexHandshakeMessages(threadId: string): JsonRpc[] {
     },
     { method: 'initialized', params: {} },
     { id: 2, method: 'thread/loaded/list', params: {} },
-    { id: 3, method: 'thread/read', params: { threadId, includeTurns: true } },
   ]
 }
 
@@ -755,7 +754,9 @@ export function codexInjectMessage(threadId: string, text: string, cwd: string |
   return { id, method: 'turn/start', params: { threadId, input: codexTextInput(text), ...(cwd ? { cwd } : {}), ...marker } }
 }
 
-// the in-progress turn id from a `thread/read{includeTurns}` result, or null when the thread is idle. With
+// the in-progress turn id from a `thread/read{includeTurns}` result, or null when the thread is idle. This is
+// retained for ownership/replay probes; delivery uses codexObservedActiveTurnId because it must not request the
+// full history. With
 // includeTurns the Thread carries its turns, each with a TurnStatus ("completed"|"interrupted"|"failed"|
 // "inProgress"); the live turn is the `inProgress` one and its id is exactly what turn/steer's precondition needs.
 export function activeTurnIdFromThread(readResult: unknown): string | null {
@@ -763,6 +764,19 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
   const turns = Array.isArray(thread?.turns) ? thread.turns : []
   const active = turns.find((t) => t?.status === 'inProgress')
   return active?.id ?? null
+}
+
+// The app-server's lightweight thread/read intentionally omits the turn list. Keep the native active id
+// observed by the failure subscription so a send can steer without replaying the whole conversation.
+const codexActiveTurns = new Map<string, string>()
+export function codexObservedActiveTurnId(threadId: string): string | null {
+  return codexActiveTurns.get(threadId) || null
+}
+function rememberCodexActiveTurn(threadId: string, turnId: unknown): void {
+  if (typeof turnId === 'string' && turnId) codexActiveTurns.set(threadId, turnId)
+}
+function forgetCodexActiveTurn(threadId: string, turnId?: unknown): void {
+  if (turnId === undefined || codexActiveTurns.get(threadId) === turnId) codexActiveTurns.delete(threadId)
 }
 
 // The app-server and the visible `--remote … resume` TUI share ONE socket, so they MUST be the SAME codex
@@ -942,7 +956,7 @@ const wsText = (s: string) => encodeWsFrame(0x1, Buffer.from(s, 'utf8'))
 // `onText`; honors ping→pong and a close. Shared by every app-server WS client here. Returns the (possibly
 // shrunk) buffer + whether a close was seen, plus the running fragment state threaded back in on each call.
 type FrameState = { buf: Buffer; fragOp: number; fragBuf: Buffer }
-function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void): boolean {
+function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void, acceptPayload: (payload: Buffer) => boolean = () => true): boolean {
   for (;;) {
     if (s.buf.length < 2) return false
     const b0 = s.buf[0], b1 = s.buf[1], op = b0 & 0x0f, fin = (b0 & 0x80) !== 0, masked = (b1 & 0x80) !== 0
@@ -959,11 +973,17 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
     if (op === 0xa) continue                                          // pong
     if (op === 0x0) s.fragBuf = Buffer.concat([s.fragBuf, payload])   // continuation
     else { s.fragOp = op; s.fragBuf = payload }
-    if (fin) { if (s.fragOp === 0x1) onText(s.fragBuf.toString('utf8')); s.fragBuf = Buffer.alloc(0); s.fragOp = 0 }
+    if (fin) {
+      if (s.fragOp === 0x1 && acceptPayload(s.fragBuf)) onText(s.fragBuf.toString('utf8'))
+      s.fragBuf = Buffer.alloc(0); s.fragOp = 0
+    }
   }
 }
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
+// Native Codex can take 15-17s to answer thread/resume under a loaded app-server. A shorter
+// deadline creates a retry storm in the session reconciler, not a useful failure signal.
+export const CODEX_TURN_OBSERVER_SUBSCRIBE_MS = 30_000
 
 // Codex has no StopFailure hook, but its app-server has the stronger native signal: every subscribed turn ends
 // with turn/completed and a final completed/interrupted/failed status. Rejoin is atomic with subscription, so
@@ -988,6 +1008,9 @@ export function codexTurnFailureObserver(
   const frames: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
   let upgraded = false, settled = false
   let reconciliationTimer: ReturnType<typeof setTimeout> | null = null
+  let readySettled = false
+  let resolveReady!: (ready: boolean) => void
+  const ready = new Promise<boolean>((resolve) => { resolveReady = resolve })
   let resolveClosed!: (reason: string | null) => void
   const closed = new Promise<string | null>((resolve) => { resolveClosed = resolve })
   const cancelReconciliation = () => {
@@ -998,12 +1021,13 @@ export function codexTurnFailureObserver(
   const finish = (reason: string | null) => {
     if (settled) return
     settled = true
+    if (!readySettled) { readySettled = true; resolveReady(false) }
     clearTimeout(timer)
     cancelReconciliation()
     try { conn.destroy() } catch {}
     resolveClosed(reason)
   }
-  const timer = setTimeout(() => finish('Codex turn observer did not subscribe within 5000ms'), 5000)
+  const timer = setTimeout(() => finish(`Codex turn observer did not subscribe within ${CODEX_TURN_OBSERVER_SUBSCRIBE_MS}ms`), CODEX_TURN_OBSERVER_SUBSCRIBE_MS)
   timer.unref?.()
   const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
   const report = (turn: unknown, fallbackMessage?: string) => {
@@ -1019,6 +1043,10 @@ export function codexTurnFailureObserver(
   conn.on('close', () => finish('Codex turn observer connection closed'))
   conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
   const handle = (json: string) => {
+    // A resumed Codex thread can stream large goal/progress notifications while the turn runs. They are
+    // irrelevant to this failure observer; avoid JSON.parse on those payloads so one active turn cannot make
+    // the backend spend its memory and CPU re-materializing a transcript it does not use.
+    if (json.includes('"method"') && !json.includes('"method":"turn/started"') && !json.includes('"method":"turn/completed"')) return
     let message: JsonRpc
     try { message = JSON.parse(json) } catch { return }
     if (message.error) return finish(`Codex turn observer request failed: ${message.error.message || JSON.stringify(message.error)}`)
@@ -1032,10 +1060,15 @@ export function codexTurnFailureObserver(
     }
     if (message.id === 2 && message.result) {
       clearTimeout(timer)
+      if (!readySettled) { readySettled = true; resolveReady(true) }
       const result = message.result as { thread?: { status?: { type?: unknown } }; initialTurnsPage?: { data?: unknown } }
+      const initialTurns = result.initialTurnsPage?.data
+      const initialActive = Array.isArray(initialTurns)
+        ? initialTurns.find((turn) => (turn as { status?: unknown })?.status === 'inProgress')
+        : null
+      rememberCodexActiveTurn(threadId, (initialActive as { id?: unknown } | null)?.id)
       if (result.thread?.status?.type === 'systemError') {
-        const turns = result.initialTurnsPage?.data
-        const latest = Array.isArray(turns) ? turns[0] : null
+        const latest = Array.isArray(initialTurns) ? initialTurns[0] : null
         // Give a concurrently-starting turn's native notification precedence over this historical snapshot.
         reconciliationTimer = setTimeout(() => {
           reconciliationTimer = null
@@ -1046,12 +1079,16 @@ export function codexTurnFailureObserver(
       return
     }
     if (message.method === 'turn/started') {
-      const params = message.params as { threadId?: unknown } | undefined
-      if (params?.threadId === threadId) cancelReconciliation()
+      const params = message.params as { threadId?: unknown; turn?: { id?: unknown } } | undefined
+      if (params?.threadId === threadId) {
+        rememberCodexActiveTurn(threadId, params.turn?.id)
+        cancelReconciliation()
+      }
     }
     if (message.method === 'turn/completed') {
       const params = message.params as { threadId?: unknown; turn?: unknown } | undefined
       if (params?.threadId === threadId) {
+        forgetCodexActiveTurn(threadId, (params.turn as { id?: unknown } | undefined)?.id)
         cancelReconciliation()
         report(params.turn)
       }
@@ -1068,9 +1105,12 @@ export function codexTurnFailureObserver(
       frames.buf = frames.buf.slice(split + 4)
       send(wsInitialize)
     }
-    if (drainWsFrames(frames, conn, handle)) finish('Codex app-server closed the turn observer')
+    if (drainWsFrames(frames, conn, handle, (payload) => {
+      const method = Buffer.from('"method"')
+      return !payload.includes(method) || payload.includes(Buffer.from('"turn/started"')) || payload.includes(Buffer.from('"turn/completed"'))
+    })) finish('Codex app-server closed the turn observer')
   })
-  return { close: () => finish(null), closed }
+  return { close: () => finish(null), closed, ready }
 }
 
 // Protocol-verified cold/restore/control seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
@@ -2064,7 +2104,7 @@ const codexTurnConfirmMs = () => {
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string, clientUserMessageId?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
-    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2), thread/read(3)]
+    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2)]
     let buf = Buffer.alloc(0), upgraded = false, settled = false
     let fragOp = 0, fragBuf = Buffer.alloc(0)
     let steering = false   // the id-4 message we sent was a steer → an expectedTurnId race may retry as start(5)
@@ -2097,14 +2137,11 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
       // JSON-RPC initialization is ordered. Under a quiet server the premature notification happened to win;
       // under shared app-server load it was ignored and every later turn waited until the old 5s wall expired.
       if (m.id === 1 && m.result) { send(hs[1]); return send(hs[2]) }      // initialize ack → initialized → ask which threads are loaded
-      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then read it
+      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then inject
         const loaded = (m.result as { data?: unknown })?.data
         if (Array.isArray(loaded) && !loaded.includes(threadId))
           return done({ ok: false, error: `Codex thread ${threadId} is not loaded in the app-server (loaded: ${loaded.join(', ') || 'none'}) — immediate poke not accepted` })
-        return send(hs[3])                                                 // thread is live → read it to decide steer-vs-start
-      }
-      if (m.id === 3 && m.result) {                                        // thread read → in-progress turn? steer into it; else start a new one
-        const turnId = activeTurnIdFromThread(m.result)
+        const turnId = codexObservedActiveTurnId(threadId)
         steering = !!turnId
         return send(codexInjectMessage(threadId, text, cwd, turnId, 4, clientUserMessageId)) // id 4: turn/steer the live turn, or turn/start
       }

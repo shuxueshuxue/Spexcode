@@ -6,6 +6,7 @@ import { PROJECT_ID, projectHref, hubHref } from './project.js'
 import { RAIL_PAGES, routeHash } from './route.js'
 import { focusLatestTab, pinTab } from './tabs.js'
 import { IdentityIcon } from './IdentityIcon.jsx'
+import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
 // The workspace's rail ([[side-nav]]) — an ACTIVITY BAR, not a page menu. Two kinds of entry, in this
@@ -24,6 +25,18 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 // the catalog.
 
 const ENTRIES = RAIL_PAGES.filter((page) => !['sessions', 'settings'].includes(page))
+
+// Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
+// so an entry names the binding by id and the hint is resolved at render — never typed into the label.
+// Evals lists two because two keys genuinely open it; the dock projection buttons list none, because no
+// action selects one projection by name and a hint that is only half true is worse than silence.
+const PAGE_KEYS = {
+  graph: ['shell.pageGraph'],
+  sessions: ['shell.pageSessions'],
+  evals: ['shell.pageEvals', 'shell.evals'],
+  issues: ['shell.pageIssues'],
+  settings: ['shell.pageSettings'],
+}
 
 // The finding controls render only inside a workspace: the cold review fast-path mounts this rail with no
 // WorkspaceProvider above it, and projection buttons with no dock state would be a lie, not disabled chrome.
@@ -55,18 +68,28 @@ function WorkspaceControls() {
       <button type="button" className={dock && dockMode === 'explorer' ? 'rail-btn on' : 'rail-btn'}
         data-tip={t('dockModes.explorer')} aria-label={t('dockModes.explorer')}
         aria-pressed={dock && dockMode === 'explorer'} onClick={() => selectMode('explorer')}>
-        <Icon name="explorer" size={18} />
+        <Icon name="files" size={18} />
       </button>
       <button type="button" className={dock && dockMode === 'sessions' ? 'rail-btn on' : 'rail-btn'}
         data-tip={t('dockModes.sessions')} aria-label={t('dockModes.sessions')}
         aria-pressed={dock && dockMode === 'sessions'} onClick={() => selectMode('sessions')}>
         <Icon name="session-list" size={18} />
       </button>
-      <button type="button" className={palette ? 'rail-btn on' : 'rail-btn'} data-tip={t('nav.search')}
-        aria-label={t('nav.search')} onClick={() => openPalette('nodes')}>
-        <Icon name="search" size={18} />
-      </button>
+      <SearchRail palette={palette} onOpen={() => openPalette('nodes')} t={t} />
     </>
+  )
+}
+
+// Search is reached by two keys, and they open two scopes of the same palette: the bare key opens the node
+// palette this button opens, the ⌥ chord opens the session one. Naming both is what the printed `(/)` was
+// trying to say and could not, having lost its modifier the moment the chord moved into the shell.
+function SearchRail({ palette, onOpen, t }) {
+  const label = withShortcut(t('nav.search'), 'graph.search', 'shell.search')
+  return (
+    <button type="button" className={palette ? 'rail-btn on' : 'rail-btn'} data-tip={label}
+      aria-label={label} onClick={onOpen}>
+      <Icon name="search" size={18} />
+    </button>
   )
 }
 
@@ -186,10 +209,11 @@ export default function SideBar({ page, identity, catalog, graphOnly = false }) 
       />}
       <WorkspaceControls />
       {ENTRIES.map((p) => (
-        <RailLink key={p} page={p} active={page === p} label={t(`nav.${p}`)} disabled={graphOnly && p !== 'graph'} />
+        <RailLink key={p} page={p} active={page === p} label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
+          disabled={graphOnly && p !== 'graph'} />
       ))}
       <div className="rail-spacer" />
-      <RailLink page="settings" active={page === 'settings'} label={t('nav.settings')} disabled={graphOnly} />
+      <RailLink page="settings" active={page === 'settings'} label={withShortcut(t('nav.settings'), ...PAGE_KEYS.settings)} disabled={graphOnly} />
     </nav>
   )
 }

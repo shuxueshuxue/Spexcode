@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/StatusBar.jsx
 related:
   - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/specMeta.js
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/Root.jsx
   - spec-dashboard/src/GraphStats.jsx
@@ -52,10 +53,27 @@ tidiness: the shared-typography guard rejects a hardcoded `line-height`, and it 
 of the bar is a shared geometry that other components will eventually measure against, and a literal is
 exactly how the 112px coupling started.
 
-**What is registered today** is coarse: the project name and the help key as two left items, the routed
-file's path when [[file-view]] is the document, the whole graph tally as one right item, the public-graph
-disclosure as another. Per-chip items would give the user finer hiding, and the registry already supports
-it; that is an unclaimed improvement, not a hidden limitation.
+**What is registered today.** On the left, the workspace identity and — while the graph is the document —
+its help key. On the right, the ambient BOARD TALLIES, one item per board: the spec-node count with its
+four-state breakdown, the fresh eval pass/fail pair, the open-issue total, and the live sessions split into
+self-driving and waiting-on-you. Each is a button that navigates to the board it counts, so a number is also
+the way to the thing it is about. Beside them ride the document's own facts: the routed file's path when
+[[file-view]] is the document, the session console's unread-resource signal, the public-graph disclosure.
+
+**The tallies are the workspace's, and the shell registers them.** They are true of the window on every
+route, so they cannot belong to a view — hanging them off the graph is exactly what emptied this bar the
+moment the graph stopped being where a reader lands, leaving one item on a strip that is supposed to answer
+how the work is doing. They ride the right group because that is where the graph tally already sat and
+because the left group is the identity strip; the region law that assigns them an owner is
+[[workspace-shell]]'s, and the owner is the frame.
+
+On the graph the ambient copies **stand down**: [[graph-stats]] registers the same numbers there as a
+focus-walk the ambient items cannot offer, and one bar printing a number twice is worse than either.
+
+**Restraint is the resting state.** A tally is muted text plus the board's own status marks; it spends a
+`kind` colour only where the number is asking for something — a failing eval, a session waiting on a human.
+A count that is merely large stays quiet. Per-chip items would give the user finer hiding, and the registry
+already supports it; that is an unclaimed improvement, not a hidden limitation.
 
 **A document contributing a fact about itself is the registry working as designed.** A file document's path
 belongs to the bar for the same reason the project name does — it is persistently true of what the window

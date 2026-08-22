@@ -84,13 +84,20 @@ const ICONS = {
   },
 
   // ——— the dock/context marks, drawn on the same 18-grid as the rail glyphs above ———
-  // ONE layout mark, mirrored: the same frame with the LEFT column filled for the left finding dock
-  // ([[side-nav]]'s rail explorer) and the RIGHT column filled for the
-  // right context dock ([[context-dock]]'s toggle). They read as a pair, because the two buttons
-  // are a few pixels apart and each one's whole message is WHICH SIDE it opens; a bare divider line left
-  // both as plain frames that read as a folder or a card. Tinting the panel — not just outlining it —
-  // is what makes the side unmistakable at 14–18px, so the fill is the glyph, not decoration.
-  explorer: {
+  // The EXPLORER projection wears a files mark, because what it answers is WHAT IS IN HERE — a tree of
+  // source files — not which edge of the window a panel occupies. It wore the left-panel mark for as long
+  // as the two dock toggles sat side by side and their whole message was which side they opened; the rail
+  // now lists projections by what they show, and a panel frame in that row reads as a card, a folder, or
+  // nothing at all. Two sheets with folded corners is the one shape every editor's file tree already uses.
+  files: {
+    vb: 18, sw: 1.4,
+    node: <><path d="M6.3 2.4h5.1l3.6 3.6v6.1" /><path d="M2.5 5.9h5.4l3.6 3.6v6.1h-9z" /><path d="M7.9 5.9v3.6h3.6" /></>,
+  },
+  // ONE layout mark, mirrored: the same frame with the LEFT column filled and the RIGHT column filled.
+  // They are the LAYOUT vocabulary — which side a dock opens — and read as a pair wherever both appear.
+  // Only the right context dock ([[context-dock]]'s toggle) draws one today; the mirror stays declared
+  // beside it, because half a mirrored pair is a glyph nobody can read the meaning of.
+  'panel-left': {
     vb: 18, sw: 1.4,
     node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
   },

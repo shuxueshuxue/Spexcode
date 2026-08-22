@@ -57,7 +57,10 @@ async function languageFor(path) {
 // how close to the bottom of the loaded text the reader must scroll before the next window is pulled.
 const PREFETCH_PX = 900
 
-export default function SourceView({ path, className = '', onSelection }) {
+// `read` is the seam that lets one viewer serve two surfaces: governed source and a node's own attachments
+// answer to different gates, but both hand back the same window shape, and the viewer has no business
+// knowing which one it is rendering.
+export default function SourceView({ path, read, className = '', onSelection }) {
   const t = useT()
   const host = useRef(null)
   const view = useRef(null)
@@ -78,7 +81,7 @@ export default function SourceView({ path, className = '', onSelection }) {
       if (c.busy || c.eof) return
       c.busy = true
       try {
-        const slice = await fetchSourceSlice(path, c.offset)
+        const slice = await (read ? read(c.offset) : fetchSourceSlice(path, c.offset))
         if (!live) return
         c.offset += slice.bytes
         c.eof = slice.eof
@@ -138,7 +141,7 @@ export default function SourceView({ path, className = '', onSelection }) {
       view.current?.destroy()
       view.current = null
     }
-  }, [path])
+  }, [path, read])
 
   const pct = status.size > 0 ? Math.min(100, Math.round((status.loaded / status.size) * 100)) : 0
   return (

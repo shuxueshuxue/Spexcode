@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+
+import { useStatusItem } from './StatusBar.jsx'
 import { loadPublicGraphMetadata } from './data.js'
 import { Icon, IconButton } from './icons.jsx'
 
@@ -30,8 +32,15 @@ export default function PublicGraphAbout() {
   const about = metadata?.about
   const publication = metadata?.publication
   const archive = metadata?.release?.archive
-  return (
-    <div className="public-about-shell">
+  // A persistent, always-available disclosure is a status-bar item, not a floating corner block. It kept
+  // the same bottom-right corner it always had, but now it shares the strip's ordering and can be hidden
+  // like any other item instead of being a fixture the reader cannot dismiss.
+  useStatusItem({
+    id: 'public-about',
+    side: 'right',
+    priority: 10,
+    node: (
+    <span className="public-about-shell">
       <button type="button" className="public-about-trigger" onClick={() => setOpen((value) => !value)}
         aria-label="About this public graph" aria-expanded={open} aria-controls="public-graph-about" title="About this public graph">
         <Icon name="info" size={16} />
@@ -69,6 +78,8 @@ export default function PublicGraphAbout() {
           )}
         </aside>
       )}
-    </div>
-  )
+    </span>
+    ),
+  })
+  return null
 }

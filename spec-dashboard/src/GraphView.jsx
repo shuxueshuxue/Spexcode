@@ -531,7 +531,7 @@ function GraphView({ param, query }) {
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.
     if (graphOnly) setOverlay(true)
-    else (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', n.id)
+    else requestTab('spec', n.id)
   }, [focusNode, graphOnly])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —

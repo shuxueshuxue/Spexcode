@@ -4,8 +4,10 @@ import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/spec
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import { loadPublicSpecContent, specUrl } from './data.js'
+import { useKeyboardScope } from './KeyboardService.jsx'
+import { fetchNodeFiles, fetchNodeFileSlice, loadPublicSpecContent, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
+import SourceView from './SourceView.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { Icon } from './icons.jsx'
@@ -197,7 +199,67 @@ function useSpecContent(id, version, { embedded = false, publicGraph = false } =
   return content
 }
 
-export function SpecPane({ node, graphOnly = false }) {
+// The `code:` list stops being a list of NAMES and becomes a list of DOORS: a governed file opens in place,
+// under the spec prose that claims it, in the same scroll. A separate tab would have put the claim and the
+// claimed thing on two screens again — the exact separation this is meant to close. One file open at a time,
+// so the pane stays a reading surface rather than a stack of viewers competing for height.
+function GovernedFiles({ files, count, onSelection }) {
+  const t = useT()
+  const [open, setOpen] = useState(null)
+  // a `code:` entry may name a SYMBOL inside a file (`SpecNode.jsx#SpecNode`) — several entries then point
+  // at one file. The chip keeps the claim's own wording; the door behind it is the file.
+  const pathOf = (entry) => entry.split('#')[0]
+  return (
+    <div className="doc-gov">
+      <span className="doc-gov-h">{t('nodeView.governs')} <b>{count}</b></span>
+      <div className="doc-gov-files">
+        {files.map((f) => {
+          const path = pathOf(f)
+          return (
+            <button key={f} type="button" className={`gov-f${open === path ? ' on' : ''}`}
+              aria-expanded={open === path} onClick={() => setOpen(open === path ? null : path)}>{f}</button>
+          )
+        })}
+      </div>
+      {open && <SourceView path={open} className="doc-gov-src" onSelection={onSelection} />}
+    </div>
+  )
+}
+
+// [[node-attachments]]: the rest of what a node's folder holds. A node has always been a FOLDER — its eval
+// contract, an evidence directory, a raw capture, a note written beside the spec that cites it — and the
+// board could see exactly one file in it. These open in the same viewer, with the same one-at-a-time rule,
+// as a governed file: the reader should not have to learn that bytes from the spec tree behave differently
+// from bytes from the worktree, even though the gate that admits them is not the same gate.
+function NodeAttachments({ nodeId, enabled }) {
+  const t = useT()
+  const [files, setFiles] = useState(null)
+  const [open, setOpen] = useState(null)
+  useEffect(() => {
+    if (!enabled) return undefined
+    let live = true
+    setOpen(null)
+    fetchNodeFiles(nodeId).then((f) => live && setFiles(f)).catch(() => live && setFiles([]))
+    return () => { live = false }
+  }, [nodeId, enabled])
+  const read = useCallback((offset) => fetchNodeFileSlice(nodeId, open, offset), [nodeId, open])
+  if (!files?.length) return null
+  return (
+    <div className="doc-gov doc-att">
+      <span className="doc-gov-h">{t('nodeView.carries')} <b>{files.length}</b></span>
+      <div className="doc-gov-files">
+        {files.map((f) => (
+          <button key={f.name} type="button" className={`gov-f${open === f.name ? ' on' : ''}`}
+            aria-expanded={open === f.name} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
+            onClick={() => setOpen(open === f.name ? null : f.name)}>{f.name}</button>
+        ))}
+      </div>
+      {open && <SourceView key={open} path={open} read={read} className="doc-gov-src" />}
+    </div>
+  )
+}
+
+export function SpecPane({ node, graphOnly = false, onSelection }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -215,13 +277,11 @@ export function SpecPane({ node, graphOnly = false }) {
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
       {node.code?.length > 0 ? (
-        <div className="doc-gov">
-          <span className="doc-gov-h">{t('nodeView.governs')} <b>{node.code.length}</b></span>
-          <div className="doc-gov-files">{node.code.map((f) => <code key={f} className="gov-f">{f}</code>)}</div>
-        </div>
+        <GovernedFiles files={node.code} count={node.code.length} onSelection={onSelection} />
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
+      {!graphOnly && <NodeAttachments nodeId={node.id} enabled />}
       {(() => {
         // body/parts are lazy-loaded ([[graph-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
         // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an
@@ -334,15 +394,15 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
       prevTop = top
       if (down) revealNext()
     }
-    const onKey = (e) => {
-      if (e.key !== 'j' && e.key !== 'ArrowDown') return
-      if (sc.scrollHeight - sc.clientHeight - sc.scrollTop > 1) return  // room to scroll → (1) handles it
-      revealNext()
-    }
     sc.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('keydown', onKey, true)   // capture: App stopPropagation()s j/k but same-target listeners still run
-    return () => { sc.removeEventListener('scroll', onScroll); window.removeEventListener('keydown', onKey, true) }
+    return () => sc.removeEventListener('scroll', onScroll)
   }, [revealNext])
+  useKeyboardScope((event) => {
+    if (event.key !== 'j' && event.key !== 'ArrowDown') return false
+    const sc = scRef.current
+    if (!sc || sc.scrollHeight - sc.clientHeight - sc.scrollTop > 1) return false
+    event.preventDefault(); revealNext(); return true
+  }, 5)
   return (
     <div className={classes.pane} ref={scRef}>
       {leading}
@@ -625,7 +685,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false, onSelection }) {
   const t = useT()
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
   const updateFilter = (kind, patch) => setFilters((current) => ({
@@ -674,7 +734,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [], 
           <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
-          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} /></div>}
+          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} onSelection={onSelection} /></div>}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
           {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}

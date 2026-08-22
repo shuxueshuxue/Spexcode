@@ -186,23 +186,17 @@ test('selected nested session keeps its lead separated from the revealed headlin
   )
 })
 
-test('session sidebar bounds one working-board scrollport above the archive place', () => {
+test('sessions document has no duplicate sidebar or scrollport', () => {
   assert.match(css, /\.si-page\s*\{[^}]*min-height:\s*0;/s)
-  assert.match(css, /\.si-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s)
-  assert.match(css, /\.si-board-scroll\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s)
-  assert.match(css, /\.si-archive-drawer\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow:\s*visible;/s)
-  assert.doesNotMatch(css, /\.si-archive-(?:drawer|preview)\s*\{[^}]*overflow-y:\s*(?:auto|scroll)/s)
+  assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
+  assert.match(css, /\.dock-session-list\s*\{[^}]*overflow:\s*auto;/s)
+  assert.match(css, /\.dock-session-archive\s*\{[^}]*border-top:/s)
 })
 
-test('session sidebar defaults denser and caps selected headlines at three lines', () => {
-  assert.match(css, /\.si-list\s*\{[^}]*flex:\s*0 0 204px;/s)
-  assert.match(css, /\.si-item\s*\{[^}]*font-size:\s*var\(--type-caption\);[^}]*line-height:\s*var\(--line-session-row\);/s)
-  // the 3lh cap clips with overflow:CLIP, never hidden — hidden makes the headline a BFC that may not
-  // overlap the floated status marker, narrowing the WHOLE block into a column beside it.
-  assert.match(css, /\.si-item\.on \.sess-id\s*\{[^}]*max-height:\s*3lh;[^}]*overflow:\s*clip;/s)
-  assert.match(sessionInterface, /useResizable\('spex\.siListWidth', 204, \{ min: 180, max: 480 \}\)/)
-  assert.match(sessionInterface, /scrollIntoView\(\{ block: 'nearest' \}\)/)
-  assert.match(sessionInterface, /onDoubleClick=\{resetListW\}/)
+test('sessions dock keeps the tree list geometry', () => {
+  assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
+  assert.match(css, /\.dock-session-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s)
+  assert.match(sessionInterface, /archiveRequested = false/)
   assert.match(resizable, /localStorage\.removeItem\(key\)/)
 })
 

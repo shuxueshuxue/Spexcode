@@ -1,4 +1,14 @@
-import type { Server } from 'node:net'
+import type { AddressInfo, Server } from 'node:net'
+
+export function resolveConfiguredPort(rawPort: string | undefined): number {
+  const normalized = rawPort?.trim()
+  if (!normalized) return 8787
+  const port = Number(normalized)
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`PORT must be an integer from 0 to 65535, got ${JSON.stringify(rawPort)}`)
+  }
+  return port
+}
 
 // @@@ listenOrExit ([[listener-readiness]]) - the one public-listener transition: before `listening`, a bind
 // failure is loud and fatal; after it, publication side effects and user-visible ready lines may run. Keeping
@@ -8,7 +18,7 @@ import type { Server } from 'node:net'
 export function listenOrExit(
   server: Server,
   port: number,
-  opts: { host?: string; label: string; cleanup?: () => void; onListen?: () => void; ready: string | string[] },
+  opts: { host?: string; label: string; cleanup?: () => void; onListen?: (port: number) => void; ready: string | string[] | ((port: number) => string | string[]) },
 ): void {
   server.once('error', (err: NodeJS.ErrnoException) => {
     opts.cleanup?.()
@@ -19,8 +29,10 @@ export function listenOrExit(
     process.exit(1)
   })
   const publishReady = () => {
-    opts.onListen?.()
-    for (const line of Array.isArray(opts.ready) ? opts.ready : [opts.ready]) console.log(line)
+    const actualPort = (server.address() as AddressInfo).port
+    opts.onListen?.(actualPort)
+    const ready = typeof opts.ready === 'function' ? opts.ready(actualPort) : opts.ready
+    for (const line of Array.isArray(ready) ? ready : [ready]) console.log(line)
   }
   if (opts.host) server.listen(port, opts.host, publishReady)
   else server.listen(port, publishReady)

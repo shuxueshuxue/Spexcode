@@ -30,7 +30,7 @@ export const STATUS_GLYPH = {
 // asking/review/error keeps that pre-death lifecycle, yet it belongs at the bottom, not under Needs You.
 // `need` = the ball is with the HUMAN (asking / review / done / close-pending / error → answer, review,
 // close, fix); `run` = self-driving, the agent's turn (working / parked / starting / queued / idle — booting
-// counts as running, not dead). Closed sessions aren't on the board at all. Same partition drives every
+// counts as running, not dead). Closed sessions occupy the final archive zone. Same partition drives every
 // session-list surface.
 // `corrupt` joins them: an unreadable record cannot resolve itself and no agent can act on it, so it is
 // squarely the human's — and it carries liveness `unknown` (never probed), so the offline check above does not
@@ -38,10 +38,11 @@ export const STATUS_GLYPH = {
 // rows and its badge, not its zone, is what says the worktree is gone.
 const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error', 'corrupt'])
 export const sessionZone = (s) => {
+  if (s?.archived) return 'archive'
   if (s?.liveness === 'offline' || s?.status === 'offline') return 'offline'
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'
 }
-export const ZONE_ORDER = ['need', 'run', 'offline']
+export const ZONE_ORDER = ['need', 'run', 'offline', 'archive']
 
 export const isArchived = (s) => !!s?.archived
 export const sessionFooterState = (s) => {
@@ -59,7 +60,7 @@ export const splitArchived = (sessions = []) => ({
 // login) resolves to null, honestly.
 export const liveSession = (sessions, id) => {
   const s = id ? (sessions || []).find((x) => x.id === id) : null
-  return s && sessionZone(s) !== 'offline' ? s : null
+  return s && sessionZone(s) !== 'offline' && sessionZone(s) !== 'archive' ? s : null
 }
 // the ONE source-session PRESENCE join ([[live-session-filter]] — the session:present|missing facet):
 // does the id still resolve to a session on the current board at ALL, any zone? Presence, not liveness —
@@ -69,7 +70,7 @@ export const liveSession = (sessions, id) => {
 // actually reach for, not the oldest.
 const effOf = (s) => (s?.sortKey != null ? s.sortKey : (s?.created ?? 0))
 export const zoneSort = (sessions) => {
-  const rank = { need: 0, run: 1, offline: 2 }
+  const rank = { need: 0, run: 1, offline: 2, archive: 3 }
   return [...sessions].sort((a, b) => rank[sessionZone(a)] - rank[sessionZone(b)] || effOf(b) - effOf(a))
 }
 

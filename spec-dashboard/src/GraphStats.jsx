@@ -3,6 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { STATUS } from './SpecNode.jsx'
 import { ScoreBadge } from './score.jsx'
 import { cycleNext } from './cycle.js'
+import { useStatusItem } from './StatusBar.jsx'
 
 const STATUS_ORDER = ['merged', 'active', 'drift', 'pending']
 // the score circles to surface: pass/fail are always shown as anchors (dim at 0); the stale + blind states
@@ -62,12 +63,21 @@ function Stat({ count, ids, focusId, onJump, title, cls = '', children }) {
   )
 }
 
+// The tally is the FOCUSED VIEW's state, so it registers on the status bar's right group rather than
+// floating over the canvas. It renders nothing itself: the component's whole output is one registered item,
+// which is what lets it stop knowing where on the screen it lands — and what freed the session window from
+// reserving height for a strip that used to sit under it.
 export default function GraphStats({ specs, focusId, onJump }) {
   const t = useT()
   const s = useMemo(() => summarize(specs), [specs])
   const jump = (id) => id && onJump?.(id)
-  return (
-    <div className="graph-stats" role="group" aria-label={t('stats.aria')}>
+  useStatusItem({
+    id: 'graph-stats',
+    side: 'right',
+    priority: 50,
+    tooltip: t('stats.aria'),
+    node: (
+      <span className="graph-stats" role="group" aria-label={t('stats.aria')}>
       {/* composition — the four status dots, counted. The leading number is the whole tree's size. */}
       <span className="bstat-total" data-tip={t('stats.totalTitle', { n: s.total })}>{s.total}</span>
       {STATUS_ORDER.map((k) => (
@@ -102,6 +112,8 @@ export default function GraphStats({ specs, focusId, onJump }) {
           </Stat>
         )
       })}
-    </div>
-  )
+      </span>
+    ),
+  })
+  return null
 }

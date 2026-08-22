@@ -9,7 +9,8 @@ code:
   - spec-dashboard/src/SpecNode.jsx#Editors
   - spec-dashboard/src/SpecNode.jsx#EDGE_ANCHOR_PROPS
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/specMeta.js

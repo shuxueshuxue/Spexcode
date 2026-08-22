@@ -12,7 +12,8 @@ scenarios:
       the graph pane's centre on both axes after camera framing settles. Issues and eval details remain available
       on demand through their routed pages and the node-info popup.
     code:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/styles.css
 ---
 # graph measurement

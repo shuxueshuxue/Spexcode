@@ -79,6 +79,24 @@ scenarios:
       An `integrity` ERROR reading "dead anchor" says the unit was deleted or renamed and tells the
       author to update the spec's code: entry; exit 1. (An ambiguous anchor — two same-named units —
       errors the same way, worded "ambiguous anchor".)
+  - name: eval-scenario-selectors-reach-the-same-gate
+    tags: [cli]
+    test: spec-cli/src/lint-scoped.test.ts
+    code: [spec-cli/src/lint.ts]
+    description: >
+      Four fixtures where the selector is declared in an eval.md scenario rather than a node's
+      frontmatter, each run through the real `spex spec lint`: (a) the scenario names a unit that does
+      not exist; (b) the file the scenario anchors stops parsing while NO node anchors it — the shape
+      that took every session's eval summary down; (c) a post-version commit moves the unit the
+      scenario anchors; (d) the scenario declares no `code:` of its own and inherits the node's axis,
+      whose selector is dead.
+    expected: >
+      (a) and (b) are `integrity` ERRORS, exit 1, each naming the node AND the scenario that declared
+      the selector and pointing the repair at that eval.md line — the declaration site decides who
+      repairs it, never whether it is checked. (c) exits 0 with NO `anchor-drift`: a moved eval axis is
+      measurement staleness, and a measurement gap never blocks. (d) reports the dead selector EXACTLY
+      once, attributed to the node, because an inherited axis is the node's own entry and not a second
+      declaration.
   - name: multi-selector-dedupe
     tags: [cli]
     description: >

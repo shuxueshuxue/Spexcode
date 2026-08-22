@@ -121,29 +121,24 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   )
 }
 
-// Every list surface uses the same zone grammar. Offline is the sole foldable zone; only its leading count
-// pod is a disclosure control. The adjacent label is deliberately inert.
+// Every list surface uses the same zone grammar. Offline and archive are foldable zones; their whole header is
+// the disclosure control and the leading count pod is a visual marker inside it.
 export function SessionZone({ item, baseClass, onToggle }) {
   const t = useT()
-  const classes = `${baseClass} ${baseClass}-${item.zone}${item.zone === 'offline' ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}`
-  if (item.zone !== 'offline') return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
-  const label = t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })
+  const foldable = item.zone === 'offline' || item.zone === 'archive'
+  const classes = `${baseClass} ${baseClass}-${item.zone}${foldable ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}${item.dropTarget ? ' drop-target' : ''}`
+  if (!foldable) return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
+  const label = item.zone === 'archive'
+    ? t(item.folded ? 'sessionZone.showArchive' : 'sessionZone.hideArchive', { n: item.count })
+    : t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })
   return (
-    <div className={classes}>
-      {item.count > 0 && (
-        <button
-          type="button"
-          tabIndex={-1}
-          className="si-zone-count"
-          aria-expanded={!item.folded}
-          aria-label={label}
-          data-tip={label}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onToggle}
-        >{item.count}</button>
-      )}
+    <button type="button" className={classes} aria-expanded={!item.folded} aria-label={label} data-tip={label}
+      data-archive-count={item.zone === 'archive' ? item.count : undefined}
+      data-session-archive-drop={item.zone === 'archive' ? '' : undefined}
+      data-session-archive-zone={item.zone === 'archive' ? '' : undefined} onClick={onToggle}>
+      {(item.count > 0 || item.zone === 'archive') && <span className="si-zone-count" aria-hidden="true">{item.count}</span>}
       <span className="si-zone-label">{t(`sessionZone.${item.zone}`)}</span>
-    </div>
+    </button>
   )
 }
 

@@ -82,7 +82,7 @@ test('public direct close removes the worktree only after the live target is col
     git(project, 'commit', '-qm', 'fixture')
     mkdirSync(bin)
     writeFileSync(join(bin, 'git'), `#!/bin/sh
-if [ "$1" = "-C" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ] && [ "$6" = "$LIVE_WORKTREE" ]; then
+if [ "$1" = "-C" ] && [ "$3" = "worktree" ] && [ "$4" = "prune" ]; then
   archived=0; grep -q '"archived": true' "$LIVE_RECORD" && archived=1
   cold=0; grep -q '"cold_proof": "cold-v1|' "$LIVE_RECORD" && cold=1
   pid=1; ! kill -0 "$(cat "$LIVE_PID_FILE")" 2>/dev/null && pid=0

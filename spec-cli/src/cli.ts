@@ -3,6 +3,11 @@ export {} // make this a module so top-level await is allowed
 // by several verbs (spec owner, graph, issue/eval node args) — a CLI reference arg tolerates an optional @/[[ ]]
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
+// @@@hoisted because of an ARRAY type - the shipped Tree-sitter TypeScript grammar parses `import('x').T`
+// but NOT `import('x').T[]`, and one unparseable governed file makes every eval selector into it
+// unextractable ([[code-anchor]]), which takes down every session's eval summary ([[session-eval]]). This
+// is type-only, so it is erased and loads no module; the lazy `await import` below still owns startup cost.
+import type { PublicCommand } from './help.js'
 import { installEvalHost } from './eval-host.js'
 installEvalHost()
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -23,7 +28,7 @@ function levenshtein(a: string, b: string): number {
   return row[b.length]
 }
 
-function nearestPublicCommand(input: string, commands: readonly import('./help.js').PublicCommand[]): string | null {
+function nearestPublicCommand(input: string, commands: readonly PublicCommand[]): string | null {
   const query = input.toLowerCase()
   if (!/^[a-z0-9-]+$/.test(query)) return null
   const similarity = (a: string, b: string) => 1 - levenshtein(a, b) / Math.max(a.length, b.length)
@@ -1490,15 +1495,6 @@ if (cmd === 'serve') {
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)
-  } else if (sub === 'review-gate') {
-    const { runReviewAcceptance } = await import('./review-acceptance.js')
-    const result = await runReviewAcceptance({
-      candidate: flag('candidate'),
-      base: flag('base'),
-      onProgress: (line) => console.error(`[review acceptance] ${line}`),
-    })
-    console.log(has('json') ? JSON.stringify(result, null, 2) : result.report)
-    process.exit(result.ok ? 0 : 1)
   } else if (sub === 'hook-prompt') {
     // The internal render seam shared by hook handlers and GuidanceCatalog. The hooks call it only on branches
     // that already emit model-facing text; their hot no-op paths remain pure shell.

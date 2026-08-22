@@ -26,7 +26,7 @@ related:
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
-  - spec-dashboard/test/session-archive-drawer.e2e.mjs
+  - spec-dashboard/test/session-archive-zone.e2e.mjs
 ---
 
 # session-console
@@ -65,27 +65,37 @@ toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
-dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
-with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds two equal compact pills above the session rows,
-kept out of the `↑/↓` path down to a session: `＋` New Session and Search, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract). The list is bounded by the routed page's viewport. Its working-board
-region owns the sidebar's only vertical scrollbar when the rows exceed the available height.
+dark terminal, whatever the app theme. The document has one right area that
+**morphs** by what's focused. Search remains available through the shell palette and the existing ⌥+/ binding;
+the sessions dock owns the list's `＋` New Session door. The document is bounded by the routed page's viewport
+and owns the terminal/timeline surface without a second navigation scrollbar.
 
-The archive is a permanent **place**, not a list mode. A bottom-pinned `Archive N` bar remains visible even when
-`N` is zero; `N` is the complete count of closed session records, with no capacity number because close has
-already reclaimed the worktree. The bar's disclosure control expands a flat newest-closed-first preview in place,
-while its label routes the right pane to the full archive page. These are separate actions on one line. The preview
-shows as many recent rows as fit without exceeding one third of the sidebar height, followed by one `View all N`
-exit to the full page. It never scrolls and never creates a nested scrollport. When the available third cannot
-hold a useful preview plus its exit, disclosure routes directly to the full page. Selecting a preview row opens
-that closed session's ordinary read-only Conversation face.
+The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
+when `N` is zero and carries the complete count of closed records. Like offline, its whole header is one keyboard-
+reachable disclosure button; the count chip is a visual marker inside it, not a separate target. The console's
+panel-level inert chrome press keeps pointer activation from stealing the current input sink. The zone is folded by
+default with its fold choice persisted locally. When open it shows the newest
+closed rows (bounded to a small fixed number so it cannot drown the working list), then one `View all N` row. The
+closed rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
+Conversation. `View all N` is a keyboard-reachable button that follows the same row geometry, ink, bottom rule, and
+hover wash as a session row, with the shared search glyph in the nesting-lead column; it has no selected state. Dropping
+a working row on the visible archive heading performs the one reversible close transition without confirmation.
+While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
+sidebar still owns exactly one scroll container.
 
-The archive page occupies the complete right pane. It reads the full closed-session index in one request, renders
-the newest-closed-first rows under sticky Today / Yesterday / calendar-date headings, and owns a search field that
-filters that complete index locally. Pagination is deliberately absent: the scrollbar represents the whole result
-set from its first paint. This page is the only archive-search entry; the global palette neither includes closed
-rows nor hints at hidden archive matches.
+`View all N` opens a transient archive index overlay, not a third right-pane mode. The overlay is scoped only to
+closed sessions, reads the complete lean index once (the row projection is `id`, visible title, search label,
+`closedAt`, and node), groups newest-first rows under sticky dates, filters locally, and
+closes on Esc or backdrop press. Choosing an index row closes the overlay and hands selection to the ordinary
+read-only Conversation, so the right pane always represents the selected session (or New Session), never an archive
+page.
+
+The archive index overlay reads the full closed-session lean index in one request, renders the newest-closed-first rows
+under sticky Today / Yesterday / calendar-date headings, and owns a search field that filters that complete index
+locally. Pagination is deliberately absent: the overlay's index scrollbar represents the whole result set from its
+first paint. This overlay is the only archive-search entry; the global palette neither includes closed rows nor
+hints at hidden archive matches. Esc/backdrop closes it, and choosing a row returns to that session's ordinary
+Conversation in the right pane.
 
 The console list is the mutable home of its session forest ([[session-nesting]]). Dragging a row moves a
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
@@ -99,9 +109,16 @@ The gesture is deliberately ordinary pointer drag rather than a tiny dedicated h
 will move, so the feedback must visibly be that row. Right-click keeps the complementary
 explicit `remove from parent` action for a nested row. Both paths call the one reparent endpoint and leave
 selection, terminal focus, and invalid/no-op drops alone.
-Dropping a working row on the permanent archive bar instead performs the row's one reversible `close` transition:
+Dropping a working row on the visible archive zone heading instead performs the row's one reversible `close` transition:
 the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
 close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
+
+The [[dock-modes]] sessions projection is the desktop's sole session list. This document therefore never
+renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
+the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
+while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
+dock remains read-only: drag-to-reparent and multi-select are explicitly retired with the duplicate list because
+their mutable state cannot belong to a finding projection. The keyboard fresh-session binding remains unchanged.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -150,20 +167,22 @@ background fire) and never expands a plugin body itself.
 An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
 base surfaces while live: its interactive tmux **Terminal** (SessionTerm), which is the default input surface,
 and the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
-liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a live
-pane-backed session between Terminal and Conversation; the icon always names the other destination, and no
-second terminal/conversation view is visible at once.
+liveness and is always Conversation. The selected face is navigation state on the session object address:
+`#/sessions/<id>?surface=terminal|conversation`; a bare `#/sessions/<id>` resolves the persisted base face.
+An explicit query writes the per-session preference through [[session-surface]]. There is no in-console face
+switch control or second tab rail: changing face navigates the same session parameter with a different query,
+replacing the current object slot; ctrl/⌘ holding uses the ordinary tab latch to keep a second object tab.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
-records, renders the same Conversation DOM: the same surface tabs, the same timeline body, and one shared footer.**
+records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
 For a live session that footer is only the enabled message composer. For an offline session it contains the
 same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
 action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
 ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
-once when selected and does not poll. A pane-backed offline or archived record keeps its Terminal tab visible but disabled, and activating
-that tab cannot leave Conversation. `queued` remains the one exception to offline relaunch: it has intentionally
+once when selected and does not poll. A pane-backed offline or archived record remains Conversation and cannot
+be switched to Terminal. `queued` remains the one exception to offline relaunch: it has intentionally
 not launched and self-starts as a slot frees.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
@@ -174,11 +193,9 @@ no nested levels, and no permanently reserved second-input strip. Its own prompt
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
-available commands. The current base tab is **Terminal** or **Conversation** for a pane-backed session, and
-Conversation for a headless session. The visual tab sequence is its current surface, the
-**Eval** navigation tab, resource tabs, then the resource picker: this is one compact tab rail, with any remaining toolbar space
-separating it from command tools. A one-pixel divider and short gutter separate the picker from Eval; there is no
-matching divider after the plus. The picker itself is a compact circular plus control, so it reads as an add/open
+available commands. Terminal/Conversation and Evals are not toolbar tabs. The shell's top [[tab-strip]] names
+the session object with an i18n face suffix; Evals keeps its one canonical scoped address and is reached by
+navigation. The picker itself is a compact circular plus control, so it reads as an add/open
 action rather than an extension of Eval. It is deliberately a step smaller and quieter than a command tool — thin
 neutral ring, accent only on hover and focus: it opens a menu of things to look at, it does not act on the session,
 and a control sized and weighted like the merge/stop tools would claim authority it does not have.
@@ -229,7 +246,16 @@ timer. Switching tabs or remounting therefore preserves the cached last-known va
 `updating` beside that last-known value, never zero; a stable equal-generation projection becomes current; a
 compute failure stays explicit with last-known retained. A graph-stream disconnect similarly marks the value
 last-known until an authoritative reconnect snapshot re-anchors it. `ready` with every category at zero is the
-only empty state, distinct from loading, updating, disconnected, and error.
+only empty state, distinct from loading, updating, disconnected, dormant, and error.
+
+**A spinner is a promise that a value is arriving, so only an arriving state may spin.** The door spins for
+`loading` and `updating` and for nothing else. A **dormant** projection ([[session-eval]]: a retained offline
+session the backend deliberately does not precompute) and a selected row carrying no projection at all (a
+closed session, which leaves the board and is served from the archive index instead) are the same fact — no
+value is coming until someone asks for one — and the door says so: last-known counts when it has them, a
+still blind-spot mark when it does not, and an accessible name naming the door itself as the way to measure
+it. The door is already that anchor, so opening it is the whole repair; the console never fetches a summary
+of its own to fill the gap.
 
 The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the console** below it in both light and dark themes (the old flat strip blended
@@ -439,9 +465,9 @@ single row with the COUNT badge first and the `OFFLINE` label second; it contain
 direction symbol. Retired and
 dormant sessions accumulate (an adopter's CR record sessions are deliberately kept alive for their external
 deep links), and a list that renders every one of them drowns the two zones a human acts on; but they are
-records, so they are never deleted and never more than one click away. The header's leading COUNT pod is the
-**only** disclosure control: it carries `aria-expanded`, toggles the zone, and stays pointer-inert for focus.
-The adjacent `OFFLINE` label is inert; clicking anywhere else in the header never changes the fold. A parent
+records, so they are never deleted and never more than one click away. The whole header is the disclosure button:
+it carries the one `aria-expanded`, toggles the zone from its label or trailing rule area, and is keyboard reachable.
+The COUNT pod is only a visual marker inside it. A parent
 row with sub sessions uses the same grammar: its child-count pod is the first content before the title/status
 body, never a trailing action, and that pod alone toggles its children and carries `aria-expanded`. Clicking
 the rest of the parent row performs that surface's ordinary row action (select/open in the console or phone,

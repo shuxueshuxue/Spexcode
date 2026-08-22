@@ -23,6 +23,11 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.9",
+    "@lezer/highlight": "^1.2.1",
     "@spexcode/spec-cli": "0.6.7",
     "@spexcode/spec-core": "0.6.7",
     "@xterm/addon-fit": "^0.11.0",

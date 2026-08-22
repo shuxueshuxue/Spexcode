@@ -6,11 +6,12 @@ desc: Global ⌥+/ opens the shared palette with sessions first; the graph's pla
 related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/App.jsx
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/address.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
-  - spec-dashboard/test/session-archive-drawer.e2e.mjs
+  - spec-dashboard/test/session-archive-zone.e2e.mjs
 ---
 # session-search
 
@@ -44,5 +45,5 @@ pressed state.
 
 The session plane contains only the working board projection. Closed rows never enter ⌥+/ results, even when a
 query exactly matches one, and the palette renders no archive-match hint or count. Archive lookup belongs to the
-complete search field on [[session-console]]'s full archive page; each search surface is complete within its own
+complete search field on [[session-console]]'s archive index overlay; each search surface is complete within its own
 place instead of mixing a small working set with an unbounded closed history.

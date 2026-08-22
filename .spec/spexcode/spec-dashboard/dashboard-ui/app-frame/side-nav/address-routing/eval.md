@@ -37,7 +37,8 @@ scenarios:
       `#/sessions/<id>`; no detail shortcut creates a second terminal home.
     code:
       - spec-dashboard/src/address.js
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/IssueCard.jsx
 ---

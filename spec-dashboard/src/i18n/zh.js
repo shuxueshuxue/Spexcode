@@ -30,18 +30,66 @@ export default {
     pending: '待定',
   },
 
-  // 会话列表按此分成两个区（[[session-console]]）——「轮到谁」。
+  // 会话列表按此分成四个区（[[session-console]]）——「轮到谁」。
   sessionZone: {
     need: '待你处理',
     run: '自运行',
     offline: '离线',
+    archive: '归档',
     showHistory: ({ n }) => `展开 ${n} 个休眠会话（历史仅收纳，绝不删除）`,
     hideHistory: ({ n }) => `收起这 ${n} 个休眠会话`,
+    showArchive: ({ n }) => `展开 ${n} 个已归档会话`,
+    hideArchive: ({ n }) => `收起这 ${n} 个已归档会话`,
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
+  specView: { missing: '没有这个节点：{id}' },
+  fileView: { none: '未选择文件' },
+  fileTree: {
+    title: '文件树',
+    aria: '项目文件树',
+  },
+  dockModes: {
+    aria: '停靠栏模式',
+    explorer: '资源管理器',
+    sessions: '会话',
+  },
+  dockSessions: {
+    new: '新建会话',
+    archive: '查看全部已归档会话',
+  },
+  contextDock: {
+    title: '上下文',
+    backlinks: '反向链接',
+    scenarios: '场景',
+    open: '显示上下文栏',
+    close: '隐藏上下文栏',
+    loading: '正在加载场景…',
+    noBacklinks: '没有反向链接',
+    noScenarios: '没有声明场景',
+    states: { pass: '通过', fail: '失败', stalePass: '旧通过', staleFail: '旧失败', missing: '未测量', empty: '未测量' },
+  },
+  empty: {
+    title: '当前没有打开的文档',
+    hint: '你关掉了最后一个文档。选一个打开即可——什么都没丢，只是现在标签栏是空的。',
+    search: '搜索节点',
+    explorer: '在资源管理器里浏览',
+    graph: '打开图文档',
+  },
+  tabs: {
+    aria: '已打开的文档',
+    close: '关闭标签',
+    graph: '图',
+    sessions: '会话',
+    evals: '评测',
+    issues: '议题',
+    surfaceTerminal: '终端',
+    surfaceConversation: '对话',
+  },
   nav: {
     railLabel: '主导航',
+    explorer: '资源管理器',
+    search: '搜索（/）',
     graph: '规格节点图（⌥1）',
     sessions: '会话面板（⌥2）',
     evals: 'Evals（⌥3 / ⌥F）',
@@ -148,10 +196,19 @@ export default {
     unlock: '解锁',
   },
 
+  statusBar: {
+    hidden: '已隐藏 —— 从状态栏恢复',
+    restore: '恢复隐藏的状态项',
+  },
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',
     loadError: '无法连接后端 —— 看板加载失败。',
+    retry: '重试',
+  },
+
+  viewError: {
+    title: '这个视图崩溃了。',
     retry: '重试',
   },
 
@@ -329,6 +386,23 @@ export default {
       settings: '打开设置（语言…）',
       help: '打开此帮助',
     },
+    shell: {
+      pageGraph: '前往图页面',
+      pageSessions: '前往会话页面',
+      pageEvals: '前往评测页面',
+      pageIssues: '前往议题页面',
+      pageSettings: '前往设置页面',
+      newSession: '打开新会话',
+      evals: '打开评测页面',
+      search: '搜索会话',
+      dockToggle: '切换资源管理器停靠栏',
+      dockMode: '切换资源管理器 / 会话停靠模式',
+      contextToggle: '切换上下文停靠栏',
+      tabClose: '关闭当前页签',
+      tabNext: '选择下一个页签',
+      tabPrevious: '选择上一个页签',
+      tabSplit: '将当前页签送入分屏',
+    },
     popup: {
       switch: '切换页签（规格 / 历史）',
       scroll: '滚动 · 展开下一版本',
@@ -410,6 +484,7 @@ export default {
   },
 
   nodeView: {
+    carries: '携带',
     paneSpec: '规格',
     paneHistory: '历史',
     paneIssues: 'issue',
@@ -520,6 +595,10 @@ export default {
     del: '删除节点…',
   },
 
+  sourceView: {
+    useSelection: '在新会话中使用选区',
+  },
+
   session: {
     opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
     lockTitle: '右键打开会话操作，包括锁定到图谱',
@@ -600,6 +679,9 @@ export default {
     surfaceLabel: '当前会话界面',
     toolbarToolsLabel: '会话工具',
     evalLoading: '正在载入此会话的评测概况',
+    evalDormant: '此会话的评测概况尚未计算 — 打开 Eval 即可测量',
+    evalDormantLast: '上次已知 — 此留存会话不再重新计算',
+    evalDormantKnown: ({ summary }) => `上次已知，不再重新计算 — ${summary}`,
     evalUnavailable: '此会话的评测概况不可用',
     evalUpdating: ({ summary }) => `正在更新此会话的评测概况 — 上次已知：${summary}`,
     evalDisconnected: ({ summary }) => summary
@@ -632,8 +714,6 @@ export default {
     offlineSubAfter: ' 仍然完好。重新启动以恢复同一对话。',
     archiveTitle: '归档',
     archiveCount: ({ n }) => `${n} 个已关闭会话`,
-    archiveExpand: '展开归档抽屉',
-    archiveCollapse: '收起归档抽屉',
     archiveViewAll: ({ n }) => `查看全部 ${n}`,
     archiveSearch: '搜索归档',
     archiveEmpty: '没有匹配的已关闭会话',
@@ -655,6 +735,8 @@ export default {
     attachRetry: '重试上传',
     attachCancel: '取消上传',
     attachDismiss: '隐藏此附件状态',
+    codeSelectionAttachments: '代码选区附件',
+    removeCodeSelection: '移除代码选区',
     // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {

@@ -219,14 +219,32 @@ surface:
   session runs, so the launch script EXPORTS `SPEXCODE_CODEX_CMD` for the codex-launch child (a fallback bare
   `codex` picks the WRONG install on a multi-codex box and mis-decides). `SPEXCODE_CODEX_BYPASS_HOOK_TRUST` forces
   the switch. Claude relies on folder-trust (often nothing).
+- **shimOwnership** — WHO owns `shimFile`. `exclusive`: a spexcode-named source file of our own
+  (`.opencode/plugins/spexcode.ts`, `.pi/extensions/spexcode.ts`) — whole-file write, whole-file delete.
+  `shared-json`: a config file the HOST AGENT shares with the user (`.claude/settings.json`,
+  `.codex/hooks.json`, `.zcode/settings.json` also carry their permissions, env, statusLine and their own
+  hooks), where a whole-file write is silent data loss and a whole-file delete makes it permanent for an
+  untracked file. There we co-own only identity-stamped ENTRIES: JSON has no comment syntax, so the stamp is
+  the hook COMMAND — every entry we write invokes `dispatch.sh`, and only such entries are ever written or
+  removed. Everything else round-trips: other keys, other events, foreign hook groups, and the user's half of
+  a group that mixes both. Re-landing replaces our entries rather than accumulating them, and the file itself
+  disappears only when nothing of theirs is left. A `shared-json` adapter's `shim()` returns the hook payload
+  the merge writer needs alongside the standalone bytes; the ownership fact is static, so `clean` reads it
+  without building a shim. What co-ownership cannot preserve is hand layout — see [[content-filter]].
 - **clean / removeTrust** — the materialize INVERSE: `clean(proj, arts, preserveProject)` surgically removes
-  ONLY this harness's tree-local artifacts — the managed contract block (sentinels), generated local shim,
-  and the `arts`-named skill/agent files. Project-scoped shim/trust is installation transport: ordinary
+  ONLY this harness's tree-local artifacts — the managed contract block (sentinels), the shim (whole-file or
+  entry-wise per `shimOwnership`), and the `arts`-named skill/agent files. Project-scoped shim/trust is
+  installation transport: ordinary
   re-materialize preserves it and the tree's final dispatch allowlist makes it inert when unselected;
   project-wide dematerialize/uninstall passes the destructive mode and calls `removeTrust`. Every step is gated on a SpexCode
   identity stamp (the managed-block sentinels, the shim's own `dispatch.sh` command line, the trust sentinels,
-  the name-scoped on-demand paths), so it never touches a user's CLAUDE.md/AGENTS.md prose, a hand-made
-  settings.json, a sibling skill the user added, or any `.spec` data. [[harness-delivery]] calls it for every
+  the `GENERATED_MARK` on each on-demand file), so it never touches a user's CLAUDE.md/AGENTS.md prose, a
+  hand-made settings.json, a sibling skill the user added, or any `.spec` data. **The `arts` name list says
+  WHICH path to look at; it never proves the file there is ours.** A live spec node named `distill` and a
+  skill the user wrote at `.claude/skills/distill/` are the same path, so the name sweep is stamp-gated too:
+  an unstamped file at a live name stays. The cost is that an artifact generated before stamps existed is now
+  spared as well — a stale file the human can delete, which is the right side of a trade whose other side is
+  deleting their work. [[harness-delivery]] calls it for every
   adapter, so dropping a harness from `harnesses` prunes its local products without deleting project transport. Adding
   a harness adds an adapter (with its `clean`), never a prune branch in materialize.
 - **payload accessors** — read `session_id`, the edited-file path (Claude `tool_input.file_path` vs Codex

@@ -256,10 +256,10 @@ try {
   }
 
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  const archiveBar = page.locator('.si-archive-bar')
-  await archiveBar.waitFor({ state: 'visible', timeout: 30_000 })
-  await page.locator('.si-archive-toggle').click()
-  const archivedRow = page.locator(`.si-archive-preview-row[data-sid="${archivedId}"]`)
+  const archiveZone = page.locator('.si-zone-archive')
+  await archiveZone.waitFor({ state: 'visible', timeout: 30_000 })
+  await archiveZone.click()
+  const archivedRow = page.locator(`.si-zone-archive ~ .si-tree-row .si-item[data-sid="${archivedId}"]`)
   await archivedRow.waitFor({ state: 'visible', timeout: 30_000 })
   timelineRequests.set(archivedId, 0)
   await archivedRow.click()

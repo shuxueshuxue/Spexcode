@@ -94,6 +94,7 @@ test('all public record APIs share pending projection and malformed fail-closed 
   const incompleteId = 'incomplete-pending-public-record'
   const invalidLifecycleId = 'invalid-lifecycle-pending-public-record'
   const invalidProposalId = 'invalid-proposal-pending-public-record'
+  const archivedId = 'archived-index-public-record'
   let backend: ChildProcess | null = null
   let pendingProcess: ChildProcess | null = null
   let livePendingProcess: ChildProcess | null = null
@@ -164,6 +165,16 @@ test('all public record APIs share pending projection and malformed fail-closed 
         cold_proof: null, adapter_recovery: null,
       },
     }))
+    writeRecord(archivedId, {
+      ...record(archivedId, project, null),
+      status: 'awaiting',
+      proposal: 'nothing',
+      note: 'archive note '.repeat(2_000),
+      stopped: true,
+      archived: true,
+      closed_at: '2026-08-22T10:20:30.000Z',
+      cold_proof: `cold-v1|claude|${archivedId}|no-resident-ref`,
+    })
 
     const processEnv = (id: string): NodeJS.ProcessEnv => ({
       ...process.env,
@@ -208,17 +219,30 @@ test('all public record APIs share pending projection and malformed fail-closed 
       error: 'no close transition was committed for session 00000000-0000-0000-0000-000000000000',
     })
 
-    const [sessionsResponse, graphResponse, resourcesResponse, settingsResponse] = await Promise.all([
+    const [sessionsResponse, archiveIndexResponse, graphResponse, resourcesResponse, settingsResponse] = await Promise.all([
       fetch(`${base}/api/sessions?all=1`),
+      fetch(`${base}/api/sessions/archive-index`),
       fetch(`${base}/api/graph`),
       fetch(`${base}/api/resources`),
       fetch(`${base}/api/settings`),
     ])
-    for (const response of [sessionsResponse, graphResponse, resourcesResponse, settingsResponse]) {
+    for (const response of [sessionsResponse, archiveIndexResponse, graphResponse, resourcesResponse, settingsResponse]) {
       if (response.status !== 200) assert.fail(`${response.url} returned ${response.status}: ${await response.text()}`)
     }
 
-    const rows = await sessionsResponse.json() as any[]
+    const fullBody = await sessionsResponse.text()
+    const rows = JSON.parse(fullBody) as any[]
+    const archiveIndexBody = await archiveIndexResponse.text()
+    const archiveIndex = JSON.parse(archiveIndexBody) as any[]
+    console.log(JSON.stringify({ archiveIndexBytes: Buffer.byteLength(archiveIndexBody), fullSessionBytes: Buffer.byteLength(fullBody) }))
+    assert.ok(Buffer.byteLength(archiveIndexBody) < Buffer.byteLength(fullBody), 'archive index is smaller than the full session list')
+    assert.ok(archiveIndex.every((row) => JSON.stringify(Object.keys(row).sort()) === JSON.stringify(['closedAt', 'id', 'label', 'node', 'title'])),
+      'archive index rows carry only the five index fields')
+    assert.equal(archiveIndex.some((row) => 'prompt' in row || 'note' in row || 'files' in row || 'web' in row), false,
+      'archive index carries no full-session fields')
+    assert.equal(archiveIndex.some((row) => row.id === pendingId), false, 'archive index excludes live sessions')
+    assert.equal(archiveIndex.some((row) => row.id === archivedId), true, 'archive index includes the archived record')
+    assert.equal(fullBody.includes('archive note '), true, 'full session list carries the detailed note used for the before measurement')
     const graph = await graphResponse.json() as { sessions: any[] }
     const resources = await resourcesResponse.json() as { owners: any[] }
     const settings = await settingsResponse.json() as { layout: { worktrees: any[] } }

@@ -6,7 +6,8 @@ desc: The ONE full-page scrollport contract shared by every document-shaped dash
 code:
   - spec-dashboard/src/PageScroll.jsx#PageScroll
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/Settings.jsx

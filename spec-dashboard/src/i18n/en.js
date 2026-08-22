@@ -31,18 +31,66 @@ export default {
     pending: 'pending',
   },
 
-  // the two triage zones the session list groups into ([[session-console]]) — "whose turn is it".
+  // the four session zones the list groups into ([[session-console]]) — "whose turn is it".
   sessionZone: {
     need: 'needs you',
     run: 'running',
     offline: 'offline',
+    archive: 'archive',
     showHistory: ({ n }) => `show ${n} dormant session${n === 1 ? '' : 's'} (history is kept, never deleted)`,
     hideHistory: ({ n }) => `fold the ${n} dormant session${n === 1 ? '' : 's'} away`,
+    showArchive: ({ n }) => `show ${n} archived session${n === 1 ? '' : 's'}`,
+    hideArchive: ({ n }) => `fold the ${n} archived session${n === 1 ? '' : 's'} away`,
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
+  specView: { missing: 'no such node: {id}' },
+  fileView: { none: 'no file selected' },
+  fileTree: {
+    title: 'EXPLORER',
+    aria: 'project file tree',
+  },
+  dockModes: {
+    aria: 'dock mode',
+    explorer: 'Explorer',
+    sessions: 'Sessions',
+  },
+  dockSessions: {
+    new: 'New Session',
+    archive: 'View all archived sessions',
+  },
+  contextDock: {
+    title: 'CONTEXT',
+    backlinks: 'BACKLINKS',
+    scenarios: 'SCENARIOS',
+    open: 'show context dock',
+    close: 'hide context dock',
+    loading: 'loading scenarios…',
+    noBacklinks: 'no backlinks',
+    noScenarios: 'no scenarios declared',
+    states: { pass: 'pass', fail: 'fail', stalePass: 'stale pass', staleFail: 'stale fail', missing: 'unmeasured', empty: 'unmeasured' },
+  },
+  empty: {
+    title: 'Nothing open',
+    hint: 'You closed the last document. Pick one to open — nothing is lost, the tabs simply hold nothing right now.',
+    search: 'Search for a node',
+    explorer: 'Browse the explorer',
+    graph: 'Open the graph document',
+  },
+  tabs: {
+    aria: 'open documents',
+    close: 'close tab',
+    graph: 'Graph',
+    sessions: 'Sessions',
+    evals: 'Evals',
+    issues: 'Issues',
+    surfaceTerminal: 'terminal',
+    surfaceConversation: 'conversation',
+  },
   nav: {
     railLabel: 'main navigation',
+    explorer: 'Explorer',
+    search: 'Search (/)',
     graph: 'Spec Node Graph (⌥1)',
     sessions: 'Sessions (⌥2)',
     evals: 'Evals (⌥3 / ⌥F)',
@@ -149,11 +197,22 @@ export default {
     unlock: 'unlock',
   },
 
+  statusBar: {
+    hidden: 'hidden — restore from the bar',
+    restore: 'restore hidden status items',
+  },
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     loading: 'loading specs from git…',
     loadError: 'backend unreachable — the graph failed to load.',
     retry: 'retry',
+  },
+
+  // the crash panel a single pane shows when the view inside it threw ([[workspace-shell]]). Deliberately
+  // two lines of copy: the message itself is the error's, not ours.
+  viewError: {
+    title: 'This view crashed.',
+    retry: 'Retry',
   },
 
   evalsFeed: {
@@ -330,6 +389,23 @@ export default {
       settings: 'open settings (language…)',
       help: 'open this help',
     },
+    shell: {
+      pageGraph: 'go to graph page',
+      pageSessions: 'go to sessions page',
+      pageEvals: 'go to evals page',
+      pageIssues: 'go to issues page',
+      pageSettings: 'go to settings page',
+      newSession: 'open new session',
+      evals: 'open evals page',
+      search: 'search sessions',
+      dockToggle: 'toggle explorer dock',
+      dockMode: 'switch explorer / sessions dock mode',
+      contextToggle: 'toggle context dock',
+      tabClose: 'close active tab',
+      tabNext: 'select next tab',
+      tabPrevious: 'select previous tab',
+      tabSplit: 'send active tab to split pane',
+    },
     popup: {
       switch: 'switch pane (spec / history)',
       scroll: 'scroll · reveal the next version',
@@ -414,6 +490,7 @@ export default {
   },
 
   nodeView: {
+    carries: 'carries',
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',
@@ -526,6 +603,10 @@ export default {
     del: 'delete node…',
   },
 
+  sourceView: {
+    useSelection: 'use selection in a new session',
+  },
+
   session: {
     opsTitle: 'nodes this session is changing — right-click for session actions',
     lockTitle: 'right-click for session actions, including lock on graph',
@@ -606,6 +687,9 @@ export default {
     surfaceLabel: 'current session surface',
     toolbarToolsLabel: 'session tools',
     evalLoading: "loading this session's eval summary",
+    evalDormant: "this session's eval summary is not computed — open Eval to measure it",
+    evalDormantLast: 'last known — this retained session is not being recomputed',
+    evalDormantKnown: ({ summary }) => `last known, not being recomputed — ${summary}`,
     evalUnavailable: "this session's eval summary is unavailable",
     evalUpdating: ({ summary }) => `updating this session's eval summary — last known: ${summary}`,
     evalDisconnected: ({ summary }) => summary
@@ -638,8 +722,6 @@ export default {
     offlineSubAfter: ' are intact. relaunch to resume the same conversation.',
     archiveTitle: 'Archive',
     archiveCount: ({ n }) => `${n} closed session${n === 1 ? '' : 's'}`,
-    archiveExpand: 'expand archive drawer',
-    archiveCollapse: 'collapse archive drawer',
     archiveViewAll: ({ n }) => `View all ${n}`,
     archiveSearch: 'Search archive',
     archiveEmpty: 'no matching closed sessions',
@@ -661,6 +743,8 @@ export default {
     attachRetry: 'retry upload',
     attachCancel: 'cancel upload',
     attachDismiss: 'dismiss attachment status',
+    codeSelectionAttachments: 'code selection attachments',
+    removeCodeSelection: 'remove code selection',
     // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {

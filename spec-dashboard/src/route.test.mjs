@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { invalidReviewPageHash, parseRoute, routeHash, legacyEvalHash, legacyReviewHash, queryString } from './route.js'
-import { addressHash, addressUrl, evalAddress, graphNodeAddress, sessionEvalAddress } from './address.js'
+import { invalidReviewPageHash, parseRoute, routeHash, legacyEvalHash, legacyReviewHash, queryString, sessionSurfaceHash } from './route.js'
+import { addressHash, addressUrl, evalAddress, graphNodeAddress, sessionEvalAddress, sessionSurfaceAddress } from './address.js'
 
 // The URL layer's two axes ([[side-nav]]): the PATH names the object, the QUERY carries view state — one
 // ?q=<raw token text> for the review lists ([[review-query]]) — and every legacy shape (session-eval
@@ -14,7 +14,23 @@ test('parseRoute splits path and query inside the hash', () => {
   assert.deepEqual(parseRoute('#/evals/my-node/my%20scenario?q=scope%3Aabc'),
     { page: 'evals', param: 'my-node/my scenario', query: { q: 'scope:abc' } })
   assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc', query: {} })
+  assert.deepEqual(parseRoute('#/sessions/abc?surface=terminal'), { page: 'sessions', param: 'abc', query: { surface: 'terminal' } })
   assert.deepEqual(parseRoute('#/nope'), { page: 'graph', param: null, query: {} })
+})
+
+test('session eval face redirects to the canonical scoped Evals address', () => {
+  assert.equal(sessionSurfaceHash('#/sessions/abc?surface=evals'), '#/evals?q=is%3Aeval%20scope%3Aabc')
+  assert.equal(sessionSurfaceHash('#/sessions/abc?surface=conversation'), null)
+  assert.equal(addressHash(sessionSurfaceAddress('abc', 'conversation')), '#/sessions/abc?surface=conversation')
+  assert.equal(addressHash(sessionSurfaceAddress('abc', 'evals')), '#/evals?q=is%3Aeval%20scope%3Aabc')
+})
+
+// the empty workspace is an address ([[tab-strip]]): it can be landed on, reloaded and left. It names no
+// object, so like settings it never carries a selector.
+test('parseRoute knows the empty workspace and gives it no selector', () => {
+  assert.deepEqual(parseRoute('#/empty'), { page: 'empty', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/empty/anything'), { page: 'empty', param: null, query: {} })
+  assert.equal(routeHash('empty'), '#/empty')
 })
 
 test('routeHash round-trips through parseRoute, q leading and the rest sorted', () => {

@@ -60,7 +60,7 @@ cd your-repo
 spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-headless,pi-headless,codex-headless   # 创建 .spec/、安装 git 钩子、物化 agent 契约
 ```
 
-引入到这里就完成了。示例列出了全部内建 harness,不用的删掉就行,`--harness` 必填,接受任意一个 id 或逗号分隔的子集。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不覆盖你的文件,只做三件事。它创建根节点 `.spec/project/spec.md` 和一份初始的 `spexcode.json`,安装 git 钩子,再把工作流规则**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):改动代码之前先读管辖它的 spec,spec 和代码在同一个 commit 里提交,只提出合并提议、不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流。
+引入到这里就完成了。示例列出了全部内建 harness,不用的删掉就行,`--harness` 必填,接受任意一个 id 或逗号分隔的子集。只想要 spec 这份资产、不想往任何 agent 里写东西,就用 `--harness none`:只引入 L0,不往任何 agent 的配置里写一个字节。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不替换属于你的文件——harness 把钩子读在你自己的配置文件里时(`.claude/settings.json`、`.codex/hooks.json`),只有 SpexCode 自己的条目会被合进去,`spex uninstall` 时再原样摘走;和你已有的 skill/agent 同名时会跳过并报出来,不会覆盖。它只做三件事。它创建根节点 `.spec/project/spec.md` 和一份初始的 `spexcode.json`,安装 git 钩子,再把工作流规则**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):改动代码之前先读管辖它的 spec,spec 和代码在同一个 commit 里提交,只提出合并提议、不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流。
 
 需要看板(图谱、session、eval)时,再启动运行时:
 

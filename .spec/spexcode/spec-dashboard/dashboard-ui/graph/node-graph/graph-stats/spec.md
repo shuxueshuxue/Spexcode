@@ -3,7 +3,7 @@ title: graph-stats
 status: active
 hue: 210
 session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
-desc: A glanceable bottom-left strip that tallies the tree's badges — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (eval circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
+desc: The tree's badges tallied and registered on the status bar — composition, attention, coverage — walking focus through the nodes behind any chip — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (eval circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
 code:
   - spec-dashboard/src/GraphStats.jsx#GraphStats
 related:
@@ -23,8 +23,12 @@ that says the whole-tree figures at a glance. Keep it honest and cheap: it **cou
 
 ## expanded spec
 
-A strip pinned to the **bottom-left** of the [[node-graph]], always on, sharing the minimal-HUD chrome. It
-  reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
+The tally is the **focused view's** state, so it lives in the right group of the [[status-bar]] rather than
+floating over the canvas. Its whole output is **one registered item**: the component renders nothing itself,
+which is what lets it stop knowing where on the screen it lands. That is not cosmetic — while this was a
+pinned strip, the session window had to cap its own height to keep clear of it, one widget's geometry
+encoded inside an unrelated component. Registering removed that coupling along with the position.
+  It reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
   frontend derivation** over each node's explicit [[graph-lean]] `reviewSummary` — no row array, new endpoint,
   or new vocabulary.
 The composition and attention figures are a **count of distinct things**, never a sum of badges: summing

@@ -684,10 +684,60 @@ test('offline history projections stay demand-only', async () => {
     { id: 'live', path: '/wt/live', liveness: 'online' },
     { id: 'offline', path: '/wt/offline', liveness: 'offline' },
   ])
-  assert.deepEqual([...rows.values()].map((row) => row.phase), ['loading', 'loading'])
+  // the live row is arriving; the retained one is dormant — demand-only, and named as such so no reader
+  // renders it as progress that never lands
+  assert.deepEqual([...rows.values()].map((row) => row.phase), ['loading', 'dormant'])
   await cache.idle()
   assert.equal(builds, 1, 'the graph precomputes the live toolbar summary only')
-  assert.equal(cache.get('offline')?.phase, 'loading')
+  assert.equal(cache.get('offline')?.phase, 'dormant')
+})
+
+test('a retained offline projection reads dormant, never an arriving phase', async () => {
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(3) }
+  }, () => {}, 'epoch')
+
+  // never measured while live: the graph must not promise a value nothing is computing
+  cache.snapshot([{ id: 'cold', path: '/wt/cold', liveness: 'offline' }])
+  await cache.idle()
+  assert.equal(builds, 0, 'a retained record still schedules no summary build')
+  assert.equal(cache.get('cold')?.phase, 'dormant')
+  assert.equal(cache.get('cold')?.value, undefined)
+
+  // measured while live, then closed: the counts stay readable as last-known and stop claiming to move
+  cache.snapshot([{ id: 'warm', path: '/wt/warm', liveness: 'online' }])
+  await cache.idle()
+  assert.equal(cache.get('warm')?.phase, 'ready')
+  cache.invalidate('all')
+  cache.snapshot([{ id: 'warm', path: '/wt/warm', liveness: 'offline' }])
+  await cache.idle()
+  const closed = cache.get('warm')!
+  assert.equal(closed.phase, 'dormant')
+  assert.equal(closed.lastKnown?.value.total, 3)
+  assert.equal(builds, 1, 'a closed session pays for no rebuild')
+
+  // and a demand still resolves it, exactly as the demand-only rule promises
+  await cache.demand('cold', '/wt/cold', async () => cache.accept('cold', cache.get('cold')!.generation, 'r-demand', summary(2)))
+  assert.equal(cache.get('cold')?.phase, 'ready')
+  assert.equal(cache.get('cold')?.value?.total, 2)
+})
+
+test('a rejected demand releases the generation it cancelled the warmup for', async () => {
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(4) }
+  }, () => {}, 'epoch')
+
+  // the demand arrives before the scheduled warmup starts, so it cancels it and then fails
+  cache.snapshot([{ id: 's', path: '/wt/s', liveness: 'online' }])
+  await assert.rejects(cache.demand('s', '/wt/s', async () => { throw new Error('open refused') }), /open refused/)
+  await cache.idle()
+  assert.equal(builds, 1, 'the cancelled warmup is re-authorized once its demand settled with nothing published')
+  assert.equal(cache.get('s')?.phase, 'ready')
+  assert.equal(cache.get('s')?.value?.total, 4)
 })
 
 test('projection warmup can be disabled for plain graph reads', async () => {

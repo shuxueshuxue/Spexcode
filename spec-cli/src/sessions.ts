@@ -1,9 +1,10 @@
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
@@ -28,6 +29,58 @@ const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-cre
 const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
 const DEFAULT_MAX_ACTIVE = 8
+
+const worktreeTrashDir = (root: string): string => join(root, '.worktrees', '.trash')
+const pendingTrashDeletes: string[] = []
+let trashDeleteRunning = false
+let trashDeleteScheduled = false
+
+async function drainWorktreeTrash(): Promise<void> {
+  while (pendingTrashDeletes.length) {
+    const path = pendingTrashDeletes.shift()!
+    try {
+      await rmAsync(path, { recursive: true, force: true })
+      if (existsSync(path)) throw new Error('path remains after recursive removal')
+    } catch (error) {
+      console.error(`spex: deferred worktree deletion failed for ${path}; retained for next backend startup: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+  trashDeleteRunning = false
+}
+
+function queueWorktreeTrash(path: string): void {
+  pendingTrashDeletes.push(path)
+  if (trashDeleteRunning || trashDeleteScheduled) return
+  trashDeleteScheduled = true
+  setImmediate(() => {
+    trashDeleteScheduled = false
+    trashDeleteRunning = true
+    void drainWorktreeTrash()
+  })
+}
+
+/** Start the one process-local serial reaper and resume any crash leftovers. */
+export function startWorktreeTrashReaper(): void {
+  const dir = worktreeTrashDir(mainRoot())
+  readdirAsync(dir, { withFileTypes: true }).then((entries) => {
+    for (const entry of entries) queueWorktreeTrash(join(dir, entry.name))
+  }).catch((error: NodeJS.ErrnoException) => {
+    if (error?.code !== 'ENOENT') console.error(`spex: deferred worktree trash scan failed for ${dir}; retrying next startup: ${error instanceof Error ? error.message : error}`)
+  })
+}
+
+function moveWorktreeToTrash(root: string, path: string): string {
+  const worktrees = resolve(join(root, '.worktrees'))
+  const source = resolve(path)
+  // Session creation uses <root>/.worktrees/<name>. Keep an adjacent trash for legacy/manual records whose
+  // recorded path predates that layout; the normal product path always lands in the governed .worktrees/.trash.
+  const parent = dirname(source)
+  const dir = parent === worktrees ? worktreeTrashDir(root) : join(parent, '.trash')
+  mkdirSync(dir, { recursive: true })
+  const target = join(dir, `wt-${Date.now()}-${randomUUID().slice(0, 12)}`)
+  renameSync(source, target)
+  return target
+}
 function maxActive(): number {
   let v: number | undefined
   try {
@@ -1144,6 +1197,43 @@ export async function setSessionSort(id: string, key: number | null): Promise<bo
 export async function sessionPrompt(id: string): Promise<string | null> {
   try { return readRecord(id) ? readPromptFile(id) : null }
   catch (e) { if (e instanceof SessionRecordUnusable) return null; throw e }
+}
+
+export type ArchiveSessionIndexRow = {
+  id: string; title: string; label: string; closedAt: string | null; node: string | null
+}
+export type ArchiveSessionIndexProbe = { promptReads?: number }
+
+// The archive overlay has no reader for the session model. Keep this projection separate from listSessions so
+// opening it skips the live tmux census, resident adapter probes, and files/web reads, and carries no full prompt bytes.
+export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe): Promise<ArchiveSessionIndexRow[]> {
+  const rows: ArchiveSessionIndexRow[] = []
+  for (const id of listSessionIds()) {
+    let entry: PublicRecordEntry
+    try { entry = readPublicRecordEntry(id) } catch { continue }
+    if (entry.kind !== 'ok') continue
+    const rec = fromRaw(entry.raw)
+    if (!rec.governed || !rec.archived) continue
+    const parts = {
+      id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
+      activity: null, note: rec.note, promptPreview: null as string | null,
+    }
+    // Name and note are ahead of the prompt in deriveTitle's precedence. Avoid touching the prompt artifact
+    // unless both are absent; only then can its preview change the visible title.
+    if (!rec.name && !rec.note?.trim()) {
+      probe && (probe.promptReads = (probe.promptReads || 0) + 1)
+      const prompt = readPromptFile(id)
+      parts.promptPreview = prompt ? oneLinePreview(prompt) : null
+    }
+    rows.push({
+      id: rec.session,
+      title: deriveTitle(parts),
+      label: deriveLabel(parts),
+      closedAt: rec.closedAt,
+      node: rec.node,
+    })
+  }
+  return rows
 }
 
 // Preserve rows through a transient record-read failure; prune after the store entry disappears.
@@ -2275,7 +2365,7 @@ const sessionCandidateLockId = (path: string, branch: string) => `create-resourc
 // after publication or bounded cleanup, so the path names exactly the transaction-owned worktree.
 export function pendingSessionCreateWorktreePaths(): Set<string> {
   const paths = new Set<string>()
-  let entries: import('node:fs').Dirent[]
+  let entries: Dirent[]
   try { entries = readdirSync(sessionCandidateReceiptDir(), { withFileTypes: true }) }
   catch { return paths }
   for (const entry of entries) {
@@ -3162,7 +3252,7 @@ function porcelainPath(line: string): string {
 }
 
 export type ReviewEvalFacts = { freshPass: number; freshFail: number; needReview: number; blind: number }
-export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' }
+export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' | 'dormant' }
 // the session-side gates only. The measured-loss readout is composed ABOVE this layer ([[manager-cockpit]]'s
 // cockpit.ts): the eval package imports this module, so reading it from here could only ever be a deferred
 // import working around a cycle. The eval side never consumed this field — it reads lint/conflict/ahead/dirty.
@@ -3281,22 +3371,14 @@ const MERGE_PROMPT = `Merge your branch into main, then settle the session hones
 
 export type MergeSessionResult =
   | { dispatched: true }
-  | { dispatched: false; reason: string; code?: 'session_merge_not_proposed'; status?: 409 }
+  | { dispatched: false; reason: string }
 
 export async function mergeSession(id: string): Promise<MergeSessionResult> {
   const wt = await findWorktree(id)
   if (!wt?.branch) return { dispatched: false, reason: 'no such mergeable session' }
   const r = await sendText(id, MERGE_PROMPT, undefined, {
     deferDrain: true,
-    acceptGuard: async (rec) => {
-      if (!rec.governed || rec.status !== 'awaiting' || rec.proposal !== 'merge') {
-        const error = new ResourceConflict(`session ${id} is not a governed awaiting merge proposal`)
-        Object.assign(error, { code: 'session_merge_not_proposed' })
-        throw error
-      }
-    },
   })
-  if (r.code === 'session_merge_not_proposed') return { dispatched: false, reason: r.error || 'merge dispatch refused', code: r.code, status: 409 }
   if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
   await resumeSession(id, { guard: false })
   await drainSession(id)
@@ -3810,9 +3892,10 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   let slot: string | null = null
   try { slot = existsSync(wt.path) ? treeSlotDir(wt.path) : null } catch { /* tree already unresolvable — nothing to key the slot by */ }
   if (existsSync(wt.path)) {
-    const removed = await gitTry(['-C', root, 'worktree', 'remove', '--force', wt.path])
-    if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: worktree removal failed; record and archive ref remain`)
-    if (existsSync(wt.path)) throw new ResourceConflict(`refusing to finish close for ${id}: worktree remains after removal`)
+    const trashed = moveWorktreeToTrash(root, wt.path)
+    const pruned = await gitTry(['-C', root, 'worktree', 'prune'])
+    if (!pruned.ok) console.error(`spex: deferred worktree ${id} was renamed to ${trashed}, but git worktree prune failed: ${pruned.stderr.trim() || pruned.failure}`)
+    queueWorktreeTrash(trashed)
   }
   if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
   requestQueueDrain()   // a close frees a slot — start the next queued session if any
@@ -4246,7 +4329,7 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
-type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed'
+type DispatchAcceptCode = 'dispatch_key_reused'
 type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
 type SendTextOptions = {
   replyVia?: 'note'

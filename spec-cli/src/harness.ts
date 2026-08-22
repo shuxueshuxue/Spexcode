@@ -265,7 +265,15 @@ export interface Harness {
   // dispatcher (harness id baked in) — a settings/hooks JSON for claude/codex, a generated event-bus PLUGIN
   // for opencode, a generated TypeScript EXTENSION for pi — plus the per-event command string (shared with
   // the trust writer so they hash identically).
-  shim(dispatch: string, spex: string): { content: string; cmd: (e: string) => string }
+  shim(dispatch: string, spex: string): { content: string; hooks?: Record<string, unknown[]>; cmd: (e: string) => string }
+  // WHO OWNS shimFile. 'exclusive' — a spexcode-named source file (opencode's plugin, pi's extension) that is
+  // wholly ours: whole-file write, whole-file delete. 'shared-json' — a config file the HOST AGENT shares with
+  // the user (`.claude/settings.json`, `.codex/hooks.json`, `.zcode/settings.json` also carry their
+  // permissions, env, statusLine and their OWN hooks), so we co-own only the identity-stamped hook entries
+  // inside it: merged in by writeManagedJsonHooks, removed the same way, and the file itself deleted only
+  // when nothing of the user's is left. A 'shared-json' adapter's shim() also returns the `hooks` payload the
+  // merge writer needs; an 'exclusive' one returns only `content`.
+  shimOwnership: 'exclusive' | 'shared-json'
   // make a dispatched/self-launched agent run the hooks with zero prompts. Codex writes PROJECT trust — and, on
   // a binary without `--dangerously-bypass-hook-trust`, per-hook trusted_hash blocks — into the GLOBAL
   // ~/.codex/config.toml (codex's security model: trust is global-only). PROJECT trust is UNCONDITIONAL: it
@@ -2284,14 +2292,135 @@ export function removeManagedBlock(file: string, comment: readonly [string, stri
   writeFileSync(file, out)
 }
 
+// @@@ managed-json-hooks - the JSON counterpart of writeManagedBlock/removeManagedBlock, for a shim file the
+// host agent SHARES with the user. `.claude/settings.json` (and `.codex/hooks.json`, `.zcode/settings.json`)
+// is the user's project config — permissions, env, statusLine, their own hooks — that merely HAPPENS to be
+// where the harness also discovers ours. A whole-file write there is silent data loss, and a whole-file
+// delete on uninstall makes it permanent for an untracked (gitignored) file. JSON has no comment syntax, so
+// the sentinel that scopes ownership is the hook COMMAND itself: every entry we write invokes `dispatch.sh`,
+// and ONLY such entries are ever removed. Everything else round-trips — other keys, other events, foreign
+// hook groups, and the user's half of a group that mixes both.
+const isOurHookEntry = (entry: unknown): boolean =>
+  !!entry && typeof entry === 'object' && typeof (entry as { command?: unknown }).command === 'string'
+  && (entry as { command: string }).command.includes('dispatch.sh')
+
+// drop OUR entries from one event's group list, keeping every foreign group byte-for-byte and keeping the
+// user's half of a mixed group. A group whose entries were all ours disappears with it.
+function stripOurHookGroups(list: unknown): unknown[] {
+  if (!Array.isArray(list)) return Array.isArray(list) ? list : []
+  const kept: unknown[] = []
+  for (const group of list) {
+    const inner = (group as { hooks?: unknown })?.hooks
+    if (!group || typeof group !== 'object' || !Array.isArray(inner)) { kept.push(group); continue }
+    const rest = inner.filter((e) => !isOurHookEntry(e))
+    if (rest.length === inner.length) kept.push(group)                       // nothing of ours in here
+    else if (rest.length) kept.push({ ...(group as object), hooks: rest })   // mixed group — keep their half
+  }
+  return kept
+}
+
+// read a shared shim file as JSON. Absent → {} (we are about to create it). UNPARSEABLE → throw: the file is
+// the user's, and overwriting prose we cannot read is exactly the data loss this primitive exists to prevent
+// (the harness itself cannot read it either, so the repair is the same one they already need).
+function readSharedShim(file: string): Record<string, unknown> {
+  if (!existsSync(file)) return {}
+  const raw = readFileSync(file, 'utf8')
+  if (!raw.trim()) return {}
+  // (re-serialization NORMALIZES the host's formatting — 2-space, one member per line. Their CONTENT all
+  // round-trips; their layout does not, because no JSON writer can reproduce hand-compacted objects. The one
+  // byte-level convention we DO honor is the trailing newline, below.)
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not a JSON object')
+    return parsed as Record<string, unknown>
+  } catch (e) {
+    throw new Error(`it is not readable JSON (${(e as Error).message}). SpexCode co-owns only its own hook entries in this file and will not overwrite content it cannot parse — fix the JSON (your harness cannot read it either), then re-run \`spex materialize\`.`)
+  }
+}
+
+// does this file end with a newline today? A host file keeps its own convention; a file we are about to
+// create gets the POSIX one. (Absent → true, so a fresh shim is newline-terminated.)
+function trailingNewline(file: string): boolean {
+  if (!existsSync(file)) return true
+  try { return /\n$/.test(readFileSync(file, 'utf8')) } catch { return true }
+}
+
+const hostHooksOf = (host: Record<string, unknown>): Record<string, unknown> => {
+  const h = host.hooks
+  return h && typeof h === 'object' && !Array.isArray(h) ? h as Record<string, unknown> : {}
+}
+
+// MERGE our per-event hook groups into a shared shim file: our previous entries are stripped first (so a
+// changed dispatch path or event set self-heals instead of accumulating), then re-appended AFTER the user's
+// groups for that event. Every other key keeps its value and its position.
+export function writeManagedJsonHooks(file: string, hooks: Record<string, unknown[]>): boolean {
+  const eol = trailingNewline(file) ? '\n' : ''
+  const host = readSharedShim(file)
+  const merged: Record<string, unknown> = {}
+  for (const [event, list] of Object.entries(hostHooksOf(host))) {
+    const kept = stripOurHookGroups(list)
+    if (kept.length) merged[event] = kept
+  }
+  for (const [event, groups] of Object.entries(hooks))
+    merged[event] = [...((merged[event] as unknown[]) ?? []), ...groups]
+  return writeFileIfChanged(file, JSON.stringify({ ...host, hooks: merged }, null, 2) + eol)
+}
+
+// the INVERSE: strip our entries, leave every other byte of meaning intact. The file is REMOVED only when
+// nothing of the user's remains ({} after our entries go) — the same deleteIfEmpty rule removeManagedBlock
+// applies to a wholly-ours CLAUDE.md, and safe here only because the write half no longer clobbers.
+export function removeManagedJsonHooks(file: string): void {
+  if (!existsSync(file)) return
+  const eol = trailingNewline(file) ? '\n' : ''
+  let host: Record<string, unknown>
+  try { host = readSharedShim(file) } catch { return }   // unparseable → not provably ours, leave it alone
+  const rest = { ...host }
+  const merged: Record<string, unknown> = {}
+  for (const [event, list] of Object.entries(hostHooksOf(host))) {
+    const kept = stripOurHookGroups(list)
+    if (kept.length) merged[event] = kept
+  }
+  if (Object.keys(merged).length) rest.hooks = merged
+  else delete rest.hooks
+  if (!Object.keys(rest).length) { rmSync(file, { force: true }); return }
+  writeFileIfChanged(file, JSON.stringify(rest, null, 2) + eol)
+}
+
+// does anything of the USER's survive in this shared shim file — the JSON analogue of the contract files'
+// host-content test ([[residence]])? Everything except our identity-stamped hook entries counts. This is what
+// decides the file's residence: wholly ours → hidden by the tree's ignore block exactly like any other machine
+// fact; carrying their content → left visible, because hiding a file the user owns is data-loss shaped.
+export function sharedShimHasHostContent(file: string): boolean {
+  if (!existsSync(file)) return false
+  let host: Record<string, unknown>
+  try { host = readSharedShim(file) } catch { return true }   // unreadable → assume theirs
+  const rest = { ...host }
+  delete rest.hooks
+  if (Object.keys(rest).length) return true
+  return Object.values(hostHooksOf(host)).some((list) => stripOurHookGroups(list).length > 0)
+}
+
+// the identity stamp on every generated skill/agent file. It is what lets BOTH halves of the pass tell our
+// artifact from a same-named file the user wrote: the erase phase refuses to delete an unstamped file, and
+// the write phase refuses to overwrite one ([[harness-delivery]]).
+export const GENERATED_MARK = '<!-- spexcode:generated -->'
+// is this path ours to replace or remove? An absent file is (nothing to lose); a present one only when it
+// carries the stamp. Unreadable → not provably ours.
+export function isGeneratedArtifact(file: string): boolean {
+  if (!existsSync(file)) return true
+  try { return readFileSync(file, 'utf8').includes(GENERATED_MARK) } catch { return false }
+}
+
 // the shim for one harness: every event → `SPEX='…' bash <dispatch> <harnessId> <Event>`. The harness id is
 // baked in so dispatch.sh can export SPEXCODE_HARNESS (the detector for the shell side). SPEX is inherited by
 // the cli-needing handlers.
-function buildShim(id: HarnessId, events: readonly string[], dispatch: string, spex: string): { content: string; cmd: (e: string) => string } {
+function buildShim(id: HarnessId, events: readonly string[], dispatch: string, spex: string): { content: string; hooks: Record<string, unknown[]>; cmd: (e: string) => string } {
   const cmd = (e: string) => `SPEX='${spex}' bash ${dispatch} ${id} ${e}`
-  const hooks: Record<string, unknown> = {}
+  const hooks: Record<string, unknown[]> = {}
   for (const e of events) hooks[e] = [{ hooks: [{ type: 'command', command: cmd(e) }] }]
-  return { content: JSON.stringify({ hooks }, null, 2), cmd }
+  // `content` stays the standalone rendering (what a shim file that is wholly ours would hold); `hooks` is
+  // what the merge writer folds into the user's shared config file. Every buildShim harness is 'shared-json'.
+  return { content: JSON.stringify({ hooks }, null, 2), hooks, cmd }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -2400,14 +2529,27 @@ function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts, preserve
   // pristine emptiness but never deleted — deleting a tracked file would surface as a `D` in the host's status.
   for (const f of h.contractFiles(proj)) removeManagedBlock(f, ['<!-- ', ' -->'], !isTrackedFile(proj, f))
   const shim = h.shimFile(proj)
-  if ((h.shimScope === 'tree' || !preserveProject) && existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
+  // a SHARED config file is un-written entry by entry (and disappears only if nothing of the user's is left);
+  // a file wholly ours goes whole, gated on its own dispatch.sh stamp.
+  if (h.shimScope === 'tree' || !preserveProject) {
+    if (h.shimOwnership === 'shared-json') removeManagedJsonHooks(shim)
+    else if (existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
+  }
   const anchor = h.worktreeHookAnchor(proj)   // the linked-worktree anchor copy, same identity gate as the shim
   if (anchor && existsSync(anchor) && readFileSync(anchor, 'utf8').includes('dispatch.sh')) rmSync(anchor, { force: true })
   if (!preserveProject) h.removeTrust(proj)
+  // the name sweep is identity-gated exactly like the stamp sweep: a live spec node named `distill` says
+  // WHICH path to look at, never that the file sitting there is ours. A user's same-named skill (the write
+  // half now refuses to overwrite it) must survive our uninstall.
   const sd = h.skillDir(proj)
-  if (sd) for (const n of arts.skills) rmSync(join(sd, n), { recursive: true, force: true })
+  const stamped = (f: string) => existsSync(f) && isGeneratedArtifact(f)
+  if (sd) for (const n of arts.skills) {
+    if (stamped(join(sd, n, 'SKILL.md'))) rmSync(join(sd, n), { recursive: true, force: true })
+  }
   const ad = h.agentDir(proj)
-  if (ad) for (const n of arts.agents) rmSync(join(ad, `${n}.md`), { force: true })
+  if (ad) for (const n of arts.agents) {
+    if (stamped(join(ad, `${n}.md`))) rmSync(join(ad, `${n}.md`), { force: true })
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -2583,6 +2725,7 @@ export const claudeHarness: Harness = {
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
   shimScope: 'tree',
+  shimOwnership: 'shared-json',
   worktreeHookAnchor: () => null,                    // claude's shim already lives in the worktree (.claude/settings.json) — self-anchors, no root rewrite
   contractFiles: (proj) => [join(proj, 'CLAUDE.md')],
   skillDir: (proj) => join(proj, '.claude', 'skills'),
@@ -2706,6 +2849,7 @@ export const codexHarness: Harness = {
   // cwd, so one shared shim serves every worktree.
   shimFile: (proj) => join(mainCheckout(proj), '.codex', 'hooks.json'),
   shimScope: 'project',
+  shimOwnership: 'shared-json',
   // a LINKED worktree also needs its OWN `.codex/hooks.json` so codex-rs anchors the project config layer for
   // the worktree cwd (without a `.codex/` under the worktree root, codex builds no layer, so the rewritten
   // root-checkout hooks are never discovered and NO hooks fire — bypass_hook_trust cannot rescue a layer that
@@ -3054,6 +3198,7 @@ export const piHarness: Harness = {
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.pi', 'extensions', 'spexcode.ts'),
   shimScope: 'tree',
+  shimOwnership: 'exclusive',
   worktreeHookAnchor: () => null,                    // the extension lives in the worktree and self-anchors, like claude
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // pi auto-loads AGENTS.md context files (shared with codex — writeManagedBlock is idempotent)
   skillDir: (proj) => join(proj, '.pi', 'skills'),   // Agent Skills standard dirs, discovered after project trust
@@ -3130,6 +3275,7 @@ export const zcodeHarness: Harness = {
   launchEnv: noLaunchEnv,
   shimFile: (proj) => join(proj, '.zcode', 'settings.json'),
   shimScope: 'tree',
+  shimOwnership: 'shared-json',
   worktreeHookAnchor: () => null,
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],
   skillDir: (proj) => join(proj, '.zcode', 'skills'),
@@ -3174,6 +3320,7 @@ export const opencodeHarness: Harness = {
   // by walking the cwd, so like claude it self-anchors and needs no root-checkout rewrite or worktree anchor.
   shimFile: (proj) => join(proj, '.opencode', 'plugins', 'spexcode.ts'),
   shimScope: 'tree',
+  shimOwnership: 'exclusive',
   worktreeHookAnchor: () => null,
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // opencode reads AGENTS.md natively (same file codex owns; the managed block is idempotent across writers)
   skillDir: (proj) => join(proj, '.opencode', 'skills'),

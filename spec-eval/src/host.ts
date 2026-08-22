@@ -1,4 +1,5 @@
 import type { RemarkTrack } from './remarks.js'
+import type { ReviewDiffFile } from '@spexcode/spec-core'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -18,7 +19,7 @@ export type ReviewPayload = {
   label: string
   ahead: number
   dirtyNonRuntime: number
-  diff: import('@spexcode/spec-core').ReviewDiffFile[]
+  diff: ReviewDiffFile[]
   gates: { conflictsWithMain: boolean; lint: { errorCount: number; warningCount: number } }
   proposal: { kind: string | null; note: string | null }
 }

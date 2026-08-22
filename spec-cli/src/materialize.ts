@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from '@spexcode/spec-core'
 import { compileManifest } from './hooks.js'
-import { writeManagedBlock, removeManagedBlock, HARNESSES, type HarnessArtifacts } from './harness.js'
+import { writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, isGeneratedArtifact, GENERATED_MARK, HARNESSES, type HarnessArtifacts } from './harness.js'
 import { git, gitBinary } from '@spexcode/spec-core'
 import { runtimeRoot, treeSlotDir, mainCheckout, readConfig } from '@spexcode/spec-core'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
@@ -17,6 +17,26 @@ export type MaterializedArtifact = {
   path: string
 }
 export type MaterializeResult = { contentHash: string; planted: MaterializedArtifact[] }
+// one shim landing: the adapter's bytes plus WHO OWNS the file they land in ([[harness-adapter]]'s
+// shimOwnership). `hooks` rides along for the shared-json case, where the bytes are merged rather than written.
+type ShimTarget = { ownership: 'exclusive' | 'shared-json'; content: string; hooks?: Record<string, unknown[]> }
+// land one shim. A file wholly ours is the plain byte-equality write; a config file the host agent SHARES with
+// the user gets ONLY our identity-stamped hook entries merged in, so their permissions, env, statusLine and
+// own hooks survive adoption (writeManagedJsonHooks, [[harness-adapter]]).
+// A shared file we cannot PARSE is the one landing that can fail, and it fails for a reason that is the
+// user's to fix. Report it and carry on: their broken JSON must not also cost them the contract, the skills
+// and the allowlist this pass still owes every other target (the pre-commit anchor runs this on the way into
+// every commit). Returns whether the shim actually landed.
+function landShim(file: string, shim: ShimTarget): boolean {
+  try {
+    if (shim.ownership === 'shared-json' && shim.hooks) writeManagedJsonHooks(file, shim.hooks)
+    else writeFileIfChanged(file, shim.content)
+    return true
+  } catch (e) {
+    console.error(`spexcode: no hooks delivered to ${file} — ${(e as Error).message}`)
+    return false
+  }
+}
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
@@ -105,8 +125,10 @@ function hostContentOf(file: string): string {
   return stripSpexcodeBlock(readFileSync(file, 'utf8'))
 }
 // the identity stamp on every generated skill/agent file — what lets the erase phase forget a product whose
-// NODE was renamed or deleted (the name-scoped sweep can only reconstruct paths the LIVE config still names).
-export const GENERATED_MARK = '<!-- spexcode:generated -->'
+// NODE was renamed or deleted (the name-scoped sweep can only reconstruct paths the LIVE config still names),
+// and what stops the write phase from landing on a same-named file the user wrote. Defined with the adapter
+// (both halves of the pass need it); re-exported here for the commit-surgery reader.
+export { GENERATED_MARK }
 function pruneGeneratedSkills(dir: string | null, keep: ReadonlySet<string>): boolean {
   if (!dir || !existsSync(dir)) return false
   let changed = false
@@ -168,10 +190,15 @@ function reconcileTree(proj: string, targets: TreeTargets, tracked: (file: strin
     removeManagedBlock(file, ['<!-- ', ' -->'], !tracked(file))
     removed = true
   }
-  const treeShims = new Set(HARNESSES.filter((h) => h.shimScope === 'tree').map((h) => h.shimFile(proj)))
-  const anchors = new Set(HARNESSES.map((h) => h.worktreeHookAnchor(proj)).filter((path): path is string => !!path))
-  for (const file of [...treeShims, ...anchors]) {
+  // a DESELECTED harness's shim is un-landed the same way its owner would clean it: entry-by-entry out of a
+  // config file the host agent shares with the user, whole-file only when the file is wholly ours.
+  const shimSites = HARNESSES.flatMap((h) => [
+    ...(h.shimScope === 'tree' ? [[h.shimFile(proj), h.shimOwnership] as const] : []),
+    ...((path) => path ? [[path, h.shimOwnership] as const] : [])(h.worktreeHookAnchor(proj)),
+  ])
+  for (const [file, ownership] of new Map(shimSites)) {
     if (targets.treeShims.has(file) || targets.anchors.has(file) || !existsSync(file)) continue
+    if (ownership === 'shared-json') { removeManagedJsonHooks(file); removed = true; continue }
     if (readFileSync(file, 'utf8').includes('dispatch.sh')) { rmSync(file, { force: true }); removed = true }
   }
   for (const dir of new Set(HARNESSES.map((h) => h.skillDir(proj)).filter((path): path is string => !!path)))
@@ -270,8 +297,8 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const artifactPaths: string[] = []
   const machinePaths: string[] = []
   const contractTargets = new Map<string, string>()
-  const treeShimTargets = new Map<string, string>()
-  const anchorTargets = new Map<string, string>()
+  const treeShimTargets = new Map<string, ShimTarget>()
+  const anchorTargets = new Map<string, ShimTarget>()
   const skillTargets = new Map<string, string>()
   const agentTargets = new Map<string, string>()
   const skillsByDir = new Map<string, Set<string>>()
@@ -281,16 +308,22 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     if (prior !== undefined && prior !== content) throw new Error(`conflicting materialize targets for ${path}`)
     targets.set(path, content)
   }
+  const addShimTarget = (targets: Map<string, ShimTarget>, path: string, shim: ShimTarget) => {
+    const prior = targets.get(path)
+    if (prior !== undefined && prior.content !== shim.content) throw new Error(`conflicting materialize targets for ${path}`)
+    targets.set(path, shim)
+  }
   for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) addTarget(contractTargets, f, contract)
     const shim = h.shim(DISPATCH, SPEX)
+    const target: ShimTarget = { ownership: h.shimOwnership, content: shim.content, hooks: shim.hooks }
     if (h.shimScope === 'tree') {
-      addTarget(treeShimTargets, h.shimFile(proj), shim.content)
+      addShimTarget(treeShimTargets, h.shimFile(proj), target)
     }
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) addTarget(anchorTargets, anchor, shim.content)
+    if (anchor) addShimTarget(anchorTargets, anchor, target)
   }
   for (const sk of skillNodes) for (const h of selected) {
     const dir = h.skillDir(proj); if (!dir) continue
@@ -318,32 +351,45 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     record('contract', file)
   }
   const contractPaths = [...contractTargets.keys()]
-  for (const [file, content] of treeShimTargets) {
-    mkdirSync(dirname(file), { recursive: true }); writeFileIfChanged(file, content)
-    record('shim', file); machinePaths.push(file)
+  // A shim file's residence is the SAME live content fact a contract file's is ([[residence]]): wholly ours →
+  // a machine fact hidden by the tree's ignore block, exactly as before; carrying the user's own content (or
+  // already tracked) → left VISIBLE, because hiding a file they own is data-loss shaped. A visible shim means
+  // our hook commands — absolute paths to THIS machine's toolchain — sit in a file they may commit, so say so.
+  const visibleShims: string[] = []
+  for (const [file, shim] of [...treeShimTargets, ...anchorTargets]) {
+    mkdirSync(dirname(file), { recursive: true })
+    if (!landShim(file, shim)) continue
+    record('shim', file)
+    const theirs = shim.ownership === 'shared-json' && (isTrackedHere(file) || sharedShimHasHostContent(file))
+    if (theirs) visibleShims.push(file)
+    else machinePaths.push(file)
   }
-  for (const [file, content] of anchorTargets) {
-    mkdirSync(dirname(file), { recursive: true }); writeFileIfChanged(file, content)
-    record('shim', file); machinePaths.push(file)
-  }
+  if (visibleShims.length)
+    console.warn(`spexcode: ${visibleShims.map((f) => relative(proj, f)).join(', ')} carries your own configuration, so it stays visible to git — and it now also holds SpexCode's hook entries, whose commands are absolute paths to THIS machine's toolchain. Committing them would break the file for everyone else. Keep them out of your commits (each clone re-materializes its own), or adopt with "harnesses": [] and wire the hooks yourself.`)
   const selectedByDispatch = new Map(selected.map((h) => [h.dispatchId, h]))
   for (const h of selectedByDispatch.values()) {
     const shim = h.shim(DISPATCH, SPEX)
     if (h.shimScope === 'project') {
       const file = h.shimFile(proj)
-      mkdirSync(dirname(file), { recursive: true }); writeFileIfChanged(file, shim.content)
-      record('shim', file)
+      mkdirSync(dirname(file), { recursive: true })
+      if (landShim(file, { ownership: h.shimOwnership, content: shim.content, hooks: shim.hooks })) record('shim', file)
     }
     for (const file of h.writeTrust(proj, shim.cmd)) record('trust', file)
   }
-  for (const [file, content] of skillTargets) {
+  // A spec node named `distill` says WHICH path to write, never that the path is ours to take. An existing
+  // file with no GENERATED_MARK is the user's own same-named skill/agent — skip it and report the collision,
+  // the same identity gate the erase half has always applied. Skipped paths are NOT recorded and NOT excluded:
+  // the file is theirs in every respect, including how git sees it.
+  const collisions: string[] = []
+  const plantGenerated = (kind: 'skill' | 'agent', file: string, content: string) => {
+    if (!isGeneratedArtifact(file)) { collisions.push(file); return }
     mkdirSync(dirname(file), { recursive: true }); writeFileIfChanged(file, content)
-    artifactPaths.push(file); record('skill', file)
+    artifactPaths.push(file); record(kind, file)
   }
-  for (const [file, content] of agentTargets) {
-    mkdirSync(dirname(file), { recursive: true }); writeFileIfChanged(file, content)
-    artifactPaths.push(file); record('agent', file)
-  }
+  for (const [file, content] of skillTargets) plantGenerated('skill', file, content)
+  for (const [file, content] of agentTargets) plantGenerated('agent', file, content)
+  if (collisions.length)
+    console.warn(`spexcode: left ${collisions.length} file(s) untouched — you already have a file at that name and it is not SpexCode-generated: ${collisions.map((f) => relative(proj, f)).join(', ')}. Rename the colliding .spec node (or your file) if you want the generated one delivered.`)
   // (8) the PLUGIN target ([[plugin-harness]]): materialize the whole system into one self-contained Claude-plugin
   //     bundle per selected folder. A plugin is EXCLUSIVE (`selected` is empty then). Pruning a DESELECTED
   //     folder needs the PREVIOUS folder set, which the live config no longer names — the one landing point
@@ -393,9 +439,16 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const ignoreFile = join(proj, '.gitignore')
   const ignoreTracked = isTrackedHere(ignoreFile)
   const ignoreHost = existsSync(ignoreFile) ? stripSpexcodeBlock(readFileSync(ignoreFile, 'utf8'), ['# ', '']) : ''
-  if (!ignoreTracked && !ignoreHost.trim()) localEntries.push('.gitignore')
+  // the self-entry only earns its keep alongside a real one: with NOTHING selected ("harnesses": []) there is
+  // no artifact to hide, and a .gitignore whose whole content is a rule ignoring itself is pure footprint.
+  // An empty body then un-writes the block, taking a wholly-ours .gitignore with it.
+  if (localEntries.length && !ignoreTracked && !ignoreHost.trim()) localEntries.push('.gitignore')
   const ignoreBody = entries(localEntries)
-  if (writeManagedBlock(ignoreFile, ignoreBody, ['# ', ''])) changedMaterialized.add(ignoreFile)
+  if (ignoreBody) {
+    if (writeManagedBlock(ignoreFile, ignoreBody, ['# ', ''])) changedMaterialized.add(ignoreFile)
+  } else {
+    removeManagedBlock(ignoreFile, ['# ', ''], !ignoreTracked && !ignoreHost.trim())
+  }
 
   const payloads: ContractFilterPayload[] = filterContracts.map((file) => ({ file: relative(proj, file), content: contract }))
   if (ignoreTracked || ignoreHost.trim()) payloads.push({ file: '.gitignore', content: ignoreBody })

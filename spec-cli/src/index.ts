@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -32,6 +32,9 @@ import { fileHumanOk } from '@spexcode/spec-eval/humanok'
 import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnavailableError } from '@spexcode/spec-eval/sessioneval'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
+import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
+import { loadConfig as loadLintConfig } from './lint.js'
+import { listNodeAttachments, readNodeAttachment } from './spec-attachments.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
@@ -47,6 +50,7 @@ installEvalHost()
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
 installProcessGuards()
+startWorktreeTrashReaper()
 
 const app = new Hono()
 startUploadReaper()
@@ -137,6 +141,54 @@ app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.
 // worktree's working tree. An untracked brand-new node is invisible to `git diff <base>`, so when the base
 // diff is empty AND status is `??` synthesize an all-additions view via `diff --no-index` (gitTry — --no-index
 // exits 1, which gitA would swallow). Gated on `??` so a tracked file with no pending change stays empty.
+// [[source-read]]: a governed source file, read as a byte WINDOW. The spec tree names the files it governs
+// but the board could never open one — this is the read half of "spec and code on one screen". The policy
+// gate is `isSourceFile`, the SAME predicate the coverage walk uses, so the set of files the board can show
+// is by construction the set the project governs. Query: path (repo-relative), offset, limit; the response
+// carries the file's total size so the client can page without a second HEAD.
+app.get('/api/source', (c) => {
+  try {
+    const root = repoRoot()
+    const slice = readSourceSlice(
+      root,
+      c.req.query('path') || '',
+      loadLintConfig(root),
+      Number(c.req.query('offset') ?? 0),
+      Number(c.req.query('limit') ?? SOURCE_SLICE_MAX_BYTES),
+    )
+    return c.json(slice)
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
+// [[node-attachments]]: what a node carries in its own folder besides its body and its readings. The board
+// showed exactly one file per node folder; these are the rest — eval contracts, evidence dirs, raw captures.
+// A different gate from /api/source on purpose (the spec tree is the product's own data, deliberately outside
+// the coverage policy), the same windowed read underneath.
+app.get('/api/specs/:id/files', (c) => {
+  try {
+    return c.json({ files: listNodeAttachments(repoRoot(), c.req.param('id')) })
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
+app.get('/api/specs/:id/files/content', (c) => {
+  try {
+    const slice = readNodeAttachment(
+      repoRoot(),
+      c.req.param('id'),
+      c.req.query('name') || '',
+      Number(c.req.query('offset') ?? 0),
+      Number(c.req.query('limit') ?? SOURCE_SLICE_MAX_BYTES),
+    )
+    return c.json(slice)
+  } catch (e) {
+    if (e instanceof SourceReadError) return c.json({ error: e.message }, e.status as 400 | 404)
+    throw e
+  }
+})
 app.get('/api/edit', async (c) => {
   const source = c.req.query('source') || '', path = c.req.query('path') || ''
   if (!source || !path) return c.json({ patch: '' })
@@ -464,6 +516,7 @@ app.delete('/api/uploads/:id', (c) => {
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all') === '1' || c.req.query('all') === 'true')))
+app.get('/api/sessions/archive-index', async (c) => c.json(await listArchivedSessionIndex()))
 app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
 app.post('/api/sessions', async (c) => {
   const requestKey = c.req.header('idempotency-key') || randomUUID()
@@ -718,7 +771,7 @@ app.post('/api/sessions/:id/resume', async (c) => {
 // A merge intent to the session's own agent (it runs the merge), never a server merge.
 app.post('/api/sessions/:id/merge', async (c) => {
   const r = await mergeSession(c.req.param('id'))
-  return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
+  return c.json(r, r.dispatched ? 200 : 409)
 })
 
 // one WS owns one native tmux client (pty-bridge): server→client = that client's rendered PTY bytes (binary);

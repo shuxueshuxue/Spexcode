@@ -90,7 +90,7 @@ gateway-to-gateway communication tunnel and requires a full session id.`, ['sele
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
       'Move only an unreadable record after the backend proves every named residue absent. --thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     done: ['spex session done --propose merge|nothing|close [--note T]',
-      '`merge` declares review: committed work ready for human review, runs the project\'s configured candidate-vs-main acceptance gate automatically, and is the ONLY declaration that offers a clickable merge. `nothing` is an intended trap: it writes no state and sends the agent to the true merge, close, ask, or park destination. `close` declares close-pending only for settled work: discardable worktree and no outstanding human decision, follow-up, or inspection. The human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
+      '`merge` declares review: committed work ready for human review and is the ONLY declaration that offers a clickable merge. `nothing` is an intended trap: it writes no state and sends the agent to the true merge, close, ask, or park destination. `close` declares close-pending only for settled work: discardable worktree and no outstanding human decision, follow-up, or inspection. The human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
     park: ['spex session park --note <what-you-await>',
       'Declare parked only when a managed watch delivery or real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
     ask: ['spex session ask --note <what-you-await>',
@@ -162,7 +162,11 @@ Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plug
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). --harness is REQUIRED — the explicit choice of which harnesses materialize delivers into
 (stamped as spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
-field satisfies it. Additive — never overwrites your files. --preset picks the .plugins plugin tier (cumulative).
+field satisfies it; --harness none delivers into NO harness (spec tree + lint + git hooks only, nothing
+written into any agent's config). Additive: it never replaces a file you own — where a harness discovers its
+hooks in your own config (.claude/settings.json, …) only SpexCode's entries are merged in and out, and a
+skill/agent name you already use is skipped and reported rather than overwritten.
+--preset picks the .plugins plugin tier (cumulative).
 Footprint is fixed: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
 a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex spec lint (adoption TODO)',

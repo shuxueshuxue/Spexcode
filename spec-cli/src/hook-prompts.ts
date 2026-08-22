@@ -32,7 +32,7 @@ const SPEC_OF_FILE = 'Contract context for this edit:\n{details}'
 const STOP_GATE_VARIANTS = Object.freeze({
   full: [
     'Your session state is a CLAIM the graph, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `{cli} session <choice>`, choosing the <choice> whose condition holds:',
-    '  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for human review. It automatically runs the configured candidate-vs-main acceptance gate, declares REVIEW, and is the ONLY proposal that offers a clickable merge.',
+    '  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for human review. It declares REVIEW and is the ONLY proposal that offers a clickable merge.',
     '  • done --propose nothing — TRAP: records no state. Choose merge, close, ask, or park below.',
     '  • done --propose close — task genuinely settled, work landed (or none to merge), worktree no longer needed, and no human decision, follow-up, or posted artifact awaits inspection: propose human close. It declares CLOSE-PENDING, not merge. Never run `session close` on your own id.',
     '  • ask --note <what-you-await> — a human reply, direction, or decision is needed, including a reported finding/recommendation, handoff, or posted-artifact inspection. It declares ASKING and resumes only when they reply.',

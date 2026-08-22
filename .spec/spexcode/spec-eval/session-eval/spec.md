@@ -160,27 +160,41 @@ being masked by an earlier successful model. No TTL, patrol, second generation, 
 copy participates.
 
 The backend retains a content-addressed, per-session projection cache. Each entry has a process epoch and a
-monotonic input generation `g`, a single in-flight build, and the last stable projection. A cache miss is
-`loading`; a relevant canonical input event increments `g` synchronously and becomes `updating` while preserving
-the last-known value; a stable build publishes `ready` only when both its generation and content revision still
-match. A changed generation or revision discards the result and the runner follows the newest generation. An
+monotonic input generation `g`, a single in-flight build, and the last stable projection. A cache miss whose
+build is running or scheduled is `loading`; a relevant canonical input event increments `g` synchronously and
+becomes `updating` while preserving the last-known value; a stable build publishes `ready` only when both its
+generation and content revision still match. `loading` and `updating` are ARRIVAL phases and are reserved for
+entries something is actually computing: an entry this cache has decided not to build reports `dormant`
+instead, carrying its last-known value when it has one. Every phase is a promise about what happens next, and
+a reader that cannot tell "a value is coming" from "no value is coming" can only wait forever. A changed generation or revision discards the result and the runner follows the newest generation. An
 error is explicit and also preserves last-known. Burst events may coalesce into one build/publication for the
 latest generation, but no older compute can overwrite it. The graph snapshot only batch-reads these cached lean
 projections; it never runs `buildSessionEvals` once per session row. A single-session READ of that same
 cache exists beside the batch one — it mints no entry, schedules no build, and moves no generation — so a
 consumer that must NOT build can report the existing projection with its phase. [[manager-cockpit]]'s review
 payload is exactly that consumer: this engine calls that payload, so the dependency runs one way only, and
-the cockpit reports `loading`/`updating`/`error`/absent as itself rather than as a computed result. Initial cache misses for live sessions may
+the cockpit reports `loading`/`updating`/`dormant`/`error`/absent as itself rather than as a computed result. Initial cache misses for live sessions may
 start one independent build per eligible entry. There is no cross-session concurrency cap or publication cohort:
 one session's Git/history work and one session's summary have no shared evaluation cut. Each entry publishes its
 own stable/error outcome as soon as its own generation and content revision still match; an unrelated slow,
 failed, or newer session never keeps that entry at `loading`/`updating`. Entry identity and generation are
 compared again at publication, so this independence cannot let an old result overwrite newer input. The graph
 stream emits the resulting session-unit deltas through its existing debounce; no summary-specific transport,
-cache, timer, or aggregate is introduced. Dormant offline history is intentionally demand-only: the graph emits
-its loading/last-known projection without scheduling a summary build for every retained session, while opening
-that session's scoped Evals route builds only the requested worktree model. This keeps the toolbar projection
-useful for active work without turning historical session count into a cold-start fan-out.
+cache, timer, or aggregate is introduced. Dormant offline history is intentionally demand-only: the graph schedules no
+summary build for a retained record, while opening that session's scoped Evals route builds only the requested
+worktree model. This keeps the toolbar projection useful for active work without turning historical session
+count into a cold-start fan-out. Because that decision is the cache's own, the cache is what names it: an
+offline entry with no build running or scheduled and no observer hold projects `dormant`, so its reader can
+offer the door that WOULD measure it instead of rendering progress that never lands. An archived session
+leaves the working set entirely and therefore has no projection at all — the same fact, and its reader draws
+the same conclusion. `ready` and `error` are outcomes, not waiting, and stay as they are when a session goes
+dormant.
+
+A demand may cancel its own entry's not-yet-started warmup so the two never build the same generation twice.
+That cancellation lasts exactly as long as the demand: once the demand settles the entry is re-authorized
+unless the demand itself published a ready value. A demand that FAILED published nothing, so leaving its
+cancellation in place would strand the entry at a generation nobody is allowed to schedule — a toolbar waiting
+on a build that was cancelled on its behalf and never replaced.
 
 Eager builds are enabled only while a delta graph subscriber owns the current stream era; plain HTTP/CLI
 reads therefore expose `loading` or last-known summaries without starting work for retained records. Within an

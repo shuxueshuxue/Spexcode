@@ -15,6 +15,13 @@ related:
 
 ## raw source
 
+**A rail destination is not the same thing as an addressable kind**, and the rail now says so by reading
+its own list. It read the full address list for as long as every address was a page; the moment documents
+became addressable ([[view-registry]]), that stopped being true — `spec` and `file` are places you arrive
+at by opening something, and there is no "go to the spec page" the way there is a sessions page. The first
+version without the split threw `unknown icon: spec` while faithfully trying to draw a destination that
+does not exist.
+
 The dashboard grew top-level surfaces — the spec graph, the session board, the evals feed, the issues
 page, settings — but they were organized as one page with overlays: the board a full-screen modal over the
 graph, the review surfaces tabs inside that modal, settings a popup. A user couldn't bookmark the session
@@ -26,8 +33,14 @@ restores the list.
 
 ## expanded spec
 
-- **One rail, five pages — every entry a real anchor.** A compact, always-visible **40px** icon rail on the app's left
-  edge is the page switch: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
+- **The rail carries two kinds of entry, finding before opening.** Under the project chip sit the
+  workspace's FINDING controls — the explorer-dock toggle and search, plain buttons that change what helps
+  you look, lit while their surface is up, rendered only inside a workspace (the cold review fast-path
+  mounts this rail with no WorkspaceProvider, and a dock toggle with no dock would be a lie) — and below
+  them the DOCUMENT OPENERS, each a real anchor naming an address. The order is the mockup's and VS Code's
+  alike: what helps you look, then where you can go.
+- **One rail, five openers — every opener a real anchor.** A compact, always-visible **40px** icon rail on the app's left
+  edge names the addressable kinds: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
   bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in
@@ -48,8 +61,8 @@ restores the list.
   Evals, Issues, and Settings render as muted `aria-disabled` icons with no `href`, handler, or keyboard
   route; they must neither navigate nor wake any live transport. The live dashboard retains five anchors.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
-  unknown hash lands here) or `#/graph/<node>` (a shareable spec-node focus), `#/sessions` (+
-  `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
+  unknown hash lands here) or `#/graph/<node>` (a finding-surface focus, never a tab), `#/sessions` (+
+  `#/sessions/<sel>` deep-linking an object tab), `#/evals` (+
   `#/evals/<node>/<scenario>`, the canonical eval DETAIL address — each segment encoded on its own so the
   path shape survives), `#/issues` (+ `#/issues/<id>`), `#/settings`. A LIST page's filter state rides a
   query string INSIDE the hash — for the review lists, ONE `?q=<raw token text>` param ([[review-query]];
@@ -58,6 +71,9 @@ restores the list.
   behind plain gateways with no index.html fallback, and a hash route needs nothing from any server.
   `route.js` is the whole route layer (parse — path + query, hash construction, navigate, one hashchange
   hook, legacy normalization); the object-level address vocabulary over it is [[address-routing]].
+- **The rail is the finding layer; the strip is the object layer.** Rail destinations remain graph, sessions,
+  evals, issues, and settings. Only an address with an object parameter enters the strip, as defined by
+  [[tab-strip]]/[[view-registry]]; bare board/list routes stay navigable but never accumulate.
 - **Pages push; list→detail pushes; filter changes push; automatic echoes replace.** Switching pages
   pushes a history entry. Opening a DETAIL page from its list is ALSO a push — measured on GitHub: history
   grows by one and browser Back restores the previous list URL, filters intact; the detail is a real

@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: l0-only-adoption
+    tags: [cli]
+    description: >-
+      Run `spex init --harness none` in a fresh git repo. Inspect the whole tree, the planted spexcode.json,
+      and the git hooks; then commit the seeded data and run `spex spec lint` and `spex graph --json`.
+      Finally set `harnesses` to ["claude"], re-materialize, set it back to [], and re-materialize.
+    expected: >-
+      spexcode.json carries "harnesses": [] and the tree gains ONLY .spec/ and spexcode.json — no .claude,
+      .codex, .opencode, .pi or .zcode dir, no CLAUDE.md or AGENTS.md, and no .gitignore (with nothing to
+      hide, an ignore file that only ignores itself is not written). The git hooks ARE installed, and lint
+      and graph both work with zero materialized artifacts — the L0 asset stands alone. Selecting claude
+      later delivers it at the next materialize, and returning to [] prunes the contract and shim again;
+      no re-adoption at any point.
   - name: illegal-harness-set-fails-loud
     tags: [cli]
     description: >-

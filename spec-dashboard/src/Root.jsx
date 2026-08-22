@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import { TransientNoticeProvider } from './TransientNotice.jsx'
+import StatusBar, { StatusBarProvider } from './StatusBar.jsx'
 import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
@@ -28,18 +29,21 @@ function ReviewEntry({ page }) {
   }
 
   return (
-    <div className="app">
-      <TooltipLayer />
-      <SideBar page={page} identity={null} catalog={null} />
-      <div className="app-main">
-        <div className={`page-pane page-${page}`}>
-          <Suspense fallback={loading}>
-            {page === 'evals'
-              ? <EvalsPage onOpenSession={openSession} />
-              : <IssuesPage onOpenSession={openSession} />}
-          </Suspense>
+    <div className="app-shell">
+      <div className="app">
+        <TooltipLayer />
+        <SideBar page={page} identity={null} catalog={null} />
+        <div className="app-main">
+          <div className={`page-pane page-${page}`}>
+            <Suspense fallback={loading}>
+              {page === 'evals'
+                ? <EvalsPage onOpenSession={openSession} />
+                : <IssuesPage onOpenSession={openSession} />}
+            </Suspense>
+          </div>
         </div>
       </div>
+      <StatusBar />
     </div>
   )
 }
@@ -60,17 +64,17 @@ export default function Root() {
   // App can normalize it back to the graph.
   if (PUBLIC_GRAPH_ONLY) {
     return (
-      <TransientNoticeProvider>
+      <TransientNoticeProvider><StatusBarProvider>
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}><App /></Suspense>
-      </TransientNoticeProvider>
+      </StatusBarProvider></TransientNoticeProvider>
     )
   }
 
   return (
-    <TransientNoticeProvider>
+    <TransientNoticeProvider><StatusBarProvider>
       <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
         {lightweight ? <ReviewEntry page={page} /> : <App />}
       </Suspense>
-    </TransientNoticeProvider>
+    </StatusBarProvider></TransientNoticeProvider>
   )
 }

@@ -12,6 +12,7 @@ export const sessionSurfaceStorageKey = (projectId = PROJECT_ID) => `${STORAGE_P
 
 const emptyState = () => ({ defaultSurface: SESSION_SURFACE_TERMINAL, sessions: {} })
 const validSurface = (value) => SURFACES.has(value)
+export const isSessionSurface = validSurface
 
 function normalizeState(value) {
   const state = emptyState()

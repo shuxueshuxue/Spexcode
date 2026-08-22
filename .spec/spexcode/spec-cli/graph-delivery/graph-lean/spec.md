@@ -36,6 +36,11 @@ the hot poll: the **detail view** fetches `{body, parts}` from `/api/specs/:id/c
 **search palette** ([[spec-search]]) fetches the body corpus from `/api/specs/lite` on open and ranks nodes
 over full prose — `body` is load-bearing for search, so the corpus keeps ranking whole. Both endpoints are filesystem-only (no git);
 `loadSpecs`/`/api/specs` still expose `body`+`parts` verbatim, [[three-part-body]]'s contract untouched.
+What the prose CONTAINED that the overview needs is projected instead of shipped: a node carries `mentions`,
+the resolved node ids its body references, so a backlink surface draws that edge without the body it came
+from. An id list is the summary of a reference the way a count is the summary of a row list — the cut this
+node exists for, not an exception to it. A ghost node (added by a worktree, not yet on main) carries the
+same field empty, so no consumer branches on its absence.
 Where a payload is in flight the detail view shows a **loading spinner** (not an empty pane), so a slow
 `/content` read shows as loading, not a bodyless node; a failed fetch resolves to an empty body,
 never a spinner that never stops. **No minimum display time** — the body lands the instant
@@ -93,6 +98,11 @@ once per change and served from cache, so a poll storm no longer re-walks git pe
 assembly's fs walks yield the event loop instead of starving the liveness probe. The network budget is
 measured as a whole-app ledger: initial graph bytes/forbidden-row counts plus the first opened list response,
 never an isolated endpoint claim.
+
+The same summary-first rule applies to the dashboard's archive index ([[session-console]]): its complete one-shot
+index is an archived-only `id`/`title`/`label`/`closedAt`/`node` projection, while the selected session's complete
+record is fetched by id for the read-only conversation. The zone's preview and the overlay reuse that cached index;
+there is no second archive query and no pagination.
 
 `buildBoard` is the frozen-input composer: its CLI/server adapter reads the spec snapshot, public session
 census, resolved layout, and one issue/forge snapshot, then passes those values together. The composer does

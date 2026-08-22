@@ -59,7 +59,18 @@ worktree state to inspect and continue with the immutable candidate tree.
 
 - **integrity** (error): every file a spec lists in `code:` exists — broken links block. A SELECTOR
   (`path#symbol` on either relation, [[code-anchor]]) must also resolve: dead (unit deleted/renamed),
-  ambiguous (two same-named units), or an unparseable file all error with the repair spelled out. A
+  ambiguous (two same-named units), or an unparseable file all error with the repair spelled out.
+  **Which file DECLARED the selector does not change this.** A scenario's `code:`/`related:` in an
+  eval.md writes the same `path#unit` and resolves through the same engine, so it is refused at the same
+  gate, and the finding names the scenario and the eval.md line to repair. Splitting one integrity fact
+  by declaration site is what let an unparseable governed file — anchored by dozens of scenarios and by
+  no node — pass this gate while it made every session's evaluation unavailable ([[session-eval]]).
+  What does NOT cross is the drift WINDOW: a scenario's selector opens none, because a moved eval axis is
+  [[eval-core]] freshness, which stays advisory. That is the line — a **measurement gap never blocks**, a
+  **broken selector always did** — and `spex eval lint` keeps reporting the same resolution failure in its
+  own worklist, where it explains why that scenario's reading is stuck rather than deciding the commit.
+  Because the gate resolves the candidate's selectors only, one parse per candidate file is shared by
+  every selector that names it, whichever file declared them. A
   language with no designated extractor remains an integrity error. A designated extractor whose
   dependency cannot run here is different: lint emits an explicit extractor-unavailable **integrity
   error**, names the repair, skips that language's anchor checks, and continues; the non-zero result
@@ -96,7 +107,11 @@ worktree state to inspect and continue with the immutable candidate tree.
   and every surface suddenly speaks a longer id than the dir name.
 - **mention** (error): every `[[id]]` in body PROSE names a real node — a dangling mention is a broken
   edge in the very graph the tree keeps honest. Retarget it or drop it; a placeholder (`[[node]]`,
-  `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text.
+  `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text. The rule does
+  not own the grammar: it reads bodies through the same `bodyMentions` parser the loader's mention
+  projection uses ([[source-of-truth]]), so the set of references lint judges and the set the graph draws
+  are the same set by construction. One finding per distinct dangling name — a name repeated in one body is
+  still one broken edge.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
   project. The source set is one explicit algebra: current regular text under those roots, selected by

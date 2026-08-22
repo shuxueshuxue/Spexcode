@@ -21,6 +21,13 @@ interface is where that intent is changed in place.
 
 ## expanded spec
 
+**The popup is the keyboard's lens; the document is the mouse's destination.** Since the workspace gained
+a real document area ([[spec-view]]), the popup is no longer the only reading surface — it is the *skim*
+surface, kept because its Shift+nav follow-the-focus walk (ten sibling docs in ten keypresses,
+[[keyboard-nav]]) has no document-area equivalent. The gestures that mean "take me to read this properly" —
+a node **double-click** on the board, the node menu's *view details* — leave the board and open the node as
+a document instead of raising the popup. `i`/Enter keep the lens.
+
 The node popup is the `i` surface: a fixed pop-out (`min(900px,90vw) × min(600px,84vh)`) with tabs, opened
 over the board and dismissed with `Esc`. It is **reference-only** (`NodeView.jsx`) — no `work` pane, no
 embedded terminal — and it is a **lens on the focus, not a pinned document**: the popup renders whichever
@@ -34,7 +41,14 @@ the **spec doc** — an information board. A **stat bar** carries the
 node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **eval
 score** ([[eval-score-badge]]), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
-files, then the body as a living current-state document (the two
+files — each one a **door, not a label**: a `code:` entry opens the file itself in place ([[source-view]]),
+under the prose that claims it and inside the same scroll, one at a time. A separate tab would have put the
+claim and the claimed thing back on two screens, which is the separation the affordance exists to close.
+Under them, what the node **carries** ([[node-attachments]]): the rest of its own folder — its eval
+contract, an evidence directory, a raw capture — opening in the same viewer with the same one-at-a-time
+rule. The reader is not asked to learn that bytes from the spec tree behave differently from bytes from the
+worktree, even though the gate that admits them is not the same gate.
+Then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
 an agent-authored *current state* — what's-done is read from the derived status, never narrated, because
 agents hallucinate completion. The proof and

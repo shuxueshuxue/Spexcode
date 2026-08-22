@@ -1,26 +1,25 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionFooterState, sessionForest, sessionHeadline } from './session.js'
+import { sessionFooterState, sessionHeadline } from './session.js'
 import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
-import { SessionConsoleTreeRow, SessionZone, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
 import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
-import SessionSelectBar from './SessionSelectBar.jsx'
-import { useResizable } from './useResizable.js'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
-import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
+import { navigateAddress, sessionEvalAddress } from './address.js'
+import { navigate } from './route.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
   getSessionBaseSurface,
+  isSessionSurface,
   setSessionBaseSurface,
   subscribeSessionSurface,
 } from './sessionSurface.js'
@@ -28,11 +27,10 @@ import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
+import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
+import { useKeyboardScope } from './KeyboardService.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
-const SESSION_DRAG_GHOST_SCALE = 0.75
-const ARCHIVE_ROW_HEIGHT = 30
-const ARCHIVE_FIXED_HEIGHT = 68
 
 const closedTime = (session) => {
   if (typeof session?.closedAt !== 'string') return null
@@ -53,9 +51,12 @@ const localDay = (time) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function ArchivePage({ sessions, onOpenSession }) {
+function ArchivePage({ sessions, onOpenSession, onClose }) {
   const { lang, t } = useI18n()
   const [query, setQuery] = useState('')
+  const searchRef = useRef(null)
+  const rowRefs = useRef([])
+  useEscLayer(true, onClose)
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(lang)
     if (!needle) return sessions
@@ -87,9 +88,19 @@ function ArchivePage({ sessions, onOpenSession }) {
     const time = closedTime(session)
     return time == null ? '' : new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(time)
   }
+  const archiveRows = groups.flatMap((group) => group.rows)
+  useEffect(() => { searchRef.current?.focus() }, [])
+  const onKeyDown = (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    const current = rowRefs.current.findIndex((element) => element === document.activeElement)
+    const next = Math.max(0, Math.min(archiveRows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))
+    rowRefs.current[next]?.focus()
+  }
 
   return (
-    <div className="si-archive-page" data-archive-page>
+    <div className="si-archive-backdrop" data-archive-backdrop onKeyDown={onKeyDown} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="si-archive-page" data-archive-page role="dialog" aria-modal="true" aria-label={t('session.archiveTitle')}>
       <header className="si-archive-head">
         <div>
           <h1>{t('session.archiveTitle')}</h1>
@@ -97,7 +108,7 @@ function ArchivePage({ sessions, onOpenSession }) {
         </div>
         <label className="si-archive-search">
           <Icon name="search" size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)}
+          <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)}
             placeholder={t('session.archiveSearch')} aria-label={t('session.archiveSearch')} />
         </label>
       </header>
@@ -107,7 +118,7 @@ function ArchivePage({ sessions, onOpenSession }) {
           <section key={group.key} className="si-archive-group" data-archive-day={group.key}>
             <h2 className="si-archive-date">{dateLabel(group.key)}</h2>
             {group.rows.map((session) => (
-              <button key={session.id} type="button" className="si-archive-page-row" data-sid={session.id}
+              <button key={session.id} ref={(element) => { rowRefs.current[archiveRows.indexOf(session)] = element }} type="button" className="si-archive-page-row" data-sid={session.id}
                 onClick={() => onOpenSession(session.id)}>
                 <span className="si-archive-row-title">{sessionHeadline(session)}</span>
                 <span className="si-archive-row-node">{session.node || session.label}</span>
@@ -118,6 +129,7 @@ function ArchivePage({ sessions, onOpenSession }) {
           </section>
         ))}
       </div>
+    </div>
     </div>
   )
 }
@@ -181,7 +193,7 @@ function SessionFiles({ session, onPreview, onDownload, onCopy }) {
   const ready = files.length > 0
 
   useEffect(() => { setOpen(false) }, [session?.id])
-  useEffect(() => {
+  useKeyboardScope((event) => {
     if (!open) return
     const closeOutside = (event) => { if (!filesRef.current?.contains(event.target)) setOpen(false) }
     window.addEventListener('pointerdown', closeOutside)
@@ -311,13 +323,19 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
 
 // The toolbar consumes only the canonical graph session projection. Last-known survives input invalidation,
 // tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
-export function sessionEvalDisplay(projection, connected = true) {
-  if (!projection) return { phase: 'loading' }
+// `rowPresent` separates the two ways a projection can be absent. A selected row that carries none is a
+// retained record the board no longer projects at all — a closed session leaves the graph and is served from
+// the archive index plus its id-addressed detail, neither of which carries eval summary — so it is dormant, exactly like the backend's own
+// dormant phase. Only a selection with no row yet is still arriving.
+export function sessionEvalDisplay(projection, connected = true, rowPresent = false) {
+  if (!projection) return { phase: rowPresent ? 'dormant' : 'loading' }
   const stable = projection.phase === 'ready' && projection.value
     ? projection.value
     : projection.lastKnown?.value
   if (!connected) return stable ? { phase: 'disconnected', ...stable } : { phase: 'disconnected' }
   if (projection.phase === 'ready' && projection.value) return { phase: 'ready', ...projection.value }
+  // Dormant carries its last-known counts when it has them, and never a spinner: nothing is recomputing them.
+  if (projection.phase === 'dormant') return stable ? { phase: 'dormant', ...stable } : { phase: 'dormant' }
   if (projection.phase === 'updating') return stable ? { phase: 'updating', ...stable } : { phase: 'loading' }
   if (projection.phase === 'error') return stable ? { phase: 'error', ...stable } : { phase: 'error' }
   return { phase: 'loading' }
@@ -328,6 +346,9 @@ function SessionEvalStats({ summary }) {
   const hasValue = Number.isInteger(summary.total)
   if (!hasValue && summary.phase === 'loading') {
     return <span className="si-eval-wait" data-tip={t('session.evalLoading')}><Icon name="loader" size={12} className="si-eval-spinner" /></span>
+  }
+  if (!hasValue && summary.phase === 'dormant') {
+    return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalDormant')} size={12} /></span>
   }
   if (!hasValue) {
     return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} size={12} /></span>
@@ -350,6 +371,7 @@ function SessionEvalStats({ summary }) {
         <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.unknown} label={t('session.evalUnknown', { n: summary.unknown })} />
       )}
       {summary.phase === 'updating' && <Icon name="loader" size={11} className="si-eval-spinner si-eval-phase" />}
+      {summary.phase === 'dormant' && <ReviewState kind="eval" state="missing" title={t('session.evalDormantLast')} className="si-eval-phase" size={11} />}
       {(summary.phase === 'disconnected' || summary.phase === 'error') && (
         <ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} className="si-eval-phase" size={11} />
       )}
@@ -432,14 +454,13 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null }) {
   const t = useT()
   const { notify } = useTransientNotice()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
+  const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
-  const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
-  const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
-  const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
+  const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
@@ -452,7 +473,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
   const [resourceFocusRequest, setResourceFocusRequest] = useState(0)
   const [dragTarget, setDragTarget] = useState(null)
-  const [sessionDrag, setSessionDrag] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [resourceTabs, setResourceTabs] = useState([])
   const [resourceSurface, setResourceSurface] = useState({})
@@ -465,12 +485,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const resourcePickerRef = useRef(null)
-  const sessionDragRef = useRef(null)
-  const suppressSessionClickRef = useRef(null)
   const knownWebsRef = useRef(null)
   const archiveRequestRef = useRef(null)
   useEffect(() => subscribeSessionSurface(() => setSurfaceVersion((version) => version + 1)), [])
-  const listRef = useRef(null)
   const outcomeTimerRef = useRef(null)
   const attachmentsRef = useRef([])
   const uploadControllersRef = useRef(new Map())
@@ -498,27 +515,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setActionOutcome((outcome) => outcome?.owner === 'command' ? null : outcome)
   }
 
-  // the working session list is grouped into triage zones (needs-you over self-running, [[session-console]]) AND
-  // nested — a session folds under its spawner ([[session-nesting]]). `forest` is that display structure (zone
-  // headers + rows, children present only while their parent is expanded); `visible` is its flat row order,
-  // which ↑/↓ nav walks, so display and nav never disagree (a collapsed child is off-screen AND out of the nav
-  // order, never a hidden target). Within a zone the newest session sits on top (automatic ordering).
-  // The OFFLINE zone rests FOLDED behind its header — the one disclosure for retained session history
-  // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled only
-  // by the header's leading count pod, and the selected session stays visible while the zone is folded.
-  const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
-  const [offlineOpen, setOfflineOpen] = useState(false)
-
   const [archiveRows, setArchiveRows] = useState(null)
-  const [archiveOpen, setArchiveOpen] = useState(false)
-  const [sidebarHeight, setSidebarHeight] = useState(0)
   const refreshArchive = useCallback(() => {
     if (archiveRequestRef.current) return archiveRequestRef.current
-    const request = fetch(apiUrl('/api/sessions?all=1'))
+    const request = fetch(apiUrl('/api/sessions/archive-index'))
       .then(async (response) => {
         if (!response.ok) throw new Error(`archive index refused (HTTP ${response.status})`)
         const rows = await response.json()
-        const archived = archiveOrder(Array.isArray(rows) ? rows.filter((session) => session?.archived) : [])
+        const archived = archiveOrder(Array.isArray(rows) ? rows.map((session) => ({ ...session, archived: true })) : [])
         setArchiveRows(archived)
         return archived
       })
@@ -540,41 +544,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     workingIdsRef.current = next
     if (open && archiveRows !== null && previous && [...previous].some((id) => !next.has(id))) void refreshArchive()
   }, [open, sessions, archiveRows, refreshArchive])
-  useLayoutEffect(() => {
-    const element = listRef.current
-    if (!element) return undefined
-    const measure = () => setSidebarHeight(element.clientHeight)
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
   const allSessions = useMemo(() => {
     const byId = new Map(sessions.map((s) => [s.id, s]))
     for (const s of archiveRows || []) if (!byId.has(s.id)) byId.set(s.id, s)
     return [...byId.values()]
   }, [sessions, archiveRows])
-  const liveSessions = useMemo(() => allSessions.filter((session) => !session.archived), [allSessions])
   const archivedSessions = useMemo(() => archiveOrder(allSessions.filter((session) => session.archived)), [allSessions])
-  const forest = useMemo(() => sessionForest(liveSessions, (id) => expanded.has(id), {
-      zoneFolded: (z) => z === 'offline' && !offlineOpen,
-      keepVisible: (s) => s.id === sel,
-    }), [liveSessions, expanded, offlineOpen, sel])
-  const foldableIds = useMemo(() => new Set(forest.filter((item) => item.type === 'row' && item.expandable)
-    .map((item) => item.s.id)), [forest])
-  const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
-  const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
-  const validIds = useMemo(() => new Set(['new', 'archive', ...allSessions.map((s) => s.id)]), [allSessions])
-  // content mode: 'new', the archive index, or a session id.
+  const validIds = useMemo(() => new Set(['new', ...allSessions.map((s) => s.id)]), [allSessions])
+  // content mode: 'new' or a session id. The archive index is a transient overlay.
   const active = validIds.has(sel) ? sel : 'new'
-  const sessionActive = active !== 'new' && active !== 'archive'
-  // An external jump may select a descendant omitted from the collapsed forest. Reveal its full path before
-  // paint when the page opens or the selected id changes. Board refreshes deliberately do not retrigger this:
-  // once visible, a human may collapse the selected branch again and that local fold choice should stick.
-  useLayoutEffect(() => {
-    if (open && sessionActive && !allSessions.find((session) => session.id === active)?.archived)
-      expandFolds(sessionAncestorIds(allSessions, active))
-  }, [open, active, sessionActive, expandFolds, allSessions])
+  const sessionActive = active !== 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. App gates Dashboard on
   // a loaded board, so `sessions` here is the REAL set — an id absent from it is genuinely gone (a dead deep
@@ -583,116 +562,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     if (open && archiveRows !== null && !validIds.has(sel)) setSel('new')
   }, [open, archiveRows, validIds, sel, setSel])
-  // the session list is a user-resizable pane ([[resizable-panes]]): drag persists; double-click resets.
-  const [listW, listDrag, resetListW] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = allSessions.find((s) => s.id === active)
-  const archivePreviewLimit = Math.max(0, Math.floor((sidebarHeight / 3 - ARCHIVE_FIXED_HEIGHT) / ARCHIVE_ROW_HEIGHT))
-  const archivePreviewRows = archiveOpen ? archivedSessions.slice(0, archivePreviewLimit) : []
-  const openArchivePage = () => { setArchiveOpen(false); setSel('archive') }
-  const toggleArchive = () => {
-    if (archivePreviewLimit < 1) return openArchivePage()
-    setArchiveOpen((value) => !value)
-  }
-  const changeSessionParent = useCallback(async (childId, parent) => {
-    const child = allSessions.find((session) => session.id === childId)
-    if (!child || (child.parent || null) === parent) return
-    try {
-      const response = await apiFetch('/api/sessions/reparent', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ children: [childId], parent }),
-      })
-      const body = await response.json().catch(() => null)
-      if (!response.ok || body?.ok === false) throw new Error(body?.error || `session parent update refused (HTTP ${response.status})`)
-      if (parent) expandFolds([parent])
-      reload?.()
-    } catch (error) {
-      setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
-    }
-  }, [allSessions, expandFolds, reload])
-  const closeIntoArchive = useCallback(async (id) => {
-    try {
-      const response = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(id)}/close`), { method: 'POST' })
-      const body = await response.json().catch(() => null)
-      if (!response.ok || body?.ok === false)
-        throw new Error(body?.error || `session close refused (HTTP ${response.status})`)
-      await reload?.()
-      await refreshArchive()
-    } catch (error) {
-      setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
-    }
-  }, [reload, refreshArchive])
-  const startSessionDrag = useCallback((event, session) => {
-    if (event.button !== 0) return
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const drag = {
-      id: session.id, width: bounds.width,
-      offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
-      startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY,
-      parent: session.parent || null, target: undefined, started: false,
-    }
-    const targetAt = (x, y) => {
-      const element = document.elementFromPoint(x, y)
-      if (element?.closest?.('[data-session-archive-drop]')) return 'archive'
-      const row = element?.closest?.('[data-session-drop-id]')
-      const root = element?.closest?.('[data-session-root-drop]')
-      let target = row?.dataset.sessionDropId || (root ? null : undefined)
-      if (target === drag.id || (target && sessionAncestorIds(allSessions, target).includes(drag.id))) target = undefined
-      if (target === drag.parent) target = undefined
-      return target
-    }
-    const onMove = (move) => {
-      if (!drag.started && Math.hypot(move.clientX - drag.startX, move.clientY - drag.startY) < 6) return
-      if (!drag.started) {
-        drag.started = true
-        document.body.classList.add('is-session-dragging')
-      }
-      drag.x = move.clientX
-      drag.y = move.clientY
-      drag.target = targetAt(move.clientX, move.clientY)
-      setSessionDrag({ ...drag })
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove, true)
-      window.removeEventListener('mouseup', onUp, true)
-      sessionDragRef.current = null
-      document.body.classList.remove('is-session-dragging')
-      if (!drag.started) return
-      suppressSessionClickRef.current = drag.id
-      // A moved button normally still dispatches its click after mouseup. Clear this guard on the next turn
-      // for browsers that suppress that click, so a later ordinary selection is never swallowed.
-      window.setTimeout(() => {
-        if (suppressSessionClickRef.current === drag.id) suppressSessionClickRef.current = null
-      }, 0)
-      setSessionDrag(null)
-      if (drag.target === 'archive') void closeIntoArchive(drag.id)
-      else if (drag.target !== undefined) void changeSessionParent(drag.id, drag.target)
-    }
-    sessionDragRef.current = { onMove, onUp }
-    window.addEventListener('mousemove', onMove, true)
-    window.addEventListener('mouseup', onUp, true)
-  }, [allSessions, changeSessionParent, closeIntoArchive])
-  useEffect(() => () => {
-    const drag = sessionDragRef.current
-    if (!drag) return
-    window.removeEventListener('mousemove', drag.onMove, true)
-    window.removeEventListener('mouseup', drag.onUp, true)
-    document.body.classList.remove('is-session-dragging')
-  }, [])
-  const draggedItem = sessionDrag ? forest.find((item) => item.type === 'row' && item.s.id === sessionDrag.id) : null
+  const [archiveIndexOpen, setArchiveIndexOpen] = useState(false)
+  useEffect(() => { if (archiveRequested) setArchiveIndexOpen(true) }, [archiveRequested])
   const terminalFree = isHeadlessSession(selSession)
   const noLivePane = selSession?.liveness === 'offline'
   const archivedSel = !!selSession?.archived
   const readOnlyPane = noLivePane || archivedSel
-  const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(active)
+  const requestedSurface = isSessionSurface(surface) ? surface : null
+  const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : requestedSurface || getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
-  const surfaceTabId = conversationSurface ? 'si-conversation-tab' : 'si-terminal-tab'
-  const surfacePanelId = conversationSurface ? 'si-conversation-panel' : 'si-terminal-panel'
   const baseSurfaceForSession = (id) => {
     const session = allSessions.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
   }
+  useEffect(() => {
+    // An explicit face in the address is a user choice, so it becomes the session's next bare default.
+    // Headless and read-only records cannot expose Terminal and keep Conversation regardless of the query.
+    if (sessionActive && requestedSurface && !terminalFree && !readOnlyPane) setSessionBaseSurface(active, requestedSurface)
+  }, [active, requestedSurface, sessionActive, terminalFree, readOnlyPane])
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
-  const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive)
+  const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive, !!selSession)
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
   const footerState = sessionFooterState(selSession)
   const activeResourceId = sessionActive ? resourceSurface[active] || null : null
@@ -799,8 +690,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
   }
-  // A resource is temporary; this restores the resolved base surface. Only the explicit switch records a
-  // per-session preference, while selecting the current base merely returns from the overlay.
+  // A resource is temporary; this restores the resolved base surface. Explicit face changes are URL
+  // navigation; returning from a resource merely clears the local overlay.
   const showBaseSurface = (id, surface, remember = false) => {
     if (id === 'new') return
     selectSession(id)
@@ -810,7 +701,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     } else {
       setTerminalFocusRequest((request) => request + 1)
     }
-    if (remember) setSessionBaseSurface(id, surface)
+    if (remember) navigate('sessions', id, { query: { surface } })
   }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
@@ -873,7 +764,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     if (seed == null) return
     setSel('new')
-    setPrompt(seed)
+    const decoded = decodePrompt(seed)
+    setPrompt(decoded.text)
+    setCodeSelections(decoded.selections)
     setMenu(null)
     onSeedConsumed?.()
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
@@ -889,16 +782,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }, 0)
     return () => clearTimeout(id)
   }, [open, active, commandOpen])
-
-  // Keyboard-driven selection in a long list must remain visible.
-  useEffect(() => {
-    if (!open || active === 'new') return
-    const frame = requestAnimationFrame(() => {
-      const row = [...(listRef.current?.querySelectorAll('[data-sid]') || [])].find((el) => el.dataset.sid === active)
-      row?.scrollIntoView({ block: 'nearest' })
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [open, active])
 
   // New-session command invocation is backend-owned: this surface and the phone send the raw
   // `/<preset> [[node]]… <free text>` through the ordinary create request, and newSession expands it for
@@ -919,9 +802,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // (both seconds of real work — worktree, branch, tmux) left the whole pane greyed and unfocused until they
   // returned; keeping it live makes the next launch type-ready at once. The empty-draft check guards double-fire.
   const submit = () => {
-    const raw = prompt.trim()
+    const raw = encodePrompt(prompt, codeSelections)
     if (!raw) return
     setPrompt('')
+    setCodeSelections([])
     createSession(raw, launcher).then(() => reload?.())
   }
 
@@ -1300,6 +1184,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       </div>
     )
   }
+  const codeSelectionQueue = () => {
+    if (!codeSelections.length) return null
+    return (
+      <div className="si-code-selection-queue" aria-label={t('session.codeSelectionAttachments')}>
+        {codeSelections.map((selection, index) => (
+          <div key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} className="si-code-selection-chip">
+            <Icon name="terminal" size={12} />
+            <span className="si-code-selection-label" title={selection.text}>{selectionLabel(selection)}</span>
+            <IconButton icon="x" size={12} className="si-code-selection-remove" label={t('session.removeCodeSelection')}
+              onClick={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
+          </div>
+        ))}
+      </div>
+    )
+  }
   // a paste carrying file(s) (a screenshot, a copied file) attaches them instead of pasting text; a plain
   // text paste has no files and falls through to the textarea's normal behaviour untouched.
   const onPasteFiles = (e, target) => {
@@ -1351,17 +1250,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return ok
   }
 
-  // multi-select mode ([[session-multi-select]]): the right-click "select" enters it, pre-ticking the row that
-  // was clicked; leaving clears both the mode and the picks.
-  const enterSelect = (session) => { setSelecting(true); setPicked(new Set([session.id])) }
-  const exitSelect = () => { setSelecting(false); setPicked(new Set()) }
-  const togglePick = (id) => setPicked((prev) => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id); else next.add(id)
-    return next
-  })
-  // after a bulk lifecycle action: leave the mode and re-read the board so every row converges together.
-  const onBulkClosed = () => { exitSelect(); reload?.() }
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the toolbar
   // tool and Command Box row call; `uiCmds` narrows the registry to current session state.
   const runners = {
@@ -1378,38 +1266,29 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
   const uiCmds = uiCommandsFor(selSession, runners)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false && command.enabled)
-  const evalKnownTitle = Number.isInteger(evalSummary.total) ? t('session.evalDoorSummary', evalSummary) : ''
-  const evalDoorTitle = evalSummary.phase === 'ready'
-    ? evalKnownTitle
-    : evalSummary.phase === 'updating'
-      ? t('session.evalUpdating', { summary: evalKnownTitle })
-      : evalSummary.phase === 'disconnected'
-        ? t('session.evalDisconnected', { summary: evalKnownTitle })
-        : evalSummary.phase === 'loading'
-          ? t('session.evalLoading')
-          : evalKnownTitle
-            ? t('session.evalFailedKnown', { summary: evalKnownTitle })
-            : t('session.evalUnavailable')
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
   const stateRef = useRef({})
   stateRef.current = {
-    order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-    commandAvailable, setCommandOpen, closeCommandBox, expanded, foldableIds, toggleFold,
+    active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+    commandAvailable, setCommandOpen, closeCommandBox,
   }
   useEffect(() => {
     const onKey = (e) => {
       const {
-        order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-        commandAvailable, setCommandOpen, closeCommandBox, expanded, foldableIds, toggleFold,
+        active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+        commandAvailable, setCommandOpen, closeCommandBox,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       if (e.target?.closest?.('[data-focus-overlay]')) return // a transient modal owns its focused control's native keys
+      // Native buttons own Enter/Space activation even while the New Session tab is selected. Keep the
+      // console router from cancelling a fold header's default click; text inputs still reach the menu/send paths below.
+      if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href]')) return
       // Reserved Alt+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new' && active !== 'archive') {
+      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
@@ -1420,24 +1299,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
       if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
-      // Shift keeps the existing Alt+↑/↓ tab family but changes its action: Alt+Shift+↓ expands and
-      // Alt+Shift+↑ collapses the selected session's disclosure. Consume both chords even when the selected
-      // row has no matching state, so they never fall through and move the tab selection.
-      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-        e.preventDefault(); e.stopPropagation()
-        if (foldableIds.has(active)) {
-          if (e.key === 'ArrowDown' && !expanded.has(active)) expandFolds([active])
-          if (e.key === 'ArrowUp' && expanded.has(active)) toggleFold(active)
-        }
-        return
-      }
-      // Alt+↑/↓ walks the session list; the modifier frees ↑/↓ from caret/TUI navigation.
-      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        e.preventDefault(); e.stopPropagation()
-        let i = order.indexOf(active); if (i < 0) i = 0
-        const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
-        setSel(order[ni]); return
-      }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
       if (menu) {
@@ -1449,21 +1310,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (commandOpen && e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation(); closeCommandBox(); return
       }
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        // a text input keeps plain ↑/↓ ENTIRELY — they're its own caret keys and never switch tabs, even at
-        // the first/last line, so typing in the box never jerks you onto another session. Tab switching while
-        // typing is the modifier combos' job (handled above). Plain ↑/↓ walk the list only outside any input.
-        if (e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'INPUT' || e.target?.isContentEditable) return
-        e.preventDefault(); e.stopPropagation()
-        const i = order.indexOf(active)
-        const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
-        setSel(order[ni]); return
-      }
       if (e.key === 'Enter' && !e.shiftKey && !composingKey(e) && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [setSel])
+    return onKey(event)
+  }, 10)
 
   useEffect(() => {
     if (!open) return
@@ -1494,102 +1344,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list" ref={listRef} style={{ flex: `0 0 ${listW}px` }}>
-          {/* while multi-selecting ([[session-multi-select]]) the pills give way to the select bar — a pick
-              count + bulk close + cancel; the rows below toggle picks instead of switching tabs. */}
-          {selecting ? (
-            <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed}
-              onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })} />
-          ) : (
-          <div className="si-toprow">
-            <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => setSel('new')}>
-              <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
-            </button>
-            {/* the click twin of ⌥+/ ([[session-search]]) — same palette open, the tooltip
-                teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
-            <button type="button" className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
-              <span className="si-pill-glyph"><Icon name="search" size={15} /></span>
-            </button>
-          </div>
-          )}
-          <div className="si-board-scroll" data-session-board-scroll>
-            {sessionDrag?.parent && (
-              <div className={`si-root-drop${sessionDrag.target === null ? ' on' : ''}`} data-session-root-drop
-                data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
-                <Icon name="corner-up-left" size={14} />
-              </div>
-            )}
-            {forest.map((it) => {
-              if (it.type === 'zone') {
-                return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="si-zone" onToggle={() => setOfflineOpen((v) => !v)} />
-              }
-              const s = it.s
-              return (
-                <SessionConsoleTreeRow
-                  key={s.id}
-                  item={it}
-                  activeId={active}
-                  selecting={selecting}
-                  picked={picked}
-                  dragging={sessionDrag?.id === s.id}
-                  dropTarget={sessionDrag?.target === s.id}
-                  onToggleFold={() => toggleFold(s.id)}
-                  rowProps={{
-                    'data-sid': s.id,
-                    'aria-grabbed': sessionDrag?.id === s.id || undefined,
-                    onMouseDown: (e) => startSessionDrag(e, s),
-                    onClick: () => {
-                      if (suppressSessionClickRef.current === s.id) {
-                        suppressSessionClickRef.current = null
-                        return
-                      }
-                      if (selecting) return togglePick(s.id)
-                      selectSession(s.id)
-                    },
-                    onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) },
-                    'data-tip': s.ops?.length ? t('session.opsTitle') : t('session.lockTitle'),
-                  }}
-                />
-              )
-            })}
-          </div>
-          <div className={`si-archive-drawer${archiveOpen ? ' open' : ''}`} data-archive-drawer>
-            {archiveOpen && (
-              <div className="si-archive-preview" data-archive-preview>
-                {archivePreviewRows.map((session) => (
-                  <button key={session.id} type="button" className="si-archive-preview-row" data-sid={session.id}
-                    onClick={() => selectSession(session.id)}>
-                    <span>{sessionHeadline(session)}</span>
-                    <Icon name="chevron-right" size={13} />
-                  </button>
-                ))}
-                <button type="button" className="si-archive-all" onClick={openArchivePage}>
-                  <span>{t('session.archiveViewAll', { n: archivedSessions.length })}</span>
-                  <Icon name="chevron-right" size={14} />
-                </button>
-              </div>
-            )}
-            <div className={`si-archive-bar${sessionDrag?.target === 'archive' ? ' drop-target' : ''}`}
-              data-session-archive-drop data-archive-count={archivedSessions.length}>
-              <button type="button" className="si-archive-toggle" aria-expanded={archiveOpen}
-                aria-label={t(archiveOpen ? 'session.archiveCollapse' : 'session.archiveExpand')}
-                onClick={toggleArchive}>
-                <Icon name="chevron-right" size={14} />
-              </button>
-              <button type="button" className="si-archive-label" onClick={openArchivePage}>
-                <span>{t('session.archiveTitle')}</span>
-                <strong>{archivedSessions.length}</strong>
-              </button>
-            </div>
-          </div>
-        </aside>
-
-        {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. */}
-        <div className="pane-resizer si-resizer" onMouseDown={listDrag} onDoubleClick={resetListW}
-          role="separator" aria-orientation="vertical" aria-valuenow={Math.round(listW)} />
-
-        <section className={`si-content${active === 'new' ? ' is-new' : active === 'archive' ? ' is-archive' : ' is-session'}`}>
-          {active === 'archive' && <ArchivePage sessions={archivedSessions} onOpenSession={selectSession} />}
+        <section className={`si-content${active === 'new' ? ' is-new' : ' is-session'}`}>
           {active === 'new' && (
             <div className="si-new-center">
               <LaunchHero />
@@ -1626,6 +1381,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
+              {codeSelectionQueue()}
               {attachmentQueue('new')}
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}
@@ -1650,49 +1406,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               pointerEvents: sessionActive ? 'auto' : 'none',
             }}
           >
-              <header className="si-tabbar" aria-label={t(conversationSurface ? 'session.conversationToolbarLabel' : 'session.toolbarLabel')}>
+              <header className="si-tabbar" aria-label={t('session.toolbarLabel')}>
                 <div className="si-surface">
-                  <div className="si-tabs" role="tablist" aria-label={t('session.surfaceLabel')}>
-                    <div className="si-base-tabs">
-                      <button
-                        type="button"
-                        id={surfaceTabId}
-                        role="tab"
-                        aria-selected={!activeResource}
-                        aria-controls={`${surfacePanelId}-${active}`}
-                        className={`si-tab${activeResource ? '' : ' on'}`}
-                        onClick={() => showBaseSurface(active, activeBaseSurface)}
-                      >
-                        <Icon name={conversationSurface ? 'message-square' : 'terminal'} size={13} />
-                        <span className="si-tab-label">{t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}</span>
-                      </button>
-                    </div>
-                    <a
-                      className="si-eval-tab sc-cyan"
-                      href={sessionActive ? addressHash(sessionEvalAddress(active)) : null}
-                      data-tip={evalDoorTitle}
-                      aria-label={evalDoorTitle}
-                    >
-                      <Icon name="evals" size={14} />
-                      <span className="si-eval-label">{t('session.tabEval')}</span>
-                      <SessionEvalStats summary={evalSummary} />
-                    </a>
-                    <div className="si-resource-tabs">
-                      {resourceTabs.filter((tab) => tab.sessionId === active).map((tab) => (
-                        <div key={tab.id} className={`si-resource-tab${activeResource?.id === tab.id ? ' on' : ''}`}>
-                          <button type="button" id={`si-resource-tab-${tab.id}`} role="tab" aria-selected={activeResource?.id === tab.id}
-                            aria-controls={`si-resource-panel-${tab.id}`} className="si-resource-tab-main"
-                            onClick={() => activateResource(tab)}>
-                            <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
-                            <span>{tab.label}</span>
-                          </button>
-                          <IconButton icon="x" size={12} className="si-resource-tab-action" label={t('session.closeResourceTab', { name: tab.label })}
-                            onClick={() => closeResource(tab)} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
                   <div ref={resourcePickerRef} className="si-resource-picker">
                     <IconButton icon="plus" size={11} className="si-tab-add" label={t('session.addResourceTab')}
                       aria-expanded={resourceMenu} disabled={!sessionActive} onClick={() => setResourceMenu((open) => !open)} />
@@ -1711,6 +1426,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
 
                 <div className="si-actions" role="group" aria-label={t('session.toolbarToolsLabel')}>
+                  {sessionActive && <IconButton icon="ellipsis" size={14} className="si-tool sc-muted" label={t('session.menuLabel')}
+                    onClick={(event) => { const box = event.currentTarget.getBoundingClientRect(); setCtxMenu({ x: box.left, y: box.bottom, session: selSession }) }} />}
                   {activeResource && (
                     <>
                       <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
@@ -1758,27 +1475,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
                     })}
                   />
-                  {!terminalFree && (
-                    <IconButton
-                      icon={conversationSurface ? 'terminal' : 'message-square'}
-                      size={14}
-                      className="si-tool sc-blue surface-switch"
-                      data-surface-switch={conversationSurface ? 'terminal' : 'conversation'}
-                      label={t(conversationSurface ? 'session.switchToTerminal' : 'session.switchToConversation')}
-                      aria-pressed={conversationSurface}
-                      disabled={readOnlyPane}
-                      onClick={() => showBaseSurface(active, conversationSurface ? 'terminal' : SESSION_SURFACE_CONVERSATION, true)}
-                    />
-                  )}
                 </div>
               </header>
               {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
                 className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${activeResource ? ' is-resource' : ''}`}
-                id={activeResource ? `si-resource-panel-${activeResource.id}` : `${surfacePanelId}-${active}`}
-                role="tabpanel"
-                aria-labelledby={activeResource ? `si-resource-tab-${activeResource.id}` : surfaceTabId}
+                id={activeResource ? `si-resource-panel-${activeResource.id}` : `si-${activeBaseSurface}-panel-${active}`}
+                role={activeResource ? 'dialog' : undefined}
+                aria-label={activeResource?.label || t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}
                 style={{ position: 'relative' }}
               >
                 {/* Live terminals stay warm; every lifecycle state uses the same Conversation DOM. */}
@@ -1891,23 +1596,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
           </div>
         </section>
-        {sessionDrag && draggedItem && (
-          <SessionConsoleTreeRow
-            item={draggedItem}
-            activeId={active}
-            selecting={selecting}
-            picked={picked}
-            inert
-            style={{
-              width: sessionDrag.width,
-              '--si-session-drag-ghost-scale': SESSION_DRAG_GHOST_SCALE,
-              left: sessionDrag.x - sessionDrag.offsetX * SESSION_DRAG_GHOST_SCALE,
-              top: sessionDrag.y - sessionDrag.offsetY * SESSION_DRAG_GHOST_SCALE,
-            }}
-          />
-        )}
       </div>
     </div>
+    {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) navigate('sessions', active === 'new' ? null : active) }} />}
     <SessionContextMenu
       menu={ctxMenu}
       onClose={() => setCtxMenu(null)}
@@ -1922,8 +1613,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setActionOutcome({ owner: 'panel', phase: 'failed', message })
       }}
       onLock={(s) => { onPickSession?.(s, false); onClose() }}
-      onMultiSelect={enterSelect}
-      onDetach={(s) => { void changeSessionParent(s.id, null) }}
     />
     </>
   )

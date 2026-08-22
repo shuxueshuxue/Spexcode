@@ -61,8 +61,19 @@ The filter guards the ADD path; the index a commit is actually built from is re-
 last gate by [[commit-surgery]] (a blob staged before the filter existed — a `-f`, a pre-arming edit —
 is cleaned there in place). Between the two, no route into history carries the block.
 
-**JSON mixed content is NOT implemented** — the designed successor, recorded here so nobody re-derives it:
-a host-tracked `settings.json` is answered by REDUCING THE DIMENSION, not by merging — claude's
-`settings.local.json` turns the mixed-content problem into a whole-file machine fact — with an identity
-stamp on any entry we'd ever have to co-own inside a shared JSON. No smudge/clean for JSON until a real
-host forces it.
+**JSON has no smudge/clean filter, and will not get one.** A comment-delimited block cannot exist in JSON,
+so the sentinel that scopes ownership there is the hook COMMAND itself: every entry we write invokes
+`dispatch.sh`, and only such entries are ever written or removed ([[harness-adapter]]'s
+`writeManagedJsonHooks` / `removeManagedJsonHooks`). That is co-ownership by identity stamp, the same idea
+this filter implements for text, minus the index/history half.
+
+The earlier plan recorded here — REDUCE THE DIMENSION by moving the shim to claude's `settings.local.json`,
+turning it back into a whole-file machine fact — is **wrong and must not be revived**: Claude Code writes
+that file itself (every permission the user approves accumulates there), so the move relocates the collision
+onto a file the host agent actively rewrites, and each side would drop the other's edits. There is no file in
+a harness's config directory that is reliably ours alone; co-ownership is the answer, not relocation.
+
+What JSON co-ownership does NOT preserve is LAYOUT: a merge re-serializes the whole object (2-space, one
+member per line), so a hand-compacted config comes back semantically identical and textually reformatted.
+Values, key order and the trailing-newline convention all round-trip; hand layout does not, because no JSON
+writer can reproduce it. That is an accepted, visible cost — unlike a whole-file write, it destroys nothing.

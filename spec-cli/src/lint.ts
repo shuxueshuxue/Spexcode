@@ -1,9 +1,10 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
-import { loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
+import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { readJsonConfig } from '@spexcode/spec-core'
-import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries } from '@spexcode/spec-core'
+import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
+import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -292,20 +293,15 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
 
   // mention: a `[[id]]` in a body must name a real node (ERROR — a dangling mention is a broken edge in
   // the very graph the tree exists to keep honest). Checked against the SAME minted ids every other
-  // surface resolves ([[id-url-safe]]). Prose only: a fenced block or inline `code span` is sample text
-  // (`[[node]]`, `[[<id>]]` placeholders live there), not a reference.
+  // surface resolves ([[id-url-safe]]). The body reader is `bodyMentions`, shared with the projection that
+  // ships the resolving mentions as edges — including its judgement of what is prose and what is sample
+  // text — so the references lint rejects and the references the graph draws can never be different sets.
+  // One finding per distinct dangling name: a name repeated in one body is still one broken edge.
   const idSet = new Set(specs.map((s) => s.id))
-  const MENTION_RE = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/gu
   for (const s of specs) {
-    let inFence = false
-    for (const rawLine of s.body.split('\n')) {
-      if (/^\s*```/.test(rawLine)) { inFence = !inFence; continue }
-      if (inFence) continue
-      const line = rawLine.replace(/`[^`]*`/g, '')
-      for (const m of line.matchAll(MENTION_RE)) {
-        if (!idSet.has(m[1]))
-          out.push({ level: 'error', rule: 'mention', spec: s.id, msg: `'${s.id}' mentions [[${m[1]}]] — no such node; retarget or drop it (backtick it if it is sample text)` })
-      }
+    for (const id of bodyMentions(s.body)) {
+      if (!idSet.has(id))
+        out.push({ level: 'error', rule: 'mention', spec: s.id, msg: `'${s.id}' mentions [[${id}]] — no such node; retarget or drop it (backtick it if it is sample text)` })
     }
   }
 
@@ -353,15 +349,50 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   // extractor that cannot run here, also ERRORS but skips those anchors so the remaining checks continue.
   type AnchorLintQuery = { id: string; version: number; relation: 'code' | 'related'; path: string; symbols: string[]; win: DriftPathEvent[] }
   type AnchorLintStep = { finding: Finding } | { query: AnchorLintQuery }
+  // @@@ one gate over every declared selector - an anchor source is a node's own `code:`/`related:` OR one
+  // eval scenario's. Both write the same `path#unit` and both resolve through the same [[code-anchor]]
+  // engine, so a dead, ambiguous, or unparseable one is the same integrity fact and is refused at the same
+  // gate. What does NOT cross is the drift WINDOW: `drift` is true only for a node's own relation, because
+  // a window over an eval axis is [[eval-core]]'s freshness, and a measurement gap must never block.
+  // `owner` names the declaration site so the repair points at the file that actually holds the selector.
+  type AnchorSource = { relation: 'code' | 'related'; entries: readonly RelationEntry[]; drift: boolean; owner: string; repair: string }
+  const nodeSource = (s: any, relation: 'code' | 'related', entries: readonly RelationEntry[]): AnchorSource =>
+    ({ relation, entries, drift: true, owner: `'${s.id}'`, repair: `the spec's ${relation}: entry` })
+  const scenarioSources = (s: any): AnchorSource[] => {
+    const evalPath = join(dirname(s.path), EVAL_FILE)
+    if (!existsAtTip(evalPath)) return []
+    let scenarios
+    // A malformed eval.md is `spex eval lint`'s eval-schema finding, not this gate's: refusing to parse it
+    // here would turn one measurement-layer typo into a blocked commit.
+    try { scenarios = parseScenarios(textAtTip(evalPath) ?? '') } catch { return [] }
+    return scenarios.flatMap((sc) => ([
+      // ONLY the scenario's OWN declarations. An empty scenario `code:` inherits the node's axis, and those
+      // entries are already this node's source above — re-reading them here would double-report one selector.
+      { relation: 'code' as const, raw: sc.code },
+      { relation: 'related' as const, raw: sc.related },
+    ] as const).flatMap(({ relation, raw }) => raw?.length
+      ? [{ relation, entries: parseRelation([...raw], relation).entries, drift: false,
+           owner: `'${s.id}' scenario '${sc.name}'`, repair: `the scenario's ${relation}: entry in ${evalPath}` }]
+      : []))
+  }
   const readyWarned = new Set<string>()
   const anchorSteps: AnchorLintStep[] = []
+  // One parse per candidate file per run, shared by every source that anchors it. Without it a file many
+  // scenarios anchor is re-extracted once per scenario, and extraction is the expensive half of this gate.
+  const unitsAtTip = new Map<string, { units: any } | { error: string }>()
   for (const s of specs) {
-    for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
-      for (const { path, selectors } of entries) {
+    for (const src of [
+      nodeSource(s, 'code', s.codeScoped),
+      nodeSource(s, 'related', s.relatedScoped),
+      ...scenarioSources(s),
+    ]) {
+      const { relation, drift, owner, repair } = src
+      for (const { path, selectors } of src.entries) {
+        if (!selectors.length) continue
         if (pending && !changed.some((file) => relationClaimsPath(path, file))) continue
         const x = extractorFor(regs, extOf(path))
         if (!x) {
-          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a Tree-sitter language row (anchors.ts) or drop the selector(s)` } })
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `${owner} anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a Tree-sitter language row (anchors.ts) or drop the selector(s)` } })
           continue
         }
         const ready = await x.ready()
@@ -372,18 +403,23 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
         }
         if (!existsAtTip(path)) continue // the missing FILE already errored above
         if (isDirectoryAtTip(path)) {
-          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' puts a selector on a directory (${relation}: ${path}#${selectors[0]}) — a selector scopes ONE real file` } })
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `${owner} puts a selector on a directory (${relation}: ${path}#${selectors[0]}) — a selector scopes ONE real file` } })
           continue
         }
-        let units
-        try {
-          const source = textAtTip(path)
-          if (source === null) throw new Error(`candidate tree has no file '${path}'`)
-          units = await x.extract(source, path)
-        } catch (e: any) {
-          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` } })
+        let cached = unitsAtTip.get(path)
+        if (!cached) {
+          try {
+            const source = textAtTip(path)
+            if (source === null) throw new Error(`candidate tree has no file '${path}'`)
+            cached = { units: await x.extract(source, path) }
+          } catch (e: any) { cached = { error: e?.message ?? String(e) } }
+          unitsAtTip.set(path, cached)
+        }
+        if ('error' in cached) {
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} (${owner}) is unverifiable — the current file does not parse: ${cached.error}` } })
           continue
         }
+        const units = cached.units
         // each selector resolves (or errors) on its own; only the live ones feed the window engine.
         // The dead/ambiguous verdict itself comes from the ONE shared classifier ([[code-anchor]]); only the
         // wording of the gate's findings lives here.
@@ -391,18 +427,18 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
         for (const res of resolveSelectors(units, selectors)) {
           const sym = res.selector
           if ('dead' in res) {
-            anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${sym} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's ${relation}: entry to follow it` } })
+            anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${sym} (${owner}) names no unit on the current tree — the unit was deleted or renamed; update ${repair} to follow it` } })
             continue
           }
           if ('ambiguous' in res) {
-            anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${sym} ('${s.id}') names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` } })
+            anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${sym} (${owner}) names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` } })
             continue
           }
           if (res.ok.typeOnly)
             anchorSteps.push({ finding: { level: 'warn', rule: 'anchor', spec: s.id, file: path, msg: `${path}#${sym} anchors a ${res.ok.kind} — anchoring a type is usually wrong (types reshape with every refactor); anchor the behaviour-bearing unit instead` } })
           live.push(sym)
         }
-        if (!live.length) continue
+        if (!drift || !live.length) continue
         const since = rowsFor(hidx, s.path)[0]?.hash || ''
         const win = windowEvents(didx, since, path, s.id)
         if (!win.length) continue

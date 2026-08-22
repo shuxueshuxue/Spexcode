@@ -12,7 +12,17 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 // the QUERY carries view state (a list's filters, the evals session scope) — so a filtered list is a
 // copyable, Back-restorable address and every consumer re-derives its whole state from the URL.
 
-export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
+// `spec` and `file` are DOCUMENT addresses — a node read as a document, a governed file read on its own.
+// They are why the address list grew: the board used to have pages and no documents, so a document had
+// nowhere to be addressed from and reading one meant opening a popup over whatever page was showing.
+// `empty` is the workspace holding NOTHING — an address, because the state has to be somewhere the reader
+// can land, reload, and leave. It is not a rail destination and not a document; the only thing that mints it
+// is closing the last tab ([[tab-strip]]).
+export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
+// The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
+// opening something (a node, a governed file); there is no "go to the spec page" the way there is a
+// sessions page, and a rail icon for one would name a place that does not exist.
+export const RAIL_PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
@@ -42,9 +52,11 @@ export function parseRoute(hash) {
   const query = Object.fromEntries(new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : ''))
   const parts = path.split('/').filter(Boolean)
   const page = PAGES.includes(parts[0]) ? parts[0] : 'graph'
-  const param = page === 'graph' || page === 'sessions' || page === 'evals' || page === 'issues'
-    ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
-    : null
+  // `settings` and `empty` name no object, so they carry no selector; every other page does, and `file`
+  // carries a repo path, so the tail rejoins on '/'.
+  const param = page === 'settings' || page === 'empty'
+    ? null
+    : (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
   return { page, param, query }
 }
 
@@ -64,6 +76,16 @@ export function legacyEvalHash(hash) {
   const scenario = parts.length > 4 ? parts.slice(4).map(decodeURIComponent).join('/') : null
   const param = node && scenario ? `${node}/${scenario}` : null
   return routeHash('evals', param, { q: param ? `scope:${id}` : scopedEvalQuery(id) })
+}
+
+// Session faces are URL state, except Evals: the session-scoped Evals list already owns that
+// address family ([[session-eval]]), so a face-shaped link is one replace into the canonical list.
+export function sessionSurfaceHash(hash) {
+  const { page, param, query } = parseRoute(hash)
+  if (page !== 'sessions' || !param || !query.surface) return null
+  if (query.surface === 'evals') return routeHash('evals', null, { q: scopedEvalQuery(param) })
+  if (query.surface !== 'conversation' && query.surface !== 'terminal') return null
+  return null
 }
 
 // the LEGACY structured review params ([[review-query]]): an old '#/evals|#/issues' address carrying
@@ -113,7 +135,7 @@ export function navigate(page, param = null, { replace = false, query = null } =
 // review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
-  const legacy = legacyEvalHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
+  const legacy = legacyEvalHash(window.location.hash) || sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)
     return parseRoute(legacy)

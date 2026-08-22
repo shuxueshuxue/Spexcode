@@ -149,7 +149,9 @@ line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body r
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
 (a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
-node shows its body not nothing), `/api/settings` (the resolved
+node shows its body not nothing), `/api/source` (one **byte window** of a governed source file, gated by the
+same policy predicate the coverage walk uses — [[source-read]] owns the contract; the route only resolves the
+root, compiles the policy, and maps a refusal onto its status), `/api/settings` (the resolved
 [[portable-layout]]), and `/api/plugins` + `/api/slash-commands` (the
 `/` dropdown — config-root plugins declaring `surface: command`, plus the Claude-Code command union).
 The read-only guidance catalog ([[guidance-catalog]]) is exposed at `/api/guidance` and by the deterministic
@@ -157,10 +159,11 @@ The read-only guidance catalog ([[guidance-catalog]]) is exposed at `/api/guidan
 prose.
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
-`/api/sessions` list + spawn; after the one-time JSON migration marker exists, list rows take lifecycle status and
-parent topology from the canonical session application database and fail loudly for a governed record with no row;
-before that explicit cutover fence, the list does not initialize a database as a read side effect. Per-session
-`resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
+`/api/sessions` list + spawn; `/api/sessions/archive-index` is the archived-only lean index (`id`, `title`, `label`,
+`closedAt`, `node`) and never substitutes for the id-addressed detail. After the one-time JSON migration marker exists,
+ordinary list rows take lifecycle status and parent topology from the canonical session application database and fail
+loudly for a governed record with no row; before that explicit cutover fence, the list does not initialize a database as
+a read side effect. Per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
 bundle), `capture` (the live pane as text), `prompt`, and id-addressed `closure` (the durable terminal-close
 audit answer after record removal). `closure` returns only its target id and close time or 404; it is not a
 second historical session collection. Every closure response carries its capability marker, including a 404,

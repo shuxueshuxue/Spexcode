@@ -6,7 +6,8 @@ desc: The desktop dashboard's root shell + shared substrate — the App.jsx root
 code:
   - spec-dashboard/src/App.jsx#App
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/PageScroll.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/project.js

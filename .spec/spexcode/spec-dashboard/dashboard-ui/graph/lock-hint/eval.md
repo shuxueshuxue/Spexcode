@@ -18,7 +18,8 @@ scenarios:
     code:
       - spec-dashboard/src/lockHint.js
     related:
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/test/lock-hint.e2e.mjs
 ---
 # lock-hint — measuring the loss

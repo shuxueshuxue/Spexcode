@@ -6,22 +6,6 @@ import { guardWorktree } from './resilience.js'
 import { HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
 import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
 
-export type ReviewSuiteConfig = { id: string; command: string; format: 'tap' | 'exit'; timeoutMs?: number }
-export type ReviewFlakyObservationConfig = { sha: string; observedAt: string; outcome: 'pass' | 'fail'; source: string }
-export type ReviewFlakyConfig = {
-  test: string
-  observations: ReviewFlakyObservationConfig[]
-  expiresAfterDays: number
-  expiresAfterBaselineCollections: number
-}
-export type ReviewAcceptanceConfig = {
-  runs: number
-  setup?: string
-  timeoutMs?: number
-  suites: ReviewSuiteConfig[]
-  flaky?: ReviewFlakyConfig[]
-}
-
 export type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   mainBranch?: string              // stable source-of-truth branch stamped by init (default: "main")
@@ -69,7 +53,6 @@ export type Config = {
     launchers?: { [name: string]: { harness?: HarnessId; cmd: string } }
     defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses; required for no-choice creates
   }
-  review?: ReviewAcceptanceConfig  // portable whole-suite candidate-vs-main proof; strictly validated by review-acceptance.ts
   resources?: {
     sessionRssMiB?: number         // resident-memory budget for one session owner (default 1024)
     backendRssMiB?: number         // resident-memory budget for this project's backend instance (default 2048)
@@ -94,10 +77,10 @@ export type Config = {
   }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
-// `serve`, `review`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
+// `serve`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'uploads' | 'sessions' | 'review' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'uploads' | 'sessions' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

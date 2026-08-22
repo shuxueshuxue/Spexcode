@@ -1,7 +1,16 @@
 import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 function describe(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
+}
+
+// Delayed close deletion lives below this directory and is never a live worktree input.
+export function isTrashWorktreePath(path: string): boolean {
+  const normalized = resolve(path)
+  const parts = normalized.split(/[\\/]+/)
+  const worktrees = parts.lastIndexOf('.worktrees')
+  return worktrees >= 0 && parts[worktrees + 1] === '.trash'
 }
 
 // run a per-worktree DETAIL read; on a throw, branch on whether the worktree DIRECTORY still exists.

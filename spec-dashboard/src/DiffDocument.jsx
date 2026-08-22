@@ -51,22 +51,22 @@ function DiffFile({ sessionId, file, comments, onComment, onEdit }) {
       parent: host.current,
       state: EditorState.create({
         doc: patch,
-        extensions: [EditorState.readOnly.of(true), EditorView.editable.of(false), lineNumbers({ formatNumber: (n) => String(map[n - 1]?.newLine || map[n - 1]?.oldLine || n) }), THEME,
-          EditorView.domEventHandlers({ mousedown: (event, editor) => {
-            if (event.button !== 0) return false
-            const line = editor.state.doc.lineAt(editor.posAtCoords({ x: event.clientX, y: event.clientY })).number
-            const target = map[line - 1]
-            if (!target) return false
-            onComment(target.newLine || target.oldLine, target.newLine || target.oldLine)
-            return false
-          } })],
+        extensions: [EditorState.readOnly.of(true), EditorView.editable.of(false), lineNumbers({ formatNumber: (n) => String(map[n - 1]?.newLine || map[n - 1]?.oldLine || n) }), THEME],
       }),
     })
     return () => { view.current?.destroy(); view.current = null }
   }, [patch, map, onComment])
+  const chooseLine = (event) => {
+    if (event.button !== 0) return
+    const line = event.target.closest?.('.cm-line')
+    if (!line || !host.current?.contains(line)) return
+    const index = Array.from(host.current.querySelectorAll('.cm-line')).indexOf(line)
+    const target = map[index]
+    if (target) onComment(target.newLine || target.oldLine, target.newLine || target.oldLine)
+  }
   return <section className="diff-file" data-diff-file={file.path}>
     <button type="button" className="diff-file-head" aria-expanded={open} onClick={() => setOpen((value) => !value)}><strong>{file.path}</strong><span>{file.status}</span><span>+{file.additions} -{file.deletions}</span><span className="diff-toolbar-spacer" />{open ? '−' : '+'}</button>
-    {open && <><div className="diff-editor" ref={host} />
+    {open && <><div className="diff-editor" ref={host} onMouseDown={chooseLine} />
     {comments.map((comment) => <div key={comment.id} className={`diff-comment${comment.sentAt ? ' sent' : ''}`}>
       <span className="diff-comment-line">L{comment.lineStart}{comment.lineEnd !== comment.lineStart ? `-L${comment.lineEnd}` : ''}</span>
       <span>{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}<IconButton icon="pencil" size={12} label={t('session.diffEdit')} onClick={() => onEdit(comment)} />

@@ -109,3 +109,48 @@ later isolated absolute-Node22 reproduction passed 1/1 and is the filed reading.
 printed `environment: node=v24.15.0 npm=11.12.1` and exited 124 (`/tmp/eval-closure-51f57a00/mentions-command-box-new-repro.txt`);
 that v24 result is explicitly **void**, is not a reading, and is not used as load/flakiness evidence. No process from
 that attempt remains.
+
+## Final closure checkpoint
+
+This addendum is the current ledger state after the later measurement batches. All measurements below used the
+absolute Node `v22.21.0` and npm `10.9.4`; Node 24/npm 11 setup output was excluded from verdicts. The branch was
+clean before each filing, and every reading names the committed tree that was actually measured.
+
+### Headless adapter stop/resume
+
+- `claude-headless-explicit-stop-resume`: **PASS**. A real isolated session stopped, resumed with the same pinned
+  launcher and native conversation, then closed. Reading codeSha: `cc113f64d`.
+- `opencode-headless-explicit-stop-resume`: **PASS**. Stop and resume used the same pinned `opencode-sub2api`
+  command and `--continue`; the temporary live worker was explicitly cleaned after the run. Reading codeSha:
+  `c9c633c00`.
+- `pi-headless-explicit-stop-resume`: **PASS**. Stop/resume/close completed with the same pinned `pi` adapter and
+  session identity. Reading codeSha: `e5b7641ba`.
+- `codex-headless-explicit-stop-resume`: **FAIL**. A real governed Codex session completed its first turn, but
+  `spex session stop` refused because the detached app-server had no exact governed thread identity and the record
+  had an empty `harness_session_id`; stop/resume was therefore not claimed. Reading codeSha: `aed50d51f`.
+
+The generic `headless-explicit-stop-resume-liveness` scenario remains stale because its contract covers every
+registered headless launcher, not just the three passing adapters. The Codex failure is preserved as a product
+finding, not downgraded to setup noise.
+
+### Later batch filings
+
+Batch nine is integrated as `5b1f9c163`, byte-for-byte equivalent to candidate `379b40e08`: the clean tarball
+optional-adopter matrix passed and the eval-detail source-resolution/unmeasured-state browser/API surface passed.
+The batch-five through batch-nine ledgers retain precise `NOT-MEASURED` reasons where their declared real driver
+was unavailable; no fake PASS rows were added for those cases.
+
+### Remaining advisory inventory
+
+The final branch-local `spex eval lint --changed` reports `0 malformed`, `0 missing`, `0 coverage gap`, and stale
+rows only. The stale rows are the existing inventory of contracts whose declared real surface was not re-executed
+on this tree: the five Terminal/SlopCodeBench behavioral benchmarks; graph-lean prose search; the unmeasured
+harness-adapter multi-world/foreign-teardown/Codex failure and platform-specific cases; the two live cap-board
+scenarios; dashboard launcher picker, nesting, activity, rename, and eval-scope/browser scenarios; the manager
+movement trace; the sessions-core all-delivery prompt invariant; and the v0.3 CLI/TUI verb chain. Their batch
+ledgers record the exact missing fixture, unavailable platform, or setup prerequisite for each; stale is not a
+PASS and not a product FAIL.
+
+The current branch-local `spex spec lint` result is `0 error(s)`; its warnings are existing drift/related-drift
+findings. Alternate launcher runs that reported Tree-sitter errors on `cli.ts` or `sessions.ts` are tool/checkout
+path observations and are not used to reclassify product behavior here.

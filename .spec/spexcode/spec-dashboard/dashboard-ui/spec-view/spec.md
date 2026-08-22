@@ -40,3 +40,8 @@ the code column is now nothing but code.
 
 The divider is the shared resizable-pane primitive, persisted like every other pane, so the split a reader
 chooses is the split they get back.
+
+**The prose pane carries a selection layer.** Selecting a passage of the prose is enough to act on it —
+send it to a session, or edit it in place and commit ([[prose-dispatch]]). That layer is mounted inside the
+prose column and is made entirely of z-layers: the document's geometry with a selection is exactly its
+geometry without one, and the code column, the divider and the chips are untouched by it.

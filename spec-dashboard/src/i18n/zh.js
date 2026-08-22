@@ -630,6 +630,39 @@ export default {
     useSelection: '在新会话中使用选区',
   },
 
+  // [[prose-dispatch]] —— 选中一段 spec 正文之后能做的事。
+  proseActions: {
+    groupLabel: '选中的正文 —— 发给会话，或就地编辑',
+    act: {
+      send: '发到会话',
+      editSend: '改写并发送',
+      explain: '解释',
+      manual: '手动编辑',
+    },
+    preset: { edit: '编辑', polish: '润色', explain: '解释' },
+    // 预置的是消息本身，不是按钮标签：点完落进输入框，人还能接着改。
+    prompt: {
+      edit: '改写这段 spec 正文，让它说该说的话。改完连同它的节点一起提交到你的分支。',
+      polish: '润色这段正文的措辞，意思一个字都不要变。',
+      explain: '解释这段正文：它在说什么、为什么在这里。只在会话里回答，不要改 spec。',
+    },
+    sendLabel: '把这段正文发给一个会话',
+    editLabel: '编辑这段正文',
+    messagePlaceholder: '一起发过去的话（可以不写）',
+    lines: '第 {a}–{b} 行',
+    target: '发给',
+    newSession: '新建会话…',
+    send: '发送',
+    sendJump: '发送并跳转',
+    sentTo: '正文已发给 {name}',
+    sendFailed: '会话没有接收这条消息',
+    commit: '提交',
+    committing: '提交中…',
+    committed: '已提交 {sha} —— 节点版本随之重算',
+    noChange: '内容没变，所以什么都没提交',
+    editNote: '会在当前 checkout 上真的提交一次 spec.md 改动',
+  },
+
   session: {
     // 会话文档上的省略号：这个面上只有它能走到重命名 / tmux attach / 锁定到图谱，所以直接把内容写出来。
     menuLabel: '会话操作 —— 重命名、attach、锁定到图谱、关闭',

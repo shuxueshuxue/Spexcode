@@ -359,6 +359,23 @@ export async function sendSessionText(id, text, { replyVia } = {}) {
   return { ok: res.ok && body?.ok !== false, error: body?.error }
 }
 
+// [[spec-body-edit]]: replace a line range of a node's spec body and land it as a commit. `original` is
+// the text the reader saw — the server refuses rather than merges when it no longer matches, so the whole
+// error body (message + code + the text that is actually there) is handed back for the editor to show.
+export async function postSpecBody(id, patch) {
+  const res = await apiFetch(specUrl(id, 'body'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+  })
+  const body = await res.json().catch(() => null)
+  if (!res.ok) {
+    const error = new Error(body?.error || `spec body edit failed (${res.status})`)
+    error.code = body?.code || 'http-error'
+    error.current = body?.current
+    throw error
+  }
+  return body
+}
+
 // the command presets (plugin nodes with `surface: command`) the backend serves at /api/plugins.
 export async function loadPlugins() {
   const res = await apiFetch('/api/plugins')

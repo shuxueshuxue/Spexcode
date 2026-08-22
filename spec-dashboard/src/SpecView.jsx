@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SpecPane } from './NodeView.jsx'
+import ProseActions from './ProseActions.jsx'
 import SourceView from './SourceView.jsx'
 import { fetchNodeFiles, fetchNodeFileSlice } from './data.js'
 import { useResizable } from './useResizable.js'
@@ -30,6 +31,7 @@ export default function SpecView({ param }) {
   const [shown, setShown] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [width, onDrag, reset] = useResizable('spex.docSplit', 620, { min: 320, max: 1200, dir: -1 })
+  const proseRef = useRef(null)
 
   // The right side opens on the node's first governed file. A prose-only node gets no right side at all
   // rather than an empty frame apologising for itself.
@@ -55,8 +57,11 @@ export default function SpecView({ param }) {
   // no picker strip above it, no path strip below it, and one place in the document where a file is named.
   return (
     <div className="specview">
-      <div className="specview-prose">
+      <div className="specview-prose" ref={proseRef}>
         <SpecPane node={node} viewer={hasFiles ? { open: shown, pick: setShown } : null} />
+        {/* the prose pane's selection layer ([[prose-dispatch]]) — pure z-layers over the reading column,
+            so the document's own geometry is exactly what it was without it. */}
+        <ProseActions node={node} hostRef={proseRef} />
       </div>
       {hasFiles && (
         <>

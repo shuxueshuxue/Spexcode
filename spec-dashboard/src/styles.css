@@ -3162,3 +3162,78 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--paper); box-shadow: var(--shadow); }
 .diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
 .diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }
+
+/* prose selection layer ([[prose-dispatch]]) — an action group that follows the passage, a message popover
+   beside the pointer, and the in-place editor. All three are fixed z-layers: the reading column never
+   changes width and no chrome band appears, whether or not something is selected. */
+.pa-group {
+  position: fixed; z-index: 60; display: flex; gap: var(--space-1); padding: var(--space-1);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.pa-act {
+  display: inline-flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4);
+  background: none; border: none; border-radius: var(--radius); cursor: pointer;
+  font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-tight); color: var(--ink);
+}
+.pa-act:hover, .pa-act:focus-visible { outline: none; background: var(--panel2); color: var(--ink2); }
+.pa-act-icon { color: var(--muted); }
+.pa-act:hover .pa-act-icon, .pa-act:focus-visible .pa-act-icon { color: currentColor; }
+
+.pa-card {
+  position: fixed; z-index: 61; display: grid; gap: var(--space-4); padding: var(--space-5);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.pa-send { width: min(360px, calc(100vw - 32px)); }
+.pa-edit { width: min(760px, calc(100vw - 32px)); }
+.pa-chip {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption);
+}
+.pa-chip-label { font-variant-numeric: tabular-nums; }
+.pa-chip-node { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--blue); }
+.pa-input {
+  width: 100%; resize: vertical; padding: var(--space-3) var(--space-4);
+  background: var(--paper); color: var(--ink2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-relaxed);
+}
+.pa-edit-input { font-family: var(--mono); resize: vertical; }
+.pa-input:focus { outline: none; border-color: var(--blue); }
+.pa-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.pa-preset {
+  padding: var(--space-1) var(--space-4); border: 1px solid var(--edge); border-radius: var(--radius-full);
+  background: var(--panel); color: var(--muted); cursor: pointer;
+  font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-ui);
+}
+.pa-preset:hover { color: var(--ink2); border-color: var(--line); }
+.pa-target { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.pa-target-label { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
+.pa-select {
+  flex: 1; min-width: 0; padding: var(--space-2) var(--space-3);
+  background: var(--paper); color: var(--ink2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-caption);
+}
+.pa-edit-head {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption);
+}
+.pa-edit-where { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-edit-lines { margin-left: auto; font-variant-numeric: tabular-nums; }
+/* a refusal is READ, not glanced at: the server hands back the text that is actually there, so the box
+   keeps the newlines and scrolls rather than truncating the collision into one line. */
+.pa-error {
+  max-height: 180px; overflow: auto; white-space: pre-wrap; padding: var(--space-3) var(--space-4);
+  color: var(--red); background: color-mix(in srgb, var(--red) 10%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--red) 40%, var(--line)); border-radius: var(--radius);
+  font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed);
+}
+.pa-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); }
+.pa-note { margin-right: auto; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
+.pa-btn {
+  padding: var(--space-2) var(--space-5); background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+  font-family: var(--ui-font); font-size: var(--type-control);
+}
+.pa-btn:hover { background: var(--panel); }
+.pa-go { border-color: var(--blue); color: var(--blue); }
+.pa-go:hover { background: var(--blue); color: var(--paper); }
+.pa-btn:disabled { opacity: .5; cursor: default; }

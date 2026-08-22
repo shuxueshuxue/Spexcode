@@ -164,14 +164,14 @@ through `launch.js`, while [[launch]]'s backend owner performs the command-plugi
 including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
 background fire) and never expands a plugin body itself.
 
-An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
-base surfaces while live: its interactive tmux **Terminal** (SessionTerm), which is the default input surface,
-and the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
-liveness and is always Conversation. The selected face is navigation state on the session object address:
-`#/sessions/<id>?surface=terminal|conversation`; a bare `#/sessions/<id>` resolves the persisted base face.
-An explicit query writes the per-session preference through [[session-surface]]. There is no in-console face
-switch control or second tab rail: changing face navigates the same session parameter with a different query,
-replacing the current object slot; ctrl/⌘ holding uses the ordinary tab latch to keep a second object tab.
+An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
+published resource faces selected by the one session object address:
+`#/sessions/<id>?surface=conversation|terminal|diff|resource:<resourceTabKey>`; a bare
+`#/sessions/<id>` resolves the persisted base face. The URL is the only selector and is a pure function of the
+address; only a user gesture may navigate it. There is no in-console resource strip, dialog, or face-switch rail.
+Opening a published resource creates a normal object tab whose identity is the canonical address, dedupes and
+focuses an existing tab, and leaves the terminal tab in the strip. Closing that tab closes the resource view;
+the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
@@ -200,8 +200,9 @@ The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
 the plus menu, never a duplicate. Clicking a filename in the top-right files dropdown uses this same open/select operation for its
-file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
-selected only when its session already is. Each resource tab exposes a close icon and a right-side **refresh** action:
+file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service
+never creates or selects a visible tab automatically. It raises the existing unread signal; clicking that signal is
+the user gesture that opens/focuses its one address tab. Each resource tab exposes a close icon and a right-side **refresh** action:
 for a file it rereads the current preview response, while for a web resource it recreates the same-origin iframe and
 requests the current local-service response. A selected file also gets **download** and **copy path**, the same actions
 offered by the files dropdown; those file-specific actions do not appear for a web resource. Removing a published

@@ -700,6 +700,7 @@ export default {
     resourceMenuLabel: 'posted files and web services',
     resourceMenuEmpty: 'all posted resources are already open',
     refreshResourceTab: 'refresh {name}',
+    unreadResources: '{n} new posted resource(s)',
     closeResourceTab: 'close {name}',
     surfaceLabel: 'current session surface',
     toolbarToolsLabel: 'session tools',

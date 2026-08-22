@@ -10,7 +10,7 @@ import { stat, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from '@spexcode/spec-core'
-import { listenOrExit } from './listen.js'
+import { listenOrExit, resolveConfiguredPort } from './listen.js'
 import { resolvePublicConfig, startGateway, resolveDistDir } from './gateway.js'
 import { publishEndpoint, dropOwnEndpoint } from './host.js'
 import { repoRoot as servedRepoRoot } from '@spexcode/spec-core'
@@ -29,7 +29,13 @@ const packageRoot = join(here, '..')
 const sourceRoot = join(packageRoot, 'src')
 const workspaceRoot = existsSync(sourceRoot) ? join(packageRoot, '..') : null
 const entryArgs = serverEntrypointArgs(packageRoot, here)
-const publicPort = Number(process.env.PORT ?? 8787)
+let publicPort: number
+try {
+  publicPort = resolveConfiguredPort(process.env.PORT)
+} catch (error) {
+  console.error(`spec-cli: invalid PORT — ${(error as Error).message}`)
+  process.exit(2)
+}
 const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
 
 // @@@ public mode ([[public-mode]]) - with `spex serve --public`, the supervisor is NOT the internet face:

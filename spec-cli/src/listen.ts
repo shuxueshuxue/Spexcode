@@ -1,5 +1,15 @@
 import type { AddressInfo, Server } from 'node:net'
 
+export function resolveConfiguredPort(rawPort: string | undefined): number {
+  const normalized = rawPort?.trim()
+  if (!normalized) return 8787
+  const port = Number(normalized)
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`PORT must be an integer from 0 to 65535, got ${JSON.stringify(rawPort)}`)
+  }
+  return port
+}
+
 // @@@ listenOrExit ([[listener-readiness]]) - the one public-listener transition: before `listening`, a bind
 // failure is loud and fatal; after it, publication side effects and user-visible ready lines may run. Keeping
 // both halves here prevents a private child or pre-bind caller from announcing a surface it does not own.

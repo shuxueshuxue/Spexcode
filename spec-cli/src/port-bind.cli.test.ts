@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import net from 'node:net'
 import { fileURLToPath } from 'node:url'
-import { listenOrExit } from './listen.js'
+import { listenOrExit, resolveConfiguredPort } from './listen.js'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -26,10 +26,10 @@ async function occupyPort(host?: string): Promise<{ port: number; close: () => P
 
 type CliProcess = { child: ChildProcess; stdout: () => string; stderr: () => string }
 
-function startCli(args: string[]): CliProcess {
+function startCli(args: string[], env: NodeJS.ProcessEnv = {}): CliProcess {
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], {
     cwd: packageRoot,
-    env: { ...process.env, SPEXCODE_API_URL: '' },
+    env: { ...process.env, ...env, SPEXCODE_API_URL: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let stdout = ''
@@ -39,8 +39,8 @@ function startCli(args: string[]): CliProcess {
   return { child, stdout: () => stdout, stderr: () => stderr }
 }
 
-async function runCli(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const running = startCli(args)
+async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const running = startCli(args, env)
   const [code] = await once(running.child, 'close') as [number | null]
   return { code, stdout: running.stdout(), stderr: running.stderr() }
 }
@@ -133,4 +133,17 @@ test('listenOrExit passes the bound port to ready publication', async () => {
   assert.ok(address && typeof address === 'object')
   assert.equal(publishedPort, address.port)
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+})
+
+test('configured PORT distinguishes default, ephemeral, and invalid values', async () => {
+  assert.equal(resolveConfiguredPort(undefined), 8787)
+  assert.equal(resolveConfiguredPort(''), 8787)
+  assert.equal(resolveConfiguredPort('   '), 8787)
+  assert.equal(resolveConfiguredPort('0'), 0)
+  assert.throws(() => resolveConfiguredPort('abc'), /PORT must be an integer from 0 to 65535/)
+
+  const invalid = await runCli(['serve'], { PORT: 'abc' })
+  assert.equal(invalid.code, 2)
+  assert.equal(invalid.stdout, '')
+  assert.match(invalid.stderr, /^spec-cli: invalid PORT — PORT must be an integer from 0 to 65535, got "abc"$/m)
 })

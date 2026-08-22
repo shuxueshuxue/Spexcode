@@ -24,8 +24,10 @@ store; there is no runtime compatibility mode or JSON read fallback.
 
 ## Responsibility
 
-`createSession`, `transitionSession`, and `attachWatcher` initialize exact protocol addresses and mutate the service
-state/topology in one synchronous transaction. A parent/child transition appends a typed event before resolving
+`createSession`, `transitionSession`, `enqueueMessage`, and `attachWatcher` initialize exact protocol addresses and
+mutate the service state/topology/recipient queue in one synchronous transaction. `enqueueMessage` is the only
+adopter-facing direct delivery action; consumers do not reach through the service to call protocol `enqueue`.
+A parent/child transition appends a typed event before resolving
 durable watcher recipients and enqueueing immutable notifications. The commit result is returned only after the
 transaction commits; an optional post-commit notifier receives that result as a wake hint and is never part of the
 transaction. `bindRuntime` requires the adopter-supplied harness kind, native id, and start token and forwards the

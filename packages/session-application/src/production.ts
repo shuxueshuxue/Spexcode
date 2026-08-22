@@ -98,6 +98,7 @@ export interface ProductionSessionApplication extends SessionApplication {
   readonly runtimeBindings: SessionRuntimeBindings
   createSession(input: CreateSessionInput): SessionState
   transitionSession(sessionId: string, input: TransitionSessionInput): CommittedSessionChange
+  enqueueMessage(sessionId: string, message: MessageInput): Message
   attachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
   bindRuntime(sessionId: string, identity: NativeRuntimeIdentity, expectedGeneration?: number): RuntimeBinding
   resolveRuntime(sessionId: string, namespace: string): RuntimeBinding | null
@@ -358,6 +359,12 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       })
       notifyCommitted(result)
       return result
+    },
+
+    enqueueMessage(sessionId, message) {
+      requireId(sessionId, 'sessionId')
+      initialize(sessionId)
+      return protocol.withTransaction(tx => tx.enqueue(sessionId, message))
     },
 
     attachWatcher(watcherSessionId, subjectSessionId, channel = WATCH_RELATION) {

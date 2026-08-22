@@ -28,12 +28,15 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.deepEqual(first.topology.children('parent', 'parent').map(edge => edge.toSessionId), ['child'])
 
   first.attachWatcher('parent', 'child', 'watch')
+  const direct = first.enqueueMessage('parent', { kind: 'fixture.direct.v1', body: Buffer.from('direct') })
+  assert.equal(direct.kind, 'fixture.direct.v1')
   first.transitionSession('child', { status: 'active', reason: 'started' })
   const childEvents = first.events.read('child')
   assert.equal(childEvents.length, 2)
   assert.equal(childEvents[1]?.type, 'session.state.changed.v1')
-  assert.equal(first.protocol.listPending('parent').length, 2)
+  assert.equal(first.protocol.listPending('parent').length, 3)
   assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
+  assert.equal(first.protocol.dequeue('parent')?.kind, 'fixture.direct.v1')
   assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
   first.close()
 

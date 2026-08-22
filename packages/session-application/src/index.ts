@@ -73,6 +73,7 @@ export function openSessionApplication(
 }
 
 export { openProjectSessionApplication } from './production.js'
+export { migrateJsonSessionRecords } from './migration.js'
 export type {
   CommittedSessionChange,
   CreateSessionInput,
@@ -84,3 +85,8 @@ export type {
   SessionStateChange,
   TransitionSessionInput,
 } from './production.js'
+export type {
+  JsonMigrationRecord,
+  JsonSessionMigrationOptions,
+  JsonSessionMigrationReport,
+} from './migration.js'

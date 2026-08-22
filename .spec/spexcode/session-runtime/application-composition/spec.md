@@ -11,7 +11,8 @@ related:
 ---
 # session application composition
 
-`openProjectSessionApplication` requires one explicit absolute database path and a locality precondition before it
-opens protocol. It caches one composition per path, initializes each component once, and closes the shared protocol
-handle only when that composition closes. State/topology/event/message writes share one synchronous transaction;
-post-commit callbacks are wake hints only. Runtime identities and generation expectations are always caller supplied.
+`openProjectSessionApplication` requires the absolute database path resolved by the shared self-launch precedence and
+a locality precondition before it opens protocol. It caches one composition per path, initializes each component once,
+and closes the shared protocol handle only when that composition closes. State/topology/event/message writes share one
+synchronous transaction; post-commit callbacks are wake hints only. Runtime identities and generation expectations are
+always caller supplied. The composition never reads JSON records or exposes an opt-in compatibility switch.

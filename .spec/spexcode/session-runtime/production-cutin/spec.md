@@ -13,12 +13,14 @@ related:
 ---
 # session runtime production cut-in
 
-The Spex backend composes the production session application only when `SPEXCODE_SESSION_DATABASE_PATH` is supplied
-as an explicit absolute path. Before opening SQLite it runs the adopter locality precondition; a missing, relative, or
-non-local path fails loudly. With the setting absent, existing JSON-backed records retain their legacy authority and
-the backend does not invent a database or silently migrate them.
+The Spex backend always composes the production session application through the existing self-launch
+`resolveDatabasePath` precedence (`databasePath`, `SPEX_SESSION_DATABASE_PATH`, `SPEX_SESSION_CONFIG`, then the
+per-user default). Before opening SQLite it runs the adopter locality precondition; a missing, relative, or non-local
+path fails loudly. There is no `SPEXCODE_SESSION_DATABASE_PATH` opt-in and no JSON fallback.
 
-New `/api/sessions` records are initialized in the configured protocol database after the legacy record is published.
+The one-time JSON migration must complete before cutover. New `/api/sessions` records are initialized in the canonical
+application database; `session.json` and `watchers.json`, when retained, are operational worktree metadata only and
+are not read as application state, events, topology, or watcher authority.
 The runtime API exposes only explicit watcher, state, event/replay, native binding, publish, and dequeue operations.
 Native identity is caller supplied, and binding generation is checked by the shared runtime component. The YATU drives
 the real HTTP backend, restarts it, replays the child state, publishes a durable watcher notification, and proves a

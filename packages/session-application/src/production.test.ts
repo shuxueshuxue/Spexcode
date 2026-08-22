@@ -73,18 +73,15 @@ test('production composition refuses missing locality and relative database path
   )
 })
 
-test('legacy rows are visible only under explicit compatibility mode and remain write-protected', () => {
-  const root = mkdtempSync(join(tmpdir(), 'session-application-legacy-'))
+test('protocol addresses without migrated application state are absent and read-only', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-unmigrated-'))
   const databasePath = join(root, 'sessions.sqlite')
   const first = openProjectSessionApplication({ databasePath, locality: () => {} })
-  first.protocol.initialize('legacy')
-  assert.equal(first.readState('legacy'), null)
+  first.protocol.initialize('unmigrated')
+  assert.equal(first.readState('unmigrated'), null)
   first.close()
 
-  const compatible = openProjectSessionApplication({ databasePath, locality: () => {}, compatibilityMode: true })
-  assert.deepEqual(compatible.readState('legacy'), {
-    sessionId: 'legacy', status: 'legacy', parentSessionId: null, updatedAtMs: 0, legacy: true,
-  })
-  assert.throws(() => compatible.transitionSession('legacy', { status: 'active' }), /legacy session has no writable state/)
-  compatible.close()
+  const reopened = openProjectSessionApplication({ databasePath, locality: () => {} })
+  assert.throws(() => reopened.transitionSession('unmigrated', { status: 'active' }), /application state is missing/)
+  reopened.close()
 })

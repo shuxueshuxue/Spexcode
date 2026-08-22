@@ -41,7 +41,6 @@ export interface SessionState {
   status: string
   parentSessionId: string | null
   updatedAtMs: number
-  legacy?: boolean
 }
 
 export interface SessionStateChange {
@@ -64,7 +63,6 @@ export interface NativeRuntimeIdentity {
 export interface ProjectSessionApplicationOptions {
   databasePath: string
   locality: LocalityPrecondition
-  compatibilityMode?: boolean
   now?: () => number
   onCommitted?: (result: CommittedSessionChange) => void
 }
@@ -74,6 +72,8 @@ export interface CreateSessionInput {
   status?: string
   parentSessionId?: string | null
   runtime?: NativeRuntimeIdentity
+  eventId?: string
+  updatedAtMs?: number
 }
 
 export interface TransitionSessionInput {
@@ -247,7 +247,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         }
         let edge: TopologyEdge | null = null
         if (parentSessionId) edge = topology.attach(tx, parentSessionId, input.sessionId, PARENT_RELATION)
-        const updatedAtMs = now()
+        const updatedAtMs = input.updatedAtMs ?? now()
         tx.exec(
           'INSERT INTO session_application_state(session_id,status,parent_session_id,updated_at_ms) VALUES(?,?,?,?)',
           input.sessionId,
@@ -255,7 +255,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           parentSessionId,
           updatedAtMs,
         )
-        const id = eventId()
+        const id = input.eventId ?? eventId()
         const change: SessionStateChange = {
           sessionId: input.sessionId,
           status,
@@ -308,7 +308,6 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       const result = protocol.withTransaction(tx => {
         const current = readStateInTransaction(tx, sessionId)
         if (!current) {
-          if (options.compatibilityMode) throw new Error(`legacy session has no writable state: ${sessionId}`)
           throw new Error(`session application state is missing: ${sessionId}`)
         }
         const status = nextStatus ?? current.status
@@ -393,8 +392,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     readState(sessionId) {
       requireId(sessionId, 'sessionId')
       const state = protocol.withTransaction(tx => readStateInTransaction(tx, sessionId))
-      if (state || !options.compatibilityMode) return state
-      return { sessionId, status: 'legacy', parentSessionId: null, updatedAtMs: 0, legacy: true }
+      return state
     },
 
     replayState(sessionId) {

@@ -54,6 +54,17 @@ export default {
     explorer: '资源管理器',
     sessions: '会话',
   },
+  contextDock: {
+    title: '上下文',
+    backlinks: '反向链接',
+    scenarios: '场景',
+    open: '显示上下文栏',
+    close: '隐藏上下文栏',
+    loading: '正在加载场景…',
+    noBacklinks: '没有反向链接',
+    noScenarios: '没有声明场景',
+    states: { pass: '通过', fail: '失败', stalePass: '旧通过', staleFail: '旧失败', missing: '未测量', empty: '未测量' },
+  },
   tabs: {
     aria: '已打开的文档',
     close: '关闭标签',

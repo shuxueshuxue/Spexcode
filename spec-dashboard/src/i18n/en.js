@@ -55,6 +55,17 @@ export default {
     explorer: 'Explorer',
     sessions: 'Sessions',
   },
+  contextDock: {
+    title: 'CONTEXT',
+    backlinks: 'BACKLINKS',
+    scenarios: 'SCENARIOS',
+    open: 'show context dock',
+    close: 'hide context dock',
+    loading: 'loading scenarios…',
+    noBacklinks: 'no backlinks',
+    noScenarios: 'no scenarios declared',
+    states: { pass: 'pass', fail: 'fail', stalePass: 'stale pass', staleFail: 'stale fail', missing: 'unmeasured', empty: 'unmeasured' },
+  },
   tabs: {
     aria: 'open documents',
     close: 'close tab',

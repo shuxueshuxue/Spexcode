@@ -3,7 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
-import { requestTab } from './tabs.js'
+import { previewTab, requestTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import { useResizable } from './useResizable.js'
 
@@ -25,10 +25,10 @@ const kidsOf = (specs) => {
   return kids
 }
 
-function Row({ depth, onClick, open, hasKids, dot, label, kind, active }) {
+function Row({ depth, onClick, onDoubleClick, open, hasKids, dot, label, kind, active }) {
   return (
     <button type="button" className={`ft-row ft-${kind}${active ? ' on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} data-tip={label}>
+      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} onDoubleClick={onDoubleClick} data-tip={label}>
       <span className="ft-caret">{hasKids ? (open ? '▾' : '▸') : ''}</span>
       {dot ? <i className="ft-dot" style={{ background: dot }} /> : <span className="ft-dot ft-none" />}
       <span className="ft-label">{label}</span>
@@ -60,13 +60,18 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
         // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
         // discloses its contents. Splitting them into two hit targets would make the common move — look
         // inside this node — cost two clicks in a list built for scanning. Ctrl/⌘ holds the document as a
-        // NEW tab ([[tab-strip]]'s looking-vs-holding boundary); a plain click follows in place.
-        onClick={(e) => { setOpen((v) => !v); (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', node.id) }} />
+        // A plain explorer click is a bounded preview; ctrl/⌘ keeps the node as a resident tab.
+        onClick={(e) => {
+          setOpen((v) => !v)
+          if (e.ctrlKey || e.metaKey) requestTab('spec', node.id)
+          else previewTab('spec', node.id)
+        }} onDoubleClick={() => requestTab('spec', node.id)} />
       {open && (
         <>
           {governed.map((f) => (
             <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()}
-              onClick={(e) => (e.ctrlKey || e.metaKey ? requestTab : navigate)('file', f)} />
+              onClick={(e) => (e.ctrlKey || e.metaKey ? requestTab : previewTab)('file', f)}
+              onDoubleClick={() => requestTab('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}

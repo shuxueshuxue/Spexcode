@@ -1,6 +1,6 @@
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
-import { tabKey, useTabs } from './tabs.js'
+import { requestTab, tabKey, useTabs } from './tabs.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR } from './session.js'
@@ -61,7 +61,10 @@ export default function TabStrip({ specs, sessions }) {
         const key = tabKey(tab)
         const active = key === activeKey
         return (
-          <div key={key} className={`tab${active ? ' on' : ''}`} role="tab" aria-selected={active}
+          <div key={key} className={`tab${active ? ' on' : ''}${tab.preview ? ' preview' : ''}`} role="tab" aria-selected={active}
+            onDoubleClick={(e) => {
+              if (tab.preview && !e.target.closest('.tab-x')) requestTab(tab.page, tab.param, tab.query)
+            }}
             onContextMenu={(e) => { e.preventDefault(); closeOthers(tab) }}
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document

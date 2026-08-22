@@ -12,8 +12,12 @@ export default function SessionsView({ param }) {
   const { palette } = useWorkspace()
   const { openPalette, takeCompose } = useWorkspaceApi()
   const [sel, setSel] = useState(() => param || 'new')
-  // a board chord may have composed text for this view before it existed; collect it once on arrival.
-  const [seed, setSeed] = useState(() => takeCompose())
+  // a board chord may have composed text for this view before it existed; collect it on arrival — in an
+  // EFFECT, never a state initializer. The take is a one-shot, and StrictMode double-invokes initializers
+  // to expose exactly that: the first invocation consumed the payload and the second's null won. The
+  // null-guard makes the double-run effect idempotent instead.
+  const [seed, setSeed] = useState(null)
+  useEffect(() => { const t = takeCompose(); if (t != null) setSeed(t) }, [takeCompose])
   useEffect(() => { if (param) setSel(param) }, [param])
 
   return (

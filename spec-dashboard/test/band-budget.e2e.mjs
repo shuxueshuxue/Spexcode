@@ -28,17 +28,21 @@ mkdirSync(OUT, { recursive: true })
 // 1. THE MODEL — the single source. The spec node states it in prose; this is the same function.
 // ===================================================================================================
 
+// R — route kind. `graph` is a LEGACY ADDRESS: reachable by typing it, never offered by the rail.
 const ROUTES = ['graph', 'evals', 'issues', 'settings', 'empty', 'spec', 'file', 'session']
 const DOCKS = ['closed', 'explorer', 'sessions']
 const CONTEXTS = ['closed', 'open']
 const SPLITS = ['none', 'open']
 const SURFACES = ['conversation', 'terminal', 'diff', 'resource']
 
-// The bare boards are full-bleed: a finding surface beside a finding surface squeezes both, so while a
-// bare #/evals or #/issues is the document the dock does not render at all.
-const BOARD_ROUTES = new Set(['evals', 'issues'])
+// The FULL-BLEED family is full width: a finding surface beside a finding surface squeezes both, and a
+// whole-page form framed by a tree nobody is reading is the same waste. While a bare #/evals, a bare
+// #/issues, or #/settings is routed, the dock does not render at all.
+// `graph` is still in R: the address is still reachable and still measurable, it is simply no longer a
+// rail destination ([[node-graph]]) — a retired entrance does not shrink the state space.
+const FULL_BLEED_ROUTES = new Set(['evals', 'issues', 'settings'])
 
-const dockBand = (state) => (state.D !== 'closed' && !BOARD_ROUTES.has(state.R) ? 1 : 0)
+const dockBand = (state) => (state.D !== 'closed' && !FULL_BLEED_ROUTES.has(state.R) ? 1 : 0)
 const contextBand = (state) => (state.R === 'spec' && state.C === 'open' ? 1 : 0)
 
 // B(state) — the whole budget. Rail, tabstrip and statusbar are unconditional; the dock and the context
@@ -276,7 +280,9 @@ const seed = async (state) => {
 
 // Boot at #/empty, then navigate. A FIRST load at a bare #/evals or #/issues renders the cold review
 // fast-path — a different, dockless shell — so entering those addresses from a booted workspace is the
-// only way to measure the real chrome.
+// only way to measure the real chrome. The same boot-then-navigate also keeps every state's measurement
+// on the mounted-document pool's steady state ([[workspace-shell]]): a hidden document is display:none,
+// which the classifier skips outright, so a warm pool can never smuggle a band into the count.
 const enter = async (state) => {
   await seed(state)
   await page.evaluate(() => { location.hash = '#/empty' })

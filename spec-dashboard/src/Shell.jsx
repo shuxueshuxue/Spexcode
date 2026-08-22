@@ -28,13 +28,18 @@ import { runTabCommand } from './tabs.js'
 // is the rule that makes two-up possible later and that keeps a view from coupling to whichever address
 // happens to be current.
 
-// The wide boards are the one place the FINDING region stands down. Evals and Issues are finding surfaces
-// in their own right — full-width GitHub-style lists with their own query, facets and rows — so putting the
-// dock beside one puts two finding surfaces on screen at once and squeezes the board the width it was
-// designed around. While a board is routed the dock does not render at all. The rail's projection buttons
-// still own the stored PREFERENCE (and stay lit only when their projection is active): the board suppresses
-// the dock for as long as it is the document, and never edits what the reader chose.
+// The FULL-BLEED family is where the finding region stands down: a surface that is already a whole page of
+// its own gets the window's full width. Evals and Issues are finding surfaces in their own right —
+// full-width GitHub-style lists with their own query, facets and rows — and Settings is a whole-page form.
+// Putting the dock beside one of them puts two finding surfaces on screen at once, or frames a form with a
+// tree nobody is reading, and squeezes the page the width it was drawn for. The rail's projection buttons
+// still own the stored PREFERENCE (and stay lit only when their projection is active): a full-bleed page
+// suppresses the dock for as long as it is routed, and never edits what the reader chose.
+//
+// The parameterized addresses in these families are NOT full-bleed: #/evals/<node>/<scenario> and
+// #/issues/<id> are object documents and keep the dock like any other document.
 const BOARD_PAGES = new Set(['evals', 'issues'])
+const isFullBleed = (page, param) => page === 'settings' || (BOARD_PAGES.has(page) && param == null)
 
 function ViewHost({ page, param, query }) {
   const t = useT()
@@ -192,9 +197,7 @@ export default function Shell() {
       <div className="app">
         <TooltipLayer />
         <SideBar page={page} identity={identity} catalog={catalog} />
-        {/* only the BARE board face is full-bleed — #/evals/<node>/<scenario> and #/issues/<id> are
-            object documents and keep the finding dock like any other document. */}
-        {dock && !(BOARD_PAGES.has(page) && param == null) && (
+        {dock && !isFullBleed(page, param) && (
           <ViewErrorBoundary resetKey="dock">
             <Dock mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />

@@ -846,6 +846,7 @@ function assertReparentable(children: string[], parent: string | null, records: 
 export async function reparentSessionRecords(rawChildren: string[], parent: string | null): Promise<SessionReparentResult> {
   const children = [...new Set(rawChildren)].sort()
   const notify: SessRec[] = []
+  const application = configuredSessionApplicationIfCutover()
   await withRecordLock('session-reparent-transaction', async () => {
     // Read former supervisors only after the transaction fence: a concurrent reparent may change exactly
     // this relation, and its real sender lock is part of the next transaction's outgoing-message boundary.
@@ -856,6 +857,15 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       const current = new Map(children.map((id) => [id, managedWatchRecord(id)]))
       assertReparentable(children, parent, current)
       const snapshots = children.map((id) => ({ id, record: current.get(id)!, watchers: readWatchEntries(id), pending: pendingSnapshot(id) }))
+      if (application) {
+        for (const snapshot of snapshots) {
+          const state = application.readState(snapshot.id)
+          if (!state) throw new ResourceConflict(`session ${snapshot.id} has no canonical application state during reparent`)
+          if (state.parentSessionId !== snapshot.record.parent) {
+            throw new ResourceConflict(`session ${snapshot.id} legacy/canonical parent mismatch: record=${snapshot.record.parent ?? 'null'} canonical=${state.parentSessionId ?? 'null'}`)
+          }
+        }
+      }
       try {
         for (const snapshot of snapshots) {
           const { record, watchers } = snapshot
@@ -874,6 +884,12 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
           if (snapshot.record.parent && snapshot.record.parent !== parent)
             revokePendingFromWhileLocked(snapshot.id, snapshot.record.parent)
         }
+        if (application) {
+          for (const snapshot of snapshots) {
+            if (snapshot.record.parent !== parent)
+              application.transitionSession(snapshot.id, { parentSessionId: parent, reason: 'reparent' })
+          }
+        }
       } catch (error) {
         let rollbackFailure: unknown = null
         for (const snapshot of [...snapshots].reverse()) {
@@ -891,6 +907,10 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
   })
   const notified: string[] = []
   if (parent) for (const child of notify) {
+    if (application) {
+      notified.push(child.session)
+      continue
+    }
     const delivered = await sendText(parent, watchMessage(child), child.session, { allowStranded: true })
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
     notified.push(child.session)

@@ -60,6 +60,8 @@ export default {
   },
   nav: {
     railLabel: 'main navigation',
+    explorer: 'Explorer',
+    search: 'Search (/)',
     graph: 'Spec Node Graph (⌥1)',
     sessions: 'Sessions (⌥2)',
     evals: 'Evals (⌥3 / ⌥F)',

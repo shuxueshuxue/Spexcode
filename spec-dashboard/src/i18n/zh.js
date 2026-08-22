@@ -59,6 +59,8 @@ export default {
   },
   nav: {
     railLabel: '主导航',
+    explorer: '资源管理器',
+    search: '搜索（/）',
     graph: '规格节点图（⌥1）',
     sessions: '会话面板（⌥2）',
     evals: 'Evals（⌥3 / ⌥F）',

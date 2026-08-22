@@ -39,19 +39,13 @@ function ViewHost({ page, param, query }) {
   )
 }
 
-// The dock toggle is a workspace control, so it lives on the bar rather than inside any view.
+// The shell's own status contribution: the workspace identity.
 function ShellStatus() {
-  const t = useT()
-  const { dock } = useWorkspace()
   const { identity } = useBoard()
-  const { setDock } = useWorkspaceApi()
   // workspace identity: which project this window is looking at. It belongs to the shell because it is
-  // true of the window, not of whatever view happens to be showing.
+  // true of the window, not of whatever view happens to be showing. The dock toggle moved to the rail
+  // ([[side-nav]]) — the finding controls live together, and one control has one owner.
   useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', text: `$ ${identity?.title || 'spexcode'}` })
-  useStatusItem({
-    id: 'explorer', side: 'left', priority: 900, kind: dock ? 'info' : 'standard',
-    text: '▤', tooltip: t('fileTree.aria'), onClick: () => setDock((v) => !v),
-  })
   return null
 }
 

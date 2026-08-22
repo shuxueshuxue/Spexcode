@@ -11,14 +11,24 @@ const consumer = join(root, 'app')
 const tarballs = join(root, 'tarballs')
 execFileSync('npm', ['run', 'build', '--workspace=@spexcode/session-protocol'], { stdio: 'ignore' })
 execFileSync('npm', ['run', 'build', '--workspace=@spexcode/session-topology'], { stdio: 'ignore' })
+execFileSync('npm', ['run', 'build', '--workspace=@spexcode/session-runtime'], { stdio: 'ignore' })
+execFileSync('npm', ['run', 'build', '--workspace=@spexcode/session-events'], { stdio: 'ignore' })
 execFileSync('npm', ['run', 'build', '--workspace=@spexcode/session-application'], { stdio: 'ignore' })
 await mkdir(consumer, { recursive: true })
 await mkdir(tarballs, { recursive: true })
 execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-protocol', '--pack-destination', tarballs])
 execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-topology', '--pack-destination', tarballs])
+execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-runtime', '--pack-destination', tarballs])
+execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-events', '--pack-destination', tarballs])
 execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-application', '--pack-destination', tarballs])
 await writeFile(join(consumer, 'package.json'), '{"name":"session-application-consumer","private":true,"type":"module"}\n')
-const packages = ['spexcode-session-protocol-0.6.7.tgz', 'spexcode-session-topology-0.6.7.tgz', 'spexcode-session-application-0.6.7.tgz']
+const packages = [
+  'spexcode-session-protocol-0.6.7.tgz',
+  'spexcode-session-topology-0.6.7.tgz',
+  'spexcode-session-runtime-0.6.7.tgz',
+  'spexcode-session-events-0.6.7.tgz',
+  'spexcode-session-application-0.6.7.tgz',
+]
 execFileSync('npm', ['install', '--silent', '--no-audit', '--no-fund', ...packages.map(name => join(tarballs, name))], { cwd: consumer })
 const require = createRequire(join(consumer, 'package.json'))
 const { openProtocol } = await import(pathToFileURL(require.resolve('@spexcode/session-protocol')).href)

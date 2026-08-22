@@ -12,6 +12,7 @@ code:
 related:
   - .spec/spexcode/session-runtime/application-state-schema/spec.md
   - .spec/spexcode/session-runtime/application-composition/spec.md
+  - .spec/spexcode/session-runtime/application-consumer-yatu/spec.md
 ---
 # session application service
 

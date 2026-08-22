@@ -22,6 +22,9 @@ The one-time JSON migration must complete before cutover. New `/api/sessions` re
 application database, and after the migration marker exists the list reads lifecycle status and parent topology from
 that database, refusing a governed record with no canonical row; `session.json` and `watchers.json`, when retained,
 are operational worktree metadata only and are not read as application state, events, topology, or watcher authority.
+Lifecycle changes, watcher subscriptions, direct sends, and delivery after the marker use the application service and
+canonical SQLite queue. A bound native runtime is required before dequeue; an unbound runtime leaves durable debt
+pending and never falls back to `pending.json` or the legacy session-core timeline.
 Concurrent or retried accepted creates may publish the same idempotency receipt more than once; the HTTP bridge
 initializes its canonical row at most once and accepts a duplicate only when the existing projection matches.
 The runtime API exposes only explicit watcher, state, event/replay, native binding, publish, and dequeue operations.

@@ -494,6 +494,7 @@ app.post('/api/sessions', async (c) => {
             status: result.session.lifecycle,
             parentSessionId: result.session.parent,
           })
+          if (result.session.parent) production.attachWatcher(result.session.parent, result.session.id, 'watch:parent')
         } catch (error) {
           const state = production.readState(result.session.id)
           const sameProjection = state?.status === result.session.lifecycle
@@ -524,12 +525,16 @@ app.get('/api/session-runtime/:id/replay', (c) => {
 })
 app.post('/api/session-runtime/:id/state', async (c) => {
   const application = runtimeApplicationOr503(c)
-  const body = await c.req.json().catch(() => null) as { status?: unknown; parentSessionId?: unknown; reason?: unknown } | null
+  const body = await c.req.json().catch(() => null) as { status?: unknown; proposal?: unknown; note?: unknown; parentSessionId?: unknown; reason?: unknown } | null
   if (body?.status !== undefined && typeof body.status !== 'string') return c.json({ error: 'status must be a string' }, 400)
+  if (body?.proposal !== undefined && body.proposal !== null && typeof body.proposal !== 'string') return c.json({ error: 'proposal must be a string or null' }, 400)
+  if (body?.note !== undefined && body.note !== null && typeof body.note !== 'string') return c.json({ error: 'note must be a string or null' }, 400)
   if (body?.parentSessionId !== undefined && body.parentSessionId !== null && typeof body.parentSessionId !== 'string') return c.json({ error: 'parentSessionId must be a string or null' }, 400)
   try {
     return c.json(application.transitionSession(c.req.param('id'), {
       status: body?.status as string | undefined,
+      proposal: body?.proposal as string | null | undefined,
+      note: body?.note as string | null | undefined,
       parentSessionId: body?.parentSessionId as string | null | undefined,
       reason: typeof body?.reason === 'string' ? body.reason : null,
     }))

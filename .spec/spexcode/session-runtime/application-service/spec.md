@@ -36,7 +36,8 @@ binding generation fence. A stale generation fails loudly.
 The original `notifyRecipients` and `attachAndNotify` operations remain as small protocol/topology-only helpers for
 callers that do not use lifecycle state. They share the same transaction boundary but do not claim a state event.
 
-State events use the closed `session.state.changed.v1` envelope with JSON payload bytes. Replay folds the append-only
+State events use the closed `session.state.changed.v1` envelope with JSON payload bytes, including the lifecycle
+proposal and note fields. Replay folds the append-only
 event stream on restart and validates sequence gaps and unknown required event types through [[session-events]].
 Successful dequeue remains the protocol transfer boundary; runtime binding resolution occurs before dequeue and is not
 an acknowledgement or a second queue.

@@ -16,16 +16,19 @@ port, starts the existing CLI in the project directory, and loads that origin in
 the page is served by the same process a terminal user starts by hand, over the same origin, the dashboard
 needs **zero** desktop-specific code.
 
-**This node is a measured spike, and the sections below say which parts are proven.** Boot, port hand-off,
-and window load work: the window loads first try in about two seconds, and the load retry never fires. Two
-things do not work yet, and both were found by running it rather than by reading it.
+**This node began as a measured spike, and the sections below preserve those measurements.** Boot, port hand-off,
+and window load work: the window loads first try in about two seconds, and the load retry never fires. The two
+spike failures are now repaired by selecting the existing gateway origin and adding Linux process containment.
 
 **Which origin serves the dashboard was got wrong, and the correction is not a detail.** `spex serve`'s `/`
 is a plain-text index of API routes; the backend serves no static bundle, so a shell pointed at it renders a
 line of text where a board should be. The dashboard dist is served by the **gateway** — `spex serve ui`, and
 the same gateway the supervisor already starts on its public branch with a `distDir`. So the shape "one
-loopback origin serving the bundle and proxying `/api`" is not something this node must invent; it exists,
-and the shell was aimed one process to the left of it.
+loopback origin serving the bundle and proxying `/api`" is not something this node must invent; it exists, and the
+shell was aimed one process to the left of it. The shell now starts that existing pair: `spex serve --port P` for
+the project backend and `spex serve ui --port Q --api-port P` for the loopback dashboard origin, then loads Q.
+This is the smallest honest choice: making `spex serve` serve static files would change the CLI contract for every
+terminal and browser user, while the gateway already is the product's explicit one-backend pairing.
 
 **The rule that keeps it honest.** Anything the desktop app can do, `spex serve` plus a browser must also be
 able to do. The shell may add operating-system integration — a window, a project picker, a tray, an
@@ -47,8 +50,14 @@ after `kill -9` on the shell, the utility process does die — and the backend's
 grandchildren reparent to init and go on holding the port. An ordinary quit leaks one too. So the sentence
 "a crashed shell cannot leave a server holding the port" was false, and the reason it was false is
 instructive: process-tree bookkeeping is defeated by reparenting, which is exactly the case that matters.
-Reaping needs a mechanism that reparenting cannot escape — cgroup membership on Linux, a job object on
-Windows. Until one is here, the leak is real and is to be described as real.
+Reaping needs a mechanism that reparenting cannot escape. On Linux the node shim enters each service into a
+`systemd-run --user --scope` cgroup whose `KillMode=control-group` owns the service; an in-scope watchdog observes
+the utility process and writes `1` to that cgroup's `cgroup.kill` after the utility is killed, so reparenting to init
+does not change membership. The Linux adapter requires the user's systemd bus (`XDG_RUNTIME_DIR` and
+`DBUS_SESSION_BUS_ADDRESS`)
+and fails loudly when it cannot create a scope. Windows has no implementation yet (the intended seam is a Job Object
+with `KILL_ON_JOB_CLOSE`); macOS has no equivalent kernel primitive in this package, so those platforms retain the
+measured leak and are named as unsupported rather than given a process-tree approximation.
 
 **Where `ELECTRON_RUN_AS_NODE` is set decides whether the app starts at all.** The backend re-spawns itself
 through `process.execPath`, which under Electron is the Electron binary, so it needs the flag to come back

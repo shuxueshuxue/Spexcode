@@ -154,3 +154,13 @@ PASS and not a product FAIL.
 The current branch-local `spex spec lint` result is `0 error(s)`; its warnings are existing drift/related-drift
 findings. Alternate launcher runs that reported Tree-sitter errors on `cli.ts` or `sessions.ts` are tool/checkout
 path observations and are not used to reclassify product behavior here.
+
+### Files preview browser closure
+
+`files/preview-refuses-unsupported-or-oversized-files-loudly` is now **PASS** at codeSha `576785b5e`. The
+measurement used an isolated git project initialized through the public `spex init`, posted both fixtures through
+`spex session files add`, served the real backend and Vite dashboard, and drove Chromium through the resource-tab
+surface. An SVG preview produced the exact named 415 instruction to download; a 2 MiB+1 text file produced the
+exact named 413 ceiling with the actual byte count. Neither case used the download action, and the temporary
+worktree, backend, dashboard, and browser were removed after the run. Structured evidence is `e1e023be…` in the
+files eval sidecar.

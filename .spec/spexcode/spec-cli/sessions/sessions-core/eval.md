@@ -53,10 +53,7 @@ scenarios:
   - name: pane-snapshot-survives-the-installed-tmux
     tags: [backend-api]
     code:
-      - spec-cli/src/sessions.ts#TMUX_PANE_SEPARATOR
-      - spec-cli/src/sessions.ts#TMUX_PANE_FORMAT
-      - spec-cli/src/sessions.ts#parseLivePanes
-      - spec-cli/src/sessions.ts#liveSnapshot
+      - spec-cli/src/sessions-hot.test.ts
     description: >
       Start a real tmux server with one session of a known name, ask it for `list-panes -a` using the EXACT
       format the liveness snapshot sends, and feed that raw output to the pane parser. Also read the format
@@ -71,11 +68,7 @@ scenarios:
   - name: a-board-row-carries-only-the-prompt-preview
     tags: [backend-api]
     code:
-      - spec-cli/src/sessions.ts#oneLinePreview
-      - spec-cli/src/sessions.ts#toSession
-      - spec-cli/src/sessions.ts#boardRow
-      - spec-cli/src/sessions.ts#listSessions
-      - spec-cli/src/sessions.ts#sessionPrompt
+      - spec-cli/src/session-public-projection.api.test.ts
     description: >
       Against a real backend serving a real board whose sessions were launched with long asks, read
       `GET /api/sessions` and weigh its body: total bytes, and the share spent on each row's `prompt` versus
@@ -90,7 +83,7 @@ scenarios:
       detail route, the only full-text reader, never depended on them.
   - name: a-dead-leaf-never-wedges-a-session
     tags: [backend-api, cli]
-    code: spec-cli/src/sessions.ts
+    code: spec-cli/src/session-send-cli.test.ts
     description: >
       Take a governed session whose recorded leaf pid is DEAD — the state a launcher that exits before
       readiness leaves behind — and drive the real `spex session stop` and `spex session close` against a
@@ -106,9 +99,7 @@ scenarios:
       no start identity", since that sentence is the conflation itself.
   - name: prompt-invariant-covers-every-delivery
     tags: [backend-api, cli]
-    code:
-      - spec-cli/src/sessions.ts#composeSessionPrompt
-      - spec-cli/src/sessions.ts#optionSafe
+    code: spec-cli/src/session-send-cli.test.ts
     description: >
       The option-shaped-prompt guarantee is made at composeSessionPrompt, which serves LAUNCH and every
       SEND — so measure the send half, not only the launch half. In an isolated real project through a real

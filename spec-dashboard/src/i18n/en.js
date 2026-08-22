@@ -44,6 +44,8 @@ export default {
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
+  specView: { missing: 'no such node: {id}' },
+  fileView: { none: 'no file selected' },
   fileTree: {
     title: 'EXPLORER',
     aria: 'project file tree',

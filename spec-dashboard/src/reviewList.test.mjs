@@ -14,7 +14,7 @@ const page = read('EvalsPage.jsx')
 const detail = read('EventDetail.jsx')
 const issues = read('IssuesPage.jsx')
 const issueCard = read('IssueCard.jsx')
-const dashboard = read('Dashboard.jsx')
+const dashboard = read('Shell.jsx') + read('GraphView.jsx') + read('views.jsx')
 const css = read('styles.css')
 const filters = readFileSync(join(here, '../../packages/spec-core/src/review/reviewFilters.js'), 'utf8')
 const reviewPage = read('reviewPage.js')
@@ -479,7 +479,7 @@ test('an open review surface follows the board issue-freshness stamp, never boar
   const app = read('App.jsx')
   // the board's own field reaches both shells — the stamp is the signal, not a derived proxy
   assert.match(app, /<MobileApp[^\n]*issuesStamp=\{board\.issuesStamp\}/)
-  assert.match(app, /<Dashboard[^\n]*issuesStamp=\{board\.issuesStamp\}/)
+  assert.match(app, /issuesStamp: board\.issuesStamp/)
   assert.match(dashboard, /<IssuesPage[^\n]*issuesStamp=\{issuesStamp\}/)
   // the list keys on what its ANSWER depends on: the issue population + the presence join, nothing else
   assert.match(issues, /refreshKey: `\$\{issuesStamp \?\? ''\}\|\$\{presenceKey\}`/)

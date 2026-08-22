@@ -43,6 +43,8 @@ export default {
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
+  specView: { missing: '没有这个节点：{id}' },
+  fileView: { none: '未选择文件' },
   fileTree: {
     title: '文件树',
     aria: '项目文件树',

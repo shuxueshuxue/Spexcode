@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { navigate, routeHash, useRoute } from './route.js'
+import { isDocument } from './views.jsx'
 
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
@@ -25,9 +26,9 @@ const read = () => {
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
 
-// Which routes are worth a tab. `settings` is a modal-shaped destination people bounce off, not a document
-// they keep open, so it is navigable but never accumulates — the strip would otherwise fill with visits.
-const TABBABLE = new Set(['graph', 'sessions', 'evals', 'issues'])
+// Which routes are worth a tab is the VIEW REGISTRY's answer, not a second list here. It was a second list
+// for one commit, and in that commit the strip could not hold the document addresses the registry had
+// already declared — two sources of truth disagreeing exactly where they were supposed to agree.
 
 export function useTabs() {
   const route = useRoute()
@@ -37,7 +38,7 @@ export function useTabs() {
   // click on the board — opens a tab, because otherwise the strip would claim to show what is open while
   // the reader looked at something absent from it.
   useEffect(() => {
-    if (!TABBABLE.has(route.page)) return
+    if (!isDocument(route.page)) return
     const key = routeHash(route.page, route.param, route.query)
     setTabs((prev) => {
       if (prev.some((t) => tabKey(t) === key)) return prev

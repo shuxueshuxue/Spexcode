@@ -7,7 +7,8 @@ code:
   - spec-dashboard/src/SessionWindow.jsx
 related:
   - spec-dashboard/src/session.js
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/MobileApp.jsx
 ---

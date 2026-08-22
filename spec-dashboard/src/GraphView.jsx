@@ -6,15 +6,8 @@ import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
-import SpecSearch from './SpecSearch.jsx'
 import GraphStats from './GraphStats.jsx'
-import StatusBar, { useStatusItem } from './StatusBar.jsx'
-import TabStrip from './TabStrip.jsx'
-import FileTree from './FileTree.jsx'
-import FileViewer from './FileViewer.jsx'
-import SideBar from './SideBar.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
 import { navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
@@ -26,6 +19,8 @@ import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
+import { useBoard, useBoardApi, useWorkspaceApi } from './workspace.jsx'
+import { useStatusItem } from './StatusBar.jsx'
 import { encodeCodeSelection } from './codeSelection.js'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
@@ -73,20 +68,20 @@ function PagePane({ active, warm = false, className, children }) {
   )
 }
 
-function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, boardLive, graphOnly = false }) {
+function GraphView({ param, query }) {
+  const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
+  const { reload } = useBoardApi()
+  const { openPalette, setCompose } = useWorkspaceApi()
   const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
-  const { page, param } = useRoute()
+  const page = 'graph'
   useEffect(() => {
-    if (graphOnly && page !== 'graph') navigate('graph', null, { replace: true })
   }, [graphOnly, page])
   // SessionInterface owns live terminals, so it stays mounted after the first visit. Do not eagerly mount
   // it on graph/evals/issues routes: a cold dashboard should not open every session transport just because
   // the console is available as a sibling route.
-  const [sessionWarm, setSessionWarm] = useState(() => !graphOnly && page === 'sessions')
-  useEffect(() => { if (!graphOnly && page === 'sessions') setSessionWarm(true) }, [graphOnly, page])
   // focus survives a reload / a mobile↔desktop breakpoint remount within this tab (sessionStorage, so a
   // fresh tab still opens on the root); a stale saved id is fine — focusRaw below falls back to the root.
   const [focusId, setFocusId] = useState(() => {
@@ -98,25 +93,15 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
-  const [search, setSearch] = useState(null)      // search palette mode: null | 'nodes' (`/`, nodes lead) | 'sessions' (⌥+/, sessions lead)
-  const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
-  const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
-  const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
+  const search = null   // the palette is the shell's ([[workspace-shell]]); the graph only asks for it
+    const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
+  const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
-  // the project name and the help key were a floating HUD in the canvas's top-left corner. They are
-  // workspace state, so they belong to the bar's LEFT group — and once they are items, the canvas stops
-  // having a reserved corner at all. `-Infinity` pins help to the far end, the slot VS Code keeps for its
-  // own always-last entry.
-  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', text: `$ ${project || 'spec-dashboard'}` })
-  const [treeOpen, setTreeOpen] = useState(() => { try { return localStorage.getItem('spexcode.tree') === '1' } catch { return false } })
-  const [viewFile, setViewFile] = useState(null)
-  useStatusItem({
-    id: 'explorer', side: 'left', priority: 900, kind: treeOpen ? 'info' : 'standard',
-    text: '▤', tooltip: t('fileTree.aria'),
-    onClick: () => setTreeOpen((v) => { try { localStorage.setItem('spexcode.tree', v ? '0' : '1') } catch {} ; return !v }),
-  })
+  // the `?` legend is the GRAPH's keymap, so the graph contributes it and it leaves the bar when the graph
+  // does. The project name is workspace identity and belongs to the shell — splitting them was the first
+  // thing the view boundary made obvious. `-Infinity` pins help to the far end.
   useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?', tooltip: t('hud.helpTitle'), onClick: () => setLegend((v) => !v) })
   const graphRef = useRef(null)
   const animRef = useRef(0)
@@ -180,8 +165,8 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     [sessions],
   )
 
-  const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
-  const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
+  const openSession = useCallback((id) => navigate('sessions', id), [])
+  const startNew = useCallback((text) => { setSeed(text); navigate('sessions', 'new') }, [setSeed])
   const startFromSelection = useCallback((selection) => {
     startNew(encodeCodeSelection(selection))
   }, [startNew])
@@ -211,20 +196,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   // echo is automatic state-naming — pages and details push, see route.js). The legacy
   // `#/sessions/<id>/eval[/…]` shape never reaches here — the route layer normalizes it to the Evals
   // family ([[session-eval]]) before any parse lands.
-  useLayoutEffect(() => {
-    if (page !== 'sessions' || !param) return
-    const id = param.split('/')[0]
-    if (id && id !== sessionSel) setSessionSel(id)
-  }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (page === 'sessions') navigate('sessions', sessionSel, { replace: true })
-  }, [page, sessionSel])
 
-  // a transient graph overlay never outlives the graph page — navigating away closes it, so a return
-  // lands on the plain page (the session interface is a page now, not part of this overlay set).
-  useEffect(() => {
-    if (page !== 'graph') { setOverlay(false); setLegend(false); setSearch(null); setNodeMenu(null) }
-  }, [page])
 
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
   const parent = focus.parent ? byId[focus.parent] : null
@@ -411,25 +383,25 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
         const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'evals', Digit4: 'issues', Digit5: 'settings' }
         const target = pageOf[e.code]
         if (target) {
-          e.preventDefault(); e.stopPropagation(); setSearch(null)
+          e.preventDefault(); e.stopPropagation(); openPalette(null)
           if (!graphOnly || target === 'graph') navigate(target)
           return
         }
-        if (!graphOnly && e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); setSearch(null); setSessionSel('new'); navigate('sessions', 'new'); return }
-        if (!graphOnly && e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('evals'); return }
+        if (!graphOnly && e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); navigate('sessions', 'new'); return }
+        if (!graphOnly && e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); openPalette(null); navigate('evals'); return }
       }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
       // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
       // sessionUI return so it holds when the palette is opened over the session board.
       if (search) {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearch(null) }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); openPalette(null) }
         return
       }
       // ⌥+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
       // reachable even while the session interface owns its keys. Match the physical slash key because
       // Option+/ emits a platform-specific glyph on macOS. Plain `/` on the board stays nodes-first (below).
-      if (!graphOnly && e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'Slash') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
+      if (!graphOnly && e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'Slash') { e.preventDefault(); e.stopPropagation(); openPalette('sessions'); return }
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -499,7 +471,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
       if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
-      if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('nodes'); return }
+      if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!graphOnly && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
         const cur = chordRef.current
@@ -602,14 +574,8 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   }, [highlightId, specs, focusNode])
 
   return (
-    <div className="app-shell">
-    <div className={kbdMode ? 'app kbd-mode' : 'app'}>
-      <TooltipLayer />
-      <SideBar page={page} identity={identity} catalog={catalog} graphOnly={graphOnly} />
-      {!graphOnly && treeOpen && <FileTree specs={specs} focusId={focusId} onOpenFile={setViewFile} />}
-      <div className="app-main">
-      {!graphOnly && <TabStrip specs={specs} sessions={sessions} />}
-      <PagePane active={graphOnly || page === 'graph'} warm className="page-graph">
+    <div className={kbdMode ? 'graphview kbd-mode' : 'graphview'}>
+
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}
@@ -669,62 +635,17 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
         {legend && <Legend onClose={() => setLegend(false)} />}
       </div>
-
-      </PagePane>
-
-      {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
-          never renders one node's prose under another's header while the new fetch is in flight. */}
-      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
-        onSelection={graphOnly ? undefined : startFromSelection} onClose={() => setOverlay(false)} />}
-      {/* The console mounts on first entry, then remains warm while other routes are shown. */}
-      {!graphOnly && <PagePane active={page === 'sessions'} warm={sessionWarm} className="page-sessions">
-        <SessionInterface
-          sessions={sessions}
-          specs={specs}
-          focusNode={focus}
-          open={page === 'sessions'}
-          searchOpen={!!search}
-          sel={sessionSel}
-          setSel={setSessionSel}
-          seed={seed}
-          onSeedConsumed={() => setSeed(null)}
-          onClose={() => navigate('graph')}
-          onPickSession={onPickSession}
-          onOpenSearch={() => setSearch('sessions')}
-          boardLive={boardLive}
-          reload={reload}
-        />
-      </PagePane>}
-      {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
-      {!graphOnly && <PagePane active={page === 'evals'} className="page-evals">
-        <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
-      </PagePane>}
-      {/* the Issues page ([[issues-view]]) — its own route; its paged reads follow the board's issue stamp */}
-      {!graphOnly && <PagePane active={page === 'issues'} className="page-issues">
-        <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
-      </PagePane>}
-      {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
-      {!graphOnly && <PagePane active={page === 'settings'} className="page-settings">
-        <Settings />
-      </PagePane>}
-      {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a
-          routed page: it must float above whichever page is showing (the graph's `/`, the session board's
-          ⌥+/ and Search pill), and a page's display:none must never swallow it. */}
-      {!graphOnly && search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
-      </div>
-    </div>
-    {viewFile && <FileViewer file={viewFile} onClose={() => setViewFile(null)} />}
-    <StatusBar />
     </div>
   )
 }
 
-// the desktop tree owns its own ReactFlowProvider (it used to sit in main.jsx): the provider is xyflow, and
-// hoisting it above the mobile/desktop split would drag the whole graph library into the phone's entry chunk.
-export default function DesktopDashboard(props) {
+// the graph owns its own ReactFlowProvider: the provider is xyflow, and hoisting it into the shell would
+// drag the whole graph library into every face's entry chunk, including the phone's and the sealed public
+// build's. A view paying for its own library is the point of the registry being lazy.
+export default function GraphViewRoot(props) {
   return (
     <ReactFlowProvider>
-      <Dashboard {...props} />
+      <GraphView {...props} />
     </ReactFlowProvider>
   )
 }

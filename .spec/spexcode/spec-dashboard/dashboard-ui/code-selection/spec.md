@@ -8,7 +8,8 @@ code:
 related:
   - spec-dashboard/src/codeSelection.test.mjs
   - spec-dashboard/src/SessionInterface.jsx
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
 ---
 # code-selection
 

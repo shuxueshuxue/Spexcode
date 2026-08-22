@@ -8,7 +8,8 @@ code:
 related:
   - spec-dashboard/src/route.js
   - spec-dashboard/src/route.test.mjs
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/test/graph-node-address.e2e.mjs

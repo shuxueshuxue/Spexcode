@@ -8,7 +8,8 @@ code:
 related:
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/route.js
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/styles.css
 ---
 # tab-strip

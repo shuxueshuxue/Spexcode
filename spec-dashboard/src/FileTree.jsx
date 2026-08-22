@@ -59,16 +59,16 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
         // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
         // discloses its contents. Splitting them into two hit targets would make the common move — look
         // inside this node — cost two clicks in a list built for scanning.
-        onClick={() => { setOpen((v) => !v); navigate('graph', node.id) }} />
+        onClick={() => { setOpen((v) => !v); navigate('spec', node.id) }} />
       {open && (
         <>
           {governed.map((f) => (
             <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()}
-              onClick={() => onOpenFile({ kind: 'source', path: f, label: f })} />
+              onClick={() => navigate('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
-              onClick={() => onOpenFile({ kind: 'attachment', nodeId: node.id, name: f.name, label: f.name })} />
+              onClick={() => navigate('spec', node.id)} />
           ))}
           {children.map((c) => (
             <NodeRow key={c.id} node={c} depth={depth + 1} kids={kids} focusId={focusId} onOpenFile={onOpenFile} />

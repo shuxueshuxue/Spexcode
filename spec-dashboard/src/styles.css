@@ -256,6 +256,42 @@ body {
 .fileviewer .srcview { margin: 0; }
 .fileviewer .srcview-body { height: min(64vh, 620px); }
 
+/* [[workspace-shell]] — the content area. One view at a time today; the host is the seam a second one
+   would mount into, which is why it is a box of its own rather than the view being the child of the frame. */
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; }
+.view-graph { display: block; }
+.graphview { position: absolute; inset: 0; }
+
+/* two views at once. The divider is the shared resizable primitive every other pane uses. */
+.content-split { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.content-split > .viewhost { flex: 1; min-width: 0; }
+.content-divider { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .55; }
+.content-divider:hover { opacity: 1; background: var(--blue); }
+.content-second { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; position: relative; border-left: 1px solid var(--line); }
+.content-second > .viewhost { flex: 1; min-height: 0; }
+.content-close { position: absolute; top: 4px; right: 6px; z-index: 3; display: inline-flex; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; color: var(--muted); cursor: pointer; }
+.content-close:hover { color: var(--ink2); border-color: var(--blue); }
+
+/* [[spec-view]] — the document: prose on the left, the code it governs on the right, both on open. */
+.specview { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.specview-prose { flex: 1; min-width: 0; overflow: auto; padding: 0 4px 0 0; scrollbar-gutter: stable; }
+.specview-prose .pane-doc { padding: 18px 22px 28px; }
+.specview-split { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .5; }
+.specview-split:hover { opacity: 1; background: var(--blue); }
+.specview-code { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--panel); }
+.specview-files { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+.specview-code .gov-att { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 22%, var(--line)); }
+.specview-code .srcview { flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; }
+.specview-code .srcview-body { height: auto; flex: 1; min-height: 0; }
+.specview-code .srcview { display: flex; flex-direction: column; }
+
+/* [[file-view]] — a governed file addressed on its own. */
+.fileview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fileview-head { flex: 0 0 auto; padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: var(--type-meta); color: var(--muted); }
+.fileview .srcview { flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; display: flex; flex-direction: column; }
+.fileview .srcview-body { height: auto; flex: 1; min-height: 0; }
+.doc-empty { padding: 28px; color: var(--muted); font-size: var(--type-control); }
+
 /* [[tab-strip]] — the address grammar in the plural. It appears only past one open document, so a reader
    who never opens a second tab sees the frame the board always had. */
 .tabstrip {

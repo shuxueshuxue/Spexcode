@@ -6,7 +6,8 @@ desc: One strip along the bottom and a registry behind it — items are declared
 code:
   - spec-dashboard/src/StatusBar.jsx
 related:
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/Root.jsx
   - spec-dashboard/src/GraphStats.jsx
   - spec-dashboard/src/PublicGraphAbout.jsx

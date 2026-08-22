@@ -17,7 +17,7 @@ scenarios:
       draft can post against the wrong review context.
   - name: eval-originator-chip-session-route
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Thread.jsx]
+    code: [spec-dashboard/src/GraphView.jsx, spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Thread.jsx]
     description: >
       In a real browser on #/evals, select an eval whose latest reading was filed by a live session.
       Click its filer/originator liveness chip in the event-detail header and read location.hash plus the

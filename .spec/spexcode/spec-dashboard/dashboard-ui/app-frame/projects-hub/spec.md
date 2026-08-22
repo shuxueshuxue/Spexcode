@@ -9,7 +9,8 @@ related:
   - spec-dashboard/src/PageScroll.jsx
   - spec-dashboard/src/main.jsx
   - spec-dashboard/src/App.jsx
-  - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/SideBar.jsx
   - spec-dashboard/src/route.js
   - spec-dashboard/src/project.js

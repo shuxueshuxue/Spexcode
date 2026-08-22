@@ -25,7 +25,8 @@ scenarios:
     code: spec-dashboard/test/session-archive-zone.e2e.mjs
     related:
       - spec-dashboard/src/SpecSearch.jsx
-      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/Shell.jsx
+      - spec-dashboard/src/GraphView.jsx
       - spec-dashboard/src/SessionInterface.jsx
     description: >
       Close a real session through the dashboard, open the global session-first palette with ⌥+/, and query

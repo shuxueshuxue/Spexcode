@@ -9,12 +9,13 @@ import {
   DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, identityFaviconHref,
 } from './IdentityIcon.jsx'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
+import { BoardProvider, WorkspaceProvider } from './workspace.jsx'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
 // Which chunk loads is the same viewport-width pick as ever — the split only moves bytes, never behaviour.
 // The projects hub ([[projects-hub]]) is a third lazy face: the catalog page standalone, no board behind it.
-const Dashboard = lazy(() => import('./Dashboard.jsx'))
+const Shell = lazy(() => import('./Shell.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
@@ -200,10 +201,10 @@ export default function App() {
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {PUBLIC_GRAPH_ONLY
-        ? <Dashboard specs={board.nodes} sessions={[]} issuesStamp={null} reload={reload} identity={identity} catalog={null} boardLive={false} graphOnly />
+        ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, boardLive: false, graphOnly: true }}><WorkspaceProvider><Shell /></WorkspaceProvider></BoardProvider>
         : isMobile
         ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
-        : <Dashboard specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reload={reload} identity={identity} catalog={projAccess} boardLive={boardLive} />}
+        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, boardLive, graphOnly: false }}><WorkspaceProvider><Shell /></WorkspaceProvider></BoardProvider>}
     </Suspense>
   )
 }

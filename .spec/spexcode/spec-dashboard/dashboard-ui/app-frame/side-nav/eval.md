@@ -49,7 +49,7 @@ scenarios:
       same pane for all four pages (warm pages display-toggle). Every rail entry is a real anchor
       (href = its page's hash address). Zero loss = the tab's identity never flashes through the SpexCode
       default on entering Sessions (or any page), and the four routes share one navigation transaction.
-    code: [spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SideBar.jsx]
+    code: [spec-dashboard/src/App.jsx, spec-dashboard/src/GraphView.jsx, spec-dashboard/src/SideBar.jsx]
   - name: global-alt-vocabulary
     tags: [frontend-e2e, desktop]
     description: >

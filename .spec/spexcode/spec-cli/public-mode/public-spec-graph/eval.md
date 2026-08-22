@@ -17,7 +17,7 @@ scenarios:
       index, loads one document on node open, and has only graph navigation enabled. Zero loss =
       an ordinary static host can expose one repository's graph without exposing a live SpexCode control
       plane.
-    code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SideBar.jsx]
+    code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/GraphView.jsx, spec-dashboard/src/SideBar.jsx]
     test: spec-dashboard/test/public-graph-static.e2e.mjs
   - name: isolated-release-host
     tags: [frontend-e2e, cli]

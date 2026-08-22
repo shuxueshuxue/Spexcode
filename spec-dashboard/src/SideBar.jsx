@@ -3,7 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
-import { PAGES, routeHash } from './route.js'
+import { RAIL_PAGES, routeHash } from './route.js'
 import { IdentityIcon } from './IdentityIcon.jsx'
 
 // The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
@@ -18,7 +18,7 @@ import { IdentityIcon } from './IdentityIcon.jsx'
 // chip still names the current project and becomes the explicit /projects login door, without revealing
 // the catalog.
 
-const ENTRIES = PAGES.filter((page) => page !== 'settings')
+const ENTRIES = RAIL_PAGES.filter((page) => page !== 'settings')
 
 function RailLink({ page, active, label, disabled = false }) {
   if (disabled) return (

@@ -45,7 +45,7 @@ scenarios:
       - spec-cli/src/sessions.ts
   - name: pi-headless-close-residue
     description: Close the real pi-headless session through the public session API and inspect its process, tmux, worktree, sockets, and record store.
-    expected: The controller and pi children stop, both controller and rendezvous sockets are gone, and the session worktree, branch, record, and store leave no residue.
+    expected: The controller and pi children stop, both controller and rendezvous sockets are gone, the session worktree is removed, and the archived session record/store and branch are retained.
     tags: [backend-api, cli]
     code:
       - spec-cli/src/pi-headless.ts#PiHeadlessController.close

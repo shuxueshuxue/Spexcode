@@ -43,8 +43,8 @@ the unified lifecycle seam binds that process instance with the same pane-ancest
 other interactive harnesses. Terminal close therefore has one finite proof chain: the receipt-checked leaf and its
 target tmux session are gone, then both the controller socket and pi rendezvous listener must reject a
 connect probe before cold filing can commit. A live or unproven listener keeps the row intact; a readable record with
-those four target resources gone has no adapter-specific refusal left and proceeds through the ordinary worktree,
-branch, and record removal.
+those four target resources gone has no adapter-specific refusal left and proceeds through the ordinary worktree
+removal while retaining the archived branch and record.
 
 Each controller child reports a non-zero exit through the shared [[harness-adapter]] turn-outcome seam. The active
 undeclared record therefore becomes `error` with the pi turn's exit code, while zero exits and an agent-authored

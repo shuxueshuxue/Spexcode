@@ -27,7 +27,7 @@ message for deterministic control probes. The
 runner proves the complete user-shaped chain: `POST /api/sessions` creates the record, the board derives
 `online` from the live rendezvous listener, `/api/sessions/:id/socket` completes HTTP `101`, the PTY bridge carries
 the fake stream and a rendezvous-delivered control marker, and `POST /api/sessions/:id/close` removes the tmux
-session, rendezvous socket, worker process, worktree, and branch.
+session, rendezvous socket, worker process, and worktree while retaining the archived session record and branch.
 
 The fixture never edits `session.json`, invents a product route, invokes a real model, or contacts the network.
 The runner is intentionally version-tolerant at the create boundary: it uses the named `launcher` field when

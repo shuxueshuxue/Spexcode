@@ -488,11 +488,18 @@ app.post('/api/sessions', async (c) => {
     if (result.status === 201) {
       const production = configuredSessionApplication()
       if (production) {
-        production.createSession({
-          sessionId: result.session.id,
-          status: result.session.lifecycle,
-          parentSessionId: result.session.parent,
-        })
+        try {
+          production.createSession({
+            sessionId: result.session.id,
+            status: result.session.lifecycle,
+            parentSessionId: result.session.parent,
+          })
+        } catch (error) {
+          const state = production.readState(result.session.id)
+          const sameProjection = state?.status === result.session.lifecycle
+            && state.parentSessionId === (result.session.parent ?? null)
+          if (!sameProjection) throw error
+        }
       }
       c.header('Idempotency-Key', requestKey)
       return c.json(result.session, 201)

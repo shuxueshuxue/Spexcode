@@ -14,6 +14,7 @@ import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDi
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
 import { stripRefSigil } from './mentions.js'
@@ -441,7 +442,15 @@ function restoreLaunchReadinessOriginal(rec: SessRec): SessRec {
   return original ? { ...rec, ...original, launchReadinessPending: null } : rec
 }
 // Rebuild the full disk projection so retired keys disappear on the next write.
+function assertLegacyJsonWritesAllowed(): void {
+  const fence = jsonMigrationFencePath(runtimeRoot())
+  if (existsSync(fence)) {
+    throw new ResourceConflict(`legacy JSON session store is fenced for one-time migration: ${fence}`)
+  }
+}
+
 function writeRecord(rec: SessRec): void {
+  assertLegacyJsonWritesAllowed()
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const obj = {
@@ -544,6 +553,7 @@ function readWatchEntries(target: string): WatchEntry[] {
 }
 
 function writeWatchEntries(target: string, entries: WatchEntry[]): void {
+  assertLegacyJsonWritesAllowed()
   const path = watchPath(target)
   if (!entries.length) { try { unlinkSync(path) } catch { /* already absent */ }; return }
   const dir = sessionStoreDir(target)
@@ -2170,6 +2180,11 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   if (input.base !== undefined && typeof input.base !== 'string') return { status: 400, error: 'session-create base must be a string' }
   const base = typeof input.base === 'string' && input.base.trim() ? input.base.trim() : null
+  try { assertLegacyJsonWritesAllowed() }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { status: 409, error: message, code: 'session_create_failed', phase: 'request' }
+  }
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {

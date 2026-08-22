@@ -32,3 +32,10 @@ Import creates protocol addresses, application state, parent/watch topology edge
 record (plus one deterministic archived event per explicit tombstone). Re-running the exact source is a no-op after
 marker verification; a changed source or a missing marked database is an error. After the marker is written, JSON
 remains only operational worktree metadata and is never a runtime source for state, events, topology, or watchers.
+
+The importer owns a durable `.json-migration.lock` fence in the legacy sessions root. Legacy writers reject a fenced
+store before touching `session.json` or `watchers.json`; the fence remains as a retired marker after the SQLite marker
+is published, so an old process cannot resume writing the superseded application store. The importer takes the fence
+before its source snapshot, re-reads the complete file set and digest immediately before installing SQLite, and aborts
+without publishing the database when the source changed during the window. A successful cutover therefore requires a
+quiet writer set, and a live process that does not honor the fence is a cutover failure, not a reason to accept drift.

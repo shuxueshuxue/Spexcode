@@ -42,6 +42,11 @@ export interface JsonSessionMigrationOptions {
   orphanParentPolicy?: 'fail' | 'tombstone'
 }
 
+/** The durable fence shared by the one-time importer and legacy JSON writers. */
+export function jsonMigrationFencePath(recordsRoot: string): string {
+  return join(recordsRoot, '.json-migration.lock')
+}
+
 export interface JsonSessionMigrationReport {
   version: number
   sourceDigest: string
@@ -163,16 +168,38 @@ function backupInputs(recordsRoot: string, files: string[], backupRoot: string, 
   if (!existsSync(digestPath)) writeFileSync(digestPath, `${digest}\n`, { flag: 'wx' })
 }
 
+function writeFence(path: string, state: 'migrating' | 'retired', sourceDigest: string): void {
+  writeFileSync(path, JSON.stringify({ version: VERSION, state, sourceDigest, pid: process.pid }) + '\n', { flag: 'wx', mode: 0o600 })
+}
+
+function replaceFence(path: string, state: 'migrating' | 'retired', sourceDigest: string): void {
+  const tmp = `${path}.${process.pid}.tmp`
+  writeFileSync(tmp, JSON.stringify({ version: VERSION, state, sourceDigest, pid: process.pid }) + '\n', { mode: 0o600 })
+  renameSync(tmp, path)
+}
+
+function assertInputsUnchanged(recordsRoot: string, expectedFiles: string[], expectedDigest: string): void {
+  const current = readInputs(recordsRoot)
+  const filesEqual = current.files.length === expectedFiles.length && current.files.every((file, index) => file === expectedFiles[index])
+  const digest = digestInputs(recordsRoot, current.files)
+  if (!filesEqual || digest !== expectedDigest) {
+    fail(`JSON migration source changed while fenced; refusing cutover (expected ${expectedDigest}, found ${digest})`)
+  }
+}
+
 export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions): JsonSessionMigrationReport {
   if (!isAbsolute(options.databasePath)) fail('databasePath must be absolute')
   const input = readInputs(options.recordsRoot)
   const sourceDigest = digestInputs(options.recordsRoot, input.files)
   const backupRoot = options.backupRoot ?? `${options.databasePath}.json-migration-backup`
   const markerPath = `${options.databasePath}.json-migration.json`
+  const fencePath = jsonMigrationFencePath(options.recordsRoot)
   if (existsSync(markerPath)) {
     const marker = parseJson(markerPath) as Partial<JsonSessionMigrationReport>
     if (marker.version !== VERSION || marker.sourceDigest !== sourceDigest) fail(`migration marker ${markerPath} does not match current JSON source`)
     if (!existsSync(options.databasePath)) fail(`migration marker exists but database is missing: ${options.databasePath}`)
+    if (existsSync(fencePath)) replaceFence(fencePath, 'retired', sourceDigest)
+    else writeFence(fencePath, 'retired', sourceDigest)
     return {
       version: VERSION,
       sourceDigest,
@@ -189,17 +216,21 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
   if (existsSync(options.databasePath)) {
     fail(`database exists without a migration marker: ${options.databasePath}; refusing to import into an ambiguous live database`)
   }
+  if (existsSync(fencePath)) fail(`JSON migration fence already exists: ${fencePath}; refusing a concurrent or incomplete cutover`)
   const orphanParentPolicy = options.orphanParentPolicy ?? 'fail'
   if (orphanParentPolicy !== 'fail' && orphanParentPolicy !== 'tombstone') fail(`unknown orphan parent policy: ${orphanParentPolicy}`)
   if (input.orphanParents.length && orphanParentPolicy === 'fail') {
     fail(`sessions name retired parents ${input.orphanParents.join(', ')}; rerun the one-time migration with orphanParentPolicy=tombstone to preserve those edges as archived addresses`)
   }
-  backupInputs(options.recordsRoot, input.files, backupRoot, sourceDigest)
-  const stagingDatabasePath = `${options.databasePath}.migration-${process.pid}.tmp`
-  if (existsSync(stagingDatabasePath)) fail(`migration staging database already exists: ${stagingDatabasePath}`)
-  const app = openProjectSessionApplication({ databasePath: stagingDatabasePath, locality: options.locality, now: options.now })
-  let parentEdges = 0, watchEdges = 0, events = 0
+  writeFence(fencePath, 'migrating', sourceDigest)
+  let databaseInstalled = false
   try {
+    backupInputs(options.recordsRoot, input.files, backupRoot, sourceDigest)
+    const stagingDatabasePath = `${options.databasePath}.migration-${process.pid}.tmp`
+    if (existsSync(stagingDatabasePath)) fail(`migration staging database already exists: ${stagingDatabasePath}`)
+    const app = openProjectSessionApplication({ databasePath: stagingDatabasePath, locality: options.locality, now: options.now })
+    let parentEdges = 0, watchEdges = 0, events = 0
+    try {
     if (orphanParentPolicy === 'tombstone') {
       for (const parent of input.orphanParents) {
         if (!app.readState(parent)) {
@@ -260,16 +291,18 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
         }
       }
     }
-    app.close()
-    renameSync(stagingDatabasePath, options.databasePath)
-  } catch (error) {
-    try { app.close() } catch { /* preserve the import failure */ }
-    for (const sidecar of [`${stagingDatabasePath}-journal`, `${stagingDatabasePath}-wal`, `${stagingDatabasePath}-shm`, stagingDatabasePath]) {
-      try { if (existsSync(sidecar)) unlinkSync(sidecar) } catch { /* cleanup is best effort; the original error wins */ }
+      assertInputsUnchanged(options.recordsRoot, input.files, sourceDigest)
+      app.close()
+      renameSync(stagingDatabasePath, options.databasePath)
+      databaseInstalled = true
+    } catch (error) {
+      try { app.close() } catch { /* preserve the import failure */ }
+      for (const sidecar of [`${stagingDatabasePath}-journal`, `${stagingDatabasePath}-wal`, `${stagingDatabasePath}-shm`, stagingDatabasePath]) {
+        try { if (existsSync(sidecar)) unlinkSync(sidecar) } catch { /* cleanup is best effort; the original error wins */ }
+      }
+      throw error
     }
-    throw error
-  }
-  const report: JsonSessionMigrationReport = {
+    const report: JsonSessionMigrationReport = {
     version: VERSION,
     sourceDigest,
     records: input.records.length,
@@ -281,7 +314,14 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
     markerPath,
     replayed: false,
   }
-  mkdirSync(dirname(markerPath), { recursive: true })
-  writeFileSync(markerPath, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' })
-  return report
+    mkdirSync(dirname(markerPath), { recursive: true })
+    writeFileSync(markerPath, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' })
+    replaceFence(fencePath, 'retired', sourceDigest)
+    return report
+  } catch (error) {
+    if (!databaseInstalled) {
+      try { unlinkSync(fencePath) } catch { /* preserve the import failure */ }
+    }
+    throw error
+  }
 }

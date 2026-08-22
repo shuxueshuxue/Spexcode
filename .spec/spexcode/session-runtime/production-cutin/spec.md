@@ -31,3 +31,8 @@ The runtime API exposes only explicit watcher, state, event/replay, native bindi
 Native identity is caller supplied, and binding generation is checked by the shared runtime component. The YATU drives
 the real HTTP backend, restarts it, replays the child state, publishes a durable watcher notification, and proves a
 stale binding is refused.
+
+Cutover is a maintenance operation, not a best-effort background import. The migration fence is taken before the
+legacy source snapshot; old JSON writers reject it, and the importer rechecks the complete source set before SQLite
+installation. Any writer that ignores the fence is evidence that the maintenance window is not quiet, so migration
+must abort rather than publish a database with a partial view of the live store.

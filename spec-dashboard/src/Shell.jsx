@@ -138,13 +138,14 @@ export default function Shell() {
       && event.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return false
     if (event.altKey && !event.metaKey && !event.ctrlKey) {
       const pageOf = [
-        ['shell.pageGraph', 'graph'], ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],
+        ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],
         ['shell.pageIssues', 'issues'], ['shell.pageSettings', 'settings'],
       ]
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        if (!graphOnly || target === 'graph') navigate(target)
+        // the sealed face has one view and no destinations; every page jump is inert there.
+        if (!graphOnly) navigate(target)
         return true
       }
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
@@ -162,8 +163,10 @@ export default function Shell() {
     }
     // Settings is a shell destination even when the graph view is not mounted. The graph keeps its own
     // rebindable slash/info verbs; this global fallback is what restores comma on every routed surface.
+    // Leaving settings lands on sessions — the workspace's daily face, and the same place an unknown
+    // address resolves to now that the graph is only an address ([[node-graph]]).
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.settings', event.key)) {
-      event.preventDefault(); navigate(page === 'settings' ? 'graph' : 'settings'); return true
+      event.preventDefault(); navigate(page === 'settings' ? 'sessions' : 'settings'); return true
     }
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.search', event.key)) {
       event.preventDefault(); openPalette('nodes'); return true

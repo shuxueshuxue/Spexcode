@@ -1,5 +1,4 @@
 import { useT } from './i18n/index.jsx'
-import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { Icon } from './icons.jsx'
 
@@ -10,9 +9,9 @@ import { Icon } from './icons.jsx'
 // empty workspace is a real state and this is what it looks like: the frame intact (rail, dock, status
 // bar), the content area quiet, and every door out named rather than implied.
 //
-// The doors are the three ways INTO a document, in the order a reader reaches for them: search by name,
-// browse the tree, or open the graph. The graph one is an ordinary anchor because the graph is a document
-// like any other — that is the whole correction; it is not the floor this state falls onto.
+// The doors are the ways INTO a document, in the order a reader reaches for them: search by name, or browse
+// the tree. There used to be a third — open the graph — and it left with the graph's retirement from the
+// workspace ([[node-graph]]): every door here has to lead somewhere the workspace still sends people.
 
 export default function EmptyView() {
   const t = useT()
@@ -30,9 +29,6 @@ export default function EmptyView() {
           <button type="button" className="empty-door" onClick={showExplorer}>
             <Icon name="explorer" size={14} /><span>{t('empty.explorer')}</span>
           </button>
-          <a className="empty-door" href={routeHash('graph')}>
-            <Icon name="graph" size={14} /><span>{t('empty.graph')}</span>
-          </a>
         </div>
       </div>
     </div>

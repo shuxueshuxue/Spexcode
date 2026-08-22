@@ -75,6 +75,8 @@ function SettingsView() { return <Settings /> }
 // graph and bare list pages are finding surfaces, while only object-shaped addresses enter the working set.
 // `empty` is what the workspace shows when it holds nothing; a tab for it would contradict its own strip.
 export const VIEWS = {
+  // `graph` is still registered and still renders at its own address; it is simply no longer anywhere the
+  // workspace SENDS a reader ([[node-graph]]). A retired entrance is not a deleted view.
   graph:    { component: GraphView,    document: false, className: 'view-graph' },
   spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
   file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
@@ -85,7 +87,7 @@ export const VIEWS = {
   empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
-export const viewFor = (page) => VIEWS[page] || VIEWS.graph
+export const viewFor = (page) => VIEWS[page] || VIEWS.sessions
 export const isDocument = (page, param = null) => typeof VIEWS[page]?.document === 'function'
   ? VIEWS[page].document(page, param)
   : !!VIEWS[page]?.document

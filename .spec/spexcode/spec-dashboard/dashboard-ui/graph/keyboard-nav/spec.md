@@ -31,6 +31,13 @@ The board claims only the shortcuts it names. Plain board verbs and relationship
 
 The keymap is **one declarative table, not a literal scattered across the handler**. `keymap.js` lists every board binding as a record — `{ id, keys, rebind, desc }`: a stable action id, its default keyboard key(s), whether it is user-rebindable, and the i18n key for its one-line description. That single table is the source two readers project from, so they can never drift apart: the **handler** dispatches from it (below), and the **help legend** renders it (the keymap half of the one help modal — see [[node-graph]]). Add a verb once, in the table, and both follow.
 
+The table also carries the shell's own ⌥ family, and there the registry is downstream of a product
+decision rather than of this node's grammar: **the page-jump digits are the rail's order** ([[side-nav]]
+owns which destinations exist and in what sequence). When a destination is withdrawn from the rail its
+digit is withdrawn with it and the rest close up — the table never keeps a digit warm for a place the
+workspace no longer sends anyone. That is why `⌥1` now names sessions: the spec-node graph left the rail
+([[node-graph]]), so it left the digits.
+
 The split that keeps this from spending complexity: **the registry owns the *binding*, never the *behavior*.** The handler bodies — the chord buffer, the focus-follow pan, the scope-following overlay cycle — stay exactly where they are; the registry only decides *which physical key names which action*. So the indirection is one resolver (`bindings.js`: `firesKey(id, key)`, honoring user overrides), not a re-implementation of the keys.
 
 **Rebinding follows that same line.** The discrete board **verbs** are rebindable — a user key override is saved per-action in `localStorage`, merged over the table's defaults, and reset on demand; the [[settings]] popup is the editor. The **structural** keys are *not* user-rebindable and the table marks them so: the arrow/vim **nav** keys (they ARE the relationship-walk, not a verb), and the `n`/`d` **chords** (a two-key grammar, not a single binding). They still appear in the legend and the editor — shown, fixed.

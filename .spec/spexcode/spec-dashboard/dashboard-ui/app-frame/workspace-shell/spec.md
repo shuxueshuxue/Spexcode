@@ -29,11 +29,11 @@ whole shell hangs off, re-derived from what the product is rather than from what
   width it was drawn for. The rail's explorer toggle still owns the stored preference and stays lit by it;
   a board suppresses the dock while it is the document and never edits the reader's choice ([[file-tree]]).
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything readable is a document with an address — the graph, a node, a file, a session, the
-  boards. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
+  active tab; everything readable is a document with an address — a node, a file, a session, an eval, an
+  issue. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the
-  center says it holds nothing and names the ways back in, because the graph is a document too and must
-  never arrive as a substitute for the reader's own answer.
+  center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
+  the reader's own answer.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane today (a document sent right);
   the mockup's backlinks/scenarios panel when it earns its keep. Context is about the current document,
   which is why it is not a finding surface and not a tab.

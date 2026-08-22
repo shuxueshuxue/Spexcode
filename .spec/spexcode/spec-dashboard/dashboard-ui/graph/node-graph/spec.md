@@ -44,4 +44,17 @@ Because this vocabulary is dense, a **floating legend** decodes it on demand (`?
 
 The board and the session console are **bidirectionally linked**: live editors map to live sessions by exact id, driving Row 2's avatars (see [[session-console]]); clicking a session row focuses its first changed node, and nodes with no live editor focus on click.
 
+**Inside the workspace this view is retired to an address.** `#/graph` and `#/graph/<node>` still parse,
+still render, and still behave exactly as described above — a typed address, a bookmark, or an old link
+reaches them intact. What was withdrawn is every standing invitation: no rail entry ([[side-nav]]), not
+the face a fresh window or an unknown address lands on ([[workspace-shell]]), and no door in the empty
+workspace ([[tab-strip]]). The reason is the one the human gave — the workspace's day is sessions, evals
+and issues, and a top-level entry for a map of the spec tree earned a place on the rail that the reader's
+actual traffic did not. Finding a node is the dock's explorer tree and the search palette; both land on
+the node's DOCUMENT, which is where a node is read.
+
+**The sealed public face is untouched by that retirement** ([[public-spec-graph]]): it is a graph and
+nothing else, so it has no workspace to retire from. This is why the view is demoted rather than deleted —
+one build's whole product is another build's legacy address.
+
 React Flow handles on these tiles are **edge anchors only**. They may exist in the DOM so parent→child edges attach to the tile edges, but they are never visible connection dots and never interactive hit targets; a click on a tile edge still belongs to the tile.

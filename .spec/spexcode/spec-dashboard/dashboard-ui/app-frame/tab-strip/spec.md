@@ -20,7 +20,7 @@ related:
 `#/spec/<id>`, `#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/sessions/new`,
 `#/evals/<node>/<scenario>`, and `#/issues/<id>`. `#/graph` (including `#/graph/<node>` focus), bare
 `#/sessions`, bare `#/evals`, and bare `#/issues` are never tabs. This is why the strip is empty on a fresh
-`#/graph` load and why returning to the graph does not mint a tab.
+`#/sessions` load and why typing the graph's address does not mint a tab.
 
 **A tab is a route.** That is the whole design, and it is why this is not a new navigation mechanism: the
 address layer already carried `page + param + query` and already made every destination copyable and
@@ -79,15 +79,16 @@ promoted; the visual treatment names its replaceable status without inventing an
 **Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
 the reason every editor uses it: the reader's eye is already where the closed tab was.
 
-**Closing the LAST tab yields the explicit empty state**, `#/empty` — not the graph. The graph is a
-finding surface, not the floor the workspace falls onto: navigating to it on a close meant a gesture that asked for
-nothing put a document on screen, and the board appeared to surface from underneath the reader's own work,
-which is the disorientation this rule exists to remove. An empty workspace is a real state and it says so —
-the frame stays whole (rail, dock, status bar), the content area names the state, and it offers the three
-ways back into a document: search, the explorer, and the graph as an ordinary anchor like any other
-document's. `empty` is an ADDRESS so the state can be landed on, reloaded and left, but it is not a
+**Closing the LAST tab yields the explicit empty state**, `#/empty` — not a substitute document. Closing
+used to navigate to the graph: a gesture that asked for nothing put a document on screen, and the board
+appeared to surface from underneath the reader's own work, which is the disorientation this rule exists to
+remove. An empty workspace is a real state and it says so — the frame stays whole (rail, dock, status
+bar), the content area names the state, and it offers the ways back into a document: search and the
+explorer. There were three, and the third was the graph; it left with the graph's retirement from the
+workspace ([[node-graph]]), because a door here has to lead somewhere the workspace still sends people.
+`empty` is an ADDRESS so the state can be landed on, reloaded and left, but it is not a
 document ([[view-registry]]): a tab for it would be the one address that contradicts the strip it sits in.
-Only closing the last tab mints it — a fresh load with no tabs still opens the graph, because starting with
+Only closing the last tab mints it — a fresh load with no tabs opens `#/sessions`, because starting with
 nothing held is not the same event as putting your last document down.
 
 `settings` is navigable but never accumulates. It is a destination people bounce off, not a document they

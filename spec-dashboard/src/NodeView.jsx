@@ -4,7 +4,7 @@ import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/spec
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import { loadPublicSpecContent, specUrl } from './data.js'
+import { fetchNodeFiles, fetchNodeFileSlice, loadPublicSpecContent, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import SourceView from './SourceView.jsx'
 import { apiUrl } from './project.js'
@@ -225,6 +225,39 @@ function GovernedFiles({ files, count }) {
   )
 }
 
+// [[node-attachments]]: the rest of what a node's folder holds. A node has always been a FOLDER — its eval
+// contract, an evidence directory, a raw capture, a note written beside the spec that cites it — and the
+// board could see exactly one file in it. These open in the same viewer, with the same one-at-a-time rule,
+// as a governed file: the reader should not have to learn that bytes from the spec tree behave differently
+// from bytes from the worktree, even though the gate that admits them is not the same gate.
+function NodeAttachments({ nodeId, enabled }) {
+  const t = useT()
+  const [files, setFiles] = useState(null)
+  const [open, setOpen] = useState(null)
+  useEffect(() => {
+    if (!enabled) return undefined
+    let live = true
+    setOpen(null)
+    fetchNodeFiles(nodeId).then((f) => live && setFiles(f)).catch(() => live && setFiles([]))
+    return () => { live = false }
+  }, [nodeId, enabled])
+  const read = useCallback((offset) => fetchNodeFileSlice(nodeId, open, offset), [nodeId, open])
+  if (!files?.length) return null
+  return (
+    <div className="doc-gov doc-att">
+      <span className="doc-gov-h">{t('nodeView.carries')} <b>{files.length}</b></span>
+      <div className="doc-gov-files">
+        {files.map((f) => (
+          <button key={f.name} type="button" className={`gov-f${open === f.name ? ' on' : ''}`}
+            aria-expanded={open === f.name} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
+            onClick={() => setOpen(open === f.name ? null : f.name)}>{f.name}</button>
+        ))}
+      </div>
+      {open && <SourceView key={open} path={open} read={read} className="doc-gov-src" />}
+    </div>
+  )
+}
+
 export function SpecPane({ node, graphOnly = false }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
@@ -247,6 +280,7 @@ export function SpecPane({ node, graphOnly = false }) {
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
+      {!graphOnly && <NodeAttachments nodeId={node.id} enabled />}
       {(() => {
         // body/parts are lazy-loaded ([[graph-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
         // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an

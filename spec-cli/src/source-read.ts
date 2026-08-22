@@ -50,15 +50,11 @@ function snapToLine(buf: Buffer, atEof: boolean): Buffer {
   return buf.subarray(0, cut + 1)
 }
 
-export function readSourceSlice(
-  root: string,
-  path: string,
-  policy: SourcePolicy,
-  offset = 0,
-  limit = SOURCE_SLICE_MAX_BYTES,
-): SourceSlice {
-  const rel = normalize(path).replace(/\\/g, '/').replace(/^\.\//, '')
-  const full = resolveGoverned(root, path, policy)
+// @@@ the window is shared, the GATE is not - what may be read differs by surface (governed source answers
+// to the coverage policy; a node's own folder answers to the spec tree), but "read a byte window and snap it
+// to a line" is one behaviour and exists once. A second copy of the windowing is how the two would drift
+// into disagreeing about what `bytes` means.
+export function readSlice(full: string, rel: string, offset = 0, limit = SOURCE_SLICE_MAX_BYTES): SourceSlice {
   const start = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0
   const want = Math.min(Math.max(Math.floor(Number.isFinite(limit) ? limit : 0), 1), SOURCE_SLICE_MAX_BYTES)
 
@@ -80,8 +76,23 @@ export function readSourceSlice(
     }
   } catch (e: any) {
     if (e instanceof SourceReadError) throw e
-    throw new SourceReadError(`cannot read ${rel}: ${e?.message ?? e}`, 404)
+    // The CODE, never the message: Node puts the absolute path it tried to open into `e.message`, and this
+    // string is an API response. A caller is owed what went wrong with the path it asked for, not where
+    // this checkout happens to live on the host.
+    throw new SourceReadError(`cannot read ${rel}: ${e?.code ?? 'read failed'}`, 404)
   } finally {
     if (fd !== null) closeSync(fd)
   }
+}
+
+// The governed-source surface: readable exactly when the coverage walk would call it a source file.
+export function readSourceSlice(
+  root: string,
+  path: string,
+  policy: SourcePolicy,
+  offset = 0,
+  limit = SOURCE_SLICE_MAX_BYTES,
+): SourceSlice {
+  const rel = normalize(path).replace(/\\/g, '/').replace(/^\.\//, '')
+  return readSlice(resolveGoverned(root, path, policy), rel, offset, limit)
 }

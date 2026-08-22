@@ -233,6 +233,14 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
   return r ? { body: r.body.trim(), parts: parseParts(r.body) } : null
 }
 
+// Where a node LIVES, repo-relative — its own folder, not its spec.md. A node's folder is the unit (the
+// same rule the plugin instances are built on), so anything that wants to see what a node carries besides
+// its body asks the spec tree's own reader rather than re-deriving a path from an id.
+export function specDir(id: string): string | null {
+  const r = raws().find((x) => x.id === id)
+  return r ? r.relPath.replace(/\/spec\.md$/, '') : null
+}
+
 // `root` defaults to the backend's own checkout — the canonical tree. A session worktree may be passed
 // instead ([[source-of-truth]]'s several-checkouts principle at the loader level): its .spec is the
 // branch's pending proposal, so eval surfaces rooted at a session must load the spec tree from the SAME

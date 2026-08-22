@@ -43,6 +43,18 @@ export default {
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
+  fileTree: {
+    title: '文件树',
+    aria: '项目文件树',
+  },
+  tabs: {
+    aria: '已打开的文档',
+    close: '关闭标签',
+    graph: '图',
+    sessions: '会话',
+    evals: '评测',
+    issues: '议题',
+  },
   nav: {
     railLabel: '主导航',
     graph: '规格节点图（⌥1）',
@@ -151,6 +163,10 @@ export default {
     unlock: '解锁',
   },
 
+  statusBar: {
+    hidden: '已隐藏 —— 从状态栏恢复',
+    restore: '恢复隐藏的状态项',
+  },
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',
@@ -413,6 +429,7 @@ export default {
   },
 
   nodeView: {
+    carries: '携带',
     paneSpec: '规格',
     paneHistory: '历史',
     paneIssues: 'issue',

@@ -37,6 +37,10 @@ score** ([[eval-score-badge]]), and the **drift** count when a governed file out
 files — each one a **door, not a label**: a `code:` entry opens the file itself in place ([[source-view]]),
 under the prose that claims it and inside the same scroll, one at a time. A separate tab would have put the
 claim and the claimed thing back on two screens, which is the separation the affordance exists to close.
+Under them, what the node **carries** ([[node-attachments]]): the rest of its own folder — its eval
+contract, an evidence directory, a raw capture — opening in the same viewer with the same one-at-a-time
+rule. The reader is not asked to learn that bytes from the spec tree behave differently from bytes from the
+worktree, even though the gate that admits them is not the same gate.
 Then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
 an agent-authored *current state* — what's-done is read from the derived status, never narrated, because

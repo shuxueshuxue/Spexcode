@@ -24,6 +24,21 @@ scenarios:
       from the board's own CSS custom properties rather than from hexes pinned in the component. The node
       status dot does NOT change in the same measurement — it pins one theme's values inline — and that
       contrast is the point of the scenario: it is the mistake this viewer exists to not repeat.
+  - name: selection-dispatches-as-composer-attachment
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/source-selection.e2e.mjs
+    description: >-
+      Through a real browser, open a governed file, drag-select several lines in the CodeMirror reader, and
+      activate its selection affordance. Read the New Session composer: the attachment chip must carry the
+      governed path and inclusive line range. Edit the surrounding prompt, remove the chip, verify no token or
+      path remains in the visible draft, and press Enter; inspect the backend's ordinary created session and
+      file the settled screenshots as `m4-*` evidence with `spex eval add source-view --scenario
+      selection-dispatches-as-composer-attachment --image <png> --pass`.
+    expected: >-
+      Selection is an explicit parent callback from the read-only viewer, never an automatic launch or a
+      SourceView dispatch path. New Session shows a removable structured attachment while the prompt remains
+      a normal editable textarea; removing it removes its encoded context from the prompt, and the final
+      edited text reaches the existing `POST /api/sessions` path without a second route or session field.
 ---
 # eval.md - source-view
 

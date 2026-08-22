@@ -57,17 +57,19 @@ async function languageFor(path) {
 // how close to the bottom of the loaded text the reader must scroll before the next window is pulled.
 const PREFETCH_PX = 900
 
-export default function SourceView({ path, className = '' }) {
+export default function SourceView({ path, className = '', onSelection }) {
   const t = useT()
   const host = useRef(null)
   const view = useRef(null)
   const cursor = useRef({ offset: 0, eof: false, size: 0, busy: false })
   const [status, setStatus] = useState({ phase: 'loading', size: 0, loaded: 0, error: null })
+  const [selection, setSelection] = useState(null)
 
   useEffect(() => {
     let live = true
     cursor.current = { offset: 0, eof: false, size: 0, busy: false }
     setStatus({ phase: 'loading', size: 0, loaded: 0, error: null })
+    setSelection(null)
 
     // Pull the next window and APPEND it. The append is a plain transaction at the document end, so the
     // reader's scroll position and selection survive it — paging must never yank the view.
@@ -92,6 +94,15 @@ export default function SourceView({ path, className = '' }) {
     }
 
     const watchScroll = EditorView.updateListener.of((u) => {
+      if (u.selectionSet) {
+        const { from, to } = u.state.selection.main
+        if (from === to) setSelection(null)
+        else {
+          const startLine = u.state.doc.lineAt(from).number
+          const endLine = u.state.doc.lineAt(Math.max(from, to - 1)).number
+          setSelection({ path, startLine, endLine, text: u.state.sliceDoc(from, to) })
+        }
+      }
       if (!u.geometryChanged && !u.docChanged) return
       const s = u.view.scrollDOM
       if (s.scrollHeight - s.scrollTop - s.clientHeight < PREFETCH_PX) pull()
@@ -132,7 +143,15 @@ export default function SourceView({ path, className = '' }) {
   const pct = status.size > 0 ? Math.min(100, Math.round((status.loaded / status.size) * 100)) : 0
   return (
     <div className={`srcview ${className}`.trim()}>
-      <div className="srcview-body" ref={host} />
+      <div className="srcview-body">
+        <div className="srcview-cm" ref={host} />
+        {selection && onSelection && (
+          <button type="button" className="srcview-select-action" onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onSelection(selection)}>
+            {t('sourceView.useSelection')}
+          </button>
+        )}
+      </div>
       <div className="srcview-foot">
         <code className="srcview-path">{path}</code>
         {status.error

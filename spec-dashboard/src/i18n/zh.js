@@ -523,6 +523,10 @@ export default {
     del: '删除节点…',
   },
 
+  sourceView: {
+    useSelection: '在新会话中使用选区',
+  },
+
   session: {
     opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
     lockTitle: '右键打开会话操作，包括锁定到图谱',
@@ -659,6 +663,8 @@ export default {
     attachRetry: '重试上传',
     attachCancel: '取消上传',
     attachDismiss: '隐藏此附件状态',
+    codeSelectionAttachments: '代码选区附件',
+    removeCodeSelection: '移除代码选区',
     // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {

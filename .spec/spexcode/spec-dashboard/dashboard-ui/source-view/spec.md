@@ -6,6 +6,8 @@ desc: The read-only face of a governed source file — a virtualising editor com
 code:
   - spec-dashboard/src/SourceView.jsx
 related:
+  - spec-dashboard/src/codeSelection.js
+  - spec-dashboard/src/codeSelection.test.mjs
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
@@ -32,6 +34,15 @@ as a plain transaction at the document end when the reader scrolls near the bott
 scroll position and selection survive the append. The footer states the file's real size and, while windows
 remain, how much of it has arrived — a partially loaded file must never read as a complete short one. A
 refused or failed read replaces that meter with the reason.
+
+The reader also exposes a selection event for a non-empty CodeMirror selection. A small action affordance
+may call the parent with `{ path, startLine, endLine, text }`; the viewer owns neither the prompt nor any
+dispatch. The parent routes that context into the ordinary New Session composer, because New is the existing
+long-form, explicit-launch surface while Command Box is an immediate message to an already selected session.
+The composer encodes the context as a human-readable, parseable prompt token, renders it back as a removable
+attachment chip, and leaves the surrounding prompt editable. Selecting code never launches by itself, and the
+viewer remains read-only: it does not write the file, create a session, or call an API beyond its existing
+window reads.
 
 **The palette comes from the board, not from the component.** Every colour is a CSS custom property the rest
 of the dashboard already defines, so the viewer re-themes with all seven themes for free. This is the

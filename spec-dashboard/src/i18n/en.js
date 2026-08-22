@@ -529,6 +529,10 @@ export default {
     del: 'delete node…',
   },
 
+  sourceView: {
+    useSelection: 'use selection in a new session',
+  },
+
   session: {
     opsTitle: 'nodes this session is changing — right-click for session actions',
     lockTitle: 'right-click for session actions, including lock on graph',
@@ -665,6 +669,8 @@ export default {
     attachRetry: 'retry upload',
     attachCancel: 'cancel upload',
     attachDismiss: 'dismiss attachment status',
+    codeSelectionAttachments: 'code selection attachments',
+    removeCodeSelection: 'remove code selection',
     // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {

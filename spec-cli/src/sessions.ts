@@ -1377,7 +1377,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // Canonical projection deliberately creates a fresh object for every governed row. That identity change is not
     // an archive failure: a hazard belongs only to a record that was actually archived and then had its cold proof
     // rejected. Otherwise every live row would inherit the missing-cold-witness message after cutover.
-    if (projectedRecord.archived && projected !== rec) s.archiveHazard = changedDuringCensus.has(id)
+    if (projectedRecord.archived && !cleanCold) s.archiveHazard = changedDuringCensus.has(id)
       ? 'archived runtime hazard: record changed while adapter residency was being reconciled; retry exact archive'
       : hasValidColdProof(rec)
         ? residentRequired && !resident

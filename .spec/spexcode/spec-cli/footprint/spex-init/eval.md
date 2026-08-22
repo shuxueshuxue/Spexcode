@@ -51,8 +51,8 @@ scenarios:
       In fresh git repositories, run the real `spex init` for zcode-only, claude-only, and zcode+claude
       delivery. Count plugin spec nodes and inspect the two hooks whose events are unavailable in zcode.
     expected: >-
-      zcode-only seeds 20 of the default 22 plugin nodes: idle/idle.sh and session-fail/fail.sh are absent,
-      while every hook reachable by zcode remains. Claude-only and zcode+claude keep all 22 nodes, because
+      zcode-only seeds 21 of the default 23 plugin nodes: idle/idle.sh and session-fail/fail.sh are absent,
+      while every hook reachable by zcode remains. Claude-only and zcode+claude keep all 23 nodes, because
       either selected adapter can emit Notification and StopFailure. The decision follows adapter event data,
       never a harness-name branch.
 ---

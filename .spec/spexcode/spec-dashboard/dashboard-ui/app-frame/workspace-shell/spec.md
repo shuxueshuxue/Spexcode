@@ -19,8 +19,9 @@ It knows there is an address, that an address names a view, and where on the scr
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-- **Where is everything? — FINDING, on the left.** The rail (the mode strip: explorer toggle, search, then
-  the document openers) and the dock (the explorer — the spec tree, open by default). Looking must be free:
+- **Where is everything? — FINDING, on the left.** The rail (the activity bar: explorer and sessions mode
+  buttons, search, then the document openers) and the dock (the explorer — the spec tree, open by default).
+  Looking must be free:
   browsing a finding surface never grows any state but the camera's. A wide board is where the region stands
   down: Evals and Issues ARE finding surfaces, full-bleed by design, so while one of them is the routed
   document the dock does not render — two finding surfaces side by side buys nothing and costs the board the
@@ -38,9 +39,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content.
 
-A control belongs to the region whose question it answers, and to exactly one owner there — the dock
-toggle sits on the rail with the other finding controls, not on the status bar, however convenient the bar
-was to reach from code.
+A control belongs to the region whose question it answers, and to exactly one owner there — the dock's
+explorer/sessions mode buttons sit on the rail with the other finding controls, not in a second dock modebar
+or on the status bar. The dock itself is content-only.
 
 **What it replaced was not a component but a missing layer.** The board used to be one ~710-line component
 that *was* the graph, with every other page hung off it as a hidden pane and every page's state held in

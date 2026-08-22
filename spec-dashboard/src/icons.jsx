@@ -80,16 +80,22 @@ const ICONS = {
     node: <><path d="M9 2.2 16 5.8 9 9.4 2 5.8Z" /><path d="M2 9.4 9 13 16 9.4" /><path d="M2 12.8 9 16.4 16 12.8" /></>,
   },
 
-  // ——— the two dock toggles, drawn on the same 18-grid as the rail glyphs above ———
+  // ——— the dock/context marks, drawn on the same 18-grid as the rail glyphs above ———
   // ONE layout mark, mirrored: the same frame with the LEFT column filled for the left finding dock
-  // ([[side-nav]]'s rail explorer, [[dock-modes]]'s explorer tab) and the RIGHT column filled for the
-  // right context dock ([[context-dock]]'s toggle). They must read as a pair, because the two buttons
+  // ([[side-nav]]'s rail explorer) and the RIGHT column filled for the
+  // right context dock ([[context-dock]]'s toggle). They read as a pair, because the two buttons
   // are a few pixels apart and each one's whole message is WHICH SIDE it opens; a bare divider line left
   // both as plain frames that read as a folder or a card. Tinting the panel — not just outlining it —
   // is what makes the side unmistakable at 14–18px, so the fill is the glyph, not decoration.
   explorer: {
     vb: 18, sw: 1.4,
     node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
+  },
+  // A session finding projection: three list rows with status points. It is deliberately not a terminal
+  // prompt or a framed panel, so the rail's sessions button has one meaning wherever it appears.
+  'session-list': {
+    vb: 18, sw: 1.4,
+    node: <><circle cx="3" cy="4.5" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="9" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="13.5" r="1" fill="currentColor" stroke="none" /><path d="M6 4.5h9.5M6 9h9.5M6 13.5h9.5" /></>,
   },
   'panel-right': {
     vb: 18, sw: 1.4,

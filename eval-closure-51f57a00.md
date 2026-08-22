@@ -38,9 +38,16 @@ These requested stale declarations have no runnable declared CLI/backend test
 surface in this batch, so no verdict is invented: `session-new/create-name-reuses-the-session-name-chain`,
 `sessions-core/prompt-invariant-covers-every-delivery`, `state/explicit-stop-is-authoritative-offline`,
 `state/session-verb-chain-v030`, `launch/cap-counts-only-the-working-set`, and
-`launch/cap-value-comes-from-spexcode-json`. They remain baseline-only or
+`launch/cap-value-comes-from-spexcode-json`, and
+`session-nesting/whole-row-drag-reparents-and-detaches`. They remain baseline-only or
 unmeasurable here because their declarations require a manual live-board,
 dashboard, or multi-process run not provided by an existing scenario command.
+
+The final `spex eval lint --changed` also reports the existing malformed-anchor
+condition for `state/explicit-stop-is-authoritative-offline`: its
+`spec-cli/src/sessions.ts` anchor cannot be verified because Tree-sitter reports
+syntax errors. This is recorded as an advisory baseline condition; the scenario
+was not reclassified as a product pass or fail.
 
 The first serial run reported one failure in `session-reparent.test.ts` only
 because three zero-byte test-created markers (`node`, `npm`,

@@ -186,6 +186,21 @@ try {
   assert.equal(await page.locator('.si-pill.shelf').count(), 0, 'the retired star archive pill is still present')
   assert.equal(await page.locator('.si-toprow .si-pill').count(), 2, 'the top row does not contain exactly New and Search')
   assert.equal(await archiveZone.locator('.si-zone-count').innerText(), '0', 'the archive zone hid its zero count')
+  assert.equal(await archiveZone.getAttribute('aria-expanded'), 'false', 'archive header did not own aria-expanded')
+  assert.equal(await archiveZone.locator('.si-zone-count').getAttribute('aria-expanded'), null, 'archive marker still owns aria-expanded')
+  assert.equal(await archiveZone.locator('button').count(), 0, 'archive header nested a button')
+  await archiveZone.locator('.si-zone-label').click()
+  assert.equal(await archiveZone.getAttribute('aria-expanded'), 'true', 'archive label did not toggle the header')
+  const initialArchiveBox = await archiveZone.boundingBox()
+  assert.ok(initialArchiveBox, 'archive header has no layout box')
+  await page.mouse.click(initialArchiveBox.x + initialArchiveBox.width - 4, initialArchiveBox.y + initialArchiveBox.height / 2)
+  assert.equal(await archiveZone.getAttribute('aria-expanded'), 'false', 'archive trailing rule area did not toggle the header')
+  await archiveZone.focus()
+  assert.equal(await archiveZone.evaluate((node) => document.activeElement === node), true, 'archive header was not keyboard focusable')
+  await archiveZone.press('Enter')
+  assert.equal(await archiveZone.getAttribute('aria-expanded'), 'true', 'archive Enter did not toggle the header')
+  await archiveZone.press('Space')
+  assert.equal(await archiveZone.getAttribute('aria-expanded'), 'false', 'archive Space did not toggle the header')
   assert.equal(await page.locator('.si-zone-archive ~ .si-tree-row .si-item').count(), 0, 'empty archive zone was not folded')
   assert.equal(archiveRequests.length, 1, 'the initial archive index was not fetched exactly once')
   assert.deepEqual(archiveRequests[0].params, [['all', '1']], 'the archive index request carried pagination parameters')
@@ -203,6 +218,7 @@ try {
   await page.mouse.down()
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height + 12, { steps: 3 })
   await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height / 2, { steps: 8 })
+  assert.equal(await archiveZone.evaluate((zone) => zone.classList.contains('drop-target')), true, 'archive header lost its drag target state')
   await page.mouse.up()
   assert.equal((await closeResponse).ok(), true, 'drag-to-archive did not reach the real close endpoint')
   await page.waitForFunction((id) => !document.querySelector(`.si-item[data-sid="${id}"]`), closeId)
@@ -217,7 +233,7 @@ try {
   await page.screenshot({ path: join(out, 'archive-zone-folded.png'), fullPage: true })
   step('one drag closed the real row without confirmation and published closedAt')
 
-  if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive .si-zone-count').click()
+  if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive').click()
   const previewRow = page.locator(`.si-zone-archive ~ .si-tree-row .si-item[data-sid="${closeId}"]`)
   await previewRow.waitFor({ state: 'visible' })
   const drawerMeasure = await page.locator('.si-list').evaluate((list) => {
@@ -232,9 +248,38 @@ try {
   })
   assert.ok(drawerMeasure.rows <= 8, `archive zone exposed too many rows: ${JSON.stringify(drawerMeasure)}`)
   assert.deepEqual(drawerMeasure.scrollables, ['si-board-scroll'], 'the sidebar has more than one scroll container')
-  assert.equal(await page.locator('.si-zone-all').count(), 1, 'archive zone omitted the View all row')
+  const viewAll = page.locator('.si-zone-all')
+  assert.equal(await viewAll.count(), 1, 'archive zone omitted the View all row')
+  assert.equal(await viewAll.locator('.si-zone-all-lead svg').count(), 1, 'View all row omitted its search glyph')
+  assert.equal(await viewAll.locator('.si-zone-all-meta, .si-zone-all .sess-glyph').count(), 0, 'View all row retained a trailing chevron')
+  const rowGeometry = await viewAll.evaluate((row) => {
+    const sessionRow = document.querySelector('.si-zone-archive ~ .si-tree-row .si-item[data-sid]')
+    const style = (node) => {
+      const computed = getComputedStyle(node)
+      return {
+        height: computed.height,
+        paddingLeft: computed.paddingLeft,
+        paddingRight: computed.paddingRight,
+        lineHeight: computed.lineHeight,
+        borderBottomWidth: computed.borderBottomWidth,
+        borderBottomStyle: computed.borderBottomStyle,
+      }
+    }
+    const icon = row.querySelector('.si-zone-all-lead svg').getBoundingClientRect()
+    const bounds = row.getBoundingClientRect()
+    return { viewAll: style(row), session: style(sessionRow), iconStart: icon.left, rowStart: bounds.left }
+  })
+  assert.deepEqual(rowGeometry.viewAll, rowGeometry.session, 'View all row geometry drifted from session rows')
+  assert.ok(rowGeometry.iconStart <= rowGeometry.rowStart + 16, 'View all search glyph is not in the row lead column')
+  await viewAll.hover()
+  const viewAllHover = await viewAll.evaluate((row) => getComputedStyle(row).backgroundColor)
+  const sessionRow = page.locator('.si-zone-archive ~ .si-tree-row .si-item[data-sid]').first()
+  await sessionRow.hover()
+  assert.equal(viewAllHover,
+    await sessionRow.evaluate((row) => getComputedStyle(row).backgroundColor),
+    'View all hover did not use the session-row wash')
   await page.screenshot({ path: join(out, 'archive-zone-expanded.png'), fullPage: true })
-  await page.locator('.si-zone-all').click()
+  await viewAll.click()
   const archivePage = page.locator('[data-archive-page]')
   await archivePage.waitFor({ state: 'visible' })
   await page.screenshot({ path: join(out, 'archive-index-overlay.png'), fullPage: true })
@@ -316,7 +361,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.si-zone-archive')?.dataset.archiveCount === '32')
   assert.equal(archiveRequests.length, beforeReloadRequests + 1, 'one page load issued more than one archive index request')
   assert.deepEqual(archiveRequests.at(-1).params, [['all', '1']], 'full archive read was paginated')
-  if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive .si-zone-count').click()
+  if (await page.locator('.si-zone-all').count() === 0) await page.locator('.si-zone-archive').click()
   await page.locator('.si-zone-all').click()
   await archivePage.waitFor({ state: 'visible' })
   const todayKey = dayKey(new Date(closed.closedAt))

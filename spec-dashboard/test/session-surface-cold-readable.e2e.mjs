@@ -258,7 +258,7 @@ try {
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
   const archiveZone = page.locator('.si-zone-archive')
   await archiveZone.waitFor({ state: 'visible', timeout: 30_000 })
-  await archiveZone.locator('.si-zone-count').click()
+  await archiveZone.click()
   const archivedRow = page.locator(`.si-zone-archive ~ .si-tree-row .si-item[data-sid="${archivedId}"]`)
   await archivedRow.waitFor({ state: 'visible', timeout: 30_000 })
   timelineRequests.set(archivedId, 0)

@@ -1142,14 +1142,16 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   color: var(--zh);
 }
 .si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
-/* The offline header stays one visual row, but only its leading count button toggles history. */
-.si-zone-fold { width: 100%; text-align: left; }
+/* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
+.si-zone-fold {
+  width: 100%; text-align: left; cursor: pointer; border: 0; background: transparent; font-family: inherit;
+}
+.si-zone-fold:hover { background: var(--panel2); }
 .si-zone-count {
   flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px;
-  background: transparent; color: inherit; cursor: pointer; font: inherit;
+  background: transparent; color: inherit; font: inherit;
   font-size: var(--type-caption); line-height: var(--line-badge); opacity: .8;
 }
-.si-zone-count:hover { color: var(--ink); opacity: 1; }
 .si-zone-label { flex: none; }
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
@@ -1159,8 +1161,8 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-zone-all {
   justify-content: initial; color: var(--ink2);
 }
+.si-zone-all-lead { color: var(--muted); align-items: center; }
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-zone-all-meta { color: var(--muted); }
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
 /* multi-select bar ([[session-multi-select]]) — a live count plus its adjacent icon-only close action. */

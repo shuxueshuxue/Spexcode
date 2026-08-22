@@ -191,8 +191,8 @@ try {
   await page.goto(`${base}/#/sessions/${renamed.id}`, { waitUntil: 'domcontentloaded' })
   await page.locator(`.si-item[data-sid="${renamed.id}"]`).waitFor({ state: 'visible', timeout: 15_000 })
 
-  const offlineCount = page.locator('.si-zone-offline > .si-zone-count')
-  if (await offlineCount.count() && await offlineCount.getAttribute('aria-expanded') === 'false') await offlineCount.click()
+  const offlineHeader = page.locator('.si-zone-offline')
+  if (await offlineHeader.count() && await offlineHeader.getAttribute('aria-expanded') === 'false') await offlineHeader.click()
   await page.locator(`.si-item[data-sid="${prose.id}"]`).waitFor({ state: 'visible', timeout: 15_000 })
   const rowTitles = new Map(await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => [
     row.dataset.sid,

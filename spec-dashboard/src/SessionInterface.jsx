@@ -42,6 +42,14 @@ import { useWorkspaceApi } from './workspace.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
+// @@@ a warm terminal belongs to a LIVE pane — a row must SAY it has one.
+// The archive index is a row summary, not a session record: it carries an id, a title and a closedAt and
+// no liveness, harness or capabilities at all. Asking `liveness !== 'offline'` read that ABSENCE as alive,
+// so every retired session mounted an xterm and opened a socket — measured on this project's board, 66 of
+// the 76 warm terminals belonged to closed sessions. Ask for the live pane instead of for the absence of a
+// dead one, and a row that reports nothing reports no pane.
+const hasLivePane = (session) => !session?.archived && session?.liveness === 'online'
+
 const closedTime = (session) => {
   if (typeof session?.closedAt !== 'string') return null
   const value = Date.parse(session.closedAt)
@@ -762,7 +770,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setOpened((prev) => {
       const valid = new Set(allSessions.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
-      for (const s of allSessions) if (!isHeadlessSession(s) && s.liveness !== 'offline') next.add(s.id)
+      for (const s of allSessions) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
       if (active !== 'new') {
         const selected = sessions.find((s) => s.id === active)
         if (selected && isHeadlessSession(selected)) next.add(active)
@@ -782,7 +790,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const valid = new Set(allSessions.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
       const selected = active === 'new' ? null : allSessions.find((s) => s.id === active)
-      if (selected && (selected.archived || selected.liveness === 'offline' || isHeadlessSession(selected)
+      // the other half of the same rule: whatever has no live pane to show is shown as a Conversation, so
+      // no selection can land on a session with neither layer mounted (a corrupt row's `unknown` liveness
+      // used to fall through both when the terminal gate stopped naming dead states one by one).
+      if (selected && (!hasLivePane(selected) || isHeadlessSession(selected)
         || conversationSurface)) next.add(selected.id)
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
       return next

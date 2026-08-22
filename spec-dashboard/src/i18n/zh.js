@@ -643,6 +643,7 @@ export default {
     diffComment: '评论这些行',
     diffCommentPlaceholder: '留下评审评论',
     diffCommentSave: '保存评论',
+    diffEdit: '编辑评论',
     diffSend: '发送评论给智能体',
     diffSent: '已发送 {n} 条评论',
     diffUnsent: '{n} 条评论未发送',

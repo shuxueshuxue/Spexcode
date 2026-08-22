@@ -29,7 +29,8 @@ function lineMap(patch) {
   return map
 }
 
-function DiffFile({ sessionId, file, comments, onComment }) {
+function DiffFile({ sessionId, file, comments, onComment, onEdit }) {
+  const t = useT()
   const host = useRef(null)
   const view = useRef(null)
   const [open, setOpen] = useState(true)
@@ -68,7 +69,7 @@ function DiffFile({ sessionId, file, comments, onComment }) {
     {open && <><div className="diff-editor" ref={host} />
     {comments.map((comment) => <div key={comment.id} className={`diff-comment${comment.sentAt ? ' sent' : ''}`}>
       <span className="diff-comment-line">L{comment.lineStart}{comment.lineEnd !== comment.lineStart ? `-L${comment.lineEnd}` : ''}</span>
-      <span>{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}
+      <span>{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}<IconButton icon="pencil" size={12} label={t('session.diffEdit')} onClick={() => onEdit(comment)} />
     </div>)}</>}
   </section>
 }
@@ -109,7 +110,7 @@ export default function DiffDocument({ sessionId }) {
       <span className="diff-toolbar-spacer" />{unsent > 0 && <span>{t('session.diffUnsent', { n: unsent })}</span>}<IconButton icon="send" size={14} label={t('session.diffSend')} disabled={!unsent} onClick={send} />
     </header>
     {!files.length && <div className="diff-state">{t('session.diffEmpty')}</div>}
-    {files.map((file) => <DiffFile key={`${file.path}:${file.diffIdentity}`} sessionId={sessionId} file={file} comments={comments.filter((comment) => comment.filePath === file.path)} onComment={(start, end) => { setDraft({ filePath: file.path, lineStart: start, lineEnd: end }); setBody('') }} />)}
+    {files.map((file) => <DiffFile key={`${file.path}:${file.diffIdentity}`} sessionId={sessionId} file={file} comments={comments.filter((comment) => comment.filePath === file.path)} onComment={(start, end) => { setDraft({ filePath: file.path, lineStart: start, lineEnd: end }); setBody('') }} onEdit={(comment) => { setDraft(comment); setBody(comment.body) }} />)}
     {draft && <div className="diff-comment-compose" role="dialog"><strong>{t('session.diffComment')}</strong><span>{draft.filePath || files[0]?.path}:L{draft.lineStart}</span><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} placeholder={t('session.diffCommentPlaceholder')} /><div><button type="button" onClick={() => setDraft(null)}>{t('common.cancel')}</button><button type="button" disabled={!body.trim()} onClick={save}>{t('session.diffCommentSave')}</button></div></div>}
   </div>
 }

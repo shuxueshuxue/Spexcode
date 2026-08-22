@@ -651,6 +651,7 @@ export default {
     diffComment: 'comment on lines',
     diffCommentPlaceholder: 'leave a review comment',
     diffCommentSave: 'save comment',
+    diffEdit: 'edit comment',
     diffSend: 'send comments to agent',
     diffSent: 'sent {n} comment(s)',
     diffUnsent: '{n} unsent comment(s)',

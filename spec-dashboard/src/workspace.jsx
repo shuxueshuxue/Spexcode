@@ -28,10 +28,11 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 
 // ---------------------------------------------------------------------------------------------------
 
-const WorkspaceState = createContext(null)  // { dock, palette, split }
+const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split }
 const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, splitTo, closeSplit }
 
 const DOCK_KEY = 'spexcode.dock'
+const DOCK_MODE_KEY = 'spexcode.dockMode'
 const SPLIT_KEY = 'spexcode.split'
 
 export function WorkspaceProvider({ children }) {
@@ -40,6 +41,9 @@ export function WorkspaceProvider({ children }) {
   // the document view behind a closed dock produced.
   const [dock, setDockState] = useState(() => {
     try { return localStorage.getItem(DOCK_KEY) !== '0' } catch { return true }
+  })
+  const [dockMode, setDockModeState] = useState(() => {
+    try { return localStorage.getItem(DOCK_MODE_KEY) === 'sessions' ? 'sessions' : 'explorer' } catch { return 'explorer' }
   })
   // The search palette floats above whichever view is showing, so it is the shell's, not a view's. A view
   // that wants it says so; it does not own it, and a view being hidden can never swallow it.
@@ -62,6 +66,11 @@ export function WorkspaceProvider({ children }) {
       try { localStorage.setItem(DOCK_KEY, next ? '1' : '0') } catch { /* private mode */ }
       return next
     }),
+    setDockMode: (next) => setDockModeState((prev) => {
+      const mode = next === 'sessions' ? 'sessions' : 'explorer'
+      try { localStorage.setItem(DOCK_MODE_KEY, mode) } catch { /* private mode */ }
+      return mode === prev ? prev : mode
+    }),
     openPalette: (mode) => setPalette(mode),
     closePalette: () => setPalette(null),
     setCompose: (text) => { compose.current = text },
@@ -77,7 +86,7 @@ export function WorkspaceProvider({ children }) {
     }),
   }), [])
 
-  const state = useMemo(() => ({ dock, palette, split }), [dock, palette, split])
+  const state = useMemo(() => ({ dock, dockMode, palette, split }), [dock, dockMode, palette, split])
   return (
     <WorkspaceApi.Provider value={api}>
       <WorkspaceState.Provider value={state}>{children}</WorkspaceState.Provider>

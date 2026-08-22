@@ -49,6 +49,11 @@ export default {
     title: '文件树',
     aria: '项目文件树',
   },
+  dockModes: {
+    aria: '停靠栏模式',
+    explorer: '资源管理器',
+    sessions: '会话',
+  },
   tabs: {
     aria: '已打开的文档',
     close: '关闭标签',

@@ -9,7 +9,7 @@ import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspac
 export default function SessionsView({ param }) {
   const { specs, sessions, boardLive } = useBoard()
   const { reload } = useBoardApi()
-  const { palette } = useWorkspace()
+  const { palette, dockMode } = useWorkspace()
   const { openPalette, takeCompose } = useWorkspaceApi()
   const [sel, setSel] = useState(() => param || 'new')
   // a board chord may have composed text for this view before it existed; collect it on arrival — in an
@@ -36,6 +36,7 @@ export default function SessionsView({ param }) {
       onOpenSearch={() => openPalette('sessions')}
       boardLive={boardLive}
       reload={reload}
+      externalSessionList={dockMode === 'sessions'}
     />
   )
 }

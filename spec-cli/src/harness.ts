@@ -43,7 +43,7 @@ export type HarnessLaunchReadinessFence = {
   validate(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
 }
 export type TurnFailure = { message: string; completedAt: number | null }
-export type FailureSubscription = { close(): void; readonly closed: Promise<string | null> }
+export type FailureSubscription = { close(): void; readonly closed: Promise<string | null>; readonly ready?: Promise<boolean> }
 // An adapter's native input transport can be ready, temporarily inconclusive, or proven unreachable. This is
 // deliberately separate from agent liveness: sessions.ts joins an unreachable transport with its independent
 // registered-pid witness before it calls the conversation stranded.
@@ -1008,6 +1008,9 @@ export function codexTurnFailureObserver(
   const frames: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
   let upgraded = false, settled = false
   let reconciliationTimer: ReturnType<typeof setTimeout> | null = null
+  let readySettled = false
+  let resolveReady!: (ready: boolean) => void
+  const ready = new Promise<boolean>((resolve) => { resolveReady = resolve })
   let resolveClosed!: (reason: string | null) => void
   const closed = new Promise<string | null>((resolve) => { resolveClosed = resolve })
   const cancelReconciliation = () => {
@@ -1018,6 +1021,7 @@ export function codexTurnFailureObserver(
   const finish = (reason: string | null) => {
     if (settled) return
     settled = true
+    if (!readySettled) { readySettled = true; resolveReady(false) }
     clearTimeout(timer)
     cancelReconciliation()
     try { conn.destroy() } catch {}
@@ -1056,6 +1060,7 @@ export function codexTurnFailureObserver(
     }
     if (message.id === 2 && message.result) {
       clearTimeout(timer)
+      if (!readySettled) { readySettled = true; resolveReady(true) }
       const result = message.result as { thread?: { status?: { type?: unknown } }; initialTurnsPage?: { data?: unknown } }
       const initialTurns = result.initialTurnsPage?.data
       const initialActive = Array.isArray(initialTurns)
@@ -1105,7 +1110,7 @@ export function codexTurnFailureObserver(
       return !payload.includes(method) || payload.includes(Buffer.from('"turn/started"')) || payload.includes(Buffer.from('"turn/completed"'))
     })) finish('Codex app-server closed the turn observer')
   })
-  return { close: () => finish(null), closed }
+  return { close: () => finish(null), closed, ready }
 }
 
 // Protocol-verified cold/restore/control seam. The Codex schema (`codex app-server generate-json-schema --experimental`)

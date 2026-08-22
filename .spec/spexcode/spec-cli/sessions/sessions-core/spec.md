@@ -156,7 +156,8 @@ under `related:`, so a change here attributes its drift and eval staleness to th
 The shared layer also reconciles each executing governed record (`status: active`) with its adapter's optional
 native turn-failure subscription. Waiting states (`asking`, `awaiting`, and `parked`) have no native turn and do
 not hold an observer. It owns subscription lifetime across backend replacement and record stop/archive/retirement,
-with bounded backoff after a transport disconnect, but no
+admits native subscriptions one at a time during reconciliation so a backend restart cannot fan out expensive
+resume handshakes, with bounded backoff after a transport disconnect, but no
 product protocol: subscription and failure mapping remain adapter work ([[harness-adapter]]). Every reported
 failure reaches one record-locked compare-and-set that changes only a live, undeclared `active` record to `error`.
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or

@@ -7,6 +7,7 @@ desc: The tree's badges tallied and registered on the status bar — composition
 code:
   - spec-dashboard/src/GraphStats.jsx#GraphStats
 related:
+  - spec-dashboard/src/specMeta.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
@@ -67,3 +68,9 @@ Desktop-only — it mounts in the graph shell the phone never renders ([[mobile-
 `.board-stats` block to the shared stylesheet ([[node-graph]] keeps `styles.css`) plus a `stats` i18n section
 it owns. So a later change to the shell, the cycle primitive, or the graph is *their* node's drift, not this
 strip's.
+
+**The per-category pass itself is not owned here.** It sits beside the node vocabulary in `specMeta.js`,
+because the ambient board tallies ([[status-bar]]) must say the same numbers on routes that never mount a
+graph, and reading them from this file would drag the graph renderer's dependency into every chunk. One
+derivation, two readers — this strip adds the walk. Where both would show, the ambient copies stand down:
+this one is the same numbers with an affordance they do not have.

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
 related:
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/styles.css
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
@@ -42,9 +43,22 @@ The CLI reaches that same write with `spex session rename <SEL> "<name>"`; insid
 shared selector for its own session ([[session-selectors]]), so a prompt preset such as [[rename]] can ask the
 agent to name itself without learning an id or creating a dashboard-only action.
 
-The gesture is the selected session's **document tools** button in [[session-console]] — the holding surface
-where a human manages the current session. The left sessions dock is a read-only finding projection and has
-no mutation menu. The tools button opens a cursor-anchored pop-over (its own surface). Picking
+**One menu, two ways in.** The selected session's **document tools** button in [[session-console]] opens it
+for the session you are reading; a **right-click on a finding-dock session row** ([[dock-modes]]) opens it for
+any row. The dock row itself stays read-only navigation — the row navigates, the menu acts — and that is what
+keeps a finding projection free of mutation state while still being where a human points at a session. Losing
+the second door is not a simplification: when the console's own list was withdrawn and the menu did not travel
+with the rows, rename and attach had no pointer route left anywhere in the window.
+
+**The opener may be a press of either button, so dismissal must survive both.** An outside press closes the
+menu — the PRESS, not the click, and only when its target is outside the menu and outside a control that
+declares it owns a menu. Closing on any click at all works exactly as long as every opener is a right-click,
+because a contextmenu press emits no click; the moment a plain button opened this menu the opening click
+reached the dismissal and shut it in the same gesture, so the button visibly toggled and no menu ever
+appeared. Testing the target is also what lets an opener toggle: pressing it again closes rather than closing
+and immediately reopening.
+
+The tools button opens a cursor-anchored pop-over (its own surface). Picking
 **rename** swaps the menu for a centred prompt (the shared modal chrome) that **titles itself with the
 session's headline** — the same words its row shows ([[session-activity]]), not the stable rename handle,
 so the human reads the very label they right-clicked and never renames what looks like a different
@@ -100,10 +114,11 @@ rolled forward.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
-so they live on the top layer — over the board's backdrop, never beneath it. The board still suppresses
-the OS context menu inside the document (the terminal-app feel of [[session-console]]) via a native
-capture-phase `contextmenu` listener. The tools button remains an ordinary focused document control, so
-opening the menu never steals focus from the current TUI or Command Box.
+so they live on the top layer — over the board's backdrop, never beneath it. A surface cancels the OS
+context menu only where it offers this menu in its place — the dock's session rows — and nowhere else:
+cancelling it across a whole panel of conversation text, diff text and terminal takes copy, paste and
+search-selection from a reader in exchange for nothing ([[session-console]]). The tools button remains an
+ordinary focused document control, so opening the menu never steals focus from the current TUI or Command Box.
 
 The pop-over is the one home for selected-session document actions. Its **lock on graph** item invokes the console's
 existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.

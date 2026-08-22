@@ -78,8 +78,10 @@ The service resolves each `KeyboardEvent` through one ordered ownership chain:
 
 The service is the only window capture listener for these layers. Native controls and Ctrl/Meta browser
 accelerators pass through unless the declared Alt family matches. The registry remains the only declaration
-table (`id`, `keys`, `rebind`, `desc`); `bindings.js` continues to resolve user overrides for the help legend
-and dispatch, preserving [[keyboard-nav]]'s one-registry/two-readers invariant.
+table (`id`, `keys`, `rebind`, `desc`); `bindings.js` continues to resolve user overrides for dispatch, for the
+help legend and settings editor, and for the shortcut hint a tooltip prints, preserving [[keyboard-nav]]'s
+one-registry/N-readers invariant. Every chord a surface reserves is declared in that table — a chord matched
+inline in a handler's own body is invisible to the other readers and cannot be rendered or rebound.
 
 ## tab grammar
 

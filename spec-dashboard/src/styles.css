@@ -412,11 +412,18 @@ body {
    an open document it still answers where the reader is, by name. The strip sits on --panel; the ACTIVE tab
    is painted --paper so it reads as the near edge of the document below it rather than a lit chip on a bar
    — that continuity is what the three-tone ground ladder is for. */
+/* The band does not clip; the TAB LIST inside it does. A document action's dropdown hangs below the strip,
+   so a strip that is itself the scroller cuts every menu off at 30px — which is how the resource picker
+   came to render perfectly and show nothing. */
 .tabstrip {
-  flex: 0 0 30px; height: 30px; display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden;
-  background: var(--panel); border-bottom: 1px solid var(--edge); scrollbar-width: none;
+  flex: 0 0 30px; height: 30px; display: flex; align-items: stretch;
+  background: var(--panel); border-bottom: 1px solid var(--edge);
 }
-.tabstrip::-webkit-scrollbar { height: 0; }
+.tabstrip-tabs {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.tabstrip-tabs::-webkit-scrollbar { height: 0; }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
   display: inline-flex; align-items: center; padding: 0 var(--space-5);
@@ -492,6 +499,11 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-warning { color: var(--yellow); }
 .sb-error { color: var(--red); }
 .sb-restore { color: var(--muted); }
+/* the ambient board tallies: one item per board, each a row of glyph+count pairs. The node dots reuse the
+   board's own four-state marks (.bstat-dot) so a count in the bar and a dot on a tile say the same thing. */
+.sb-tally { display: inline-flex; align-items: center; gap: 6px; }
+.sb-tally-lead { font-weight: var(--weight-semibold); color: var(--ink2); }
+.sb-tally-part { display: inline-flex; align-items: center; gap: 3px; }
 
 /* ---- left navigation rail ---- */
 .side-rail {

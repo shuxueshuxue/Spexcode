@@ -36,7 +36,11 @@ restores the list.
 - **The rail carries two kinds of entry, finding before opening.** Under the project chip sit the
   workspace's FINDING controls — search plus the dock's two projection buttons, explorer and sessions.
   Those two are plain buttons, not addresses: each changes what helps you look and is lit only while its
-  projection is up. The dock starts open in explorer; clicking the active projection collapses it, while
+  projection is up. **Each wears what it LISTS**, not where its panel sits: explorer is a files mark,
+  sessions a list of rows with status points. Explorer wore the left-panel frame back when the two dock
+  toggles sat a few pixels apart and their whole message was which side they opened; on a rail of
+  projections that frame reads as a card or a folder and says nothing about a file tree
+  ([[icon-system]] keeps the mirrored panel pair for the dock toggles that actually mean a side). The dock starts open in explorer; clicking the active projection collapses it, while
   clicking the other opens the dock and selects that projection. They render only inside a workspace (the
   cold review fast-path has no WorkspaceProvider). Below them sit the DOCUMENT OPENERS, each a real anchor
   naming an address. The order is the mockup's and VS Code's alike: what helps you look, then where you can go.
@@ -45,7 +49,12 @@ restores the list.
   bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in
-  tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. Each entry is an `<a>`
+  tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. **A tooltip names the key,
+  and reads it from the keymap.** An entry declares the action id a key also reaches it by, and the printed
+  chord is resolved at render from [[keyboard-nav]]'s registry — user rebinds included, all modifiers
+  present, nothing if nothing is bound. It is never typed into the translated label: that is a copy of a
+  binding no rebind can reach, and both dictionaries had drifted into three glyph dialects for the same
+  modifier while the rail advertised a bare `/` for a chord that had moved. Each entry is an `<a>`
   carrying its page's address (`href="#/…"`): a click is a native hash navigation — the *same transaction*
   the address bar, a bookmark, ⌥digit, or any in-page door produces — so middle-click/new-tab/copy-address
   come free and no click handler re-implements routing. The rail is chrome, not a

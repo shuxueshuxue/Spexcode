@@ -44,6 +44,7 @@ import { reparentRequest, SessionReparentRequestError } from './session-reparent
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { editSpecBody, readSpecBodyEdit, SpecBodyEditError } from './spec-body-edit.js'
 
 installEvalHost()
 
@@ -132,6 +133,21 @@ app.get('/api/specs/lite', (c) => c.json(loadSpecsLite()))
 app.get('/api/specs/:id/content', (c) => {
   const x = specContent(c.req.param('id'))
   return x ? c.json(x) : c.json({ body: '', parts: null }, 404)
+})
+// [[spec-body-edit]]: the WRITE half of the spec document — a human at the board replaces a line range of
+// a node's body and it lands as a real commit. The endpoint takes no path (it derives one from the node id)
+// and rewrites nothing but the body, so a request cannot reach code or frontmatter; a region that moved
+// since it was read is a 409 with the current text, never a merge. The version bump and drift are
+// recomputed from the commit by [[source-of-truth]] — nothing else is written.
+app.post('/api/specs/:id/body', async (c) => {
+  try {
+    const result = await editSpecBody(c.req.param('id'), readSpecBodyEdit(await c.req.json().catch(() => null)))
+    if (result.changed) notifyBoardChanged('full')
+    return c.json(result)
+  } catch (e) {
+    if (e instanceof SpecBodyEditError) return c.json({ error: e.message, code: e.code, ...(e.detail ?? {}) }, e.status)
+    throw e
+  }
 })
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched

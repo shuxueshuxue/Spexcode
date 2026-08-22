@@ -9,6 +9,7 @@ import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
+import { requestTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
@@ -541,9 +542,9 @@ function GraphView({ param, query }) {
   // double-click is the mouse parallel to `i`: OPEN the node as a document. Single click still only
   // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
   // leaves it.
-  const onNodeDoubleClick = useCallback((_e, n) => {
+  const onNodeDoubleClick = useCallback((e, n) => {
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    focusNode(n.id); navigate('spec', n.id)
+    focusNode(n.id); (e.ctrlKey || e.metaKey ? requestTab : navigate)('spec', n.id)
   }, [focusNode])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —

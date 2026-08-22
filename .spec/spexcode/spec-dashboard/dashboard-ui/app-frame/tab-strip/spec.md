@@ -22,14 +22,23 @@ Back-navigable. Opening several at once is that grammar in the plural. A tab cli
 **The split of truth follows what workspace editors settled on.** The OPEN LIST is a local layout
 preference — it survives reloads, it is not worth putting in a link, and two people opening the same
 address should not inherit each other's tabs. The ACTIVE tab is the URL. So every address stays exactly as
-shareable as before, and a reader who never opens a second document cannot tell this landed: the strip does
-not render until there are two, because one tab is not a strip, it is the single-document frame the board
-always had.
+shareable as before. The strip renders from the first tab: it is where the current document's NAME lives,
+and chrome that only appears when a second document exists would jump the layout at exactly the moment of
+the reader's first hold.
+
+**Looking is not holding.** The strip is the working set — what the reader has deliberately kept — and
+browsing must never grow it. A plain navigation (an explorer row, a board double-click, a link) REPLACES
+the active tab's slot, the way every workspace editor treats an unpinned pane; holding is the explicit
+gesture, ctrl/⌘-click, which appends a new tab (`requestTab` — a one-shot latch the finding surfaces set
+before navigating, consumed by the strip's own route subscription, so no finding surface ever touches the
+strip's state). Before this boundary every glance became a tab and ten minutes of browsing turned the strip
+into a history list — a different, worse widget. Appending also happens when there is no slot to replace:
+the first document of a session is always kept.
 
 **Identity is the canonical hash.** Two routes that print the same address *are* the same tab, so
 re-opening an already-open document activates it instead of stacking a duplicate, and nothing has to dedupe
-by hand. The current address is always in the strip — navigating anywhere opens a tab — because a strip
-that claimed to show what is open while the reader looked at something absent from it would be lying.
+by hand. The current address is always in the strip — by replacement or by keep — because a strip that
+claimed to show what is open while the reader looked at something absent from it would be lying.
 
 **Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
 the reason every editor uses it: the reader's eye is already where the closed tab was. Closing the last one
@@ -44,6 +53,5 @@ does, so the strip speaks the board's vocabulary rather than inventing a tab-spe
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
 
-**Not yet claimed:** two documents visible at once. The model makes it reachable — a second active tab and
-the existing resizable-pane primitive — but nothing here implements it, and the inline expansion of a
-governed file under its spec ([[source-view]]) already covers the case the split was first wanted for.
+**Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
+the second pane. The strip only names the gesture; the pane is workspace state, not a tab.

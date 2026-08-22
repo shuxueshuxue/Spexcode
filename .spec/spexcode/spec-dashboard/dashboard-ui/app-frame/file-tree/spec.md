@@ -32,7 +32,11 @@ wherever they are listed rather than teaching the reader two vocabularies for on
 **A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]; a governed file row opens
 [[file-view]]. The dock used to open a layer over the frame, because the frame had no content area to open
 anything into — that limitation is gone with [[workspace-shell]], and with it the layer. Clicking here and
-clicking a tab now reach the same place by the same address.
+clicking a tab now reach the same place by the same address. A plain click follows in place — the tree is a
+finding surface, and looking never grows the working set ([[tab-strip]]); ctrl/⌘-click HOLDS the document
+as a new tab.
 
-The dock is off by default and toggled from the status bar, where a workspace control belongs now that
-[[status-bar]] exists. Its width is the shared resizable-pane primitive, persisted per pane like every other.
+The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
+workspace whose only entrance is a URL is a workspace nobody enters. It is toggled from the rail's explorer
+entry ([[side-nav]]), where the other workspace-finding controls live. Its width is the shared
+resizable-pane primitive, persisted per pane like every other.

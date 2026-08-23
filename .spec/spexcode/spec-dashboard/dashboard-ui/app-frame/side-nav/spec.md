@@ -19,6 +19,8 @@ related:
 
 The rail is the activity bar for routed destinations. Its light has exactly one meaning: the current route.
 The dock projection is a separate, secondary fact shown by the dock header, never by the route light.
+The sessions entry may add a needs-you count badge as an overlay; the badge is attention state and never changes
+the route light's meaning. The same count prefixes the browser title when non-zero.
 
 ## expanded spec
 
@@ -46,7 +48,7 @@ The dock projection is a separate, secondary fact shown by the dock header, neve
   activation remain available. The rail never scrolls or overlays page content.
 - **Route peers.** The URL is hash state (`#/graph`, `#/sessions`, `#/evals`, `#/issues`, `#/settings`, plus
   document/detail tails). Page switches push history; list-to-detail and filter changes push; automatic route
-  echoes replace. Singleton boards are resident by address and therefore create-or-focus through ordinary
-  anchor navigation. Legacy review addresses normalize at the route layer.
+  echoes replace. Bare evals/issues/settings boards are navigation destinations, not documents, so ordinary
+  anchor navigation never creates or focuses a strip tab. Legacy review addresses normalize at the route layer.
 - **Public graph.** The sealed graph-only face keeps the graph anchor and renders the other rail destinations
   muted and inert (`aria-disabled` with no href or handler); it mounts no live dock or transport.

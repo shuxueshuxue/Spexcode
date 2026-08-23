@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
-import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+import { sessionHandle, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -105,7 +105,8 @@ export function useFold() {
 export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const t = useT()
   const ops = opSummary(s.ops)
-  const headline = sessionHeadline(s)
+  // Identity is stable; lifecycle notes and readiness warnings belong to the secondary status slot.
+  const headline = sessionHandle(s)
   const statusWord = t(`status.${s.status}`)
   return (
     <>
@@ -115,7 +116,9 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
           flex row) so that, when a selected row wraps ([[session-activity]] reveal), it can FLOAT onto the
           headline's first line and the wrapped lines below run full-width beneath it. */}
       <span className="sess-meta">
-        <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
+        <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }}
+          data-tip={s.note ? `${statusWord} · ${s.note}` : statusWord}
+          aria-label={s.note ? `${statusWord} · ${s.note}` : statusWord}>{STATUS_GLYPH[s.status]}</span>
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
       <span className="sess-id" data-tip={headline}>{headline}</span>

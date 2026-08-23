@@ -513,6 +513,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
 
   const [archiveRows, setArchiveRows] = useState(null)
+  const [pendingSession, setPendingSession] = useState(null)
   const refreshArchive = useCallback(() => {
     if (archiveRequestRef.current) return archiveRequestRef.current
     const request = fetch(apiUrl('/api/sessions/archive-index'))
@@ -544,8 +545,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const allSessions = useMemo(() => {
     const byId = new Map(sessions.map((s) => [s.id, s]))
     for (const s of archiveRows || []) if (!byId.has(s.id)) byId.set(s.id, s)
+    if (pendingSession && !byId.has(pendingSession.id)) byId.set(pendingSession.id, pendingSession)
     return [...byId.values()]
-  }, [sessions, archiveRows])
+  }, [sessions, archiveRows, pendingSession])
+  useEffect(() => {
+    if (pendingSession && sessions.some((session) => session.id === pendingSession.id)) setPendingSession(null)
+  }, [sessions, pendingSession])
   const archivedSessions = useMemo(() => archiveOrder(allSessions.filter((session) => session.archived)), [allSessions])
   const validIds = useMemo(() => new Set(['new', ...allSessions.map((s) => s.id)]), [allSessions])
   // content mode: 'new' or a session id. The archive index is a transient overlay.
@@ -839,17 +844,32 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       return s ? `[[${s.id}]] (${s.path})` : m
     })
 
-  // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
-  // The box NEVER disables or blurs: clear the draft optimistically (so a fresh draft can't be clobbered when
-  // the POST lands) and fire the launch in the BACKGROUND. Gating the box on the in-flight POST + a board re-read
-  // (both seconds of real work — worktree, branch, tmux) left the whole pane greyed and unfocused until they
-  // returned; keeping it live makes the next launch type-ready at once. The empty-draft check guards double-fire.
+  // launch a session, then follow the published id into its document. The box NEVER disables or blurs: clear the
+  // draft optimistically (so a fresh draft can't be clobbered when the POST lands) and keep the launch request in
+  // the background while the pending document shows its creation stages. The empty-draft check guards double-fire.
   const submit = () => {
     const raw = encodePrompt(prompt, codeSelections)
     if (!raw) return
     setPrompt('')
     setCodeSelections([])
-    createSession(raw, launcher).then(() => reload?.())
+    createSession(raw, launcher).then((result) => {
+      if (result.ok && result.id) {
+        setPendingSession({
+          id: result.id,
+          ...(result.session || {}),
+          label: result.session?.label || raw.split(/\s+/).slice(0, 8).join(' ') || result.id,
+          title: result.session?.title || result.session?.label || raw.split(/\s+/).slice(0, 8).join(' ') || result.id,
+          status: result.session?.status || 'queued', liveness: result.session?.liveness || 'offline',
+          archived: false, capabilities: result.session?.capabilities || { headless: true },
+        })
+        // The create response is the publication fence: move the reader into the new document immediately,
+        // while its queued/starting row and live execution trace catch up through the board stream.
+        navigate('sessions', result.id)
+        reload?.()
+      } else if (!result.ok) {
+        notify(result.error || t('session.launchFailed'), { kind: 'error' })
+      }
+    })
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@` session references

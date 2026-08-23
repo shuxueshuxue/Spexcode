@@ -84,3 +84,6 @@ already supports it; that is an unclaimed improvement, not a hidden limitation.
 belongs to the bar for the same reason the project name does — it is persistently true of what the window
 is showing — and the alternative was a title strip of its own, which is a chrome band [[ui-state-model]]
 does not allot. The bar is where a persistent readout goes precisely so that no surface has to grow one.
+
+Session lifecycle attention reuses the same transient-notice provider as every other acknowledged action. A transition
+into `asking` emits one clickable notice that opens that session document; no session-specific notification channel exists.

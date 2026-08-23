@@ -81,15 +81,12 @@ export const zoneSort = (sessions) => {
 // solely as the old-backend fallback, confined to THIS file. Reach for s.raw.name / s.raw.title only for an
 // explicitly raw consumer (the rename prefill).
 //
-// `sessionHandle` is the STABLE handle — its ONLY sanctioned uses are the avatar/hover TOOLTIP, mobile's
-// handle-line, and search MATCHING. On a current backend the wire always carries `label`, so this door
-// short-circuits there: what search matches IS the label (a rename name or the prompt truncation);
-// raw id/node/branch fragments are deliberately NOT promised searchable.
-// It is NEVER a visible one-line title: EVERY surface where a human reads "which session is this" (board
-// rows, the map window, Enter tabs, the console strip, the search palette, the @-mention dropdown, and the
-// node-menu overlay list) renders `sessionHeadline`. Naming the stable door `Handle`, not `Name`, is the
-// architectural guard: a dev wanting "the name to show" reaches for the headline by reflex and can no longer
-// grab the handle by mistake — the divergence that kept recurring ([[session-activity]]: one name everywhere).
+// `sessionHandle` is the STABLE identity — the value a row or tab uses for "which session is this". On a
+// current backend the wire always carries `label`, so this door short-circuits there: a rename name or prompt
+// summary remains stable while activity, readiness and infra notes change in the secondary status slot.
+// Raw id/node/branch fragments are deliberately NOT promised searchable except as the final fallback.
+// `sessionHeadline` remains available for live prose surfaces (chat, timeline, and archive search) where the
+// changing activity line is the content being read, not the session identity.
 
 export function nestSessions(sessions) {
   const present = new Set(sessions.map((s) => s?.id))

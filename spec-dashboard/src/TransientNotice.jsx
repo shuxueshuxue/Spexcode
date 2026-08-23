@@ -9,7 +9,7 @@ let nextNoticeId = 0
 function noticeOptions(message, options = {}) {
   const kind = ['success', 'error', 'info'].includes(options.kind) ? options.kind : 'info'
   const duration = resolveNoticeDuration(message, options.duration)
-  return { kind, duration }
+  return { kind, duration, onClick: typeof options.onClick === 'function' ? options.onClick : null }
 }
 
 function TransientNoticeViewport({ notices, dismiss, setInteraction }) {
@@ -32,6 +32,14 @@ function TransientNoticeViewport({ notices, dismiss, setInteraction }) {
           data-paused={notice.paused ? 'true' : undefined}
           style={{ '--tn-duration': `${notice.duration}ms` }}
           role={notice.kind === 'error' ? 'alert' : 'status'}
+          tabIndex={notice.onClick ? 0 : undefined}
+          onClick={notice.onClick ? (event) => {
+            if (event.target.closest('button')) return
+            notice.onClick()
+          } : undefined}
+          onKeyDown={notice.onClick ? (event) => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); notice.onClick() }
+          } : undefined}
           onPointerEnter={() => setInteraction(notice.id, 'pointer', true)}
           onPointerLeave={() => setInteraction(notice.id, 'pointer', false)}
           onFocus={() => setInteraction(notice.id, 'focus', true)}
@@ -77,9 +85,10 @@ export function TransientNoticeProvider({ children }) {
     const text = String(message ?? '').trim()
     if (!text) return null
     const { kind, duration } = noticeOptions(text, options)
+    const onClick = typeof options?.onClick === 'function' ? options.onClick : null
     const id = `notice-${++nextNoticeId}`
     interactions.current.set(id, { pointer: false, focus: false })
-    setNotices((current) => [...current, { id, kind, message: text, duration, paused: false }])
+    setNotices((current) => [...current, { id, kind, message: text, duration, paused: false, onClick }])
     if (duration) schedule(id, duration)
     return id
   }, [schedule])

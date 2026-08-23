@@ -4,7 +4,7 @@ import { STATUS_COLOR, sessionHandle, sessionHeadline, sessionPresentationOrder 
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '@spexcode/spec-cli/ranker'
 import { useSpecCorpus } from './corpus.js'
-import { graphNodeAddress, sessionAddress } from './address.js'
+import { sessionAddress, specAddress } from './address.js'
 
 // the breadcrumb path the rows show + match against (`.spec/a/b/<id>/spec.md` minus the shell + leaf),
 // so a row reads like the tree path it is. Mirrors SessionInterface's @-mention path.
@@ -34,7 +34,7 @@ export function buildEntries(specs, sessions, corpus) {
     const path = specPath(s.path)
     entries.push({
       kind: 'spec', key: `spec:${s.id}`, target: s.id,
-      address: graphNodeAddress(s.id),
+      address: specAddress(s.id),
       color: (STATUS[s.status] || STATUS.pending).color,
       title: s.title || s.id, sub: path,
       // the shared ranker's three fields, the SAME map the floor uses for a node: name = title+id, desc = the

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/views.jsx
 related:
   - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/viewRegistry.js
   - spec-dashboard/src/route.js
   - spec-dashboard/src/tabs.js
 ---

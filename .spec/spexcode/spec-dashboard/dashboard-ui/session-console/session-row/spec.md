@@ -71,11 +71,11 @@ expanding a subtree never moves the keyboard surface sink. `useFold` holds that 
 
 **The zone.** `SessionZone` groups a `sessionForest` into one rendered block.
 
-**The module owns no surface of its own.** It once also exported a floating session window that hovered
-over the spec-node graph; the finding dock now projects that same forest with these same rows, one pane to
-the left, and two live copies of one list on one screen is not a glance but a duplicate. The window is
-retired and its callers are the dock, the console and the phone. The lock it used to be the only door to is
-untouched: a session is claimed from a dock row and the graph reads the claim from [[workspace-shell]].
+**The module owns no full list surface of its own.** The graph carries only a compact, collapsed
+cross-reference badge; opening it uses [[session-picker]] rows and preserves the existing lock/open gestures.
+The finding dock remains the desktop session list, while the graph badge is deliberately bounded and does not
+render zones, nesting, drag state, or a second list model. The lock is shared workspace state: a picker row
+claims a session and the graph reads the claim from [[workspace-shell]].
 
 **The lock.** `LockGlyph` is the shared "claimed by another session" indicator: the monochrome `lock`
 icon at `currentColor`, never a colour emoji, used both on the row and in the lock-hint banner so the

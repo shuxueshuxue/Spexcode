@@ -65,7 +65,7 @@ sitting inside the head row, the current door needs no answer — the row it is 
 one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
 force, so the key and the visible door can never disagree.
 
-The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
+The dock's session projection is the **one full session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
 route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
 the status published by `/api/sessions` is ground truth. `asking`/`review`/`done`/`close-pending`/`error` form
@@ -86,9 +86,9 @@ into offline. That overcorrection is revoked. 人类判词：“不要再新增�
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim
-while it holds. This is the ONLY place the claim is made from a list, and it is why the graph no longer
-floats a session window of its own ([[session-row]]): the claim belongs beside the sessions, and the lock
-itself is [[workspace-shell]] state so the two surfaces need not know about each other.
+while it holds. The graph's own cross-reference is only the bounded collapsed badge described by
+[[node-graph]] and [[session-picker]], not a second full list: the claim belongs beside the sessions, and the
+lock itself is [[workspace-shell]] state so the two surfaces need not know about each other.
 
 **Right-click on a session row opens that session's own menu** — rename, tmux attach, lock on graph, close —
 the same menu the selected session's document tools open from the actions slot. One menu, two ways in: the

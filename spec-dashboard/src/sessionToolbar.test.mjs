@@ -7,7 +7,6 @@ import { inboxCommands, mergeAvailability, uiCommandsFor, UI_COMMANDS } from './
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
 const contextMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
-const selectBar = readFileSync(new URL('./SessionSelectBar.jsx', import.meta.url), 'utf8')
 const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const focus = readFileSync(new URL('./focus.js', import.meta.url), 'utf8')

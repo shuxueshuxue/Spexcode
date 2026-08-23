@@ -148,7 +148,7 @@ function SessionDock({ sessions, activeId }) {
             title: `Parent session: ${sessionHandle(parent)}`,
             onClick: () => navigate('sessions', parent.id),
           } : null
-          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId} selecting={false} picked={new Set()}
+          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId}
             dragging={drag?.id === item.s.id}
             dropTarget={drag?.target === item.s.id}
             onToggleFold={() => toggle(item.s.id)}
@@ -221,7 +221,7 @@ function DockHead({ mode, specs, sessions }) {
               onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
               <Icon name="archive" size={13} />
             </button>
-            <button type="button" className="dock-head-act" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
+            <button type="button" className="dock-head-act dock-head-act-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
               onClick={() => navigate('sessions', 'new')}>
               <Icon name="plus" size={14} />
             </button>

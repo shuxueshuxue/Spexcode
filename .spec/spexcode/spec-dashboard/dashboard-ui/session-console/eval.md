@@ -375,7 +375,6 @@ scenarios:
     code:
       - spec-dashboard/src/SessionInterface.jsx#SessionInterface
       - spec-dashboard/src/Modal.jsx#Modal
-      - spec-dashboard/src/SessionSelectBar.jsx#SessionSelectBar
       - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
     description: >-
       Keep the console on its New Session tab, enter multi-select mode, then open the bulk archive and close

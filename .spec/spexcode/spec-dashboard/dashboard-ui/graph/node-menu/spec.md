@@ -39,7 +39,8 @@ currently touch it (`overlay.source === session.source`) — the menu appends, b
 five fixed actions, **one item per overlaying session**: the `sessionDisplayState` status-coloured glyph plus the session's **headline** —
 the SAME live line the board rows show ([[session-activity]]'s one-name-every-surface / `sessionHeadline`),
 never the stable label, so a session reads identically here and on the board it overlays.
-Picking one opens that session in the console ([[session-console]]). This is the **one place a crossing
+Picking one opens that session in the console ([[session-console]]) through the shared [[session-picker]] row
+language. This is the **one place a crossing
 into an *existing* session lives** — the graph deliberately has no bare keystroke for it and the
 node-info popup's Enter is inert ([[keyboard-nav]]), so the mouse menu is where "jump into the session
 editing this node" belongs. A node with no overlay shows only the five fixed actions — no divider, no empty

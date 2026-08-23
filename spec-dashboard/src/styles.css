@@ -335,6 +335,8 @@ body {
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
+.dock-head-act-new { color: var(--paper); background: var(--blue); box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 70%, var(--line)); }
+.dock-head-act-new:hover { color: var(--paper); background: var(--ink2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 28%, transparent); }
 /* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
    is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
    one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
@@ -824,6 +826,24 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
 
+/* The graph cross-reference is a compact badge, not a second session list. It keeps the graph's top-right
+   corner quiet at rest and expands in place only when a reader asks to choose or inspect a session. */
+.sess-badge { position: absolute; top: 10px; right: 10px; z-index: 6; display: grid; justify-items: end; }
+.sess-badge-trigger {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 3px 7px;
+  color: var(--ink2); background: color-mix(in srgb, var(--paper) 92%, var(--panel2)); border: 1px solid var(--line);
+  border-radius: var(--radius-full); box-shadow: var(--shadow);
+  font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
+}
+.sess-badge-trigger:hover, .sess-badge-trigger[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
+.sess-badge-count { font-variant-numeric: tabular-nums; }
+.sess-badge-face { display: inline-flex; }
+.sess-badge-panel {
+  width: min(250px, calc(100vw - 24px)); margin-top: 5px; padding: 5px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.sess-badge-panel .session-picker-list { max-height: min(46vh, 320px); }
+
 /* Focus emphasis may settle gently; graph-space positions never transition here because React Flow's
    solid edges already use final coordinates. Direction comes from the viewport pan, not detached tiles. */
 .react-flow__node { transition: opacity .18s ease; }
@@ -1271,6 +1291,31 @@ a.scenario-count:hover { background: var(--panel2); }
    glyph + the session name. The glyph keeps its status colour on hover (inline colour wins). */
 .sess-menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .sess-menu-item.sess-menu-sess .sess-glyph { width: 11px; line-height: var(--leading-none); }
+.session-picker { display: grid; gap: 4px; min-width: 0; }
+.session-picker-filter {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 7px;
+  color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-caption); outline: none;
+}
+.session-picker-filter:focus { border-color: var(--blue); }
+.session-picker-list { display: grid; gap: 1px; max-height: 220px; overflow: auto; }
+.session-picker-row {
+  display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; min-height: 28px;
+  padding: 4px 7px; color: var(--ink); background: transparent; border: 0; border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui); text-align: left; cursor: pointer;
+}
+.session-picker-row:hover, .session-picker-row:focus, .session-picker-row.active { outline: none; background: var(--panel2); color: var(--ink2); }
+.session-picker-row.selected { box-shadow: inset 2px 0 0 var(--blue); }
+.session-picker-row.new { color: var(--blue); }
+.session-picker-row.compact { min-height: 25px; padding: 3px 5px; font-size: var(--type-meta); }
+.session-picker-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-picker-status { flex: none; width: 13px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); }
+.session-picker-new-icon { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; color: currentColor; }
+.session-picker-empty { padding: 6px 7px; color: var(--muted); font-size: var(--type-caption); }
+.sess-menu-picker { min-width: 0; }
+.sess-menu-picker .session-picker-list { max-height: 180px; }
+.sess-menu-picker .session-picker-row { min-height: 27px; }
+.mention-menu .session-picker-row { margin: 0; }
 /* the rename prompt rides the shared Modal chrome, just narrower than the wide help/legend popup. */
 .sess-rename-modal { width: min(360px, 92vw); }
 .sess-rename { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; }
@@ -1553,31 +1598,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--muted); }
-/* multi-select bar ([[session-multi-select]]) — a live count plus its adjacent icon-only close action. */
-.si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.si-selcount { flex: 1; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--ink2); }
-.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
-.si-select-action {
-  flex: none; width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0;
-  background: transparent; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; color: var(--orange);
-}
-.si-select-action:hover { background: color-mix(in srgb, var(--orange) 14%, var(--panel)); border-color: var(--orange); }
-.si-select-action:disabled { opacity: .5; cursor: not-allowed; }
-/* row checkbox shown only while selecting — an empty square that fills blue-with-a-tick when picked. */
-.si-check {
-  flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: var(--radius); box-sizing: border-box;
-}
-.si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
-.si-check.on::after {
-  content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px;
-  border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
-}
-/* The real fold pod is an absolute sibling of the row button. Move it with the checkbox so it remains aligned
-   with the hidden fold slot in the whole-row drag surface. */
-.si-item:has(> .si-check) ~ .sess-fold-control { margin-left: 20px; }
-/* a picked row wears the same soft blue wash as the selected tab, so the checklist reads at a glance. */
-.si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
-.si-item.picked:hover { background: color-mix(in srgb, var(--blue) 20%, var(--panel2)); }
 .si-pill {
   flex: 1; display: flex; align-items: center; justify-content: center;
   padding: 7px 0; background: none; border: 1px solid var(--line); border-radius: var(--radius);
@@ -2302,11 +2322,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-attach-queue.command { padding: 5px 0 1px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
 .si-code-selection-queue { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: 6px; }
 .si-code-selection-chip {
-  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 3px 5px 3px 7px;
-  border: 1px solid color-mix(in srgb, var(--blue) 42%, var(--line)); border-radius: var(--radius);
-  color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--paper)); font-family: var(--mono);
-  font-size: var(--type-caption);
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 3px 4px 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line)); border-left: 3px solid var(--blue); border-radius: var(--radius);
+  color: var(--ink2); background: color-mix(in srgb, var(--blue) 5%, var(--paper)); font-family: var(--ui-font);
+  font-size: var(--type-caption); line-height: var(--leading-ui); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--paper) 70%, transparent);
 }
+.si-code-selection-chip > svg { color: var(--blue); flex: none; }
 .si-code-selection-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-code-selection-remove { width: 18px; height: 18px; padding: 0; color: var(--muted); }
 .si-code-selection-remove:hover { color: var(--red); }
@@ -3344,13 +3365,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-ui);
 }
 .pa-preset:hover { color: var(--ink2); border-color: var(--line); }
-.pa-target { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.pa-target { display: grid; gap: var(--space-2); min-width: 0; }
 .pa-target-label { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
-.pa-select {
-  flex: 1; min-width: 0; padding: var(--space-2) var(--space-3);
-  background: var(--paper); color: var(--ink2); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: var(--ui-font); font-size: var(--type-caption);
-}
+.pa-session-picker { min-width: 0; }
+.pa-session-picker .session-picker-list { max-height: 150px; }
+.pa-session-picker .session-picker-row { min-height: 27px; }
 .pa-edit-head {
   display: flex; align-items: center; gap: var(--space-3); min-width: 0;
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption);

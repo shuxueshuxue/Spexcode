@@ -7,9 +7,9 @@ import { useEscLayer } from './escStack.js'
 import { encodePrompt } from './codeSelection.js'
 import { proseSelection, PROSE_PRESETS, regionText, stampedRange } from './proseSelection.js'
 import { postSpecBody, sendSessionText } from './data.js'
-import { createSession } from './launch.js'
+import { createSession, useLaunchers } from './launch.js'
 import { useSpecContent } from './specContent.js'
-import { sessionHeadline } from './session.js'
+import { sessionFooterState, sessionHeadline } from './session.js'
 import { navigate } from './route.js'
 
 // [[prose-dispatch]]: what a reader can DO with a passage of spec prose they just selected.
@@ -57,11 +57,10 @@ const ACTIONS = [
   { key: 'manual', icon: 'pencil', preset: null, jump: false },
 ]
 
-const LIVE_STATUSES = new Set(['active', 'working', 'asking'])
-
 export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear }) {
   const t = useT()
   const { sessions = [] } = useBoard()
+  const { launcher } = useLaunchers()
   const { notify } = useTransientNotice()
   const content = useSpecContent(node?.id, node?.version)
   const body = node?.body ?? content?.body ?? ''
@@ -74,7 +73,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const live = sessions.filter((s) => !s?.archived && LIVE_STATUSES.has(s?.status))
+  const live = sessions.filter((s) => sessionFooterState(s) === 'live')
   const dismiss = useCallback(() => { setPanel(null); setError(null); setBusy(false) }, [])
   const clear = useCallback(() => { setHit(null); onCodeSelectionClear?.(); dismiss() }, [dismiss, onCodeSelectionClear])
 
@@ -132,7 +131,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   }, [hostRef])
 
   useEscLayer(!!panel, dismiss)
-  useEscLayer(!!hit && !panel, clear)
+  useEscLayer(!!(hit || codeSelection) && !panel, clear)
 
   // an outside press closes the open card. Bound while a card is open only, so ordinary reading never pays
   // for a document-level listener.
@@ -171,7 +170,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     if (to === 'new') {
       setBusy(true)
       setError(null)
-      const res = await createSession(prompt)
+      const res = await createSession(prompt, launcher)
       setBusy(false)
       if (!res.ok) { setError(res.error || t('proseActions.sendFailed')); return }
       notify(t('proseActions.sentTo', { name: sessionHeadline(res.session) || res.id?.slice(0, 8) || t('proseActions.newSession') }), { kind: 'success' })

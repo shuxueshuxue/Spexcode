@@ -45,8 +45,8 @@ ordinary prompt and travels the one input route every other surface uses ([[disp
 already rules that "no API route, session field, or alternate dispatch path belongs here", and none is
 added: an existing target receives the prompt through the session input route. Choosing a new session uses
 the existing `createSession(prompt)` API in the same click, then opens the returned timeline — there is no
-second launch-face send. The target list reads backend status directly and includes only active, working, or
-asking sessions; archived and dormant records are not dispatch targets.
+second launch-face send. The target list uses the shared `sessionFooterState(session) === 'live'` predicate;
+idle sessions remain dispatch targets while offline, archived, and other non-live records do not.
 
 **The verbs seed the box; they are not modes.** Each action opens the same popover, differing only in what
 it puts in the message field and which send mode it defaults to. The three preset buttons are the same

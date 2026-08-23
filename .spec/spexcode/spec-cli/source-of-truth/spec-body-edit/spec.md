@@ -17,9 +17,9 @@ related:
 Reading a spec on the board and finding a wrong sentence should not mean opening an editor somewhere else.
 Give the board the affordance GitHub's web view has — **edit this passage right here and commit it** —
 without giving it anything else. Only `spec.md` bodies. Never code. And when it can't be done, say so
-loudly instead of half-doing it. The same Edit & Send action is reachable from the full spec document and
-the spec pane in the node information popup; choosing a new session sends the selected body range directly
-through session creation, carrying its `[[code-selection]]` chip in the first prompt.
+loudly instead of half-doing it. The same Edit Manually action is reachable from the full spec document and
+the spec pane in the node information popup; it opens the body editor for the selected range and commits
+only that replacement.
 
 ## expanded spec
 

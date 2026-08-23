@@ -9,19 +9,18 @@ scenarios:
       timeline and inspect the received prompt for the path, inclusive line range, and selection token.
     expected: >-
       The file selection opens the same four actions as spec prose, the old one-button affordance is absent,
-      archived or dormant sessions are absent from the target list, and sending reaches the selected live
-      session through its ordinary input route with the code-selection attachment intact.
-  - name: popup-prose-edit-send-creates-session
+      an idle session remains in the target list while an offline session is absent, and sending reaches the
+      selected live session through its ordinary input route with the code-selection attachment intact.
+  - name: popup-body-edit-send-direct-create
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/source-selection.e2e.mjs
     description: >-
-      Open a node's `i`/Enter information popup, select prose in its spec pane, choose Edit & Send, keep
-      the edit preset, select a new session, and send. Observe the newly returned session timeline and the
-      first prompt body in the backend.
+      Through the real dashboard, select a body range in the node information popup and choose Edit & Send
+      with a new session target. Inspect the created session's first prompt and the settled popup/session
+      screenshots.
     expected: >-
-      The popup spec pane exposes the same ProseActions group as the full spec document. The new-session
-      action calls session creation once, carries the selected node body range as a code-selection chip in
-      the initial prompt, and opens the created session without a second launch-face send.
+      The selected body range is encoded as one code-selection attachment in the initial create request,
+      the returned session opens immediately, and no empty launch composer or second send is required.
 ---
 # eval.md - prose-dispatch
 

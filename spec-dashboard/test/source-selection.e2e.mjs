@@ -92,7 +92,26 @@ try {
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  await context.addInitScript(() => localStorage.setItem('si.launcher', 'fake'))
   const page = await context.newPage()
+  // Keep the target-filter proof deterministic: one dormant row must be rejected while an idle row is
+  // accepted by the same backend-shaped footer-state contract the dashboard uses in production.
+  const seededTargets = [
+    { id: 'idle-fixture', label: 'idle fixture', headline: 'idle fixture', title: 'idle fixture', status: 'idle', lifecycle: 'idle', liveness: 'online', archived: false, created: 2 },
+    { id: 'offline-fixture', label: 'offline fixture', headline: 'offline fixture', title: 'offline fixture', status: 'offline', lifecycle: 'idle', liveness: 'offline', archived: false, created: 1 },
+  ]
+  // The stream's authoritative full snapshot would otherwise replace the seeded HTTP fixture immediately;
+  // this scenario is measuring the target list, so let the ordinary graph poll own the board snapshot.
+  await page.route('**/api/graph/stream*', (route) => route.abort())
+  await page.route('**/api/graph*', async (route) => {
+    if (route.request().method() !== 'GET' || new URL(route.request().url()).pathname !== '/api/graph') return route.continue()
+    const response = await route.fetch()
+    const board = await response.json()
+    if (!board || !Array.isArray(board.sessions)) return route.fulfill({ response })
+    const existing = new Set(board.sessions.map((row) => row?.id))
+    const merged = { ...board, sessions: [...board.sessions, ...seededTargets.filter((row) => !existing.has(row.id))] }
+    return route.fulfill({ response, body: JSON.stringify(merged) })
+  })
   await page.goto(`http://127.0.0.1:${uiPort}/#/spec/fixture`, { waitUntil: 'domcontentloaded' })
   await page.locator('.gov-f').first().waitFor({ state: 'visible', timeout: 90_000 })
   assert.equal(await page.locator('.specview-code').count(), 0, 'SpecView has no embedded source face')
@@ -114,15 +133,29 @@ try {
   assert.equal(await actions.count(), 4, 'source selections use the shared four-action group')
   assert.equal(await page.locator('.srcview-select-action').count(), 0, 'the old one-button affordance is gone')
   await page.screenshot({ path: join(out, 'm4-source-selection-actions.png'), fullPage: true })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(50)
+  assert.equal(await page.locator('.pa-group').count(), 0, 'Escape closes the source-selection action group')
+  await page.mouse.move(first.x + 4, first.y + first.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(last.x + Math.min(last.width - 2, 110), last.y + last.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await actions.first().waitFor({ state: 'visible', timeout: 10_000 })
   await actions.filter({ hasText: 'Send to Session' }).click()
   const card = page.locator('.pa-send')
   await card.waitFor({ state: 'visible' })
   assert.match((await card.locator('.pa-chip').textContent()) || '', /lines 2–5/)
   assert.match((await card.locator('.pa-chip').textContent()) || '', /src\/fixture\.js/)
   await card.locator('.pa-input').fill('Please inspect the selected implementation.')
+  const targetOptions = await card.locator('.pa-select option').evaluateAll((options) => options.map((option) => ({ value: option.value, text: option.textContent })))
+  assert.ok(targetOptions.some((option) => option.value === 'idle-fixture'), `idle session remains a dispatch target: ${JSON.stringify(targetOptions)}`)
+  assert.equal(targetOptions.some((option) => option.value === 'offline-fixture'), false, 'offline session is not a dispatch target')
+  await page.screenshot({ path: join(out, 'm4-selection-target-filter.png'), fullPage: true })
   await card.locator('.pa-select').selectOption('new')
   await page.screenshot({ path: join(out, 'm4-selection-send-card.png'), fullPage: true })
+  const createRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/sessions')
   await card.locator('.pa-btn').filter({ hasText: 'Send' }).click()
+  assert.equal((await createRequest).postDataJSON()?.launcher, 'fake', 'direct create respects the remembered launcher')
   const created = await waitFor(async () => {
     const rows = await fetch(`http://127.0.0.1:${apiPort}/api/sessions?all=1`).then((r) => r.json())
     return rows.find((row) => row.promptPreview?.includes('Please inspect the selected implementation.')) || null

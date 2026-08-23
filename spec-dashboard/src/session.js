@@ -1,6 +1,6 @@
-import { sessionHandle, sessionHeadline, sessionPresent, sessionTitle } from '@spexcode/spec-core/review'
+import { sessionHandle, sessionHeadline, sessionPresent } from '@spexcode/spec-core/review'
 
-export { sessionHandle, sessionHeadline, sessionPresent, sessionTitle }
+export { sessionHandle, sessionHeadline, sessionPresent }
 
 // status→colour values are theme tokens (styles.css :root) so the palette stays single-sourced; var() resolves in inline styles.
 export const STATUS_COLOR = {
@@ -44,18 +44,12 @@ export const sessionDisplayState = (s) => {
   }
 }
 export const sessionZone = (s) => sessionDisplayState(s).zone
-export const ZONE_ORDER = ['need', 'run', 'offline', 'archive']
-
 export const isArchived = (s) => !!s?.archived
 export const sessionFooterState = (s) => {
   if (isArchived(s)) return 'archived'
   if (s?.status !== 'queued' && (s?.status === 'offline' || s?.liveness === 'offline')) return 'offline'
   return 'live'
 }
-export const splitArchived = (sessions = []) => ({
-  live: sessions.filter((s) => !isArchived(s)),
-  archived: sessions.filter(isArchived),
-})
 // the ONE liveness join: resolve an id against the board sessions and return the
 // session only while it is ALIVE (listed and not offline) — the same alive/offline judgment the originator
 // chip renders (Thread.jsx). A non-session id ('human', a github

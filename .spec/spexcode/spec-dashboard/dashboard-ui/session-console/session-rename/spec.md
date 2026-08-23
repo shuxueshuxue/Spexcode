@@ -71,9 +71,9 @@ derived label. Renaming an unknown session fails loudly — the endpoint answers
 success.
 
 Archive is reached from the sessions dock's bottom `View all` door and remains a document overlay; it is not
-part of this tools menu. Multi-select is retired with the withdrawn duplicate list; any future batch operation belongs
-to a future explicit selection mode in the dock session list, as [[session-multi-select]] records. Moving a session by drag
-is NOT retired and is not this node's: it lives with the list that shows the sessions ([[dock-modes]]),
+part of this tools menu. The current dock has no batch-selection mode; any future batch operation needs its own
+current contract and belongs to an explicit selection mode in that list. Moving a session by drag is not this
+node's: it lives with the list that shows the sessions ([[dock-modes]]),
 because where a session sits is the shape of that list rather than an action on one session.
 
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
@@ -133,9 +133,8 @@ ordinary focused document control, so opening the menu never steals focus from t
 
 The pop-over is the one home for selected-session document actions. Its **lock on graph** item invokes the console's
 existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.
-The same menu also hosts [[attach-menu]]'s live-only attach item. List-only multi-select is not offered after the
-list's retirement. Row drag/reparent is a dock-list gesture, not a selected-session menu action, and its owner is
-[[dock-modes]].
+The same menu also hosts [[attach-menu]]'s live-only attach item. It offers no list-selection or batch-lifecycle
+action. Row drag/reparent is a dock-list gesture, not a selected-session menu action, and its owner is [[dock-modes]].
 
 Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text rows, grouped commands, and a
 separate destructive close row. This node supplies the session actions; it never forks the menu chrome.

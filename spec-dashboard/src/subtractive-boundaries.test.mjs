@@ -13,6 +13,9 @@ const dashboardDir = dirname(srcDir)
 const retiredPaths = [
   join(srcDir, 'SessionSelectBar.jsx'),
   join(dashboardDir, 'test', 'session-multi-select.e2e.mjs'),
+  ...['spec.md', 'eval.md', 'evals.ndjson'].map((file) => join(
+    dashboardDir, '..', '.spec', 'spexcode', 'spec-dashboard', 'dashboard-ui', 'session-console', 'session-multi-select', file,
+  )),
 ]
 
 const governedSessionFiles = [
@@ -22,7 +25,7 @@ const governedSessionFiles = [
   'Dock.jsx',
 ]
 
-test('withdrawn session multi-select surface stays absent', () => {
+test('withdrawn session multi-select mechanism and its retired governance stay absent', () => {
   for (const path of retiredPaths) {
     assert.equal(existsSync(path), false, `retired multi-select artifact returned: ${path}`)
   }
@@ -31,6 +34,11 @@ test('withdrawn session multi-select surface stays absent', () => {
   for (const name of governedSessionFiles) {
     const source = readFileSync(join(srcDir, name), 'utf8')
     assert.doesNotMatch(source, forbidden, `${name} revived the withdrawn multi-select mechanism`)
+  }
+
+  for (const locale of ['en.js', 'zh.js']) {
+    const source = readFileSync(join(srcDir, 'i18n', locale), 'utf8')
+    assert.doesNotMatch(source, /\bsessionSelect\s*:/, `${locale} revived dead multi-select copy`)
   }
 })
 

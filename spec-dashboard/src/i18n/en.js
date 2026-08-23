@@ -533,15 +533,6 @@ export default {
     attachCopied: 'copied',
   },
 
-  // the multi-select bar's sourced lifecycle controls ([[session-multi-select]]).
-  sessionSelect: {
-    selected: ({ n }) => `${n} selected`,
-    drag: 'drag onto a session to make it the parent',
-    close: 'close',
-    closeTitle: ({ n }) => (n === 1 ? 'close 1 session?' : `close ${n} sessions?`),
-    closeConfirm: 'This closes every selected session and removes its worktree. Any uncommitted changes are lost.',
-  },
-
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells
   // the user the key to walk that session's changed nodes — or that the session has none to show.
   lockHint: {

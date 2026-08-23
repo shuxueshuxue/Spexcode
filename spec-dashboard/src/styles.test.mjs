@@ -115,9 +115,20 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.tab\.on\s*\{[^}]*background:\s*var\(--paper\);/s)
   // A SEAM IS A STEP, NOT A LINE: ground · the --edge hairline · one pixel of --panel · paper. The middle
   // rung is what makes the document read as raised, and it is why no panel here needs a drop shadow.
-  assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
+  assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
   // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
   assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
+})
+
+test('seams and group heads use one divider rule', () => {
+  assert.match(css, /--divider-rule:\s*1px solid var\(--edge\);/)
+  assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.ft-section \+ \.ft-section\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.dock-session-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.si-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.m-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.m-tabbar\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.doesNotMatch(css, /\.tabstrip\s*\{[^}]*border-bottom:/s)
 })
 
 test('the status bar owns a flex row and cannot cover the content viewport', () => {

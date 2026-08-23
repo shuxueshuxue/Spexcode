@@ -8,6 +8,7 @@ import { placeTab, tabKey, tabRoute } from './tabModel.js'
 
 const srcDir = dirname(fileURLToPath(import.meta.url))
 const dashboardDir = dirname(srcDir)
+const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
 
 // These paths are deliberate: a retired surface must fail loudly if a future change restores its entry point.
 const retiredPaths = [
@@ -45,6 +46,13 @@ test('withdrawn session multi-select mechanism and its retired governance stay a
 test('live rail does not regrow the retired graph destination', () => {
   assert.deepEqual(RAIL_PAGES, ['sessions', 'evals', 'issues', 'settings'])
   assert.equal(RAIL_PAGES.includes('graph'), false)
+})
+
+test('retired generic pane-resizer CSS stays absent', () => {
+  assert.doesNotMatch(css, /\.pane-resizer\b/, 'dead generic pane-resizer CSS returned')
+  assert.match(css, /\.content-divider\b/, 'live split resize seam disappeared with the dead generic rule')
+  assert.match(css, /\.ft-resize\b/, 'live file-tree resize seam disappeared with the dead generic rule')
+  assert.match(css, /\.ctx-resize\b/, 'live context-dock resize seam disappeared with the dead generic rule')
 })
 
 test('empty workspace remains a real route and view entry', () => {

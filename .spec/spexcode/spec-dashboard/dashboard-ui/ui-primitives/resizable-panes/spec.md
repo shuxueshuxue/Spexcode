@@ -37,4 +37,6 @@ can be moved says so wherever it is, and a resting window still gains no visible
 
 The current pane on the mechanism is the session board's list ([[session-console]]). A future pane joins by
 mounting the same hook + divider, not by writing its own drag handling; the graph remains a full-width canvas
-and therefore mounts no divider.
+and therefore mounts no divider. There is no generic `.pane-resizer` surface: each mounted consumer owns its
+named seam (`.content-divider`, `.ft-resize`, or `.ctx-resize`), so an unowned selector cannot quietly become
+a second resize mechanism.

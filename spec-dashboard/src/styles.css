@@ -762,14 +762,6 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .settings-body { width: min(720px, 94%); padding: 16px 0 50px; }
 .page-title { font-size: var(--type-heading); font-weight: var(--weight-semibold); color: var(--ink2); margin: 6px 2px 14px; }
 
-/* ---- pane resizers ([[resizable-panes]]) - an invisible col-resize strip straddling a pane border; a
-   center line shows on hover/drag so the affordance appears exactly when reached for. ---- */
-.pane-resizer { cursor: col-resize; z-index: 6; position: relative; }
-.pane-resizer::after {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; margin-left: -1.5px;
-  background: transparent; border-radius: 2px;
-}
-.pane-resizer:hover::after, body.is-resizing .pane-resizer::after { background: color-mix(in srgb, var(--blue) 55%, transparent); }
 /* the session board's divider sits in the flex row, straddling the list border via negative margins */
 /* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
 body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-select: none !important; }

@@ -213,7 +213,7 @@ export default function App({ surface = 'workspace' }) {
     return <div className="loading">{t('hud.loading')}</div>
   }
   const workspace = isMobile
-    ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
+    ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} route={route} />
     : <WorkspaceSurface route={lastWorkspaceRoute.current || { page: 'graph', param: null, query: null }} />
   // Every routed product face shares the workspace shell. In particular, Evals and Issues are resident
   // tabs, so a detail route must keep the Spec/Session/File working set and the same TabStrip visible.

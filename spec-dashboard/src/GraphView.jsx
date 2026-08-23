@@ -7,7 +7,7 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { useRoute, navigate } from './route.js'
+import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import {

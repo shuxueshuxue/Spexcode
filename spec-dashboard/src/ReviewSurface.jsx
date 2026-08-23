@@ -28,7 +28,7 @@ export default function ReviewSurface({ page, param, query }) {
     return (
       <div className="review-surface review-surface-mobile">
         <Suspense fallback={loading}>
-          <MobileApp specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} />
+          <MobileApp specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} route={{ page, param, query }} />
         </Suspense>
         <StatusBar />
       </div>

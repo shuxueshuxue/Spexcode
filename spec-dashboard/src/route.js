@@ -21,9 +21,9 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
 // The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
 // opening something (a node, a governed file); there is no "go to the spec page" the way there is a
-// sessions page, and a rail icon for one would name a place that does not exist. `graph` is absent for
-// the opposite reason: it is still addressable, but it is no longer a place the workspace sends anyone.
-export const RAIL_PAGES = ['sessions', 'evals', 'issues', 'settings']
+// sessions page, and a rail icon for one would name a place that does not exist. Graph remains a real
+// route and therefore gets a route light and an ordinary anchor.
+export const RAIL_PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons

@@ -4,7 +4,6 @@ import { inertChromePress } from './focus.js'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
 import { RAIL_PAGES, navigate, routeHash } from './route.js'
-import { focusLatestTab } from './tabs.js'
 import { IdentityIcon } from './IdentityIcon.jsx'
 import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -24,12 +23,12 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 // chip still names the current project and becomes the explicit /projects login door, without revealing
 // the catalog.
 
-const ENTRIES = RAIL_PAGES.filter((page) => !['sessions', 'settings'].includes(page))
+const ENTRIES = RAIL_PAGES
 
 // Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
 // so an entry names the binding by id and the hint is resolved at render — never typed into the label.
-// Evals lists two because two keys genuinely open it; the dock projection buttons list none, because no
-// action selects one projection by name and a hint that is only half true is worse than silence.
+// Evals lists two because two keys genuinely open it. The dock panel switch has no page key: it is a
+// state control, not a destination.
 const PAGE_KEYS = {
   graph: ['shell.pageGraph'],
   sessions: ['shell.pageSessions'],
@@ -38,48 +37,23 @@ const PAGE_KEYS = {
   settings: ['shell.pageSettings'],
 }
 
-// The finding controls render only inside a workspace: the cold review fast-path mounts this rail with no
-// WorkspaceProvider above it, and projection buttons with no dock state would be a lie, not disabled chrome.
-function WorkspaceControls() {
+// The dock's one rail control owns only open/closed state. Projection choice belongs to the route link
+// that led there; it never gets the route's active styling and never navigates by itself.
+function DockToggle() {
   const t = useT()
-  const { dock, dockMode } = useWorkspace()
-  const { setDock, setDockMode } = useWorkspaceApi()
-  if (!setDock || !setDockMode) return null
-  // Selecting a projection is a TEMPORARY override of the projection the focused tab implies
-  // ([[dock-modes]]): it holds until the reader moves to another document, and then the dock goes back to
-  // following. Clicking the active projection collapses the dock, which is the second door on the same
-  // toggle as the dock's own collapse control.
-  const selectMode = (mode) => {
-    if (!dock) {
-      setDock(true)
-      setDockMode(mode)
-    } else if (dockMode === mode) {
-      setDock(false)
-    } else {
-      setDockMode(mode)
-    }
-    // ARMED, not opening: asking for a projection never mints a tab. The explorer waits for the reader to
-    // pick a node; sessions returns to the session already held, and otherwise waits the same way — a
-    // launch page nobody asked for is exactly the kind of document this workspace stopped putting on screen.
-    if (mode === 'sessions') focusLatestTab((tab) => tab.page === 'sessions' && tab.param)
-  }
+  const { dock } = useWorkspace()
+  const { setDock } = useWorkspaceApi()
+  if (!setDock) return null
+  const label = t(dock ? 'dockModes.collapse' : 'dockModes.expand')
   return (
-    <>
-      <button type="button" className={dock && dockMode === 'explorer' ? 'rail-btn on' : 'rail-btn'}
-        data-tip={t('dockModes.explorer')} aria-label={t('dockModes.explorer')}
-        aria-pressed={dock && dockMode === 'explorer'} onClick={() => selectMode('explorer')}>
-        <Icon name="files" size={18} />
-      </button>
-      <button type="button" className={dock && dockMode === 'sessions' ? 'rail-btn on' : 'rail-btn'}
-        data-tip={t('dockModes.sessions')} aria-label={t('dockModes.sessions')}
-        aria-pressed={dock && dockMode === 'sessions'} onClick={() => selectMode('sessions')}>
-        <Icon name="session-list" size={18} />
-      </button>
-    </>
+    <button type="button" className="rail-btn rail-panel-toggle" data-tip={label} aria-label={label}
+      aria-pressed={dock} onClick={() => setDock((value) => !value)}>
+      <Icon name={dock ? 'panel-left' : 'panel-right'} size={18} />
+    </button>
   )
 }
 
-function RailLink({ page, active, label, disabled = false }) {
+function RailLink({ page, active, label, disabled = false, onNavigate }) {
   if (disabled) return (
     <span className="rail-btn disabled" data-tip={label} aria-label={label} aria-disabled="true">
       <Icon name={page} size={18} />
@@ -100,6 +74,7 @@ function RailLink({ page, active, label, disabled = false }) {
       onClick={(event) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         event.preventDefault()
+        onNavigate?.()
         navigate(page)
       }}
     >
@@ -140,7 +115,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, denied, t }) {
     <div className="proj-chip-wrap" ref={ref}>
       <button
         type="button"
-        className={open ? 'rail-btn proj-chip on' : 'rail-btn proj-chip'}
+        className={open ? 'rail-btn proj-chip proj-chip-open' : 'rail-btn proj-chip'}
         data-tip={chipLabel}
         aria-label={chipLabel}
         aria-haspopup={projects ? 'menu' : undefined}
@@ -181,6 +156,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, denied, t }) {
 
 export default function SideBar({ page, identity, catalog, graphOnly = false }) {
   const t = useT()
+  const { setDock, setDockMode } = useWorkspaceApi()
   const catalogOk = catalog?.state === 'ok'
   const catalogDenied = catalog?.state === 'denied'
   return (
@@ -195,13 +171,16 @@ export default function SideBar({ page, identity, catalog, graphOnly = false }) 
         denied={catalogDenied}
         t={t}
       />}
-      <WorkspaceControls />
+      <DockToggle />
       {ENTRIES.map((p) => (
         <RailLink key={p} page={p} active={page === p} label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
-          disabled={graphOnly && p !== 'graph'} />
+          disabled={graphOnly && p !== 'graph'}
+          onNavigate={() => {
+            if (p === 'sessions') { setDock?.(true); setDockMode?.('sessions') }
+            else if (p === 'graph') { setDock?.(true); setDockMode?.('explorer') }
+          }} />
       ))}
       <div className="rail-spacer" />
-      <RailLink page="settings" active={page === 'settings'} label={withShortcut(t('nav.settings'), ...PAGE_KEYS.settings)} disabled={graphOnly} />
     </nav>
   )
 }

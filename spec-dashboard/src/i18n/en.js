@@ -56,6 +56,7 @@ export default {
   },
   dockModes: {
     collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar',
     aria: 'dock mode',
     explorer: 'Explorer',
     sessions: 'Sessions',
@@ -94,6 +95,7 @@ export default {
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
+    settings: 'Settings',
     issueNew: 'New issue',
     openInNewTab: 'Open in a new tab',
     surfaceTerminal: 'terminal',
@@ -117,6 +119,7 @@ export default {
   },
   nav: {
     railLabel: 'main navigation',
+    graph: 'Spec Node Graph',
     explorer: 'Explorer',
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.

@@ -14,6 +14,14 @@ let freshStoreOwned = false
 let freshStoreCommitted = false
 let freshStoreLeases = 0
 
+type SessionApplicationCommitWake = (recipients: readonly string[]) => void
+let commitWake: SessionApplicationCommitWake = () => {}
+
+/** The application owns commit ordering; Spex supplies the adopter transport wake. */
+export function setSessionApplicationCommitWake(wake: SessionApplicationCommitWake): void {
+  commitWake = wake
+}
+
 /** The backend's sole session application composition. Path selection is shared with self-launch. */
 export function configuredSessionApplication(): ProductionSessionApplication {
   if (cached !== undefined) return cached
@@ -21,6 +29,7 @@ export function configuredSessionApplication(): ProductionSessionApplication {
   cached = openProjectSessionApplication({
     databasePath,
     locality: path => { requireLocalDatabasePath(path) },
+    onCommitted: result => commitWake(result.recipients),
   })
   return cached
 }

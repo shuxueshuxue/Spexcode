@@ -529,6 +529,10 @@ exec sleep 30
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
+  writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${process.pid}\n`)
+  writeFileSync(join(sessionStoreDir(id), 'watchers.json'), `${JSON.stringify([{
+    watcher: `watcher-${id}`, createdAt: new Date().toISOString(), sources: ['parent'], snapshotPending: 'readiness-timeout-snapshot',
+  }])}\n`)
 
   const proofPath = sessionArtifactPath(id, 'launch.receipt')
   const proof = (overrides: Record<string, unknown> = {}) => ({
@@ -544,7 +548,7 @@ exec sleep 30
     ;(codexHarness as any).launchReady = async () => {
       if (rejectPostProofReadiness) {
         rejectPostProofReadiness = false
-        throw new Error('forced post-proof queued liveness rejection')
+        throw new Error('forced post-proof launch readiness timed out')
       }
       return { proof: { kind: 'fixture-post-proof-live' }, validate: async () => true }
     }
@@ -552,7 +556,7 @@ exec sleep 30
       writeFileSync(proofPath, contents)
       await assert.rejects(drainQueue(), pattern)
       const rejected = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-      assert.match(rejected.note, /queued launch readiness failed/)
+      assert.match(rejected.note, /launch readiness warning/)
       assert.equal(rejected.harness_session_id, '')
       assert.equal(readFileSync(sessionArtifactPath(id, 'launch'), 'utf8'), launchPayload)
       assert.equal(readFileSync(proofPath, 'utf8'), contents)
@@ -574,12 +578,16 @@ exec sleep 30
     assert.deepEqual(handedOver, [])
     assert.equal(stageHarnessLaunchProof(id, 'thread-queued', launchPayload), true)
     assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch receipt/)
-    await waitUntil(() => /forced post-proof queued liveness rejection/.test(
+    await waitUntil(() => /forced post-proof launch readiness timed out/.test(
       JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).note || ''), 'post-proof queued liveness note')
     await sleep(0)
 
     const rejectedLiveness = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(rejectedLiveness.harness_session_id, 'thread-queued')
+    assert.equal(rejectedLiveness.status, 'active', 'an online worker remains active after readiness timeout')
+    assert.equal(rejectedLiveness.stopped, false, 'an online worker is not marked stopped by readiness timeout')
+    assert.match(rejectedLiveness.note, /^launch readiness warning:/)
+    assert.match(readFileSync(join(sessionStoreDir(id), 'watchers.json'), 'utf8'), /readiness-timeout-snapshot/, 'watcher snapshot debt survives the warning')
     assert.equal(existsSync(sessionArtifactPath(id, 'launch')), false)
     assert.equal(existsSync(proofPath), false)
     assert.equal(readFileSync(invocationCount, 'utf8'), '1')
@@ -1526,7 +1534,7 @@ test('launchPreflight refuses a launch that cannot succeed, naming which fact se
   const base: SessRec = {
     session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
     title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, note: null,
-    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false, closedAt: null,
+    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null,
     launcher: null, launchCmd: '/bin/true', launchOwner: null,
   }
   try {
@@ -1576,7 +1584,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, stopped: false, archived: false, closedAt: null,
+      harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null,
       launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
@@ -1674,7 +1682,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   const base: SessRec = {
     session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
     name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
-    createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, closedAt: null, launcher: 'codex', launchCmd: 'codex',
+    createdAt: 1, harness: 'codex', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null, launcher: 'codex', launchCmd: 'codex',
     launchOwner: publicAuthority,
   }
   assert.equal(rawLifecycleStatus(base), OWNED_QUEUE_RAW_STATUS)

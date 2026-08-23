@@ -10,14 +10,13 @@ const spec = (id) => ({ page: 'spec', param: id, query: null })
 const session = (id) => ({ page: 'sessions', param: id, query: null })
 const keys = (tabs) => tabs.map((t) => `${t.pinned ? '*' : '~'}${tabKey(t)}`)
 
-test('plain navigation reuses ONE slot, whatever kind of document it opens', () => {
+test('plain navigation reuses one slot per document kind', () => {
   let tabs = []
   for (const id of ['a', 'b', 'c', 'd', 'e']) tabs = placeTab(tabs, spec(id))
   assert.deepEqual(keys(tabs), ['~#/spec/e'])
-  // sessions are not a special kind: the old type fence made every session click resident, which is how
-  // three dock clicks became three tabs.
+  // A different kind gets its own slot, so browsing sessions cannot evict the current spec.
   for (const id of ['s1', 's2', 's3']) tabs = placeTab(tabs, session(id))
-  assert.deepEqual(keys(tabs), ['~#/sessions/s3'])
+  assert.deepEqual(keys(tabs), ['~#/spec/e', '~#/sessions/s3'])
 })
 
 test('ctrl/⌘ pins a second tab and the pinned one is never replaced', () => {
@@ -116,11 +115,16 @@ test('the slot survives a reorder as the slot, wherever it is dragged', () => {
   assert.deepEqual(keys(tabs), ['~#/spec/next', '*#/spec/pin1', '*#/spec/pin2'])
 })
 
-test('legacy storage migrates to exactly one slot', () => {
+test('legacy storage migrates to one slot per document kind', () => {
   // old entries: an unmarked one is resident, a `preview` one is the slot
   assert.deepEqual(normalizeTabs([{ page: 'spec', param: 'a' }, { page: 'spec', param: 'b', preview: true }]),
     [{ page: 'spec', param: 'a', query: null, pinned: true }, { page: 'spec', param: 'b', query: null, pinned: false }])
   // more than one unpinned can only come from a hand-edited store; the last one wins the slot
   const many = normalizeTabs([{ page: 'spec', param: 'a', pinned: false }, { page: 'spec', param: 'b', pinned: false }])
   assert.deepEqual(many.map((t) => t.pinned), [true, false])
+  const kinds = normalizeTabs([
+    { page: 'spec', param: 'a', pinned: false },
+    { page: 'sessions', param: 's1', pinned: false },
+  ])
+  assert.deepEqual(kinds.map((t) => t.pinned), [false, false])
 })

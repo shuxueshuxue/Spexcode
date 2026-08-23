@@ -106,9 +106,18 @@ test('camera falls back to the reading anchor when the visible bbox cannot fit',
   assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (X_GAP / 2) * viewport.zoom)
 })
 
-test('camera keeps the reading anchor when fitting would require zooming out', () => {
+test('camera lowers zoom only when the anchored neighbourhood cannot fit', () => {
   const nodes = Array.from({ length: 5 }, (_, index) => ({ x: index * X_GAP, y: 0 }))
   const viewport = viewportForFocus({ focus: nodes[4], parent: nodes[3], visible: nodes, width: 900, height: 600, zoom: 0.85 })
-  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.zoom, (900 - CAMERA_GUTTER) / (4 * X_GAP + 176))
   assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (nodes[3].x + nodes[4].x) / 2 * viewport.zoom)
+})
+
+test('camera clamps an oversized vertical frontier to a reachable top edge', () => {
+  const focus = { x: 0, y: 0 }
+  const children = Array.from({ length: 17 }, (_, index) => ({ x: X_GAP, y: (index - 8) * Y_GAP }))
+  const viewport = viewportForFocus({ focus, child: children[8], visible: [focus, ...children], width: 900, height: 300, zoom: 0.85 })
+  const minY = -8 * Y_GAP - 25
+  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.y, -minY * viewport.zoom)
 })

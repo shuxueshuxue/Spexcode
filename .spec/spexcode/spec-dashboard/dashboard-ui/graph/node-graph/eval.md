@@ -9,14 +9,16 @@ scenarios:
       tight two-row tile — Row 1: status dot · title, with the pending-op glyphs (when overlays exist)
       or else the bare last-edited age at the right edge; Row 2: version, badges, and any live editors'
       avatars. Press → to drill into a child and ← to drill back out;
-      the tree re-plots and the camera follows focus, framing the focused tile at the graph pane's
-      geometric centre. Measure the focused tile centre against the graph rectangle after the pan settles. Record the navigation as
+      the tree re-plots and the camera follows the reading-pair anchor (43%, or the parent-focus midpoint
+      for a leaf), with fit-left treatment when the visible bbox already fits. Measure the anchor against the
+      graph rectangle after the pan settles. Record the navigation as
       video and screenshot the settled framing; file both with the pass verdict.
     expected: >-
       The drill-down tidy-tree renders: a short root column, one focused layer with sibling subtrees
       collapsed to `▸N` tiles, and each node a two-row tile showing its identity and
-      recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera keeps the focused
-      tile centred on both axes of the graph pane. The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
+      recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera keeps the reading
+      pair at 43% (or the leaf midpoint), with vertical reachability and fit-left treatment where applicable.
+      The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
       and a pass verdict.
   - name: close-active-tab-returns-to-graph
     tags: [frontend-e2e, desktop]

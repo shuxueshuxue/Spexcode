@@ -85,7 +85,8 @@ scenarios:
     expected: >-
       A mouse click re-focuses and expands the clicked node, and its viewport target matches keyboard focus:
       focus→nearest-child midpoint at the `43%` canvas token (or parent↔focus for a leaf), with the focus row
-      on the vertical axis. When the visible bbox fits, both states use fit-to-pane with one left gutter.
+      on the vertical axis and a vertical reachability clamp. When the visible bbox fits at the current user
+      zoom, both states use fit-to-pane with one left gutter; that fit zoom does not leak into later anchored moves.
     code:
       - spec-dashboard/src/Shell.jsx
       - spec-dashboard/src/GraphView.jsx

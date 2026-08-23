@@ -637,6 +637,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
           <TooltipLayer />
           <div className="app-main"><ViewHost page="graph" param={param} query={query} /></div>
         </div>
+        <StatusBar />
       </div>
     )
   }

@@ -29,6 +29,7 @@ test('public graph mode has one static input and closes every live dashboard doo
   // A door that is not built is shut more firmly than a door that closes itself.
   assert.match(dashboard, /if \(graphOnly\) \{/)
   assert.match(dashboard, /<ViewHost page="graph"/)
+  assert.match(dashboard, /<StatusBar \/>/)
   assert.match(dashboard, /onNodeContextMenu=\{graphOnly \? undefined/)
   assert.match(nodeView, /panesFor\(node, graphOnly\)/)
   assert.match(publicMode, /PUBLIC_GRAPH_METADATA_SOURCE/)

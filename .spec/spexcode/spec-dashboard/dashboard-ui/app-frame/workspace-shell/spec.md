@@ -200,8 +200,10 @@ white screen, which is the failure this exists to prevent. The other half of the
 stale dist: a lazy chunk that 404s after a redeploy retries twice, then reloads the page once (guarded, so
 it can only happen once per tab) before surfacing here ([[view-registry]]).
 
-**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view. A door
-that is not built is shut more firmly than a door that closes itself, which is why that face no longer
+**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view, but it
+still mounts the frame's bottom ambient status bar. The public About disclosure is registered there, so the
+static graph's release facts have a real visible owner instead of a provider entry that can never paint. A
+door that is not built is shut more firmly than a door that closes itself, which is why that face no longer
 redirects away from live addresses — it never renders one.
 
 **Two views at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second view

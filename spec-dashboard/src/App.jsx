@@ -12,12 +12,15 @@ import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { BoardProvider, WorkspaceProvider } from './workspace.jsx'
 import { KeyboardServiceProvider } from './KeyboardService.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
+import ReviewSurface from './ReviewSurface.jsx'
+import SettingsSurface from './SettingsSurface.jsx'
+import { useRoute } from './route.js'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
 // Which chunk loads is the same viewport-width pick as ever — the split only moves bytes, never behaviour.
 // The projects hub ([[projects-hub]]) is a third lazy face: the catalog page standalone, no board behind it.
-const Shell = lazy(() => import('./Shell.jsx'))
+const WorkspaceSurface = lazy(() => import('./WorkspaceSurface.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
@@ -35,8 +38,11 @@ window.addEventListener('vite:preloadError', (e) => {
   location.reload()
 })
 
-export default function App() {
+export default function App({ surface = 'workspace' }) {
   const t = useT()
+  const route = useRoute()
+  const lastWorkspaceRoute = useRef(null)
+  if (surface === 'workspace') lastWorkspaceRoute.current = route
   const backendHealth = useBackendHealth()
   const isMobile = useIsMobile()
   const [board, setBoard] = useState(null)
@@ -208,13 +214,24 @@ export default function App() {
     )
     return <div className="loading">{t('hud.loading')}</div>
   }
+  const workspace = isMobile
+    ? (surface === 'review' ? null : <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />)
+    : <WorkspaceSurface route={lastWorkspaceRoute.current || { page: 'graph', param: null, query: null }} />
+  const routed = surface === 'review'
+    ? <>
+        {/* Keep the workspace tree mounted while review owns the visible surface. Its document pool retains
+            graph camera, active tabs, and warm session transports for an immediate return. */}
+        <div style={{ display: 'none' }} aria-hidden="true"><WorkspaceSurface route={lastWorkspaceRoute.current || { page: 'graph', param: null, query: null }} inactive /></div>
+        <ReviewSurface page={route.page} param={route.param} query={route.query} />
+      </>
+    : surface === 'settings'
+      ? <SettingsSurface />
+      : workspace
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {PUBLIC_GRAPH_ONLY
-      ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, boardLive: false, graphOnly: true }}><KeyboardServiceProvider><WorkspaceProvider><Shell /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>
-        : isMobile
-        ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
-        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, boardLive, graphOnly: false }}><KeyboardServiceProvider><WorkspaceProvider><Shell /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>}
+      ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, boardLive: false, graphOnly: true }}><KeyboardServiceProvider><WorkspaceProvider><WorkspaceSurface route={route} /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>
+        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, boardLive, graphOnly: false }}><KeyboardServiceProvider><WorkspaceProvider>{routed}</WorkspaceProvider></KeyboardServiceProvider></BoardProvider>}
     </Suspense>
   )
 }

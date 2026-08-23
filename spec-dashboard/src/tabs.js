@@ -26,7 +26,13 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string'), isDocument) : []
+    if (!Array.isArray(raw)) return []
+    const valid = raw.filter((t) => t && typeof t.page === 'string')
+    const normalized = normalizeTabs(valid, isDocument)
+    // Persist the migration at the same boundary that reads it: old review entries disappear once and do
+    // not keep resurfacing in another tab or after the next reload.
+    if (JSON.stringify(normalized) !== JSON.stringify(valid)) localStorage.setItem(KEY, JSON.stringify(normalized))
+    return normalized
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -142,7 +148,7 @@ export function useTabs({ onCloseStart } = {}) {
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
   // Closing stays in the tab's identity domain: session tabs prefer the right session, then the left, and
-  // only an empty session set lands on New Session. Spec/file tabs retain their graph-bottom-sheet return.
+  // only an empty session set lands on the explicit empty workspace. Spec/file tabs retain their graph return.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()

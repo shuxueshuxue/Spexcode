@@ -645,16 +645,32 @@ async function claudeDeliveryTransport(rec: HarnessDeliveryRecord): Promise<Deli
 
 const unprovenDeliveryTransport = async (): Promise<DeliveryTransportState> => ({ kind: 'unproven' })
 
-function replyViaSocket(sock: string, text: string, mid?: string, auth?: string): Promise<DispatchResult> {
+type ReplyOutcome = DispatchResult & { kicked?: boolean }
+
+// Claude's rendezvous daemon owns one connection at a time. A liveness probe can therefore destroy a
+// delivery connection after its write has reached the kernel but before the daemon parses the line. Send the
+// reply and an in-order repaint probe in one chunk: repaint-done proves the reply line was parsed first; a
+// close/reset before that proves the whole chunk was discarded and is safe to retry. An open connection that
+// outlives the wall is treated as busy, not lost, preserving the no-false-failure behavior for active turns.
+function replyViaSocket(sock: string, text: string, mid?: string, auth?: string, wallMs = 10_000): Promise<ReplyOutcome> {
   return new Promise((resolve) => {
     let settled = false
     let c: ReturnType<typeof createConnection>
-    const done = (r: DispatchResult) => {
+    let wall: NodeJS.Timeout
+    const done = (r: ReplyOutcome) => {
       if (settled) return
       settled = true
-      if (!r.ok) try { c?.destroy() } catch { /* */ }
+      clearTimeout(wall)
+      if (r.ok) {
+        // A confirmed repaint has already crossed the parser. On a busy timeout, finish the stream cleanly so
+        // the daemon can consume the buffered pair before its FIN; never destroy an unparsed write.
+        try { c?.end() } catch { /* */ }
+      } else {
+        try { c?.destroy() } catch { /* */ }
+      }
       resolve(r)
     }
+    wall = setTimeout(() => done({ ok: true }), wallMs)
     try {
       c = createConnection({ path: sock })
     } catch (e) {
@@ -663,31 +679,42 @@ function replyViaSocket(sock: string, text: string, mid?: string, auth?: string)
     }
     c.on('error', (e: NodeJS.ErrnoException) => {
       const code = e?.code || String(e)
-      done({ ok: false, error: `rendezvous socket error: ${code}` })
+      done({ ok: false, kicked: code === 'ECONNRESET' || code === 'EPIPE', error: `rendezvous socket error: ${code} — prompt NOT delivered` })
     })
-    c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the poke was written' }))
+    c.on('close', () => done({ ok: false, kicked: true, error: 'rendezvous connection closed before the daemon parsed the prompt (kicked by a concurrent connect)' }))
     c.on('connect', () => c.write(
-      `${auth ? JSON.stringify({ role: 'controller', auth }) + '\n' : ''}${JSON.stringify({ type: 'reply', text, ...(mid ? { mid } : {}) })}\n`,
-      (error) => {
-        if (error) return done({ ok: false, error: `rendezvous socket write failed: ${error.message}` })
-        c.end()
-        done({ ok: true })
-      },
+      `${auth ? JSON.stringify({ role: 'controller', auth }) + '\n' : ''}${JSON.stringify({ type: 'reply', text, ...(mid ? { mid } : {}) })}\n${JSON.stringify({ type: 'repaint' })}\n`,
     ))
+    let buf = ''
+    c.on('data', (chunk) => {
+      buf += chunk.toString('utf8')
+      let nl: number
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl)
+        buf = buf.slice(nl + 1)
+        let type = ''
+        try { type = (JSON.parse(line) as { type?: string })?.type ?? '' } catch { continue }
+        if (type === 'repaint-done') return done({ ok: true })
+        if (type === 'reply-rejected' || type === 'auth-rejected') return done({ ok: false, error: `rendezvous daemon rejected the prompt (${type}) — prompt NOT delivered` })
+        if (type === 'shutting-down') return done({ ok: false, error: 'agent is shutting down — prompt NOT delivered' })
+      }
+    })
   })
 }
 const POKE_ATTEMPTS = 2
-async function pokeRendezvous(sock: string, text: string, mid?: string, auth?: string): Promise<DispatchResult> {
-  let last: DispatchResult = { ok: false, error: 'not attempted' }
+async function pokeRendezvous(sock: string, text: string, mid?: string, auth?: string, wallMs?: number): Promise<DispatchResult> {
+  let last: ReplyOutcome = { ok: false, error: 'not attempted' }
   for (let attempt = 0; attempt < POKE_ATTEMPTS; attempt++) {
-    last = await replyViaSocket(sock, text, mid, auth)
+    last = await replyViaSocket(sock, text, mid, auth, wallMs)
     if (last.ok) return last
+    if (!last.kicked) break
+    await new Promise((resolve) => setTimeout(resolve, 60 + Math.random() * 140))
   }
   return { ok: false, error: `rendezvous poke failed after ${POKE_ATTEMPTS} attempts: ${last.error ?? 'unknown error'}` }
 }
 
-export async function deliverViaRendezvous(id: string, text: string, mid?: string): Promise<DispatchResult> {
-  return pokeRendezvous(rvSock(id), text, mid)
+export async function deliverViaRendezvous(id: string, text: string, mid?: string, wallMs?: number): Promise<DispatchResult> {
+  return pokeRendezvous(rvSock(id), text, mid, undefined, wallMs)
 }
 
 export async function deliverViaClaudeRendezvous(id: string, text: string, mid?: string, runtimeDir?: string): Promise<DispatchResult> {

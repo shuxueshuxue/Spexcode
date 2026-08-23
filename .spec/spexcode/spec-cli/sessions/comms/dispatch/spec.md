@@ -53,14 +53,13 @@ Locating the truth in the file is what dissolves the hardest failure this mechan
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,
 discarding any received-but-unparsed line with it — and our own liveness probes ARE such connects, so a
 probe landing in the write→parse window silently killed a "successfully sent" prompt (the field incident:
-dashboard messages recorded `sent` with no trace in the claude transcript). That single socket write was
-the message's only copy, which is why proving it had been parsed needed an in-order barrier, and why a
-lost proof needed a resend that might duplicate. With the record written before any transport runs, a lost
-kick is not a lost message and a retried one is not a duplicate — the queue entry is removed only by an insert
-that landed — so the barrier, its retry classification, and the whole `commit-unknown` outcome — a request
-that crossed the transport but whose confirmation was lost — are gone, along with the separate idempotency
-ledger that existed to make replay safe. **Acceptance now has exactly two outcomes: the bytes are in the log,
-or they are not.**
+dashboard messages recorded `sent` with no trace in the claude transcript). The adapter now writes the reply
+and an in-order repaint probe as one chunk: `repaint-done` proves parse, while a kick before it proves the
+whole chunk was lost and permits a bounded same-`mid` retry. A still-open timeout is busy, not proof of loss,
+and remains optimistic to avoid false failures on active turns. The durable append remains the acceptance
+boundary and the queue entry is removed only after the adapter reports its handover outcome, so a proven kick
+cannot silently clear the only pending attempt. **Acceptance still has exactly two outcomes: the bytes are in
+the log, or they are not.**
 
 That separation is also what a later refactor lost by collapsing the two questions back together. Removing the
 adapter's receipt left nothing able to say a message had been handed over, so every message was replayed to the

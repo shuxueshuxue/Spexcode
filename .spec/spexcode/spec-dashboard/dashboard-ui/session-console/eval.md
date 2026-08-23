@@ -148,6 +148,7 @@ scenarios:
       anchor plus `/eval`. Offline and queued sessions cannot open Command Box, and no `/type` or type tool exists.
   - name: modifier-arrows-switch-sessions
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-shortcuts.e2e.mjs
     description: >-
       With focus in New Session, Command Box, the live xterm, and inert console chrome, press plain and
       Cmd/Alt/Ctrl-modified Up/Down and observe both session selection and the focused surface.
@@ -308,7 +309,7 @@ scenarios:
   - name: row-context-and-external-reveal
     tags: [frontend-e2e, desktop]
     description: >-
-      Right-click a nested session row, exercise lock/rename/select/attach/close availability, then open
+      Right-click a nested session row, exercise lock/rename/attach/close availability, then open
       a session hidden below collapsed ancestors from the graph node menu and an originator chip.
     expected: >-
       The shared context menu exposes state-appropriate actions without stealing terminal focus. Close remains
@@ -318,11 +319,14 @@ scenarios:
   - name: session-window-remains-bounded
     tags: [frontend-e2e, desktop]
     description: >-
-      Populate enough sessions to exceed 80% viewport height and inspect the map-side SessionWindow against the
-      graph stats strip while scrolling and selecting rows.
+      Open a graph with live sessions and inspect the compact SessionWindow badge in the graph's upper-right
+      corner. Open the badge, filter the shared picker, choose a session to lock the graph, and double-click a
+      row to navigate into that session.
     expected: >-
-      The window stays bounded above the stats strip and scrolls internally. It retains avatars, shared compact
-      headlines, status glyphs, triage grouping, and graph-lock gestures without becoming the console sidebar.
+      The graph shows a bounded count-and-avatar badge at rest, with no second full session list. Expansion opens
+      the shared SessionPicker with the same avatar, stable handle, and lifecycle glyph language as the dock,
+      graph menu, mentions, and prose dispatch. Choosing a row locks the graph; double-clicking navigates to
+      `#/sessions/<id>`; the full forest remains owned by the dock.
   - name: offline-history-disclosure
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
@@ -371,11 +375,9 @@ scenarios:
       Restore returns the same corrupt row rather than a runtime or readable replacement record.
   - name: lifecycle-confirm-owns-enter
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/session-multi-select.e2e.mjs
     code:
       - spec-dashboard/src/SessionInterface.jsx#SessionInterface
       - spec-dashboard/src/Modal.jsx#Modal
-      - spec-dashboard/src/SessionSelectBar.jsx#SessionSelectBar
       - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
     description: >-
       Keep the console on its New Session tab, enter multi-select mode, then open the bulk archive and close

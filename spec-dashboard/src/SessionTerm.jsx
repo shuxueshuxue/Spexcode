@@ -15,6 +15,13 @@ const SYNC_END = '\x1b[?2026l'
 // Button mode 1000 + SGR 1006 pass through: they are what makes xterm emit wheel reports at all.
 const MOTION_TRACKING_MODES = new Set([9, 1002, 1003, 1005, 1015])
 
+// xterm can emit SGR, X10, or URXVT mouse reports depending on the TUI's negotiated mode.
+// All are pointer traffic, never a user's resume key. Keeping this at the input boundary
+// prevents a click from opening the resume confirmation dialog for an asking session.
+export function isTerminalPointerReport(data) {
+  return data.startsWith('\x1b[<') || data.startsWith('\x1b[M') || /^\x1b\[[0-9;]+[Mm]$/.test(data)
+}
+
 function onlyMotionTrackingModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
 }
@@ -278,7 +285,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       if (!writableRef.current || !focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
       // A suspended TUI may put a token-consuming resume prompt under the cursor. The first real key is
       // the user's intent boundary; keep it out of tmux until the separate confirmation is answered.
-      const pointerReport = data.startsWith('\x1b[<')
+      const pointerReport = isTerminalPointerReport(data)
       if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
         setPendingInput(data)
         setInputConfirmOpen(true)

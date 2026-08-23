@@ -39,7 +39,8 @@ status or liveness. The family sits in the root's zone: **glyph ≡ the session'
 family's root status**.
 
 **The row.** `SessionRow` renders one session: its status colour and glyph come from `session.js`
-(`STATUS_COLOR` / `STATUS_GLYPH`), its identity from `sessionHandle` and `sessionHeadline`, and its
+(`STATUS_COLOR` / `STATUS_GLYPH`), its visible name from the shared `sessionHeadline` (the same door used by
+@-mentions), and its stable handle only in secondary identity reveals, and its
 activity from `opSummary`, which folds an op list into per-op counts using the shared `GLYPH` map.
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.
@@ -49,13 +50,11 @@ The governing human ruling is: “我们的显示模式一直都只看 parent se
 It replaces cross-zone root splitting and the `○`-out-of-zone partition rule. The stored parent relationship is
 the only nesting input, and the root alone chooses the family's zone.
 
-**The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
-face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current
-forest item; it does not serialize a second appearance shape. The one permitted visual difference is a 75% scale
-of the ghost, so a selected row's expanded headline does not cover the receiving object; the pointer anchor is
-adjusted to that scale. The other difference is semantic: the live row is a button with its handlers while the
-ghost is inert. The ghost therefore keeps selected headline wrapping and its right-side marker in the same
-formatting context as the source row before the final visual scale is applied.
+**The console projection.** The desktop dock's tree wrapper, item, shared row face, and fold pod are one
+presentational tree. Multi-select checkboxes and the former inert drag ghost are retired; the live row is the
+only rendered session face. Dragging keeps the source row marked and highlights a valid target in the same
+tree, while the backend owns the reparent operation. No second appearance shape or hidden selection state is
+minted for the gesture.
 
 **The rails.** `RowLead` draws the tree connectors to the left of a row. A guide array describes the
 ancestry: each entry says whether that column continues below, so the last entry becomes a tee or an
@@ -69,11 +68,11 @@ expanding a subtree never moves the keyboard surface sink. `useFold` holds that 
 
 **The zone.** `SessionZone` groups a `sessionForest` into one rendered block.
 
-**The module owns no surface of its own.** It once also exported a floating session window that hovered
-over the spec-node graph; the finding dock now projects that same forest with these same rows, one pane to
-the left, and two live copies of one list on one screen is not a glance but a duplicate. The window is
-retired and its callers are the dock, the console and the phone. The lock it used to be the only door to is
-untouched: a session is claimed from a dock row and the graph reads the claim from [[workspace-shell]].
+**The module owns no full list surface of its own.** The graph carries only a compact, collapsed
+cross-reference badge; opening it uses [[session-picker]] rows and preserves the existing lock/open gestures.
+The finding dock remains the desktop session list, while the graph badge is deliberately bounded and does not
+render zones, nesting, drag state, or a second list model. The lock is shared workspace state: a picker row
+claims a session and the graph reads the claim from [[workspace-shell]].
 
 **The lock.** `LockGlyph` is the shared "claimed by another session" indicator: the monochrome `lock`
 icon at `currentColor`, never a colour emoji, used both on the row and in the lock-hint banner so the

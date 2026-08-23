@@ -9,14 +9,16 @@ scenarios:
       tight two-row tile — Row 1: status dot · title, with the pending-op glyphs (when overlays exist)
       or else the bare last-edited age at the right edge; Row 2: version, badges, and any live editors'
       avatars. Press → to drill into a child and ← to drill back out;
-      the tree re-plots and the camera follows focus, framing the focused tile at the graph pane's
-      geometric centre. Measure the focused tile centre against the graph rectangle after the pan settles. Record the navigation as
+      the tree re-plots and the camera follows the reading-pair anchor (43%, or the parent-focus midpoint
+      for a leaf), with fit-left treatment when the visible bbox already fits. Measure the anchor against the
+      graph rectangle after the pan settles. Record the navigation as
       video and screenshot the settled framing; file both with the pass verdict.
     expected: >-
       The drill-down tidy-tree renders: a short root column, one focused layer with sibling subtrees
       collapsed to `▸N` tiles, and each node a two-row tile showing its identity and
-      recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera keeps the focused
-      tile centred on both axes of the graph pane. The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
+      recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera keeps the reading
+      pair at 43% (or the leaf midpoint), with vertical reachability and fit-left treatment where applicable.
+      The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
       and a pass verdict.
   - name: close-active-tab-returns-to-graph
     tags: [frontend-e2e, desktop]
@@ -82,10 +84,17 @@ scenarios:
 ---
 # eval.md — node-graph
 
+Current camera measurements supersede older centre-framing readings: assert the focus→child midpoint at the
+`43%` horizontal token (or parent↔focus for a leaf), with the focus row vertically. When the visible bbox fits,
+assert fit-left with one grid-column gutter instead.
+
 This view is product surface — it is measured by **looking** (YATU), not by a unit test: the agent opens
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,
-the marks and any live editors' avatars on Row 2 — with focus at the graph pane's geometric centre. The
-recording and screenshot ride together with the verdict. Structural readings sample browser frames around
-the interaction and distinguish graph-space geometry from the moving viewport: a still cannot prove that the
-tree stayed connected while the camera supplied direction.
+the marks and any live editors' avatars on Row 2 — with the focus→child reading pair at the graph pane's
+43% horizontal token (or the parent↔focus midpoint for a leaf) and the focus row vertically. If the visible
+bbox fits at the current user zoom, the frame uses fit-left treatment with one gutter; fit may lower zoom to
+fit but never raise a deliberate user zoom, and later anchored moves preserve that zoom. The recording and
+screenshot ride together with the verdict. Structural readings sample browser frames around the interaction
+and distinguish graph-space geometry from the moving viewport: a still cannot prove that the tree stayed
+connected while the camera supplied direction.

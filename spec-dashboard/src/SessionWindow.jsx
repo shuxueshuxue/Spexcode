@@ -2,9 +2,11 @@ import { useCallback, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
-import { sessionDisplayState, sessionHandle } from './session.js'
+import { sessionDisplayState, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
+import SessionPicker from './SessionPicker.jsx'
+import { useEscLayer } from './escStack.js'
 
 // [[session-row]]: ONE session row, drawn the same on every surface that lists sessions — the dock's
 // projection, the console, the phone. The module owns the row's face, its tree lead and fold control, and
@@ -58,18 +60,16 @@ export function FoldPod({ expanded, rollup, kin, onToggle, inert = false }) {
 }
 
 // The console's live row and inert drag projection share this complete tree. Only their outer semantics differ.
-export function SessionConsoleTreeRow({ item, activeId, selecting, picked, dragging = false, dropTarget = false, onToggleFold, rowProps = {}, inert = false, style }) {
+export function SessionConsoleTreeRow({ item, activeId, dragging = false, dropTarget = false, onToggleFold, rowProps = {}, inert = false, style }) {
   const { s } = item
-  const selected = !selecting && activeId === s.id
-  const isPicked = selecting && picked.has(s.id)
+  const selected = activeId === s.id
   const lead = (item.expandable || item.depth)
     ? <RowLead guides={item.guides} expandable={item.expandable} kin={item.kin} />
     : null
   const fold = item.expandable ? { expanded: item.expanded, rollup: item.rollup, kin: item.kin } : null
   const treeClass = `sess-tree-row si-tree-row${dragging ? ' dragging' : ''}${dropTarget ? ' drop-target' : ''}${inert ? ' si-session-drag-ghost' : ''}`
-  const itemClass = `si-item${selected ? ' on' : ''}${isPicked ? ' picked' : ''}`
+  const itemClass = `si-item${selected ? ' on' : ''}`
   const face = <>
-    {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
     <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
   </>
   const treeStyle = { '--ov': labelColor(s.id), '--sess-fold-indent': `${item.depth * 14}px`, ...style }
@@ -106,8 +106,9 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const display = sessionDisplayState(s)
-  // Identity is stable; lifecycle notes and readiness warnings belong to the secondary status slot.
-  const headline = sessionHandle(s)
+  // The row and the @ menu share one visible name. The stable handle remains available in the avatar
+  // tooltip/search matching, but must not become a second row label.
+  const headline = sessionHeadline(s)
   const statusWord = t(`status.${display.status}`)
   return (
     <>
@@ -150,8 +151,36 @@ export function SessionZone({ item, baseClass, onToggle }) {
   )
 }
 
-// RETIRED: the floating session glance that used to hover over the graph's top-left. The dock projects the
-// same forest, with the same rows, one pane to the left — two live copies of one list on one screen is not a
-// glance, it is a duplicate. The graph's lock and highlight are untouched: a session is still claimed from a
-// dock row or from the keyboard, and [[lock-hint]] still names the claim. What went is the second projection,
-// not the semantics; everything this file exports is what the dock, the console and the phone all draw with.
+// A compact graph cross-reference: the badge is closed at rest, while the expanded picker is the same
+// session choice language used by the graph menu and prose dispatch. Locking stays the graph gesture;
+// opening a session remains an explicit double-click/navigation, so the badge never becomes a second dock.
+export function SessionWindow({ sessions = [], activeId = null, onPick, onOpenSession, onNew }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  useEscLayer(open, () => setOpen(false))
+  const active = sessions.find((session) => session.source === activeId)
+  const faces = (active ? [active] : sessions).slice(0, 3)
+  const choose = (id) => {
+    if (id === 'new') { setOpen(false); onNew?.(); return }
+    const session = sessions.find((item) => item.id === id)
+    if (session) onPick?.(session)
+  }
+  const openSession = (id) => { setOpen(false); if (id !== 'new') onOpenSession?.(id) }
+  return (
+    <div className="sess-badge">
+      <button type="button" className="sess-badge-trigger" aria-expanded={open} aria-controls="graph-session-picker"
+        aria-label={t('sessionWindow.badgeLabel')} data-tip={t('sessionWindow.badgeLabel')} onClick={() => setOpen((value) => !value)}>
+        <span className="sess-badge-face" aria-hidden="true">{faces.map((session) => <Avatar key={session.id} seed={session.id} status={session.status} size={15} />)}</span>
+        <span className="sess-badge-count">{sessions.length}</span>
+      </button>
+      {open && (
+        <div id="graph-session-picker" className="sess-badge-panel" role="dialog" aria-label={t('sessionWindow.badgeLabel')}>
+          <SessionPicker sessions={sessions} value={active?.id || ''} onChange={choose} onOpen={openSession} includeNew filter={sessions.length > 5} compact ariaLabel={t('sessionWindow.badgeLabel')} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The graph badge above is intentionally the only bounded cross-reference; the full forest remains owned by
+// the dock, console and phone rows below.

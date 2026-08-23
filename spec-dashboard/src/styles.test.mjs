@@ -8,6 +8,7 @@ import { createRequire } from 'node:module'
 const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 const css = readFileSync(join(here, 'styles.css'), 'utf8')
+const shell = readFileSync(join(here, 'Shell.jsx'), 'utf8')
 const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
 const terminalFont = readFileSync(join(here, 'terminalFont.js'), 'utf8')
 const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
@@ -114,9 +115,20 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.tab\.on\s*\{[^}]*background:\s*var\(--paper\);/s)
   // A SEAM IS A STEP, NOT A LINE: ground · the --edge hairline · one pixel of --panel · paper. The middle
   // rung is what makes the document read as raised, and it is why no panel here needs a drop shadow.
-  assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
+  assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
   // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
   assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
+})
+
+test('seams and group heads use one divider rule', () => {
+  assert.match(css, /--divider-rule:\s*1px solid var\(--edge\);/)
+  assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.ft-section \+ \.ft-section\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.dock-session-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.si-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.m-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.m-tabbar\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.doesNotMatch(css, /\.tabstrip\s*\{[^}]*border-bottom:/s)
 })
 
 test('the status bar owns a flex row and cannot cover the content viewport', () => {
@@ -132,6 +144,32 @@ test('the status bar owns a flex row and cannot cover the content viewport', () 
   assert.doesNotMatch(statusRule, /position:\s*(?:absolute|fixed)/)
   assert.match(css, /\.side-rail\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
   assert.match(css, /\.dock\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
+})
+
+test('launcher session tallies keep the status line geometry and semantic slash grammar', () => {
+  assert.match(shell, /useLaunchers\(\)/)
+  assert.match(shell, /session\.launcher === launcher\.name/)
+  assert.match(shell, /launcherSessionGroups/)
+  assert.match(shell, /name: 'other'/)
+  assert.match(shell, /if \(!sessions\.length\) return null/)
+  assert.match(shell, /data-launcher=\{launcher\.name\}/)
+  assert.match(shell, /sb-launcher-running.*counts\.running/s)
+  assert.match(shell, /sb-launcher-needs.*counts\.needsYou/s)
+  assert.match(shell, /sb-launcher-other.*counts\.other/s)
+  assert.match(shell, /sb-launcher-summary/)
+  assert.match(shell, /sb-launcher-badge/)
+  assert.match(shell, /kind: needsYou > 0 \? 'warning'/)
+  const rightRule = css.match(/\.sb-right\s*\{([^}]*)\}/)?.[1] || ''
+  assert.doesNotMatch(rightRule, /max-width|overflow:\s*hidden/)
+  assert.match(css, /\.sb-launcher-group\s*\{[^}]*flex:\s*0\s*0\s*auto;[^}]*min-width:\s*max-content;/s)
+  assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*padding-inline:\s*0;/)
+  assert.match(css, /\.sb-launcher-glyph\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s)
+  assert.match(css, /\.sb-launcher-glyph \.si-agent-glyph\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s)
+  assert.match(css, /\.sb-launcher-running\s*\{\s*color:\s*var\(--green\)/)
+  assert.match(css, /\.sb-launcher-needs\s*\{\s*color:\s*var\(--yellow\)/)
+  assert.match(css, /\.sb-launcher-other\s*\{\s*color:\s*var\(--muted\)/)
+  assert.match(css, /@media \(max-width:\s*900px\)[\s\S]*?\.sb-launcher-list\s*\{\s*display:\s*none;/)
+  assert.match(css, /@media \(max-width:\s*900px\)[\s\S]*?\.sb-launcher-summary\s*\{\s*display:\s*inline-flex;/)
 })
 
 test('the dock toggle reads as frame chrome, not a sixth route tab', () => {

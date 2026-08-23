@@ -55,7 +55,6 @@ scenarios:
       The confirm action has focus on open, so plain Enter is that same confirmation rather than an inert key
       or an activation behind the dialog.
   - name: archive-confirm-with-enter
-    test: spec-dashboard/test/session-multi-select.e2e.mjs
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, right-click an ordinary session row and pick

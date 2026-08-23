@@ -35,7 +35,7 @@ physical key reaches a handler that performs the action; `-` means no action (th
 controls may still receive it). `graph*` includes the graph-only public face where noted. This is the
 pre-refactor state measured from the source and spot-checked in Chromium against the running dashboard.
 
-| registry action | graph | spec / file | sessions | evals | issues | settings | empty |
+| registry action | graph (address only) | spec / file | sessions | evals | issues | settings | empty |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `nav.up`, `nav.down`, `nav.parent`, `nav.child` | fire; Shift passes through popup lens | - | - | - | - | - | - |
 | `graph.zoomIn`, `graph.zoomOut`, `graph.zoomReset` | fire | - | - | - | - | - | - |

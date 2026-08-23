@@ -92,10 +92,10 @@ test('resource closing returns to its held session before the new-session page',
   assert.deepEqual(closeDestination(resource, [session], 0), session)
 })
 
-// Boards are destinations, not documents. The same predicate is used for new routes and persisted storage,
-// so a board tab written by the old resident implementation is removed on the next read.
-test('board entries are cleared during normalization while details remain documents', () => {
-  const isDocument = (page, param) => !((page === 'evals' || page === 'issues') && param == null) && page !== 'settings'
+// Review surfaces are destinations, not workspace documents. The same predicate is used for new routes and
+// persisted storage, so old eval/issue tabs are removed on the next read.
+test('review entries are cleared during normalization', () => {
+  const isDocument = (page) => !['evals', 'issues', 'settings'].includes(page)
   const raw = [
     { page: 'evals', param: null, query: { state: 'open' }, pinned: true },
     { page: 'issues', param: null, query: { q: 'needle' }, pinned: false },
@@ -104,8 +104,7 @@ test('board entries are cleared during normalization while details remain docume
     { page: 'issues', param: '42', pinned: false },
   ]
   const tabs = normalizeTabs(raw, isDocument)
-  assert.deepEqual(tabs.map(tabKey), ['#/evals/node/scenario', '#/issues/42'])
-  assert.deepEqual(tabs.map((t) => t.pinned), [false, false])
+  assert.deepEqual(tabs, [])
 })
 
 // REORDERING IS A SPLICE, and the properties that matter are the ones a drag can violate: the set of open
@@ -163,6 +162,6 @@ test('closing a session stays in the session identity domain', () => {
     { page: 'file', param: 'README.md', query: null, pinned: true },
   ]
   assert.deepEqual(closeDestination(session('closed'), remaining, 0), session('right'))
-  assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'sessions', param: 'new', query: null })
+  assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'empty', param: null, query: null })
   assert.deepEqual(closeDestination({ page: 'spec', param: 'node' }, [], 0), { page: 'graph', param: null, query: null })
 })

@@ -76,18 +76,18 @@ scenarios:
   - name: click-does-not-pan-keyboard-does
     tags: [frontend-e2e, desktop]
     description: >-
-      Open the dashboard and read the clicked tile's screen centre and the React Flow viewport transform
+      Open the dashboard and read the focused tile's screen centre plus the React Flow viewport transform
       (the `.react-flow__viewport` translate). CLICK a node other than the focused one: it becomes focused and
-      drills open; after the frontier settles, the clicked tile's screen centre remains unchanged while the
-      viewport absorbs the layout delta. Then press an arrow key (or h/j/k/l) to move focus by one step: now
-      the viewport transform DOES change, flat-panning to recentre the new focus. Screenshot the board after
-      the click and file with
+      drills open; after the frontier settles, the viewport uses the same reading-pair anchor as keyboard
+      navigation. Then press an arrow key (or h/j/k/l) to move focus by one step and capture the new anchor.
+      Screenshot both settled states and file with
       `spex yatsu eval keyboard-nav --image <png> --pass`.
     expected: >-
-      A mouse click re-focuses and expands the clicked node. If its frontier changes the viewport transform may
-      change, but the clicked tile's screen centre is stable because the camera absorbs the graph-layout delta.
-      A keyboard focus move (arrow/vim) DOES pan the camera to recentre the new focus. The camera follows the
-      keyboard, while mouse focus keeps the world stable under the pointer.
+      A mouse click re-focuses and expands the clicked node, and its viewport target matches keyboard focus:
+      focus→nearest-child midpoint at the `43%` canvas token (or parent↔focus for a leaf), with the focus row
+      on the vertical axis and a vertical reachability clamp. When the visible bbox fits at the current user
+      zoom, both states use fit-to-pane with one left gutter at or below the user's zoom; fit may lower but never
+      raise a deliberate user zoom, and it does not leak into later anchored moves.
     code:
       - spec-dashboard/src/Shell.jsx
       - spec-dashboard/src/GraphView.jsx

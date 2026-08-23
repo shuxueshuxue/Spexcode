@@ -19,22 +19,25 @@ related:
 ---
 # tab-strip
 
-**The strip holds OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, `#/sessions/<id>`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A session's
+**The strip holds workspace OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
+`#/file/<path>`, or `#/sessions/<id>`. Evals and Issues are review-surface addresses, not workspace
+documents: `#/evals/<node>/<scenario>` and `#/issues/<id>` never enter the strip, even when opened from a
+spec panel or status chip. A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
 own identity, appended beside the unchanged session tab. Bare
 `#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
 are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
-ordinary objects and may be held like every other document. The rail is therefore navigation only; it does
+also review destinations and never become workspace objects. The rail is therefore navigation only; it does
 not create, pin, or focus a board tab ([[side-nav]]).
 
-What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy
-address, [[node-graph]]), bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
+What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
+addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
 This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
-nothing.
+nothing. `#/empty` is the explicit state reached after the last workspace object is closed; it is not a
+fresh-boot alias and it never enters the strip.
 
 **The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
 has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
@@ -114,7 +117,8 @@ route, `#/graph`, or the sessions launch page never creates a tab.
 **The semantics are a pure function** (`tabModel.js`: `placeTab`, `normalizeTabs`), separate from the hook
 that owns storage and the route subscription. The law above is therefore checkable without a browser, which
 is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
-pinned tab must survive them all.
+pinned tab must survive them all. Reading persisted tabs writes the normalized result back once, so retired
+review entries are removed from storage rather than merely hidden in memory.
 
 **Identity is the canonical object hash.** Two routes that print the same object address *are* the same tab,
 and session surface queries are deliberately ignored: `#/sessions/a?surface=terminal` and
@@ -193,10 +197,9 @@ tabs additionally classify their fallback so a session can never hand focus to t
 
 **Closing hands focus back by document kind.** A spec or file tab closes to the graph backdrop, preserving the
 existing reading path. A session tab never falls to graph: the nearest remaining session tab on its right wins,
-then the nearest session on its left; when none remains, close lands on `#/sessions/new`, the explicit New Session
-page. This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
-graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule; the explicit `empty` state remains
-the fallback only for a working set with no classified heir. `empty` is an ADDRESS so the state can be landed on,
+then the nearest session on its left; when none remains, close lands on the explicit empty workspace `#/empty`.
+This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
+graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule. `empty` is an ADDRESS so the state can be landed on,
 reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
 contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
 is not the same event as putting your last document down.
@@ -233,6 +236,10 @@ unresolved selector does.
 
 **Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
 the second pane. The strip only names the gesture; the pane is workspace state, not a tab.
+
+**The strip/content boundary is one shared `--divider-rule` seam.** The strip supplies the panel ground and the
+content host owns the single top rule, so the active tab's paper plane meets the document without a second
+tab-local border or a layout jump. Group headings elsewhere in the frame consume the same rule mechanism.
 
 The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
 not another navigation surface: changing tabs changes the registered buttons, and a document with no registered

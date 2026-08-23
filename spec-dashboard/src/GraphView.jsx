@@ -4,14 +4,17 @@ import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
-import { LockGlyph } from './SessionWindow.jsx'
+import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
-import { layout, singleLayerFrontier, X_GAP, Y_GAP } from './data.js'
+import {
+  layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
+  GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_TILE_SIZE,
+} from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
@@ -37,12 +40,12 @@ const nodeTypes = { spec: SpecNode }
 // Layout coordinates name the node centre. Initial dimensions let React Flow place a new fixed-format tile
 // and its edges on the first render instead of painting one unmeasured frame before its ResizeObserver fires.
 const NODE_ORIGIN = [0.5, 0.5]
-const NODE_SIZE = { width: 176, height: 50 }
+const NODE_SIZE = GRAPH_TILE_SIZE
 const NODE_HANDLES = [
   { type: 'target', position: Position.Left, x: -1.5, y: 22.5, width: 5, height: 5 },
   { type: 'source', position: Position.Right, x: 172.5, y: 22.5, width: 5, height: 5 },
 ]
-const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
+const clamp = (z) => Math.max(GRAPH_MIN_ZOOM, Math.min(GRAPH_MAX_ZOOM, z))
 
 // nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
@@ -110,6 +113,9 @@ function GraphView({ param, query }) {
     tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: () => setLegend((v) => !v) })
   const graphRef = useRef(null)
   const animRef = useRef(0)
+  const viewportRef = useRef(null)
+  const fitZoomRef = useRef(null)
+  const userZoomRef = useRef(0.85)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
   const [kbdMode, setKbdMode] = useState(false)
   const kbdRef = useRef(false); kbdRef.current = kbdMode
@@ -290,14 +296,23 @@ function GraphView({ param, query }) {
   }, [focusId, specs2, byId])
 
   // Flat-pan the viewport without moving graph-space node/edge geometry.
+  const writeViewport = useCallback((viewport) => {
+    viewportRef.current = { ...viewport }
+    setViewport(viewport)
+  }, [setViewport])
   const animateView = useCallback((target, dur) => {
+    if (!dur) {
+      cancelAnimationFrame(animRef.current)
+      writeViewport(target)
+      return
+    }
     const start = getViewport()
     const t0 = performance.now()
     cancelAnimationFrame(animRef.current)
     const step = (now) => {
       const p = dur ? Math.min(1, (now - t0) / dur) : 1
       const eased = 1 - Math.pow(1 - p, 3)
-      setViewport({
+      writeViewport({
         x: start.x + (target.x - start.x) * eased,
         y: start.y + (target.y - start.y) * eased,
         zoom: start.zoom + (target.zoom - start.zoom) * eased,
@@ -305,58 +320,95 @@ function GraphView({ param, query }) {
       if (p < 1) animRef.current = requestAnimationFrame(step)
     }
     animRef.current = requestAnimationFrame(step)
-  }, [getViewport, setViewport])
+  }, [getViewport, writeViewport])
 
-  // Frame a node at the graph pane's geometric centre; when zoom is omitted the current zoom is reused.
+  // Frame a focus for reading: anchor the focus→child pair at 43% (or focus→parent for a leaf), while a
+  // complete visible neighbourhood gets fit-to-pane treatment with one left gutter.
   const centerOn = useCallback((node, zoom, dur = 300) => {
     const el = graphRef.current
     if (!el) return
-    const z = zoom ?? getViewport().zoom
-    animateView({ x: el.clientWidth / 2 - node.x * z, y: el.clientHeight / 2 - node.y * z, zoom: z }, dur)
-  }, [animateView, getViewport])
+    const currentZoom = getViewport().zoom
+    const fromFit = zoom == null && fitZoomRef.current != null && Math.abs(currentZoom - fitZoomRef.current) < 0.01
+    const z = zoom ?? (fromFit ? userZoomRef.current : currentZoom)
+    const childrenForNode = specs2.filter((candidate) => candidate.parent === node.id)
+    const child = childrenForNode.length
+      ? childrenForNode.reduce((best, candidate) => Math.abs(candidate.y - node.y) < Math.abs(best.y - node.y) ? candidate : best)
+      : null
+    const parentNode = node.parent ? byId[node.parent] : null
+    const target = viewportForFocus({
+      focus: node, parent: parentNode, child, visible: specs2,
+      width: el.clientWidth, height: el.clientHeight, zoom: z, fit: zoom == null,
+    })
+    if (zoom == null) {
+      if (Math.abs(target.zoom - z) > 0.001) {
+        fitZoomRef.current = target.zoom
+        userZoomRef.current = z
+      } else {
+        fitZoomRef.current = null
+        userZoomRef.current = target.zoom
+      }
+    } else {
+      fitZoomRef.current = null
+      userZoomRef.current = target.zoom
+    }
+    animateView(target, dur)
+  }, [animateView, byId, getViewport, specs2])
 
-  // Frame the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
-  // camera. Gated on the route: a deep-load on another page keeps the graph hidden (zero-sized), so framing
-  // waits for the first visit instead of measuring a display:none container.
+  const focusRef = useRef(focus); focusRef.current = focus
+  const centerRef = useRef(centerOn); centerRef.current = centerOn
+
+  // Frame once after the graph page's first visible paint. ResizeObserver below owns later chrome/pane changes.
   const framedRef = useRef(false)
   useEffect(() => {
     if (framedRef.current || page !== 'graph') return
-    const id = requestAnimationFrame(() => {
+    let id = 0
+    const frameWhenSized = () => {
+      const el = graphRef.current
+      if (!el?.clientWidth || !el.clientHeight) {
+        id = requestAnimationFrame(frameWhenSized)
+        return
+      }
       framedRef.current = true
       centerOn(focus, undefined, 0)
-    })
+    }
+    id = requestAnimationFrame(frameWhenSized)
     return () => cancelAnimationFrame(id)
   }, [centerOn, focus, page])
 
-  // The camera follows the KEYBOARD, not the mouse ([[keyboard-nav]]): a keyboard or programmatic focus move
-  // pans to frame the new focus. A mouse click re-plots the frontier, but the clicked tile stays at its screen
-  // position; the camera absorbs the layout delta so the world does not jump under the pointer.
+  useEffect(() => {
+    if (page !== 'graph' || !graphRef.current || typeof ResizeObserver === 'undefined') return
+    const el = graphRef.current
+    let last = { width: 0, height: 0 }
+    let frame = 0
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.round(entry.contentRect.width)
+      const height = Math.round(entry.contentRect.height)
+      if (!width || !height || (width === last.width && height === last.height)) return
+      last = { width, height }
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        if (framedRef.current) centerRef.current(focusRef.current, undefined, 0)
+      })
+    })
+    observer.observe(el)
+    return () => { cancelAnimationFrame(frame); observer.disconnect() }
+  }, [page])
+
+  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the same reading
+  // pair anchor. The graph coordinates remain layout-owned; only this viewport changes.
   // Fires on focusId alone (not the poll); reads latest focus/centerOn via refs; skips the first paint.
-  const focusRef = useRef(focus); focusRef.current = focus
-  const centerRef = useRef(centerOn); centerRef.current = centerOn
   const followedRef = useRef(false)
-  const clickAnchorRef = useRef(null)
   // lastCenteredRef makes the follow route-safe: a focus set while ANOTHER page is up (an issues-page node chip, a
   // search pick) can't measure the hidden zero-sized graph, so the pan runs when the graph page shows again —
   // and an unchanged focus doesn't re-pan on every page return.
   const lastCenteredRef = useRef(null)
-  // Apply a click's camera correction before the browser paints the new frontier. The graph node positions may
-  // change when its parent layer opens; keeping the clicked centre's screen coordinates makes that structural
-  // change read as a camera move rather than a tile flying away from the pointer.
-  useLayoutEffect(() => {
-    const anchor = clickAnchorRef.current
-    if (page !== 'graph' || !anchor || anchor.id !== focusId || !focus) return
-    clickAnchorRef.current = null
-    setViewport({ x: anchor.x - focus.x * anchor.zoom, y: anchor.y - focus.y * anchor.zoom, zoom: anchor.zoom })
-    followedRef.current = true
-    lastCenteredRef.current = focusId
-  }, [focus, focusId, page, setViewport])
   useEffect(() => {
     if (page !== 'graph') return
     if (!followedRef.current) { followedRef.current = true; lastCenteredRef.current = focusId; return }
     if (lastCenteredRef.current === focusId) return
     lastCenteredRef.current = focusId
-    centerRef.current(focusRef.current)
+    const id = window.setTimeout(() => centerRef.current(focusRef.current), 50)
+    return () => clearTimeout(id)
   }, [focusId, page])
 
   // focus-return boundary ([[focus-return]]): a transient overlay (search / help / node popup) takes focus
@@ -519,39 +571,32 @@ function GraphView({ param, query }) {
     return () => window.removeEventListener('mousemove', onMove, true)
   }, [])
 
-  // Clicking a node focuses it and drills it open. Anchor the clicked tile's current screen centre so a frontier
-  // re-plot moves the camera by exactly the layout delta; it does NOT open a session — Enter crosses into one.
-  const anchorClick = useCallback((n) => {
-    const viewport = getViewport()
-    clickAnchorRef.current = { id: n.id, x: viewport.x + n.position.x * viewport.zoom, y: viewport.y + n.position.y * viewport.zoom, zoom: viewport.zoom }
-  }, [getViewport])
+  // Clicking a node focuses it and drills it open. The same reading-pair camera target used by keyboard
+  // navigation is applied after the frontier re-plots; it does NOT open a session.
   const onNodeClick = useCallback((_e, n) => {
-    if (n.id !== focusRef.current.id) anchorClick(n)
     focusNode(n.id)
-  }, [anchorClick, focusNode])
+  }, [focusNode])
 
   // double-click is the mouse parallel to `i`: OPEN the node as a document. Single click still only
   // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
   // leaves it.
   const onNodeDoubleClick = useCallback((e, n) => {
-    if (n.id !== focusRef.current.id) anchorClick(n)
     focusNode(n.id)
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.
     if (graphOnly) setOverlay(true)
     else pinTab('spec', n.id)
-  }, [anchorClick, focusNode, graphOnly])
+  }, [focusNode, graphOnly])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
-  // focusing the node first with the same screen anchor as click so the menu and the board agree on the target.
+  // focusing the node first with the same camera target as every other focus move.
   // Off-node right-clicks aren't handled here: the open menu closes ITSELF on any window contextmenu
   // (NodeContextMenu's capture listener), and the browser default stays available elsewhere.
   const onNodeContextMenu = useCallback((e, n) => {
     e.preventDefault()
-    if (n.id !== focusRef.current.id) anchorClick(n)
     focusNode(n.id)
     setNodeMenu({ x: e.clientX, y: e.clientY, id: n.id })
-  }, [anchorClick, focusNode])
+  }, [focusNode])
 
   // clicking a session in the top-right window toggles the lock on its worktree's overlays (matched by
   // source = worktree path). Locking ON jumps to the first node it's changing, in TREE order so the
@@ -572,18 +617,35 @@ function GraphView({ param, query }) {
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
+          onMoveEnd={(event, viewport) => {
+            const previous = viewportRef.current
+            const changed = !previous
+              || Math.abs(previous.x - viewport.x) > 0.001
+              || Math.abs(previous.y - viewport.y) > 0.001
+              || Math.abs(previous.zoom - viewport.zoom) > 0.001
+            viewportRef.current = { ...viewport }
+            if (event && changed) {
+              fitZoomRef.current = null
+              userZoomRef.current = viewport.zoom
+            }
+          }}
+          onInit={() => centerOn(focus, undefined, 0)}
           nodeOrigin={NODE_ORIGIN}
           zoomOnDoubleClick={false}
           nodesDraggable={false}
           nodesFocusable={false}
           disableKeyboardA11y
           defaultViewport={{ x: 0, y: 0, zoom: 0.85 }}
-          minZoom={0.4}
-          maxZoom={1.6}
+          minZoom={GRAPH_MIN_ZOOM}
+          maxZoom={GRAPH_MAX_ZOOM}
           proOptions={{ hideAttribution: true }}
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
+
+        {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId}
+          onPick={(session) => lockGraphTo(session.source)} onOpenSession={openSession}
+          onNew={() => startNew(`[[${focus.id}]] `)} />}
 
         {graphOnly && <PublicGraphAbout />}
 

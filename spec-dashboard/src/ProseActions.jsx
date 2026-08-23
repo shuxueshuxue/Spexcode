@@ -10,6 +10,7 @@ import { postSpecBody, sendSessionText } from './data.js'
 import { createSession, useLaunchers } from './launch.js'
 import { useSpecContent } from './specContent.js'
 import { sessionFooterState, sessionHeadline } from './session.js'
+import SessionPicker from './SessionPicker.jsx'
 import { navigate } from './route.js'
 
 // [[prose-dispatch]]: what a reader can DO with a passage of spec prose they just selected.
@@ -282,13 +283,10 @@ function SendPopover({ t, panel, selection, sessions, target, setTarget, draft, 
           </button>
         ))}
       </div>
-      <label className="pa-target">
+      <div className="pa-target">
         <span className="pa-target-label">{t('proseActions.target')}</span>
-        <select className="pa-select" value={target} onChange={(event) => setTarget(event.target.value)}>
-          {sessions.map((s) => <option key={s.id} value={s.id}>{sessionHeadline(s) || s.id.slice(0, 8)}</option>)}
-          <option value="new">{t('proseActions.newSession')}</option>
-        </select>
-      </label>
+        <SessionPicker sessions={sessions} value={target} onChange={setTarget} includeNew filter compact className="pa-session-picker" ariaLabel={t('proseActions.target')} />
+      </div>
       {error && <div className="pa-error" role="alert">{error}</div>}
       <div className="pa-foot">
         <button type="button" className="pa-btn" onClick={onClose}>{t('common.cancel')}</button>

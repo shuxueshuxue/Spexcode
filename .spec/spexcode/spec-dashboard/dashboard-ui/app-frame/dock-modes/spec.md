@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/styles.css
 ---
 # dock-modes
@@ -39,8 +40,8 @@ as its own tab.
 
 **The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
-projection doors only. Opening and closing SLIDE, for one shared
-`--dur-panel` token rather than a duration invented per panel, and the element outlives the state that
+projection doors only. Opening and closing slide with one shared `--dur-panel` token rather than a duration
+invented per panel, and the element outlives the state that
 hides it by exactly that long so the reverse is visible too. The animated property is max-width: the dock's
 width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
 inside a keyframe is ignored by the spec, which is how the first version of this animated nothing at all.
@@ -65,7 +66,7 @@ sitting inside the head row, the current door needs no answer — the row it is 
 one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
 force, so the key and the visible door can never disagree.
 
-The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
+The dock's session projection is the **one full session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
 route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
 the status published by `/api/sessions` is ground truth. `asking`/`review`/`done`/`close-pending`/`error` form
@@ -79,6 +80,10 @@ door navigates to the sessions document's archive overlay. Both are finding-surf
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
 separate gesture with its own section below, and it changes no address.
+
+Every zone heading uses the shared `--divider-rule` hairline for its trailing separator. The zone hue remains
+on the label and count pod, where it carries status meaning; the boundary itself has one token and one weight,
+matching the explorer's section heads and the tab/content seam.
 When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
 keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
 well; the reveal is derived from `activeSessionId`, not a second selection state.
@@ -89,9 +94,9 @@ rule while keeping each child's own glyph.
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim
-while it holds. This is the ONLY place the claim is made from a list, and it is why the graph no longer
-floats a session window of its own ([[session-row]]): the claim belongs beside the sessions, and the lock
-itself is [[workspace-shell]] state so the two surfaces need not know about each other.
+while it holds. The graph's own cross-reference is only the bounded collapsed badge described by
+[[node-graph]] and [[session-picker]], not a second full list: the claim belongs beside the sessions, and the
+lock itself is [[workspace-shell]] state so the two surfaces need not know about each other.
 
 **Right-click on a session row opens that session's own menu** — rename, tmux attach, lock on graph, close —
 the same menu the selected session's document tools open from the actions slot. One menu, two ways in: the
@@ -152,8 +157,8 @@ the bottom — so one window cannot expose two competing navigation lists.
 The dock mode is not a second navigation model and the DOCK does not read the global address: the shell
 derives the projection from the focused document and passes it down, exactly as it passes the board data.
 Whether the dock renders is therefore two facts and not one — the reader's open/closed choice, and whether
-the focused tab has a sidebar at all ([[ui-state-model]] counts the band from exactly those two). Below the one header row the dock renders
-content only — the tree, or the session forest. There is no dock modebar.
+the focused tab has a sidebar at all ([[ui-state-model]] counts the band from exactly those two). Beneath that
+header, the dock renders content only — the tree, or the session forest. There is no dock modebar.
 
 **Its resting width is a margin, not a column.** The dock opens at 200px and will not be dragged below
 160px: wide enough that a session headline or a file name reads before it ellipses, narrow enough that the

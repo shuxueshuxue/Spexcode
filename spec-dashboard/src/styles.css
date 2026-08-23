@@ -87,6 +87,9 @@
   /* a chrome boundary is FELT, not seen: half the strength of a real divider, because the ground ladder
      under it is already doing the separating. */
   --edge: color-mix(in srgb, var(--line) 55%, transparent);
+  /* ONE quiet rule for seams and group heads. A caller may choose whether it is a border or a trailing
+     hairline, but it never chooses a second colour/weight for the same divider job. */
+  --divider-rule: 1px solid var(--edge);
   /* ONE elevation, for the things that genuinely float. Everything else sits flat on its ground. */
   --shadow: 0 4px 16px rgba(0, 0, 0, .18);
 }
@@ -335,6 +338,8 @@ body {
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
+.dock-head-act-new { color: var(--paper); background: var(--blue); box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 70%, var(--line)); }
+.dock-head-act-new:hover { color: var(--paper); background: var(--ink2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 28%, transparent); }
 /* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
    is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
    one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
@@ -381,7 +386,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    tracked label is decoration wearing the costume of hierarchy ([[typography]]), and hierarchy here is
    spent on space, then colour, then weight. It is NOT a band either: it scrolls with the list it heads,
    inside `.ft-body`'s scrollport, and carries its own aria-expanded ([[ui-state-model]]). */
-.ft-section + .ft-section { border-top: 1px solid var(--edge); margin-top: var(--space-2); }
+.ft-section + .ft-section { border-top: var(--divider-rule); margin-top: var(--space-2); }
 .ft-section-head {
   display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
   background: none; border: 0; cursor: pointer; text-align: left;
@@ -440,7 +445,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   color: var(--zh); font: var(--type-caption)/var(--leading-ui) var(--ui-font);
   font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal);
 }
-.dock-session-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.dock-session-zone::after { content: ''; flex: 1; border-top: var(--divider-rule); opacity: .75; }
 .dock-session-zone[aria-expanded] { cursor: pointer; }
 .dock-session-zone[aria-expanded]:hover { background: var(--panel2); }
 .dock-session-zone-need { --zh: var(--yellow); }
@@ -469,7 +474,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
    thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
    genuinely float (menus, the palette), never stacked to fake a surface. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; border-top: var(--divider-rule); box-shadow: inset 1px 0 0 var(--panel); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -517,7 +522,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    before line formation creates another row. */
 .tabstrip {
   flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
-  background: var(--panel); border-bottom: 1px solid var(--edge);
+  background: var(--panel);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
@@ -635,13 +640,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .sb-group { display: flex; align-items: center; min-width: 0; }
 /* the right group renders OUTWARD-IN: appended items land at the outer edge, so a higher priority sits
    nearer the centre without the contributor computing a position. */
-.sb-right { flex-direction: row-reverse; }
+.sb-right { flex-direction: row-reverse; min-width: 0; flex: 0 1 auto; }
 .sb-left { overflow: hidden; }
 .sb-item {
   display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; max-width: 100%;
   font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--line-status); color: inherit;
   background: none; border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.sb-item:has(.sb-launcher-groups) { padding-inline: 0; }
 button.sb-item { cursor: pointer; }
 button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transparent); }
 button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
@@ -677,6 +683,32 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-tally-button:disabled { opacity: .45; cursor: default; }
 .sb-tally-sep { width: 1px; height: 12px; margin: 0 1px; background: var(--line); }
 .sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.sb-launcher-groups { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-list { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-group {
+  display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; min-width: max-content; max-width: 100%; padding: 0; border: 0;
+  color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer;
+}
+.sb-launcher-group:hover { color: var(--ink2); }
+.sb-launcher-group:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.sb-launcher-glyph { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 12px; height: 12px; color: var(--ink2); }
+.sb-launcher-glyph .si-agent-glyph { width: 12px; height: 12px; }
+.sb-launcher-badge { position: absolute; right: -4px; bottom: -4px; display: inline-flex; align-items: center; justify-content: center; width: 7px; height: 7px; border: 1px solid var(--ground); border-radius: 50%; background: var(--blue); color: var(--ground); font-size: var(--type-hero); line-height: var(--leading-ui); }
+.sb-launcher-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-launcher-counts { display: inline-flex; align-items: center; flex: none; }
+.sb-launcher-running { color: var(--green); }
+.sb-launcher-needs { color: var(--yellow); }
+.sb-launcher-other { color: var(--muted); }
+.sb-launcher-slash { color: var(--muted); padding: 0 1px; }
+.sb-launcher-summary { display: none; align-items: center; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer; }
+.sb-launcher-summary:hover { color: var(--ink2); }
+.sb-launcher-summary:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.sb-launcher-summary-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 12px; height: 12px; padding: 0 2px; border: 1px solid var(--muted); border-radius: 2px; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-none); }
+/* Compact desktop widths hide the launcher list as one unit, so no KDA digit can be flex-shrunk or clipped. */
+@media (max-width: 900px) {
+  .sb-launcher-list { display: none; }
+  .sb-launcher-summary { display: inline-flex; }
+}
 
 /* ---- left navigation rail ---- */
 .side-rail {
@@ -709,7 +741,7 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
   position: absolute; top: -3px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px;
   display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
   color: var(--paper); background: var(--yellow); border: 1px solid var(--ground); border-radius: var(--radius-full);
-  font: var(--weight-semibold) var(--type-micro)/1 var(--ui-font); pointer-events: none;
+  font: var(--weight-semibold) var(--type-caption)/1 var(--ui-font); pointer-events: none;
 }
 
 /* ---- routed page containers — ONE pane boundary for every page ([[side-nav]]) ---- */
@@ -827,6 +859,24 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta);
 }
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
+
+/* The graph cross-reference is a compact badge, not a second session list. It keeps the graph's top-right
+   corner quiet at rest and expands in place only when a reader asks to choose or inspect a session. */
+.sess-badge { position: absolute; top: 10px; right: 10px; z-index: 6; display: grid; justify-items: end; }
+.sess-badge-trigger {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 3px 7px;
+  color: var(--ink2); background: color-mix(in srgb, var(--paper) 92%, var(--panel2)); border: 1px solid var(--line);
+  border-radius: var(--radius-full); box-shadow: var(--shadow);
+  font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
+}
+.sess-badge-trigger:hover, .sess-badge-trigger[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
+.sess-badge-count { font-variant-numeric: tabular-nums; }
+.sess-badge-face { display: inline-flex; }
+.sess-badge-panel {
+  width: min(250px, calc(100vw - 24px)); margin-top: 5px; padding: 5px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.sess-badge-panel .session-picker-list { max-height: min(46vh, 320px); }
 
 /* Focus emphasis may settle gently; graph-space positions never transition here because React Flow's
    solid edges already use final coordinates. Direction comes from the viewport pan, not detached tiles. */
@@ -1047,10 +1097,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-body li { margin: 2px 0; }
 .doc-body code { font-size: var(--type-control); background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: var(--radius); }
 .doc-body strong { color: var(--ink2); }
-.doc-h { font-size: var(--type-control); color: var(--ink2); font-weight: var(--weight-semibold); margin: 14px 0 6px; }
+.doc-h { color: var(--ink2); font-weight: var(--weight-semibold); margin: 14px 0 6px; line-height: var(--leading-tight); }
+.doc-h1 { font-size: var(--type-title); }
+.doc-h2 { font-size: var(--type-subtitle); }
+.doc-h3 { font-size: var(--type-body); }
+.doc-h4, .doc-h5, .doc-h6 { font-size: var(--type-control); }
 .doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: var(--radius); overflow-x: auto; font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
+.doc-external { text-decoration: underline; text-underline-offset: 2px; }
+.doc-quote { margin: 0 0 10px; padding: 4px 12px; color: var(--muted); border-left: 2px solid var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
+.doc-quote p { margin: 0; }
+.doc-image { display: block; max-width: 100%; height: auto; margin: 6px 0; border-radius: var(--radius); }
+.doc-math, .doc-math-block { overflow-x: auto; }
+.doc-math-block { margin: 8px 0; padding: 2px 0; }
+.doc-math-error { color: var(--red); white-space: pre-wrap; }
 /* GFM tables in a spec body — compact, bordered, header-tinted; scrolls on its own if too wide. */
 .doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: var(--type-control); display: block; overflow-x: auto; }
 .doc-table th, .doc-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
@@ -1266,10 +1327,33 @@ a.scenario-count:hover { background: var(--panel2); }
 /* close/delete are destructive — orange text + icon, isolated by a separator rather than a loud fill. */
 .sess-menu-item.danger, .sess-menu-item.danger .sess-menu-icon { color: var(--orange); }
 .sess-menu-item.danger:hover, .sess-menu-item.danger:focus { background: color-mix(in srgb, var(--orange) 14%, var(--panel)); color: var(--orange); }
-/* overlay-session items ([[node-menu]]): a thin divider parts them from the verbs, each row a status
-   glyph + the session name. The glyph keeps its status colour on hover (inline colour wins). */
+/* overlay-session items ([[node-menu]]): a thin divider parts them from the verbs. */
 .sess-menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
-.sess-menu-item.sess-menu-sess .sess-glyph { width: 11px; line-height: var(--leading-none); }
+.session-picker { display: grid; gap: 4px; min-width: 0; }
+.session-picker-filter {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 7px;
+  color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-caption); outline: none;
+}
+.session-picker-filter:focus { border-color: var(--blue); }
+.session-picker-list { display: grid; gap: 1px; max-height: 220px; overflow: auto; }
+.session-picker-row {
+  display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; min-height: 28px;
+  padding: 4px 7px; color: var(--ink); background: transparent; border: 0; border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui); text-align: left; cursor: pointer;
+}
+.session-picker-row:hover, .session-picker-row:focus, .session-picker-row.active { outline: none; background: var(--panel2); color: var(--ink2); }
+.session-picker-row.selected { box-shadow: inset 2px 0 0 var(--blue); }
+.session-picker-row.new { color: var(--blue); }
+.session-picker-row.compact { min-height: 25px; padding: 3px 5px; font-size: var(--type-meta); }
+.session-picker-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-picker-status { flex: none; width: 13px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); }
+.session-picker-new-icon { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; color: currentColor; }
+.session-picker-empty { padding: 6px 7px; color: var(--muted); font-size: var(--type-caption); }
+.sess-menu-picker { min-width: 0; }
+.sess-menu-picker .session-picker-list { max-height: 180px; }
+.sess-menu-picker .session-picker-row { min-height: 27px; }
+.mention-menu .session-picker-row { margin: 0; }
 /* the rename prompt rides the shared Modal chrome, just narrower than the wide help/legend popup. */
 .sess-rename-modal { width: min(360px, 92vw); }
 .sess-rename { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; }
@@ -1528,7 +1612,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); user-select: none;
   color: var(--zh);
 }
-.si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.si-zone::after { content: ''; flex: 1; border-top: var(--divider-rule); opacity: .75; }
 /* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
 .si-zone-fold {
   width: 100%; text-align: left; cursor: pointer; border: 0; background: transparent; font-family: inherit;
@@ -1552,31 +1636,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--muted); }
-/* multi-select bar ([[session-multi-select]]) — a live count plus its adjacent icon-only close action. */
-.si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.si-selcount { flex: 1; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--ink2); }
-.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
-.si-select-action {
-  flex: none; width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0;
-  background: transparent; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; color: var(--orange);
-}
-.si-select-action:hover { background: color-mix(in srgb, var(--orange) 14%, var(--panel)); border-color: var(--orange); }
-.si-select-action:disabled { opacity: .5; cursor: not-allowed; }
-/* row checkbox shown only while selecting — an empty square that fills blue-with-a-tick when picked. */
-.si-check {
-  flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: var(--radius); box-sizing: border-box;
-}
-.si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
-.si-check.on::after {
-  content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px;
-  border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
-}
-/* The real fold pod is an absolute sibling of the row button. Move it with the checkbox so it remains aligned
-   with the hidden fold slot in the whole-row drag surface. */
-.si-item:has(> .si-check) ~ .sess-fold-control { margin-left: 20px; }
-/* a picked row wears the same soft blue wash as the selected tab, so the checklist reads at a glance. */
-.si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
-.si-item.picked:hover { background: color-mix(in srgb, var(--blue) 20%, var(--panel2)); }
 .si-pill {
   flex: 1; display: flex; align-items: center; justify-content: center;
   padding: 7px 0; background: none; border: 1px solid var(--line); border-radius: var(--radius);
@@ -2301,11 +2360,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-attach-queue.command { padding: 5px 0 1px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
 .si-code-selection-queue { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: 6px; }
 .si-code-selection-chip {
-  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 3px 5px 3px 7px;
-  border: 1px solid color-mix(in srgb, var(--blue) 42%, var(--line)); border-radius: var(--radius);
-  color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--paper)); font-family: var(--mono);
-  font-size: var(--type-caption);
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 3px 4px 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line)); border-left: 3px solid var(--blue); border-radius: var(--radius);
+  color: var(--ink2); background: color-mix(in srgb, var(--blue) 5%, var(--paper)); font-family: var(--ui-font);
+  font-size: var(--type-caption); line-height: var(--leading-ui); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--paper) 70%, transparent);
 }
+.si-code-selection-chip > svg { color: var(--blue); flex: none; }
 .si-code-selection-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-code-selection-remove { width: 18px; height: 18px; padding: 0; color: var(--muted); }
 .si-code-selection-remove:hover { color: var(--red); }
@@ -2494,7 +2554,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* bottom tab bar — the two planes (specs / sessions), thumb-reachable, with the device's home-bar inset. */
 .m-tabbar {
-  flex: none; display: flex; border-top: 1px solid var(--line); background: var(--panel);
+  flex: none; display: flex; border-top: var(--divider-rule); background: var(--panel);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 .m-tabbar-btn {
@@ -2528,6 +2588,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* zone headers on the mobile session list — same partition every desktop list draws ([[session-console]]). */
 .m-zone { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); color: var(--muted); }
+.m-zone::after { content: ''; flex: 1; border-top: var(--divider-rule); opacity: .75; }
 .m-zone .si-zone-count { min-width: 24px; min-height: 24px; }
 
 /* session detail — the terminal-free conversation ([[session-timeline]]): identity card, then the
@@ -2989,9 +3050,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
 
-/* [[transient-notices]]: fixed feedback belongs above page content, but yields to menus and modals. */
+/* [[transient-notices]]: fixed feedback belongs at the top-right, above page content, but yields to menus and modals. */
 .tn-viewport {
-  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 50;
+  position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); bottom: auto; z-index: 50;
   display: flex; flex-direction: column; gap: 6px; width: min(400px, calc(100vw - 32px)); max-block-size: min(50dvh, 32rem);
   overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: thin;
 }
@@ -3022,7 +3083,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @keyframes tn-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tn-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 640px) {
-  .tn-viewport { right: max(10px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); }
+  .tn-viewport { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); bottom: auto; width: min(440px, calc(100vw - 20px)); }
 }
 @media (prefers-reduced-motion: reduce) { .tn-notice, .tn-progress { animation: none; } .tn-progress { transform: scaleX(1); } }
 
@@ -3288,6 +3349,32 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-editor { min-height:80px; max-height:58vh; overflow:auto; }
 .diff-editor .cm-line { cursor:pointer; }
 .diff-editor .cm-line:hover { background:color-mix(in srgb, var(--blue) 14%, transparent); }
+.diff-review-body { display:grid; grid-template-columns:minmax(180px, 240px) minmax(0, 1fr); min-height:0; }
+.diff-file-panel { border-right:1px solid var(--line); overflow:auto; background:color-mix(in srgb, var(--line) 12%, var(--paper)); }
+.diff-file-panel button { display:grid; gap:2px; width:100%; padding:8px 10px; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--ink); text-align:left; font:inherit; cursor:pointer; }
+.diff-file-panel button:hover, .diff-file-panel button[aria-current="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); }
+.diff-file-panel button strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.diff-file-panel button span { color:var(--muted); font-size:var(--type-meta); }
+.diff-files { min-width:0; }
+.diff-file { min-width:0; }
+.diff-hunk-tools { display:flex; justify-content:flex-end; gap:4px; padding:3px 8px; border-bottom:1px solid var(--line); background:var(--paper); }
+.diff-hunk-tools button, .diff-mode button, .diff-toolbar > button { border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); color:var(--ink2); font:inherit; cursor:pointer; padding:2px 7px; }
+.diff-hunk-tools button:hover, .diff-mode button:hover, .diff-toolbar > button:hover, .diff-mode button[aria-pressed="true"], .diff-toolbar > button[aria-pressed="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); color:var(--ink); }
+.diff-mode { display:inline-flex; gap:0; }
+.diff-mode button + button { border-left:0; border-radius:0 var(--radius) var(--radius) 0; }
+.diff-mode button:first-child { border-radius:var(--radius) 0 0 var(--radius); }
+.diff-editor-split { max-height:58vh; overflow:auto; }
+.diff-editor-split .cm-mergeView { display:flex; min-width:max-content; }
+.diff-editor-split .cm-mergeView > .cm-editor { min-width:0; flex:1 1 50%; }
+.diff-editor-split .cm-mergeView > .cm-editor + .cm-editor { border-left:1px solid var(--line); }
+.diff-editor-unified { max-height:58vh; overflow:auto; }
+.diff-editor-unified.is-wrap .cm-line { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media (max-width: 720px) {
+  .diff-review-body { grid-template-columns:1fr; }
+  .diff-file-panel { display:flex; border-right:0; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .diff-file-panel button { min-width:180px; border-bottom:0; border-right:1px solid var(--line); }
+  .diff-editor-split .cm-mergeView { min-width:760px; }
+}
 .diff-comment { display:flex; align-items:flex-start; gap:10px; padding:7px 14px 7px 58px; border-top:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
 .diff-comment.sent { opacity:.7; }
 .diff-comment-line { color:var(--blue); font-family:var(--mono); white-space:nowrap; }
@@ -3344,13 +3431,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-ui);
 }
 .pa-preset:hover { color: var(--ink2); border-color: var(--line); }
-.pa-target { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.pa-target { display: grid; gap: var(--space-2); min-width: 0; }
 .pa-target-label { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
-.pa-select {
-  flex: 1; min-width: 0; padding: var(--space-2) var(--space-3);
-  background: var(--paper); color: var(--ink2); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: var(--ui-font); font-size: var(--type-caption);
-}
+.pa-session-picker { min-width: 0; }
+.pa-session-picker .session-picker-list { max-height: 150px; }
+.pa-session-picker .session-picker-row { min-height: 27px; }
 .pa-edit-head {
   display: flex; align-items: center; gap: var(--space-3); min-width: 0;
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption);

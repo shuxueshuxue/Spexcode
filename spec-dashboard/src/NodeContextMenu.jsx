@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
-import { sessionDisplayState, sessionHeadline } from './session.js'
 import { copyAddress, graphNodeAddress } from './address.js'
+import SessionPicker from './SessionPicker.jsx'
 
 export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewChild, onDelete, sessions = [], onOpenSession }) {
   const t = useT()
@@ -40,7 +40,7 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewC
   // picking closes FIRST, then fires — the action may navigate away (New Session), and the menu must not
   // linger over the next page.
   const pick = (fn) => (e) => { e.stopPropagation(); onClose(); fn(menu.id) }
-  const open = (id) => (e) => { e.stopPropagation(); onClose(); onOpenSession?.(id) }
+  const open = (id) => { onClose(); onOpenSession?.(id) }
   const copyUrl = async (e) => {
     e.stopPropagation()
     setCopyState((await copyAddress(graphNodeAddress(menu.id))) ? 'copied' : 'failed')
@@ -61,19 +61,7 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewC
         <>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            {sessions.map((s) => {
-              const display = sessionDisplayState(s)
-              return (
-                <ContextMenuItem
-                  key={s.id}
-                  className="sess-menu-sess"
-                  leading={<span className="sess-glyph" style={{ color: display.color }} aria-hidden="true">{display.glyph}</span>}
-                  onClick={open(s.id)}
-                >
-                  {sessionHeadline(s)}
-                </ContextMenuItem>
-              )
-            })}
+            <SessionPicker sessions={sessions} value="" onChange={open} filter={sessions.length > 4} compact className="sess-menu-picker" ariaLabel={t('nodeMenu.overlaySessions')} />
           </ContextMenuGroup>
         </>
       )}

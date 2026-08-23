@@ -42,13 +42,12 @@ boundary**: every page gets the same pane and the same loading fallback, and war
 session board — declare warmth to stay mounted and display-toggle across switches), `data.js` (the shared polled board
 data every view reads), and `styles.css` (the global stylesheet).
 
-The root route resolves the view registry's `surfaceFor(page)` before choosing a host. Workspace routes mount
-the workspace surface; review routes mount the same standalone review surface for cold and hot navigation;
-settings mounts its own surface. When review is visible after a workspace visit, the workspace host remains
-mounted but inactive at its last workspace route, preserving graph camera, tabs, and warm session state without
-mounting a review view inside the workspace document pool. The inactive host exposes only that content pool
-and ledger registrations; its rail, dock, tab strip, and other workspace chrome are not rendered into the
-review surface tree.
+The route registry resolves every product page into the shared workspace host. Evals and Issues are resident
+workspace tabs: cold links, list navigation, and detail navigation all render through the same Shell and
+TabStrip, so the Spec/Session/File working set remains visible while a finding is focused. Issues omits the
+activity rail by its page-owned dock policy but retains the shared tab strip. There is no second review chrome
+tree or cold-only route path that can hide the working set; mobile reflows the same route family through its
+responsive face.
 
 **Backend reachability is one shell fact.** Every dashboard API read reports through the shared data transport.
 A network refusal or gateway 502/503/504 marks the whole live dashboard offline, even when a page still holds a

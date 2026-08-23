@@ -46,9 +46,10 @@ review entry hands them the same props the shell does.
 
 **`surface` is the shell boundary.** `workspace` owns Explorer, tab strip, document pool, and dock;
 `workspace` owns the evals/issues board and detail layout with the shared Explorer/tab strip/working set;
-Issues omits the activity rail while retaining the shared strip. Settings is a resident workspace tab. Root resolves `surfaceFor(page)` from this registry once, and
-the same surface component tree renders for a cold URL and an in-app navigation. A view cannot acquire a
-different surface's chrome because it is never mounted inside that surface's host.
+Issues omits the activity rail while retaining the shared strip. Settings is a resident workspace tab. The
+registry is the single source for view ownership and document/residency policy; the root mounts the shared
+workspace host for these routes both on a cold URL and after in-app navigation. A review view cannot acquire a
+second surface's chrome because no standalone review host exists.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
 keeping its own list. Evals, Issues, and Settings are resident top-level tabs; parameterized detail routes

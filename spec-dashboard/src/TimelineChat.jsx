@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
 import { useT } from './i18n/index.jsx'
-import { inertChromePress } from './focus.js'
 import { useIsMobile } from './useIsMobile.js'
 import RichText, { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
@@ -19,6 +18,8 @@ const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 const transcriptCache = new Map()
 
 function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
+// The interval end moves when a later status arrives; expansion belongs to the status event itself.
+function transcriptStatusKey(sessionId, from) { return `${sessionId}:${from}` }
 
 function TranscriptPayload({ data }) {
   if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
@@ -246,6 +247,48 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return () => clearInterval(iv)
   }, [load, active, footerState])
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
+
+  const fetchTranscript = useCallback(async (event, to, statusId) => {
+    const from = epochOf(event.ts)
+    const key = transcriptKey(s.id, from, to)
+    const cached = transcriptCache.get(key)
+    if (cached) {
+      setTranscripts((previous) => new Map(previous).set(statusId, { ...cached, transcriptKey: key }))
+      return
+    }
+    const pending = { state: 'loading', transcriptKey: key }
+    transcriptCache.set(key, pending)
+    setTranscripts((previous) => new Map(previous).set(statusId, pending))
+    const result = await loadSessionTranscript(s.id, from, to)
+    const value = result.ok
+      ? { state: 'ready', data: result.data, transcriptKey: key }
+      : { state: 'error', error: result.error, transcriptKey: key }
+    transcriptCache.set(key, value)
+    setTranscripts((previous) => {
+      const current = previous.get(statusId)
+      // A newer poll may have moved this status to another interval while this request was in flight.
+      return current?.transcriptKey === key ? new Map(previous).set(statusId, value) : previous
+    })
+  }, [s.id])
+
+  // A later status changes only the transcript interval, never the user's disclosure choice. Refresh the
+  // expanded row against that new interval while keeping it open.
+  useEffect(() => {
+    if (!active || !events) return undefined
+    for (const [index, event] of events.entries()) {
+      if (event.kind !== 'status') continue
+      const from = epochOf(event.ts)
+      const statusId = transcriptStatusKey(s.id, from)
+      if (!expandedStatuses.has(statusId)) continue
+      const nextStatus = events.slice(index + 1).find((candidate) => candidate.kind === 'status')
+      const to = nextStatus ? epochOf(nextStatus.ts) : Math.max(from + 1, transcriptNowRef.current)
+      const key = transcriptKey(s.id, from, to)
+      const current = transcripts.get(statusId)
+      if (current?.transcriptKey === key || current?.state === 'loading') continue
+      void fetchTranscript(event, to, statusId)
+    }
+    return undefined
+  }, [active, events, expandedStatuses, fetchTranscript, s.id, transcripts])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const followTimelineTail = useCallback(() => {
@@ -385,21 +428,13 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return peer ? sessionHeadline(peer) : from.slice(0, 8)
   }
 
-  const toggleTranscript = async (event, to) => {
+  const toggleTranscript = (event, to) => {
     const from = epochOf(event.ts)
-    const key = transcriptKey(s.id, from, to)
+    const statusId = transcriptStatusKey(s.id, from)
     const next = new Set(expandedStatuses)
-    if (next.has(key)) { next.delete(key); setExpandedStatuses(next); return }
-    next.add(key); setExpandedStatuses(next)
-    const cached = transcriptCache.get(key)
-    if (cached) { setTranscripts((previous) => new Map(previous).set(key, cached)); return }
-    const pending = { state: 'loading' }
-    transcriptCache.set(key, pending)
-    setTranscripts((previous) => new Map(previous).set(key, pending))
-    const result = await loadSessionTranscript(s.id, from, to)
-    const value = result.ok ? { state: 'ready', data: result.data } : { state: 'error', error: result.error }
-    transcriptCache.set(key, value)
-    setTranscripts((previous) => new Map(previous).set(key, value))
+    if (next.has(statusId)) { next.delete(statusId); setExpandedStatuses(next); return }
+    next.add(statusId); setExpandedStatuses(next)
+    void fetchTranscript(event, to, statusId)
   }
 
   // day-separated render list, oldest first (the wire order)
@@ -412,7 +447,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       const nextStatus = (events || []).slice(i + 1).find((candidate) => candidate.kind === 'status')
       const transcriptFrom = epochOf(e.ts)
       const transcriptTo = nextStatus ? epochOf(nextStatus.ts) : Math.max(transcriptFrom + 1, transcriptNowRef.current)
-      const transcriptId = transcriptKey(s.id, transcriptFrom, transcriptTo)
+      const transcriptId = transcriptStatusKey(s.id, transcriptFrom)
       const transcript = transcripts.get(transcriptId)
       const expanded = expandedStatuses.has(transcriptId)
       const scale = transcript?.state === 'ready'
@@ -458,8 +493,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
 
   return (
     <div className="tl-chat">
-      <div className="m-timeline" ref={scrollRef} onScroll={onScroll}
-        onMouseDownCapture={inertChromePress} onMouseDown={beginTimelineSelection}>
+      <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
+        onMouseDown={beginTimelineSelection}>
         <div ref={timelineContentRef}>
           {detail?.prompt && (
             <details className="m-ev m-ev-prompt">

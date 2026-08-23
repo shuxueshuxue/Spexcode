@@ -14,8 +14,10 @@ related:
 **Status: active** — the shared token-to-React migration now owns spec bodies, issue/review replies, and the
 session timeline. The `proseTokens` markdown-it adapter preserves source maps and promotes `[[id]]`, evidence
 links, and time anchors to semantic tokens. `SpecBody`, `RichText`, and `Thread` are compatibility names over
-that same boundary; no surface pre-strips marks or injects ordinary prose HTML. The browser migration gate for
-TimelineChat remains a separate acceptance item because its parked-fixture run still needs a healthy backend.
+that same boundary; no surface pre-strips marks or injects ordinary prose HTML. A current committed-tree
+Chromium probe (`spec-dashboard/test/spec-markdown.e2e.mjs`) passes at 1280x800 and 900x844, including the
+three semantic payloads and source-map stamps; the TimelineChat selection/copy gate remains separate because
+its parked-fixture run still needs a healthy backend.
 The current compatibility renderer now covers standard links, remote images, blockquotes, heading levels,
 inline/display KaTeX, emphasis, strikethrough, and ordered/unordered lists; `code:`
 names the one renderer module and `related:` names every surface that consumes it (the node-body view,

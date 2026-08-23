@@ -103,6 +103,14 @@ const ICONS = {
     vb: 18, sw: 1.4,
     node: <><circle cx="3" cy="4.5" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="9" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="13.5" r="1" fill="currentColor" stroke="none" /><path d="M6 4.5h9.5M6 9h9.5M6 13.5h9.5" /></>,
   },
+  // The mirrored pair that toggles the LEFT and RIGHT docks. Two lanes once landed green separately —
+  // one deleting "the duplicate panel-left", one drawing the fold toggle with it — and the merged main
+  // white-screened every user, because Icon threw on the missing name and the rail sits above every
+  // boundary. The pair lives together so neither half can be judged dead in isolation again.
+  'panel-left': {
+    vb: 18, sw: 1.4,
+    node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
+  },
   'panel-right': {
     vb: 18, sw: 1.4,
     node: <><path d="M11.6 2.5h3.3a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6h-3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M11.6 2.5v13" /></>,
@@ -143,7 +151,13 @@ const ICONS = {
 
 export function Icon({ name, size = 16, strokeWidth, className, style }) {
   const def = ICONS[name]
-  if (!def) throw new Error(`unknown icon: ${name}`)
+  if (!def) {
+    // LOUD but not FATAL. A missing glyph is a one-key dictionary bug; throwing here once took the whole
+    // product down for every user, because chrome (the rail) renders outside every view boundary. The
+    // console keeps the failure unmissable; the reader keeps their workspace.
+    console.error(`unknown icon: ${name}`)
+    return <svg width={size} height={size} viewBox="0 0 16 16" className={className} style={style} aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" strokeDasharray="3 2" /></svg>
+  }
   const vb = def.vb || 24
   return (
     <svg

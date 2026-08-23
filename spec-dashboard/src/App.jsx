@@ -12,8 +12,6 @@ import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { BoardProvider, WorkspaceProvider } from './workspace.jsx'
 import { KeyboardServiceProvider } from './KeyboardService.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
-import ReviewSurface from './ReviewSurface.jsx'
-import SettingsSurface from './SettingsSurface.jsx'
 import { useRoute } from './route.js'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
@@ -215,18 +213,12 @@ export default function App({ surface = 'workspace' }) {
     return <div className="loading">{t('hud.loading')}</div>
   }
   const workspace = isMobile
-    ? (surface === 'review' ? null : <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />)
+    ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
     : <WorkspaceSurface route={lastWorkspaceRoute.current || { page: 'graph', param: null, query: null }} />
-  const routed = surface === 'review'
-    ? <>
-        {/* Keep the workspace tree mounted while review owns the visible surface. Its document pool retains
-            graph camera, active tabs, and warm session transports for an immediate return. */}
-        <div style={{ display: 'none' }} aria-hidden="true"><WorkspaceSurface route={lastWorkspaceRoute.current || { page: 'graph', param: null, query: null }} inactive /></div>
-        <ReviewSurface page={route.page} param={route.param} query={route.query} />
-      </>
-    : surface === 'settings'
-      ? <SettingsSurface />
-      : workspace
+  // Every routed product face shares the workspace shell. In particular, Evals and Issues are resident
+  // tabs, so a detail route must keep the Spec/Session/File working set and the same TabStrip visible.
+  // The old standalone ReviewSurface path made the strip disappear on cold review navigation.
+  const routed = workspace
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {PUBLIC_GRAPH_ONLY

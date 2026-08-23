@@ -23,7 +23,7 @@
 </head>
 <body>
   <h1>Session Runtime Audit</h1>
-  <p class="meta">Evidence captured 2026-08-22 from the live SpexCode checkout. Scope: session packages, CLI/runtime composition, watch policy, process health, and polling/lock costs.</p>
+  <p class="meta">Evidence captured 2026-08-22 to 2026-08-23 from the live SpexCode checkout. Scope: session packages, CLI/runtime composition, watch policy, process health, and polling/lock costs.</p>
 
   <section>
     <h2>Executive Result</h2>
@@ -38,11 +38,11 @@
     <table>
       <thead><tr><th>Observation</th><th>Evidence</th><th>Decision</th></tr></thead>
       <tbody>
-        <tr><td>Working-watch flood</td><td>The accidental <code>watch:manual</code> edge from the current parent to <code>ded4b563</code> was cancelled. The remaining relation is the ordinary parent edge; parent-only routine <code>working</code> is now suppressed.</td><td class="pass">Fixed and verified</td></tr>
-        <tr><td>Current parent status</td><td>The parent record had an authored <code>awaiting + proposal=close</code>, so <code>close-pending</code> was an honest projection of a stale self-declaration. It was restored to <code>active</code> with the proposal cleared.</td><td class="pass">Corrected</td></tr>
-        <tr><td><code>ded4b563</code> status</td><td>Canonical SQLite/API state is <code>active/working + online</code>; its Claude process is alive and accepting turns. The visible <code>400</code> account error is an adapter/account failure, not proof that the process exited. The legacy JSON <code>parked</code> value is stale after SQLite cutover.</td><td class="warn">No forced lifecycle rewrite</td></tr>
-        <tr><td>Codex launch pressure</td><td>At least five long-lived app-server parent/child pairs are PPID 1. The current project server owns live references and exceeds its budget; its Codex child is about <strong>1.07 GiB RSS</strong>. Host swap is about <strong>6.1 GiB</strong>. A new <code>thread/start</code> timing out at 15s is consistent with this pressure.</td><td class="fail">P1 infrastructure</td></tr>
-        <tr><td>Safe cleanup boundary</td><td>The four other PPID 1 servers have exact project roots, but their loaded native reference sets cannot be proven; the runtime correctly marks them ineligible for reclaim. The current endpoint and the 8787 backend are also protected owners.</td><td class="pass">No blind kill</td></tr>
+        <tr><td>Working-watch flood</td><td>Current <code>session watch list</code> is empty. The remaining working lines in the parent timeline carry <code>watch-initial-snapshot</code> receipts from prior managed relations; this run created no manual watch. Parent-only routine <code>working</code> remains suppressed by the package policy.</td><td class="warn">Historical noise; no new edge</td></tr>
+        <tr><td>Current parent status</td><td>The live parent record is <code>asking</code>; its current declaration waits on the external account-pool recovery. No <code>close-pending</code> or proposal is being asserted by this run.</td><td class="pass">Current state verified</td></tr>
+        <tr><td><code>ded4b563</code> status</td><td>Canonical record is <code>parked/online</code>. Delivery succeeds, but every real model probe returns a new HTTP 400 “当前绑定账号暂不可用”. This is an upstream account-pool block, not evidence that the Claude process exited; lifecycle was not rewritten.</td><td class="warn">External blocker</td></tr>
+        <tr><td>Codex launch pressure</td><td>The draining generation <code>detached-v3-57fe943b</code> remains bound to 96 historical records and the live clients; its ownership probe timed out at 5s, with about <strong>1.95 GiB RSS</strong> and roughly <strong>32% CPU</strong>. The current backend is about <strong>2.43 GiB RSS</strong> and <strong>105% CPU</strong>. A new <code>thread/start</code> timing out at 15s is consistent with this pressure.</td><td class="fail">P1 infrastructure</td></tr>
+        <tr><td>Safe cleanup boundary</td><td>The exact failed Codex session <code>64f3dc58</code> had zero ahead/dirty work, so it was stopped and closed. The draining app-server still has live bindings and an unproven ownership census; the runtime correctly refuses reclaim. No blind kill was used.</td><td class="pass">One safe cleanup; old gen retained</td></tr>
       </tbody>
     </table>
     <p>The selector fixture was also moved off the retired <code>.si-tool.command</code> selector and now passes against the current UI. The policy implementation remains package-neutral: the CLI supplies the validated union of parent/manual recipients.</p>
@@ -53,11 +53,11 @@
     <table>
       <thead><tr><th>Observation</th><th>Value</th><th>Interpretation</th></tr></thead>
       <tbody>
-        <tr><td>Session records</td><td>122 total</td><td>98 archived; 24 live.</td></tr>
-        <tr><td>Live authored state</td><td>13 asking, 1 awaiting/close-pending, 2 parked, 4 active</td><td>Lifecycle is separate from liveness; waiting states are not failures.</td></tr>
-        <tr><td>Live liveness</td><td>16 online, 3 offline, 1 unknown, 4 active/online</td><td>Three asking and one parked record are offline while retaining authored lifecycle. This is a health signal to investigate, not permission to rewrite lifecycle.</td></tr>
-        <tr><td>Topology</td><td>107 parent edges, 105 parent-watch edges, 3 manual-watch edges</td><td>The current parent has one manual edge to the parent session itself; the large working-message volume was not explained by dozens of manual watches.</td></tr>
-        <tr><td>Processes</td><td>33 Codex processes, 12 Codex app-server processes</td><td>High for 24 live records and consistent with the reported app-server pair accumulation. Process ownership/reaping remains an infrastructure item.</td></tr>
+        <tr><td>Session records</td><td>130 total</td><td>113 archived; 17 live.</td></tr>
+        <tr><td>Live authored state</td><td>11 asking, 2 parked, 1 close-pending, 1 idle, 2 error</td><td>Lifecycle is separate from liveness; waiting and error records are not rewritten by process probes.</td></tr>
+        <tr><td>Live liveness</td><td>13 online, 4 offline</td><td>Liveness is an independent health signal; it does not erase authored lifecycle/proposal facts.</td></tr>
+        <tr><td>Topology</td><td>109 parent edges; current manual-watch list empty</td><td>Current working-message volume is not explained by a newly registered manual watch.</td></tr>
+        <tr><td>Processes</td><td>Old generation remains shared by live Codex clients; current generation has no client bindings</td><td>Formal rotation is complete, but existing live conversations remain pinned to their original generation by design.</td></tr>
         <tr><td>Backend</td><td>8787 listening at capture</td><td>Reachable during this snapshot; prior unexplained restarts remain an unresolved incident.</td></tr>
       </tbody>
     </table>

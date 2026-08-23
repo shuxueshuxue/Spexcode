@@ -8,6 +8,8 @@ code:
 related:
   - spec-desktop/node-entry.mjs
   - spec-desktop/package.json
+  - package.json
+  - scripts/desktop-contract.test.mjs
 ---
 # spec-desktop
 
@@ -15,6 +17,12 @@ A desktop application that is **a window and a child process, and nothing else**
 port, starts the existing CLI in the project directory, and loads that origin in a `BrowserWindow`. Because
 the page is served by the same process a terminal user starts by hand, over the same origin, the dashboard
 needs **zero** desktop-specific code.
+
+The optional shell is reachable from the repository root through `npm run desktop:install` followed by
+`npm run desktop:start`; `npm run desktop:check` verifies these entrypoints and the optional-workspace boundary.
+Electron remains outside the root workspaces by design, so browser-only contributors do not install the desktop
+runtime. These entrypoints are developer integration, not a claim that signed installers or a release channel
+exist.
 
 **This node began as a measured spike, and the sections below preserve those measurements.** Boot, port hand-off,
 and window load work: the window loads first try in about two seconds, and the load retry never fires. The two

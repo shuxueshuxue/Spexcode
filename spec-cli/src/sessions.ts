@@ -473,8 +473,7 @@ function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
   const application = configuredSessionApplicationIfCutover()
   // The JSON file remains the durable runtime/worktree envelope, but it is not a lifecycle writer after
-  // cutover. Read the canonical state only to keep the retired envelope internally coherent for tools that
-  // inspect its metadata; state transitions themselves happen through application.transitionSession().
+  // cutover; state transitions happen through application.transitionSession().
   // Once the application row exists, preserve the old lifecycle bytes exactly as migration evidence. Do not
   // copy canonical state back into them: that would create a second writer and make a stale JSON snapshot look
   // current. New records still need the envelope fields until their canonical row is created.

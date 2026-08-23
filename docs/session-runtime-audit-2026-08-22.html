@@ -24,6 +24,13 @@
 <body>
   <h1>Session Runtime Audit</h1>
   <p class="meta">Evidence captured 2026-08-22 and updated 2026-08-23 from the live SpexCode checkout. Scope: session packages, CLI/runtime composition, watch policy, process health, and polling/lock costs.</p>
+  <section>
+    <h2>Live recheck · 2026-08-23</h2>
+    <p><span class="pass">Canonical state verified:</span> <code>ded4b563-50b9-4146-b860-e98e0d073700</code> is now <code>error/online</code>, with the note <code>Claude-GLM upstream account binding returns HTTP 400; delivery channel is healthy, model unavailable</code>. Its rendezvous delivery still accepts input, but every real model turn fails upstream. The dashboard must therefore show an error lifecycle even while liveness remains online; liveness does not overwrite lifecycle.</p>
+    <p><span class="pass">The observed name split is fixed:</span> the canonical visible title (<code>Spec node graph 界面重构</code>) is now painted by the picker, tabs, asking notice, and session surfaces. The stable label (<code>我们现在需要开始进行一个重构</code>) remains a search handle only. It is not a second visible title or a second lifecycle fact.</p>
+    <p><span class="warn">External error boundary:</span> the Claude/reclaude adapter's native <code>StopFailure</code> hook is materialized and tested, but this upstream HTTP 400 does not emit that native event. No honest local code path can infer a future model failure from a successful delivery receipt without adding pane polling or a second event source. The live record was corrected to <code>error</code>; automatic future transitions require the upstream adapter/account path to emit its failure signal.</p>
+    <p><span class="pass">Runtime recheck:</span> dashboard production build passed, backend <code>/health</code> returned <code>ok</code>, the manual-watch registry was empty, and the Codex generation rotation remained intact (new generation current, old generation draining). No new status axis, manual watch, periodic package poll, or destructive archive was introduced.</p>
+  </section>
 
   <section>
     <h2>Executive Result</h2>

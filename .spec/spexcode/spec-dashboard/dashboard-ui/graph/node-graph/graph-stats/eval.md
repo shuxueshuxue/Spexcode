@@ -42,6 +42,17 @@ scenarios:
       Repeated clicks on a multi-node chip walk focus through each distinct node it counts and wrap
       at the end (not stuck on the first); a zero-count chip does not respond. The filed reading
       carries the screenshot as image evidence and a pass verdict.
+  - name: shell-owns-one-board-ledger
+    tags: [frontend-e2e, desktop]
+    description: >-
+      At a 1440px viewport, open the graph so its keep-mounted document enters the pool, then switch to
+      another workspace route. Inspect the status bar DOM and rendered geometry; return to the graph and
+      repeatedly click a non-zero status, drift, issue, and eval category.
+    expected: >-
+      The right status group contains one shell-owned board ledger: each node, issue, and eval number appears
+      once even after the graph has been mounted and hidden; no graph-stats status item remains; fresh and
+      stale eval states have different icon geometry; the complete right group is at most 480px wide; and
+      category clicks on the graph still walk the counted nodes in order and wrap without losing any tally.
 ---
 # eval.md — graph-stats
 
@@ -51,3 +62,8 @@ total equals the four status-dot counts summed, ◆ is the *deduped* distinct op
 stale score is the greyed verdict inside the ring — then confirms that repeatedly clicking a multi-node chip
 *walks* focus through every node it counts and wraps. Both readings are image evidence with a verdict, not
 a `blob: null` placeholder.
+
+The shell-ownership repair is measured through the whole workspace rather than an isolated graph paint:
+mount the graph, switch away while it remains pooled, and inspect the one status bar a user sees. The DOM
+proves ownership and icon identity; rendered rectangles prove the width bound; repeated graph clicks prove
+that consolidating the ledger did not discard navigation.

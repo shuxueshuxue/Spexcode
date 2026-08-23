@@ -100,9 +100,10 @@ the last verdict.
 Last-good tallies remain useful during a backend outage, but they are not current truth. While the shared
 transport is offline, every numeric workspace tally visibly carries a compact `~` stale marker (with the
 translated `stale` word retained as its accessible name and tooltip) and muted treatment; the global shell
-banner names the outage and owns retry. The compact marker keeps the complete right group within the 480px
-bound even while all last-good digits remain rendered and actionable. A successful transport response removes
-the marker without replacing the numbers with invented zeroes.
+banner names the outage and owns retry. The marker borrows its tally's trailing inset and adds no layout width,
+keeping the complete right group within the 480px bound even while all last-good digits remain rendered and
+actionable. A successful transport response removes the marker without replacing the numbers with invented
+zeroes.
 
 **Restraint is the resting state.** A tally is muted text plus the board's own status marks; it spends a
 `kind` colour only where the number is asking for something — a failing eval, a session waiting on a human.

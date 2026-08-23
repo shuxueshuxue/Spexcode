@@ -320,9 +320,11 @@ body {
 .dock-head-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .dock-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
 .sb-stale {
-  display: inline-flex; align-items: center; justify-content: center; width: 8px; height: 14px; margin-left: 2px;
+  position: absolute; right: -1px; top: 0; display: inline-flex; align-items: center; justify-content: center; width: 8px; height: 14px; margin-left: 0;
   color: var(--yellow); font-style: normal; font-size: var(--type-caption); line-height: var(--line-status);
+  overflow: visible;
 }
+.sb-stale::before { content: '~'; position: absolute; left: 0; top: 0; }
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
@@ -616,7 +618,7 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the ambient board tallies: one item per board, each a row of glyph+count pairs. The node dots reuse the
    board's own four-state marks so a count in the bar and a dot on a tile say the same thing. */
-.sb-tally { display: inline-flex; align-items: center; gap: 4px; }
+.sb-tally { position: relative; display: inline-flex; align-items: center; gap: 4px; }
 .sb-tally-lead { font-weight: var(--weight-semibold); color: var(--ink2); }
 .sb-tally-part { display: inline-flex; align-items: center; gap: 3px; }
 .sb-tally-button {

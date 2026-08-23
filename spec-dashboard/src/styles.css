@@ -323,7 +323,7 @@ body {
 .dock-head-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .dock-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
 .sb-stale {
-  position: absolute; right: -1px; top: 0; display: inline-flex; align-items: center; justify-content: center; width: 8px; height: 14px; margin-left: 0;
+  position: absolute; right: -5px; top: 0; display: inline-flex; align-items: center; justify-content: center; width: 5px; height: 14px; margin-left: 0;
   color: var(--yellow); font-style: normal; font-size: var(--type-caption); line-height: var(--line-status);
   overflow: visible;
 }

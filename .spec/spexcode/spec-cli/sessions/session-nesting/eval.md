@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: needs-you-child-stays-under-running-root
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
+    code: [spec-dashboard/src/session.js, spec-dashboard/src/Dock.jsx, spec-dashboard/src/SessionWindow.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Through the running dashboard's sessions dock, show a running PARENT with a present CHILD whose own
+      lifecycle is asking. Expand the PARENT's existing fold pod and inspect the rendered tree row, zone header,
+      and status glyphs.
+    expected: >
+      The CHILD stays indented beneath PARENT at depth >= 1 even though its own glyph is `?`; it never becomes a
+      needs-you sibling root and no `sess-parent-mark` / upward parent link is rendered. The family is counted in
+      PARENT's root zone, and the zone header count is the full root-plus-descendant population whether folded or open.
   - name: child-folds-under-its-spawner
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs

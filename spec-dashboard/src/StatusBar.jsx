@@ -41,7 +41,7 @@ const order = (a, b) => (b.priority - a.priority) || (hash(b.id) - hash(a.id)) |
 
 // what actually changes the rendered item. A fresh `node` element every paint must not count as a change,
 // or the bar would re-render itself for as long as its contributor keeps painting.
-const itemKey = (i) => i && `${i.id}|${i.side}|${i.priority}|${i.kind ?? ''}|${typeof i.text === 'string' ? i.text : ''}|${i.tooltip ?? ''}`
+const itemKey = (i) => i && `${i.id}|${i.side}|${i.priority}|${i.kind ?? ''}|${i.overflow ? 'overflow' : ''}|${typeof i.text === 'string' ? i.text : ''}|${i.tooltip ?? ''}`
 
 export function StatusBarProvider({ children }) {
   const [items, setItems] = useState(() => new Map())
@@ -107,7 +107,7 @@ export function useStatusItem(item) {
 }
 
 function StatusItem({ item, onToggleHidden }) {
-  const cls = `sb-item${item.kind && item.kind !== 'standard' ? ` sb-${item.kind}` : ''}${item.onClick ? ' sb-act' : ''}`
+  const cls = `sb-item${item.kind && item.kind !== 'standard' ? ` sb-${item.kind}` : ''}${item.onClick ? ' sb-act' : ''}${item.overflow ? ' sb-overflow' : ''}`
   const body = item.node ?? item.text
   const common = {
     className: cls,
@@ -129,8 +129,9 @@ export default function StatusBar() {
   const left = all.filter((i) => i.side !== 'right').sort(order)
   const right = all.filter((i) => i.side === 'right').sort(order)
   const hiddenCount = state.items.size - all.length
+  const hasOverlay = all.some((i) => i.overflow)
   return (
-    <footer className="statusbar" role="status">
+    <footer className={hasOverlay ? 'statusbar has-overlay' : 'statusbar'} role="status">
       <div className="sb-group sb-left">
         {left.map((i) => <StatusItem key={i.id} item={i} onToggleHidden={api.toggleHidden} />)}
       </div>

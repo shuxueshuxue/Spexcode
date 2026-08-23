@@ -5,8 +5,8 @@ scenarios:
     test: spec-dashboard/test/lock-hint.e2e.mjs
     description: >-
       In a Chromium browser running the real dashboard, use a graph projection based on the live backend
-      response with a controlled session overlay so the non-empty lock population is reproducible. Click
-      that actual SessionWindow row to lock it. With two changed nodes, inspect the rendered top-centre
+      response with a controlled session overlay so the non-empty lock population is reproducible. Open the
+      bounded SessionWindow badge, then claim the same session from the full dock row. With two changed nodes, inspect the rendered top-centre
       banner and its keycaps, then click its visible release control. Reload with the same locked session
       changing one node and lock it again.
     expected: >-
@@ -24,6 +24,6 @@ scenarios:
 ---
 # lock-hint — measuring the loss
 
-The browser is the oracle: drive the visible SessionWindow row and read the rendered lock banner. The
+The browser is the oracle: drive the visible SessionWindow badge/dock row and read the rendered lock banner. The
 controlled graph input only creates the otherwise optional live-overlay population; it does not replace
 the dashboard, its lock interaction, or its rendered user interface.

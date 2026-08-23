@@ -142,7 +142,7 @@ function SessionDock({ sessions, activeId }) {
           // when the slot moves on. Ctrl/⌘ or a double-click holds it as its own tab, and ⌥ scopes the
           // graph to its worktree — the gesture the retired map-side glance used to own.
           const locked = !!item.s.source && item.s.source === lockedSource
-          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId} selecting={false} picked={new Set()}
+          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId}
             dragging={drag?.id === item.s.id}
             dropTarget={drag?.target === item.s.id}
             onToggleFold={() => toggle(item.s.id)}
@@ -215,7 +215,7 @@ function DockHead({ mode, specs, sessions }) {
               onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
               <Icon name="archive" size={13} />
             </button>
-            <button type="button" className="dock-head-act" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
+            <button type="button" className="dock-head-act dock-head-act-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
               onClick={() => navigate('sessions', 'new')}>
               <Icon name="plus" size={14} />
             </button>

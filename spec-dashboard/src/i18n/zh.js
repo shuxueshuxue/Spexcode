@@ -70,6 +70,13 @@ export default {
     archive: '已归档会话',
     rowTip: '打开 · ctrl+点击固定为标签 · alt+点击把图锁定到该会话',
   },
+  sessionPicker: {
+    label: '选择会话',
+    filter: '筛选会话',
+    empty: '没有匹配的会话',
+    newSession: '新建会话…',
+    overlaySessions: '正在修改此节点的会话',
+  },
   contextDock: {
     title: '上下文',
     scenarios: '场景',
@@ -480,6 +487,7 @@ export default {
   },
 
   sessionWindow: {
+    badgeLabel: '此图上的会话',
     menuLabel: '会话操作',
     rowTitle: '单击将图锁定到此会话 · 双击打开它',
     lockedTitle: '图已锁定到此会话——再次单击解除',

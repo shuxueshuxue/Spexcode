@@ -73,6 +73,13 @@ export default {
     archive: 'Archived sessions',
     rowTip: 'open · ctrl-click holds a tab · alt-click scopes the graph to this session',
   },
+  sessionPicker: {
+    label: 'choose a session',
+    filter: 'filter sessions',
+    empty: 'no matching sessions',
+    newSession: 'new session…',
+    overlaySessions: 'sessions touching this node',
+  },
   contextDock: {
     title: 'Context',
     scenarios: 'Scenarios',
@@ -487,6 +494,7 @@ export default {
   },
 
   sessionWindow: {
+    badgeLabel: 'sessions on this graph',
     menuLabel: 'session actions',
     rowTitle: 'click to lock the graph onto this session · double-click to open it',
     lockedTitle: 'graph locked to this session — click again to release',

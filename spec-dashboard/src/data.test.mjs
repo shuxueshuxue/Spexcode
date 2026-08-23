@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { layout, singleLayerFrontier, X_GAP, Y_GAP } from './data.js'
+import { layout, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
 
 const tree = [
   { id: 'root', parent: null },
@@ -70,4 +70,61 @@ test('every focus stop has no overlapping source-of-truth tile boxes', () => {
     }
   }
   assert.ok(X_GAP >= width && Y_GAP >= height)
+})
+
+test('camera anchors a focus-child reading pair to the left-of-centre token', () => {
+  const focus = { x: 0, y: 0 }
+  const child = { x: X_GAP, y: 0 }
+  const viewport = viewportForFocus({ focus, child, visible: [focus, child], width: 900, height: 600, zoom: 0.85, fit: false })
+  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (X_GAP / 2) * viewport.zoom)
+  assert.equal(viewport.y, 300)
+})
+
+test('camera uses the parent-focus midpoint for a leaf', () => {
+  const focus = { x: X_GAP, y: 54 }
+  const parent = { x: 0, y: 0 }
+  const viewport = viewportForFocus({ focus, parent, visible: [parent, focus], width: 900, height: 600, zoom: 1, fit: false })
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (X_GAP / 2))
+  assert.equal(viewport.y, 300 - focus.y)
+})
+
+test('camera fits a complete small neighbourhood and leaves one grid gutter', () => {
+  const root = { x: 0, y: 0 }
+  const child = { x: X_GAP, y: 0 }
+  const viewport = viewportForFocus({ focus: root, child, visible: [root, child], width: 900, height: 600, zoom: 0.85 })
+  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.x, CAMERA_GUTTER + 88 * viewport.zoom)
+  assert.equal(viewport.y, 300)
+})
+
+test('fit never raises a user-selected zoom', () => {
+  const root = { x: 0, y: 0 }
+  const child = { x: X_GAP, y: 0 }
+  const viewport = viewportForFocus({ focus: root, child, visible: [root, child], width: 900, height: 600, zoom: 0.4 })
+  assert.equal(viewport.zoom, 0.4)
+})
+
+test('camera falls back to the reading anchor when the visible bbox cannot fit', () => {
+  const nodes = Array.from({ length: 12 }, (_, index) => ({ x: index * X_GAP, y: 0 }))
+  const focus = nodes[0]
+  const viewport = viewportForFocus({ focus, child: nodes[1], visible: nodes, width: 900, height: 600, zoom: 0.85 })
+  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (X_GAP / 2) * viewport.zoom)
+})
+
+test('camera lowers zoom only when the anchored neighbourhood cannot fit', () => {
+  const nodes = Array.from({ length: 5 }, (_, index) => ({ x: index * X_GAP, y: 0 }))
+  const viewport = viewportForFocus({ focus: nodes[4], parent: nodes[3], visible: nodes, width: 900, height: 600, zoom: 0.85 })
+  assert.equal(viewport.zoom, (900 - CAMERA_GUTTER) / (4 * X_GAP + 176))
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (nodes[3].x + nodes[4].x) / 2 * viewport.zoom)
+})
+
+test('camera clamps an oversized vertical frontier to a reachable top edge', () => {
+  const focus = { x: 0, y: 0 }
+  const children = Array.from({ length: 17 }, (_, index) => ({ x: X_GAP, y: (index - 8) * Y_GAP }))
+  const viewport = viewportForFocus({ focus, child: children[8], visible: [focus, ...children], width: 900, height: 300, zoom: 0.85 })
+  const minY = -8 * Y_GAP - 25
+  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.y, -minY * viewport.zoom)
 })

@@ -237,7 +237,9 @@ export default {
     restore: 'restore hidden status items',
     // the ambient board tallies; each names its own door, because each item IS that door.
     nodes: ({ n }) => `${n} spec nodes — merged · active · drift · pending. Open the graph`,
-    evals: ({ pass, fail }) => `fresh evals: ${pass} passing, ${fail} failing — open the evals board`,
+    evals: ({ pass, fail, stalePass, staleFail, empty }) =>
+      `eval scenarios: ${pass} fresh pass, ${fail} fresh fail, ${stalePass} stale pass, ${staleFail} stale fail, ${empty} unmeasured`,
+    openEvals: 'open the Evals board',
     issues: ({ n }) => `${n} open issues — open the issues board`,
     sessions: ({ run, need }) => `${run} running, ${need} waiting on you — open the sessions console`,
   },
@@ -592,11 +594,8 @@ export default {
     },
   },
 
-  // the bottom-left board-stats strip — the per-node badges COUNTED across the whole tree (distinct things,
-  // never a sum of badges), except coverage which counts SCENARIOS (the unit of eval loss). Each chip's
-  // title says what it counts; clicking WALKS focus through the nodes behind it, one per click.
+  // The shell ledger's graph walk: per-node badges count distinct things; coverage counts scenarios.
   stats: {
-    aria: 'graph statistics',
     totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
     driftTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} whose code is ahead of its spec — click to walk them`,

@@ -14,6 +14,8 @@ import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
+import { ScoreBadge } from './score.jsx'
+import { nextGraphStatNode } from './GraphStats.jsx'
 import { sessionHandle, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
@@ -151,6 +153,27 @@ function ShellStatus() {
   return null
 }
 
+const SCORE_VIEW = [
+  { state: 'pass', always: true, titleKey: 'scorePass' },
+  { state: 'fail', always: true, titleKey: 'scoreFail' },
+  { state: 'stalePass', titleKey: 'scoreStalePass' },
+  { state: 'staleFail', titleKey: 'scoreStaleFail' },
+  { state: 'empty', titleKey: 'scoreEmpty' },
+]
+
+function BoardStat({ name, count, title, onClick, children }) {
+  return (
+    <button type="button" className="sb-tally-button" data-board-stat={name} data-tip={title}
+      aria-label={title} disabled={!onClick} onClick={onClick}>
+      {children}{count}
+    </button>
+  )
+}
+
+const storedGraphFocus = () => {
+  try { return sessionStorage.getItem('spex.focus') } catch { return null }
+}
+
 // The BOARD's own numbers, as ambient state.
 //
 // They used to hang off the graph, so the moment the graph stopped being where a reader lands, the window
@@ -163,9 +186,10 @@ function ShellStatus() {
 // spends a `kind` colour ONLY where a number is asking for something — a failing eval, a session waiting
 // on a human. A count that is merely large stays quiet.
 //
-// On the graph itself they stand down: [[graph-stats]] registers the same tallies there with a focus-walk
-// the ambient copy cannot offer, and one bar must never print the same number twice.
-function BoardStatus({ specs, sessions, quiet }) {
+// This is the only ledger on every route, graph included. On the graph its category buttons reuse
+// [[graph-stats]]'s walk; elsewhere issue/eval buttons keep opening their boards, while node categories
+// enter the graph already focused on the first node they count.
+function BoardStatus({ specs, sessions, page }) {
   const t = useT()
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
@@ -178,35 +202,67 @@ function BoardStatus({ specs, sessions, quiet }) {
     }
     return zones
   }, [sessions])
-  const { pass, fail } = tally.scoreCount
+  const { fail } = tally.scoreCount
+  const walkGraph = (ids) => {
+    const id = nextGraphStatNode(ids, storedGraphFocus())
+    if (id) navigate('graph', id, { replace: page === 'graph' })
+  }
+  const graphOrBoard = (ids, board) => (ids.length
+    ? (page === 'graph' ? () => walkGraph(ids) : () => navigate(board))
+    : null)
 
-  useStatusItem(quiet ? null : {
+  useStatusItem({
     id: 'board-nodes', side: 'right', priority: 41,
     tooltip: t('statusBar.nodes', { n: tally.total }),
-    onClick: () => navigate('graph'),
     node: (
       <span className="sb-tally">
-        <span className="sb-tally-lead">{tally.total}</span>
+        <button type="button" className="sb-tally-button sb-tally-lead" data-board-stat="nodes-total"
+          data-tip={t('stats.totalTitle', { n: tally.total })} aria-label={t('stats.totalTitle', { n: tally.total })}
+          onClick={() => navigate('graph')}>{tally.total}</button>
         {STATUS_ORDER.map((k) => (
-          <span key={k} className="sb-tally-part">
-            <i className="bstat-dot" style={{ background: STATUS[k].color }} />{tally.status[k].length}
-          </span>
+          <BoardStat key={k} name={`status-${k}`} count={tally.status[k].length}
+            onClick={tally.status[k].length ? () => walkGraph(tally.status[k]) : null}
+            title={t('stats.statusTitle', { n: tally.status[k].length, status: t(`status.${k}`) })}>
+            <i className="sb-status-dot" style={{ background: STATUS[k].color }} />
+          </BoardStat>
         ))}
+        <span className="sb-tally-sep" />
+        <BoardStat name="drift" count={tally.driftIds.length}
+          onClick={tally.driftIds.length ? () => walkGraph(tally.driftIds) : null}
+          title={t('stats.driftTitle', { n: tally.driftIds.length })}>⚠</BoardStat>
       </span>
     ),
   })
-  useStatusItem(quiet ? null : {
+  useStatusItem({
     id: 'board-evals', side: 'right', priority: 42,
     kind: fail > 0 ? 'error' : undefined,
-    tooltip: t('statusBar.evals', { pass, fail }),
-    onClick: () => navigate('evals'),
-    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span></span>,
+    tooltip: t('statusBar.evals', tally.scoreCount),
+    node: (
+      <span className="sb-tally">
+        {SCORE_VIEW.map(({ state, always, titleKey }) => {
+          const count = tally.scoreCount[state]
+          if (!count && !always) return null
+          return (
+            <BoardStat key={state} name={`eval-${state}`} count={count}
+              onClick={graphOrBoard(tally.scoreNodes[state], 'evals')}
+              title={page === 'graph'
+                ? t(`stats.${titleKey}`, { n: count })
+                : `${t(`score.${state}`)} · ${t('statusBar.openEvals')}`}>
+              <ScoreBadge state={state} />
+            </BoardStat>
+          )
+        })}
+      </span>
+    ),
   })
-  useStatusItem(quiet ? null : {
+  useStatusItem({
     id: 'board-issues', side: 'right', priority: 43,
     tooltip: t('statusBar.issues', { n: tally.issueCount }),
-    onClick: () => navigate('issues'),
-    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span></span>,
+    node: <span className="sb-tally"><BoardStat name="issues" count={tally.issueCount}
+      onClick={graphOrBoard(tally.issueIds, 'issues')}
+      title={page === 'graph'
+        ? t('stats.issueTitle', { n: tally.issueCount })
+        : t('statusBar.issues', { n: tally.issueCount })}>◆</BoardStat></span>,
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
@@ -421,7 +477,7 @@ export default function Shell() {
         <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
       </div>
       <ShellStatus />
-      <BoardStatus specs={specs} sessions={sessions} quiet={page === 'graph'} />
+      <BoardStatus specs={specs} sessions={sessions} page={page} />
       <StatusBar />
       {/* the one shared palette: it floats above whichever view is showing, so it is the shell's. A view
           being hidden must never be able to swallow it — the reason it was hoisted here in the first place. */}

@@ -54,10 +54,10 @@ of the bar is a shared geometry that other components will eventually measure ag
 exactly how the 112px coupling started.
 
 **What is registered today.** On the left, the workspace identity and — while the graph is the document —
-its help key. On the right, the ambient BOARD TALLIES, one item per board: the spec-node count with its
-four-state breakdown, the fresh eval pass/fail pair, the open-issue total, and the live sessions split into
-self-driving and waiting-on-you. Each is a button that navigates to the board it counts, so a number is also
-the way to the thing it is about. Beside them ride the document's own facts: the routed file's path when
+its help key. On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
+its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
+pass/fail, unmeasured); the deduped open-issue total; and live sessions split into self-driving and
+waiting-on-you. Beside them ride the document's own facts: the routed file's path when
 [[file-view]] is the document, the session console's unread-resource signal, the public-graph disclosure.
 
 **The tallies are the workspace's, and the shell registers them.** They are true of the window on every
@@ -67,8 +67,16 @@ how the work is doing. They ride the right group because that is where the graph
 because the left group is the identity strip; the region law that assigns them an owner is
 [[workspace-shell]]'s, and the owner is the frame.
 
-On the graph the ambient copies **stand down**: [[graph-stats]] registers the same numbers there as a
-focus-walk the ambient items cannot offer, and one bar printing a number twice is worse than either.
+The ledger never stands down and no view registers a substitute. On graph addresses its category buttons
+gain [[graph-stats]]'s focus-walk: repeated clicks cycle the counted node ring and wrap. Off the graph,
+issue/eval categories open their boards and node categories enter the graph on a matching node. Thus every
+number remains a door without creating a second owner or tying ownership to a mounted view's lifetime.
+
+At a 1440px viewport the complete right group is at most one third of the window (480px), with every digit
+still rendered and actionable. Density comes from one occurrence of each fact and compact glyph/count
+pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
+icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves
+the last verdict.
 
 **Restraint is the resting state.** A tally is muted text plus the board's own status marks; it spends a
 `kind` colour only where the number is asking for something — a failing eval, a session waiting on a human.

@@ -52,8 +52,10 @@ whole shell hangs off, re-derived from what the product is rather than from what
   unopinionated window looks like.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content. The frame itself is what fills it: the workspace identity
-  and the BOARD TALLIES — spec nodes by state, fresh eval verdicts, open issues, live sessions — are true of
-  the window on every route, so no view may own them and each is registered here. A view contributes only
+  and the ONE BOARD LEDGER — spec nodes by state plus drift, every eval scenario state, open issues, live
+  sessions — is true of the window on every route, so no view may own a duplicate and each group is
+  registered here. On a graph address the same buttons acquire graph focus-walk behavior; their visual
+  ownership and lifetime remain the frame's. A view contributes only
   facts about the document it is showing. That division is what stopped the bar from emptying when a view
   stopped being where a reader lands; the shape of an item and where it lands is [[status-bar]]'s.
 

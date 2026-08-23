@@ -19,8 +19,10 @@ scenarios:
       the buttons), and DOM reads confirm every icon-only button carries both title and aria-label. Open
       issue rows render the shared registry's two-path 16px `issue-opened` fill geometry in semantic green;
       every concluded issue renders the matching two-path 16px `issue-closed` fill geometry in semantic
-      closed purple. A pass uses circle-check in list/detail/A-B, a fail circle-x, stale retains its verdict
-      icon in muted tone, and unscored uses circle-minus/dashed. No status dot or Unicode verdict remains.
+      closed purple. A current pass uses solid-ring circle-check in list/detail/A-B and a current fail uses
+      solid-ring circle-x; stale pass/fail preserve that inner verdict but use a dashed outer ring, while
+      unscored uses circle-minus/dashed. No status dot or Unicode verdict remains, and freshness never relies
+      on colour or tooltip alone.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/icons.jsx]
   - name: harness-product-marks

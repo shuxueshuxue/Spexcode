@@ -10,6 +10,7 @@ related:
 related:
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/test/keep-alive.e2e.mjs
+  - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
@@ -36,7 +37,10 @@ pooled entry changes. Hidden panes are inactive and their intents are rejected w
 host drops its provider with the host. Address and query shapes are validated at the boundary (lowercase
 kebab-case page, string-or-null selector, URL-safe primitive query values), so malformed cross-view writes fail
 before the route layer. Navigation policy and tab identity remain shell-owned; this scope is an intent channel,
-not a second router. `viewScope.test.mjs` proves the validation, atomic intent shape, and hidden-pane suspension.
+not a second router. The host obtains its route contract from the view registry itself: an intent targeting an
+unregistered address is rejected before dispatch, and document/resident predicates remain owned by that same
+registry rather than a second shell allow-list. `viewScope.test.mjs` and `viewRegistry.test.mjs` prove the
+validation, atomic intent shape, hidden-pane suspension, and unowned-route rejection.
 
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:

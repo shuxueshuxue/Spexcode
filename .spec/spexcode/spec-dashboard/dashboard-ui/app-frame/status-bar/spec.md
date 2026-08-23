@@ -6,6 +6,7 @@ desc: The window's bottom row and a registry behind it — items are declared da
 code:
   - spec-dashboard/src/StatusBar.jsx
 related:
+  - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/specMeta.js
   - spec-dashboard/src/GraphView.jsx
@@ -141,3 +142,12 @@ Board tally actions use the shared [[icon-system]] registry for their semantic m
 `triangle-alert` glyph and issue totals use the official `issue-opened` glyph. Statusbar markup does not
 introduce Unicode warning/diamond stand-ins or a second local icon vocabulary; the tally's count and
 accessible label remain unchanged.
+
+## executable mount guard
+
+`src/budgetContracts.test.mjs` is the source-level regression guard for the two status-bar ownership
+boundaries that are otherwise easy to lose during route work. It asserts that the sealed public graph still
+mounts the shared status provider/footer, that the normal shell owns the single `BoardStatus` ledger, and that
+the graph's retired `GraphStats` boundary registers no second item. The same guard is deliberately kept beside
+the runtime tests rather than relying on a screenshot: a hidden keep-mounted graph must not be able to leave a
+second status item behind, and a public build must not silently lose its only ambient readout.

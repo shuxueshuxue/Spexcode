@@ -90,9 +90,9 @@ scenarios:
       and its prompt seed, then record the exact hash and selected node ids from the ordinary composer draft.
     expected: >-
       Partial-overlap marquee selection marks every touched tile; the action group is visible only for a
-      non-empty selection. Send to Session navigates to `#/sessions/new` through the ordinary composer with
-      one `[[node-id]]` reference per selected tile, and the transient graph selection clears after dispatch
-      without changing graph focus or camera.
+      non-empty selection. Send to Session navigates to `#/sessions/new?seed=...`, where the encoded seed is
+      the ordinary composer draft with one `[[node-id]]` reference per selected tile, and the transient graph
+      selection clears after dispatch without changing graph focus or camera.
 ---
 # eval.md — node-graph
 

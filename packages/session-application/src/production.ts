@@ -31,6 +31,8 @@ const STATE_EVENT = 'session.state.changed.v1'
 const MESSAGE_EVENT = 'session.message.sent.v1'
 const PARENT_RELATION = 'parent'
 const WATCH_RELATION = 'watch'
+const PARENT_WATCH_RELATION = 'watch:parent'
+const MANUAL_WATCH_RELATION = 'watch:manual'
 const compositions = new Map<string, ProductionSessionApplication>()
 
 export interface LocalityPrecondition {
@@ -242,6 +244,41 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     options.onCommitted?.(result)
   }
 
+  // Parent supervision is quiet for routine working transitions. A manual watch opts into the
+  // complete feed; overlapping sources are a union, so one watcher receives one queue item.
+  const lifecycleRecipients = (
+    subjectSessionId: string,
+    previousStatus: string | null,
+    status: string,
+    tx: ProtocolTransaction,
+  ): string[] => {
+    const recipients = new Set<string>()
+    for (const edge of topology.parents(subjectSessionId, undefined, tx)) {
+      const parentOnly = edge.relationType === 'watch:parent'
+      const manual = edge.relationType === 'watch:manual' || edge.relationType === 'watch'
+      if (manual || (parentOnly && (status !== 'active' || previousStatus === 'queued'))) {
+        recipients.add(edge.fromSessionId)
+      }
+    }
+    return [...recipients].sort()
+  }
+
+  // Parent supervision is intentionally quiet for routine active/working transitions. A manual watch
+  // opts into the complete feed; when both sources exist, the union keeps that manual choice without
+  // enqueueing the same watcher twice. Creation still publishes its initial snapshot through the normal
+  // relation recipients; this filter governs later lifecycle transitions only. A queued creation snapshot is
+  // corrected once by the first ready active publication, otherwise parent-only supervision would retain the
+  // stale queued face forever.
+  const lifecycleRecipients = (subjectSessionId: string, previousStatus: string | null, status: string, tx: ProtocolTransaction): string[] => {
+    const recipients = new Set<string>()
+    for (const edge of topology.parents(subjectSessionId, undefined, tx)) {
+      const parentOnly = edge.relationType === PARENT_WATCH_RELATION
+      const manual = edge.relationType === MANUAL_WATCH_RELATION || edge.relationType === WATCH_RELATION
+      if (manual || (parentOnly && (status !== 'active' || previousStatus === 'queued'))) recipients.add(edge.fromSessionId)
+    }
+    return [...recipients].sort()
+  }
+
   const app: ProductionSessionApplication = {
     databasePath: options.databasePath,
     protocol,
@@ -406,7 +443,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           occurredAtMs: updatedAtMs,
         })
         const recipients = input.recipientSessionIds === undefined
-          ? topology.recipients(sessionId, tx)
+          ? lifecycleRecipients(sessionId, current.status, status, tx)
           : [...new Set(input.recipientSessionIds.map(recipient => {
             requireId(recipient, 'recipientSessionId')
             return recipient

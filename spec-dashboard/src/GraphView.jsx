@@ -113,6 +113,7 @@ function GraphView({ param, query }) {
     tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: () => setLegend((v) => !v) })
   const graphRef = useRef(null)
   const animRef = useRef(0)
+  const viewportRef = useRef(null)
   const fitZoomRef = useRef(null)
   const userZoomRef = useRef(0.85)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
@@ -295,10 +296,14 @@ function GraphView({ param, query }) {
   }, [focusId, specs2, byId])
 
   // Flat-pan the viewport without moving graph-space node/edge geometry.
+  const writeViewport = useCallback((viewport) => {
+    viewportRef.current = { ...viewport }
+    setViewport(viewport)
+  }, [setViewport])
   const animateView = useCallback((target, dur) => {
     if (!dur) {
       cancelAnimationFrame(animRef.current)
-      setViewport(target)
+      writeViewport(target)
       return
     }
     const start = getViewport()
@@ -307,7 +312,7 @@ function GraphView({ param, query }) {
     const step = (now) => {
       const p = dur ? Math.min(1, (now - t0) / dur) : 1
       const eased = 1 - Math.pow(1 - p, 3)
-      setViewport({
+      writeViewport({
         x: start.x + (target.x - start.x) * eased,
         y: start.y + (target.y - start.y) * eased,
         zoom: start.zoom + (target.zoom - start.zoom) * eased,
@@ -315,7 +320,7 @@ function GraphView({ param, query }) {
       if (p < 1) animRef.current = requestAnimationFrame(step)
     }
     animRef.current = requestAnimationFrame(step)
-  }, [getViewport, setViewport])
+  }, [getViewport, writeViewport])
 
   // Frame a focus for reading: anchor the focus→child pair at 43% (or focus→parent for a leaf), while a
   // complete visible neighbourhood gets fit-to-pane treatment with one left gutter.
@@ -613,7 +618,13 @@ function GraphView({ param, query }) {
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
           onMoveEnd={(event, viewport) => {
-            if (event) {
+            const previous = viewportRef.current
+            const changed = !previous
+              || Math.abs(previous.x - viewport.x) > 0.001
+              || Math.abs(previous.y - viewport.y) > 0.001
+              || Math.abs(previous.zoom - viewport.zoom) > 0.001
+            viewportRef.current = { ...viewport }
+            if (event && changed) {
               fitZoomRef.current = null
               userZoomRef.current = viewport.zoom
             }

@@ -44,10 +44,11 @@ export function viewportForFocus({
     && contentHeight * zoom <= height
   const fitZoom = Math.min(maxZoom, (width - gutter) / contentWidth, height / contentHeight)
   if (fit && currentFits && fitZoom >= minZoom) {
+    const fitZoomAtOrBelowUser = Math.min(fitZoom, zoom)
     return {
-      x: gutter - minX * fitZoom,
-      y: (height - contentHeight * fitZoom) / 2 - minY * fitZoom,
-      zoom: fitZoom,
+      x: gutter - minX * fitZoomAtOrBelowUser,
+      y: (height - contentHeight * fitZoomAtOrBelowUser) / 2 - minY * fitZoomAtOrBelowUser,
+      zoom: fitZoomAtOrBelowUser,
     }
   }
 

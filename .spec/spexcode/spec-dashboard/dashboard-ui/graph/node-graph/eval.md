@@ -91,7 +91,10 @@ assert fit-left with one grid-column gutter instead.
 This view is product surface — it is measured by **looking** (YATU), not by a unit test: the agent opens
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,
-the marks and any live editors' avatars on Row 2 — with focus at the graph pane's geometric centre. The
-recording and screenshot ride together with the verdict. Structural readings sample browser frames around
-the interaction and distinguish graph-space geometry from the moving viewport: a still cannot prove that the
-tree stayed connected while the camera supplied direction.
+the marks and any live editors' avatars on Row 2 — with the focus→child reading pair at the graph pane's
+43% horizontal token (or the parent↔focus midpoint for a leaf) and the focus row vertically. If the visible
+bbox fits at the current user zoom, the frame uses fit-left treatment with one gutter; fit may lower zoom to
+fit but never raise a deliberate user zoom, and later anchored moves preserve that zoom. The recording and
+screenshot ride together with the verdict. Structural readings sample browser frames around the interaction
+and distinguish graph-space geometry from the moving viewport: a still cannot prove that the tree stayed
+connected while the camera supplied direction.

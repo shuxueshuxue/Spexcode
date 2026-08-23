@@ -93,9 +93,16 @@ test('camera fits a complete small neighbourhood and leaves one grid gutter', ()
   const root = { x: 0, y: 0 }
   const child = { x: X_GAP, y: 0 }
   const viewport = viewportForFocus({ focus: root, child, visible: [root, child], width: 900, height: 600, zoom: 0.85 })
-  assert.equal(viewport.zoom, (900 - CAMERA_GUTTER) / (X_GAP + 176))
+  assert.equal(viewport.zoom, 0.85)
   assert.equal(viewport.x, CAMERA_GUTTER + 88 * viewport.zoom)
   assert.equal(viewport.y, 300)
+})
+
+test('fit never raises a user-selected zoom', () => {
+  const root = { x: 0, y: 0 }
+  const child = { x: X_GAP, y: 0 }
+  const viewport = viewportForFocus({ focus: root, child, visible: [root, child], width: 900, height: 600, zoom: 0.4 })
+  assert.equal(viewport.zoom, 0.4)
 })
 
 test('camera falls back to the reading anchor when the visible bbox cannot fit', () => {

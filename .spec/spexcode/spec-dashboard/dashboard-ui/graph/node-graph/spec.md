@@ -27,7 +27,8 @@ nearest child column sits at the `43%` canvas token; a leaf uses the midpoint be
 and a root with no pair uses itself. The anchor's vertical coordinate is the focused tile's row, clamped so
 the visible parent/focus columns and child frontier remain reachable. When the visible node bbox fits the pane
 at the current user zoom, the camera instead fits that content and leaves one grid-column gutter at the left
-edge. A fit zoom is local to that fit frame; later anchored moves preserve the user's zoom, lowering it only
+edge. Fit uses the minimum of the computed fit zoom and the user's current zoom: it may lower zoom to make
+content fit, never raise a deliberate user zoom. Later anchored moves preserve that user zoom, lowering it only
 when the anchored frontier cannot fit. Keyboard, click, and programmatic focus changes all use this same
 target; a click absorbs the instantaneous 0px screen jump and the existing smooth camera transition supplies
 the reading motion. Only the camera moves; layout coordinates never change.

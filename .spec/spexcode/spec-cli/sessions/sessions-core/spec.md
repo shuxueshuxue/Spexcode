@@ -74,6 +74,12 @@ registered process is alive but its native transport is temporarily absent; the 
 contract, and the next transport sweep drains it. This durable watch path never treats `asking`, `parked`, `error`,
 or either `awaiting` proposal (`review`/`close-pending`) as terminal or requires a dashboard poll, and it does not
 change the lifecycle or cutover rules of either session.
+When legacy record metadata still carries a waiting, error, stopped, or archived lifecycle, a stale canonical
+application row may not project it back to `active`; the durable record fact wins until an explicit lifecycle
+transition updates both authorities. A retired protocol address is likewise not delivery debt: the retry sweep
+must drop that impossible lookup rather than polling and logging it forever.
+An existing queue with no bound governed runtime is also retained but not polled; binding/resume is the event
+that makes it drainable again.
 Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.

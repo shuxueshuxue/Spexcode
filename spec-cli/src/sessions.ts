@@ -1356,16 +1356,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
     const rec = snapshot.rec
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
-    const canonicalState = canonicalStates.get(id)
-    const projectedRecord = canonicalState
-      ? {
-          ...rec,
-          status: canonicalState.status as Lifecycle,
-          proposal: canonicalState.proposal as Proposal | null,
-          note: canonicalState.note,
-          parent: canonicalState.parentSessionId,
-        }
-      : rec
+    const projectedRecord = canonicalRecordProjection(rec, canonicalStates.get(id))
     // A forced public liveness comes only from the shared record projection. Do not let live process/thread
     // evidence punch through it (including archive hazard repair).
     if (entry.kind === 'ok' && entry.liveness === 'offline') {
@@ -1805,9 +1796,41 @@ export function canonicalWatchRecipients(
 
 export function sessionHasPendingDelivery(
   id: string,
-  application: Pick<ProductionSessionApplication, 'protocol'> | null = configuredSessionApplicationIfCutover() ?? null,
+  application: Pick<ProductionSessionApplication, 'protocol'>
+    & Partial<Pick<ProductionSessionApplication, 'resolveRuntime'>>
+    | null = configuredSessionApplicationIfCutover() ?? null,
 ): boolean {
-  return application ? application.protocol.listPending(id).length > 0 : owesDelivery(id)
+  if (!application) return owesDelivery(id)
+  const runtime = application.resolveRuntime?.(id, 'spex-governed')
+  if (runtime === null) return false
+  try {
+    return application.protocol.listPending(id).length > 0
+  } catch (error) {
+    // A legacy record can outlive its migrated protocol address. It has no canonical queue to drain;
+    // treating that address as owed makes the supervisor retry the same impossible lookup forever.
+    if ((error as { code?: string })?.code === 'PROTOCOL_SESSION_UNKNOWN'
+      || /unknown protocol address/i.test(error instanceof Error ? error.message : String(error))) return false
+    throw error
+  }
+}
+
+export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'stopped' | 'archived'>>(
+  rec: T,
+  canonical: { status: string; proposal: string | null; note: string | null; parentSessionId: string | null } | null | undefined,
+): T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null } {
+  // Canonical state may lag a legacy record during archive/stop or an authored waiting/error transition.
+  // Those durable states are terminal/needs-you facts and must never be resurrected as active by a stale
+  // application row. Active/idle/queued records remain canonical-led, as intended after cutover.
+  if (!canonical || rec.archived || rec.stopped || !['active', 'idle', 'queued'].includes(rec.status)) {
+    return rec as T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null }
+  }
+  return {
+    ...rec,
+    status: canonical.status as Lifecycle,
+    proposal: canonical.proposal as Proposal | null,
+    note: canonical.note,
+    parent: canonical.parentSessionId,
+  }
 }
 
 function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {

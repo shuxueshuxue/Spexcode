@@ -3,6 +3,8 @@ import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
+import { middleEllipsis } from './specMeta.js'
+export { middleEllipsis } from './specMeta.js'
 
 // compact "Nm/Nh/Nd ago"; returns null for a missing/unparseable date so the caller can render nothing.
 function timeAgo(iso, t) {
@@ -32,18 +34,6 @@ const EDGE_ANCHOR_PROPS = {
 // here so the graph side keeps its one import site.
 export { STATUS, GLYPH } from './specMeta.js'
 import { STATUS, GLYPH } from './specMeta.js'
-
-// Keep both ends of long identities visible. CSS's tail-only ellipsis made distinct paths look identical
-// when their shared prefix filled the fixed title slot.
-export function middleEllipsis(value, maxChars = 14) {
-  const text = String(value ?? '')
-  if (text.length <= maxChars) return text
-  if (maxChars <= 1) return '…'.slice(0, maxChars)
-  const available = maxChars - 1
-  const head = Math.ceil(available / 2)
-  const tail = Math.floor(available / 2)
-  return `${text.slice(0, head)}…${text.slice(text.length - tail)}`
-}
 
 function Editors({ data }) {
   const t = useT()

@@ -14,7 +14,7 @@ import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDi
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
-import { jsonMigrationFencePath } from '@spexcode/session-application'
+import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
 import { stripRefSigil } from './mentions.js'
@@ -1789,6 +1789,20 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
   }
 }
 
+export function canonicalWatchRecipients(
+  application: Pick<ProductionSessionApplication, 'topology'>,
+  sessionId: string,
+  status: string,
+): string[] {
+  const recipients = new Set<string>()
+  for (const edge of application.topology.parents(sessionId)) {
+    if (!edge.relationType.startsWith('watch')) continue
+    if (status === 'active' && edge.relationType === 'watch:parent') continue
+    recipients.add(edge.fromSessionId)
+  }
+  return [...recipients]
+}
+
 function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
   const application = configuredSessionApplicationIfCutover()
   if (!application) return
@@ -1797,7 +1811,13 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
     if (rec.parent) application.attachWatcher(rec.parent, rec.session, 'watch:parent')
     return
   }
-  application.transitionSession(rec.session, { status, proposal, note, parentSessionId: rec.parent })
+  application.transitionSession(rec.session, {
+    status,
+    proposal,
+    note,
+    parentSessionId: rec.parent,
+    recipientSessionIds: canonicalWatchRecipients(application, rec.session, status),
+  })
 }
 
 async function launchReadinessWitnessAlive(id: string, harness: Harness, current: SessRec): Promise<boolean> {

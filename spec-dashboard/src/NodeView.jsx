@@ -5,7 +5,7 @@ import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
-import { fetchNodeFiles, loadPublicSpecContent, specUrl } from './data.js'
+import { fetchNodeFiles, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
@@ -16,6 +16,10 @@ import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
 import { EVAL_QUERY_DEFAULT, setToken } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
+import ProseActions from './ProseActions.jsx'
+import { useSpecContent } from './specContent.js'
+
+export { useSpecContent } from './specContent.js'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -201,34 +205,6 @@ function TwoPart({ parts, body }) {
       </PartCard>
     </div>
   )
-}
-
-// body + parts are NOT on the board ([[graph-lean]]); fetch them when a node opens. `/api/specs/:id/content`
-// returns both (the backend does the parse), so there is no client-side parser to keep in sync. Cached per
-// (id, version) so re-opening is instant, but a NEW version (the board carries the live version) misses the
-// stale entry and refetches — the detail prose can never lag the version badge above it. A non-OK response is
-// shown but never cached, so a transient 404 during a backend reload can't poison the node until a reload.
-// Exported so the prose selection layer ([[prose-selection]]) reads the SAME body the pane rendered, from
-// the same per-(id,version) cache — two fetches could disagree about the text a line number points at.
-const contentCache = new Map()
-export function useSpecContent(id, version, { embedded = false, publicGraph = false } = {}) {
-  const key = `${publicGraph ? 'public:' : ''}${id}@${version ?? ''}`
-  const [content, setContent] = useState(() => contentCache.get(key) ?? null)
-  useEffect(() => {
-    if (embedded) return undefined
-    const hit = contentCache.get(key)
-    if (hit) { setContent(hit); return }             // cached (re-open) → instant, no spinner
-    setContent(null)                                  // drop the previous node/version's prose while the new one loads
-    let on = true
-    const request = publicGraph
-      ? loadPublicSpecContent(id)
-      : fetch(specUrl(id, 'content')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-    request
-      .then((d) => { contentCache.set(key, d); if (on) setContent(d) })   // land the body the instant it arrives — no artificial delay
-      .catch(() => { if (on) setContent({ body: '', parts: null }) })
-    return () => { on = false }
-  }, [embedded, id, version, key, publicGraph])
-  return content
 }
 
 // The `code:` list is a row of file doors. The claim stays in the spec prose, while the bytes live at the
@@ -713,6 +689,7 @@ const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory',
 
 export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false }) {
   const t = useT()
+  const proseRef = useRef(null)
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
   const updateFilter = (kind, patch) => setFilters((current) => ({
     ...current,
@@ -760,7 +737,12 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [], 
           <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
-          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} /></div>}
+          {active === 'spec' && (
+            <div className="pane-solo" ref={proseRef}>
+              <SpecPane node={node} graphOnly={graphOnly} />
+              {!graphOnly && <ProseActions node={node} hostRef={proseRef} />}
+            </div>
+          )}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
           {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}

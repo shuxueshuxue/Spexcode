@@ -58,7 +58,9 @@ that the existing active/resource publication is observably working. A launch at
 that resource contract and its loud failure note, but retires the debt without fabricating working. A synchronous
 launch/preflight failure likewise retires the debt rather than misreporting its queued record as capacity backlog;
 only the queue's proven full-capacity branch may publish queued. Only a later state write consults the source
-policy. A retryable launch error retains the same debt for the next queue attempt, and a restarted supervisor may
+policy. In the canonical application path, this caller-owned policy passes the resolved recipient set into the
+neutral application transition; the package never interprets parent/manual names. A retryable launch error retains
+the same debt for the next queue attempt, and a restarted supervisor may
 reclaim readiness observation for an already-active launch without launching or replaying its prompt. Each accepted
 snapshot is keyed by the debt token and authored state; before clearing the token, delivery compares the latest state
 under the record lock and accepts any raced actionable state with its own key. A crash before that compare therefore

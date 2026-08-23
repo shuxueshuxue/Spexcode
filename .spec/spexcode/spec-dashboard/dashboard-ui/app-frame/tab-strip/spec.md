@@ -151,26 +151,30 @@ strip is a working set someone chose. Every row is the same height, and the band
 working set rather than a constant.
 
 **Width is elastic before it is wrapped, following VS Code's `wrapTabs` fit behaviour.** Each tab is one flex
-item with a zero basis, an 80px minimum and a 240px maximum (the active tab uses a 112px readability floor so
-its always-visible close control never crowds its title). Flex first shrinks every tab on the current row; it
-creates another row only when the sum of those minimums cannot fit. Each wrapped row then grows its own tabs
-again, so a short last row may be wider than the rows above it. This is one CSS flex rule, not JavaScript width
-measurement. The close affordance is always present on the active tab; an inactive tab shows it only on hover.
-At the narrow end, padding is reduced first, and status dots/spinners disappear only at the final 320px strip
-width; the face keeps its full accessible label and tooltip while its visible title ellipsises.
+item with a zero basis, an 80px minimum and a 240px preferred maximum (the active tab uses a 112px readability
+floor so its always-visible close control never crowds its title). Flex first shrinks every tab on the current
+row; it creates another row only when the sum of those minimums cannot fit. A dense working set releases the
+preferred cap so every wrapped row, including a short final row, fills the tablist; that is why the final row
+may be wider than the rows above it. This is one CSS flex rule, not JavaScript width measurement. The close
+affordance is always present on the active tab; an inactive tab shows it only on hover. At the narrow end,
+padding is reduced per tab at 140px, and status dots/spinners disappear per tab at 100px; the face keeps its
+full accessible label and tooltip while its visible title ellipsises.
 
-The measured fit matrix below records the rendered tab width in pixels (action cluster absent; a 30px row; the
-active tab is included in the count). A `*` marks a wrapped layout; values are the actual equal-width flex
-items in the first row, with the final row noted where it differs:
+The measured fit matrix below records the real rendered tab width in pixels. The viewport includes the 40px
+rail and the 200px explorer dock; the 36px document-action sibling is also present, so the tablist width is
+`viewport - 276px` (1404/1004/624px). A `*` marks a wrapped layout; the active tab is included in the count,
+and `last=` records a widened final row:
 
-| viewport | 2 tabs | 3 tabs | 5 tabs | 8 tabs | 12 tabs |
+| viewport / tablist | 2 tabs | 3 tabs | 5 tabs | 8 tabs | 12 tabs |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 1680px | 240 | 240 | 240 | 210 | 140 |
-| 1280px | 240 | 240 | 240 | 160 | 112 + 11x106.2 |
-| 900px | 240 | 240 | 180 | 112.5 | 112 + 9x87.6 (`*`, final 2 = 240) |
+| 1680 / 1404px | 240 | 240 | 240 | 175.5 | 117 |
+| 1280 / 1004px | 240 | 240 | 200.8 | 125.5 | 112 + 11x81.1 |
+| 900 / 624px | 240 | 208 | 124.8 | 112 + 6x85.3 (`*`, last=624) | 112 + 6x85.3 (`*`, last=5x124.8) |
 
-The screenshots for this 15-cell matrix are the review evidence for this paragraph; the widths above are kept
-in the same commit as the CSS so a future change can re-measure the contract rather than infer it from prose.
+The dense 15-tab stress case at 900/624px is three rows of `7 + 7 + 1`; the final tab is 624px wide and
+leaves no remainder. The screenshots for this 15-cell matrix plus that 15-tab stress case are the review
+evidence for this paragraph; the widths above are kept in the same commit as the CSS so a future change can
+re-measure the product surface rather than infer it from prose.
 
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run

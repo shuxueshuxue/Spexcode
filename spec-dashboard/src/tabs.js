@@ -26,7 +26,13 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string'), isDocument) : []
+    if (!Array.isArray(raw)) return []
+    const valid = raw.filter((t) => t && typeof t.page === 'string')
+    const normalized = normalizeTabs(valid, isDocument)
+    // Persist the migration at the same boundary that reads it: old review entries disappear once and do
+    // not keep resurfacing in another tab or after the next reload.
+    if (JSON.stringify(normalized) !== JSON.stringify(valid)) localStorage.setItem(KEY, JSON.stringify(normalized))
+    return normalized
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }

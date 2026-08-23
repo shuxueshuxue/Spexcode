@@ -6,6 +6,7 @@ import { MAX_NOTICE_DURATION, MIN_NOTICE_DURATION, readingNoticeDuration, resolv
 const read = (name) => readFileSync(new URL(name, import.meta.url), 'utf8')
 const notice = read('./TransientNotice.jsx')
 const root = read('./Root.jsx')
+const reviewSurface = read('./ReviewSurface.jsx')
 const evals = read('./EvalsPage.jsx')
 const issues = read('./IssuesPage.jsx')
 const sessions = read('./SessionInterface.jsx')
@@ -30,8 +31,10 @@ test('transient notices expire by readable length, honor overrides, and remain d
 })
 
 test('one root provider serves full and lightweight dashboard routes', () => {
-  assert.match(root, /<TransientNoticeProvider>[\s\S]*\{lightweight \? <ReviewEntry page=\{page\} param=\{param\} query=\{query\} \/> : <App \/>\}[\s\S]*<\/TransientNoticeProvider>/)
-  assert.match(root, /<\/div>\s*<StatusBar \/>\s*<\/div>\s*\)/)
+  assert.match(root, /surfaceFor\(page\)/)
+  assert.match(root, /<ReviewSurface page=\{page\} param=\{param\} query=\{query\} \/>/)
+  assert.match(root, /<App surface=\{surface\} \/>/)
+  assert.match(reviewSurface, /<StatusBar \/>/)
 })
 
 test('review surfaces and the session console publish through the shared mechanism', () => {

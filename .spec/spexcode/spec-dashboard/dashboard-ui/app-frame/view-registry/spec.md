@@ -2,7 +2,7 @@
 title: view-registry
 status: active
 hue: 225
-desc: Address kind → view, and the one contract every view obeys: it receives its route, it does not read the global one.
+desc: Address kind → view and surface, with one route-props contract for every view.
 code:
   - spec-dashboard/src/views.jsx
 related:
@@ -12,7 +12,7 @@ related:
 ---
 # view-registry
 
-The map from an address kind to the thing that renders it, and the single contract a view signs:
+The map from an address kind to the thing that renders it, its surface, and the single contract a view signs:
 
 > **A view receives `{ param, query }` as props and does not read the global address.**
 
@@ -27,9 +27,17 @@ view that reads the global address follows the reader out of its own pane: a hid
 itself from whatever was opened next. Both now take `{ param, query }` like everything else, and the cold
 review entry hands them the same props the shell does.
 
+**`surface` is the shell boundary.** `workspace` owns Explorer, tab strip, document pool, and dock;
+`review` owns the evals/issues board and detail layout with the rail but no Explorer, tab strip, or working
+set; `settings` owns its own settings page. Root resolves `surfaceFor(page)` from this registry once, and
+the same surface component tree renders for a cold URL and an in-app navigation. A view cannot acquire a
+different surface's chrome because it is never mounted inside that surface's host.
+
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. The user-facing distinction between object documents and bare board destinations is owned
-by [[tab-strip]]/[[workspace-shell]]; this node only supplies the machine predicate and storage normalization.
+keeping its own list. Evals and Issues are always `document: false`, including parameterized detail routes;
+legacy persisted entries are discarded by `normalizeTabs` at the storage boundary. The user-facing
+distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
+this node supplies the machine predicate and storage normalization.
 
 Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), bare sessions, bare
 evals/issues/settings boards, and `empty`, which is retained only as a compatibility alias for graph. **`/sessions/new` was a document and is not one now**: it names no

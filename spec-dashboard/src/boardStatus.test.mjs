@@ -36,3 +36,11 @@ test('project switching has one compact owner in the status row', () => {
   assert.match(shell, /href=\{hubHref\(\)\}/)
   assert.doesNotMatch(sideBar, /ProjectChip|proj-chip|IdentityIcon|projectHref|hubHref/)
 })
+
+test('rail projection focus stays in the one route/tab grammar', () => {
+  assert.match(sideBar, /import \{ focusLatestTab \} from '\.\/tabs\.js'/)
+  assert.doesNotMatch(sideBar, /shell\.pageGraph/)
+  assert.match(sideBar, /const handled = onNavigate\?\.\(\) === true/)
+  assert.match(sideBar, /return focusLatestTab\(\(tab\) => tab\.page === 'sessions' && tab\.param\)/)
+  assert.match(sideBar, /if \(!handled\) navigate\(page\)/)
+})

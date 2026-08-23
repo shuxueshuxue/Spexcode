@@ -117,8 +117,8 @@ The [[dock-modes]] sessions projection is the desktop's sole session list. This 
 renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
 the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
 while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
-dock remains read-only: drag-to-reparent and multi-select are explicitly retired with the duplicate list because
-their mutable state cannot belong to a finding projection. The keyboard fresh-session binding remains unchanged.
+dock remains list-owned: multi-select is explicitly retired with the duplicate list, while row movement belongs
+to the dock's sole session list ([[dock-modes]]). The keyboard fresh-session binding remains unchanged.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -179,8 +179,9 @@ the composer that is the human's only way to speak to a running session. The add
 screen; the store decides only what a bare address means.
 Opening a published resource is an ORDINARY navigation to that address: it lands in the strip's current slot
 like every other plain click, dedupes onto an already-open tab, and mints a tab of its own only from the
-gestures that mint any tab ([[tab-strip]]). It used to force a resident tab, which is exactly the reflex that
-filled the strip with things nobody decided to keep. Closing that tab closes the resource view;
+gestures that mint any tab ([[tab-strip]]). **Historical: an earlier implementation forced a resident tab**,
+which filled the strip with things nobody decided to keep; that behavior is retired. Closing the ordinary
+resource tab closes the resource view;
 the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
@@ -373,8 +374,8 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
 action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert. Bulk close leaves select mode immediately but aggregates every returned
-refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.
+renders no action alert. The retired multi-select contract is not a current bulk-close path; any future batch
+operation must be specified as an explicit selection mode owned by the dock session list.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
 stop, close, or merge would falsely claim the dashboard sent the agent a prompt.
@@ -385,8 +386,7 @@ a passive [[mentions]] reference, while `@new` uses the selected session as the 
 parent and therefore folds that child below it. File paste, drop, and pick reuse [[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename, archive or close
-([[session-rename]] / [[archive]]), select for bulk archive/close and drag-to-reparent
-([[session-multi-select]]), and **attach** for a live row ([[attach-menu]], which hands over the
+([[session-rename]] / [[archive]]), and **attach** for a live row ([[attach-menu]], which hands over the
 `spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
 suppression. Archive and close share the menu's danger group and each confirms before its lifecycle request.
 Lock on graph locks the board to that session and navigates to

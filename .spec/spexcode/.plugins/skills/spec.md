@@ -11,9 +11,5 @@ where an agent invokes them on demand, each carrying `surface: skill`. Grouping 
 legible at a glance — the skill plugins on this shelf, the command presets on [[commands]], the auxiliary
 system contracts on [[prompts]], with [[core]] a flat child beside them.
 
-This node is a **shelf, not a surface** (the [[prompts]] shape): it declares no `surface` field and
-gathers nothing itself. Discovery is recursive and field-driven ([[surface]]), so a resident plugs in
-exactly as it would at the root. A plugin that serves BOTH surfaces — [[distill]] is skill and command —
-shelves here by its primary (skill) identity and still gathers as a command through its field. The init
-templates mirror this layout. The shelf stays pure presentation: moving a resident beneath it changes
-neither that plugin's identity nor the surfaces gathered from its frontmatter.
+This node is a **shelf, not a surface**. Its routing and relocation invariant is owned once by
+[[.plugins]]'s shelf invariant; this node only describes skill-specific materialization and invocation.

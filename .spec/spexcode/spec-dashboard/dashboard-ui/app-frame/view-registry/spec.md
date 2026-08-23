@@ -28,10 +28,8 @@ itself from whatever was opened next. Both now take `{ param, query }` like ever
 review entry hands them the same props the shell does.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. Only parameterized OBJECTS qualify: spec, file, session, eval detail, and issue detail.
-Bare evals/issues/settings boards are destinations, not documents, regardless of their entry point or query,
-so they never enter the strip. Persisted entries are filtered through this same predicate during storage
-normalization, which clears board tabs written by older versions.
+keeping its own list. The user-facing distinction between object documents and bare board destinations is owned
+by [[tab-strip]]/[[workspace-shell]]; this node only supplies the machine predicate and storage normalization.
 
 Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), bare sessions, bare
 evals/issues/settings boards, and `empty`, which is retained only as a compatibility alias for graph. **`/sessions/new` was a document and is not one now**: it names no

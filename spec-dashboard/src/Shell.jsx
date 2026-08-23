@@ -22,13 +22,15 @@ import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { runTabCommand } from './tabs.js'
+import { pinTab, runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useLaunchers } from './launch.js'
 import { HARNESS_BY_ID } from './harness.jsx'
 import Legend from './Legend.jsx'
+import { ViewScopeProvider } from './ViewScope.jsx'
+import { createViewScope } from './viewScope.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -70,6 +72,29 @@ const POOL_LIMIT = 6
 // mirrors --dur-panel in the stylesheet: the shell has to outlive the CSS animation by the same amount it
 // lasts, and one of the two has to name the number.
 const DOCK_ANIMATION_MS = 170
+
+// Every mounted view gets one route scope. The shell is the only dispatcher: views can request an address,
+// explicitly hold one in the tab working set, or update their own query, but they cannot receive the raw navigate
+// callback or write another host's route. Pooled panes keep the scope object and only update its route/active
+// snapshot as they move between visible and hidden states.
+function ViewScopeHost({ page, param, query, active, children }) {
+  const dispatch = useCallback((intent) => {
+    const { page: targetPage, param: targetParam, query: targetQuery } = intent.address
+    if (intent.type === 'hold') {
+      pinTab(targetPage, targetParam, targetQuery)
+      return { accepted: true, intent }
+    }
+    navigate(targetPage, targetParam, { query: targetQuery })
+    return { accepted: true, intent }
+  }, [])
+  const holder = useMemo(() => createViewScope({
+    route: { page, param, query }, dispatch, active,
+  }), []) // the shell updates this holder below; the public scope identity remains stable for the view
+  useEffect(() => {
+    holder.update({ route: { page, param, query }, active })
+  }, [holder, page, param, query, active])
+  return <ViewScopeProvider scope={holder.scope}>{children}</ViewScopeProvider>
+}
 
 // [[workspace-shell]]'s MOUNTED-DOCUMENT POOL. Switching tabs used to remount the document from scratch —
 // every switch re-ran a view's whole boot, which is what "why does clicking a tab reload it" was naming.
@@ -121,9 +146,11 @@ const PoolPane = memo(function PoolPane({ entry, showing }) {
           document is the reader's own recovery, and it must not need a reload. */}
       <ViewErrorBoundary resetKey={entry.address}>
         <PaneProvider value={pane}>
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <View param={entry.param} query={entry.query} />
-          </Suspense>
+          <ViewScopeHost page={entry.page} param={entry.param} query={entry.query} active={showing}>
+            <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+              <View param={entry.param} query={entry.query} />
+            </Suspense>
+          </ViewScopeHost>
         </PaneProvider>
       </ViewErrorBoundary>
     </div>
@@ -141,9 +168,11 @@ function ViewHost({ page, param, query, inactive = false }) {
       style={inactive ? { display: 'none' } : undefined}>
       <ViewErrorBoundary resetKey={address}>
         <PaneProvider value={{ address, active: !inactive }}>
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <View key={poolKey(page, param)} param={param} query={query} />
-          </Suspense>
+          <ViewScopeHost page={page} param={param} query={query} active={!inactive}>
+            <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+              <View key={poolKey(page, param)} param={param} query={query} />
+            </Suspense>
+          </ViewScopeHost>
         </PaneProvider>
       </ViewErrorBoundary>
     </div>

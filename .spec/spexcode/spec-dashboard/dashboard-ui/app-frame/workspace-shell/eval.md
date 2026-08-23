@@ -1,5 +1,14 @@
 ---
 scenarios:
+  - name: pooled-view-route-scope
+    description: >
+      Exercise the shell's ViewScope contract with an active and hidden pooled pane. Submit open, hold, and
+      own-query intents, then update the pooled entry and submit again.
+    expected: >
+      Active intents dispatch one frozen typed address to the shell; malformed addresses fail at the boundary;
+      hidden panes return inactive without dispatch; reactivation updates the scope route before dispatch.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/viewScope.js, spec-dashboard/src/viewScope.test.mjs, spec-dashboard/src/ViewScope.jsx, spec-dashboard/src/Shell.jsx]
   - name: review-does-not-inherit-workspace-chrome
     description: >
       In a real browser, seed persisted tabs including legacy evals and issues entries, reload the graph,

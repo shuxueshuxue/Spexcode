@@ -1,0 +1,36 @@
+node:internal/modules/esm/resolve:271
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/home/jeffry/spexcode/.worktrees/session-protocol-de57/spikes/sqlite-m2/engine.mjs' imported from /home/jeffry/spexcode/.worktrees/session-protocol-de57/spikes/sqlite-m2/test/engine.test.mjs
+    at finalizeResolution (node:internal/modules/esm/resolve:271:11)
+    at moduleResolve (node:internal/modules/esm/resolve:861:10)
+    at defaultResolve (node:internal/modules/esm/resolve:988:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:697:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:714:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:746:52)
+    at #resolve (node:internal/modules/esm/loader:679:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:599:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:162:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:252:17) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///home/jeffry/spexcode/.worktrees/session-protocol-de57/spikes/sqlite-m2/engine.mjs'
+}
+
+Node.js v24.15.0
+✖ test/engine.test.mjs (91.187686ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.981612
+
+✖ failing tests:
+
+test at test/engine.test.mjs:1:1
+✖ test/engine.test.mjs (91.187686ms)
+  'test failed'
+exit=1

@@ -1,0 +1,9 @@
+{
+  "name": "@spexcode/sqlite-m1-spike",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "test": "node --test --experimental-sqlite test/contract.test.mjs"
+  }
+}

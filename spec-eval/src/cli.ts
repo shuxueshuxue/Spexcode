@@ -189,7 +189,7 @@ async function scan(args: string[] = []): Promise<number> {
           }
           // an anchor is a claim a named unit exists — dead/ambiguous/unextractable is LOUD, and until it is
           // repaired the probe issues no verdict, so the reading stays conservatively stale.
-          for (const p of [...axis.problems, ...anchorProblems(root, axis.entries)]) {
+          for (const p of [...axis.problems, ...(await anchorProblems(root, axis.entries))]) {
             malformed++
             findings.push(`  • eval-schema: '${s.id}' scenario '${sc.name}' ${p} — fix ${y.evalPath}`)
           }

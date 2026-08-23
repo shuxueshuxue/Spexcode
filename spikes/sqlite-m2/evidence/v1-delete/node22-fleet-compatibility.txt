@@ -1,0 +1,34 @@
+# Fleet compatibility: the ruling keeps Node >=22, so v1 must actually run there.
+# node: v22.21.0   sqlite: 3.50.4
+# cmd: node --test test/engine.test.mjs test/concurrency.test.mjs
+
+  duration_ms: 8.491434
+  type: 'test'
+  ...
+# Subtest: a reader is not blocked by an open write, and sees only committed state
+ok 51 - a reader is not blocked by an open write, and sees only committed state
+  ---
+  duration_ms: 32.251757
+  type: 'test'
+  ...
+# Subtest: write contention surfaces as a loud busy error, never as an empty result
+ok 52 - write contention surfaces as a loud busy error, never as an empty result
+  ---
+  duration_ms: 132.212242
+  type: 'test'
+  ...
+# Subtest: an unwritable database directory fails loudly at open
+ok 53 - an unwritable database directory fails loudly at open
+  ---
+  duration_ms: 0.987539
+  type: 'test'
+  ...
+1..53
+# tests 53
+# suites 0
+# pass 52
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 28215.016196

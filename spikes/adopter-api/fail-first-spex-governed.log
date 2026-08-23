@@ -1,0 +1,32 @@
+file:///home/jeffry/spexcode/.worktrees/session-runtime-189f/spikes/adopter-api/spex-governed-contract.mjs:12
+  if (result.status !== 0) throw new Error(`${mode} failed\nstdout=${result.stdout}\nstderr=${result.stderr}`)
+                                 ^
+
+Error: producer failed
+stdout=
+stderr=node:internal/modules/cjs/loader:1479
+  throw err;
+  ^
+
+Error: Cannot find module '/home/jeffry/spexcode/.worktrees/session-runtime-189f/file:/home/jeffry/spexcode/.worktrees/session-runtime-189f/spikes/adopter-api/spex-governed-sequence.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)
+    at Module._load (node:internal/modules/cjs/loader:1262:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v24.15.0
+
+    at child (file:///home/jeffry/spexcode/.worktrees/session-runtime-189f/spikes/adopter-api/spex-governed-contract.mjs:12:34)
+    at file:///home/jeffry/spexcode/.worktrees/session-runtime-189f/spikes/adopter-api/spex-governed-contract.mjs:17:20
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async node:internal/modules/esm/loader:639:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.15.0

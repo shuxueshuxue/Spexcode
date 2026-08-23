@@ -507,12 +507,13 @@ export default function ProjectsPage() {
   const [adminBusy, setAdminBusy] = useState(false)
   const [adminErr, setAdminErr] = useState(null)
   const [projectPage, setProjectPage] = useState(1)
+  const [pollRetry, setPollRetry] = useState(0)
   const seq = useRef(0)
 
   const refresh = useCallback(async () => {
     const mine = ++seq.current
     const r = await loadProjects()
-    if (mine !== seq.current) return // freshest-issued wins, same guard as the board
+    if (mine !== seq.current) return null // freshest-issued wins, same guard as the board
     if (r.state === 'ok') {
       setState({ kind: 'ok', adminGated: r.adminGated, gateway: r.gateway, projects: r.projects })
       // health rides its own probes through the authorized /p/:id lane — concurrent, freshest wins per
@@ -522,17 +523,33 @@ export default function ProjectsPage() {
       })
     } else if (r.state === 'denied') setState({ kind: 'denied', reason: r.reason })
     else setState((s) => (s.kind === 'ok' ? s : { kind: 'absent' })) // a transient miss keeps the last catalog
+    return r
   }, [])
 
   // live appearance/disappearance/health: poll while mounted, plus an immediate re-read when the tab
   // becomes visible again (the poll would catch it anyway; this trims the staleness a wake resumes with).
   useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, CATALOG_POLL_MS)
-    const onVis = () => { if (!document.hidden) refresh() }
+    let id
+    let live = true
+    let denied = false
+    const poll = async () => {
+      const result = await refresh()
+      if (result?.state === 'denied') {
+        denied = true
+        if (id) { clearInterval(id); id = undefined }
+      }
+      return result
+    }
+    const start = async () => {
+      const result = await poll()
+      // A denied catalog is a stable auth state; wait for the gate to request a fresh read.
+      if (live && result?.state !== 'denied') id = setInterval(poll, CATALOG_POLL_MS)
+    }
+    start()
+    const onVis = () => { if (!document.hidden && !denied) poll() }
     document.addEventListener('visibilitychange', onVis)
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
-  }, [refresh])
+    return () => { live = false; if (id) clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [refresh, pollRetry])
 
   const runAdmin = async (fn) => {
     setAdminBusy(true); setAdminErr(null)
@@ -548,7 +565,7 @@ export default function ProjectsPage() {
 
   const body = (() => {
     if (state.kind === 'loading') return <div className="loading">{t('hud.loading')}</div>
-    if (state.kind === 'denied') return <CredentialGate scope="admin" locked={state.reason === 'locked'} onUnlocked={refresh} />
+    if (state.kind === 'denied') return <CredentialGate scope="admin" locked={state.reason === 'locked'} onUnlocked={() => setPollRetry((n) => n + 1)} />
     if (state.kind === 'absent') {
       return (
         <div className="proj-empty">

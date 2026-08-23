@@ -1,0 +1,694 @@
+########## NODE v18.20.8 (/home/jeffry/.nvm/versions/node/v18.20.8/bin/node) NO FLAG
+### cmd: /home/jeffry/.nvm/versions/node/v18.20.8/bin/node probe-driver.mjs
+{
+  "node": "18.20.8",
+  "execArgv": [],
+  "module": null,
+  "moduleError": "ERR_UNKNOWN_BUILTIN_MODULE:No such built-in module: node:sqlite",
+  "exports": [],
+  "features": {}
+}
+### exit=0
+
+########## NODE v18.20.8 (/home/jeffry/.nvm/versions/node/v18.20.8/bin/node) --experimental-sqlite
+### cmd: /home/jeffry/.nvm/versions/node/v18.20.8/bin/node --experimental-sqlite probe-driver.mjs
+/home/jeffry/.nvm/versions/node/v18.20.8/bin/node: bad option: --experimental-sqlite
+### exit=9
+
+########## NODE v20.20.2 (/home/jeffry/.nvm/versions/node/v20.20.2/bin/node) NO FLAG
+### cmd: /home/jeffry/.nvm/versions/node/v20.20.2/bin/node probe-driver.mjs
+{
+  "node": "20.20.2",
+  "execArgv": [],
+  "module": null,
+  "moduleError": "ERR_UNKNOWN_BUILTIN_MODULE:No such built-in module: node:sqlite",
+  "exports": [],
+  "features": {}
+}
+### exit=0
+
+########## NODE v20.20.2 (/home/jeffry/.nvm/versions/node/v20.20.2/bin/node) --experimental-sqlite
+### cmd: /home/jeffry/.nvm/versions/node/v20.20.2/bin/node --experimental-sqlite probe-driver.mjs
+/home/jeffry/.nvm/versions/node/v20.20.2/bin/node: bad option: --experimental-sqlite
+### exit=9
+
+########## NODE v22.21.0 (/home/jeffry/.nvm/versions/node/v22.21.0/bin/node) NO FLAG
+### cmd: /home/jeffry/.nvm/versions/node/v22.21.0/bin/node probe-driver.mjs
+{
+  "node": "22.21.0",
+  "execArgv": [],
+  "module": "node:sqlite",
+  "moduleError": null,
+  "exports": [
+    "DatabaseSync",
+    "StatementSync",
+    "backup",
+    "constants",
+    "default"
+  ],
+  "features": {
+    "sqlite_version": {
+      "ok": true,
+      "value": "3.50.4"
+    },
+    "sqlite_source_id": {
+      "ok": true,
+      "value": "2025-07-30 19:33:53 4d8adfb30e03f9cf27f800a2c1ba3c48fb4ca1b08b0f5ed59a4d5ecbf45e20a3"
+    },
+    "journal_mode_wal": {
+      "ok": true,
+      "value": "wal"
+    },
+    "busy_timeout": {
+      "ok": true,
+      "value": 5000
+    },
+    "foreign_keys_on": {
+      "ok": true,
+      "value": 1
+    },
+    "synchronous_full": {
+      "ok": true,
+      "value": 2
+    },
+    "data_version": {
+      "ok": true,
+      "value": 2
+    },
+    "quick_check": {
+      "ok": true,
+      "value": "ok"
+    },
+    "strict_table": {
+      "ok": true,
+      "value": "created"
+    },
+    "strict_enforced": {
+      "ok": true,
+      "value": "NOT-ENFORCED: integer accepted into TEXT column"
+    },
+    "autoincrement": {
+      "ok": true,
+      "value": "1,3"
+    },
+    "partial_index": {
+      "ok": true,
+      "value": "SEARCH p USING INDEX p_pending (sid=?)"
+    },
+    "json_valid_json_type": {
+      "ok": true,
+      "value": "object-ok rejectArray=true rejectGarbage=true"
+    },
+    "unique_null_coexists": {
+      "ok": true,
+      "value": "nullRowsAccepted=3 duplicateNonNullRejected=true"
+    },
+    "blob_roundtrip": {
+      "ok": true,
+      "value": "Uint8Array len=6 equal=true"
+    },
+    "returning_clause": {
+      "ok": true,
+      "value": "id=2"
+    },
+    "vacuum_into": {
+      "ok": true,
+      "value": "rows=2"
+    },
+    "backup_api": {
+      "ok": true,
+      "value": "present (async function)"
+    },
+    "readonly_open": {
+      "ok": true,
+      "value": "rejected: attempt to write a readonly database"
+    },
+    "begin_immediate": {
+      "ok": true,
+      "value": "ok"
+    },
+    "session_extension": {
+      "ok": true,
+      "value": "absent"
+    },
+    "changes_bigint": {
+      "ok": true,
+      "value": "changes=1 (number) lastInsertRowid=number"
+    }
+  }
+}
+(node:2628359) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+### exit=0
+
+########## NODE v22.21.0 (/home/jeffry/.nvm/versions/node/v22.21.0/bin/node) --experimental-sqlite
+### cmd: /home/jeffry/.nvm/versions/node/v22.21.0/bin/node --experimental-sqlite probe-driver.mjs
+{
+  "node": "22.21.0",
+  "execArgv": [
+    "--experimental-sqlite"
+  ],
+  "module": "node:sqlite",
+  "moduleError": null,
+  "exports": [
+    "DatabaseSync",
+    "StatementSync",
+    "backup",
+    "constants",
+    "default"
+  ],
+  "features": {
+    "sqlite_version": {
+      "ok": true,
+      "value": "3.50.4"
+    },
+    "sqlite_source_id": {
+      "ok": true,
+      "value": "2025-07-30 19:33:53 4d8adfb30e03f9cf27f800a2c1ba3c48fb4ca1b08b0f5ed59a4d5ecbf45e20a3"
+    },
+    "journal_mode_wal": {
+      "ok": true,
+      "value": "wal"
+    },
+    "busy_timeout": {
+      "ok": true,
+      "value": 5000
+    },
+    "foreign_keys_on": {
+      "ok": true,
+      "value": 1
+    },
+    "synchronous_full": {
+      "ok": true,
+      "value": 2
+    },
+    "data_version": {
+      "ok": true,
+      "value": 2
+    },
+    "quick_check": {
+      "ok": true,
+      "value": "ok"
+    },
+    "strict_table": {
+      "ok": true,
+      "value": "created"
+    },
+    "strict_enforced": {
+      "ok": true,
+      "value": "NOT-ENFORCED: integer accepted into TEXT column"
+    },
+    "autoincrement": {
+      "ok": true,
+      "value": "1,3"
+    },
+    "partial_index": {
+      "ok": true,
+      "value": "SEARCH p USING INDEX p_pending (sid=?)"
+    },
+    "json_valid_json_type": {
+      "ok": true,
+      "value": "object-ok rejectArray=true rejectGarbage=true"
+    },
+    "unique_null_coexists": {
+      "ok": true,
+      "value": "nullRowsAccepted=3 duplicateNonNullRejected=true"
+    },
+    "blob_roundtrip": {
+      "ok": true,
+      "value": "Uint8Array len=6 equal=true"
+    },
+    "returning_clause": {
+      "ok": true,
+      "value": "id=2"
+    },
+    "vacuum_into": {
+      "ok": true,
+      "value": "rows=2"
+    },
+    "backup_api": {
+      "ok": true,
+      "value": "present (async function)"
+    },
+    "readonly_open": {
+      "ok": true,
+      "value": "rejected: attempt to write a readonly database"
+    },
+    "begin_immediate": {
+      "ok": true,
+      "value": "ok"
+    },
+    "session_extension": {
+      "ok": true,
+      "value": "absent"
+    },
+    "changes_bigint": {
+      "ok": true,
+      "value": "changes=1 (number) lastInsertRowid=number"
+    }
+  }
+}
+(node:2628371) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+### exit=0
+
+########## NODE v24.14.0 (/home/jeffry/.nvm/versions/node/v24.14.0/bin/node) NO FLAG
+### cmd: /home/jeffry/.nvm/versions/node/v24.14.0/bin/node probe-driver.mjs
+{
+  "node": "24.14.0",
+  "execArgv": [],
+  "module": "node:sqlite",
+  "moduleError": null,
+  "exports": [
+    "DatabaseSync",
+    "Session",
+    "StatementSync",
+    "backup",
+    "constants",
+    "default"
+  ],
+  "features": {
+    "sqlite_version": {
+      "ok": true,
+      "value": "3.51.2"
+    },
+    "sqlite_source_id": {
+      "ok": true,
+      "value": "2026-01-09 17:27:48 b270f8339eb13b504d0b2ba154ebca966b7dde08e40c3ed7d559749818cb2075"
+    },
+    "journal_mode_wal": {
+      "ok": true,
+      "value": "wal"
+    },
+    "busy_timeout": {
+      "ok": true,
+      "value": 5000
+    },
+    "foreign_keys_on": {
+      "ok": true,
+      "value": 1
+    },
+    "synchronous_full": {
+      "ok": true,
+      "value": 2
+    },
+    "data_version": {
+      "ok": true,
+      "value": 2
+    },
+    "quick_check": {
+      "ok": true,
+      "value": "ok"
+    },
+    "strict_table": {
+      "ok": true,
+      "value": "created"
+    },
+    "strict_enforced": {
+      "ok": true,
+      "value": "NOT-ENFORCED: integer accepted into TEXT column"
+    },
+    "autoincrement": {
+      "ok": true,
+      "value": "1,3"
+    },
+    "partial_index": {
+      "ok": true,
+      "value": "SEARCH p USING INDEX p_pending (sid=?)"
+    },
+    "json_valid_json_type": {
+      "ok": true,
+      "value": "object-ok rejectArray=true rejectGarbage=true"
+    },
+    "unique_null_coexists": {
+      "ok": true,
+      "value": "nullRowsAccepted=3 duplicateNonNullRejected=true"
+    },
+    "blob_roundtrip": {
+      "ok": true,
+      "value": "Uint8Array len=6 equal=true"
+    },
+    "returning_clause": {
+      "ok": true,
+      "value": "id=2"
+    },
+    "vacuum_into": {
+      "ok": true,
+      "value": "rows=2"
+    },
+    "backup_api": {
+      "ok": true,
+      "value": "present (async function)"
+    },
+    "readonly_open": {
+      "ok": true,
+      "value": "rejected: attempt to write a readonly database"
+    },
+    "begin_immediate": {
+      "ok": true,
+      "value": "ok"
+    },
+    "session_extension": {
+      "ok": true,
+      "value": "present"
+    },
+    "changes_bigint": {
+      "ok": true,
+      "value": "changes=1 (number) lastInsertRowid=number"
+    }
+  }
+}
+(node:2628391) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+### exit=0
+
+########## NODE v24.14.0 (/home/jeffry/.nvm/versions/node/v24.14.0/bin/node) --experimental-sqlite
+### cmd: /home/jeffry/.nvm/versions/node/v24.14.0/bin/node --experimental-sqlite probe-driver.mjs
+{
+  "node": "24.14.0",
+  "execArgv": [
+    "--experimental-sqlite"
+  ],
+  "module": "node:sqlite",
+  "moduleError": null,
+  "exports": [
+    "DatabaseSync",
+    "Session",
+    "StatementSync",
+    "backup",
+    "constants",
+    "default"
+  ],
+  "features": {
+    "sqlite_version": {
+      "ok": true,
+      "value": "3.51.2"
+    },
+    "sqlite_source_id": {
+      "ok": true,
+      "value": "2026-01-09 17:27:48 b270f8339eb13b504d0b2ba154ebca966b7dde08e40c3ed7d559749818cb2075"
+    },
+    "journal_mode_wal": {
+      "ok": true,
+      "value": "wal"
+    },
+    "busy_timeout": {
+      "ok": true,
+      "value": 5000
+    },
+    "foreign_keys_on": {
+      "ok": true,
+      "value": 1
+    },
+    "synchronous_full": {
+      "ok": true,
+      "value": 2
+    },
+    "data_version": {
+      "ok": true,
+      "value": 2
+    },
+    "quick_check": {
+      "ok": true,
+      "value": "ok"
+    },
+    "strict_table": {
+      "ok": true,
+      "value": "created"
+    },
+    "strict_enforced": {
+      "ok": true,
+      "value": "NOT-ENFORCED: integer accepted into TEXT column"
+    },
+    "autoincrement": {
+      "ok": true,
+      "value": "1,3"
+    },
+    "partial_index": {
+      "ok": true,
+      "value": "SEARCH p USING INDEX p_pending (sid=?)"
+    },
+    "json_valid_json_type": {
+      "ok": true,
+      "value": "object-ok rejectArray=true rejectGarbage=true"
+    },
+    "unique_null_coexists": {
+      "ok": true,
+      "value": "nullRowsAccepted=3 duplicateNonNullRejected=true"
+    },
+    "blob_roundtrip": {
+      "ok": true,
+      "value": "Uint8Array len=6 equal=true"
+    },
+    "returning_clause": {
+      "ok": true,
+      "value": "id=2"
+    },
+    "vacuum_into": {
+      "ok": true,
+      "value": "rows=2"
+    },
+    "backup_api": {
+      "ok": true,
+      "value": "present (async function)"
+    },
+    "readonly_open": {
+      "ok": true,
+      "value": "rejected: attempt to write a readonly database"
+    },
+    "begin_immediate": {
+      "ok": true,
+      "value": "ok"
+    },
+    "session_extension": {
+      "ok": true,
+      "value": "present"
+    },
+    "changes_bigint": {
+      "ok": true,
+      "value": "changes=1 (number) lastInsertRowid=number"
+    }
+  }
+}
+(node:2628500) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+### exit=0
+
+########## NODE v24.15.0 (/home/jeffry/.local/bin/node) NO FLAG
+### cmd: /home/jeffry/.local/bin/node probe-driver.mjs
+{
+  "node": "24.15.0",
+  "execArgv": [],
+  "module": "node:sqlite",
+  "moduleError": null,
+  "exports": [
+    "DatabaseSync",
+    "Session",
+    "StatementSync",
+    "backup",
+    "constants",
+    "default"
+  ],
+  "features": {
+    "sqlite_version": {
+      "ok": true,
+      "value": "3.51.3"
+    },
+    "sqlite_source_id": {
+      "ok": true,
+      "value": "2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6d618"
+    },
+    "journal_mode_wal": {
+      "ok": true,
+      "value": "wal"
+    },
+    "busy_timeout": {
+      "ok": true,
+      "value": 5000
+    },
+    "foreign_keys_on": {
+      "ok": true,
+      "value": 1
+    },
+    "synchronous_full": {
+      "ok": true,
+      "value": 2
+    },
+    "data_version": {
+      "ok": true,
+      "value": 2
+    },
+    "quick_check": {
+      "ok": true,
+      "value": "ok"
+    },
+    "strict_table": {
+      "ok": true,
+      "value": "created"
+    },
+    "strict_enforced": {
+      "ok": true,
+      "value": "NOT-ENFORCED: integer accepted into TEXT column"
+    },
+    "autoincrement": {
+      "ok": true,
+      "value": "1,3"
+    },
+    "partial_index": {
+      "ok": true,
+      "value": "SEARCH p USING INDEX p_pending (sid=?)"
+    },
+    "json_valid_json_type": {
+      "ok": true,
+      "value": "object-ok rejectArray=true rejectGarbage=true"
+    },
+    "unique_null_coexists": {
+      "ok": true,
+      "value": "nullRowsAccepted=3 duplicateNonNullRejected=true"
+    },
+    "blob_roundtrip": {
+      "ok": true,
+      "value": "Uint8Array len=6 equal=true"
+    },
+    "returning_clause": {
+      "ok": true,
+      "value": "id=2"
+    },
+    "vacuum_into": {
+      "ok": true,
+      "value": "rows=2"
+    },
+    "backup_api": {
+      "ok": true,
+      "value": "present (async function)"
+    },
+    "readonly_open": {
+      "ok": true,
+      "value": "rejected: attempt to write a readonly database"
+    },
+    "begin_immediate": {
+      "ok": true,
+      "value": "ok"
+    },
+    "session_extension": {
+      "ok": true,
+      "value": "present"
+    },
+    "changes_bigint": {
+      "ok": true,
+      "value": "changes=1 (number) lastInsertRowid=number"
+    }
+  }
+}
+### exit=0
+
+########## NODE v24.15.0 (/home/jeffry/.local/bin/node) --experimental-sqlite
+### cmd: /home/jeffry/.local/bin/node --experimental-sqlite probe-driver.mjs
+{
+  "node": "24.15.0",
+  "execArgv": [
+    "--experimental-sqlite"
+  ],
+  "module": "node:sqlite",
+  "moduleError": null,
+  "exports": [
+    "DatabaseSync",
+    "Session",
+    "StatementSync",
+    "backup",
+    "constants",
+    "default"
+  ],
+  "features": {
+    "sqlite_version": {
+      "ok": true,
+      "value": "3.51.3"
+    },
+    "sqlite_source_id": {
+      "ok": true,
+      "value": "2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6d618"
+    },
+    "journal_mode_wal": {
+      "ok": true,
+      "value": "wal"
+    },
+    "busy_timeout": {
+      "ok": true,
+      "value": 5000
+    },
+    "foreign_keys_on": {
+      "ok": true,
+      "value": 1
+    },
+    "synchronous_full": {
+      "ok": true,
+      "value": 2
+    },
+    "data_version": {
+      "ok": true,
+      "value": 2
+    },
+    "quick_check": {
+      "ok": true,
+      "value": "ok"
+    },
+    "strict_table": {
+      "ok": true,
+      "value": "created"
+    },
+    "strict_enforced": {
+      "ok": true,
+      "value": "NOT-ENFORCED: integer accepted into TEXT column"
+    },
+    "autoincrement": {
+      "ok": true,
+      "value": "1,3"
+    },
+    "partial_index": {
+      "ok": true,
+      "value": "SEARCH p USING INDEX p_pending (sid=?)"
+    },
+    "json_valid_json_type": {
+      "ok": true,
+      "value": "object-ok rejectArray=true rejectGarbage=true"
+    },
+    "unique_null_coexists": {
+      "ok": true,
+      "value": "nullRowsAccepted=3 duplicateNonNullRejected=true"
+    },
+    "blob_roundtrip": {
+      "ok": true,
+      "value": "Uint8Array len=6 equal=true"
+    },
+    "returning_clause": {
+      "ok": true,
+      "value": "id=2"
+    },
+    "vacuum_into": {
+      "ok": true,
+      "value": "rows=2"
+    },
+    "backup_api": {
+      "ok": true,
+      "value": "present (async function)"
+    },
+    "readonly_open": {
+      "ok": true,
+      "value": "rejected: attempt to write a readonly database"
+    },
+    "begin_immediate": {
+      "ok": true,
+      "value": "ok"
+    },
+    "session_extension": {
+      "ok": true,
+      "value": "present"
+    },
+    "changes_bigint": {
+      "ok": true,
+      "value": "changes=1 (number) lastInsertRowid=number"
+    }
+  }
+}
+### exit=0
+

@@ -15,7 +15,8 @@ import { IdentityIcon } from './IdentityIcon.jsx'
 // Under the multi-project gateway ([[projects-hub]]) a scoped page adds the persistent current-project
 // selector chip at the top. A successful catalog probe gives it same-tab switching plus the global
 // /projects door; it never adds project management to the scoped rail. When the catalog is denied the
-// chip still names the current project but carries no menu: the catalog stays unrevealed.
+// chip still names the current project and becomes the explicit /projects login door, without revealing
+// the catalog.
 
 const ENTRIES = PAGES.filter((page) => page !== 'settings')
 
@@ -41,7 +42,7 @@ function RailLink({ page, active, label, disabled = false }) {
 // the current-project chip + switcher menu. `projects` is the catalog list when the admin scope holds,
 // else null (chip only). Online/unknown rows navigate with a plain same-tab location change; an explicitly
 // offline row stays visible as a disabled status item because its scoped backend cannot serve the shell.
-function ProjectChip({ identity, projects, gatewayIdentity, t }) {
+function ProjectChip({ identity, projects, gatewayIdentity, denied, t }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -53,13 +54,26 @@ function ProjectChip({ identity, projects, gatewayIdentity, t }) {
     return () => { document.removeEventListener('mousedown', onDown, true); window.removeEventListener('keydown', onKey, true) }
   }, [open])
   const label = identity?.title || PROJECT_ID || ''
+  const chipLabel = denied ? t('nav.projectChipLogin', { name: label }) : t('nav.projectChip', { name: label })
+  if (denied) return (
+    <div className="proj-chip-wrap" ref={ref}>
+      <a
+        className="rail-btn proj-chip"
+        data-tip={chipLabel}
+        aria-label={chipLabel}
+        href={hubHref()}
+      >
+        <IdentityIcon icon={identity?.icon} size={27} />
+      </a>
+    </div>
+  )
   return (
     <div className="proj-chip-wrap" ref={ref}>
       <button
         type="button"
         className={open ? 'rail-btn proj-chip on' : 'rail-btn proj-chip'}
-        data-tip={t('nav.projectChip', { name: label })}
-        aria-label={t('nav.projectChip', { name: label })}
+        data-tip={chipLabel}
+        aria-label={chipLabel}
         aria-haspopup={projects ? 'menu' : undefined}
         aria-expanded={projects ? open : undefined}
         onClick={() => { if (projects) setOpen((v) => !v) }}
@@ -99,6 +113,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, t }) {
 export default function SideBar({ page, identity, catalog, graphOnly = false }) {
   const t = useT()
   const catalogOk = catalog?.state === 'ok'
+  const catalogDenied = catalog?.state === 'denied'
   return (
     // the rail is inert chrome for pointer focus ([[focus-return]]): a press acts (link navigates, chip
     // menu opens) without taking DOM focus, so chrome never becomes the focus-return ticket and an
@@ -108,6 +123,7 @@ export default function SideBar({ page, identity, catalog, graphOnly = false }) 
         identity={identity}
         projects={catalogOk ? catalog.projects : null}
         gatewayIdentity={catalogOk ? catalog.gateway.identity : null}
+        denied={catalogDenied}
         t={t}
       />}
       {ENTRIES.map((p) => (

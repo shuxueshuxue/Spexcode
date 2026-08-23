@@ -548,13 +548,13 @@ const currentTreeUnitMemo = new Map<string, { units: Unit[] } | { failed: string
 // caller retaining a verdict derived from these units names it by the same identity that decides the parse
 // ([[selector-anchor-scope]]). Returning the key rather than re-deriving it elsewhere is what keeps the two
 // from drifting apart.
-function currentTreeImage(root: string, x: Extractor, path: string): { key: string; units: Unit[] } {
+async function currentTreeImage(root: string, x: Extractor, path: string): Promise<{ key: string; units: Unit[] }> {
   const source = readFileSync(join(root, path), 'utf8')
   const key = `${x.memoKey(path)}\0${createHash('sha1').update(source).digest('hex')}`
   const hit = currentTreeUnitMemo.get(key)
   if (hit) { if ('failed' in hit) throw new Error(hit.failed); return { key, units: hit.units } }
   let entry: { units: Unit[] } | { failed: string }
-  try { entry = { units: x.extract(source, path) } }
+  try { entry = { units: await x.extract(source, path) } }
   catch (err: any) { entry = { failed: err?.message ?? String(err) } }
   if (currentTreeUnitMemo.size >= CURRENT_TREE_MEMO_MAX) currentTreeUnitMemo.clear()
   currentTreeUnitMemo.set(key, entry)
@@ -566,12 +566,12 @@ function currentTreeImage(root: string, x: Extractor, path: string): { key: stri
 // Split out from the verdict below so a caller can name the image before deciding whether it still has to
 // derive the verdict at all; a `problem` image has no name, and an unnameable input is never retained.
 type EntryImage = { key: string; units: Unit[] } | { problem: string }
-function entryImage(root: string, regs: Extractor[], path: string, selector: string | undefined): EntryImage {
+async function entryImage(root: string, regs: Extractor[], path: string, selector: string | undefined): Promise<EntryImage> {
   const x = extractorFor(regs, extOf(path))
   if (!x) return { problem: `\`code\` selector \`${path}#${selector}\` — no designated extractor for that language; drop the #anchor or add a language row` }
-  const ready = x.ready()
+  const ready = await x.ready()
   if (ready !== true) return { problem: `\`code\` anchors on ${path} are unverified: ${ready}` }
-  try { return currentTreeImage(root, x, path) }
+  try { return await currentTreeImage(root, x, path) }
   catch (err: any) { return { problem: `\`code\` anchors on ${path} are unverified: ${err?.message ?? String(err)}` } }
 }
 
@@ -589,8 +589,8 @@ function selectorProblem(units: Unit[], path: string, selectors: readonly string
   }
   return null
 }
-function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry): string | null {
-  const image = entryImage(root, regs, entry.path, entry.selectors[0])
+async function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry): Promise<string | null> {
+  const image = await entryImage(root, regs, entry.path, entry.selectors[0])
   return 'problem' in image ? image.problem : selectorProblem(image.units, entry.path, entry.selectors)
 }
 
@@ -643,9 +643,9 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
       // one coherent read of each source per sweep: every entry on a path resolves against the same bytes,
       // and the read that names the verdict is the read the verdict was derived from.
       const images = new Map<string, EntryImage>()
-      const imageOf = (path: string, selector: string | undefined): EntryImage => {
+      const imageOf = async (path: string, selector: string | undefined): Promise<EntryImage> => {
         let hit = images.get(path)
-        if (hit === undefined) { hit = entryImage(root, regs, path, selector); images.set(path, hit) }
+        if (hit === undefined) { hit = await entryImage(root, regs, path, selector); images.set(path, hit) }
         return hit
       }
       const remember = (name: string | null, hit: boolean) => { if (scope && name !== null) {
@@ -658,7 +658,7 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
         if (!e.selectors.length) continue
         const key = anchorKey(sinceSha, e.path, e.selectors)
         if (verdicts.has(key) || queued.has(key)) continue
-        const image = imageOf(e.path, e.selectors[0])
+        const image = await imageOf(e.path, e.selectors[0])
         const name = 'problem' in image ? null : `${registry}\x1f${image.key}\x1f${key}`
         const remembered = scope && name !== null ? scope.anchorVerdicts.get(name) : undefined
         if (remembered !== undefined) { verdicts.set(key, remembered); continue }
@@ -686,12 +686,12 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
 // the LOUD half: a selector is a claim that a named unit EXISTS, held to the same standard as a ghost path.
 // Dead, ambiguous, unparseable, or no designated extractor — each names itself and its repair, and until
 // repaired the probe issues no verdict, so the reading stays stale. Over-warn, never a silent pass.
-export function anchorProblems(root: string, entries: readonly RelationEntry[]): string[] {
+export async function anchorProblems(root: string, entries: readonly RelationEntry[]): Promise<string[]> {
   const regs = extractors(root)
   const out: string[] = []
   for (const e of entries) {
     if (!e.selectors.length) continue
-    const problem = entryUnverifiable(root, regs, e)
+    const problem = await entryUnverifiable(root, regs, e)
     if (problem) out.push(problem)
   }
   return out

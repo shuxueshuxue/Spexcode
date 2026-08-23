@@ -1,0 +1,13 @@
+import React from 'react'
+
+export interface PanelProps {
+  title: string
+}
+
+export const label = 'panel'
+
+export function Panel(props: PanelProps) {
+  return <section aria-label={props.title}>{label}</section>
+}
+
+export const renderPanel = (title: string) => <Panel title={title} />

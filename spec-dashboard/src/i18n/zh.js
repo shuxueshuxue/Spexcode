@@ -48,6 +48,7 @@ export default {
     issues: '议题（⌥4）',
     settings: '设置（⌥5）',
     projectChip: '项目：{name} — 切换项目',
+    projectChipLogin: '项目：{name} — 登录管理项目',
     projectOnline: '在线',
     projectOffline: '离线',
     allProjects: '全部项目',

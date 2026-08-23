@@ -5,6 +5,8 @@ hue: 210
 desc: The window's bottom row and a registry behind it — items are declared data, not widgets someone positions.
 code:
   - spec-dashboard/src/StatusBar.jsx
+  - spec-dashboard/src/statusOwnership.js
+  - spec-dashboard/src/statusOwnership.test.mjs
 related:
   - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/Shell.jsx

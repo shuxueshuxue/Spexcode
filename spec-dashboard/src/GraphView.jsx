@@ -25,7 +25,6 @@ import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { useStatusItem } from './StatusBar.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -107,9 +106,6 @@ function GraphView({ param, query }) {
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
-  // The shell owns the registry-backed help legend, so the graph button uses the same global state.
-  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
-    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const viewportRef = useRef(null)

@@ -48,10 +48,13 @@ function accepted(intent, result) {
 // Returns a public scope and a shell-only updater. The updater is deliberately not part of the public
 // object, so a view can request route work but cannot rewrite the route it was mounted with or reactivate a
 // hidden pane. Shell reuses the same scope when a pooled document changes address.
-export function createViewScope({ route, dispatch, active = true, contract = VIEW_ROUTE_CONTRACT } = {}) {
+export function createViewScope({ route, dispatch, active = true, contract = VIEW_ROUTE_CONTRACT, owner = null } = {}) {
   if (typeof dispatch !== 'function') throw new TypeError('view scope requires a dispatch function')
   if (!contract || typeof contract.assertAddress !== 'function') {
     throw new TypeError('view scope requires a route contract')
+  }
+  if (owner != null && (typeof owner !== 'object' || owner.kind !== 'view' || typeof owner.page !== 'string')) {
+    throw new TypeError('view scope owner must identify a view')
   }
   let current = normalizeAddress(route, 'route')
   let enabled = active !== false
@@ -66,6 +69,7 @@ export function createViewScope({ route, dispatch, active = true, contract = VIE
   Object.defineProperties(scope, {
     route: { enumerable: true, get: () => current },
     active: { enumerable: true, get: () => enabled },
+    owner: { enumerable: true, value: owner ? Object.freeze({ ...owner }) : null },
   })
   scope.open = (address) => emit('open', address)
   scope.hold = (address) => emit('hold', address)

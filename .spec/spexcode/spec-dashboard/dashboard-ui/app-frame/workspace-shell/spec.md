@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/documentActions.jsx
   - spec-dashboard/src/ViewScope.jsx
   - spec-dashboard/src/viewScope.js
+  - spec-dashboard/src/statusOwnership.js
   - spec-dashboard/src/viewScope.test.mjs
 ---
 # workspace-shell

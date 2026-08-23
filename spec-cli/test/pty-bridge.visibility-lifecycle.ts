@@ -1,6 +1,6 @@
 // Each visible browser viewer is one native tmux client. Hidden sockets own none; hiding lingers only that
-// viewer, while socket detach removes it immediately. tmux's largest policy, not bridge size voting, lets a
-// large client own the application grid without losing the small client's native viewport.
+// viewer, while socket detach removes it immediately. tmux's latest-active policy, not bridge size voting,
+// lets the most recently active client own the application grid without losing the peer's native viewport.
 //
 // Run: SPEXCODE_TMUX=visibility-<pid> npx tsx test/pty-bridge.visibility-lifecycle.ts
 import { execFile } from 'node:child_process'

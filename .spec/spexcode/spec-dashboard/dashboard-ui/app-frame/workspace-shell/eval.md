@@ -27,6 +27,14 @@ scenarios:
       the registry is the only source for document/resident ownership.
     tags: [desktop]
     code: [spec-dashboard/src/viewScope.js, spec-dashboard/src/viewScope.test.mjs, spec-dashboard/src/viewRegistry.js, spec-dashboard/src/viewRegistry.test.mjs, spec-dashboard/src/views.jsx, spec-dashboard/src/Shell.jsx]
+  - name: view-status-ownership-boundary
+    description: >
+      Submit focused-document and shell-owned status contributions through the shared status policy.
+    expected: >
+      A view can register only right-group text facts; left-group or arbitrary markup contributions fail before
+      registration, while shell chrome retains its full permissions.
+    tags: [desktop]
+    code: [spec-dashboard/src/statusOwnership.js, spec-dashboard/src/statusOwnership.test.mjs, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/ViewScope.jsx]
 ---
 
 Measure YATU through the built dashboard in this worktree and a real browser against the running Spex backend.

@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { hash } from './color.js'
 import { useT } from './i18n/index.jsx'
+import { useOptionalViewScope } from './ViewScope.jsx'
+import { assertStatusOwnership } from './statusOwnership.js'
 
 // [[status-bar]]: one strip along the bottom, and a REGISTRY rather than a place to hang widgets.
 //
@@ -48,6 +50,7 @@ export function StatusBarProvider({ children }) {
   const [hidden, setHidden] = useState(readHidden)
 
   const register = useCallback((item) => {
+    assertStatusOwnership(item, item?.owner)
     setItems((prev) => {
       // Identical re-registration is a no-op on the STATE, so a contributor that re-renders does not make
       // the bar re-render. Belt as well as braces: the stable api already stops the loop, and this stops
@@ -85,10 +88,12 @@ export function StatusBarProvider({ children }) {
 // what keeps the phone face and the static public build from needing a bar they do not draw.
 export function useStatusItem(item) {
   const api = useContext(StatusApi)
-  const { id } = item || {}
-  const latest = useRef(item)
-  latest.current = item
-  const key = itemKey(item)
+  const scope = useOptionalViewScope()
+  const ownedItem = item ? { ...item, owner: scope?.owner || null } : item
+  const { id } = ownedItem || {}
+  const latest = useRef(ownedItem)
+  latest.current = ownedItem
+  const key = itemKey(ownedItem)
   useEffect(() => {
     if (!api || !id) return undefined
     api.register(latest.current)
@@ -96,7 +101,7 @@ export function useStatusItem(item) {
   }, [api, id, key])
   // a node-bearing item still needs its node refreshed when the node changes, without the identity churn
   // of putting an element in the dependency list: register again only when the element actually differs.
-  const lastNode = useRef(item?.node)
+  const lastNode = useRef(ownedItem?.node)
   useEffect(() => {
     if (!api || !id) return
     if (lastNode.current !== latest.current?.node) {

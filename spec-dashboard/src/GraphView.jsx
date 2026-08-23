@@ -568,7 +568,7 @@ function GraphView({ param, query }) {
   }, [anchorClick, focusNode, graphOnly])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
-  // focusing the node first (in place, no pan, same as click) so the menu and the board agree on the target.
+  // focusing the node first with the same screen anchor as click so the menu and the board agree on the target.
   // Off-node right-clicks aren't handled here: the open menu closes ITSELF on any window contextmenu
   // (NodeContextMenu's capture listener), and the browser default stays available elsewhere.
   const onNodeContextMenu = useCallback((e, n) => {

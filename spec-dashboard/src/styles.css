@@ -830,7 +830,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
-.node-title { font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-title { font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink2); flex: 1; overflow: hidden; white-space: nowrap; }
 .node-ago { font-size: var(--type-caption); color: var(--muted); flex: none; white-space: nowrap; }
 .node-ver { font-size: var(--type-caption); color: var(--muted); flex: none; }
 

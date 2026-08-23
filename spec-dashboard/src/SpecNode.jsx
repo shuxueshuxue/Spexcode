@@ -35,7 +35,7 @@ import { STATUS, GLYPH } from './specMeta.js'
 
 // Keep both ends of long identities visible. CSS's tail-only ellipsis made distinct paths look identical
 // when their shared prefix filled the fixed title slot.
-export function middleEllipsis(value, maxChars = 18) {
+export function middleEllipsis(value, maxChars = 14) {
   const text = String(value ?? '')
   if (text.length <= maxChars) return text
   if (maxChars <= 1) return '…'.slice(0, maxChars)

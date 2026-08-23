@@ -65,15 +65,15 @@ the real host filesystem: a read-only directory browser selects an existing fold
 path as a candidate, then `POST /projects` normalizes it to the repo's main checkout. An existing Git repo
 can be cataloged directly; a plain folder enters only after the user explicitly chooses the bounded `git init`
 side effect. An absent candidate enters only through the explicit `createDir` + Git-initialization transaction,
-which creates the requested path and one minimal initial commit (`README.md`, message `chore: 初始化项目`) before
-that same Git/catalog workflow. The seed commit is limited to a directory created by this transaction: an
-existing folder or repository is never auto-committed. If the requested absent path is inside another Git
-repository, the new directory becomes its own nested Git root, so the parent repository is never changed. If
-Git identity, hooks, or another local policy refuses
-the seed commit, the transaction fails and does not claim catalog success. Optional SpexCode setup
-still runs the real `spex init` with an explicit harness choice, never a dashboard-owned initializer, after the
-seed commit. A failed init returns its exit code and complete transcript and does not claim catalog success; the
-catalog write happens only after every requested setup step succeeds. Its project operations ride the same hub
+which creates the requested path. Any selected project root whose `HEAD` is still unborn is completed by one
+minimal initial commit (`README.md` plus the existing project contents, message `chore: 初始化项目`) as part of
+that same explicit add transaction, including retries of a prior interrupted setup. A repository with existing
+history is never auto-committed, and a path inside another Git repository never seeds or commits that parent.
+When optional SpexCode setup is requested, the real `spex init` runs first so its `spexcode.json` and `.spec` source
+are included in the bootstrap commit; the initializer remains a real CLI verb with an explicit harness choice,
+never a dashboard-owned initializer. If Git identity, hooks, or another local policy refuses the bootstrap commit,
+or the requested init fails, the transaction fails and does not claim catalog success. A failed init returns its exit
+code and complete transcript; the catalog write happens only after every requested setup step succeeds. Its project operations ride the same hub
 admin scope. `GET|PUT /projects/:id/config` is the narrow source-file seam for the project's raw,
 committed `spexcode.json`: it works while the backend is offline, treats an absent file as `{}`, accepts
 only a top-level JSON object, writes atomically, and rejects a stale revision rather than overwriting a

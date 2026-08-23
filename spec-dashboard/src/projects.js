@@ -4,8 +4,8 @@
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
 //   GET  /projects/browse?path=…          browse host directories or read an absent-path candidate
-//   POST /projects {root, createDir?, initGit?, init?} explicitly create/initialize as requested, seed a first
-//   commit for a newly created directory, then register
+//   POST /projects {root, createDir?, initGit?, init?} explicitly create/initialize as requested, complete an
+//   unborn selected root with its first commit, then register
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
@@ -184,6 +184,8 @@ export async function browseProjectDirectories(path = '') {
     parent: typeof data.parent === 'string' ? data.parent : null,
     home: typeof data.home === 'string' ? data.home : data.path,
     gitRoot: typeof data.gitRoot === 'string' ? data.gitRoot : null,
+    // 旧版 host gateway 没有提交状态字段；对这类响应按已就绪处理，避免凭空显示写操作。新版会明确返回布尔值。
+    hasCommit: typeof data.hasCommit === 'boolean' ? data.hasCommit : !!data.gitRoot,
     initialized: !!data.initialized,
     cataloged: !!data.cataloged,
     entries: data.entries.filter((entry) => entry && typeof entry.name === 'string' && typeof entry.path === 'string').map((entry) => ({

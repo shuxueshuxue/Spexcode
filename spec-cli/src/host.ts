@@ -127,7 +127,7 @@ function gitProjectRoot(dir: string): string | null {
 // The admin folder picker reads directory NAMES only. An absent typed path is a read-only candidate, so
 // the UI can offer an explicit new-project transaction instead of making a failed browse do that work.
 export type ProjectDirectoryListing = {
-  path: string; exists: boolean; parent: string | null; home: string; gitRoot: string | null
+  path: string; exists: boolean; parent: string | null; home: string; gitRoot: string | null; hasCommit: boolean
   initialized: boolean; cataloged: boolean
   entries: Array<{ name: string; path: string; git: boolean; initialized: boolean }>
 }
@@ -137,11 +137,12 @@ export function browseProjectDirectories(dir?: string): ProjectDirectoryListing 
     const path = resolve(requested)
     return {
       path, exists: false, parent: dirname(path) === path ? null : dirname(path), home: homedir(),
-      gitRoot: null, initialized: false, cataloged: false, entries: [],
+      gitRoot: null, hasCommit: false, initialized: false, cataloged: false, entries: [],
     }
   }
   const path = existingDirectory(requested)
   const gitRoot = gitProjectRoot(path)
+  const hasCommit = !!gitRoot && hasGitCommit(gitRoot)
   const entries = readdirSync(path, { withFileTypes: true })
     .filter((entry) => {
       if (entry.isDirectory()) return true
@@ -164,6 +165,7 @@ export function browseProjectDirectories(dir?: string): ProjectDirectoryListing 
     parent: dirname(path) === path ? null : dirname(path),
     home: homedir(),
     gitRoot,
+    hasCommit,
     initialized: !!gitRoot && existsSync(join(gitRoot, '.spec')),
     cataloged: !!gitRoot && readCatalog().some((entry) => entry.root === gitRoot),
     entries,
@@ -313,8 +315,11 @@ function hasGitCommit(root: string): boolean {
 
 function createInitialProjectCommit(root: string): void {
   const readme = join(root, 'README.md')
-  // 新目录通常为空；若 mkdir 与此步骤之间已有进程写入文件，保留现有内容，但必须留下可提交的树。
+  // 新目录通常为空；若初始化前已有文件，保留现有内容，但必须留下可提交的树。
   if (!existsSync(readme)) writeFileSync(readme, '')
+  const previousAllowMain = process.env.SPEXCODE_ALLOW_MAIN
+  // 这是宿主明确发起的引导提交；放行 SpexCode 自身的主分支保护，但仍执行其他用户 hook，拒绝时返回明确错误。
+  process.env.SPEXCODE_ALLOW_MAIN = '1'
   try {
     git(['-C', root, 'add', '--', '.'])
     git(['-C', root, 'commit', '--quiet', '-m', INITIAL_PROJECT_COMMIT_MESSAGE])
@@ -325,11 +330,15 @@ function createInitialProjectCommit(root: string): void {
       : typeof rawStderr === 'string' ? rawStderr.trim() : ''
     const detail = stderr || (error instanceof Error ? error.message : String(error))
     throw new Error(`cannot create the initial Git commit in ${root}: ${detail}`)
+  } finally {
+    if (previousAllowMain === undefined) delete process.env.SPEXCODE_ALLOW_MAIN
+    else process.env.SPEXCODE_ALLOW_MAIN = previousAllowMain
   }
 }
 
-// 加项目事务按固定顺序执行：选择已有目录，或显式创建并初始化 Git；新目录先产生首个 commit，再按请求
-// 运行真实 CLI 初始化，全部成功后才登记 catalog。已有目录和仓库绝不自动提交。
+// 加项目事务按固定顺序执行：选择已有目录，或显式创建并初始化 Git；对目标自身的 unborn 仓库先运行
+// 请求的真实 CLI 初始化，再产生包含现有内容与 SpexCode 配置的首个 commit，全部成功后才登记 catalog。
+// 已有历史的仓库不自动提交；位于父仓库中的普通子目录也不会把父仓库误当成新项目提交。
 export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
   if (setup.createDir && !setup.initGit) throw new Error('creating a project directory requires Git initialization')
   let directoryCreated = false
@@ -356,10 +365,9 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
     if (!root) throw new Error(`git init completed but ${path} is still not a Git repository`)
   }
 
-  if (directoryCreated && gitInitialized && !hasGitCommit(root)) {
-    createInitialProjectCommit(root)
-    initialCommitCreated = true
-  }
+  // 无论本次刚执行 `git init`，还是重试留下 `.git` 的旧流程，unborn 仓库都不是完整项目。修复只限于
+  // 选中的仓库根目录；位于父仓库中的路径绝不能为父仓库生成提交。
+  const needsInitialCommit = root === path && !hasGitCommit(root)
 
   let init: AddProjectSetupResult['init']
   if (setup.init) {
@@ -369,6 +377,11 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
     const result = await runSpex(root, ['init', '--harness', harness, ...(preset ? ['--preset', preset] : [])])
     init = result
     if (result.code !== 0) return { ok: false, root, directoryCreated, gitInitialized, initialCommitCreated, init }
+  }
+
+  if (needsInitialCommit && !hasGitCommit(root)) {
+    createInitialProjectCommit(root)
+    initialCommitCreated = true
   }
 
   catalogAdd(root)

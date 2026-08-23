@@ -2750,6 +2750,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .proj-config-editor.invalid { border-color: var(--red); }
 .proj-op-status { font-size: var(--type-meta); }
 .proj-op-status.ok { color: var(--green); }
+.proj-op-status.warn { color: var(--orange); }
 .proj-op-status.fail { color: var(--red); }
 .proj-log {
   margin: 4px 0 0; padding: 8px 10px; max-height: 240px; overflow: auto;

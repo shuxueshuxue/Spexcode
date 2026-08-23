@@ -45,11 +45,13 @@ KNOWN-project view ([[host-gateway]]): a repo enters the fleet by running `spex 
 the page's dedicated Add Project modal. The modal is a focused host-folder picker, not another inline
 drawer: an editable absolute-path bar and parent/home navigation select one directory while a bounded list
 shows its child folders. A typed missing path becomes a clear New project command, which creates that
-directory, initializes Git, creates its minimal initial `README.md` commit, and registers it through the host's
-one add workflow. A missing path inside another Git repository gets its own nested root rather than mutating
-the parent. The selected folder's
-actual state drives a compact setup section. An existing Git
-repo can be added as-is; a plain folder requires an explicit checked Git initialization choice. SpexCode
+directory and registers it through the host's one add workflow; any selected root that still has an unborn
+`HEAD` receives the same minimal initial `README.md` commit, so a retry of a partially completed setup is usable.
+The browser exposes that repair even when the root is already cataloged; a repository with existing history stays
+read-only in this flow.
+A missing path inside another Git repository gets its own nested root rather than mutating the parent. The selected
+folder's actual state drives a compact setup section. An existing Git repo with history can be added as-is; a plain
+folder requires an explicit checked Git initialization choice. SpexCode
 initialization is independently optional, recognizes an already-initialized repo, and requires explicit
 harness targets before submit. One submit runs the host's unified add workflow; it stays pending through
 the requested real `git init` / `spex init`, keeps the modal open on failure with the command's full

@@ -59,8 +59,7 @@ function PasswordForm({ onSet, onClear, placeholder, busy, t }) {
   )
 }
 
-// One modal over the host add transaction: browse a real directory, or make an absent typed path an
-// explicit new Git project (the host seeds its first commit), then let the host run real spex init → catalog.
+// 添加项目弹窗复用宿主事务：浏览真实目录，或把缺失路径创建为 Git 项目；宿主会在登记前补齐 unborn 根目录（含 SpexCode 文件）。
 function AddProjectModal({ onAdded, onClose, t }) {
   const [path, setPath] = useState('')
   const [listing, setListing] = useState(null)
@@ -92,8 +91,10 @@ function AddProjectModal({ onAdded, onClose, t }) {
   const selected = !!listing?.exists && path === listing.path
   const newProject = !!listing && !listing.exists && path === listing.path
   const needsGit = selected && !listing.gitRoot
+  const needsInitialCommit = selected && listing.gitRoot === listing.path && listing.hasCommit === false
+  const repairingInitialCommit = needsInitialCommit && !!listing.cataloged
   const needsSpex = selected && !listing.initialized
-  const canSubmit = selected && !loading && !busy && !listing.cataloged &&
+  const canSubmit = selected && !loading && !busy && (!listing.cataloged || repairingInitialCommit) &&
     (!needsGit || initGit) && (!initSpex || !!harnesses.length)
   const toggleHarness = (id) => setHarnesses((all) => all.includes(id) ? all.filter((item) => item !== id) : [...all, id])
 
@@ -102,7 +103,7 @@ function AddProjectModal({ onAdded, onClose, t }) {
     if (!canSubmit) return
     setBusy(true); setError(null); setOutput('')
     const r = await addProject(listing.path, {
-      ...(needsGit ? { initGit } : {}),
+      ...((needsGit || needsInitialCommit) ? { initGit: true } : {}),
       ...(needsSpex && initSpex ? { init: { harness: harnesses.join(',') } } : {}),
     })
     setBusy(false)
@@ -174,7 +175,10 @@ function AddProjectModal({ onAdded, onClose, t }) {
           <div className="proj-add-options">
             <div className="proj-add-selected" title={listing.path}>{listing.path}</div>
             {listing.gitRoot ? (
-              <div className="proj-add-state"><Icon name="check" size={13} /> Git <code>{listing.gitRoot}</code></div>
+              <>
+                <div className="proj-add-state"><Icon name="check" size={13} /> Git <code>{listing.gitRoot}</code></div>
+                {needsInitialCommit && <div className="proj-op-status warn">{t('projects.initialCommitMissing')}</div>}
+              </>
             ) : (
               <label className="proj-add-check">
                 <input type="checkbox" checked={initGit} onChange={(e) => setInitGit(e.target.checked)} disabled={busy} />
@@ -202,7 +206,7 @@ function AddProjectModal({ onAdded, onClose, t }) {
                 )}
               </>
             )}
-            {listing.cataloged && <div className="proj-op-status ok">{t('projects.alreadyAdded')}</div>}
+            {listing.cataloged && !repairingInitialCommit && <div className="proj-op-status ok">{t('projects.alreadyAdded')}</div>}
           </div>
         )}
 
@@ -215,7 +219,7 @@ function AddProjectModal({ onAdded, onClose, t }) {
         <div className="proj-add-actions">
           <button className="proj-act" type="button" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
           <button className="proj-act primary" type="submit" disabled={!canSubmit}>
-            {busy ? t('projects.addBusy') : t('projects.addSubmit')}
+            {busy ? t('projects.addBusy') : repairingInitialCommit ? t('projects.repairInitialCommit') : t('projects.addSubmit')}
           </button>
         </div>
       </form>

@@ -190,7 +190,7 @@ test('browseProjectDirectories normalizes the host folder listing and encodes a 
     calls.push(url)
     return jsonRes(200, {
       path: '/home/me/a b', exists: true, parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
-      initialized: true, cataloged: false,
+      hasCommit: true, initialized: true, cataloged: false,
       entries: [{ name: 'child', path: '/home/me/a b/child', git: true, initialized: false }, { nope: true }],
     })
   }
@@ -198,7 +198,7 @@ test('browseProjectDirectories normalizes the host folder listing and encodes a 
   assert.equal(calls[0], '/projects/browse?path=%2Fhome%2Fme%2Fa%20b')
   assert.deepEqual(r, {
     ok: true, path: '/home/me/a b', exists: true, parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
-    initialized: true, cataloged: false,
+    hasCommit: true, initialized: true, cataloged: false,
     entries: [{ name: 'child', path: '/home/me/a b/child', git: true, initialized: false }],
   })
 })
@@ -206,11 +206,22 @@ test('browseProjectDirectories normalizes the host folder listing and encodes a 
 test('browseProjectDirectories preserves an absent-path candidate for the New project command', async () => {
   const r = await withFetch(async () => jsonRes(200, {
     path: '/home/me/new-project', exists: false, parent: '/home/me', home: '/home/me',
-    gitRoot: null, initialized: false, cataloged: false, entries: [],
+    gitRoot: null, hasCommit: false, initialized: false, cataloged: false, entries: [],
   }), () => browseProjectDirectories('/home/me/new-project'))
   assert.deepEqual(r, {
     ok: true, path: '/home/me/new-project', exists: false, parent: '/home/me', home: '/home/me',
-    gitRoot: null, initialized: false, cataloged: false, entries: [],
+    gitRoot: null, hasCommit: false, initialized: false, cataloged: false, entries: [],
+  })
+})
+
+test('browseProjectDirectories preserves an unborn Git root for the repair affordance', async () => {
+  const r = await withFetch(async () => jsonRes(200, {
+    path: '/home/me/unborn', exists: true, parent: '/home/me', home: '/home/me',
+    gitRoot: '/home/me/unborn', hasCommit: false, initialized: true, cataloged: true, entries: [],
+  }), () => browseProjectDirectories('/home/me/unborn'))
+  assert.deepEqual(r, {
+    ok: true, path: '/home/me/unborn', exists: true, parent: '/home/me', home: '/home/me',
+    gitRoot: '/home/me/unborn', hasCommit: false, initialized: true, cataloged: true, entries: [],
   })
 })
 

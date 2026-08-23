@@ -85,8 +85,10 @@
   <section>
     <h2>Open Work</h2>
     <ol>
+      <li><strong>48.1a/b/c:</strong> reproduce the receipt-witness, codex-headless liveness, and self-heal-target cases; then fix them in the harness/backend with a fail/pass pair for each.</li>
+      <li><strong>49.1:</strong> reconcile <code>owesDelivery</code> and <code>drainSession</code> with the SQLite queue, remove silent abandonment, and prove retry delivery.</li>
+      <li><strong>71.1:</strong> observe the two live-warning samples after <code>d72ea0940</code>; a warning must not overwrite lifecycle/proposal or emit a parent-only routine-working receipt.</li>
       <li>Reproduce and repair app-server ownership/reaping, startup sweep, and Codex launch serialization. Record exact process identity and exit cause.</li>
-      <li>Reproduce the three reported liveness holes (receipt witness, codex-headless, self-heal target) before changing adapters.</li>
       <li>Replace synchronous busy retry with a measured contention strategy or move the blocking boundary; retain the fail-loud timeout.</li>
       <li>Measure dashboard hot/warm/cold pollers at zero, one, and many SSE subscribers. They are consumer behavior, not session-package polling.</li>
       <li>Re-run a real parent/manual YATU flow against the deployed backend and verify no working receipt reaches a parent-only watcher.</li>

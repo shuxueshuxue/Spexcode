@@ -487,6 +487,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [resourceMenu, setResourceMenu] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
+  // One opaque key per session draft lets a queued transport retry the same durable message. It is cleared
+  // only after accepted handover or when the human edits the draft, never when the box merely closes.
+  const commandDeliveryKeysRef = useRef({})
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const knownWebsRef = useRef(null)
@@ -998,11 +1001,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // of the New Session launch composition — see [[command-box]]).
     const text = expandMentions(raw)
     if (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending') return
+    const deliveryId = commandDeliveryKeysRef.current[active] || crypto.randomUUID()
+    commandDeliveryKeysRef.current[active] = deliveryId
     setActionOutcome({ owner: 'command', phase: 'sending', message: t('session.outcomeSending') })
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'command', text }),
+        body: JSON.stringify({ kind: 'command', text, deliveryId }),
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
@@ -1013,7 +1018,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         return
       }
+      if (outcome?.delivery === 'queued') {
+        setActionOutcome({ owner: 'command', phase: 'failed', message: t('session.outcomeQueued') })
+        return
+      }
       setMsg((current) => current === raw ? '' : current)
+      delete commandDeliveryKeysRef.current[active]
       setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
@@ -1630,7 +1640,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
-                            onChange={(e) => { setMsg(e.target.value); syncMenu(e.target) }}
+                            onChange={(e) => { delete commandDeliveryKeysRef.current[active]; setMsg(e.target.value); syncMenu(e.target) }}
                             onSelect={(e) => syncMenu(e.target)}
                             onPaste={(e) => onPasteFiles(e, 'command')}
                             onBlur={() => setMenu(null)}

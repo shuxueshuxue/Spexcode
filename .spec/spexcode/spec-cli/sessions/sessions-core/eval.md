@@ -108,6 +108,18 @@ scenarios:
       answered with ONE refusal, which left a session that could be neither launched nor closed, with
       `quarantine` inapplicable because the record parses fine. Refusal text must not say "is not alive or has
       no start identity", since that sentence is the conflation itself.
+  - name: canonical-acceptance-survives-unbound-runtime
+    tags: [backend-api, cli]
+    description: >
+      In an isolated migrated project, create a governed Codex record and its canonical SQLite application row
+      without a runtime binding. Send one command through the exported `sendText` seam while the SQLite queue
+      accepts it and the post-commit drain refuses the unbound runtime.
+    expected: >
+      The command is reported as `ok: true, delivery: queued`, and the SQLite queue retains exactly one pending
+      message. A post-commit drain refusal must not be reported as an append failure: binding/resume is the
+      explicit event that makes the already-accepted debt drainable.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/session-application-timeline.test.ts
   - name: prompt-invariant-covers-every-delivery
     tags: [backend-api, cli]
     code: spec-cli/src/session-send-cli.test.ts

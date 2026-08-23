@@ -193,6 +193,8 @@ once when selected and does not poll. A pane-backed offline or archived record r
 be switched to Terminal. `queued` remains the one exception to offline relaunch: it has intentionally
 not launched and self-starts as a slot frees.
 
+Conversation status rows expose one keyboard-reachable disclosure button (`aria-expanded`) for each `▸ N turns · M tools` transcript entry. Every entry starts folded on first load, after a timeline/status refresh, and when a different session is selected; no data arrival or remount may open it. The disclosure choice is keyed to the status event, not to the current transcript interval, so a later status that closes the interval keeps an already-open entry open and keeps an untouched entry closed. The timeline body is selectable text: Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an accidental editable surface.
+
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
 terminal mount keys on **liveness, never the lifecycle label**: a session whose process is gone reads `offline`
 whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead

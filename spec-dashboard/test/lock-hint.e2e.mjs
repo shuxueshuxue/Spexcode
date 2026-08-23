@@ -61,8 +61,8 @@ await page.route('**/api/graph*', (route) => route.fulfill({
 
 const observations = []
 const observe = (step, value) => observations.push({ step, value })
-// A session is claimed from the FINDING DOCK's session row — the graph's floating glance is retired and
-// the dock projects the same forest. Alt-click is the claim; the row wears it while the graph is scoped.
+// A session is claimed from the finding dock's full row list; the graph badge is only a bounded cross-reference.
+// Alt-click is the claim; the row wears it while the graph is scoped.
 const sessionRow = () => page.locator('.dock-session-list .si-item').filter({ hasText: headline })
 const claim = async () => sessionRow().click({ modifiers: ['Alt'] })
 const locked = () => sessionRow().evaluate((row) => row.hasAttribute('data-locked'))
@@ -72,7 +72,7 @@ await context.addInitScript(() => {
 
 try {
   await page.goto(`${BASE}/#/graph`, { waitUntil: 'domcontentloaded' })
-  assert.equal(await page.locator('.sesswin').count(), 0, 'the map-side session glance is retired')
+  await page.locator('.sess-badge-trigger').waitFor({ state: 'visible' })
   await sessionRow().waitFor({ state: 'visible' })
   await claim()
 

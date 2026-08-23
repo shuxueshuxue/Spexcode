@@ -40,9 +40,7 @@ scenarios:
       focused, so Enter closes that dialog and sends exactly one close request per selected row, then leaves
       multi-select mode. Escape, Cancel, and a backdrop click still cancel without a lifecycle request.
     tags: [frontend-e2e, backend-api, desktop]
-    test: "spec-dashboard/test/session-multi-select.e2e.mjs"
   - name: nested-count-moves-with-selectable-row
-    test: spec-dashboard/test/session-multi-select.e2e.mjs
     description: >
       On the session console, inspect a collapsed parent row whose leading count represents nested
       sessions, then enter multi-select mode from that row's context menu and compare the checkbox,

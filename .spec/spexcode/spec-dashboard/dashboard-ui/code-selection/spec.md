@@ -32,3 +32,7 @@ the same prompt text and uses the existing `createSession` entry point. Malforme
 They are never silently discarded. No API route, session field, or alternate dispatch path belongs here —
 a token sent to an ALREADY-RUNNING session ([[prose-dispatch]]) rides the ordinary session input route for
 the same reason, as one more prompt rather than a channel of its own.
+
+The visible chip is a compact attachment marker, not a second composer: one blue edge, one file-diff mark,
+the address and inclusive line range, and one icon-only remove action. It uses the same quiet bordered
+composer tokens as [[session-picker]] and stays readable when several selections wrap in the queue.

@@ -749,6 +749,22 @@ scenarios:
       a `queue-operation` enqueue for the marker while the source transcript receives no matching record. A
       missing or unreachable fork mapping keeps the ordinary launch-time socket path and never guesses credentials;
       the resumed source receives the marker once rather than leaving an online session permanently pending.
+  - name: claude-rendezvous-kick-retry
+    tags: [backend-api, cli]
+    test:
+      path: spec-cli/src/harness.test.ts
+      name: "deliverViaRendezvous: retries a failed poke with the same message id"
+    code:
+      - spec-cli/src/harness.ts#replyViaSocket
+      - spec-cli/src/harness.ts#deliverViaRendezvous
+    description: >-
+      Exercise the rendezvous delivery seam against a one-connection daemon fixture that destroys the first
+      delivery before parsing it, then accepts the retry and emits the ordered repaint confirmation. Also run
+      the open-but-silent busy case through the same adapter function.
+    expected: >-
+      The first close is classified as a whole-chunk kick, the same timeline marker is retried only within the
+      bounded attempt budget, and the daemon records exactly one reply. A still-open silent connection is busy,
+      not a loss and not a retry storm; an explicit daemon rejection fails loudly.
   # harness-delivery-campaign:end
 ---
 # eval.md — harness-adapter

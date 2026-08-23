@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -29,6 +29,13 @@ const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) 
     await sleep(20)
   }
 }
+
+test('canonical delivery retry reads the SQLite queue instead of legacy pending.json', () => {
+  const pending = { protocol: { listPending: () => [{ messageId: 'sqlite-message' }] } } as any
+  const empty = { protocol: { listPending: () => [] } } as any
+  assert.equal(sessionHasPendingDelivery('canonical-pending', pending), true)
+  assert.equal(sessionHasPendingDelivery('canonical-empty', empty), false)
+})
 
 test('session diff commit links preserve the full forge repository and commit identity', () => {
   const commit = '2dcade6662e89689444e3ee1cc73a866dcab83d0'

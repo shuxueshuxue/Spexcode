@@ -1803,6 +1803,13 @@ export function canonicalWatchRecipients(
   return [...recipients]
 }
 
+export function sessionHasPendingDelivery(
+  id: string,
+  application: Pick<ProductionSessionApplication, 'protocol'> | null = configuredSessionApplicationIfCutover(),
+): boolean {
+  return application ? application.protocol.listPending(id).length > 0 : owesDelivery(id)
+}
+
 function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
   const application = configuredSessionApplicationIfCutover()
   if (!application) return
@@ -2057,7 +2064,11 @@ const requestQueueDrain = (): void => {
 // each queued recipient to its existing runtime; a failed or absent runtime leaves the message pending for retry.
 setSessionApplicationCommitWake((recipients) => {
   queueMicrotask(() => {
-    for (const recipient of recipients) void drainSession(recipient)
+    for (const recipient of recipients) {
+      void drainSession(recipient).catch((error) => {
+        console.error(`spex: canonical delivery wake failed for ${recipient}: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
   })
 })
 
@@ -2084,11 +2095,16 @@ export function superviseDelivery(intervalMs = 2000): void {
   supervisingDelivery = true
   const tick = async () => {
     try {
+      const application = configuredSessionApplicationIfCutover()
       for (const id of listSessionIds()) {
-        if (!owesDelivery(id)) continue
-        try { await drainSession(id) } catch { /* an adapter that refused stays owed; next tick retries */ }
+        if (!sessionHasPendingDelivery(id, application)) continue
+        try { await drainSession(id) } catch (error) {
+          console.error(`spex: delivery retry failed for ${id}: ${error instanceof Error ? error.message : String(error)}`)
+        }
       }
-    } catch { /* transient store read; next tick retries */ }
+    } catch (error) {
+      console.error(`spex: delivery retry sweep failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     setTimeout(tick, intervalMs).unref()
   }
   void tick()
@@ -4762,7 +4778,9 @@ export async function drainSession(id: string): Promise<void> {
     const rec = readRecord(id)
     if (!rec) return
     const binding = application.resolveRuntime(id, 'spex-governed')
-    if (!binding || binding.status !== 'bound') return
+    if (!binding || binding.status !== 'bound') {
+      throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
+    }
     const h = harnessById(rec.harness || defaultHarness.id)
     await withDeliveryLocks([id], async () => {
       for (;;) {

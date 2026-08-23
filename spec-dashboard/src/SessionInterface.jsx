@@ -1522,7 +1522,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
     onKey(event)
     return event.cancelBubble
-  }, 10)
+  }, 10, { allowTyping: true })
 
   // A surface may cancel the native menu only where it offers one of its own. The console once cancelled it
   // for the WHOLE panel, which was survivable while a session list occupied most of that panel and did own a

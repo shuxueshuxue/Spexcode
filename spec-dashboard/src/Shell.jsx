@@ -584,12 +584,6 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       return true
     }
     if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
-    // [[keyboard-nav]]'s native-control restraint, kept across the hoist to the shell scope: while real
-    // DOM focus sits in a typing context — an input, a textarea (the session composer, xterm's helper),
-    // anything contenteditable — every UNMODIFIED key belongs to that control. A bare comma must type a
-    // comma, never navigate to settings. Modifier-carrying chords (the ⌥ page jumps) still pass.
-    if (!event.altKey && !event.ctrlKey && !event.metaKey
-      && event.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return false
     // Help is shell chrome, not a graph-only action. Native typing contexts still own a literal '?'.
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key)) {
       event.preventDefault(); closePalette(); toggleHelp(); return true

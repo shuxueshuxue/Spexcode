@@ -7,13 +7,18 @@ import { consumeEscape } from './escStack.js'
 // update their handler without replacing the listener on every render.
 const KeyboardServiceContext = createContext(null)
 
-// A typing surface owns every unmodified key. Keep this predicate beside the shell service so routed
-// views do not grow subtly different copies (the xterm helper is a textarea, as are both composers).
+// A typing surface owns every unmodified key. Keep the predicate and the registration boundary together
+// so routed views cannot grow subtly different copies (the xterm helper is a textarea, as are both composers).
 export function isTypingTarget(target) {
   if (!target) return false
   if (target.isContentEditable) return true
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true
   return Boolean(target.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
+}
+
+export function scopeOwnsEvent(event, allowTyping = false) {
+  if (allowTyping || event?.altKey || event?.ctrlKey || event?.metaKey) return true
+  return !isTypingTarget(event?.target)
 }
 
 export function KeyboardServiceProvider({ children }) {
@@ -52,13 +57,13 @@ export function KeyboardServiceProvider({ children }) {
 // on answering while the reader typed into a spec beside it. Being on screen is the condition for owning
 // the keyboard, so the pane's own answer decides whether the registration happens at all; a view outside
 // any pane (the phone, the hub, the sealed build) is always its window's only view and always registers.
-export function useKeyboardScope(handler, priority = 0) {
+export function useKeyboardScope(handler, priority = 0, { allowTyping = false } = {}) {
   const { register } = useContext(KeyboardServiceContext) || {}
   const active = usePaneActive()
   const handlerRef = useRef(handler)
   handlerRef.current = handler
   useEffect(() => {
     if (!register || !active) return undefined
-    return register((event) => handlerRef.current(event), priority)
-  }, [register, priority, active])
+    return register((event) => scopeOwnsEvent(event, allowTyping) && handlerRef.current(event), priority)
+  }, [register, priority, active, allowTyping])
 }

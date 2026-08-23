@@ -148,6 +148,7 @@ scenarios:
       anchor plus `/eval`. Offline and queued sessions cannot open Command Box, and no `/type` or type tool exists.
   - name: modifier-arrows-switch-sessions
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-shortcuts.e2e.mjs
     description: >-
       With focus in New Session, Command Box, the live xterm, and inert console chrome, press plain and
       Cmd/Alt/Ctrl-modified Up/Down and observe both session selection and the focused surface.

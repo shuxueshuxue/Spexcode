@@ -19,14 +19,16 @@ related:
 ---
 # tab-strip
 
-**The strip holds OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, `#/sessions/<id>`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A session's
+**The strip holds workspace OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
+`#/file/<path>`, or `#/sessions/<id>`. Evals and Issues are review-surface addresses, not workspace
+documents: `#/evals/<node>/<scenario>` and `#/issues/<id>` never enter the strip, even when opened from a
+spec panel or status chip. A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
 own identity, appended beside the unchanged session tab. Bare
 `#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
 are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
-ordinary objects and may be held like every other document. The rail is therefore navigation only; it does
+also review destinations and never become workspace objects. The rail is therefore navigation only; it does
 not create, pin, or focus a board tab ([[side-nav]]).
 
 What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy

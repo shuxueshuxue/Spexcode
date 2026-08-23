@@ -77,7 +77,7 @@ const DOCK_ANIMATION_MS = 170
 // RENDER ORDER IS INSERTION ORDER, never recency. Reordering keyed children moves real DOM nodes, and a
 // moved node re-attaches its iframes and canvases — which is a reload wearing a different name. Recency
 // lives in a counter used only to pick the victim.
-function ViewPool({ page, param, query }) {
+function ViewPool({ page, param, query, inactive = false }) {
   const key = poolKey(page, param)
   const address = routeHash(page, param, query)
   const seq = useRef(0)
@@ -98,7 +98,7 @@ function ViewPool({ page, param, query }) {
       return next
     })
   }, [key, address])
-  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={entry.key === key} />)
+  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={!inactive && entry.key === key} />)
 }
 
 // One mounted document. It is MEMOISED, and that is not a micro-optimization: the shell re-renders on
@@ -129,14 +129,15 @@ const PoolPane = memo(function PoolPane({ entry, showing }) {
 
 // The SECOND pane is not a pool. It holds one document the reader deliberately sent there, so it is the
 // one place where keying on the address is the whole contract — there is no browsing history to keep warm.
-function ViewHost({ page, param, query }) {
+function ViewHost({ page, param, query, inactive = false }) {
   const t = useT()
   const { component: View, className } = viewFor(page)
   const address = routeHash(page, param, query)
   return (
-    <div className={`viewhost ${className}`}>
+    <div className={`viewhost ${className}`} aria-hidden={inactive ? 'true' : undefined}
+      style={inactive ? { display: 'none' } : undefined}>
       <ViewErrorBoundary resetKey={address}>
-        <PaneProvider value={{ address, active: true }}>
+        <PaneProvider value={{ address, active: !inactive }}>
           <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
             <View key={poolKey(page, param)} param={param} query={query} />
           </Suspense>
@@ -350,22 +351,22 @@ function BoardStatus({ specs, sessions, page }) {
 // One view, or two. The second is a second route and a place to put it — nothing in any view changes,
 // because a view was already receiving its route rather than reading it. That is the whole return on the
 // hinge: two-up stopped being a rewrite and became a layout.
-function Content({ page, param, query }) {
+function Content({ page, param, query, inactive = false }) {
   const t = useT()
   const { split } = useWorkspace()
   const { closeSplit } = useWorkspaceApi()
   const [width, onDrag, reset] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
-  if (!split) return <ViewPool page={page} param={param} query={query} />
+  if (!split) return <ViewPool page={page} param={param} query={query} inactive={inactive} />
   return (
     <div className="content-split">
-      <ViewHost page={page} param={param} query={query} />
+      <ViewHost page={page} param={param} query={query} inactive={inactive} />
       <div className="content-divider" onMouseDown={onDrag} onDoubleClick={reset}
         role="separator" aria-orientation="vertical" />
       <div className="content-second" style={{ width }}>
         <button type="button" className="content-close" onClick={closeSplit} aria-label={t('tabs.close')}>
           <Icon name="x" size={12} />
         </button>
-        <ViewHost page={split.page} param={split.param} query={split.query} />
+        <ViewHost page={split.page} param={split.param} query={split.query} inactive={inactive} />
       </div>
     </div>
   )
@@ -380,9 +381,10 @@ function ContextToggle({ visible, onToggle }) {
   </button>
 }
 
-export default function Shell() {
+export default function Shell({ routeOverride = null, inactive = false }) {
   const t = useT()
-  const { page, param, query } = useRoute()
+  const route = useRoute()
+  const { page, param, query } = routeOverride || route
   const { specs, sessions, identity, graphOnly } = useBoard()
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
@@ -452,6 +454,7 @@ export default function Shell() {
   }, [place, identity?.title, needsYou])
 
   const onShellKey = useCallback((event) => {
+    if (inactive) return false
     // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
     if (palette) {
       if (event.key === 'Escape') { event.preventDefault(); closePalette(); return true }
@@ -513,8 +516,8 @@ export default function Shell() {
       return true
     }
     return false
-  }, [closePalette, dockKind, dockMode, graphOnly, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
-  useKeyboardScope(onShellKey, -100)
+  }, [closePalette, dockKind, dockMode, graphOnly, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
+  useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
   // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.
   if (graphOnly) {
@@ -547,7 +550,7 @@ export default function Shell() {
                   on the current document, so it rides the strip's own trailing cluster. */}
               <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
                 trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
-              <Content page={page} param={param} query={query} />
+              <Content page={page} param={param} query={query} inactive={inactive} />
             </div>
             <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
           </div>

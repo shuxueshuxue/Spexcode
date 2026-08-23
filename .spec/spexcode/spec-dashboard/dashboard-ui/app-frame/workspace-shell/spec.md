@@ -6,6 +6,8 @@ desc: The frame — rail, dock, tab strip, content area, status bar — and deli
 code:
   - spec-dashboard/src/Shell.jsx
 related:
+  - spec-dashboard/src/WorkspaceSurface.jsx
+related:
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/test/keep-alive.e2e.mjs
   - spec-dashboard/src/ViewErrorBoundary.jsx
@@ -48,9 +50,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer, and a bare review/settings board
-  (`#/evals`, `#/issues`, `#/settings`) brings no sidebar at all, taking the full width instead of inheriting
-  the tree the last tab was showing. Parameterized review details remain documents and retain the dock. A bare
+  brings the session list, a node or a governed file brings the explorer. Review and settings routes are
+  separate surfaces: they bring their own board/page layout and no workspace sidebar, taking the full width
+  instead of inheriting the tree the last tab was showing. Review details are not workspace documents. A bare
   sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
   route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the

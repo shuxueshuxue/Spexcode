@@ -29,9 +29,11 @@ const CHUNK_RELOAD_KEY = 'spexcode.chunk-reload'
 // rather than spin the tab. A successful import clears the guard, so the next stale dist gets its reload.
 function lazyRetry(importer) {
   return lazy(async () => {
+    console.warn('lazy start')
     for (let attempt = 0; ; attempt++) {
       try {
         const mod = await importer()
+        console.warn('lazy resolved', Object.keys(mod))
         try { sessionStorage.removeItem(CHUNK_RELOAD_KEY) } catch { /* private mode */ }
         return mod
       } catch (err) {

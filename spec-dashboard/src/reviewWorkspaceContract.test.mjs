@@ -18,4 +18,5 @@ test('review routes use the resident workspace shell instead of a second chrome 
   assert.match(shell, /<TabStrip[\s\S]*route=\{\{ page, param, query \}\}/)
   assert.match(views, /evals:\s+\{[\s\S]*surface: 'workspace'[\s\S]*document: true[\s\S]*resident: true/)
   assert.match(views, /issues:\s+\{[\s\S]*surface: 'workspace'[\s\S]*document: true[\s\S]*resident: true/)
+  assert.match(views, /spec:\s+\{[^\n]*surface: 'workspace'[^\n]*document:[^\n]*resident: true/)
 })

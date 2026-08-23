@@ -47,7 +47,7 @@ test('resident review tabs share the workspace strip while Issues removes the ac
 })
 
 test('resident tabs and the activity rail share view-owned page icons', () => {
-  for (const [page, icon] of [['evals', 'evals'], ['issues', 'issues']]) {
+  for (const [page, icon] of [['spec', 'graph'], ['evals', 'evals'], ['issues', 'issues']]) {
     assert.match(views, new RegExp(`${page}:\\s+\\{[^\\n]*resident: true, icon: '${icon}'`))
   }
   assert.match(builtInViewPlugins, /settings:\s*\{[\s\S]*?resident: true,[\s\S]*?icon: 'settings'/)

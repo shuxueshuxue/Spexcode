@@ -5,14 +5,15 @@ import { routeHash } from './route.js'
 // checked without a browser. It is here rather than in `tabs.js` for exactly that reason: the hook needs
 // the view registry, the registry is JSX, and a rule nobody can test in isolation is a rule that drifts.
 
-// A tab's identity is the object address. Base session faces are selectors on that object, not different
-// documents: changing `?surface=conversation|terminal|diff` must update the URL without replacing or
-// multiplying the session tab. Published resources are the exception: they are file-class workspace objects,
+// A tab's identity is the object address unless the view is resident. Base session faces are selectors on
+// that object, not different documents: changing `?surface=conversation|terminal|diff` must update the URL
+// without replacing or multiplying the session tab. Resident Spec/Evals/Issues/Settings details canonicalize
+// to their top-level address. Published resources are the exception: they are file-class workspace objects,
 // so their resource selector remains in the identity and opens beside the session.
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
-const RESIDENT_PAGES = new Set(['evals', 'issues', 'settings'])
+const RESIDENT_PAGES = new Set(['spec', 'evals', 'issues', 'settings'])
 export const tabRoute = (route) => route?.page === 'sessions' && route?.param && !isResourceRoute(route)
   ? { ...route, query: null }
   : RESIDENT_PAGES.has(route?.page)

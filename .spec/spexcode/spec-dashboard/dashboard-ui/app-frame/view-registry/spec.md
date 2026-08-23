@@ -53,8 +53,9 @@ workspace host for these routes both on a cold URL and after in-app navigation. 
 second surface's chrome because no standalone review host exists.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. Evals, Issues, and Settings are resident top-level tabs; parameterized detail routes
-canonicalize their tab identity to the board address while preserving detail URL state. The user-facing
+keeping its own list. Spec, Evals, Issues, and Settings are resident top-level tabs; parameterized Spec,
+Evals, and Issues detail routes canonicalize their tab identity to the resident address while preserving
+detail URL state. The user-facing
 distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
 this node supplies the machine predicate, storage normalization, and the optional `icon` identity used by
 both the activity rail and resident workspace tabs. A page icon has one owner here; consumers do not keep
@@ -67,9 +68,10 @@ session, so the predicate takes the selector's VALUE and not merely its presence
 form, and the session it starts becomes a document the moment it has an id.
 
 **A rail destination is not the same thing as an addressable kind.** `spec` and `file` are addresses you
-arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. The rail
-therefore has its own list, and the first version of this without that split threw `unknown icon: spec` —
-the rail had faithfully tried to draw a destination that does not exist.
+arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. Spec is
+still a resident tab once opened, but it is not a rail destination. The rail therefore has its own list, and
+the first version of this without that split threw `unknown icon: spec` — the rail had faithfully tried to
+draw a destination that does not exist.
 
 **Each view is lazy and pays for its own libraries.** The graph carries xyflow and mounts its own
 ReactFlowProvider; hoisting that into the shell would drag the whole graph library into every face's entry

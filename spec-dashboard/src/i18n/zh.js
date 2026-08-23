@@ -99,6 +99,7 @@ export default {
     aria: '已打开的文档',
     close: '关闭标签',
     graph: '图',
+    spec: '规格',
     sessions: '会话',
     evals: '评测',
     issues: '议题',

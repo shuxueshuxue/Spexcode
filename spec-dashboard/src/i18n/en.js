@@ -102,6 +102,7 @@ export default {
     aria: 'open documents',
     close: 'close tab',
     graph: 'Graph',
+    spec: 'Spec',
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',

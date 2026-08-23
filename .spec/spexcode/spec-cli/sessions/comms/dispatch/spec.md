@@ -49,6 +49,11 @@ cross the append boundary even when the parent's registered process is alive but
 That notification still uses the ordinary parent queue and retry path; it is not reported as handed over until an
 adapter accepts it, and it never weakens the stranded refusal for a caller's new prompt.
 
+A prompt accepted from a human (the input route with no `from` session) is also the explicit re-entry for a waiting
+turn: `asking` and inferred `idle` become canonical `active` at that same acceptance boundary. Agent-to-agent
+messages and managed watch events keep the recipient's authored waiting state. Native terminal input follows the
+same rule after the PTY write; mouse reports are navigation, not a prompt, and do not wake a session.
+
 Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,
 discarding any received-but-unparsed line with it — and our own liveness probes ARE such connects, so a

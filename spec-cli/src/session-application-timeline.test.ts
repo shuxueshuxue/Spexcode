@@ -86,6 +86,40 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   }
 })
 
+test('a human prompt re-enters asking without treating agent delivery as human activity', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-human-prompt-reentry-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const databasePath = join(home, 'sessions.sqlite')
+  const id = 'asking-reentry-session'
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/asking-reentry', node: null,
+    title: 'asking', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'needs a reply',
+    sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: 'thread-asking-reentry', stopped: false,
+    archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'asking', note: 'needs a reply' })
+  try {
+    const human = await sendText(id, 'continue with the next step')
+    assert.equal(human.ok, true)
+    assert.equal(app.readState(id)?.status, 'active', 'a human prompt must make the waiting session working')
+
+    app.transitionSession(id, { status: 'asking', proposal: null, note: 'needs a reply' })
+    const agent = await sendText(id, 'handoff context', 'another-session')
+    assert.equal(agent.ok, true)
+    assert.equal(app.readState(id)?.status, 'asking', 'agent-to-agent delivery must not erase a human wait')
+  } finally {
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
 test('a transport miss stays queued and a Command Box retry reuses the same canonical message', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-queued-command-'))
   const previousHome = process.env.SPEXCODE_HOME

@@ -98,7 +98,7 @@ try {
   // accepted by the same backend-shaped footer-state contract the dashboard uses in production.
   const seededTargets = [
     { id: 'idle-fixture', label: 'idle fixture', headline: 'idle fixture', title: 'idle fixture', status: 'idle', lifecycle: 'idle', liveness: 'online', archived: false, created: 2 },
-    { id: 'offline-fixture', label: 'offline fixture', headline: 'offline fixture', title: 'offline fixture', status: 'offline', lifecycle: 'idle', liveness: 'offline', archived: false, created: 1 },
+    { id: 'offline-fixture', label: 'offline fixture', headline: 'offline fixture', title: 'offline fixture', status: 'asking', lifecycle: 'asking', liveness: 'offline', archived: false, created: 1 },
   ]
   // The stream's authoritative full snapshot would otherwise replace the seeded HTTP fixture immediately;
   // this scenario is measuring the target list, so let the ordinary graph poll own the board snapshot.

@@ -11,6 +11,9 @@ related:
 ---
 # file-view
 
+The file document owns the address and tab boundary; its renderer is the child [[source-view]]. This split keeps
+document navigation here and read-only window rendering in one implementation leaf.
+
 A file opened as its own document, at its own address. Governed worktree paths use `#/file/<path>` and
 node attachments use the same address family with a `.spec/<node>/<name>` logical path. The latter still
 uses the node-owned attachment API because `.spec/**` is intentionally outside the governed-source gate.

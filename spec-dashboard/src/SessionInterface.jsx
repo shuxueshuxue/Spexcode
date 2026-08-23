@@ -1354,6 +1354,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const documentKey = sessionActive
     ? routeHash('sessions', active, requestedSurface ? { surface: requestedSurface } : null)
     : null
+  const surfaceChoices = terminalFree || readOnlyPane
+    ? [SESSION_SURFACE_CONVERSATION]
+    : [SESSION_SURFACE_CONVERSATION, SESSION_SURFACE_TERMINAL, SESSION_SURFACE_DIFF]
   const documentActions = sessionActive ? [
     {
       id: 'resource-picker', icon: 'plus', label: t('session.addResourceTab'), priority: 100,
@@ -1375,14 +1378,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setCtxMenu((current) => (current ? null : { x: box.left, y: box.bottom, session: selSession }))
       },
     },
-    ...(!activeResource ? [{
+    ...(!activeResource && surfaceChoices.length > 1 ? [{
       id: 'surface-switcher', label: t('session.surfaceSwitcher'), priority: 80,
-      menuKey: `${activeBaseSurface}:${terminalFree || readOnlyPane ? 'conversation' : 'terminal,diff'}`,
+      menuKey: `${activeBaseSurface}:${surfaceChoices.join(',')}`,
       node: <SessionSurfaceSwitcher
         current={diffSurface ? SESSION_SURFACE_DIFF : activeBaseSurface}
-        choices={terminalFree || readOnlyPane
-          ? [SESSION_SURFACE_CONVERSATION]
-          : [SESSION_SURFACE_CONVERSATION, SESSION_SURFACE_TERMINAL, SESSION_SURFACE_DIFF]}
+        choices={surfaceChoices}
         label={t('session.surfaceSwitcher')}
         labels={{
           [SESSION_SURFACE_CONVERSATION]: t('tabs.surfaceConversation'),

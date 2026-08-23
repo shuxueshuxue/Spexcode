@@ -21,3 +21,10 @@ materialized into the agent's contract.
 Which plugins `spex init` ships is the [[init-preset]] rule. `seed: false` excludes a plugin subtree; shared
 plugins have one body and one helper set — there is no separately authored adopter variant. Dogfood eval
 scenarios/readings remain with the implementation and git history they measure.
+
+## shelf invariant
+
+Grouping shelves (`[[commands]]`, `[[skills]]`, `[[review]]`, and `[[prompts]]`) are presentation parents, not
+surfaces. Discovery is recursive and field-driven, so moving a resident under a shelf changes neither its
+identity nor the surfaces gathered from its frontmatter. Each shelf therefore states only its surface-specific
+purpose; it must not copy this routing invariant.

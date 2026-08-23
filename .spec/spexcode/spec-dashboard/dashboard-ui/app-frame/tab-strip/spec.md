@@ -12,7 +12,6 @@ related:
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
-  - spec-dashboard/src/EmptyView.jsx
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
@@ -56,7 +55,7 @@ and chrome that only appears when a second document exists would jump the layout
 the reader's first hold.
 
 **The row is always there, and it always says something.** On the routes that mint no tab — the graph, the
-review/settings boards, the sessions launch page, the empty workspace — the strip names the PLACE instead: the same projection the
+review/settings boards, and the sessions launch page — the strip names the PLACE instead: the same projection the
 document title uses, drawn quiet, because orientation is not a title. This is what makes the row honest
 rather than reserved: the shell used to hold the space with a wrapper that drew a blank band on exactly
 those routes, which is a band that says nothing while costing the budget the same as one that does.
@@ -126,6 +125,10 @@ strip — by replacement or by keep — because a strip that claimed to show wha
 something absent from it would be lying. This is the regression guard for the human's report: "点进去(diff)之后当前 tab
 就废掉了" and "一个 session 的视图可以在 terminal 和 conversation 视图之间切换".
 
+Resources are **pinned holds at birth**. Opening a posted file or web resource is an intentional request to
+keep that file-class workspace object; its tab is born `pinned:true`, never competes for the file slot, and
+is removed only by its close action. Reload normalization repairs older resource entries to the same hold.
+
 **The slot is visibly italic and weakened.** It is still a real route and can be copied, reloaded, closed,
 or pinned; the visual treatment names its replaceable status without inventing another tab kind.
 
@@ -181,6 +184,9 @@ the fallback only for a working set with no classified heir. `empty` is an ADDRE
 reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
 contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
 is not the same event as putting your last document down.
+The earlier human rule "退回到 spec node graph" described spec/file workspaces. The later session-specific
+report "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" narrows that rule: session tabs
+use the classified session fallback above, while spec/file tabs retain the graph return.
 
 `settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
 the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
@@ -214,9 +220,10 @@ the second pane. The strip only names the gesture; the pane is workspace state, 
 
 The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
 not another navigation surface: changing tabs changes the registered buttons, and a document with no registered
-actions leaves the edge blank. A session registers one three-state segmented switcher there — conversation,
-terminal, diff — with terminal/diff omitted when the session is headless or offline. The selected face is the
-only highlighted segment; each press replaces the session surface URL and leaves the session tab count unchanged.
+actions leaves the edge blank. A session with more than one available face registers one three-state segmented
+switcher there — conversation, terminal, diff — with terminal/diff omitted when the session is headless or
+offline; a single-face session hides the switcher entirely. The selected face is the only highlighted segment;
+each press replaces the session surface URL and leaves the session tab count unchanged.
 The tab itself shows only the session name and status dot, never "· terminal" or "· diff". The reader's words
 remain the test: "为什么要在 tab 上去写 terminal 这种东西" and "一个 session 的视图可以在 terminal 和
 conversation 视图之间切换,这是存在很长时间的功能,怎么能就这么消失了".

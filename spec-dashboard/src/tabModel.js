@@ -29,8 +29,10 @@ export function normalizeTabs(raw, isDocument = () => true) {
   const tabs = raw.filter((t) => isDocument(t.page, t.param ?? null)).map((t) => {
     const route = { page: t.page, param: t.param ?? null, query: t.query ?? null }
     return {
-    page: route.page, param: route.param ?? null, query: route.query ?? null,
-    pinned: t.pinned != null ? t.pinned !== false : t.preview !== true,
+      page: route.page, param: route.param ?? null, query: route.query ?? null,
+      // Published resources are deliberate holds: they must never compete for a replaceable file slot,
+      // including when an older persisted record forgot to mark them pinned.
+      pinned: isResourceRoute(route) ? true : (t.pinned != null ? t.pinned !== false : t.preview !== true),
     }
   })
   const unique = []
@@ -44,7 +46,7 @@ export function normalizeTabs(raw, isDocument = () => true) {
   }
   const slots = new Map()
   unique.forEach((t, i) => { if (!t.pinned) slots.set(tabKind(t), i) })
-  return unique.map((t, i) => (t.pinned || slots.get(t.page) === i ? t : { ...t, pinned: true }))
+  return unique.map((t, i) => (t.pinned || slots.get(tabKind(t)) === i ? t : { ...t, pinned: true }))
 }
 
 // WHERE THE STRIP LANDS, given what it holds and what was asked for. Everything the strip decides is here:
@@ -63,7 +65,14 @@ export function placeTab(tabs, route, mode = 'slot') {
       ? { ...t, ...(faceChanged ? { query: normalized.query } : {}), ...(mode === 'pin' ? { pinned: true } : {}) }
       : t)
   }
-  const entry = { page: normalized.page, param: normalized.param ?? null, query: normalized.query ?? null, pinned: mode === 'pin' }
+  const entry = {
+    page: normalized.page,
+    param: normalized.param ?? null,
+    query: normalized.query ?? null,
+    // A resource opened from a session is a held file-class object. It is intentionally durable until
+    // explicitly closed, so ordinary file navigation can never evict it.
+    pinned: isResourceRoute(normalized) || mode === 'pin',
+  }
   // A published resource is a file-class workspace tab. Opening one appends it, preserving the session tab
   // and its selected base face; a second click on the same resource was handled by the identity check above.
   if (isResourceRoute(normalized)) return [...tabs, entry]

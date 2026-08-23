@@ -67,6 +67,14 @@ test('base session surfaces share identity while resources remain separate file-
   const withResource = placeTab(tabs, resource)
   assert.equal(withResource.length, 2)
   assert.equal(withResource[0], tabs[0])
+  assert.equal(withResource[1].pinned, true)
+})
+
+test('resource holds stay pinned after reload normalization and never compete for the file slot', () => {
+  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' }, pinned: false }
+  const normalized = normalizeTabs([resource, { page: 'file', param: 'old.md', query: null, pinned: false }])
+  assert.equal(normalized[0].pinned, true)
+  assert.equal(normalized[1].pinned, false)
 })
 
 test('persisted session face duplicates collapse to one tab and preserve an explicit hold', () => {

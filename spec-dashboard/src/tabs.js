@@ -139,11 +139,8 @@ export function useTabs() {
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
-  // Closing the ACTIVE tab hands focus to its right-hand neighbour, else its left — the rule every editor
-  // uses, because the reader's eye is already where the closed tab was. Closing the LAST one lands on the
-  // explicit empty workspace: it used to navigate to the graph, so a gesture that asked for nothing put a
-  // document on screen and the board seemed to appear from underneath. An empty working set is a real
-  // state, and the reader is owed the state they produced rather than a substitute document.
+  // Closing stays in the tab's identity domain: session tabs prefer the right session, then the left, and
+  // only an empty session set lands on New Session. Spec/file tabs retain their graph-bottom-sheet return.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()

@@ -12,6 +12,5 @@ related:
 
 # release-build-eval
 
-`@spexcode/spec-eval` emits its production modules from `src` to `dist` with NodeNext resolution and
-declarations. Its test files remain development-only. The CLI receives this JavaScript package through its
-declared package dependency, never through a source-relative import or a consumer-side TypeScript build.
+The shared [[packaging]] package-build invariant applies here. This leaf supplies the eval-specific delta:
+`spec-eval/tsconfig.build.json` compiles `@spexcode/spec-eval` for the JavaScript artifact consumed by the CLI.

@@ -22,12 +22,13 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"/)
   assert.match(source, /function SessionSurfaceSwitcher\(/)
   assert.match(source, /id: 'surface-switcher'/)
+  assert.match(source, /surfaceChoices\.length > 1/)
   assert.match(source, /setSessionBaseSurface\(active, next\)/)
   assert.match(source, /surface = null/)
   assert.match(source, /const requestedSurface = isSessionSurface\(surface\) \? surface : null/)
   assert.match(source, /const activeBaseSurface = terminalFree \|\| readOnlyPane \? SESSION_SURFACE_CONVERSATION : requestedSurface \|\| getSessionBaseSurface\(active\)/)
-  // opening a resource is an ordinary navigation: it lands in the strip's current slot like every other
-  // plain click, and never mints a tab of its own ([[tab-strip]]).
+  // opening a resource is an ordinary navigation; tabModel turns that address into a pinned file-class
+  // hold while preserving the session tab ([[tab-strip]]).
   assert.match(source, /navigate\('sessions', tab\.sessionId, \{ query: \{ surface: resourceSurface\(tab\.id\) \} \}\)/)
   assert.doesNotMatch(source, /requestTab|pinTab/)
   assert.match(source, /const activeResourceId = sessionActive \? requestedResourceId : null/)

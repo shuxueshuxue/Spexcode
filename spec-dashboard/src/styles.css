@@ -47,6 +47,8 @@
   --type-icon-lg: 24px;
   /* the one statement size a page may spend, once ([[typography]]) */
   --type-display: 26px;
+  /* The launch wordmark is intentionally tiny and responsive so its six-line bitmap stays intact. */
+  --type-hero: clamp(5.5px, 1.15vw, 9.5px);
   --type-terminal: 11px;
 
   /* THREE weights, and the scale stops there. Escalation runs space → colour → weight → size, so a
@@ -58,6 +60,7 @@
   --leading-none: 1;
   --leading-tight: 1.25;
   --leading-ui: 1.45;
+  --leading-hero: 1.06;
   --leading-relaxed: 1.55;
   --leading-body: 1.65;
   --line-input: 20px;

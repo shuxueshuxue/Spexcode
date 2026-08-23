@@ -20,7 +20,8 @@ related:
 The rail is the activity bar for routed destinations. Its light has exactly one meaning: the current route.
 The dock projection is a separate, secondary fact shown by the dock header, never by the route light.
 The sessions entry may add a needs-you count badge as an overlay; the badge is attention state and never changes
-the route light's meaning. The same count prefixes the browser title when non-zero.
+the route light's meaning. The same count prefixes the browser title when non-zero. Project identity and
+switching live in [[status-bar]]; the rail carries no project chip or duplicate switcher.
 
 ## expanded spec
 
@@ -45,7 +46,13 @@ the route light's meaning. The same count prefixes the browser title when non-ze
   If a route selection changes a projection, that state must remain visually distinct from the route light.
 - **Pointer and keyboard behavior.** Rail links are real anchors with translated labels/tooltips and current
   keymap hints. Pointer presses are inert chrome for focus acquisition, while Tab and native Enter/Space
-  activation remain available. The rail never scrolls or overlays page content.
+  activation remain available. The rail never scrolls or overlays page content. It and the optional dock
+  extend to the viewport bottom as the shell's left region; the content status row begins after their
+  one-pixel `--line` right seam rather than crossing underneath them.
+- **Route controls only.** The permanently mounted controls are the dock toggle and the five route entries.
+  The former top project chip is absent: its mark, visible name, catalog menu, offline rules, guest login
+  door, and `/projects` management entry moved together to the status row, so project switching has one
+  persistent owner rather than two entrances with different geometry.
 - **Route peers.** The URL is hash state (`#/graph`, `#/sessions`, `#/evals`, `#/issues`, `#/settings`, plus
   document/detail tails). Page switches push history; list-to-detail and filter changes push; automatic route
   echoes replace. Bare evals/issues/settings boards are navigation destinations, not documents, so ordinary

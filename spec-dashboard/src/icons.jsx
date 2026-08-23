@@ -24,6 +24,8 @@ const ICONS = {
   // stroke glyphs dimensionally aligned with the filled issue pair below without a domain CSS patch.
   'circle-check': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" /><path d="m4.8 8 2 2L11.5 5.5" /></> },
   'circle-x': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" /><path d="m5.4 5.4 5.2 5.2" /><path d="m10.6 5.4-5.2 5.2" /></> },
+  'circle-check-dashed': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /><path d="m4.8 8 2 2L11.5 5.5" /></> },
+  'circle-x-dashed': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /><path d="m5.4 5.4 5.2 5.2" /><path d="m10.6 5.4-5.2 5.2" /></> },
   'circle-minus': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" /><path d="M4.8 8h6.4" /></> },
   'circle-dashed': { vb: 16, sw: 1.5, node: <circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /> },
   ellipsis: { node: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></> },

@@ -326,6 +326,8 @@ test('one icon-label-tone mapping drives every review state home', () => {
   assert.match(shell, /closed: \{ icon: 'issue-closed', tone: 'closed'/)
   assert.match(shell, /pass: \{ icon: 'circle-check', tone: 'pass'/)
   assert.match(shell, /fail: \{ icon: 'circle-x', tone: 'fail'/)
+  assert.match(shell, /stalePass: \{ icon: 'circle-check-dashed', tone: 'stale'/)
+  assert.match(shell, /staleFail: \{ icon: 'circle-x-dashed', tone: 'stale'/)
 
   assert.match(evals, /state=\{<ReviewState kind="eval" state=\{e\.state\}/)
   assert.match(issues, /state=\{<ReviewState kind="issue" state=\{status\}/)
@@ -338,9 +340,11 @@ test('one icon-label-tone mapping drives every review state home', () => {
   assert.doesNotMatch(css, /\.issue-state/)
   assert.match(shell, /className="review-state-icon" style=\{\{ width: size, height: size \}\}/)
   assert.match(css, /\.rl-row-state\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;[^}]*place-items:\s*center;/s)
-  for (const name of ['circle-check', 'circle-x', 'circle-minus', 'circle-dashed']) {
+  for (const name of ['circle-check', 'circle-x', 'circle-check-dashed', 'circle-x-dashed', 'circle-minus', 'circle-dashed']) {
     assert.match(icons, new RegExp(`'${name}': \\{ vb: 16, sw: 1\\.5`))
   }
+  assert.match(icons, /'circle-check-dashed': \{[^}]*strokeDasharray="2 2"/)
+  assert.match(icons, /'circle-x-dashed': \{[^}]*strokeDasharray="2 2"/)
   assert.doesNotMatch(css, /\.review-state\.eval|\.rl-row-state[^}]*\.eval/)
 })
 

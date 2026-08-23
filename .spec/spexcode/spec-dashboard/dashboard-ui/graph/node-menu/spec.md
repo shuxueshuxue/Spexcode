@@ -15,8 +15,9 @@ Right-clicking a spec node on the board suppresses the browser's default context
 **custom node menu** at the cursor. The board's design language already pairs mouse gestures with
 keyboard verbs (click ↔ arrows, double-click ↔ `i`); this menu completes the pairing for the verbs a
 mouse-only user otherwise cannot reach at all — the chords most of all. Right-click also **focuses**
-the node first (expanding in place, no pan — same contract as click), so the menu always acts on the
-node under the cursor and the board visibly agrees about which node that is.
+the node first (the clicked tile stays screen-stable while the camera absorbs any layout delta — the same
+anchor contract as click), so the menu always acts on the node under the cursor and the board visibly agrees
+about which node that is.
 
 The menu exposes the node verbs plus one address handoff, with no new node mutation behind them:
 

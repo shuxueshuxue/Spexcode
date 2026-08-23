@@ -1,7 +1,7 @@
 # Spec tree content audit
 
-Date: 2026-08-22  
-Scope: current `.spec/spexcode` tree only; 362 `spec.md` nodes.  
+Date: 2026-08-22
+Scope: current `.spec/spexcode` tree only; 362 `spec.md` nodes.
 Phase: audit only. No spec node was edited.
 
 ## Method and totals

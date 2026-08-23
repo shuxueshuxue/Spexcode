@@ -156,9 +156,3 @@ export const usePane = () => useContext(Pane)
 // the two questions with their no-provider answers, so callers do not each invent a default.
 export const usePaneActive = () => useContext(Pane)?.active !== false
 export const usePaneAddress = () => useContext(Pane)?.address ?? null
-
-// A guard the shell asserts in development: a view must not read the global address. It receives its route
-// as props, because that is what lets the shell render two of them at once, and what stops a view from
-// silently coupling itself to whichever address happens to be current.
-export const VIEW_ROUTE_CONTRACT =
-  'a view receives { param, query } as props and must not call useRoute()'

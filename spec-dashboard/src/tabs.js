@@ -148,7 +148,7 @@ export function useTabs({ onCloseStart } = {}) {
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
   // Closing stays in the tab's identity domain: session tabs prefer the right session, then the left, and
-  // only an empty session set lands on New Session. Spec/file tabs retain their graph-bottom-sheet return.
+  // only an empty session set lands on the explicit empty workspace. Spec/file tabs retain their graph return.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()

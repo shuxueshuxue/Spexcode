@@ -110,7 +110,7 @@ export function closeDestination(tab, remaining, index) {
   if (isSessionTab(tab)) {
     const right = remaining.slice(index).find(isSessionTab)
     const left = [...remaining.slice(0, index)].reverse().find(isSessionTab)
-    return right || left || { page: 'sessions', param: 'new', query: null }
+    return right || left || { page: 'empty', param: null, query: null }
   }
   if (tab?.page === 'spec' || tab?.page === 'file') return { page: 'graph', param: null, query: null }
   const heir = remaining[index] || remaining[index - 1]

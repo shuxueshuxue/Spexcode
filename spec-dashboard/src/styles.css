@@ -494,14 +494,15 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    set behind a gesture — the documents you are holding are off-screen and there is no mark saying so —
    while wrapping keeps the whole set legible and pays for it in a thickness the reader can see and control.
    The band's height is therefore the working set, not a constant; the strip is `flex: 0 0 auto` and the
-   rows are what make it tall. */
+   rows are what make it tall. `flex-basis: 0` is deliberate: line formation sees each tab's minimum first,
+   so the strip shrinks every tab before it creates another row, then flex-grow fills each row again. */
 .tabstrip {
   flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
   background: var(--panel); border-bottom: 1px solid var(--edge);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
-  flex-wrap: wrap; align-content: flex-start;
+  flex-wrap: wrap; align-content: flex-start; container-type: inline-size;
 }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
@@ -509,11 +510,11 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   color: var(--muted); font-size: var(--type-meta); white-space: nowrap;
 }
 .tab {
-  position: relative; flex: 0 0 auto; height: 30px;
-  display: flex; align-items: center; min-width: 0; max-width: 220px;
+  position: relative; flex: 1 1 0; height: 30px;
+  display: flex; align-items: center; min-width: 80px; max-width: 240px;
   border-right: 1px solid var(--edge); color: var(--muted);
 }
-.tab.on { background: var(--paper); color: var(--ink2); }
+.tab.on { min-width: 112px; background: var(--paper); color: var(--ink2); }
 /* A DRAG SAYS WHERE, NEVER WHAT. The moved tab fades to say it is in hand and the landing place wears a
    single hairline on the edge the tab would arrive at — drawn ON a tab rather than between them, so it is
    at home in any row of a wrapped strip. Nothing lifts and nothing casts a shadow: the strip stays one
@@ -541,9 +542,19 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   display: inline-flex; align-items: center; padding: 0 var(--space-4) 0 var(--space-1); height: 100%;
   background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
 }
-.tab:hover .tab-x, .tab.on .tab-x { opacity: 1; }
+.tab.on .tab-x, .tab:hover .tab-x { opacity: 1; }
 .tab-x:hover { color: var(--ink2); }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* At the narrow end of the same flex scale, text gets the space first. The full label remains on the face's
+   accessible name and tooltip, so the second half of a session label can disappear without losing it. Status
+   marks are the last decoration removed; the active tab's close control is intentionally never hidden. */
+@container (max-width: 420px) {
+  .tab-face { gap: var(--space-2); padding-left: var(--space-2); }
+  .tab-x { padding-right: var(--space-2); }
+}
+@container (max-width: 320px) {
+  .tab-dot, .tab-spinner { display: none; }
+}
 /* The action cluster sits at the band's LAST row, against the content it acts on. It is a sibling of the
    wrapping list rather than a member of it, so it reserves its own column and no tab can ever run under
    it — a reserved-space trick measured in JS is what an editor needs only because its toolbar overlays the

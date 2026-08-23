@@ -150,6 +150,28 @@ self-limiting: the current-slot-per-kind rule means the strip only grows when so
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 
+**Width is elastic before it is wrapped, following VS Code's `wrapTabs` fit behaviour.** Each tab is one flex
+item with a zero basis, an 80px minimum and a 240px maximum (the active tab uses a 112px readability floor so
+its always-visible close control never crowds its title). Flex first shrinks every tab on the current row; it
+creates another row only when the sum of those minimums cannot fit. Each wrapped row then grows its own tabs
+again, so a short last row may be wider than the rows above it. This is one CSS flex rule, not JavaScript width
+measurement. The close affordance is always present on the active tab; an inactive tab shows it only on hover.
+At the narrow end, padding is reduced first, and status dots/spinners disappear only at the final 320px strip
+width; the face keeps its full accessible label and tooltip while its visible title ellipsises.
+
+The measured fit matrix below records the rendered tab width in pixels (action cluster absent; a 30px row; the
+active tab is included in the count). A `*` marks a wrapped layout; values are the actual equal-width flex
+items in the first row, with the final row noted where it differs:
+
+| viewport | 2 tabs | 3 tabs | 5 tabs | 8 tabs | 12 tabs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1680px | 240 | 240 | 240 | 210 | 140 |
+| 1280px | 240 | 240 | 240 | 160 | 112 + 11x106.2 |
+| 900px | 240 | 240 | 180 | 112.5 | 112 + 9x87.6 (`*`, final 2 = 240) |
+
+The screenshots for this 15-cell matrix are the review evidence for this paragraph; the widths above are kept
+in the same commit as the CSS so a future change can re-measure the contract rather than infer it from prose.
+
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run
 under it — an editor needs a measured reserve at the end of the last row only because its toolbar floats

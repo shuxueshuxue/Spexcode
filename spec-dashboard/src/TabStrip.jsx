@@ -197,6 +197,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
       {tabs.map((tab, index) => {
         const key = tabKey(tab)
         const active = key === activeKey
+        const tabLabel = label(tab, { specs, sessions, names, t })
         // the insertion marker rides the tab the moved one would land in front of — or, for the end of the
         // strip, the trailing edge of the last tab. Two classes, one line, at home in any row of a wrapped
         // strip because it is drawn on a tab rather than between them.
@@ -213,10 +214,10 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
-            <button type="button" className="tab-face" data-tip={key}
+            <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
               onClick={(e) => (e.altKey ? splitTo(tab) : open(tab))}>
               <TabDot tab={tab} specs={specs} sessions={sessions} />
-              <span className="tab-label">{label(tab, { specs, sessions, names, t })}</span>
+              <span className="tab-label">{tabLabel}</span>
             </button>
             <button type="button" className="tab-x" onClick={() => close(tab)} aria-label={t('tabs.close')}>
               <Icon name="x" size={11} />

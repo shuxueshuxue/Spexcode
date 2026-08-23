@@ -134,6 +134,14 @@ test('the chrome bands the budget does not allow are gone from the sheet', () =>
   assert.match(css, /\.m-composer\s*\{[^}]*position:\s*absolute;/s)
 })
 
+test('tab widths shrink elastically before wrapping and keep the active close affordance', () => {
+  assert.match(css, /\.tabstrip-tabs\s*\{[^}]*flex-wrap:\s*wrap;[^}]*container-type:\s*inline-size;/s)
+  assert.match(css, /\.tab\s*\{[^}]*flex:\s*1 1 0;[^}]*min-width:\s*80px;[^}]*max-width:\s*240px;/s)
+  assert.match(css, /\.tab\.on\s*\{[^}]*min-width:\s*112px;/s)
+  assert.match(css, /\.tab\.on \.tab-x, \.tab:hover \.tab-x\s*\{[^}]*opacity:\s*1;/s)
+  assert.match(css, /@container \(max-width:\s*320px\)\s*\{[^}]*\.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
+})
+
 test('wheel is xterm-native — no browser quantizer, ledger, or synthetic bottoming', () => {
   // the browser reimplementing wheel→SGR conversion was a bug factory (X10 corruption, min-tick
   // amplification, growth race, flip loss, top clamp). xterm's own mouse-report mode conversion —

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8')
 const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
+const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
@@ -33,9 +34,11 @@ test('session tabs use the shared visible title, not the stable search handle', 
   assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)
 })
 
-test('review destinations keep their icon on the route rail instead of inventing board tabs', () => {
-  // Evals, Issues, and Settings are review/settings surfaces, not workspace objects. Their visual marker is
-  // the one route rail icon; putting a second marker into a never-created board tab would split ownership.
+test('resident review tabs share the workspace strip while Issues removes the activity rail', () => {
+  // Evals, Issues, and Settings are resident tabs. Issues is the focused full-width reading surface; its
+  // detail still has the shared strip, while the activity rail is intentionally omitted.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{page\} size=\{18\} \/>/)
+  assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} \/>/)
+  assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
 })

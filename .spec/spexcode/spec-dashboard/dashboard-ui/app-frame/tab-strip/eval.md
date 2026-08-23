@@ -14,6 +14,19 @@ scenarios:
       Settings, never the internal key tabs.settings.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
+  - name: divider-seam-and-group-head-geometry
+    description: >-
+      In a real Chromium dashboard, open a spec document with the Explorer dock and a session document with
+      the Sessions dock at both a 1440x900 desktop viewport and a 390x844 narrow viewport. Measure the rendered
+      tab strip/content seam, an Explorer section divider, and a Sessions zone heading divider after each view
+      settles; capture one screenshot per viewport.
+    expected: >-
+      The content host owns exactly one 1px top divider while the tab strip owns no bottom border. Explorer and
+      Sessions group headings expose the same 1px divider rule, with no negative geometry, overlap, or horizontal
+      overflow at either viewport. The tab strip bottom and content host top share one y coordinate.
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/styles.css]
+    test: spec-dashboard/test/divider-geometry.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

@@ -85,6 +85,11 @@ With real ground steps doing the separating, a chrome boundary is **felt, not se
 half-strength `--line`, and it is what the rail, dock, strip, status bar and context dock are bounded with.
 `--line` remains the honest divider for a card, a field, a table rule — the places a real edge is the point.
 
+`--divider-rule` is the one quiet rule for seams and group heads: `1px solid var(--edge)`. A caller may
+place that rule on a border or use it as the trailing hairline of a heading, but it does not invent another
+colour or weight for the same boundary job. The tab strip's content boundary is owned by the content host's
+top edge, so the active tab and document meet through the same token without a second strip line.
+
 **A SEAM IS A STEP, NOT A LINE — and the step is built from the ladder itself.** Where the chrome floor
 meets the content plane the boundary runs `--ground` · the `--edge` hairline · one pixel of `--panel` ·
 `--paper`: four values in three pixels. That middle pixel is what makes the document read as sitting ABOVE

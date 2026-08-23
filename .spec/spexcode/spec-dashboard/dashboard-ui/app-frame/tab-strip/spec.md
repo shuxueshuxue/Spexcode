@@ -237,6 +237,10 @@ unresolved selector does.
 **Two documents at once is the shell's** ([[workspace-shell]]): alt-clicking a tab sends its document to
 the second pane. The strip only names the gesture; the pane is workspace state, not a tab.
 
+**The strip/content boundary is one shared `--divider-rule` seam.** The strip supplies the panel ground and the
+content host owns the single top rule, so the active tab's paper plane meets the document without a second
+tab-local border or a layout jump. Group headings elsewhere in the frame consume the same rule mechanism.
+
 The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
 not another navigation surface: changing tabs changes the registered buttons, and a document with no registered
 actions leaves the edge blank. A session with more than one available face registers one three-state segmented

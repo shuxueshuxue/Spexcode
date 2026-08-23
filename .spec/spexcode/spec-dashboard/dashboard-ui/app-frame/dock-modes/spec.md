@@ -79,6 +79,10 @@ door navigates to the sessions document's archive overlay. Both are finding-surf
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
 separate gesture with its own section below, and it changes no address.
+
+Every zone heading uses the shared `--divider-rule` hairline for its trailing separator. The zone hue remains
+on the label and count pod, where it carries status meaning; the boundary itself has one token and one weight,
+matching the explorer's section heads and the tab/content seam.
 When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
 keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
 well; the reveal is derived from `activeSessionId`, not a second selection state.

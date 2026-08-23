@@ -21,7 +21,7 @@ test('plain navigation reuses one slot per document kind', () => {
 })
 
 test('ctrl/⌘ pins a second tab and the pinned one is never replaced', () => {
-  let tabs = placeTab([], file('a'))                 // slot
+  let tabs = placeTab([], spec('a'))                 // slot
   tabs = placeTab(tabs, session('s1'), 'pin')        // explicit hold
   assert.deepEqual(keys(tabs), ['~#/file/a', '*#/sessions/s1'])
   // the slot moves on; the pinned tab stays exactly where it is, address intact
@@ -43,7 +43,7 @@ test('the slot keeps its POSITION when its address changes', () => {
 })
 
 test('re-opening an address activates it instead of stacking; pinning promotes it in place', () => {
-  let tabs = placeTab(placeTab([], file('a'), 'pin'), file('b'))
+  let tabs = placeTab(placeTab([], spec('a'), 'pin'), spec('b'))
   const before = tabs
   assert.equal(placeTab(tabs, spec('a')), before)          // already open: nothing moves
   tabs = placeTab(tabs, spec('b'), 'pin')                  // double-click on the slot
@@ -109,10 +109,10 @@ test('resident routes normalize to one top-level Spec, Evals, or Issues tab', ()
 })
 
 test('opening a spec keeps its detail address while focusing the resident Spec tab', () => {
-  let tabs = placeTab([], spec('first'))
+  let tabs = placeTab([], residentSpec('first'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])
   assert.deepEqual(tabs[0], { page: 'spec', param: 'first', query: null, pinned: true })
-  tabs = placeTab(tabs, spec('second'))
+  tabs = placeTab(tabs, residentSpec('second'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])
   assert.equal(tabs[0].param, 'second')
 })

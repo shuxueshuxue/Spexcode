@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
-import { sessionDisplayState, sessionHandle } from './session.js'
+import { sessionDisplayState, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import SessionPicker from './SessionPicker.jsx'
@@ -106,8 +106,9 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const display = sessionDisplayState(s)
-  // Identity is stable; lifecycle notes and readiness warnings belong to the secondary status slot.
-  const headline = sessionHandle(s)
+  // The row and the @ menu share one visible name. The stable handle remains available in the avatar
+  // tooltip/search matching, but must not become a second row label.
+  const headline = sessionHeadline(s)
   const statusWord = t(`status.${display.status}`)
   return (
     <>

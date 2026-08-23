@@ -39,7 +39,8 @@ status or liveness. The family sits in the root's zone: **glyph ≡ the session'
 family's root status**.
 
 **The row.** `SessionRow` renders one session: its status colour and glyph come from `session.js`
-(`STATUS_COLOR` / `STATUS_GLYPH`), its identity from `sessionHandle` and `sessionHeadline`, and its
+(`STATUS_COLOR` / `STATUS_GLYPH`), its visible name from the shared `sessionHeadline` (the same door used by
+@-mentions), and its stable handle only in secondary identity reveals, and its
 activity from `opSummary`, which folds an op list into per-op counts using the shared `GLYPH` map.
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.

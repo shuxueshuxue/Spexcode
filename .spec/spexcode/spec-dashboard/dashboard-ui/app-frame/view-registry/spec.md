@@ -21,7 +21,8 @@ The map from an address kind to the thing that renders it, its surface, and the 
 
 The core map is seeded into one runtime registry. Product extensions use its `registerView(name,
 definition, owner)` or `registerPlugin({ id, views })` API; they do not mutate the exported core object.
-Names are lowercase kebab-case, every definition must provide a component function, and registration is
+Names are lowercase kebab-case, every definition must provide a callable component or a tagged React
+component object such as `React.lazy`, and registration is
 fail-closed: an existing core or plugin view cannot be replaced. Plugin registration validates every view
 before mutating the registry, so a collision leaves all prior entries intact. A plugin can be removed by id,
 which removes only the views it owns. The registry is the sole lookup used by `viewFor`, `surfaceFor`, and the

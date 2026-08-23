@@ -160,6 +160,32 @@ self-limiting: the current-slot-per-kind rule means the strip only grows when so
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 
+**Width is elastic before it is wrapped, following VS Code's `wrapTabs` fit behaviour.** Each tab is one flex
+item with a zero basis, an 80px minimum and a 240px preferred maximum (the active tab uses a 112px readability
+floor so its always-visible close control never crowds its title). Flex first shrinks every tab on the current
+row; it creates another row only when the sum of those minimums cannot fit. Each row grows independently until
+the preferred 240px cap; a short final row may retain legal empty space rather than producing an oversized
+outlier. This is one CSS flex rule, not JavaScript width measurement. The close affordance is always present on
+the active tab; an inactive tab shows it only on hover. At the narrow end,
+padding is reduced per tab at 140px, and status dots/spinners disappear per tab at 100px; the face keeps its
+full accessible label and tooltip while its visible title ellipsises.
+
+The measured fit matrix below records the real rendered tab width in pixels. The viewport includes the 40px
+rail and the 200px explorer dock; the 36px document-action sibling is also present, so the tablist width is
+`viewport - 276px` (1404/1004/624px). A `*` marks a wrapped layout; the active tab is included in the count,
+and `last=` records a widened final row:
+
+| viewport / tablist | 2 tabs | 3 tabs | 5 tabs | 8 tabs | 12 tabs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1680 / 1404px | 240 | 240 | 240 | 175.5 | 117 |
+| 1280 / 1004px | 240 | 240 | 200.8 | 125.5 | 112 + 11x81.1 |
+| 900 / 624px | 240 | 208 | 124.8 | 112 + 6x85.3 (`*`, last=240) | 112 + 6x85.3 (`*`, final 5x124.8) |
+
+The dense 15-tab stress case at 900/624px is three rows of `7 + 7 + 1`; the final tab stops at 240px and
+leaves the remaining space empty by design. The screenshots for this 15-cell matrix plus that 15-tab stress
+case are the review evidence for this paragraph; the widths above are kept in the same commit as the CSS so a
+future change can re-measure the product surface rather than infer it from prose.
+
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run
 under it — an editor needs a measured reserve at the end of the last row only because its toolbar floats

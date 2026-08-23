@@ -36,9 +36,10 @@ identity or deduplication. A `resource:…` face is the exception: it is a file-
 own identity, appended beside the unchanged session tab. The rail navigates into this same working set and
 does not own a second focus state. Graph remains the one addressable view that never becomes a top-level tab.
 
-Review and settings destinations still have an icon: it belongs to their one active route entry in the activity
-rail, where the route is actually selected. A board's list tabs (for example Open/Closed) are view-local
-filters, not workspace addresses; this split keeps one owner for both the icon and the route light.
+Resident Evals, Issues, and Settings tabs render the page icon declared by [[view-registry]], the same
+identity their activity-rail entries use. A detail URL keeps that resident tab identity while its scenario or
+issue selection remains route state. A board's list tabs (for example Open/Closed) are view-local filters,
+not workspace addresses.
 
 What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
 addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, and **`#/sessions/new`** —
@@ -216,9 +217,9 @@ The earlier human rule "退回到 spec node graph" described spec/file workspace
 report "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" narrows that rule: session tabs
 use the classified session fallback above, while spec/file tabs retain the graph return.
 
-`settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
-the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
-parameterized detail objects may be held.
+Settings, Evals, and Issues are resident documents even though their bare addresses are board destinations;
+their detail/query state does not mint another identity. The same resident tab remains selected for a bare
+board or any parameterized detail URL.
 
 **Labels come from the board's own projections** — a node's title, a session's headline — never from a
 second lookup table that could drift from them. A tab for a node carries the same four-state dot its tile
@@ -226,14 +227,15 @@ does, so the strip speaks the board's vocabulary rather than inventing a tab-spe
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
 
-**A board's DETAIL is not the board, and its tab says so.** While `#/evals`, `#/evals/<node>/<scenario>`
-and a second reading all printed "Evals", the strip could hold three tabs with nothing to tell them apart —
-which is a strip that has stopped being a working set. A scenario tab reads *node title · scenario*: the
-scenario is the leaf, the node is the folder it sits in, and that is the same container·leaf grammar a
-session tab already uses. It wears the NODE's status dot, because the reading's own verdict is not on the
-board — knowing it costs a detail request, and a tab must never mint a fetch to draw itself. An issue tab
-reads the concern, ellipsised by the tab's own width rather than cut short in the label, and `#/issues/new`
-names the compose page it actually is.
+**A board's DETAIL is route state inside its resident tab.** Evals and Issues keep the stable page label and
+page icon in the strip while the URL carries the selected scenario or issue; Evals may additionally wear the
+selected node's status dot, which costs no detail fetch. `#/issues/new` remains a compose route with no issue
+identity.
+
+Session conversation, terminal, and diff are not three workspace tabs. They are surfaces of one session tab:
+the toolbar exposes one icon-only conversation/terminal toggle and one independent diff action, both using
+URL replace so switching never creates, replaces, or reorders the session tab. This is the later single-button
+resolution of the earlier request that those faces share the top row.
 
 **A document with no projection names ITSELF.** An issue is the one document the board holds nothing about
 — the issues board is paged and the detail fetches its own — so the detail reports the concern it already

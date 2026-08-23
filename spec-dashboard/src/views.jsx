@@ -1,4 +1,5 @@
 import { lazy } from 'react'
+import SessionsView from './SessionsView.jsx'
 import { useBoard, useBoardApi } from './workspace.jsx'
 import { navigate } from './route.js'
 import { createViewRegistry } from './viewRegistry.js'
@@ -29,11 +30,9 @@ const CHUNK_RELOAD_KEY = 'spexcode.chunk-reload'
 // rather than spin the tab. A successful import clears the guard, so the next stale dist gets its reload.
 function lazyRetry(importer) {
   return lazy(async () => {
-    console.warn('lazy start')
     for (let attempt = 0; ; attempt++) {
       try {
         const mod = await importer()
-        console.warn('lazy resolved', Object.keys(mod))
         try { sessionStorage.removeItem(CHUNK_RELOAD_KEY) } catch { /* private mode */ }
         return mod
       } catch (err) {
@@ -53,12 +52,6 @@ function lazyRetry(importer) {
 const GraphView = lazyRetry(() => import('./GraphView.jsx'))
 const SpecView = lazyRetry(() => import('./SpecView.jsx'))
 const FileView = lazyRetry(() => import('./FileView.jsx'))
-// Keep the session console's chunk warm before a graph action navigates into it. The graph is the first
-// cold face, and waiting for the lazy boundary only after a click leaves the mounted view pool showing its
-// loading fallback during that route transition. Preloading is still code-split; it only moves the fetch to
-// idle time while the reader is on the graph.
-const importSessionsView = () => import('./SessionsView.jsx')
-const SessionsView = lazyRetry(importSessionsView)
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
@@ -92,7 +85,8 @@ export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
   // sends anyone through the rail or a tab close.
   graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
-  // Spec detail links keep their canonical `#/spec/<id>` URL while the working set owns one `#/spec` tab.
+  // Spec detail links remain canonical `#/spec/<id>` addresses; residency gives them one stable Spec tab
+  // identity without changing the SpecView/FileView document boundary.
   spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, resident: true, icon: 'graph', className: 'view-spec' },
   file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
@@ -118,7 +112,7 @@ export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
 registerPlugin(createSettingsViewPlugin(SettingsView))
 
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
-export const preloadView = (page) => page === 'sessions' ? importSessionsView() : Promise.resolve()
+export const preloadView = () => Promise.resolve()
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
 export const iconFor = (page) => viewRegistry.get(page)?.icon || null
 export const isDocument = (page, param = null) => {

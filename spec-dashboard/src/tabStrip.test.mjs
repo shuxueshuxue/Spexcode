@@ -6,6 +6,7 @@ const source = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8')
 const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 const views = readFileSync(new URL('./views.jsx', import.meta.url), 'utf8')
+const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
@@ -46,9 +47,11 @@ test('resident review tabs share the workspace strip while Issues removes the ac
 })
 
 test('resident tabs and the activity rail share view-owned page icons', () => {
-  for (const [page, icon] of [['evals', 'evals'], ['issues', 'issues'], ['settings', 'settings']]) {
+  for (const [page, icon] of [['evals', 'evals'], ['issues', 'issues']]) {
     assert.match(views, new RegExp(`${page}:\\s+\\{[^\\n]*resident: true, icon: '${icon}'`))
   }
+  assert.match(builtInViewPlugins, /settings:\s*\{[\s\S]*?resident: true,[\s\S]*?icon: 'settings'/)
+  assert.match(views, /registerPlugin\(createSettingsViewPlugin\(SettingsView\)\)/)
   assert.match(views, /export const iconFor = \(page\) => viewRegistry\.get\(page\)\?\.icon \|\| null/)
   assert.match(source, /const icon = isResident\(tab\.page\) \? iconFor\(tab\.page\) : null/)
   assert.match(source, /<TabKindIcon tab=\{tab\} \/>[\s\S]{0,100}<TabDot tab=\{tab\}/)

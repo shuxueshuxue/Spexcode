@@ -746,6 +746,7 @@ export default {
     resumeInputTitle: 'resume this session?',
     resumeInputMessage: 'This session is waiting for a resume. Confirm before sending the first key.',
     resumeInputConfirm: 'resume and send key',
+    surfaceSwitcher: 'session surface',
     diffLoading: 'loading diff…',
     diffEmpty: 'no branch changes',
     diffMerged: 'merged into {base}',

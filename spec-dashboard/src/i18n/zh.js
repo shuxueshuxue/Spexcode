@@ -733,6 +733,7 @@ export default {
     resumeInputTitle: '恢复此会话？',
     resumeInputMessage: '此会话正在等待恢复。发送第一个按键前请先确认。',
     resumeInputConfirm: '恢复并发送按键',
+    surfaceSwitcher: '会话视图',
     diffLoading: '正在加载差异……',
     diffEmpty: '没有分支改动',
     diffMerged: '已合并到 {base}',

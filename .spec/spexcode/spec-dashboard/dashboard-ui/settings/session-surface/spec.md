@@ -42,10 +42,12 @@ stored base was Terminal: the terminal layer hidden, the conversation layer neve
 composer that is the human's only way to speak to that session. The store answers ONE question — what does a
 bare address mean — and it must not also be consulted for what is on screen.
 
-Resource surfaces are ordinary session object tabs whose identity is their canonical address. The plus picker and
-tab deduplication form the complete open list; closing a resource closes that tab and its warm preview, while the
-session's terminal/PTY remains untouched. A new posted web resource never becomes visible automatically: it adds
-an unread signal, and only clicking that signal navigates to the resource address.
+Resource surfaces are file-class workspace tabs whose identity is their canonical resource address. The plus
+picker and tab deduplication form the complete resource open list; opening one appends beside the session tab
+instead of replacing its Terminal/Conversation face. Closing a resource closes that tab and its warm preview,
+while the session's terminal/PTY and base-surface preference remain untouched. A new posted web resource never
+becomes visible automatically: it adds an unread signal, and only clicking that signal navigates to the resource
+address.
 
 **Every overlay has a return leg, and it is the same address in every case.** Esc from a resource, Esc from
 the diff, and pressing the diff door while it is lit all navigate to the bare `#/sessions/<id>`. The diff door

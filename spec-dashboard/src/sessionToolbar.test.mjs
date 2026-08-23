@@ -19,13 +19,16 @@ const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('session faces are routed and the console has no second tab rail', () => {
-  assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"|surface-switch/)
+  assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"/)
+  assert.match(source, /function SessionSurfaceSwitcher\(/)
+  assert.match(source, /id: 'surface-switcher'/)
+  assert.match(source, /surfaceChoices\.length > 1/)
+  assert.match(source, /setSessionBaseSurface\(active, next\)/)
   assert.match(source, /surface = null/)
   assert.match(source, /const requestedSurface = isSessionSurface\(surface\) \? surface : null/)
   assert.match(source, /const activeBaseSurface = terminalFree \|\| readOnlyPane \? SESSION_SURFACE_CONVERSATION : requestedSurface \|\| getSessionBaseSurface\(active\)/)
-  assert.doesNotMatch(source, /setSessionBaseSurface\(active, requestedSurface\)/)
-  // opening a resource is an ordinary navigation: it lands in the strip's current slot like every other
-  // plain click, and never mints a tab of its own ([[tab-strip]]).
+  // opening a resource is an ordinary navigation; tabModel turns that address into a pinned file-class
+  // hold while preserving the session tab ([[tab-strip]]).
   assert.match(source, /navigate\('sessions', tab\.sessionId, \{ query: \{ surface: resourceSurface\(tab\.id\) \} \}\)/)
   assert.doesNotMatch(source, /requestTab|pinTab/)
   assert.match(source, /const activeResourceId = sessionActive \? requestedResourceId : null/)
@@ -89,6 +92,8 @@ test('live offline and archived conversations share one footer with cold input a
   assert.match(timelineChat, /disabled=\{readOnly\}/)
   assert.match(timelineChat, /data-focus-sink=\{active && !readOnly \? '' : undefined\}/)
   assert.match(timelineChat, /if \(!active \|\| footerState === 'archived'\) return undefined[\s\S]{0,100}setInterval\(load, 8000\)/)
+  assert.match(source, /onRestore=\{id === active && session\.status !== 'retired' \? resumeAndReturnToWorking : undefined\}/)
+  assert.match(timelineChat, /\{onRestore && <button type="button" className="m-coldline-action"/)
   assert.match(source, /footerState=\{sessionFooterState\(session\)\}/)
   assert.match(source, /const readOnlyPane = noLivePane \|\| archivedSel/)
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
@@ -258,6 +263,7 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.deepEqual(names('done', 'online', 'nothing'), ['command', 'eval', 'merge', 'stop', 'close'])
   assert.deepEqual(names('queued', 'offline'), ['eval', 'merge', 'close'])
   assert.deepEqual(names('asking', 'offline'), ['eval', 'merge', 'relaunch', 'close'])
+  assert.deepEqual(names('retired', 'offline'), ['eval', 'merge', 'close'])
   assert.deepEqual(names('review', 'offline', 'merge'), ['eval', 'merge', 'relaunch', 'close'])
   assert.deepEqual(typed('asking', 'offline'), ['eval', 'close'])
   assert.deepEqual(typed('review', 'online', 'merge'), ['eval', 'merge', 'stop', 'close'])

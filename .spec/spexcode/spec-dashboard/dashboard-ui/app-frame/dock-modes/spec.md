@@ -1,5 +1,5 @@
 ---
-title: dock-projection
+title: dock-modes
 status: active
 hue: 210
 desc: The left finding dock's explorer and sessions projections, selected by the rail.
@@ -49,9 +49,9 @@ Reduced-motion drops the animation and keeps both doors.
 **THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
 its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how
 thick the dock is — which is the [[ui-state-model]] budget made structural rather than remembered. A
-projection may not mint a strip of its own; the explorer's own count row, the sessions `+` row and the
-archive door were three separate strips stacked around one list, three answers to a question this row
-already answers once.
+projection may not mint a strip of its own. **Historical:** the explorer count row, sessions `+` row, and
+archive door were once three separate strips stacked around one list; that arrangement is retired in favor of
+this single header row.
 
 The header and zone tallies are last-good projections during a backend outage. They stay visible for context
 but carry the same translated `stale` marker as the status bar until the shared transport proves reachability
@@ -59,16 +59,21 @@ again; the dock never paints an old count as silently current and never invents 
 
 **SEARCH IS ONE OF THOSE DOORS, and each head opens it on what that head LISTS.** The sessions head searches
 sessions; the explorer head searches nodes. It is the same palette either way — same rows, same keys, same
-matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). Search used to be a
-rail button ([[side-nav]]), where it had to name a scope it could not know: it sat above both projections
-and opened exactly one of them, so a reader asking "search what?" got whichever answer the button's author
-had picked. Sitting inside the head row, the button needs no answer — the row it is in has already given
+matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). **Historical:** search
+used to be a rail button ([[side-nav]]) that had to guess a scope above both projections. That button is retired;
+sitting inside the head row, the current door needs no answer — the row it is in has already given
 one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
 force, so the key and the visible door can never disagree.
 
 The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
-route-selected highlight (`activeSessionId`). The header's `+` navigates to `sessions/new` and its archive
+route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
+archived records form the fourth archive zone; otherwise offline liveness wins over lifecycle and puts the row in
+offline. The two legislated exceptions are `queued`, which has not launched and remains runnable under running,
+and `archive`, which is a closed zone rendered with the muted offline mark (`○`). While online
+asking/review/done/close-pending/error form needs-you and the remaining online states
+form running. A parent-child display edge is kept only within one derived zone, so an offline child is a root in
+the offline bucket rather than a row under an online parent. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a

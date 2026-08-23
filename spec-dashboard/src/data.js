@@ -3,20 +3,46 @@ import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the two-layer expansion frontier chosen by
-// GraphView. Coordinates depend only on tree shape plus that frontier, never on the focused id.
+// GraphView. Coordinates depend only on tree shape plus that frontier, never on the focused id. A node's
+// visible child block owns one slot per visible descendant block, so adjacent branches reserve the total
+// height of the next layer before their parents are centred. This is the part the old independent-centre
+// recursion missed: two wide sibling blocks could otherwise occupy the same rows.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })
   const pos = {}
-  const place = (id, depth, y) => {
-    pos[id] = { x: depth * X_GAP, y }
+  // The span is deliberately based on each node's immediate visible child block. Deeper expansion can
+  // add nodes in a later column without re-spacing an unrelated column unless that later block itself needs
+  // more rows; every occupied row still has the same centre-to-centre step and a four-pixel clear gap.
+  const spans = new Map()
+  const span = (id) => {
+    if (spans.has(id)) return spans.get(id)
+    const cs = expanded.has(id) ? (kids[id] || []) : []
+    const value = cs.length ? cs.reduce((total, child) => total + span(child), 0) : 1
+    spans.set(id, value)
+    return value
+  }
+  const place = (id, depth, slot) => {
+    pos[id] = { x: depth * X_GAP, y: slot * Y_GAP }
     const cs = expanded.has(id) ? (kids[id] || []) : []
     if (!cs.length) return
-    const top = y - ((cs.length - 1) / 2) * Y_GAP   // children block centred on the parent's row
-    cs.forEach((c, i) => place(c, depth + 1, top + i * Y_GAP))
+    const total = cs.reduce((sum, child) => sum + span(child), 0)
+    let cursor = slot - total / 2
+    cs.forEach((child) => {
+      const width = span(child)
+      place(child, depth + 1, cursor + width / 2)
+      cursor += width
+    })
   }
-  nodes.filter((n) => !n.parent).forEach((r, i) => place(r.id, 0, i * Y_GAP))
+  const roots = nodes.filter((n) => !n.parent)
+  const total = roots.reduce((sum, root) => sum + span(root), 0)
+  let cursor = -total / 2
+  roots.forEach((root) => {
+    const width = span(root)
+    place(root.id, 0, cursor + width / 2)
+    cursor += width
+  })
   return pos
 }
 

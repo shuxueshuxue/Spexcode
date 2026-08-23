@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import FileTree from './FileTree.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { SessionConsoleTreeRow, useFold } from './SessionWindow.jsx'
-import { sessionAncestorIds, sessionForest } from './session.js'
+import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
@@ -48,7 +48,7 @@ function SessionDock({ sessions, activeId }) {
     if (!activeId) return
     const active = (sessions || []).find((session) => session.id === activeId)
     expand(sessionAncestorIds(sessions || [], activeId))
-    if (active && (active.liveness === 'offline' || active.status === 'offline')) setOfflineOpen(true)
+    if (active && sessionZone(active) === 'offline') setOfflineOpen(true)
   }, [activeId, sessions, expand])
   const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,

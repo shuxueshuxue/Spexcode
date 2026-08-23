@@ -10,7 +10,9 @@ related:
 
 # prose-renderer
 
-**Status: pending** — this node is the contract; the module does not exist yet. When it lands, `code:`
+**Status: pending** — this node is the contract; the full token-to-React migration is not complete yet. The
+current compatibility renderer now covers standard links, remote images, blockquotes, heading levels,
+inline/display KaTeX, emphasis, strikethrough, and ordered/unordered lists; `code:`
 names the one renderer module and `related:` names every surface that consumes it (the node-body view,
 the Issues detail + compose preview, the thread, the session timeline) plus its parser/math dependencies.
 
@@ -21,8 +23,9 @@ every thread reply (issue threads and eval remarks alike), the Issues compose pr
 timeline's messages. It is ONE kind of content, and it is currently produced by THREE different
 mechanisms:
 
-- a hand-written tokenizer (`SpecBody`) that knows fenced code, headings, GFM tables, lists, paragraphs
-  and exactly three inline forms — `` `code` ``, `**bold**`, `[[id]]`;
+- a hand-written tokenizer (`SpecBody`) that knows fenced code, headings, GFM tables, lists, paragraphs,
+  links, images, blockquotes, math, emphasis, and strikethrough, while the full semantic-token migration
+  remains outstanding;
 - the thread's own pre-processing, which strips the `▶m:ss` time anchor and the `/api/evidence/<hash>`
   media links out of the prose with regexes BEFORE handing the remainder to that tokenizer, then renders
   the anchor button and the media beside it as siblings;

@@ -1093,7 +1093,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the lazy spec-body loading spinner ([[graph-lean]]): a thin ring in the palette, centred where the body will land */
 .pane-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
 .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink2); animation: si-attach-spin .7s linear infinite; }
-.doc-body ul { margin: 0 0 10px; padding-left: 18px; }
+.doc-body ul, .doc-body ol { margin: 0 0 10px; padding-left: 18px; }
 .doc-body li { margin: 2px 0; }
 .doc-body code { font-size: var(--type-control); background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: var(--radius); }
 .doc-body strong { color: var(--ink2); }

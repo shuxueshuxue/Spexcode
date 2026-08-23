@@ -25,6 +25,11 @@ const body = [
   '',
   '[Guide](https://example.com) and $E = mc^2$ plus \\(a+b\\).',
   '',
+  '*emphasis* and ~~retired~~.',
+  '',
+  '3. third item',
+  '4. fourth item',
+  '',
   '![Diagram](https://example.test/diagram.svg "fixture image")',
   '',
   '$$\\int_0^1 x^2 dx$$',
@@ -71,6 +76,9 @@ try {
         link: root.querySelector('.doc-external')?.getAttribute('href') || null,
         image: { src: root.querySelector('.doc-image')?.getAttribute('src') || null, loaded: root.querySelector('.doc-image')?.complete && root.querySelector('.doc-image')?.naturalWidth > 0 },
         math: root.querySelectorAll('.doc-math, .doc-math-block').length,
+        emphasis: root.querySelector('.doc-body em')?.textContent || null,
+        strike: root.querySelector('.doc-body del')?.textContent || null,
+        ordered: { tag: root.querySelector('.doc-body ol')?.tagName || null, start: root.querySelector('.doc-body ol')?.getAttribute('start') || null, items: [...root.querySelectorAll('.doc-body ol li')].map((el) => el.textContent) },
         stamps: [...root.querySelectorAll('[data-l0]')].map((el) => [el.tagName, el.dataset.l0, el.dataset.l1]),
         viewport: { width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
         boxes: { quote: rect('.doc-quote'), image: rect('.doc-image') },
@@ -81,6 +89,9 @@ try {
     assert.equal(probe.link, 'https://example.com', `${name}: link is live`)
     assert.equal(probe.image.loaded, true, `${name}: image decodes`)
     assert.equal(probe.math, 3, `${name}: dollar, bracket, and display math render`)
+    assert.equal(probe.emphasis, 'emphasis', `${name}: emphasis renders as an element`)
+    assert.equal(probe.strike, 'retired', `${name}: strikethrough renders as an element`)
+    assert.deepEqual(probe.ordered, { tag: 'OL', start: '3', items: ['third item', 'fourth item'] }, `${name}: ordered list preserves authored numbering`)
     assert.ok(probe.stamps.some((stamp) => stamp[0] === 'H2'), `${name}: heading carries provenance`)
     assert.ok(probe.stamps.some((stamp) => stamp[0] === 'BLOCKQUOTE'), `${name}: quote carries provenance`)
     assert.equal(probe.viewport.scrollWidth, probe.viewport.width, `${name}: prose does not widen viewport`)

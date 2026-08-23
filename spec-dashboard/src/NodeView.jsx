@@ -75,7 +75,7 @@ const mathHtml = (source, display = false) => {
 // formulas use the same authored meaning without changing the line-level provenance around their block.
 function inline(text) {
   const out = []
-  const re = /!\[([^\]]*)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|\[([^\]]+)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]|(?<!\$)\$([^$\n]+?)\$(?!\$)|\\\(([^\n]+?)\\\)/g
+  const re = /!\[([^\]]*)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|\[([^\]]+)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~\n]+)~~|(?<!\*)\*([^*\n]+)\*(?!\*)|\[\[([^\]]+)\]\]|(?<!\$)\$([^$\n]+?)\$(?!\$)|\\\(([^\n]+?)\\\)/g
   let last = 0, m, k = 0
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index))
@@ -89,12 +89,14 @@ function inline(text) {
       else out.push(m[4])
     } else if (m[7] != null) out.push(<code key={k++}>{m[7]}</code>)
     else if (m[8] != null) out.push(<strong key={k++}>{m[8]}</strong>)
+    else if (m[9] != null) out.push(<del key={k++}>{m[9]}</del>)
+    else if (m[10] != null) out.push(<em key={k++}>{m[10]}</em>)
     else {
-      if (m[9] != null) {
-        const href = routeHash('spec', m[9])
-        out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[9]}</a>)
+      if (m[11] != null) {
+        const href = routeHash('spec', m[11])
+        out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[11]}</a>)
       } else {
-        const source = m[10] ?? m[11]
+        const source = m[12] ?? m[13]
         const rendered = mathHtml(source)
         out.push(rendered
           ? <span className="doc-math" key={k++} data-math-source={source} dangerouslySetInnerHTML={{ __html: rendered }} />
@@ -220,6 +222,20 @@ export function SpecBody({ body, lineBase = 0 }) {
       out.push(<blockquote className="doc-quote" key={k++} {...at(from, i - 1)}>
         <p>{quote.map((part, j) => <span key={j} {...at(part.line, part.line)}>{j ? <br /> : null}{inline(part.text)}</span>)}</p>
       </blockquote>)
+    } else if (/^\d+[.)]\s+/.test(t)) {
+      // Ordered items use the same per-line provenance as bullets. Preserve a non-one start value
+      // because authored numbering is part of the reader's meaning, not decoration.
+      const items = []
+      const first = lines[i].trim().match(/^(\d+)[.)]\s+/)
+      const start = Number(first?.[1] || 1)
+      while (i < lines.length && /^\d+[.)]\s+/.test(lines[i].trim())) {
+        items.push({ text: lines[i].trim().replace(/^\d+[.)]\s+/, ''), line: i }); i++
+      }
+      out.push(
+        <ol key={k++} start={start} {...at(from, i - 1)}>
+          {items.map((it, j) => <li key={j} {...at(it.line, it.line)}>{inline(it.text)}</li>)}
+        </ol>
+      )
     } else if (/^-\s+/.test(t)) {
       // each item is stamped on its own: a list is one block to the tokenizer but a reader selects one
       // bullet, and the smallest addressable region should be the smallest thing the renderer can name.
@@ -236,7 +252,7 @@ export function SpecBody({ body, lineBase = 0 }) {
       const buf = []
       while (i < lines.length) {
         const l = lines[i]
-        if (l.trim() === '' || /^```/.test(l.trim()) || /^#{1,6}\s+/.test(l) || /^-\s+/.test(l.trim())) break
+        if (l.trim() === '' || /^```/.test(l.trim()) || /^#{1,6}\s+/.test(l) || /^\d+[.)]\s+/.test(l.trim()) || /^-\s+/.test(l.trim())) break
         // a table starting on the next line ends this paragraph even without a blank separator.
         if (l.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) break
         buf.push(l); i++

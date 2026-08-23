@@ -172,7 +172,12 @@ function GraphView({ param, query }) {
   )
 
   const openSession = useCallback((id) => navigate('sessions', id), [])
-  const startNew = useCallback((text) => { setSeed(text); navigate('sessions', 'new') }, [setSeed])
+  // The route carries the launch draft across the graph-to-session transition. The workspace handoff remains
+  // the live path for chords, while the query is the durable, replayable address of this one New Session draft.
+  const startNew = useCallback((text) => {
+    setSeed(text)
+    navigate('sessions', 'new', { query: { seed: text } })
+  }, [setSeed])
   const selectedNodes = useMemo(() => selectedNodeIds.map((id) => rawById[id]).filter(Boolean), [rawById, selectedNodeIds])
   const dispatchSelected = useCallback(() => {
     if (!selectedNodes.length) return

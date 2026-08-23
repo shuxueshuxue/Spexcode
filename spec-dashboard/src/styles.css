@@ -1023,13 +1023,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .srcview-body { position: relative; height: min(46vh, 420px); overflow: hidden; }
 .srcview-cm, .srcview-cm .cm-editor { height: 100%; }
 .srcview-body .cm-editor.cm-focused { outline: none; }
-.srcview-select-action {
-  position: absolute; right: 10px; top: 9px; z-index: 2; display: inline-flex; align-items: center;
-  padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--blue) 55%, var(--line)); border-radius: var(--radius);
-  color: var(--blue); background: color-mix(in srgb, var(--paper) 94%, transparent); font-family: var(--ui-font);
-  font-size: var(--type-caption); cursor: pointer; box-shadow: var(--shadow);
-}
-.srcview-select-action:hover { background: var(--panel2); }
 /* the read's progress, floated over the text while it is still news; a z-layer, never a strip. */
 .srcview-progress {
   position: absolute; right: var(--space-5); bottom: var(--space-4); z-index: 3;
@@ -3322,6 +3315,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .pa-act:hover, .pa-act:focus-visible { outline: none; background: var(--panel2); color: var(--ink2); }
 .pa-act-icon { color: var(--muted); }
 .pa-act:hover .pa-act-icon, .pa-act:focus-visible .pa-act-icon { color: currentColor; }
+.pa-act:disabled { opacity: .45; cursor: default; }
+.pa-loading { position: fixed; z-index: 60; display: inline-flex; padding: 4px; color: var(--muted); }
 
 .pa-card {
   position: fixed; z-index: 61; display: grid; gap: var(--space-4); padding: var(--space-5);

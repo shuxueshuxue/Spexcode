@@ -116,7 +116,8 @@ route, `#/graph`, or the sessions launch page never creates a tab.
 **The semantics are a pure function** (`tabModel.js`: `placeTab`, `normalizeTabs`), separate from the hook
 that owns storage and the route subscription. The law above is therefore checkable without a browser, which
 is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
-pinned tab must survive them all.
+pinned tab must survive them all. Reading persisted tabs writes the normalized result back once, so retired
+review entries are removed from storage rather than merely hidden in memory.
 
 **Identity is the canonical object hash.** Two routes that print the same object address *are* the same tab,
 and session surface queries are deliberately ignored: `#/sessions/a?surface=terminal` and

@@ -91,6 +91,8 @@ export interface TransitionSessionInput {
   note?: string | null
   parentSessionId?: string | null
   reason?: string | null
+  /** An upstream policy may resolve recipients before this neutral transition. */
+  recipientSessionIds?: readonly string[]
 }
 
 export interface CommittedSessionChange {
@@ -395,7 +397,12 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           payload: encodeEventJson(change),
           occurredAtMs: updatedAtMs,
         })
-        const recipients = topology.recipients(sessionId, tx)
+        const recipients = input.recipientSessionIds === undefined
+          ? topology.recipients(sessionId, tx)
+          : [...new Set(input.recipientSessionIds.map(recipient => {
+            requireId(recipient, 'recipientSessionId')
+            return recipient
+          }))]
         const messages = recipients.map(recipient => tx.enqueue(recipient, messageForEvent(change, id)))
         return {
           state: { sessionId, status, proposal, note, parentSessionId, updatedAtMs },

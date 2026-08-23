@@ -519,6 +519,19 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   }, [closePalette, dockKind, dockMode, graphOnly, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
   useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
+  // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review
+  // tree at all. Keep only the inactive content pool and the ambient ledger registrations; this prevents
+  // DOM queries and accessibility trees from seeing a second rail, dock, or tab strip.
+  if (inactive) {
+    return (
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <Content page={page} param={param} query={query} inactive />
+        <ShellStatus />
+        <BoardStatus specs={specs} sessions={sessions} page={page} />
+      </div>
+    )
+  }
+
   // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.
   if (graphOnly) {
     return (

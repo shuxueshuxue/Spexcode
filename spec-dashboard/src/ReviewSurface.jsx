@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, lazy } from 'react'
 import SideBar, { rememberReviewAddress } from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar from './StatusBar.jsx'

@@ -40,3 +40,10 @@ The desktop Electron dependency is deliberately outside the root workspaces in `
 users who do not run the optional shell do not ingest its runtime. A dependency may be added without a removal
 only under one of these measured exceptions; otherwise the owning feature must remove its superseded edge in the
 same change.
+
+The no-predecessor exception is explicit for the current renderer arrivals: `@codemirror/lang-javascript`,
+`@codemirror/language`, `@codemirror/merge`, `@codemirror/state`, `@codemirror/view`, `@lezer/highlight`,
+`katex`, and `markdown-it`. CodeMirror owns the SourceView and DiffDocument editor faces; KaTeX and markdown-it
+own RichText. Each replaced a local hand-renderer or parser boundary, so there is no old package edge to subtract.
+This list is executable: `spec-dashboard/src/dependencyBoundary.test.mjs` fails if a listed package or this
+exception disappears from the contract.

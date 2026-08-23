@@ -87,6 +87,9 @@
   /* a chrome boundary is FELT, not seen: half the strength of a real divider, because the ground ladder
      under it is already doing the separating. */
   --edge: color-mix(in srgb, var(--line) 55%, transparent);
+  /* ONE quiet rule for seams and group heads. A caller may choose whether it is a border or a trailing
+     hairline, but it never chooses a second colour/weight for the same divider job. */
+  --divider-rule: 1px solid var(--edge);
   /* ONE elevation, for the things that genuinely float. Everything else sits flat on its ground. */
   --shadow: 0 4px 16px rgba(0, 0, 0, .18);
 }
@@ -383,7 +386,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    tracked label is decoration wearing the costume of hierarchy ([[typography]]), and hierarchy here is
    spent on space, then colour, then weight. It is NOT a band either: it scrolls with the list it heads,
    inside `.ft-body`'s scrollport, and carries its own aria-expanded ([[ui-state-model]]). */
-.ft-section + .ft-section { border-top: 1px solid var(--edge); margin-top: var(--space-2); }
+.ft-section + .ft-section { border-top: var(--divider-rule); margin-top: var(--space-2); }
 .ft-section-head {
   display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
   background: none; border: 0; cursor: pointer; text-align: left;
@@ -442,7 +445,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   color: var(--zh); font: var(--type-caption)/var(--leading-ui) var(--ui-font);
   font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal);
 }
-.dock-session-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.dock-session-zone::after { content: ''; flex: 1; border-top: var(--divider-rule); opacity: .75; }
 .dock-session-zone[aria-expanded] { cursor: pointer; }
 .dock-session-zone[aria-expanded]:hover { background: var(--panel2); }
 .dock-session-zone-need { --zh: var(--yellow); }
@@ -471,7 +474,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
    thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
    genuinely float (menus, the palette), never stacked to fake a surface. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; border-top: var(--divider-rule); box-shadow: inset 1px 0 0 var(--panel); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -519,7 +522,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    before line formation creates another row. */
 .tabstrip {
   flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
-  background: var(--panel); border-bottom: 1px solid var(--edge);
+  background: var(--panel);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
@@ -1598,7 +1601,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); user-select: none;
   color: var(--zh);
 }
-.si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.si-zone::after { content: ''; flex: 1; border-top: var(--divider-rule); opacity: .75; }
 /* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
 .si-zone-fold {
   width: 100%; text-align: left; cursor: pointer; border: 0; background: transparent; font-family: inherit;
@@ -2540,7 +2543,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* bottom tab bar — the two planes (specs / sessions), thumb-reachable, with the device's home-bar inset. */
 .m-tabbar {
-  flex: none; display: flex; border-top: 1px solid var(--line); background: var(--panel);
+  flex: none; display: flex; border-top: var(--divider-rule); background: var(--panel);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 .m-tabbar-btn {
@@ -2574,6 +2577,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* zone headers on the mobile session list — same partition every desktop list draws ([[session-console]]). */
 .m-zone { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); color: var(--muted); }
+.m-zone::after { content: ''; flex: 1; border-top: var(--divider-rule); opacity: .75; }
 .m-zone .si-zone-count { min-width: 24px; min-height: 24px; }
 
 /* session detail — the terminal-free conversation ([[session-timeline]]): identity card, then the

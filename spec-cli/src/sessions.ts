@@ -4676,12 +4676,14 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused'
-type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
+type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode; deliveryPending?: boolean }
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency
   acceptGuard?: (record: SessRec) => Promise<void>
   deferDrain?: boolean
+  // Command Box needs a truthful native-handoff verdict; ordinary agent sends retain durable queue semantics.
+  requireDelivery?: boolean
   // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
   // temporarily absent, the normal queue must retain the event so the parent's next runtime can wake and drain it.
   allowStranded?: boolean
@@ -4718,6 +4720,8 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       if (!opts.deferDrain) await drainSession(id)
+      const deliveryPending = sessionHasPendingDelivery(id, application)
+      if (opts.requireDelivery && deliveryPending) return { ok: false, deliveryPending: true, error: `prompt appended to session ${id}, but native terminal delivery is still pending` }
       return { ok: true, ...(opts.idempotency ? { replayed: !!existing } : {}) }
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
@@ -4766,6 +4770,8 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
   // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
   // the text in a live agent's current turn instead of up to one tick later.
   if (!opts.deferDrain) await drainSession(id)
+  const deliveryPending = sessionHasPendingDelivery(id)
+  if (opts.requireDelivery && deliveryPending) return { ok: false, deliveryPending: true, error: `prompt appended to session ${id}, but native terminal delivery is still pending` }
   return { ok: true, ...(opts.idempotency ? { replayed } : {}) }
 }
 

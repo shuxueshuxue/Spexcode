@@ -833,6 +833,7 @@ export default {
     outcomeWorking: '正在处理...',
     outcomeSending: '正在发送...',
     outcomeDelivered: '已送达',
+    outcomeQueued: '已保存，等待终端接收',
     deliveryFailed: ({ status }) => `未送达（HTTP ${status}）`,
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',

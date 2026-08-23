@@ -373,7 +373,10 @@ in-flight `sending...` state. A failed 502 keeps the complete draft and the box 
 no delivery marker of its own: a send either put the bytes in the log or did not, so a retry can only ever
 repeat something that never landed. Once either result settles, it visibly acknowledges through the shared
 [[transient-notices]] stack — a short-lived delivery/failure result outside the Command Box's geometry —
-before a successful send clears the draft and closes the box. A `/` line
+before a successful send clears the draft and closes the box. If the durable append succeeds but native handoff
+is still pending, the API returns a non-success `deliveryPending` result; the Command Box keeps its complete draft
+open and says it is waiting for terminal delivery, so the user can retry without mistaking queue persistence for
+terminal receipt. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every document-action twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable

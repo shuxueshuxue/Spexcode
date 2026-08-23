@@ -1021,6 +1021,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
+        if (outcome?.deliveryPending) {
+          // Durable append succeeded, but the native handoff did not. Keep the draft and box open so the
+          // user can retry after the transport recovers; a queued record is not a delivered command.
+          setActionOutcome({ owner: 'command', phase: 'queued', message: t('session.outcomeQueued') })
+          return
+        }
         setActionOutcome({
           owner: 'command',
           phase: 'failed',

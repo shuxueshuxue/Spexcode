@@ -844,6 +844,7 @@ export default {
     outcomeWorking: 'working...',
     outcomeSending: 'sending...',
     outcomeDelivered: 'delivered',
+    outcomeQueued: 'saved; waiting for terminal delivery',
     deliveryFailed: ({ status }) => `not delivered (HTTP ${status})`,
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',

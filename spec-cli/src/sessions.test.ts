@@ -37,6 +37,38 @@ test('canonical delivery retry reads the SQLite queue instead of legacy pending.
   assert.equal(sessionHasPendingDelivery('canonical-empty', empty), false)
 })
 
+test('Command Box delivery can report durable append separately from native handoff', serial, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalTransport = claudeHarness.deliveryTransport
+  const originalDeliver = claudeHarness.deliver
+  const home = mkdtempSync(join(tmpdir(), 'spex-command-delivery-pending-'))
+  const id = `command-delivery-pending-${process.pid}`
+  process.env.SPEXCODE_HOME = home
+  try {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: 'command-box', title: '', name: '', parent: '',
+      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: id,
+      stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
+    }, null, 2)}\n`)
+    claudeHarness.deliveryTransport = async () => ({ kind: 'unproven' })
+    claudeHarness.deliver = async () => ({ ok: false, error: 'fixture native handoff refused' })
+    const accepted = await sendText(id, 'command box prompt', undefined, { requireDelivery: true })
+    assert.deepEqual(accepted, {
+      ok: false,
+      deliveryPending: true,
+      error: `prompt appended to session ${id}, but native terminal delivery is still pending`,
+    })
+    assert.equal(sessionHasPendingDelivery(id), true, 'durable queue debt remains for retry')
+  } finally {
+    claudeHarness.deliveryTransport = originalTransport
+    claudeHarness.deliver = originalDeliver
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('session diff commit links preserve the full forge repository and commit identity', () => {
   const commit = '2dcade6662e89689444e3ee1cc73a866dcab83d0'
   assert.equal(commitUrlForRemote('git@github.com:shuxueshuxue/spexcode.git', commit),

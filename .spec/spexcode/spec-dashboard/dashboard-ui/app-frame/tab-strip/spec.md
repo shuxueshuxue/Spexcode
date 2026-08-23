@@ -31,6 +31,11 @@ are reached (rail, cold link, status/chip query) and never enter the strip. Thei
 also review destinations and never become workspace objects. The rail is therefore navigation only; it does
 not create, pin, or focus a board tab ([[side-nav]]).
 
+Review and settings destinations still have an icon: it belongs to their one active route entry in the activity
+rail, where the route is actually selected. They must not acquire a second, synthetic board tab merely to carry
+that mark. A board's list tabs (for example Open/Closed) are view-local filters, not workspace addresses; this
+split keeps one owner for both the icon and the route light.
+
 What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
 addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The

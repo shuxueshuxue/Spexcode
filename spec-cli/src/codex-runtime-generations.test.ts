@@ -166,6 +166,35 @@ function recordSession(root: string, sessionId: string, threadId: string): void 
   })}\n`)
 }
 
+test('archived historical bindings do not pin a zero-reference draining generation', { concurrency: false }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-archived-'))
+  try {
+    mkdirSync(join(root, 'sessions'), { recursive: true })
+    let starts = 0
+    const start = async (endpoint: CodexGenerationEndpoint) => { starts++; await startEndpoint(endpoint) }
+    const before = await ensureCodexCurrentGeneration(root, start)
+    const archived = join(root, 'sessions', 'archived-history')
+    mkdirSync(archived)
+    writeFileSync(join(archived, 'session.json'), `${JSON.stringify({
+      session_id: 'archived-history', governed: true, harness: 'codex', harness_session_id: 'thread-archived', archived: true,
+    })}\n`)
+    bindCodexGeneration(root, 'archived-history', 'thread-archived', before.id)
+    await rotateCodexCurrentGeneration(root, start)
+    const result = await reclaimDrainingCodexGeneration(root, before.id, async () => ({ healthy: true, referenceIds: [], peerCount: 0 }))
+    assert.equal(result.reclaimed, true)
+    assert.match(result.reason, /zero-reference census/)
+    assert.equal(readCodexGenerationLedger(root).generations[before.id]?.state, 'reclaimed')
+  } finally {
+    for (const endpoint of Object.values(readCodexGenerationLedger(root).generations).map((generation) => generation.endpoint)) {
+      const pid = Number(requirePid(endpoint.pidFile, '0'))
+      if (pid > 0 && processStartToken(pid)) {
+        try { process.kill(pid, 'SIGTERM') } catch { /* already reclaimed */ }
+      }
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('an explicit app-server switch moves only new Codex traffic to a proved fresh root', { concurrency: false }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-explicit-rotation-'))
   try {

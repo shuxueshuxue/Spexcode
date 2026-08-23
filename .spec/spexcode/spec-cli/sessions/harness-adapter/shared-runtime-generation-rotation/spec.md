@@ -78,6 +78,12 @@ identity is still present and its native loaded-reference census, governed bindi
 are all zero. Reclamation rechecks those facts immediately before acting. Names, command lines,
 or a matching socket filename are never ownership evidence. Ambiguity retains both roots.
 
+An archived historical session record does not by itself remain a governed binding that pins a draining
+root. Its rollout and record remain recoverable, but it no longer routes or protects a live generation;
+the exact native reference and peer census remains the independent guard if the old thread is still loaded.
+A `record-removing` close transaction is different: its matching record continues to protect the binding
+until the destructive removal finishes or fails loudly.
+
 The project backend performs this zero-reference reclaim sweep when it starts and after generation rotation.
 The sweep is advisory and fail-closed: an unhealthy census, an ambiguous identity, or a protected binding
 leaves the draining root in place for the next pass. It never signals the current generation or a session's

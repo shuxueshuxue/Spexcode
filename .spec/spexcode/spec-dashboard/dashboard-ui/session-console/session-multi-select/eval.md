@@ -3,16 +3,17 @@ scenarios:
   - name: retired-session-multi-select-surface
     tags: [frontend-e2e]
     test:
-      path: spec-dashboard/src/sessionToolbar.test.mjs
-      name: bulk close and select mode are retired with multi-select
-    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionContextMenu.jsx]
+      path: spec-dashboard/src/subtractive-boundaries.test.mjs
+      name: withdrawn session multi-select surface stays absent
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/subtractive-boundaries.test.mjs]
     description: >
       Inspect the current session console contract and its focused regression assertions after the former
       duplicate session-list surface was withdrawn.
     expected: >
       The current dashboard has no SessionSelectBar, select-mode state, row checkboxes, or bulk-close
-      lifecycle endpoint. Single-session close and the dock-owned row actions remain the only current
-      lifecycle controls; a future batch-selection feature must introduce a new spec and scenario.
+      lifecycle endpoint, and the retired component/E2E entry-point paths remain absent. Single-session close
+      and the dock-owned row actions remain the only current lifecycle controls; a future batch-selection
+      feature must introduce a new spec and scenario.
 ---
 
 # session-multi-select - retired measurement

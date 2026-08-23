@@ -64,7 +64,10 @@ function inline(text) {
     if (m.index > last) out.push(text.slice(last, m.index))
     if (m[1] != null) out.push(<code key={k++}>{m[1]}</code>)
     else if (m[2] != null) out.push(<strong key={k++}>{m[2]}</strong>)
-    else out.push(<span className="doc-link" key={k++}>{m[3]}</span>)
+    else {
+      const href = routeHash('spec', m[3])
+      out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[3]}</a>)
+    }
     last = re.lastIndex
   }
   if (last < text.length) out.push(text.slice(last))

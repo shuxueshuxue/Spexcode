@@ -7,6 +7,7 @@ import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate, routeHash } from './route.js'
+import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor } from './views.jsx'
@@ -34,10 +35,10 @@ import { useTransientNotice } from './TransientNotice.jsx'
 
 // THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]) — which projection it shows, and whether
 // it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Bare
-// singleton boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
+// review/settings boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
 // empty, and the bare sessions board have no opinion and preserve the current projection.
 const dockFor = (page, param) => {
-  // Bare singleton boards are full-width. Their object detail is a document and keeps the dock, so the
+  // Bare review/settings boards are full-width. Their object detail is a document and keeps the dock, so the
   // rail's explorer projection remains truthful beside it (C2/C4).
   if ((page === 'evals' || page === 'issues') && param == null) return 'none'
   if (page === 'settings') return 'none'
@@ -342,9 +343,8 @@ export default function Shell() {
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        // the keyboard twin of the rail button, and the same ordinary navigation: a singleton board is
-        // resident by address ([[view-registry]]), so it is held rather than spent through the current
-        // slot without this chord asking for it. The sealed face has one view and no destinations.
+        // the keyboard twin of the rail button. Review/settings boards are destinations, not documents, so
+        // this navigation leaves the strip untouched. The sealed face has one view and no destinations.
         if (!graphOnly) navigate(target)
         return true
       }
@@ -428,7 +428,7 @@ export default function Shell() {
       {palette && (
         <SpecSearch specs={specs} sessions={sessions} boost={palette === 'sessions' ? 'session' : null}
           onClose={closePalette}
-          onPick={(hit) => { closePalette(); if (hit?.hash) location.hash = hit.hash; else if (hit?.id) navigate('spec', hit.id) }} />
+          onPick={(hit) => { closePalette(); navigateAddress(hit?.address) }} />
       )}
       <span className="sr-only">{t('nav.railLabel')}</span>
     </div>

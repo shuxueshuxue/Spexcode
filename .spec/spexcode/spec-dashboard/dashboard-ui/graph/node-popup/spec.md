@@ -41,13 +41,12 @@ the **spec doc** — an information board. A **stat bar** carries the
 node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **eval
 score** ([[eval-score-badge]]), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
-files — each one a **door, not a label**: a `code:` entry opens the file itself in place ([[source-view]]),
-under the prose that claims it and inside the same scroll, one at a time. A separate tab would have put the
-claim and the claimed thing back on two screens, which is the separation the affordance exists to close.
-Under them, what the node **carries** ([[node-attachments]]): the rest of its own folder — its eval
-contract, an evidence directory, a raw capture — opening in the same viewer with the same one-at-a-time
-rule. The reader is not asked to learn that bytes from the spec tree behave differently from bytes from the
-worktree, even though the gate that admits them is not the same gate.
+files are the document's own chips: a `code:` entry links to the file's `#/file/<path>` document
+([[spec-view]], [[file-view]]). Ordinary activation navigates the current slot to that independent file
+document; the tab model supplies held navigation when the reader asks for another tab. Under them, what the
+node **carries** ([[node-attachments]]): the rest of its own folder — its eval contract, an evidence
+directory, a raw capture — uses the same file-document address grammar behind its node-owned API gate.
+The popup remains a reference lens; it does not embed a source reader or make prose and code one screen.
 Then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
 an agent-authored *current state* — what's-done is read from the derived status, never narrated, because

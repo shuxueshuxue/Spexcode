@@ -14,6 +14,9 @@ related:
 ---
 # source-view
 
+This is the renderer child of [[file-view]]. `file-view` owns the file address and tab placement; this node owns
+only the read-only window reader and its selection event.
+
 The component that renders a file document. It pulls windows from either [[source-read]] or the node
 attachment reader and shows them; it cannot write. SpecView never mounts this component automatically:
 the file address and tab are the only source surface.

@@ -12,7 +12,5 @@ fires from the eval detail's remark composer by typing `/<name>` ([[review-comma
 prefills the composer — the human edits and sends, and the result is an ordinary remark on the
 (node, scenario) thread; a preset adds prose, never a write mechanism.
 
-This node is a **shelf, not a surface** (the [[prompts]] shape): it declares no `surface` field and
-gathers nothing itself. Discovery is recursive and field-driven ([[surface]]), so residents plug in
-exactly as they would at the root. First resident: [[refuse]], the human's dispute of a viewed
-reading's verdict.
+This node is a **shelf, not a surface**. Its routing and relocation invariant is owned once by
+[[.plugins]]'s shelf invariant. First resident: [[refuse]], the human's dispute of a viewed reading's verdict.

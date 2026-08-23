@@ -4,18 +4,20 @@ import { readFileSync } from 'node:fs'
 
 const source = (name) => readFileSync(new URL(name, import.meta.url), 'utf8')
 
-test('opening a terminal is read-only until one explicit non-focusing unlock', () => {
+test('live terminals are writable by default and only suspended input asks for confirmation', () => {
   const term = source('./SessionTerm.jsx')
   const session = source('./SessionInterface.jsx')
 
-  assert.match(term, /SessionTerm\([^)]*writable = false/)
+  assert.match(term, /SessionTerm\([^)]*writable = true/)
   assert.match(term, /disableStdin: !writable/)
   assert.match(term, /!writableRef\.current \|\| !focusedRef\.current/)
-  assert.match(session, /id: 'enable-terminal-input'/)
-  assert.match(session, /setWritableSession\(active\)/)
-  assert.match(session, /setWritableSession\(null\)/)
-  assert.match(session, /writable=\{writableSession === id/)
-  assert.doesNotMatch(session, /enable-terminal-input[^\n]*autoFocus/)
+  assert.doesNotMatch(session, /enable-terminal-input|writableSession|setWritableSession/)
+  assert.match(session, /writable=\{open && terminalShown\}/)
+  assert.match(session, /resumeRequired=\{session\.status === 'asking'\}/)
+  assert.match(term, /setInputConfirmOpen\(true\)/)
+  assert.match(term, /setPendingInput\(data\)/)
+  assert.match(term, /resumeInputConfirm/)
+  assert.doesNotMatch(term, /resumeInputConfirm[^\n]*autoFocus/)
 })
 
 test('an empty diff distinguishes merged work and prints complete git identities', () => {

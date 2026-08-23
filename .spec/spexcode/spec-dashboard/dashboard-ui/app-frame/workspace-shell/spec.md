@@ -14,11 +14,29 @@ related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/documentActions.jsx
+  - spec-dashboard/src/ViewScope.jsx
+  - spec-dashboard/src/viewScope.js
+  - spec-dashboard/src/viewScope.test.mjs
 ---
 # workspace-shell
 
 The frame, and only the frame. It does not know what a spec is, what a session is, or what any view needs.
 It knows there is an address, that an address names a view, and where on the screen that view goes.
+
+## Route ownership boundary
+
+Each shell-owned `ViewHost` provides its view with one read-only `ViewScope`. The scope exposes the mounted
+address and active state, plus exactly three runtime-checked intents: `open(address)` replaces the current
+route, `hold(address)` asks the workspace to place a document in the second pane, and `ownQuery(query)` updates
+the current view's query while preserving its page and selector. The scope dispatches one frozen intent object
+to the shell; views never receive the raw `navigate` or `splitTo` callbacks.
+
+The mounted-document pool keeps one scope identity per host and updates its address/active snapshot when a
+pooled entry changes. Hidden panes are inactive and their intents are rejected without dispatch; unmounting a
+host drops its provider with the host. Address and query shapes are validated at the boundary (lowercase
+kebab-case page, string-or-null selector, URL-safe primitive query values), so malformed cross-view writes fail
+before the route layer. Navigation policy and tab identity remain shell-owned; this scope is an intent channel,
+not a second router. `viewScope.test.mjs` proves the validation, atomic intent shape, and hidden-pane suspension.
 
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:

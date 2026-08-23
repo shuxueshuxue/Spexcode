@@ -27,7 +27,7 @@ It knows there is an address, that an address names a view, and where on the scr
 
 Each shell-owned `ViewHost` provides its view with one read-only `ViewScope`. The scope exposes the mounted
 address and active state, plus exactly three runtime-checked intents: `open(address)` replaces the current
-route, `hold(address)` asks the route/tabs owner to pin a held document, and `ownQuery(query)` updates
+route, `hold(address)` asks the workspace to place a document in the second pane, and `ownQuery(query)` updates
 the current view's query while preserving its page and selector. The scope dispatches one frozen intent object
 to the shell; views never receive the raw `navigate` or `splitTo` callbacks.
 

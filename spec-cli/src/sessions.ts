@@ -3313,6 +3313,18 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     return true
   })
 }
+// A human prompt is the explicit re-entry from a waiting turn; runtime liveness is not.
+export function markHumanPromptActive(sessionId: string): boolean {
+  try {
+    const rec = readRecord(sessionId)
+    if (!rec || rec.archived || retirementReason(rec) || (rec.status !== 'asking' && rec.status !== 'idle')) return false
+    return markState('active', { sessionId })
+  } catch (error) {
+    // The message/PTY write is already accepted; a raced close or unreadable record must not turn it into a false send failure.
+    console.error(`spex: could not publish human-input activity for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false
@@ -4828,6 +4840,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       replayed = !!existing
+      if (!from) markHumanPromptActive(id)
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
     }
@@ -4886,6 +4899,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       ...(code ? { code } : {}),
     }
   }
+  if (!from) markHumanPromptActive(id)
   // Awaited, not fire-and-forget: an unawaited insert can lose its race with a short-lived caller's exit,
   // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
   // the text in a live agent's current turn instead of up to one tick later.
@@ -5044,7 +5058,7 @@ function rawKeyArgs(id: string, key: string): string[] | null {
 // (browser + server + send-keys all parallel) and scramble the sequence; a single serialised batch cannot.
 // An unknown token is skipped without dropping the rest; false only if the tmux session is gone or nothing sent.
 export async function rawKey(id: string, key: string | string[]): Promise<boolean> {
-  return withRecordLock(id, async () => {
+  const sent = await withRecordLock(id, async () => {
     const list = (Array.isArray(key) ? key : [key]).filter((k) => typeof k === 'string' && k.length > 0)
     if (list.length === 0 || !(await alive(id))) return false
     let sent = false
@@ -5055,4 +5069,6 @@ export async function rawKey(id: string, key: string | string[]): Promise<boolea
     }
     return sent
   })
+  if (sent) markHumanPromptActive(id)
+  return sent
 }

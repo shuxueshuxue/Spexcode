@@ -22,7 +22,7 @@ import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { pinTab, runTabCommand } from './tabs.js'
+import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -74,19 +74,20 @@ const POOL_LIMIT = 6
 const DOCK_ANIMATION_MS = 170
 
 // Every mounted view gets one route scope. The shell is the only dispatcher: views can request an address,
-// explicitly hold one in the tab working set, or update their own query, but they cannot receive the raw navigate
+// explicitly hold one in the second pane, or update their own query, but they cannot receive the raw navigate
 // callback or write another host's route. Pooled panes keep the scope object and only update its route/active
 // snapshot as they move between visible and hidden states.
 function ViewScopeHost({ page, param, query, active, children }) {
+  const { splitTo } = useWorkspaceApi()
   const dispatch = useCallback((intent) => {
     const { page: targetPage, param: targetParam, query: targetQuery } = intent.address
     if (intent.type === 'hold') {
-      pinTab(targetPage, targetParam, targetQuery)
+      splitTo(intent.address)
       return { accepted: true, intent }
     }
     navigate(targetPage, targetParam, { query: targetQuery })
     return { accepted: true, intent }
-  }, [])
+  }, [splitTo])
   const holder = useMemo(() => createViewScope({
     route: { page, param, query }, dispatch, active,
   }), []) // the shell updates this holder below; the public scope identity remains stable for the view

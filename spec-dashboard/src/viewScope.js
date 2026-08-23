@@ -45,9 +45,8 @@ export function createViewScope({ route, dispatch, active = true } = {}) {
   let enabled = active !== false
 
   const emit = (type, address) => {
-    const normalized = normalizeAddress(address, `${type}.address`)
     if (!enabled) return { accepted: false, reason: 'inactive', type }
-    const intent = Object.freeze({ type, address: normalized })
+    const intent = Object.freeze({ type, address: normalizeAddress(address, `${type}.address`) })
     return accepted(intent, dispatch(intent))
   }
   const scope = {}
@@ -58,9 +57,8 @@ export function createViewScope({ route, dispatch, active = true } = {}) {
   scope.open = (address) => emit('open', address)
   scope.hold = (address) => emit('hold', address)
   scope.ownQuery = (query) => {
-    const normalized = normalizeQuery(query, 'own-query.query')
     if (!enabled) return { accepted: false, reason: 'inactive', type: 'own-query' }
-    const address = { page: current.page, param: current.param, query: normalized }
+    const address = { page: current.page, param: current.param, query: normalizeQuery(query, 'own-query.query') }
     const intent = Object.freeze({ type: 'own-query', address: normalizeAddress(address, 'own-query.address') })
     return accepted(intent, dispatch(intent))
   }

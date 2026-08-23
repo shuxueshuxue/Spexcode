@@ -41,8 +41,8 @@ residency lived in the rail button's click handler — a board opened from anywh
 its own first row click evicted it. Registering it here is the same reason `document` is here: what the
 strip may hold and how it holds it are one fact about an address, in one place.
 
-Left out: graph (including its focused node — a legacy address), bare sessions, and `empty`, which is what
-shows when nothing is held at all. **`/sessions/new` was a document and is not one now**: it names no
+Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), and bare sessions.
+`empty` is retained only as a compatibility alias for graph; it is not a separate view. **`/sessions/new` was a document and is not one now**: it names no
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
 form, and the session it starts becomes a document the moment it has an id.
 

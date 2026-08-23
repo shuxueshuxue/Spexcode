@@ -53,7 +53,6 @@ const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
-const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
 const openSession = (id) => navigate('sessions', id)
 
@@ -79,11 +78,10 @@ function SettingsView() { return <Settings /> }
 // whose bare address names a place the reader keeps open rather than one they bounce off. A singleton is a
 // tab like any other; it is a singleton only because its address carries no selector, so opening it twice
 // is opening the same address twice, which the strip already resolves to one tab.
-// What is left out is what has no object and no residency: the graph (a legacy address), bare sessions and
-// the sessions launch page (a form), and `empty` — a tab for it would contradict its own strip.
+// What is left out is what has no object and no residency: the graph bottom sheet, bare sessions and the
+// sessions launch page (a form). `empty` is parsed as graph and has no separate view.
 export const VIEWS = {
-  // `graph` is still registered and still renders at its own address; it is simply no longer anywhere the
-  // workspace SENDS a reader ([[node-graph]]). A retired entrance is not a deleted view.
+  // `graph` is registered as the document-free workspace bottom sheet ([[node-graph]]).
   graph:    { component: GraphView,    document: false, className: 'view-graph' },
   spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
   file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
@@ -93,7 +91,6 @@ export const VIEWS = {
   evals:    { component: EvalsView,    document: true, resident: true, className: 'view-evals' },
   issues:   { component: IssuesView,   document: true, resident: true, className: 'view-issues' },
   settings: { component: SettingsView, document: true, resident: true, className: 'view-settings' },
-  empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
 export const viewFor = (page) => VIEWS[page] || VIEWS.sessions

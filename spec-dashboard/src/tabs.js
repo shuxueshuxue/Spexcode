@@ -141,11 +141,9 @@ export function useTabs() {
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
-  // Closing the ACTIVE tab hands focus to its right-hand neighbour, else its left — the rule every editor
-  // uses, because the reader's eye is already where the closed tab was. Closing the LAST one lands on the
-  // explicit empty workspace: it used to navigate to the graph, so a gesture that asked for nothing put a
-  // document on screen and the board seemed to appear from underneath. An empty working set is a real
-  // state, and the reader is owed the state they produced rather than a substitute document.
+  // Closing the ACTIVE tab returns to the graph bottom sheet. It deliberately does not focus a neighbour:
+  // "我 Close 掉一个 Spec 工作区的 Tab 之后…如果我还有其他 Spec 工作区的 Tab…它会退回到那个 spec node graph 的页面".
+  // Closing a non-active tab leaves the current route untouched; the remaining tabs stay in their order.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()
@@ -154,9 +152,7 @@ export function useTabs() {
     const next = prev.filter((_, n) => n !== i)
     putTabs(next)
     if (key === activeKey) {
-      const heir = next[i] || next[i - 1]
-      if (heir) navigate(heir.page, heir.param, { query: heir.query })
-      else navigate('empty')
+      navigate('graph')
     }
   }, [activeKey])
 

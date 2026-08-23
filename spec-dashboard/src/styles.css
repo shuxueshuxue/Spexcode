@@ -47,6 +47,8 @@
   --type-icon-lg: 24px;
   /* the one statement size a page may spend, once ([[typography]]) */
   --type-display: 26px;
+  /* The launch wordmark is intentionally tiny and responsive so its six-line bitmap stays intact. */
+  --type-hero: clamp(5.5px, 1.15vw, 9.5px);
   --type-terminal: 11px;
 
   /* THREE weights, and the scale stops there. Escalation runs space → colour → weight → size, so a
@@ -58,6 +60,7 @@
   --leading-none: 1;
   --leading-tight: 1.25;
   --leading-ui: 1.45;
+  --leading-hero: 1.06;
   --leading-relaxed: 1.55;
   --leading-body: 1.65;
   --line-input: 20px;
@@ -258,8 +261,20 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.app-shell { display: flex; flex-direction: column; height: 100vh; }
-.app { flex: 1; min-height: 0; display: flex; }
+.backend-frame { display:flex; flex-direction:column; height:100vh; min-height:0; }
+.backend-frame > .app-shell { flex:1; min-height:0; }
+.backend-offline-banner {
+  flex:0 0 32px; display:flex; align-items:center; justify-content:center; gap:8px; min-width:0;
+  padding:0 12px; color:var(--yellow); background:color-mix(in srgb, var(--yellow) 12%, var(--ground));
+  border-bottom:1px solid color-mix(in srgb, var(--yellow) 35%, var(--edge)); font-size:var(--type-meta);
+}
+.backend-offline-banner span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.backend-offline-banner button { padding:2px 8px; color:var(--ink2); background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); font:inherit; cursor:pointer; }
+.backend-offline-banner button:hover { border-color:var(--yellow); }
+.app-shell { height: 100%; min-height: 0; }
+.app { width: 100%; height: 100%; min-height: 0; display: flex; }
+.app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle {
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
@@ -306,13 +321,28 @@ body {
 }
 .dock-head-name { color: var(--ink2); font-weight: var(--weight-medium); }
 .dock-head-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.dock-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
+.sb-stale {
+  position: absolute; right: -5px; top: 0; display: inline-flex; align-items: center; justify-content: center; width: 5px; height: 14px; margin-left: 0;
+  color: var(--yellow); font-style: normal; font-size: var(--type-caption); line-height: var(--line-status);
+  overflow: visible;
+}
+.sb-stale::before { content: '~'; position: absolute; left: 0; top: 0; }
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
-.ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
+/* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
+   is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
+   one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
+   instead of the head and the list sharing a piece of state to say "something is being carried". */
+body.is-session-dragging .dock-archive-door { color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+body.is-session-dragging .dock-archive-door:hover {
+  color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
+}
+.ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: auto; }
 .ft-row {
   display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
   background: none; border: 0; cursor: pointer; text-align: left;
@@ -331,8 +361,19 @@ body {
 .ft-dir .ft-label { color: var(--ink); }
 .ft-code, .ft-dir { text-decoration: none; }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+/* THE SEAM IS ALSO A GRIP, and it says so the way the split's own resizer already does. These two hid a 6px
+   grab strip with no feedback at all while [[resizable-panes]]'s divider lit under the pointer — two
+   dividers with two answers to the same question. One answer now: the seam thickens into the accent under
+   the pointer and while dragging, and shows nothing at rest, so a resting window gains no visible handle. */
+.ft-resize::after, .ctx-resize::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent;
+}
+.ft-resize:hover::after, .ctx-resize:hover::after,
+body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
+  background: color-mix(in srgb, var(--blue) 55%, transparent);
+}
 
-/* the explorer's two DISCLOSURES ([[files-tree]]): Specs, the spec tree, open by default because it is the
+/* the explorer's two DISCLOSURES ([[disk-tree]]): Specs, the spec tree, open by default because it is the
    explorer's main body; Files, the disk, closed. A head borrows the DOCK HEADER's register exactly — muted
    meta size, the name in --ink2 at medium weight, sentence case — so the sidebar reads as one column with
    a hierarchy in it rather than two panels bolted together. Sentence case is not a detail: an all-caps
@@ -353,7 +394,7 @@ body {
 /* [[dock-modes]] — the dock is one finding surface with two compact projections; mode controls live on the rail. */
 .dock {
   flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
-  background: var(--ground); border-right: 1px solid var(--edge);
+  background: var(--ground); border-right: 1px solid var(--line);
   overflow: hidden; max-width: 640px; animation: dock-in var(--dur-panel) ease;
 }
 /* the sidebar SLIDES rather than blinking: opening animates from nothing, and closing keeps the element on
@@ -368,12 +409,19 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dock, .dock.dock-closing { animation: none; }
 }
-.dock-session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
+.dock-session-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
 .dock > .filetree { flex: 1; min-height: 0; border-right: 0; background: transparent; }
 /* the row that currently owns the graph ([[workspace-shell]]'s lock) wears the claim, so the dock is where
    both the claiming and the claimed state are visible. */
 .dock-session-list .si-item[data-locked] { box-shadow: inset 2px 0 0 var(--blue); }
-.dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: auto; }
+.ft-body, .dock-session-list, .ds-side, .m-sesslist, .m-sessdetail {
+  scrollbar-width: none;
+}
+.ft-body::-webkit-scrollbar, .dock-session-list::-webkit-scrollbar, .ds-side::-webkit-scrollbar,
+.m-sesslist::-webkit-scrollbar, .m-sessdetail::-webkit-scrollbar {
+  display: none;
+}
 .dock-session-list .si-item { padding-left: 8px; padding-right: 8px; }
 /* the zone heading — the session list's own group grammar (.si-zone below) at dock density: a small-caps
    label in the zone's hue, a bordered count pod, and a trailing hairline that separates the group WITHOUT
@@ -411,7 +459,16 @@ body {
 
 /* [[workspace-shell]] — the content area. One view at a time today; the host is the seam a second one
    would mount into, which is why it is a box of its own rather than the view being the child of the frame. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; }
+/* DEPTH IS THE LADDER, NOT A SHADOW. The three tones already say where the document is; what a single
+   hairline could not say is that the document sits ABOVE the chrome rather than beside it. The seam is
+   therefore a STEP made of the ladder's own middle rung: chrome (--ground) · the hairline (--edge) · one
+   pixel of --panel · the content plane (--paper). Four values in three pixels, and it works in every theme
+   by construction, because the ladder is ordered in every theme.
+   It also continues the tab strip: the strip IS --panel, so the middle rung runs unbroken across the top of
+   the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
+   thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
+   genuinely float (menus, the palette), never stacked to fake a surface. */
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -435,16 +492,10 @@ body {
 .content-close { position: absolute; top: 4px; right: 6px; z-index: 3; display: inline-flex; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); cursor: pointer; }
 .content-close:hover { color: var(--ink2); border-color: var(--blue); }
 
-/* [[spec-view]] — the document: prose on the left, the code it governs on the right, both on open. */
+/* [[spec-view]] — the document is full-width prose; files open at their own address. */
 .specview { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .specview-prose { flex: 1; min-width: 0; overflow: auto; padding: 0 4px 0 0; scrollbar-gutter: stable; }
 .specview-prose .pane-doc { padding: 18px 22px 28px; }
-.specview-split { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .5; }
-.specview-split:hover { opacity: 1; background: var(--blue); }
-.specview-code { flex: 0 0 auto; min-width: 0; max-width: 58%; display: flex; flex-direction: column; border-left: 1px solid var(--edge); background: var(--paper); }
-.specview-code .srcview { flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; }
-.specview-code .srcview-body { height: auto; flex: 1; min-height: 0; }
-.specview-code .srcview { display: flex; flex-direction: column; }
 
 /* [[file-view]] — a governed file addressed on its own. */
 .fileview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -456,28 +507,42 @@ body {
    an open document it still answers where the reader is, by name. The strip sits on --panel; the ACTIVE tab
    is painted --paper so it reads as the near edge of the document below it rather than a lit chip on a bar
    — that continuity is what the three-tone ground ladder is for. */
-/* The band does not clip; the TAB LIST inside it does. A document action's dropdown hangs below the strip,
-   so a strip that is itself the scroller cuts every menu off at 30px — which is how the resource picker
-   came to render perfectly and show nothing. */
+/* The band does not clip, and it does not SCROLL either: tabs that do not fit on one line WRAP onto the
+   next, every row 30px, the way an editor's wrapped tab bar does. A horizontal scroller hides the working
+   set behind a gesture — the documents you are holding are off-screen and there is no mark saying so —
+   while wrapping keeps the whole set legible and pays for it in a thickness the reader can see and control.
+   The band's height is therefore the working set, not a constant; the strip is `flex: 0 0 auto` and the
+   rows are what make it tall. `flex-basis: 0` is deliberate: line formation sees each tab's minimum first,
+   so the strip shrinks every tab before it creates another row, then flex-grow fills each row again. */
 .tabstrip {
-  flex: 0 0 30px; height: 30px; display: flex; align-items: stretch;
+  flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
   background: var(--panel); border-bottom: 1px solid var(--edge);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  flex-wrap: wrap; align-content: flex-start; container-type: inline-size;
 }
-.tabstrip-tabs::-webkit-scrollbar { height: 0; }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
   display: inline-flex; align-items: center; padding: 0 var(--space-5);
   color: var(--muted); font-size: var(--type-meta); white-space: nowrap;
 }
 .tab {
-  display: flex; align-items: center; min-width: 0; max-width: 220px;
-  border-right: 1px solid var(--edge); color: var(--muted);
+  position: relative; flex: 1 1 0; height: 30px;
+  display: flex; align-items: center; min-width: 80px; max-width: 240px;
+  border-right: 1px solid var(--edge); color: var(--muted); container-type: inline-size;
 }
-.tab.on { background: var(--paper); color: var(--ink2); }
+.tab.on { min-width: 112px; background: var(--paper); color: var(--ink2); }
+/* A DRAG SAYS WHERE, NEVER WHAT. The moved tab fades to say it is in hand and the landing place wears a
+   single hairline on the edge the tab would arrive at — drawn ON a tab rather than between them, so it is
+   at home in any row of a wrapped strip. Nothing lifts and nothing casts a shadow: the strip stays one
+   plane while its order changes. */
+.tab.tab-moving { opacity: .38; }
+.tab.tab-drop-before::after, .tab.tab-drop-after::after {
+  content: ''; position: absolute; top: 3px; bottom: 3px; width: 2px; background: var(--blue); pointer-events: none;
+}
+.tab.tab-drop-before::after { left: 0; }
+.tab.tab-drop-after::after { right: 0; }
 /* the CURRENT SLOT: the one tab ordinary navigation reuses. Italic and weakened says replaceable — the
    same treatment the narrower preview tab used to wear, now naming the one slot every document passes
    through unless the reader holds it ([[tab-strip]]). */
@@ -489,18 +554,48 @@ body {
 }
 .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 2px; }
+.tab-spinner { flex: 0 0 auto; color: var(--blue); animation: tab-spin .9s linear infinite; font-style: normal; }
+@keyframes tab-spin { to { transform: rotate(360deg); } }
 .tab-x {
   display: inline-flex; align-items: center; padding: 0 var(--space-4) 0 var(--space-1); height: 100%;
   background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
 }
-.tab:hover .tab-x, .tab.on .tab-x { opacity: 1; }
+.tab.on .tab-x, .tab:hover .tab-x { opacity: 1; }
 .tab-x:hover { color: var(--ink2); }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* At the narrow end of the same flex scale, text gets the space first. The full label remains on the face's
+   accessible name and tooltip, so the second half of a session label can disappear without losing it. Status
+   marks are the last decoration removed; the active tab's close control is intentionally never hidden. */
+@container (max-width: 140px) {
+  .tab-face { gap: var(--space-2); padding-left: var(--space-2); }
+  .tab-x { padding-right: var(--space-2); }
+}
+@container (max-width: 100px) {
+  .tab-dot, .tab-spinner { display: none; }
+}
+/* The action cluster sits at the band's LAST row, against the content it acts on. It is a sibling of the
+   wrapping list rather than a member of it, so it reserves its own column and no tab can ever run under
+   it — a reserved-space trick measured in JS is what an editor needs only because its toolbar overlays the
+   rows. `align-self: flex-end` is the whole of the choice: with one row it is exactly where it always was,
+   and with several it stays put instead of drifting to the middle of a band that grew. */
 .tabstrip-actions {
-  flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; gap: var(--space-1);
+  flex: 0 0 auto; min-width: 0; margin-left: auto; align-self: flex-end; height: 30px;
+  display: flex; align-items: center; gap: var(--space-1);
   padding: 0 var(--space-3);
 }
 .document-action { position: relative; display: inline-flex; align-items: center; }
+.session-surface-switcher {
+  display: inline-flex; align-items: center; height: 24px; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; background: var(--panel2);
+}
+.session-surface-choice {
+  height: 22px; padding: 0 7px; color: var(--muted); background: transparent; border: 0;
+  border-right: 1px solid var(--line); font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
+}
+.session-surface-choice:last-child { border-right: 0; }
+.session-surface-choice:hover, .session-surface-choice:focus-visible { color: var(--ink2); background: var(--panel); }
+.session-surface-choice.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.session-surface-choice:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .document-action-button {
   appearance: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
   padding: 0; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius);
@@ -518,11 +613,11 @@ body {
   box-shadow: var(--shadow);
 }
 
-/* [[status-bar]] — a full-width strip, not a floating chip. Numbers are VS Code's, which Zed's 4px padding
+/* [[status-bar]] — the content column's footer, not a floating chip or a bar over the sidebar. Numbers are VS Code's, which Zed's 4px padding
    plus 8px group gap reproduces in visual weight: 22px content box, 12px text, 0 5px per item. */
 .statusbar {
   flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
-  background: var(--ground); border-top: 1px solid var(--edge);
+  background: var(--ground); border-top: 1px solid var(--line);
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-status); color: var(--muted);
   overflow: hidden;
 }
@@ -546,16 +641,33 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-warning { color: var(--yellow); }
 .sb-error { color: var(--red); }
 .sb-restore { color: var(--muted); }
+.sb-project-trigger {
+  min-width: 0; height: var(--line-status); display: inline-flex; align-items: center; gap: 5px; padding: 0;
+  color: inherit; background: none; border: 0; font: inherit; text-decoration: none; cursor: pointer;
+}
+.sb-project-trigger:hover, .sb-project-trigger.open { color: var(--blue); }
+.sb-project-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.sb-project-mark { display: block; flex: 0 0 14px; width: 14px; height: 14px; }
+.sb-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the ambient board tallies: one item per board, each a row of glyph+count pairs. The node dots reuse the
-   board's own four-state marks (.bstat-dot) so a count in the bar and a dot on a tile say the same thing. */
-.sb-tally { display: inline-flex; align-items: center; gap: 6px; }
+   board's own four-state marks so a count in the bar and a dot on a tile say the same thing. */
+.sb-tally { position: relative; display: inline-flex; align-items: center; gap: 4px; }
 .sb-tally-lead { font-weight: var(--weight-semibold); color: var(--ink2); }
 .sb-tally-part { display: inline-flex; align-items: center; gap: 3px; }
+.sb-tally-button {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0; border: 0; color: inherit;
+  background: none; font: inherit; white-space: nowrap; cursor: pointer;
+}
+.sb-tally-button:hover { color: var(--ink2); }
+.sb-tally-button:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.sb-tally-button:disabled { opacity: .45; cursor: default; }
+.sb-tally-sep { width: 1px; height: 12px; margin: 0 1px; background: var(--line); }
+.sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
 
 /* ---- left navigation rail ---- */
 .side-rail {
   flex: 0 0 40px; display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
-  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--edge);
+  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--line);
 }
 .rail-spacer { flex: 1; }
 /* a rail entry is a real anchor ([[side-nav]]); the chip is a button — one look for both */
@@ -569,6 +681,13 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .rail-btn.disabled:hover { background: none; color: var(--line); }
 /* the active page: a soft accent wash + accent ink — a state, not a hover effect */
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
+.rail-btn { position: relative; }
+.rail-badge {
+  position: absolute; top: -3px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  color: var(--paper); background: var(--yellow); border: 1px solid var(--ground); border-radius: var(--radius-full);
+  font: var(--weight-semibold) var(--type-micro)/1 var(--ui-font); pointer-events: none;
+}
 
 /* ---- routed page containers — ONE pane boundary for every page ([[side-nav]]) ---- */
 .page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); }
@@ -686,25 +805,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
 
-.graph-stats {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink2);
-}
-.bstat-total { font-weight: var(--weight-semibold); color: var(--ink); padding-right: 1px; }
-.bstat {
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 1px 4px; border: 0; border-radius: var(--radius); background: none;
-  font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui); color: inherit; cursor: pointer;
-}
-.bstat:hover:not(:disabled) { background: var(--panel2); color: var(--ink); }
-.bstat:disabled { opacity: .38; cursor: default; }
-.bstat-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }  /* matches .node-dot */
-.bstat-drift { color: var(--yellow); }                                   /* matches .drift-badge */
-.bstat-issue { color: var(--magenta); }                                  /* matches .issue-badge */
-.bstat-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--line); }
-.graph-stats .score-badge { width: 13px; height: 13px; font-size: var(--type-caption); }
-.graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
-
 /* Focus emphasis may settle gently; graph-space positions never transition here because React Flow's
    solid edges already use final coordinates. Direction comes from the viewport pan, not detached tiles. */
 .react-flow__node { transition: opacity .18s ease; }
@@ -736,7 +836,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
-.node-title { font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-title { font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink2); flex: 1; overflow: hidden; white-space: nowrap; }
 .node-ago { font-size: var(--type-caption); color: var(--muted); flex: none; white-space: nowrap; }
 .node-ver { font-size: var(--type-caption); color: var(--muted); flex: none; }
 
@@ -891,14 +991,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-gov-files { display: flex; flex-wrap: wrap; gap: 5px; }
 .gov-f { font-family: var(--mono); font-size: var(--type-meta); color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: var(--radius); cursor: pointer; }
 .gov-f:hover { border-color: var(--blue); }
-.gov-f.on { background: color-mix(in srgb, var(--blue) 18%, var(--panel2)); border-color: var(--blue); color: var(--ink2); }
 .doc-gov.prose .doc-gov-h { font-style: italic; }
 /* [[node-attachments]] — the rest of the node's folder, sharing the governed-file chip so a reader learns
    one affordance, not two, for opening what a node holds. */
 .doc-att { margin-top: -8px; }
 .doc-att .gov-f { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 22%, var(--line)); }
-.doc-att .gov-f:hover, .doc-att .gov-f.on { border-color: var(--cyan); }
-.doc-att .gov-f.on { background: color-mix(in srgb, var(--cyan) 16%, var(--panel2)); color: var(--ink2); }
+.doc-att .gov-f:hover { border-color: var(--cyan); }
 
 /* [[source-view]]: a governed file opened in place, under the prose that claims it. Bounded height — it is
    a reading window inside the spec pane, never a curtain that buries the body below it. */
@@ -1387,22 +1485,22 @@ a.scenario-count:hover { background: var(--panel2); }
   border-left-color: var(--blue); border-left-width: 3px;
   box-shadow: inset 0 0 0 1px var(--blue);
 }
-.si-root-drop {
-  height: 28px; margin: 5px 10px 2px; display: flex; align-items: center; justify-content: center;
-  border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: var(--radius);
-  color: var(--muted); transition: background .12s, border-color .12s, color .12s;
+/* THE GAP IS THE TOP LEVEL ([[dock-modes]]). While a nested row is in hand the list outlines itself, and
+   the outline goes green where the release would actually detach. An OUTLINE, never a border or an
+   inserted strip: outlines take no layout, so the rows the reader is aiming at do not move under the
+   pointer the moment the drag begins — which is exactly what a head-of-list drop strip did. */
+.dock-session-list.root-armed { outline: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); outline-offset: -3px; }
+.dock-session-list.root-on { outline-style: solid; outline-color: var(--green); }
+.dock-root-hint {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; padding: 4px 6px; z-index: 2;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  border-radius: var(--radius); background: color-mix(in srgb, var(--ground) 88%, transparent);
+  color: var(--muted); font-size: var(--type-caption);
 }
-.si-root-drop.on {
-  position: relative; z-index: 51;
-  background: color-mix(in srgb, var(--green) 12%, var(--panel2));
-  border-color: var(--green); color: var(--green);
-}
-.si-session-drag-ghost {
-  position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0;
-  box-shadow: var(--shadow);
-  opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left;
-}
-body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
+.dock-session-list.root-on ~ .dock-root-hint { color: var(--green); }
+/* the window wears the gesture ([[drag-gesture]]): one class for every movable list, so a drag reads the
+   same whether it started in the tab strip or in the session dock. */
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
    the taller row. Resting rows keep the generic vertical centring above. */
 .si-item.on + .sess-fold-control { top: 7px; transform: none; }
@@ -1880,7 +1978,12 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 }
 .fv-send:disabled { opacity: 0.45; cursor: default; }
 
-.si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+/* THE TERMINAL IS A DARK CARD ON THE CONTENT PLANE, not a wall butted against the seam. A gutter of --paper
+   down its leading edge is what makes it read that way, and it is the same step the rest of the window
+   uses — the terminal keeps its own --term-bg (the one surface that is legitimately dark in every theme),
+   and the plane it sits on shows beside it. Leading edge only: the pane's other three sides already meet
+   chrome that steps for them. */
+.si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; padding-left: var(--space-3); background: var(--paper); }
 
 .si-archive-backdrop {
   position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
@@ -1926,11 +2029,10 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
-/* the page's ONE statement size, spent on the name and then not spent again. Muted on purpose: the lit
-   thing in an empty room is the input, not the sign above it. */
 .si-hero {
-  margin: 0 0 var(--space-7); color: var(--muted); font-size: var(--type-display);
-  font-weight: var(--weight-regular); line-height: var(--leading-tight); user-select: none;
+  margin: 0 0 2px; font-family: var(--mono); font-size: var(--type-hero); line-height: var(--leading-hero);
+  white-space: pre; user-select: none; background: linear-gradient(180deg, var(--blue), var(--magenta));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .si-inputwrap {
   position: relative;
@@ -2897,7 +2999,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 
 /* ================================================================================================
    projects hub ([[projects-hub]]) — the global `/projects` catalog page, the unified credential card,
-   and the scoped rail's current-project selector. Everything
+   and the scoped status row's current-project selector. Everything
    reads through the shared palette vars, so all themes skin these surfaces with no extra rules. */
 
 /* --- the credential card: ONE visual language for admin sign-in and per-project unlock --- */
@@ -3100,17 +3202,16 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
-/* --- the rail's current-project selector chip + switcher menu --- */
-.proj-chip-wrap { position: relative; }
-.rail-btn.proj-chip {
-  padding: 2.5px; color: var(--ink2); overflow: hidden;
-}
-.rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { color: var(--blue); }
+/* --- the status row's project selector menu --- */
 .proj-menu {
-  position: absolute; left: calc(100% + 6px); top: 0; z-index: 60; min-width: 180px; max-width: 280px;
+  z-index: 60; min-width: 180px; max-width: 280px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px;
   box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 1px; font-family: var(--ui-font);
+}
+.status-project-menu {
+  position: absolute; left: 4px; bottom: calc(var(--line-status) + 4px);
+  max-height: min(320px, calc(100vh - var(--line-status) - 12px)); overflow-y: auto;
 }
 .proj-menu-item {
   display: flex; align-items: center; gap: 7px; text-decoration: none; cursor: pointer;
@@ -3146,7 +3247,10 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 }
 /* branch diff document ([[diff-document]]) */
 .diff-document { display:flex; flex-direction:column; min-height:0; height:100%; overflow:auto; background:var(--paper); color:var(--ink); }
-.diff-toolbar { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:9px; min-height:34px; padding:0 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-toolbar { position:sticky; top:0; z-index:2; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; min-height:34px; padding:6px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-refs { display:inline-flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
+.diff-refs strong { font-weight:var(--weight-medium); }
+.diff-oids { min-width:0; color:var(--muted); overflow-wrap:anywhere; white-space:normal; }
 .diff-toolbar-spacer { flex:1; }
 .diff-file { border-bottom:1px solid var(--line); }
 .diff-file-head { display:flex; width:100%; gap:12px; align-items:center; padding:7px 12px; border:0; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 28%, var(--paper)); color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
@@ -3159,6 +3263,9 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .diff-comment-line { color:var(--blue); font-family:var(--mono); white-space:nowrap; }
 .diff-state { padding:24px; color:var(--muted); }
 .diff-state.error { color:var(--red); }
+.diff-state.diff-merged { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+.diff-state.diff-merged strong { color:var(--ink2); }
+.diff-state.diff-merged a, .diff-state.diff-merged code { max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
 .diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--paper); box-shadow: var(--shadow); }
 .diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
 .diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }

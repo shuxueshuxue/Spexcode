@@ -25,7 +25,7 @@ scope resolves to its **anonymous identity** — the URL id plus the default mar
 to see — but receives no fleet data or management control.
 
 `IdentityIcon` and `IdentityPicker` are the one renderer and chooser over [[icon-presets]]. The renderer
-supplies every swatch, row mark, rail chip, and favicon. The chooser keeps the local presets as featured
+supplies every swatch, row mark, status-bar identity button, and favicon. The chooser keeps the local presets as featured
 choices and restores the established broad Iconify namespace through a compact searchable, source-filtered
 browser; its results use native radio semantics with accessible names, keyboard movement, theme tokens, and
 a narrow responsive grid. On the admin Projects face, both
@@ -35,7 +35,7 @@ successful choice. Project disclosure lives inside its existing setup/details dr
 lives in the page's low-priority settings/details area. Both call the host's structured writes.
 
 Every visible projection consumes the selected resolved identity: global branding and tab metadata use the
-gateway; project rows, switcher rows, scoped current-project mark, tab metadata, session header, and graph
+gateway; project rows, switcher rows, the status bar's scoped current-project mark and name, tab metadata, session header, and graph
 brand use the scoped project. A catalog refresh changes those projections live without copying icon state
 into a route or browser preference. The project switcher renders each catalog project's identity in one
 fixed mark slot before its name and renders the catalog gateway identity for its global Projects row;

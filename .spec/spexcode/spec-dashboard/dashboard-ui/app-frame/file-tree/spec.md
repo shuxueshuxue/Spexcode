@@ -6,7 +6,7 @@ desc: The left dock — a spec node is a folder, so the tree that navigates the 
 code:
   - spec-dashboard/src/FileTree.jsx
 related:
-  - spec-dashboard/src/FilesTree.jsx
+  - spec-dashboard/src/DiskTree.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/useResizable.js
@@ -31,11 +31,11 @@ built for scanning.
 wherever they are listed rather than teaching the reader two vocabularies for one thing.
 
 **A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]; a governed file row opens
-[[file-view]]. The dock used to open a layer over the frame, because the frame had no content area to open
+[[file-view]], and an attachment row opens the same FileView through its `.spec/<node>/<name>` logical
+address. The dock used to open a layer over the frame, because the frame had no content area to open
 anything into — that limitation is gone with [[workspace-shell]], and with it the layer. Clicking here and
-clicking a tab now reach the same place by the same address. A plain click opens the spec/file preview slot;
-ctrl/⌘-click or double-click HOLDS the document as a resident tab. The preview slot is the only replaceable
-address and is fenced to spec/file by [[tab-strip]].
+clicking a tab now reach the same place by the same address. Plain, ctrl/⌘, and double-click placement are
+the shared [[tab-strip]] gestures; the tree does not carry a second tab policy.
 
 **The tree names itself through the dock, not through a strip of its own.** "Explorer" and the node tally
 live in [[dock-modes]]' single header row, because they describe the dock that is currently projecting the
@@ -44,7 +44,7 @@ above, and it cost a chrome band to give.
 
 **The explorer discloses TWO sections, and they are two projections of one project.** SPECS is this tree —
 open by default, because it is the explorer's main body rather than one option among two. FILES is the disk
-listed as the disk ([[files-tree]]) — closed by default, because it answers a question this tree cannot: a
+listed as the disk ([[disk-tree]]) — closed by default, because it answers a question this tree cannot: a
 path exists here only if some node claims it, so a reader who knows where a file lives but not which node
 governs it has nowhere to look. Closed also means unmounted, so a reader who never opens it never costs the
 backend a listing.

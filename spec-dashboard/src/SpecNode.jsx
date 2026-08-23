@@ -3,6 +3,8 @@ import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
+import { middleEllipsis } from './specMeta.js'
+export { middleEllipsis } from './specMeta.js'
 
 // compact "Nm/Nh/Nd ago"; returns null for a missing/unparseable date so the caller can render nothing.
 function timeAgo(iso, t) {
@@ -80,7 +82,7 @@ export default function SpecNode({ data, selected }) {
         <span className="node-dot" style={{ background: s.color }}>
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
-        <span className="node-title">{data.title}</span>
+        <span className="node-title" title={data.title}>{middleEllipsis(data.title)}</span>
         {/* pending ops replace the age — an overlay means the node is being touched NOW */}
         {ops.length > 0 ? (
           <span className="ov-marks" data-tip={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>

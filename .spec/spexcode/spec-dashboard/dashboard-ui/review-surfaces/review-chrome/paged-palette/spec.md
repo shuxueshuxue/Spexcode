@@ -39,6 +39,6 @@ rule — `/` leads with whatever projection is in force, and the `⌥/` chord le
 typing context is the one place the bare key cannot fire and a session console is what a typing context is.
 
 An empty query is the plain jump-list: planes group in the caller's order and each keeps its source
-surface's stable order. Picking routes through [[address-routing]] — a node focuses the graph, a session
-jumps to its tab ([[session-console]]). Plane boost, keyboard ownership and selection routing remain
+surface's stable order. Picking routes through [[address-routing]] — a node opens its `#/spec/<id>` document,
+a session jumps to its tab ([[session-console]]). Plane boost, keyboard ownership and selection routing remain
 [[session-search]]'s single shared behavior.

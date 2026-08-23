@@ -9,9 +9,9 @@ related:
   - spec-dashboard/src/tabModel.js
   - spec-dashboard/src/tabModel.test.mjs
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
-  - spec-dashboard/src/EmptyView.jsx
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
@@ -19,33 +19,25 @@ related:
 ---
 # tab-strip
 
-**The strip holds objects and singletons.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A SINGLETON
-tab is a bare board — `#/evals`, `#/issues`, `#/settings` — a place the reader keeps open rather than one
-they bounce off. It is a tab like any other, closable like any other; "singleton" is not a second tab kind
-but a consequence of the identity rule: the address carries no selector, so opening it twice is opening the
-same address twice, which the strip already resolves to one tab. The rail button is therefore
-create-or-focus without needing to know it is ([[side-nav]]).
+**The strip holds OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
+`#/file/<path>`, `#/sessions/<id>`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A session's
+`?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
+identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
+own identity, appended beside the unchanged session tab. Bare
+`#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
+are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
+ordinary objects and may be held like every other document. The rail is therefore navigation only; it does
+not create, pin, or focus a board tab ([[side-nav]]).
 
-**A singleton board is RESIDENT, and residency belongs to the address.** A board never takes the current
-slot: it is a place, and a place is not something the reader spends the slot on. This is the other half of
-"singleton", and leaving it out cost exactly what the whole-address reasoning predicts — a board reached by
-an ordinary navigation (the status-bar tally, a pasted link) sat in the slot, so its own first row click
-replaced the list with the detail. The reader asked to read one scenario and lost the list they were
-reading it from. The rail button used to hold the board by hand, which made residency a property of that
-button rather than of the board; every other door got the slot. [[view-registry]] answers residency for the
-address (`resident`, and only while the address carries no selector), so no door has to remember. The
-DETAIL addresses of those same pages are ordinary objects and land in the slot like everything else.
-
-What the strip does NOT hold is what has neither an object nor residency: `#/graph` (including
-`#/graph/<node>` focus — a legacy address, [[node-graph]]), bare `#/sessions`, and **`#/sessions/new`** —
+What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy
+address, [[node-graph]]), bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
 This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
 nothing.
 
-**The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a board
-tab has none ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
+**The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
+has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
 各个 tab，各个 tab 才相当于是工作区，而不是左侧边栏。"* The left rail is a way to change destination and the
 dock only describes the current tab; the strip is what you are working on, and none of the three is
 interchangeable with another.
@@ -63,7 +55,7 @@ and chrome that only appears when a second document exists would jump the layout
 the reader's first hold.
 
 **The row is always there, and it always says something.** On the routes that mint no tab — the graph, the
-sessions launch page, the empty workspace — the strip names the PLACE instead: the same projection the
+review/settings boards, and the sessions launch page — the strip names the PLACE instead: the same projection the
 document title uses, drawn quiet, because orientation is not a title. This is what makes the row honest
 rather than reserved: the shell used to hold the space with a wrapper that drew a blank band on exactly
 those routes, which is a band that says nothing while costing the budget the same as one that does.
@@ -81,16 +73,14 @@ the strip does not reshuffle under the reader. A tab is born only from this whit
 1. ctrl/⌘-click on a row;
 2. a double-click, on a row or on the slot tab itself;
 3. a document's own explicit "open in a new tab" action — including a review row's context menu;
-4. a deep link into a workspace that has no slot yet;
-5. arriving at a RESIDENT address (a singleton board), which is held by what it is rather than by a gesture.
+4. a deep link into a workspace that has no slot yet (for an object document; boards do not qualify).
 
-Everything else reuses the slot, **regardless of what kind of document it is**. That last clause is the
-correction. The rule used to be fenced by TYPE — only `spec` and `file` could be replaceable, sessions and
-board details were always resident — and the fence was defended as a capability argument (a type that
-cannot be a preview cannot be displaced). What it actually produced was a strip that filled itself:
-clicking three session rows in the dock left three tabs, and opening any resident document while browsing
-PROMOTED the preview first, so a reader who clicked around had a working set of things nobody decided to
-keep. A protection that mints tabs is not protecting the reader.
+Everything else reuses the unpinned slot **within the route's page kind**. The two human rules sit beside
+each other: "弹新 tab 需用户准许" prevents kind-internal browsing from proliferating tabs, while
+"session 不许被 spec 顶掉 / session→session 原位切换" prevents a different kind from evicting the
+reader's session and keeps same-kind session clicks in place. One-slot-any-kind satisfies the first rule
+only by breaking the second: a spec click can drive out a session. When no unpinned slot exists for the
+requested kind, the address is appended as another unpinned slot for that kind; pinned tabs remain held.
 
 **What replaced the type fence is a smaller pair of guarantees**: a pinned tab is never passively replaced
 (only its own close button removes it), and a session's persisted default face can only ever be a BASE
@@ -101,7 +91,7 @@ why the old fence was buying safety that was never at risk.
 
 | gesture | result |
 | --- | --- |
-| plain click / plain navigation | the slot takes that address (or one slot is opened if none exists) |
+| plain click / plain navigation | that page kind's slot takes the address (or one is opened if none exists) |
 | ctrl/⌘-click | a new pinned tab |
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | close | that tab only; the slot is nothing special to close |
@@ -123,40 +113,112 @@ route, `#/graph`, or the sessions launch page never creates a tab.
 
 **The semantics are a pure function** (`tabModel.js`: `placeTab`, `normalizeTabs`), separate from the hook
 that owns storage and the route subscription. The law above is therefore checkable without a browser, which
-is what the previous version lacked when it drifted: five plain clicks must leave exactly one slot, and a
+is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
 pinned tab must survive them all.
 
-**Identity is the canonical hash.** Two routes that print the same address *are* the same tab, so
-re-opening an already-open document activates it instead of stacking a duplicate, and nothing has to dedupe
-by hand. The current address is always in the strip — by replacement or by keep — because a strip that
-claimed to show what is open while the reader looked at something absent from it would be lying.
+**Identity is the canonical object hash.** Two routes that print the same object address *are* the same tab,
+and session surface queries are deliberately ignored: `#/sessions/a?surface=terminal` and
+`#/sessions/a?surface=diff` activate the same `#/sessions/a` tab. Surface navigation uses URL replace, so the
+face changes without creating, replacing, or reordering a tab. A published file/web resource instead appends a
+file-class tab and leaves the session tab and its selected face untouched. The current object is always in the
+strip — by replacement or by keep — because a strip that claimed to show what is open while the reader looked at
+something absent from it would be lying. This is the regression guard for the human's report: "点进去(diff)之后当前 tab
+就废掉了" and "一个 session 的视图可以在 terminal 和 conversation 视图之间切换".
+
+Resources are **pinned holds at birth**. Opening a posted file or web resource is an intentional request to
+keep that file-class workspace object; its tab is born `pinned:true`, never competes for the file slot, and
+is removed only by its close action. Reload normalization repairs older resource entries to the same hold.
 
 **The slot is visibly italic and weakened.** It is still a real route and can be copied, reloaded, closed,
 or pinned; the visual treatment names its replaceable status without inventing another tab kind.
 
-**Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
-the reason every editor uses it: the reader's eye is already where the closed tab was.
+## the order is the reader's, and the strip wraps rather than scrolls
 
-**Closing the LAST tab yields the explicit empty state**, `#/empty` — not a substitute document. Closing
-used to navigate to the graph: a gesture that asked for nothing put a document on screen, and the board
-appeared to surface from underneath the reader's own work, which is the disorientation this rule exists to
-remove. An empty workspace is a real state and it says so — the frame stays whole (rail, dock, status
-bar), the content area names the state, and it offers the ways back into a document: search and the
-explorer. There were three, and the third was the graph; it left with the graph's retirement from the
-workspace ([[node-graph]]), because a door here has to lead somewhere the workspace still sends people.
-`empty` is an ADDRESS so the state can be landed on, reloaded and left, but it is not a
-document ([[view-registry]]): a tab for it would be the one address that contradicts the strip it sits in.
-Only closing the last tab mints it — a fresh load with no tabs opens `#/sessions`, because starting with
-nothing held is not the same event as putting your last document down.
+**A tab can be dragged, and the order it lands in is the stored order.** There is no second arrangement to
+keep in step with the list — the strip renders the array, so moving a tab is one `splice` and the placement
+persists through the same local storage the open list already uses. Two consequences fall out rather than
+being arranged: the arrangement survives a reload for free, and a drag *changes nothing else* — the active
+document stays active, no address is written, and a release that lands where the tab started writes nothing
+at all. **A slot is not exempt.** It is an ordinary entry that happens to be unpinned, found by its kind and
+that flag rather than by position, so it may be dragged anywhere and ordinary navigation still lands in it
+exactly where the reader put it.
 
-`settings` used to be described as a destination people bounce off, and was therefore kept out of the
-strip. Two things were true at once and only one of them was the reason: a strip that filled with *visits*
-would stop being a list of what you are working on — but that is what the current slot solves, for every
-kind of address at once. Settings is a singleton tab now, held when it is asked for by name and closed like
-anything else.
+The gesture is the workspace's shared pointer drag ([[drag-gesture]]) and it is deliberately not native
+HTML5 drag-and-drop: a tab face is a button, which swallows `dragstart`, and the browser's drop protocol
+and ghost image are machinery neither this strip nor the session dock wants. Six pixels of slack keep a
+press a press, so click, double-click-to-pin, middle-click-to-close and the context menu are all untouched;
+the click the browser emits after a real drag is eaten, so dropping a tab never also opens it. **The mark is
+a hairline on the edge the tab would arrive at**, drawn on a tab rather than between tabs — which is what
+keeps it correct in any row of a wrapped strip — and it appears only where a release would actually change
+the order. Nothing lifts and nothing casts a shadow: the strip stays one plane while its order changes.
 
-**Labels come from the board's own projections** — a node's title, a session's headline plus its i18n face
-suffix — never from a
+**Tabs that do not fit WRAP onto the next row; the strip never scrolls sideways.** This is the one mode.
+A horizontal scroller hides the working set behind a gesture — the documents you are holding sit off-screen
+with nothing saying so, which is a strip that has stopped answering the question it exists to answer.
+Wrapping keeps the whole set legible and pays for it in a thickness the reader can see, and the payment is
+self-limiting: the current-slot-per-kind rule means the strip only grows when someone enters another kind or explicitly holds one, so a tall
+strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
+working set rather than a constant.
+
+**Width is elastic before it is wrapped, following VS Code's `wrapTabs` fit behaviour.** Each tab is one flex
+item with a zero basis, an 80px minimum and a 240px preferred maximum (the active tab uses a 112px readability
+floor so its always-visible close control never crowds its title). Flex first shrinks every tab on the current
+row; it creates another row only when the sum of those minimums cannot fit. Each row grows independently until
+the preferred 240px cap; a short final row may retain legal empty space rather than producing an oversized
+outlier. This is one CSS flex rule, not JavaScript width measurement. The close affordance is always present on
+the active tab; an inactive tab shows it only on hover. At the narrow end,
+padding is reduced per tab at 140px, and status dots/spinners disappear per tab at 100px; the face keeps its
+full accessible label and tooltip while its visible title ellipsises.
+
+The measured fit matrix below records the real rendered tab width in pixels. The viewport includes the 40px
+rail and the 200px explorer dock; the 36px document-action sibling is also present, so the tablist width is
+`viewport - 276px` (1404/1004/624px). A `*` marks a wrapped layout; the active tab is included in the count,
+and `last=` records a widened final row:
+
+| viewport / tablist | 2 tabs | 3 tabs | 5 tabs | 8 tabs | 12 tabs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1680 / 1404px | 240 | 240 | 240 | 175.5 | 117 |
+| 1280 / 1004px | 240 | 240 | 200.8 | 125.5 | 112 + 11x81.1 |
+| 900 / 624px | 240 | 208 | 124.8 | 112 + 6x85.3 (`*`, last=240) | 112 + 6x85.3 (`*`, final 5x124.8) |
+
+The dense 15-tab stress case at 900/624px is three rows of `7 + 7 + 1`; the final tab stops at 240px and
+leaves the remaining space empty by design. The screenshots for this 15-cell matrix plus that 15-tab stress
+case are the review evidence for this paragraph; the widths above are kept in the same commit as the CSS so a
+future change can re-measure the product surface rather than infer it from prose.
+
+**The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
+It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run
+under it — an editor needs a measured reserve at the end of the last row only because its toolbar floats
+over the rows. With one row this is exactly where the cluster always was; with several it stays put instead
+of drifting to the middle of a band that grew.
+
+**A wrapped strip is still ONE band.** Rows are the strip's internal layout, not stacked chrome, and
+[[ui-state-model]] counts it once at any height — a model that counted rows would be counting the reader's
+open documents as chrome. The budget gate enters every state with a working set deep enough to wrap and
+prints the row count beside the band count, so the claim is measured rather than asserted.
+
+**Closing hands focus to the right-hand neighbour, else the left, within the tab's kind.** That is the rule every
+editor uses, for the reason every editor uses it: the reader's eye is already where the closed tab was. Session
+tabs additionally classify their fallback so a session can never hand focus to the graph.
+
+**Closing hands focus back by document kind.** A spec or file tab closes to the graph backdrop, preserving the
+existing reading path. A session tab never falls to graph: the nearest remaining session tab on its right wins,
+then the nearest session on its left; when none remains, close lands on `#/sessions/new`, the explicit New Session
+page. This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
+graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule; the explicit `empty` state remains
+the fallback only for a working set with no classified heir. `empty` is an ADDRESS so the state can be landed on,
+reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
+contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
+is not the same event as putting your last document down.
+The earlier human rule "退回到 spec node graph" described spec/file workspaces. The later session-specific
+report "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" narrows that rule: session tabs
+use the classified session fallback above, while spec/file tabs retain the graph return.
+
+`settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
+the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
+parameterized detail objects may be held.
+
+**Labels come from the board's own projections** — a node's title, a session's headline — never from a
 second lookup table that could drift from them. A tab for a node carries the same four-state dot its tile
 does, so the strip speaks the board's vocabulary rather than inventing a tab-specific one. When a selector
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
@@ -184,4 +246,10 @@ the second pane. The strip only names the gesture; the pane is workspace state, 
 
 The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
 not another navigation surface: changing tabs changes the registered buttons, and a document with no registered
-actions leaves the edge blank.
+actions leaves the edge blank. A session with more than one available face registers one three-state segmented
+switcher there — conversation, terminal, diff — with terminal/diff omitted when the session is headless or
+offline; a single-face session hides the switcher entirely. The selected face is the only highlighted segment;
+each press replaces the session surface URL and leaves the session tab count unchanged.
+The tab itself shows only the session name and status dot, never "· terminal" or "· diff". The reader's words
+remain the test: "为什么要在 tab 上去写 terminal 这种东西" and "一个 session 的视图可以在 terminal 和
+conversation 视图之间切换,这是存在很长时间的功能,怎么能就这么消失了".

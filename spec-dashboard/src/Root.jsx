@@ -8,6 +8,7 @@ import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
+import { BackendStatusFrame } from './BackendStatus.jsx'
 
 const App = lazy(() => import('./App.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
@@ -33,25 +34,29 @@ function ReviewEntry({ page, param, query }) {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} identity={null} catalog={null} />
-        <div className="app-main">
-          <div className={`page-pane page-${page}`}>
-            <Suspense fallback={loading}>
-              {/* the cold entry hands the route down like the shell does: the boards read their route
-                  from props, never from the global address ([[view-registry]]). */}
-              {page === 'evals'
-                ? <EvalsPage param={param} query={query} onOpenSession={openSession} />
-                : <IssuesPage param={param} query={query} onOpenSession={openSession} />}
-            </Suspense>
+        <SideBar page={page} />
+        <div className="app-content-column">
+          <div className="app-content-row">
+            <div className="app-main">
+              <div className={`page-pane page-${page}`}>
+                <Suspense fallback={loading}>
+                  {/* the cold entry hands the route down like the shell does: the boards read their route
+                      from props, never from the global address ([[view-registry]]). */}
+                  {page === 'evals'
+                    ? <EvalsPage param={param} query={query} onOpenSession={openSession} />
+                    : <IssuesPage param={param} query={query} onOpenSession={openSession} />}
+                </Suspense>
+              </div>
+            </div>
           </div>
+          <StatusBar />
         </div>
       </div>
-      <StatusBar />
     </div>
   )
 }
 
-export default function Root() {
+function RootContent() {
   const t = useT()
   const { page, param, query } = useRoute()
   const coldReviewRoute = page === 'evals' || (page === 'issues' && !param)
@@ -80,4 +85,8 @@ export default function Root() {
       </Suspense>
     </DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
   )
+}
+
+export default function Root() {
+  return <BackendStatusFrame><RootContent /></BackendStatusFrame>
 }

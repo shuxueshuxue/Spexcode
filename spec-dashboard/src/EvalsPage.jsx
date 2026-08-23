@@ -11,6 +11,8 @@ import { apiUrl } from './project.js'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { usePaneActive } from './workspace.jsx'
+import { apiFetch } from './data.js'
+import { useBackendHealth } from './BackendStatus.jsx'
 
 // The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
 // page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, the whole face ONE token
@@ -51,7 +53,7 @@ function fetchEvalDetail(node, scenario, sessionId) {
   if (detailInflight.has(key)) return detailInflight.get(key)
   const query = new URLSearchParams({ node, scenario })
   if (sessionId) query.set('scope', sessionId)
-  const request = fetch(apiUrl(`/api/evals/detail?${query}`), { cache: 'no-store' })
+  const request = apiFetch(apiUrl(`/api/evals/detail?${query}`), { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
     .finally(() => detailInflight.delete(key))
   detailInflight.set(key, request)
@@ -201,16 +203,19 @@ export default function EvalsPage({ param = null, query = EMPTY_QUERY, specs = E
   const t = useT()
   const showing = usePaneActive()
   const { notify } = useTransientNotice()
+  const backendHealth = useBackendHealth()
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
   // conflated with session:present|missing, the source-session presence facet.
   const sessionId = readToken(query.q || '', 'scope') || null
   const sessionProjection = sessions.find((session) => session.id === sessionId)?.evalSummary || null
-  const detail = useEvalDetail(param, sessionId, sessionProjection, !!param, issuesStamp)
+  const freshness = `${issuesStamp ?? ''}|${backendHealth.retryKey}`
+  const detail = useEvalDetail(param, sessionId, sessionProjection, !!param, freshness)
   const queryText = String(query.q ?? '').trim() || EVAL_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
+  const listRefreshKey = useMemo(() => ({ specs, retryKey: backendHealth.retryKey }), [specs, backendHealth.retryKey])
   // a hidden pane does not fetch: the list would refresh on every board push for a screen nobody is
   // looking at, and the pool exists to keep documents WARM, not busy ([[workspace-shell]]).
-  const list = useReviewPage('evals', queryText, page, { enabled: !param && showing, refreshKey: specs })
+  const list = useReviewPage('evals', queryText, page, { enabled: !param && showing, refreshKey: listRefreshKey })
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
   // ('@ new→<session>') reaches the shared notice surface, so an @-dispatch is never silent.
   const flash = (outcomes) => { if (outcomes) notify(outcomes) }

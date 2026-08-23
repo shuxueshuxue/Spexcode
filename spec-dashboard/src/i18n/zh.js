@@ -50,11 +50,12 @@ export default {
     specs: '规格',
     files: '文件',
   },
-  filesTree: {
+  diskTree: {
     loading: '正在加载…',
   },
   dockModes: {
     collapse: '收起侧边栏',
+    expand: '展开侧边栏',
     aria: '停靠栏模式',
     explorer: '资源管理器',
     sessions: '会话',
@@ -91,8 +92,13 @@ export default {
     sessions: '会话',
     evals: '评测',
     issues: '议题',
+    settings: '设置',
     issueNew: '新建议题',
     openInNewTab: '在新标签打开',
+    menuLabel: '标签操作',
+    menuClose: '关闭',
+    menuCloseOthers: '关闭其他',
+    menuSplit: '送入分屏',
     surfaceTerminal: '终端',
     surfaceConversation: '对话',
     surfaceDiff: '差异',
@@ -113,6 +119,7 @@ export default {
   },
   nav: {
     railLabel: '主导航',
+    graph: '规格节点图',
     explorer: '资源管理器',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',
@@ -225,9 +232,16 @@ export default {
     restore: '恢复隐藏的状态项',
     // 环境态的看板计数；每一项本身就是它命名的那扇门。
     nodes: ({ n }) => `${n} 个规格节点 —— 已合并 · 进行中 · 漂移 · 待建。打开节点图`,
-    evals: ({ pass, fail }) => `新鲜评测：${pass} 通过，${fail} 失败 —— 打开评测看板`,
+    evals: ({ pass, fail, stalePass, staleFail, empty }) =>
+      `评测场景：${pass} 最新通过，${fail} 最新失败，${stalePass} 过期通过，${staleFail} 过期失败，${empty} 未测量`,
+    openEvals: '打开 Evals 看板',
     issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
     sessions: ({ run, need }) => `${run} 个在跑，${need} 个等你 —— 打开会话面板`,
+  },
+  backend: {
+    offline: '后端不可达 —— 当前显示的数据可能已陈旧',
+    retry: '重试',
+    stale: '陈旧',
   },
   hud: {
     helpTitle: '帮助 — 按键与图例',
@@ -575,9 +589,8 @@ export default {
     },
   },
 
-  // 左下角的看板统计条 —— 把节点徽章在整棵树上「计数」（去重的不同对象，而非徽章求和），唯独覆盖度按「场景」计数（评测损失的真实单位）。每个小块的悬停说明标明它统计什么；点击会沿其背后的节点逐个走查（每点一次走到下一个）。
+  // shell 账本的 graph 走查：节点徽章按不同对象计数，覆盖度按场景计数。
   stats: {
-    aria: '看板统计',
     totalTitle: ({ n }) => `树中共有 ${n} 个规格节点`,
     statusTitle: ({ n, status }) => `${n} 个${status} —— 点击逐个走查`,
     driftTitle: ({ n }) => `${n} 个节点的代码领先于其规格 —— 点击逐个走查`,
@@ -705,7 +718,7 @@ export default {
     issuesReplyPlaceholder: '回复……',
     issuesConcernPlaceholder: '关切 —— 一行概述',
     issuesBodyPlaceholder: '详情（可选）',
-    inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',
+    inputPlaceholder: '描述工作 · @ 会话 · [[ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',
     menuCommands: '命令',
     menuPresets: '命令预设',
     menuSpecNodes: '规格节点',
@@ -718,8 +731,13 @@ export default {
     tabTerminal: '终端',
     tabConversation: '对话',
     tabDiff: '差异',
+    surfaceSwitcher: '会话视图',
+    enableTerminalInput: '允许终端输入',
+    terminalInputEnabled: '终端输入已允许 —— 再点击终端以聚焦',
     diffLoading: '正在加载差异……',
     diffEmpty: '没有分支改动',
+    diffMerged: '已合并到 {base}',
+    diffCommit: '打开提交 {commit}',
     diffFailed: '差异不可用：{message}',
     diffScope: '分支差异',
     diffClose: '离开分支差异，回到会话',

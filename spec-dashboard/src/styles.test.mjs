@@ -112,6 +112,25 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.viewhost\s*\{[^}]*background:\s*var\(--paper\);/s)
   // the active tab is painted the CONTENT tone so the tab and its document read as one plane
   assert.match(css, /\.tab\.on\s*\{[^}]*background:\s*var\(--paper\);/s)
+  // A SEAM IS A STEP, NOT A LINE: ground · the --edge hairline · one pixel of --panel · paper. The middle
+  // rung is what makes the document read as raised, and it is why no panel here needs a drop shadow.
+  assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
+  // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
+  assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
+})
+
+test('the status bar owns a flex row and cannot cover the content viewport', () => {
+  assert.match(css, /\.backend-frame\s*\{[^}]*height:\s*100vh;[^}]*min-height:\s*0;/s)
+  assert.match(css, /\.app-shell\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/s)
+  assert.match(css, /\.app\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*display:\s*flex;/s)
+  assert.match(css, /\.app-content-column\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*flex-direction:\s*column;/s)
+  assert.match(css, /\.app-content-row\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*display:\s*flex;/s)
+  const statusRule = css.match(/\.statusbar\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(statusRule, /flex:\s*0 0 var\(--line-status\)/)
+  assert.match(statusRule, /border-top:\s*1px solid var\(--line\)/)
+  assert.doesNotMatch(statusRule, /position:\s*(?:absolute|fixed)/)
+  assert.match(css, /\.side-rail\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
+  assert.match(css, /\.dock\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
 })
 
 test('the chrome bands the budget does not allow are gone from the sheet', () => {
@@ -127,6 +146,16 @@ test('the chrome bands the budget does not allow are gone from the sheet', () =>
   assert.match(css, /\.srcview-progress\s*\{[^}]*position:\s*absolute;/s)
   // the conversation composer floats over its reading column, exactly like the terminal's command box
   assert.match(css, /\.m-composer\s*\{[^}]*position:\s*absolute;/s)
+})
+
+test('tab widths shrink elastically before wrapping and keep the active close affordance', () => {
+  assert.match(css, /\.tabstrip-tabs\s*\{[^}]*flex-wrap:\s*wrap;/s)
+  assert.match(css, /\.tab\s*\{[^}]*flex:\s*1 1 0;[^}]*min-width:\s*80px;[^}]*max-width:\s*240px;[^}]*container-type:\s*inline-size;/s)
+  assert.match(css, /\.tab\.on\s*\{[^}]*min-width:\s*112px;/s)
+  assert.match(css, /\.tab\.on \.tab-x, \.tab:hover \.tab-x\s*\{[^}]*opacity:\s*1;/s)
+  assert.doesNotMatch(css, /\.tabstrip-tabs:has\(\.tab:nth-child\(8\)\)/)
+  assert.match(css, /@container \(max-width:\s*140px\)\s*\{[^}]*\.tab-face/s)
+  assert.match(css, /@container \(max-width:\s*100px\)\s*\{[^}]*\.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
 })
 
 test('wheel is xterm-native — no browser quantizer, ledger, or synthetic bottoming', () => {
@@ -146,7 +175,8 @@ test('pointer is the browser\'s; motion never reports; wheel-only reporting reac
   assert.match(terminal, /MOTION_TRACKING_MODES\s*=\s*new Set\(\[9, 1002, 1003, 1005, 1015\]\)/)
   assert.match(terminal, /onlyMotionTrackingModes/)
   assert.match(xtermRuntime, /shouldForceSelection\(e\)\{return!0\}/)
-  assert.match(terminal, /disableStdin:\s*false/)
+  assert.match(terminal, /disableStdin:\s*!writable/)
+  assert.match(terminal, /term\.options\.disableStdin = !writable/)
   assert.match(terminal, /term\.onData\(\(data\)/)
   assert.match(terminal, /sock\.send\(JSON\.stringify\(\{ t: 'input', data \}\)\)/)
   assert.match(terminal, /const initialFocusFrame = requestAnimationFrame\([\s\S]*term\.focus\(\)/)

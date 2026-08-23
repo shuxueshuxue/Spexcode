@@ -15,8 +15,9 @@ Right-clicking a spec node on the board suppresses the browser's default context
 **custom node menu** at the cursor. The board's design language already pairs mouse gestures with
 keyboard verbs (click ↔ arrows, double-click ↔ `i`); this menu completes the pairing for the verbs a
 mouse-only user otherwise cannot reach at all — the chords most of all. Right-click also **focuses**
-the node first (expanding in place, no pan — same contract as click), so the menu always acts on the
-node under the cursor and the board visibly agrees about which node that is.
+the node first (the clicked tile stays screen-stable while the camera absorbs any layout delta — the same
+anchor contract as click), so the menu always acts on the node under the cursor and the board visibly agrees
+about which node that is.
 
 The menu exposes the node verbs plus one address handoff, with no new node mutation behind them:
 
@@ -35,7 +36,7 @@ work, never a direct server op, so a mis-aimed right-click can't destroy anythin
 
 **Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
 currently touch it (`overlay.source === session.source`) — the menu appends, below a divider from the
-five fixed actions, **one item per overlaying session**: a status-coloured glyph plus the session's **headline** —
+five fixed actions, **one item per overlaying session**: the `sessionDisplayState` status-coloured glyph plus the session's **headline** —
 the SAME live line the board rows show ([[session-activity]]'s one-name-every-surface / `sessionHeadline`),
 never the stable label, so a session reads identically here and on the board it overlays.
 Picking one opens that session in the console ([[session-console]]). This is the **one place a crossing

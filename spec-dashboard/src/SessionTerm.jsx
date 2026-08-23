@@ -55,7 +55,7 @@ function execCopyFallback(text) {
   return ok
 }
 
-export default function SessionTerm({ sessionId, active = true, focused = active, focusRequest = 0 }) {
+export default function SessionTerm({ sessionId, active = true, focused = active, writable = false, focusRequest = 0 }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
   // Last locally fitted or backend-requested grid. Visible measurement waits for the native transaction;
@@ -67,9 +67,11 @@ export default function SessionTerm({ sessionId, active = true, focused = active
   // Refs expose prop changes to the long-lived socket effect without recreating either browser resource.
   const activeRef = useRef(active)
   const focusedRef = useRef(focused)
+  const writableRef = useRef(writable)
   const hideRef = useRef(null)
   activeRef.current = active
   focusedRef.current = focused
+  writableRef.current = writable
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
@@ -77,7 +79,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
   useEffect(() => {
     const term = new Terminal({
       ...terminalTypography(),
-      cursorBlink: true, disableStdin: false, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input
+      cursorBlink: true, disableStdin: !writable, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input after the reader unlocks it
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
       // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
@@ -123,7 +125,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     const viewerIsVisible = () => activeRef.current && document.visibilityState !== 'hidden'
     const initialFocusFrame = requestAnimationFrame(() => {
       const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
-      if (focusedRef.current && viewerIsVisible()) {
+      if (writableRef.current && focusedRef.current && viewerIsVisible()) {
         helper?.setAttribute('data-focus-sink', '')
         if (document.activeElement !== helper) term.focus()
       }
@@ -257,7 +259,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     const onPageHide = () => sock?.close()
     window.addEventListener('pagehide', onPageHide)
     const inputSub = term.onData((data) => {
-      if (!focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
+      if (!writableRef.current || !focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
       sock.send(JSON.stringify({ t: 'input', data }))
     })
 
@@ -306,9 +308,9 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       measureAndRequest()
       try { term.refresh(0, term.rows - 1) } catch { /* native attach still supplies the current screen */ }
       cancelAnimationFrame(visibilityFocusFrame)
-      if (focusedRef.current) visibilityFocusFrame = requestAnimationFrame(() => {
+      if (writableRef.current && focusedRef.current) visibilityFocusFrame = requestAnimationFrame(() => {
         const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
-        if (focusedRef.current && viewerIsVisible() && document.activeElement !== helper) term.focus()
+        if (writableRef.current && focusedRef.current && viewerIsVisible() && document.activeElement !== helper) term.focus()
       })
     }
     document.addEventListener('visibilitychange', onDocumentVisibility)
@@ -344,15 +346,15 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     if (!term) return
     let focusFrame = 0
     const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
-    if (focused) helper?.setAttribute('data-focus-sink', '')
+    if (writable && focused) helper?.setAttribute('data-focus-sink', '')
     else helper?.removeAttribute('data-focus-sink')
     if (active && document.visibilityState !== 'hidden') {
       lastSizeRef.current = { cols: 0, rows: 0 }
       measureRef.current?.()
       try { term.refresh(0, term.rows - 1) } catch { /* */ }
-      if (focused) focusFrame = requestAnimationFrame(() => {
+      if (writableRef.current && focused) focusFrame = requestAnimationFrame(() => {
         const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
-        if (focusedRef.current && activeRef.current && document.visibilityState !== 'hidden' && document.activeElement !== helper) termRef.current?.focus()
+        if (writableRef.current && focusedRef.current && activeRef.current && document.visibilityState !== 'hidden' && document.activeElement !== helper) termRef.current?.focus()
       })
       else term.blur()
     } else {
@@ -365,16 +367,27 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     }
   }, [sessionId, active, focused])
 
+  useLayoutEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    term.options.disableStdin = !writable
+    const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+    if (!writable) {
+      helper?.removeAttribute('data-focus-sink')
+      term.blur()
+    }
+  }, [writable])
+
   // An already-active row or Terminal tab can be activated repeatedly without changing `active`/`focused`.
   // Keep that intent separate from geometry so refocusing never causes a redundant resize/repaint transaction.
   useLayoutEffect(() => {
-    if (!focusRequest || !active || !focused || document.visibilityState === 'hidden') return
+    if (!focusRequest || !active || !focused || !writable || document.visibilityState === 'hidden') return
     const focusFrame = requestAnimationFrame(() => {
       const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
-      if (activeRef.current && focusedRef.current && document.activeElement !== helper) termRef.current?.focus()
+      if (activeRef.current && focusedRef.current && writableRef.current && document.activeElement !== helper) termRef.current?.focus()
     })
     return () => cancelAnimationFrame(focusFrame)
-  }, [sessionId, active, focused, focusRequest])
+  }, [sessionId, active, focused, focusRequest]) // writable intentionally does not replay an earlier focus request
 
   return (
     <div className="st-wrap">

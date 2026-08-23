@@ -7,18 +7,25 @@ import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate, routeHash } from './route.js'
+import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
+import { IdentityIcon } from './IdentityIcon.jsx'
+import { PROJECT_ID, hubHref, projectHref } from './project.js'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
-import { sessionZone } from './session.js'
+import { ScoreBadge } from './score.jsx'
+import { nextGraphStatNode } from './GraphStats.jsx'
+import { sessionHandle, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
+import { useBackendHealth } from './BackendStatus.jsx'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -32,15 +39,17 @@ import { useDocumentNames } from './documentActions.jsx'
 // happens to be current.
 
 // THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]) — which projection it shows, and whether
-// it exists at all. A session document belongs with the session list; a node or a governed file belongs
-// with the explorer. The singleton boards have NO natural sidebar, so they render none and the main area
-// takes the whole width: a board must not inherit the previous tab's dock, because inheriting it is what
-// makes a sidebar feel like a setting the reader is maintaining instead of a fact about what they hold.
-// `keep` is the third answer — the graph and the empty workspace have no opinion and change nothing.
-const SIDEBARLESS = new Set(['evals', 'issues', 'settings'])
-const dockFor = (page) => {
-  if (SIDEBARLESS.has(page)) return 'none'
-  if (page === 'sessions') return 'sessions'
+// it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Bare
+// review/settings boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
+// empty, and the bare sessions board have no opinion and preserve the current projection.
+const dockFor = (page, param) => {
+  // Bare review/settings boards are full-width. Their object detail is a document and keeps the dock, so the
+  // rail's explorer projection remains truthful beside it (C2/C4).
+  if ((page === 'evals' || page === 'issues') && param == null) return 'none'
+  if (page === 'settings') return 'none'
+  // A bare sessions board is not a session document. Its initial projection stays explorer; clicking the
+  // sessions route may explicitly select sessions through SideBar, while a session object derives it.
+  if (page === 'sessions' && param != null) return 'sessions'
   if (page === 'spec' || page === 'file') return 'explorer'
   return 'keep'
 }
@@ -137,14 +146,101 @@ function ViewHost({ page, param, query }) {
   )
 }
 
-// The shell's own status contribution: the workspace identity.
+// The shell's own status contribution: one project identity button and its existing catalog switcher.
+// Project identity is ambient window state, so its one persistent door lives beside the other ambient
+// facts. The rail is route/finding chrome and deliberately carries no duplicate project chip.
 function ShellStatus() {
-  const { identity } = useBoard()
-  // workspace identity: which project this window is looking at. It belongs to the shell because it is
-  // true of the window, not of whatever view happens to be showing. The dock toggle moved to the rail
-  // ([[side-nav]]) — the finding controls live together, and one control has one owner.
-  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', text: `$ ${identity?.title || 'spexcode'}` })
-  return null
+  const t = useT()
+  const { identity, catalog } = useBoard()
+  const [open, setOpen] = useState(false)
+  const catalogOk = catalog?.state === 'ok'
+  const denied = catalog?.state === 'denied'
+  const projects = catalogOk ? catalog.projects : null
+  const label = identity?.title || PROJECT_ID || 'spexcode'
+  const triggerLabel = denied ? t('nav.projectChipLogin', { name: label }) : t('nav.projectChip', { name: label })
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (event) => {
+      if (!event.target.closest?.('[data-status-project], .status-project-menu')) setOpen(false)
+    }
+    const onKey = (event) => {
+      if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) }
+    }
+    document.addEventListener('mousedown', onDown, true)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown, true)
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
+
+  const triggerBody = (
+    <>
+      <IdentityIcon icon={identity?.icon} size={14} className="sb-project-mark" />
+      <span className="sb-project-name">{label}</span>
+    </>
+  )
+  const trigger = projects ? (
+    <button type="button" className={open ? 'sb-project-trigger open' : 'sb-project-trigger'}
+      data-status-project="" data-tip={triggerLabel} aria-label={triggerLabel}
+      aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      {triggerBody}
+    </button>
+  ) : (
+    <a className="sb-project-trigger" data-status-project="" data-tip={triggerLabel}
+      aria-label={triggerLabel} href={hubHref()}>{triggerBody}</a>
+  )
+
+  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', node: trigger })
+  if (!open || !projects) return null
+  return (
+    <div className="proj-menu status-project-menu" role="menu">
+      {projects.map((project) => {
+        const offline = project.online === false
+        const current = project.id === PROJECT_ID
+        const state = offline ? t('nav.projectOffline') : project.online === true ? t('nav.projectOnline') : null
+        const className = `proj-menu-item${current ? ' current' : ''}${offline ? ' offline' : ''}`
+        const content = (
+          <>
+            <IdentityIcon icon={project.identity.icon} size={16} className="proj-menu-mark" />
+            {project.gated && <Icon name="lock" size={11} />}
+            <span className="proj-menu-name">{project.identity.title}</span>
+            {state && <span className={`proj-menu-status ${offline ? 'offline' : 'online'}`} aria-hidden="true">{state}</span>}
+            {current && <Icon name="check" size={12} />}
+          </>
+        )
+        return offline
+          ? <div key={project.id} role="menuitem" aria-disabled="true" className={className}>{content}</div>
+          : <a key={project.id} role="menuitem" className={className} href={projectHref(project.id)}>{content}</a>
+      })}
+      <a role="menuitem" className="proj-menu-item all" href={hubHref()}>
+        <IdentityIcon icon={catalog.gateway.identity?.icon} fallback="gateway" size={16} className="proj-menu-mark" />
+        <span className="proj-menu-name">{t('nav.allProjects')}</span>
+      </a>
+    </div>
+  )
+}
+
+const SCORE_VIEW = [
+  { state: 'pass', always: true, titleKey: 'scorePass' },
+  { state: 'fail', always: true, titleKey: 'scoreFail' },
+  { state: 'stalePass', titleKey: 'scoreStalePass' },
+  { state: 'staleFail', titleKey: 'scoreStaleFail' },
+  { state: 'empty', titleKey: 'scoreEmpty' },
+]
+
+function BoardStat({ name, count, title, onClick, children }) {
+  return (
+    <button type="button" className="sb-tally-button" data-board-stat={name} data-tip={title}
+      aria-label={title} disabled={!onClick} onClick={onClick}>
+      {children}{count}
+    </button>
+  )
+}
+
+const storedGraphFocus = () => {
+  try { return sessionStorage.getItem('spex.focus') } catch { return null }
 }
 
 // The BOARD's own numbers, as ambient state.
@@ -159,10 +255,13 @@ function ShellStatus() {
 // spends a `kind` colour ONLY where a number is asking for something — a failing eval, a session waiting
 // on a human. A count that is merely large stays quiet.
 //
-// On the graph itself they stand down: [[graph-stats]] registers the same tallies there with a focus-walk
-// the ambient copy cannot offer, and one bar must never print the same number twice.
-function BoardStatus({ specs, sessions, quiet }) {
+// This is the only ledger on every route, graph included. On the graph its category buttons reuse
+// [[graph-stats]]'s walk; elsewhere issue/eval buttons keep opening their boards, while node categories
+// enter the graph already focused on the first node they count.
+function BoardStatus({ specs, sessions, page }) {
   const t = useT()
+  const { offline } = useBackendHealth()
+  const stale = offline ? <span className="sb-stale" aria-label={t('backend.stale')} data-tip={t('backend.stale')} /> : null
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.
@@ -174,42 +273,76 @@ function BoardStatus({ specs, sessions, quiet }) {
     }
     return zones
   }, [sessions])
-  const { pass, fail } = tally.scoreCount
+  const { fail } = tally.scoreCount
+  const walkGraph = (ids) => {
+    const id = nextGraphStatNode(ids, storedGraphFocus())
+    if (id) navigate('graph', id, { replace: page === 'graph' })
+  }
+  const graphOrBoard = (ids, board) => (ids.length
+    ? (page === 'graph' ? () => walkGraph(ids) : () => navigate(board))
+    : null)
 
-  useStatusItem(quiet ? null : {
+  useStatusItem({
     id: 'board-nodes', side: 'right', priority: 41,
     tooltip: t('statusBar.nodes', { n: tally.total }),
-    onClick: () => navigate('graph'),
     node: (
       <span className="sb-tally">
-        <span className="sb-tally-lead">{tally.total}</span>
+        <button type="button" className="sb-tally-button sb-tally-lead" data-board-stat="nodes-total"
+          data-tip={t('stats.totalTitle', { n: tally.total })} aria-label={t('stats.totalTitle', { n: tally.total })}
+          onClick={() => navigate('graph')}>{tally.total}</button>
         {STATUS_ORDER.map((k) => (
-          <span key={k} className="sb-tally-part">
-            <i className="bstat-dot" style={{ background: STATUS[k].color }} />{tally.status[k].length}
-          </span>
+          <BoardStat key={k} name={`status-${k}`} count={tally.status[k].length}
+            onClick={tally.status[k].length ? () => walkGraph(tally.status[k]) : null}
+            title={t('stats.statusTitle', { n: tally.status[k].length, status: t(`status.${k}`) })}>
+            <i className="sb-status-dot" style={{ background: STATUS[k].color }} />
+          </BoardStat>
         ))}
+        <span className="sb-tally-sep" />
+        <BoardStat name="drift" count={tally.driftIds.length}
+          onClick={tally.driftIds.length ? () => walkGraph(tally.driftIds) : null}
+          title={t('stats.driftTitle', { n: tally.driftIds.length })}>⚠</BoardStat>
+        {stale}
       </span>
     ),
   })
-  useStatusItem(quiet ? null : {
+  useStatusItem({
     id: 'board-evals', side: 'right', priority: 42,
     kind: fail > 0 ? 'error' : undefined,
-    tooltip: t('statusBar.evals', { pass, fail }),
-    onClick: () => navigate('evals'),
-    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span></span>,
+    tooltip: t('statusBar.evals', tally.scoreCount),
+    node: (
+      <span className="sb-tally">
+        {SCORE_VIEW.map(({ state, always, titleKey }) => {
+          const count = tally.scoreCount[state]
+          if (!count && !always) return null
+          return (
+            <BoardStat key={state} name={`eval-${state}`} count={count}
+              onClick={graphOrBoard(tally.scoreNodes[state], 'evals')}
+              title={page === 'graph'
+                ? t(`stats.${titleKey}`, { n: count })
+                : `${t(`score.${state}`)} · ${t('statusBar.openEvals')}`}>
+              <ScoreBadge state={state} />
+            </BoardStat>
+          )
+        })}
+        {stale}
+      </span>
+    ),
   })
-  useStatusItem(quiet ? null : {
+  useStatusItem({
     id: 'board-issues', side: 'right', priority: 43,
     tooltip: t('statusBar.issues', { n: tally.issueCount }),
-    onClick: () => navigate('issues'),
-    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span></span>,
+    node: <span className="sb-tally"><BoardStat name="issues" count={tally.issueCount}
+      onClick={graphOrBoard(tally.issueIds, 'issues')}
+      title={page === 'graph'
+        ? t('stats.issueTitle', { n: tally.issueCount })
+        : t('statusBar.issues', { n: tally.issueCount })}>◆</BoardStat>{stale}</span>,
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
     kind: live.need > 0 ? 'warning' : undefined,
     tooltip: t('statusBar.sessions', { run: live.run, need: live.need }),
     onClick: () => navigate('sessions'),
-    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span>{stale}</span>,
   })
   return null
 }
@@ -250,7 +383,22 @@ function ContextToggle({ visible, onToggle }) {
 export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
-  const { specs, sessions, identity, catalog, graphOnly } = useBoard()
+  const { specs, sessions, identity, graphOnly } = useBoard()
+  const { notify } = useTransientNotice()
+  const previousSessionStatus = useRef(null)
+  const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
+  useEffect(() => {
+    const previous = previousSessionStatus.current
+    previousSessionStatus.current = new Map((sessions || []).map((session) => [session.id, session.status]))
+    if (!previous) return
+    for (const session of sessions || []) {
+      if (session.status !== 'asking' || previous.get(session.id) === 'asking') continue
+      notify(`${sessionHandle(session)} · ${t('status.asking')}`, {
+        kind: 'info',
+        onClick: () => navigate('sessions', session.id),
+      })
+    }
+  }, [sessions, notify, t])
   const documentNames = useDocumentNames()
   const { dock, dockMode, palette } = useWorkspace()
   const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
@@ -276,7 +424,7 @@ export default function Shell() {
   // selects a projection by hand — that override simply lasts until the reader moves to another DOCUMENT,
   // which is what makes it an override rather than a second setting. The effect is keyed on the document,
   // not the address, so switching a session's own face is not a focus change.
-  const dockKind = dockFor(page)
+  const dockKind = dockFor(page, param)
   const documentKey = `${page}/${param ?? ''}`
   // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
   // slides out ([[dock-modes]]). One timer, cleared on reopen; the reader can never end up with a ghost
@@ -300,8 +448,8 @@ export default function Shell() {
   // window still says which workspace it belongs to when several are open side by side.
   const place = placeLabel({ page, param, query }, { specs, sessions, names: documentNames, t })
   useEffect(() => {
-    document.title = `${place} · ${identity?.title || 'spexcode'}`
-  }, [place, identity?.title])
+    document.title = `${needsYou > 0 ? `(${needsYou}) ` : ''}${place} · ${identity?.title || 'spexcode'}`
+  }, [place, identity?.title, needsYou])
 
   const onShellKey = useCallback((event) => {
     // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
@@ -324,9 +472,8 @@ export default function Shell() {
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        // the keyboard twin of the rail button, and the same ordinary navigation: a singleton board is
-        // resident by address ([[view-registry]]), so it is held rather than spent through the current
-        // slot without this chord asking for it. The sealed face has one view and no destinations.
+        // the keyboard twin of the rail button. Review/settings boards are destinations, not documents, so
+        // this navigation leaves the strip untouched. The sealed face has one view and no destinations.
         if (!graphOnly) navigate(target)
         return true
       }
@@ -385,32 +532,36 @@ export default function Shell() {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} identity={identity} catalog={catalog} />
+        <SideBar page={page} needsYou={needsYou} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />
           </ViewErrorBoundary>
         )}
-        <div className="app-main">
-          {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
-              without an open document, which is one band wearing two names. The context toggle is a control
-              on the current document, so it rides the strip's own trailing cluster. */}
-          <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
-            trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
-          <Content page={page} param={param} query={query} />
+        <div className="app-content-column">
+          <div className="app-content-row">
+            <div className="app-main">
+              {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
+                  without an open document, which is one band wearing two names. The context toggle is a control
+                  on the current document, so it rides the strip's own trailing cluster. */}
+              <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
+                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
+              <Content page={page} param={param} query={query} />
+            </div>
+            <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
+          </div>
+          <ShellStatus />
+          <BoardStatus specs={specs} sessions={sessions} page={page} />
+          <StatusBar />
         </div>
-        <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
       </div>
-      <ShellStatus />
-      <BoardStatus specs={specs} sessions={sessions} quiet={page === 'graph'} />
-      <StatusBar />
       {/* the one shared palette: it floats above whichever view is showing, so it is the shell's. A view
           being hidden must never be able to swallow it — the reason it was hoisted here in the first place. */}
       {palette && (
         <SpecSearch specs={specs} sessions={sessions} boost={palette === 'sessions' ? 'session' : null}
           onClose={closePalette}
-          onPick={(hit) => { closePalette(); if (hit?.hash) location.hash = hit.hash; else if (hit?.id) navigate('spec', hit.id) }} />
+          onPick={(hit) => { closePalette(); navigateAddress(hit?.address) }} />
       )}
       <span className="sr-only">{t('nav.railLabel')}</span>
     </div>

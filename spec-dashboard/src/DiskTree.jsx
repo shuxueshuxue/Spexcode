@@ -4,7 +4,7 @@ import { navigate, routeHash } from './route.js'
 import { holdAnchor } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 
-// [[files-tree]]: the explorer's ORDINARY-FILE projection. [[file-tree]] above it navigates the project the
+// [[disk-tree]]: the explorer's ORDINARY-FILE projection. [[file-tree]] above it navigates the project the
 // way the SPEC tree is shaped — a node is a folder, a governed file hangs off the node that claims it — and
 // that is the right shape for the work this product is about. It is the wrong shape for the other thing a
 // reader does constantly, which is open a file they know the location of: a path only exists there if some
@@ -46,7 +46,7 @@ function Dir({ entry, depth }) {
         <span className="ft-caret">{open ? '▾' : '▸'}</span>
         <span className="ft-label">{entry.name}</span>
       </button>
-      {open && <Branch state={branch} depth={depth + 1} loading={t('filesTree.loading')} />}
+      {open && <Branch state={branch} depth={depth + 1} loading={t('diskTree.loading')} />}
     </>
   )
 }
@@ -81,10 +81,10 @@ function Branch({ state, depth, loading }) {
   )
 }
 
-export default function FilesTree() {
+export default function DiskTree() {
   const t = useT()
   const branch = useBranch('', true)
   return <div className="ft-files">
-    <Branch state={branch} depth={0} loading={t('filesTree.loading')} />
+    <Branch state={branch} depth={0} loading={t('diskTree.loading')} />
   </div>
 }

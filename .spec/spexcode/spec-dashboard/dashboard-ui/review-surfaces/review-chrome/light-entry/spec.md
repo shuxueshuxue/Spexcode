@@ -28,7 +28,8 @@ The root is also where the frame-wide providers are mounted, so every face — t
 board, the phone — is inside them without asking whether it is. [[status-bar]]'s registry is one of these:
 the cold shell draws the same bottom strip the board does, and a contributor anywhere below can register an
 item without knowing which face is showing. The registry hook is inert outside a provider, so this costs the
-sealed public build nothing.
+sealed public build nothing. The same root wraps every face in the shared backend-health frame, so an
+unreachable review request can show one global retry banner without booting the board runtime.
 
 The cold review boundary may request one bounded [[paged-review]] page or detail response, its evidence, and
 route-local review resources. It does not fetch `/api/graph`, open [[graph-stream]], read a session

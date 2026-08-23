@@ -13,7 +13,7 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState } from './session-application.js'
+import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
@@ -1765,24 +1765,26 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
-function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, broadcast = terminal): void {
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string, live = false): void {
   const reason = error instanceof Error ? error.message : String(error)
-  const note = `queued launch readiness failed: ${reason}`
+  const note = `${label ?? (terminal ? 'queued launch readiness failed' : 'launch readiness warning')}: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
   if (rec && !retirementReason(rec) && (rec.note !== note || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null)))) {
-    // A pre-receipt failure is terminal for this launch attempt. A post-receipt timeout uses the warning branch
-    // below, preserving lifecycle/proposal and the exact native identity for a later retry.
+    // Readiness failure is terminal for this launch attempt. Keep the exact reason on the record,
+    // publish an offline/error transition, and clear every durable/in-memory ownership marker so close
+    // and a later explicit resume have an honest starting point.
     if (terminal) {
-      if (broadcast) publishCanonicalLifecycle(rec, 'error', null, note)
+      publishCanonicalLifecycle(rec, 'error', null, note)
       writeRecord({ ...rec, status: 'error', proposal: null, stopped: true, note, launchOwner: null, launchReadinessStartedAt: null })
-    } else if (broadcast) {
-      publishCanonicalLifecycle(rec, rec.status, rec.proposal, note)
-      writeRecord({ ...rec, note, launchReadinessStartedAt: null })
     } else {
-      // A readiness timeout is a transient observation, not a lifecycle fact. Keep the queued/active record
-      // and its proposal untouched, while retaining the diagnostic for the next drain or operator inspection.
-      writeRecord({ ...rec, note, launchReadinessStartedAt: null })
+      const status = live && (rec.status === 'error' || rec.stopped) ? 'active' : rec.status
+      const stopped = live ? false : rec.stopped
+      const restored = { ...rec, status, stopped, note, launchOwner: null, launchReadinessStartedAt: null }
+      // A live post-receipt timeout is a diagnostic, not a parent-watch lifecycle transition. The record/file
+      // projection still updates the local row; the canonical event stream remains quiet until a real state change.
+      if (!live) publishCanonicalLifecycle(restored, status, restored.proposal, note)
+      writeRecord(restored)
     }
   }
 }
@@ -1796,6 +1798,16 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
     return
   }
   application.transitionSession(rec.session, { status, proposal, note, parentSessionId: rec.parent })
+}
+
+async function launchReadinessWitnessAlive(id: string, harness: Harness, current: SessRec): Promise<boolean> {
+  if (agentAlive(id) === true) return true
+  try {
+    const snap = await liveSnapshot(id)
+    return harness.liveness(current, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online'
+  } catch {
+    return false
+  }
 }
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): void {
@@ -1832,14 +1844,21 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = 
     })
     .catch(async (error) => {
       const reason = error instanceof Error ? error.message : String(error)
-      // Missing native identity is a deterministic terminal launch failure. Once identity exists, readiness is
-      // only an adapter liveness warning: do not overwrite lifecycle/proposal or emit a parent-watch transition.
-      const terminal = /native identity and first-turn rollout receipt did not arrive/i.test(reason)
-      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error, terminal, terminal)) }
+      const timedOut = /timed out|did not become ready/i.test(reason)
+      let live = false
+      let terminal = timedOut
+      try {
+        await withRecordLock(id, async () => {
+          const current = readRecord(id)
+          if (timedOut && current) live = await launchReadinessWitnessAlive(id, harness, current)
+          terminal = timedOut && !live
+          noteQueuedLaunchFailureUnlocked(id, error, terminal, live ? 'launch readiness warning' : undefined, live)
+        })
+      }
       catch (recordError) {
         console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${reason}`)
       }
-      await clearPendingWatchSnapshots(id)
+      if (!live) await clearPendingWatchSnapshots(id)
     })
     .finally(() => launching.delete(id))
 }
@@ -1942,8 +1961,15 @@ async function drainQueueUnlocked(): Promise<void> {
         // before any queue/watch work so a backend restart cannot resurrect the old active/limbo projection.
         if (rec.status !== 'queued' && /^queued launch readiness failed:/.test(rec.note || '') && (rec.status !== 'error' || !rec.stopped)) {
           const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
-          const terminal = /native identity and first-turn rollout receipt did not arrive/i.test(priorReason)
-          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(session.id, priorReason, terminal, terminal))
+          const harness = harnessById(rec.harness || defaultHarness.id)
+          const live = await launchReadinessWitnessAlive(session.id, harness, rec)
+          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(
+            session.id,
+            priorReason,
+            !live,
+            live ? 'launch readiness warning' : undefined,
+            live,
+          ))
           continue
         }
         // A pre-fix active row may still carry the authoritative launch artifact without a timestamp. Its
@@ -2006,6 +2032,14 @@ const requestQueueDrain = (): void => {
     console.error(`spex: queue drain failed: ${error instanceof Error ? error.message : String(error)}`)
   })
 }
+
+// Canonical state commits already own the durable recipient queue. This is only the post-commit wake that hands
+// each queued recipient to its existing runtime; a failed or absent runtime leaves the message pending for retry.
+setSessionApplicationCommitWake((recipients) => {
+  queueMicrotask(() => {
+    for (const recipient of recipients) void drainSession(recipient)
+  })
+})
 
 let supervisingQueue = false
 export function superviseQueue(intervalMs = 3000): void {
@@ -3436,23 +3470,51 @@ export type ReviewPayload = {
 
 export type SessionDiffFile = ReviewDiffFile & { patch: string; diffIdentity: string }
 export type SessionDiffPayload = {
-  id: string; scope: 'branch'; base: string; head: string; mergeBase: string
+  id: string; scope: 'branch'; branch: string; baseRef: string; base: string; head: string; mergeBase: string
+  mergedIntoBase: boolean; commitUrl: string | null
   files: SessionDiffFile[]; comments: DiffComment[]
 }
 
-async function diffHeadPair(wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ base: string; head: string; mergeBase: string }> {
+export function commitUrlForRemote(remote: string, commit: string): string | null {
+  const raw = remote.trim()
+  let host = '', path = ''
+  try {
+    const url = new URL(raw)
+    if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'ssh:') {
+      host = url.host
+      path = url.pathname
+    }
+  } catch {
+    const scp = /^(?:[^@/]+@)?([^:/]+):(.+)$/.exec(raw)
+    if (scp) [, host, path] = scp
+  }
+  path = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '')
+  if (!host || !path) return null
+  const commitPath = host.toLowerCase().includes('gitlab') ? '-/commit' : 'commit'
+  return `https://${host}/${path}/${commitPath}/${commit}`
+}
+
+async function diffHeadPair(wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; mergedIntoBase: boolean; commitUrl: string | null }> {
   if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`)
-  const base = wt.rec.base || mainBranch()
+  const baseRef = wt.rec.base || mainBranch()
   const [headOut, baseOut] = await Promise.all([
     gitA(['-C', wt.path, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`]),
-    gitA(['-C', wt.path, 'rev-parse', '--verify', `${base}^{commit}`]),
+    gitA(['-C', wt.path, 'rev-parse', '--verify', `${baseRef}^{commit}`]),
   ])
   const head = headOut.trim(), resolvedBase = baseOut.trim()
   if (!isGitObjectId(wt.path, head) || !isGitObjectId(wt.path, resolvedBase))
     throw new ResourceConflict(`session ${wt.rec.session} diff heads are unproven`)
   const mergeBase = (await gitA(['-C', wt.path, 'merge-base', resolvedBase, head])).trim()
   if (!isGitObjectId(wt.path, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`)
-  return { base: resolvedBase, head, mergeBase }
+  const [ancestor, remote] = await Promise.all([
+    gitTry(['-C', wt.path, 'merge-base', '--is-ancestor', head, resolvedBase]),
+    gitTry(['-C', wt.path, 'remote', 'get-url', 'origin']),
+  ])
+  return {
+    branch: wt.branch, baseRef, base: resolvedBase, head, mergeBase,
+    mergedIntoBase: ancestor.ok,
+    commitUrl: remote.ok ? commitUrlForRemote(remote.stdout, head) : null,
+  }
 }
 
 export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000): Promise<SessionDiffPayload | null> {
@@ -3467,7 +3529,7 @@ export async function sessionDiff(id: string, filePath?: string, offset = 0, lim
     const patch = await gitA(['-C', wt.path, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
     return { ...file, patch: patch.slice(offset, offset + limit), diffIdentity: identity }
   }))
-  return { id, scope: 'branch', base: pair.base, head: pair.head, mergeBase: pair.mergeBase, files: result, comments: wt.rec.diffComments ?? [] }
+  return { id, scope: 'branch', ...pair, files: result, comments: wt.rec.diffComments ?? [] }
 }
 
 export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' | 'sentAt'> & { id?: string }): Promise<DiffComment | null> {
@@ -4680,13 +4742,8 @@ export async function drainSession(id: string): Promise<void> {
     const rec = readRecord(id)
     if (!rec) return
     const binding = application.resolveRuntime(id, 'spex-governed')
+    if (!binding || binding.status !== 'bound') return
     const h = harnessById(rec.harness || defaultHarness.id)
-    // Records created before the one-time application cutover have neither a runtime start token nor a
-    // native session id. Their harness rendezvous socket is still the exact transport identity, so they
-    // must remain reachable without inventing a binding for a native runtime we cannot identify. New
-    // records never take this path: a missing binding there is a launch/ownership failure and stays fail-closed.
-    const legacyTransport = !rec.runtimeStartToken && !rec.harnessSessionId && !rec.stopped && !rec.archived
-    if ((!binding || binding.status !== 'bound') && !legacyTransport) return
     await withDeliveryLocks([id], async () => {
       for (;;) {
         const pending = application.protocol.listPending(id)
@@ -4700,9 +4757,7 @@ export async function drainSession(id: string): Promise<void> {
         }
         const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
         if (!delivered.ok) return
-        const removed = binding && binding.status === 'bound'
-          ? application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration)
-          : application.protocol.dequeue(id)
+        const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration)
         if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
       }
     })

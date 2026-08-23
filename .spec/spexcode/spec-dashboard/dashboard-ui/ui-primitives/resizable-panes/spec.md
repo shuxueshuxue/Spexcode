@@ -28,6 +28,13 @@ The divider also follows the familiar editor-panel reset gesture: a double-click
 override and restores its current product default. Reset is returned by the same hook, so consumers do not
 reach into localStorage or duplicate default-width knowledge.
 
+**Every divider shows the same accent, including the ones on a chrome seam.** The finding dock and the
+context dock each hide their grab strip on the edge of a panel rather than between two panes, and for a
+while that difference cost them the affordance entirely: they were 6px of bare cursor change while the
+split's own divider lit under the pointer. Two dividers with two answers to one question. They wear the
+same accent now — nothing at rest, the accent on hover and for as long as a drag is live — so a seam that
+can be moved says so wherever it is, and a resting window still gains no visible handle.
+
 The current pane on the mechanism is the session board's list ([[session-console]]). A future pane joins by
 mounting the same hook + divider, not by writing its own drag handling; the graph remains a full-width canvas
 and therefore mounts no divider.

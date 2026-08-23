@@ -18,41 +18,76 @@ related:
 The frame, and only the frame. It does not know what a spec is, what a session is, or what any view needs.
 It knows there is an address, that an address names a view, and where on the screen that view goes.
 
+## Ownership: contributions are licensed by the parent
+
+Every UI element has exactly one **parent**. A child may contribute only through the channel its parent exposes;
+there is no ambient right to reach across the tree and write into another surface. Shared chrome — status-bar
+items, document actions, keyboard authority, the search palette, and transient notifications — accepts
+contributions only through the active `ViewHost`'s typed `ViewScope` channel. When a view is not the active route,
+its contributions are automatically suspended; when its host unmounts, the scope is revoked and every contribution
+is disposed. A component that is not the parent therefore cannot construct a contribution into someone else's
+surface. The double-status-bar incident is the reason this is a mechanism contract: *不可能允许非 parent 的组件随意塞东西*.
+
+Navigation has one authority. Only the route/tabs layer may mutate the address. A view requests a typed intent —
+`open`, `hold`, or `own-query` — and the route/tabs owner decides how that intent changes the current slot, held
+documents, or query state. A view cannot write another view's address, replace another view's content, or smuggle
+a cross-view navigation through a shared callback; those operations are structurally unavailable outside the
+navigation owner.
+
+A view renders only inside its own `ViewHost` subtree. It may not mount content into a sibling host, the shell's
+chrome, or another view's document region. Overlays are the shell's authorized layer: a view asks the shell for an
+overlay through its parent scope, and the shell owns placement, stacking, dismissal, and focus return. This keeps
+overlay escape hatches explicit while preserving the same one-parent rule for transient surfaces.
+
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-- **Where is everything? — FINDING, on the left.** The rail is an **activity bar**: the explorer and
-  sessions projection buttons, search, then the singleton boards (evals, issues, settings pinned at the
-  bottom). The dock beside it is one finding surface with two projections. Looking must be free: browsing a
-  finding surface never grows any state but the camera's.
+- **Where is everything? — FINDING, on the left.** The rail is an **activity bar** of route anchors
+  (`graph`, `sessions`, `evals`, `issues`, `settings`) whose one light means the current route. A separate
+  mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
+  surface with two projections; projection styling belongs to the dock header, never the route light.
+  Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer, and a singleton board brings no
-  sidebar at all, taking the full width instead of inheriting the tree the last tab was showing. So the
-  sidebar describes the working set rather than being a setting maintained beside it, and the rail's lit
-  button reads as *where this document belongs* ([[dock-modes]]). A rail click overrides the derivation by
-  hand and the override lapses at the next focus change ([[file-tree]]).
+  brings the session list, a node or a governed file brings the explorer, and a bare review/settings board
+  (`#/evals`, `#/issues`, `#/settings`) brings no sidebar at all, taking the full width instead of inheriting
+  the tree the last tab was showing. Parameterized review details remain documents and retain the dock. A bare
+  sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
+  route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
+  beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
+  dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything readable is a document with an address — a node, a file, a session, an eval, an
-  issue, and the **singleton boards** (evals, issues, settings), which are tabs you keep rather than places
-  you bounce off. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
+  active tab; everything held is an object document with an address — a node, a file, a session, an eval
+  detail, or an issue detail. Bare evals/issues/settings boards are destinations, not tabs. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
-  ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the
-  center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
-  the reader's own answer.
+  ([[tab-strip]]). With no document focus the center lands on the graph bottom sheet (`#/graph`) and names
+  the ways back in through the explorer/palette; the graph is the hidden tab the human explicitly retained,
+  not a document substitute.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
-  [[context-dock]]: a spec node's scenarios and open issues, collapsed until asked for. Context is about the
-  current document, which is why it is not a finding surface and not a tab.
+  [[context-dock]]: a spec node's scenarios and open issues. Context is about the current document, which is
+  why it is not a finding surface and not a tab. **The frame owns its resting state, and that state is
+  closed** — the shell reads the preference, so the default belongs here rather than inside the dock that
+  would be arguing for its own existence. It is closed because opening it costs the spec prose 383px of 575
+  at 1440: a question about the document does not get to spend the document's width until it is asked. The
+  toggle rides the tab strip's trailing cluster and the choice persists, so this decides only what an
+  unopinionated window looks like.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
-  land above its right end, never over content. The frame itself is what fills it: the workspace identity
-  and the BOARD TALLIES — spec nodes by state, fresh eval verdicts, open issues, live sessions — are true of
-  the window on every route, so no view may own them and each is registered here. A view contributes only
+  land above its right end, never over content. Rail and optional dock are the through-bottom left region;
+  the view/context row and status row form the right content column. The bar is an unshrinking sibling after
+  the view row, so it consumes its own height, starts only at the sidebar edge, and never covers a view; a
+  terminal's final xterm row fits above it. One-pixel `--line` borders own the vertical and horizontal seams.
+  The frame itself is what fills it: the workspace identity
+  and the ONE BOARD LEDGER — spec nodes by state plus drift, every eval scenario state, open issues, live
+  sessions — is true of the window on every route, so no view may own a duplicate and each group is
+  registered here. The identity is one compact project-mark/name button that owns the catalog switcher
+  and `/projects` door; the route rail contains no duplicate chip. On a graph address the same buttons acquire graph focus-walk behavior; their visual
+  ownership and lifetime remain the frame's. A view contributes only
   facts about the document it is showing. That division is what stopped the bar from emptying when a view
   stopped being where a reader lands; the shape of an item and where it lands is [[status-bar]]'s.
 
 A control belongs to the region whose question it answers, and to exactly one owner there — the dock's
-explorer/sessions mode buttons sit on the rail with the other finding controls, not in a second dock modebar
-or on the status bar. The dock itself is content-only.
+  projection is named in its header, while the permanently mounted rail's mirrored panel control owns dock
+  open/closed and exposes `aria-pressed`. The dock itself is content-only and has no second collapse door.
 
 **Each region gets ONE band, and a band is a row that earns its place.** [[ui-state-model]] states the
 budget and measures it; the shell's obligation is to have no spacer that stands in for a band it does not
@@ -109,7 +144,9 @@ Adding chrome around that model — a status bar, a tab strip, a file dock — p
 for one screen and still no way to read a spec beside its code. Chrome around the old model is not the new
 model, and building three pieces of it before noticing is the mistake this node exists to have corrected.
 
-**The shell is the only component that reads the global address.** A view receives `{param, query}` as
+**The shell is the only component that reads the global address.** A palette pick hands the shell one app
+address, which it executes through [[address-routing]]; the shell does not inspect node/session data or mint
+another route. A view receives `{param, query}` as
 props ([[view-registry]]). That one rule is the hinge: it is what makes rendering two views at once a
 layout change rather than a rewrite, and what stops a view from silently coupling to whichever address
 happens to be current.
@@ -148,22 +185,27 @@ The SECOND pane is not a pool: it holds one document the reader deliberately sen
 the address is the whole contract.
 
 Measured with six documents mounted (`test/keep-alive.e2e.mjs`): a document's own DOM node survives a round
-trip through two other tabs, warm switches between flowing documents land at **0.03–0.12s**, and the pool
-costs **0.019 seconds of script per 10 idle seconds** — 0.028s with a live session console hidden among
-them, whose cost is terminal output arriving rather than the pool.
+trip through two other tabs, **every** warm switch lands under the 0.25s red line — 0.073s, 0.029s, 0.053s,
+0.101s including the return to the session console — and the pool costs **0.006 seconds of script per 10
+idle seconds**, 0.013s with a live session console hidden among them, whose cost is terminal output arriving
+rather than the pool.
 
-**The return to the session console is the measured exception, and it is the console's DOM rather than the
-pool's hiding.** That switch costs about **0.5s** against the 0.25s the others meet, and the long task
-inside it is laying out the console's terminal rows the moment they are rendered again — the probe counts
-**~4,500 row elements** across the console's warm layers, so the cost scales with how much terminal a reader
-has accumulated, not with the pool. Three hidden states were measured against exactly that switch and none
-of them moved it, which is the useful result: `display:none` pays ~0.5s on return; keeping the box laid out
-(`position:absolute` + `visibility:hidden`, the pattern the console uses internally) pays ~0.31s on EVERY
-switch instead, because the dock's width follows the focused tab so the box changes size while hidden and
-re-lays those rows out each time; `content-visibility:hidden` restores the other switches but still pays
-~0.37s on return. A property that takes a subtree out of rendering cannot make rendering it again cheap.
-So the pool keeps `display:none` — the cheapest of the three everywhere it differs — and the residual belongs
-to [[session-console]]'s warm-layer contract, where the row count is decided.
+**The return to the session console was the one measured exception, and it was never the pool's hiding.**
+That switch used to cost ~0.5s, and the long task inside it was laying out the console's terminal rows the
+moment they were rendered again — ~4,500 row elements across the console's warm layers. Three hidden states
+were measured against exactly that switch and none of them moved it, which was the first useful result:
+`display:none` paid ~0.5s on return; keeping the box laid out (`position:absolute` + `visibility:hidden`,
+the pattern the console uses internally) paid ~0.31s on EVERY switch instead, because the dock's width
+follows the focused tab so the box changes size while hidden and re-lays those rows out each time;
+`content-visibility:hidden` restored the other switches but still paid ~0.37s on return. A property that
+takes a subtree out of rendering cannot make rendering it again cheap. So the pool keeps `display:none` —
+the cheapest of the three everywhere it differs.
+
+The second useful result is that **the row count was not the reader's accumulated terminal**. It was warm
+terminals mounted for sessions that no longer existed: the console's mount gate read an archive-index row's
+missing liveness as alive, so 66 of the 76 mounted xterms — 4,290 of the 4,940 row elements, and 66 live
+WebSockets — belonged to closed sessions. Deciding the row count is [[session-console]]'s warm-layer
+contract, and it now decides it by asking for a live pane; this switch costs **0.101s**.
 
 **A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
 error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split

@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: terminal-read-does-not-arm-input
+    tags: [frontend-e2e, desktop, backend-api]
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionTerm.jsx]
+    description: >-
+      Open a live pane-backed session whose TUI is waiting at a token-consuming Enter confirmation. Inspect
+      the terminal, active element, websocket input frames, and document actions; enable input, inspect focus
+      again, then separately press the terminal and type one harmless key. Leave and reopen the session.
+    expected: >-
+      Opening and reading renders the real terminal but focuses no xterm helper and sends zero input frames.
+      One explicit enable-terminal-input button is visible, not pre-focused, and outside the terminal landing.
+      Pressing it sends no terminal byte and leaves focus on the button. Only the later terminal press permits
+      the harmless key to reach tmux. Leaving or reopening returns to read-only with zero replay, so a token
+      confirmation can never consume quota as a side effect of reading or the reader's next Enter.
   - name: timeline-message-composer-contract
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/timeline-chat-composer.e2e.mjs

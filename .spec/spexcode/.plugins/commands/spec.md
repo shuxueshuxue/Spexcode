@@ -21,10 +21,5 @@ resolution. A preset with `{{targets}}` always receives the resolved target bloc
 gets a target block only when the invocation actually names a target, so a targetless utility remains a small
 prompt. An unknown leading `/name` stays ordinary prompt text and is never swallowed or guessed.
 
-This node is a **shelf, not a surface** (the [[prompts]] shape): it declares no `surface` field and
-gathers nothing itself. Discovery is recursive and field-driven ([[surface]]), so a resident plugs in
-exactly as it would at the root — the gather set is path-independent, so shelving a command changes
-nothing about what `/api/plugins` and the launcher offer. A plugin that serves BOTH surfaces (e.g.
-[[distill]], skill and command) shelves once by its primary identity, never duplicated. The init
-templates mirror this layout. The shelf stays pure presentation: moving a resident beneath it changes
-neither that plugin's identity nor the surfaces gathered from its frontmatter.
+This node is a **shelf, not a surface**. Its routing and relocation invariant is owned once by
+[[.plugins]]'s shelf invariant; this node only describes command-specific discovery and invocation.

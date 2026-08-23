@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
-import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+import { sessionDisplayState, sessionHandle } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -98,24 +98,28 @@ export function useFold() {
 }
 
 // THE session row face — ONE face for every list surface, desktop and mobile: the headline plus a single
-// colour-coded STATUS_GLYPH mark (the exact status word stays on the hover title for a11y). The only
+// colour-coded mark from sessionDisplayState (the effective status word stays on the hover title for a11y). The only
 // per-surface flex is `showAvatar`: the map-side SessionWindow (beside the spec-node graph) KEEPS the
 // avatar so a session cross-references its node avatars; the console sidebar and the phone drop it
 // (redundant next to the headline). `lead` is the optional nesting fold gutter.
 export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const t = useT()
   const ops = opSummary(s.ops)
-  const headline = sessionHeadline(s)
-  const statusWord = t(`status.${s.status}`)
+  const display = sessionDisplayState(s)
+  // Identity is stable; lifecycle notes and readiness warnings belong to the secondary status slot.
+  const headline = sessionHandle(s)
+  const statusWord = t(`status.${display.status}`)
   return (
     <>
       {lead}
-      {showAvatar && <Avatar seed={s.id} status={s.status} title={`${sessionHandle(s)} · ${statusWord} — ${s.id.slice(0, 8)}`} />}
+      {showAvatar && <Avatar seed={s.id} status={display.status} title={`${sessionHandle(s)} · ${statusWord} — ${s.id.slice(0, 8)}`} />}
       {/* meta is rendered BEFORE the headline in source (CSS `order` keeps it visually last in the resting
           flex row) so that, when a selected row wraps ([[session-activity]] reveal), it can FLOAT onto the
           headline's first line and the wrapped lines below run full-width beneath it. */}
       <span className="sess-meta">
-        <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
+        <span className="sess-glyph" style={{ color: display.color }}
+          data-tip={s.note ? `${statusWord} · ${s.note}` : statusWord}
+          aria-label={s.note ? `${statusWord} · ${s.note}` : statusWord}>{display.glyph}</span>
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
       <span className="sess-id" data-tip={headline}>{headline}</span>

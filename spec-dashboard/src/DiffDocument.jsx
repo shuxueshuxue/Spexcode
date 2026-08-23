@@ -106,10 +106,16 @@ export default function DiffDocument({ sessionId }) {
   const comments = state.data?.comments || []
   const unsent = comments.filter((comment) => !comment.sentAt).length
   return <div className="diff-document" data-diff-document lang={lang}>
-    <header className="diff-toolbar"><span><Icon name="git-merge" size={14} />{t('session.diffScope')}</span><code>{state.data.base.slice(0, 8)}… → {state.data.head.slice(0, 8)}…</code>
+    <header className="diff-toolbar"><span className="diff-refs"><Icon name="git-merge" size={14} /><strong>{state.data.branch}</strong><span>→</span><strong>{state.data.baseRef}</strong></span><code className="diff-oids">{state.data.head} → {state.data.base}</code>
       <span className="diff-toolbar-spacer" />{unsent > 0 && <span>{t('session.diffUnsent', { n: unsent })}</span>}<IconButton icon="send" size={14} label={t('session.diffSend')} disabled={!unsent} onClick={send} />
     </header>
-    {!files.length && <div className="diff-state">{t('session.diffEmpty')}</div>}
+    {!files.length && (state.data.mergedIntoBase
+      ? <div className="diff-state diff-merged"><strong>{t('session.diffMerged', { base: state.data.baseRef })}</strong>
+        {state.data.commitUrl
+          ? <a href={state.data.commitUrl} target="_blank" rel="noreferrer">{t('session.diffCommit', { commit: state.data.head })}</a>
+          : <code>{state.data.head}</code>}
+      </div>
+      : <div className="diff-state">{t('session.diffEmpty')}</div>)}
     {files.map((file) => <DiffFile key={`${file.path}:${file.diffIdentity}`} sessionId={sessionId} file={file} comments={comments.filter((comment) => comment.filePath === file.path)} onComment={(start, end) => { setDraft({ filePath: file.path, lineStart: start, lineEnd: end }); setBody('') }} onEdit={(comment) => { setDraft(comment); setBody(comment.body) }} />)}
     {draft && <div className="diff-comment-compose" role="dialog"><strong>{t('session.diffComment')}</strong><span>{draft.filePath || files[0]?.path}:L{draft.lineStart}</span><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} placeholder={t('session.diffCommentPlaceholder')} /><div><button type="button" onClick={() => setDraft(null)}>{t('common.cancel')}</button><button type="button" disabled={!body.trim()} onClick={save}>{t('session.diffCommentSave')}</button></div></div>}
   </div>

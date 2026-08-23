@@ -1,5 +1,15 @@
 ---
 scenarios:
+  - name: merged-branch-empty-state-is-honest
+    tags: [frontend-e2e, desktop, backend-api]
+    code: [spec-dashboard/src/DiffDocument.jsx, spec-cli/src/sessions.ts]
+    description: >-
+      Open the diff of a retained session whose branch head commit is already reachable from main and whose
+      merge-base diff is empty. Read the header refs, object ids, empty-state sentence, and commit target.
+    expected: >-
+      The header prints the complete branch and base names plus full head/base ids. The empty state says the
+      branch head is merged into main and the head is a real forge commit link when origin supports one; it
+      never says no branch changes. An unmerged genuinely-empty control keeps the no-changes sentence.
   - name: branch-diff-comment-roundtrip
     tags: [frontend-e2e, desktop, backend-api]
     description: >-

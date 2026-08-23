@@ -42,8 +42,11 @@ before it can publish `session.json` or `watchers.json`; after the SQLite migrat
 operational metadata, but the canonical application service is the only state/event/topology authority.
 [[session-follow]]'s durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
 is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
-and uses the existing send queue to notify each watcher only after releasing the target's lock; no monitor
-loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed
+and uses the existing send queue to notify each watcher only after releasing the target's lock; the canonical
+application commit invokes the same post-commit wake callback so each recipient's existing durable queue is
+drained immediately in the originating runtime. The callback is a transport wake, not a second queue or source
+of truth: a missing runtime, crash, or failed handover leaves the committed row pending for the normal retry
+path. No monitor loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed
 reader fallback for callers with no governed delivery address. A watcher identity owns a small independent
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
@@ -138,10 +141,16 @@ The receipt is atomically no-replace and consumption is record-first, payload-se
 crash boundary is retryable without forgetting or replaying the first turn, while malformed or cross-bound
 receipts fail rather than repairing themselves from weaker input.
 Readiness is a bounded launch transaction, not an advisory note. If the native identity/first-turn receipt or
-post-receipt liveness fence misses its deadline, the launch owner publishes one explicit terminal failure on the
-record: lifecycle `error`, stopped/offline liveness, and the complete `queued launch readiness failed: ...`
-reason. That write uses the ordinary transition/watch path, so a parent watcher is notified and the row cannot
-remain queued/active while claiming launch is still in progress. A backend restart reconciles every durable
+post-receipt liveness fence misses its deadline, the launch owner re-reads the same record and consults the
+existing real agent/adapter liveness witness before deciding its lifecycle. A live registered process or online
+resource is not terminalized by a readiness timeout: it retains `active`/online truth, restores `stopped:false`
+if a racing timeout already wrote a terminal projection, and receives a loud, non-terminal readiness warning;
+the first-turn receipt and runtime binding are not replayed. The witness and recovery write are one record-locked
+decision, and an online warning leaves any pending watcher snapshot debt intact for the existing queue. Only a
+proven-dead process/resource may publish one explicit terminal failure on the record: lifecycle `error`,
+stopped/offline liveness, and the complete `queued launch readiness failed: ...` reason. That write uses the
+ordinary transition/watch path, so a parent watcher is notified and the row cannot remain queued/active while
+claiming launch is still in progress. A backend restart reconciles every durable
 launch residue: a live registered runtime gets its readiness observer rebuilt without replaying the first turn;
 an expired or provably dead residue is failed closed with the same terminal record. No launch residue may remain
 an indefinitely in-progress row.

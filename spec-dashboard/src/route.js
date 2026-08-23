@@ -15,15 +15,14 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 // `spec` and `file` are DOCUMENT addresses — a node read as a document, a governed file read on its own.
 // They are why the address list grew: the board used to have pages and no documents, so a document had
 // nowhere to be addressed from and reading one meant opening a popup over whatever page was showing.
-// `empty` is the workspace holding NOTHING — an address, because the state has to be somewhere the reader
-// can land, reload, and leave. It is not a rail destination and not a document; the only thing that mints it
-// is closing the last tab ([[tab-strip]]).
-export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
+// Graph is the workspace bottom sheet when no document is focused. `empty` remains a compatibility spelling
+// for old links and is canonicalized to graph at parse time; it is not a second view.
+export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings']
 // The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
 // opening something (a node, a governed file); there is no "go to the spec page" the way there is a
-// sessions page, and a rail icon for one would name a place that does not exist. `graph` is absent for
-// the opposite reason: it is still addressable, but it is no longer a place the workspace sends anyone.
-export const RAIL_PAGES = ['sessions', 'evals', 'issues', 'settings']
+// sessions page, and a rail icon for one would name a place that does not exist. Graph remains a real
+// route and therefore gets a route light and an ordinary anchor.
+export const RAIL_PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
@@ -45,21 +44,22 @@ export function queryString(query) {
 // '#/graph/node-a' → { page: 'graph', param: 'node-a' }. '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
 // 'node/scenario' (the canonical eval DETAIL address — each segment decoded; the page splits on the first
 // '/'). '#/issues/<id>' → the issue detail. Anything after '?' inside the hash is the query axis.
-// Anything unknown lands on sessions — the workspace's daily face. It used to land on the graph, back
-// when the graph WAS the board; the graph is now an addressable legacy view nothing routes to on its own.
+// Anything unknown lands on graph — the workspace's document-free bottom sheet. `#/empty` is accepted as a
+// legacy alias and canonicalizes to the same graph route.
 export function parseRoute(hash) {
   const h = (hash || '').replace(/^#\/?/, '')
   const qi = h.indexOf('?')
   const path = qi >= 0 ? h.slice(0, qi) : h
   const query = Object.fromEntries(new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : ''))
   const parts = path.split('/').filter(Boolean)
+  const aliasEmpty = parts[0] === 'empty'
   const known = PAGES.includes(parts[0])
-  const page = known ? parts[0] : 'sessions'
-  // `settings` and `empty` name no object, so they carry no selector; every other page does, and `file`
+  const page = aliasEmpty ? 'graph' : (known ? parts[0] : 'graph')
+  // `settings` names no object, so it carries no selector; every other page does, and `file`
   // carries a repo path, so the tail rejoins on '/'. An UNKNOWN first segment carries no selector either:
   // its tail was written for a page that does not exist, and handing it to the fallback page would mint an
   // object address for an object nobody named.
-  const param = !known || page === 'settings' || page === 'empty'
+  const param = aliasEmpty || !known || page === 'settings'
     ? null
     : (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
   return { page, param, query }
@@ -146,7 +146,15 @@ const currentRoute = () => {
     window.history.replaceState(null, '', legacy)
     return parseRoute(legacy)
   }
-  return parseRoute(window.location.hash)
+  const parsed = parseRoute(window.location.hash)
+  // The graph bottom sheet is the canonical cold landing. Normalize the empty hash, the retired `empty`
+  // spelling, and unknown paths so the address bar agrees with the view instead of merely rendering an
+  // implicit fallback.
+  if (parsed.page === 'graph' && !/^#\/graph(?:\/|\?|$)/.test(window.location.hash || '')) {
+    window.history.replaceState(null, '', '#/graph')
+    return parseRoute('#/graph')
+  }
+  return parsed
 }
 
 export function useRoute() {

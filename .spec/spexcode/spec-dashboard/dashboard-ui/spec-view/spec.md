@@ -2,7 +2,7 @@
 title: spec-view
 status: active
 hue: 195
-desc: A spec node read as a document — its prose and the code it governs, side by side, in the main area.
+desc: A spec node read as a full-width prose document, with governed files and attachments as links to their own file documents.
 code:
   - spec-dashboard/src/SpecView.jsx
 related:
@@ -12,36 +12,37 @@ related:
 ---
 # spec-view
 
-A spec node opened as a **document**: its prose on the left, the code it governs on the right, both there
-when the document opens rather than one click inside the other.
-
-This is the surface the whole refactor exists for. Its absence was the refactor's real failure for a while
-— the board grew a status bar, a tab strip and a file dock while reading a spec still meant opening a popup
-over a graph, with the governed file one more click inside that popup. Every piece passed its own
-verification; none of them was the thing that had been asked for.
+A spec node opened as a **document**: its prose is the whole document surface. Governed files and node
+attachments remain in the prose's chip/link rows, but opening one navigates to its own `#/file/<path>`
+document. SpecView never mounts a source reader and never chooses a file to show on first open.
 
 **The prose renderer is the same pane the popup uses, not a second one.** A document and a popup showing
 the same node must never be two implementations that can disagree about what the node says. The popup keeps
 its place as a quick lens on board focus; this is where a node is READ.
 
-**The right side opens on the node's first governed file**, and a `code:` entry naming a symbol resolves to
-its file — several such entries open one viewer, because the reader wants the file, not three views of it.
-A node's attachments ([[node-attachments]]) are picked the same way: the reader is not asked to learn that
-bytes from the spec tree behave differently from bytes from the worktree, even though the gate that admits
-them is not the same gate.
+Inline `[[id]]` references in that shared renderer are real document anchors: they use the canonical
+`#/spec/<id>` address, ordinary clicks replace the spec slot, and Ctrl/Command-click uses [[tab-strip]]'s
+`holdAnchor` gesture to keep a second document. The popup and both document panes therefore expose the same
+working link, not a styled but inert span.
 
-**The chips that pick the file are the DOCUMENT'S OWN chips.** The prose already lists what the node
-governs and carries; handing that list the code column makes it the picker, so the file is named once, in
-the sentence that claims it. A picker strip welded above the code was the same list a second time and a
-chrome band to hold it — and with the viewer no longer repeating the path underneath ([[source-view]]),
-the code column is now nothing but code.
+`code:` entries naming symbols resolve to file addresses — several entries can name the same file, but no
+source face is embedded in the spec. A node's attachments ([[node-attachments]]) use the same chip row and
+the same file-document address grammar. Attachments are still read through their node-owned API gate, not
+through the governed-source policy; FileView supplies that alternate reader behind the address.
 
-**A prose-only node gets no right side at all**, rather than an empty frame apologising for itself.
+**The chips that open a file are the DOCUMENT'S OWN chips.** The prose already lists what the node governs
+and carries, so the file is named once in the sentence that claims it. A click is ordinary navigation; tab
+placement and whether the current slot is replaced or another kind is appended belong to [[tab-strip]]'s
+tab model, not to SpecView. The spec tab remains in the working set while focus moves to the file document.
 
-The divider is the shared resizable-pane primitive, persisted like every other pane, so the split a reader
-chooses is the split they get back.
+**A prose-only node is the same full-width document**, with no empty source frame and no document split.
 
 **The prose pane carries a selection layer.** Selecting a passage of the prose is enough to act on it —
 send it to a session, or edit it in place and commit ([[prose-dispatch]]). That layer is mounted inside the
 prose column and is made entirely of z-layers: the document's geometry with a selection is exactly its
-geometry without one, and the code column, the divider and the chips are untouched by it.
+geometry without one, and the chips are untouched by it.
+
+**B5 acceptance.** A spec document has no `.specview-code`, no automatic `SourceView`, and no split
+divider or `spex.docSplit` state. Opening a governance chip or attachment produces an independent file tab,
+leaves the spec tab in the working set, focuses the file, and lets a second chip replace the same file slot.
+An alt-click on that file tab still sends it to the shell's second pane ([[tab-strip]]).

@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { navigate, parseRoute, routeHash, useRoute } from './route.js'
-import { isDocument, isResident } from './views.jsx'
-import { normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { navigate, parseRoute, useRoute } from './route.js'
+import { isDocument } from './views.jsx'
+import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
-export { placeTab, tabKey }
+export { closeDestination, moveTab, placeTab, tabKey }
 
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
 //
 // A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. The strip holds the documents the reader asked it to hold,
-// plus ONE current slot that ordinary navigation lands in and reuses. Every plain click — an explorer row,
-// a dock session row, a board row, a link inside a document — replaces the slot's address; it never grows
-// the strip. Holding is explicit: ctrl/⌘-click, a double-click, or a document's own "open in a new tab"
-// action. That is the whole rule, and it is deliberately independent of WHAT is being opened: the old
-// version fenced replacement to spec/file documents by type, which meant browsing sessions or board rows
-// minted a tab per click and the strip filled with things nobody had decided to keep.
+// plus one current slot per document kind that ordinary navigation lands in and reuses. Every plain click —
+// an explorer row, a dock session row, an object row, a link inside a document — replaces the same-kind slot;
+// an address of another kind gets its own slot rather than evicting a different kind. Holding is explicit:
+// ctrl/⌘-click, a double-click, or a document's own "open in a new tab" action. That is the whole rule, and
+// it keeps the old anti-proliferation guarantee without allowing cross-kind eviction.
 //
 // The split of truth is deliberate and follows what every workspace editor settled on: the OPEN LIST is a
 // local layout preference (it survives reloads, it is not worth putting in a link, and two people opening
@@ -27,7 +26,7 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param)), isResident) : []
+    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string'), isDocument) : []
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -74,7 +73,7 @@ export function runTabCommand(name, ...args) {
 // one they were holding. Naming the address removes the race: if the tab is already in the list it is
 // pinned here, and if the navigation is still in flight the mark makes the placement itself pinned.
 export function pinTab(page, param = null, query = null) {
-  const key = routeHash(page, param, query)
+  const key = tabKey({ page, param, query })
   pinKey = key
   const held = getTabs()
   if (held.some((tab) => tabKey(tab) === key)) {
@@ -129,24 +128,19 @@ export function useTabs() {
   // while the reader looked at something absent from it would be lying. Every caller runs this and the
   // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
   useEffect(() => {
-    if (!isDocument(route.page, route.param)) return
-    const key = routeHash(route.page, route.param, route.query)
-    // a SINGLETON BOARD is held however it was reached ([[view-registry]]'s residency): it is a place, not
-    // something the reader spends the slot on, so opening a detail from one of its rows cannot evict it.
-    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
+    const key = tabKey(route)
     if (pinKey && pinKey !== key) pinKey = null
+    if (!isDocument(route.page, route.param)) return
+    const mode = pinKey === key ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 
-  const activeKey = routeHash(route.page, route.param, route.query)
+  const activeKey = tabKey(route)
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
-  // Closing the ACTIVE tab hands focus to its right-hand neighbour, else its left — the rule every editor
-  // uses, because the reader's eye is already where the closed tab was. Closing the LAST one lands on the
-  // explicit empty workspace: it used to navigate to the graph, so a gesture that asked for nothing put a
-  // document on screen and the board seemed to appear from underneath. An empty working set is a real
-  // state, and the reader is owed the state they produced rather than a substitute document.
+  // Closing stays in the tab's identity domain: session tabs prefer the right session, then the left, and
+  // only an empty session set lands on New Session. Spec/file tabs retain their graph-bottom-sheet return.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()
@@ -155,9 +149,8 @@ export function useTabs() {
     const next = prev.filter((_, n) => n !== i)
     putTabs(next)
     if (key === activeKey) {
-      const heir = next[i] || next[i - 1]
-      if (heir) navigate(heir.page, heir.param, { query: heir.query })
-      else navigate('empty')
+      const destination = closeDestination(tab, next, i)
+      navigate(destination.page, destination.param, { query: destination.query })
     }
   }, [activeKey])
 
@@ -166,6 +159,11 @@ export function useTabs() {
     putTabs(getTabs().filter((t) => tabKey(t) === key))
     if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
   }, [activeKey])
+
+  // THE READER'S OWN ORDER. The strip already persists its list; reordering it is the same write, so the
+  // arrangement survives a reload for free and needs no second store. Nothing here navigates — a drag says
+  // where a document sits, never which one you are looking at.
+  const move = useCallback((key, before) => { putTabs(moveTab(getTabs(), key, before)) }, [])
 
   useEffect(() => registerTabCommands({
     closeActive: () => {
@@ -181,5 +179,5 @@ export function useTabs() {
     active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
   }), [activeKey, open, close])
 
-  return useMemo(() => ({ tabs, activeKey, open, close, closeOthers }), [tabs, activeKey, open, close, closeOthers])
+  return useMemo(() => ({ tabs, activeKey, open, close, closeOthers, move }), [tabs, activeKey, open, close, closeOthers, move])
 }

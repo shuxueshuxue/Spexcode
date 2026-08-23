@@ -2,6 +2,7 @@ import { navigate, parseRoute, routeHash } from './route.js'
 import { nodeEvalQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
+export const specAddress = (nodeId) => ({ kind: 'spec', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 // A session face is one URL axis. Resource faces use the existing resourceTabKey as their value
 // (`resource:<sessionId>:<kind>:<key>`), so they remain ordinary session object addresses.
@@ -28,6 +29,7 @@ export function addressHash(address) {
   if (!address) return routeHash('graph')
   if (address.kind === 'hash') return address.hash
   if (address.kind === 'graph-node') return routeHash('graph', address.nodeId)
+  if (address.kind === 'spec') return routeHash('spec', address.nodeId)
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-surface') {
     if (address.surface === 'evals') return routeHash('evals', null, { q: scopedEvalQuery(address.sessionId) })

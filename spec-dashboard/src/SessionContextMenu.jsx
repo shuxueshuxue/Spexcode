@@ -7,7 +7,7 @@ import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onError }) {
+export default function SessionContextMenu({ menu, closeRequest = null, onCloseRequestDone, onClose, onChanged, onLock, onError }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -129,13 +129,21 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     }
   }
 
+  // THE CLOSE CONFIRM HAS TWO OPENERS AND ONE BODY. The menu's own item is the first; a row dropped on
+  // the dock's archive door is the second ([[dock-modes]]). The removal is identical, so the prompt is the
+  // same prompt rather than a second one written beside it — two dialogs for one destruction is two places
+  // for the wording, the danger styling and the background-removal semantics to drift apart. The drop's
+  // request is owned by its caller, so dismissing has to hand it back rather than only clearing local state.
+  const closingSession = closing || closeRequest
+  const dismissClose = () => { setClosing(null); onCloseRequestDone?.() }
+
   // confirmed close: dismiss the confirm AT ONCE and fire the worktree removal in the BACKGROUND — it's
   // seconds of real work (git worktree remove + killing the agent/tmux), and (like New Session's launch)
   // the human must never watch a frozen, disabled dialog wait it out. The board reload when it lands drops
   // the row off every surface; the next poll reconciles a failure. No busy-guard: the prompt is already gone.
   const confirmClose = () => {
-    const { id } = closing
-    setClosing(null)
+    const { id } = closingSession
+    dismissClose()
     apiFetch(`/api/sessions/${id}/close`, { method: 'POST' })
       .then(async (response) => {
         const body = await response.json().catch(() => null)
@@ -208,17 +216,17 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
           </form>
         </Modal>
       )}
-      {closing && (
+      {closingSession && (
         <Modal
-          title={t('sessionWindow.closeTitle', { name: sessionHeadline(closing) })}
+          title={t('sessionWindow.closeTitle', { name: sessionHeadline(closingSession) })}
           closeLabel={t('common.close')}
           className="sess-rename-modal"
-          onClose={() => setClosing(null)}
+          onClose={dismissClose}
         >
           <div className="sess-confirm">
             <p className="sess-confirm-msg">{t('sessionWindow.closeConfirm')}</p>
             <div className="sess-rename-actions">
-              <button type="button" className="sess-rename-btn" onClick={() => setClosing(null)}>{t('common.cancel')}</button>
+              <button type="button" className="sess-rename-btn" onClick={dismissClose}>{t('common.cancel')}</button>
               <button type="button" className="sess-rename-btn danger" onClick={confirmClose} autoFocus>{t('sessionWindow.close')}</button>
             </div>
           </div>

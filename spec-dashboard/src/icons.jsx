@@ -24,6 +24,8 @@ const ICONS = {
   // stroke glyphs dimensionally aligned with the filled issue pair below without a domain CSS patch.
   'circle-check': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" /><path d="m4.8 8 2 2L11.5 5.5" /></> },
   'circle-x': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" /><path d="m5.4 5.4 5.2 5.2" /><path d="m10.6 5.4-5.2 5.2" /></> },
+  'circle-check-dashed': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /><path d="m4.8 8 2 2L11.5 5.5" /></> },
+  'circle-x-dashed': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /><path d="m5.4 5.4 5.2 5.2" /><path d="m10.6 5.4-5.2 5.2" /></> },
   'circle-minus': { vb: 16, sw: 1.5, node: <><circle cx="8" cy="8" r="7.25" /><path d="M4.8 8h6.4" /></> },
   'circle-dashed': { vb: 16, sw: 1.5, node: <circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /> },
   ellipsis: { node: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></> },
@@ -97,26 +99,24 @@ const ICONS = {
   // They are the LAYOUT vocabulary — which side a dock opens — and read as a pair wherever both appear.
   // Only the right context dock ([[context-dock]]'s toggle) draws one today; the mirror stays declared
   // beside it, because half a mirrored pair is a glyph nobody can read the meaning of.
-  'panel-left': {
-    vb: 18, sw: 1.4,
-    node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
-  },
   // A session finding projection: three list rows with status points. It is deliberately not a terminal
   // prompt or a framed panel, so the rail's sessions button has one meaning wherever it appears.
   'session-list': {
     vb: 18, sw: 1.4,
     node: <><circle cx="3" cy="4.5" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="9" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="13.5" r="1" fill="currentColor" stroke="none" /><path d="M6 4.5h9.5M6 9h9.5M6 13.5h9.5" /></>,
   },
-  'panel-right': {
-    vb: 18, sw: 1.4,
-    node: <><path d="M11.6 2.5h3.3a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6h-3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M11.6 2.5v13" /></>,
-  },
-  // the same panel glyph mirrored: the left dock's own collapse control ([[dock-modes]]).
+  // The mirrored pair that toggles the LEFT and RIGHT docks. Two lanes once landed green separately —
+  // one deleting "the duplicate panel-left", one drawing the fold toggle with it — and the merged main
+  // white-screened every user, because Icon threw on the missing name and the rail sits above every
+  // boundary. The pair lives together so neither half can be judged dead in isolation again.
   'panel-left': {
     vb: 18, sw: 1.4,
     node: <><path d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
   },
-
+  'panel-right': {
+    vb: 18, sw: 1.4,
+    node: <><path d="M11.6 2.5h3.3a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6h-3.3z" fill="currentColor" stroke="none" opacity="0.4" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M11.6 2.5v13" /></>,
+  },
   // GitHub Primer Octicons `issue-opened-16` (MIT) — preserve the official filled ring + centre.
   'issue-opened': {
     vb: 16, fill: 'currentColor', stroke: 'none',
@@ -153,7 +153,13 @@ const ICONS = {
 
 export function Icon({ name, size = 16, strokeWidth, className, style }) {
   const def = ICONS[name]
-  if (!def) throw new Error(`unknown icon: ${name}`)
+  if (!def) {
+    // LOUD but not FATAL. A missing glyph is a one-key dictionary bug; throwing here once took the whole
+    // product down for every user, because chrome (the rail) renders outside every view boundary. The
+    // console keeps the failure unmissable; the reader keeps their workspace.
+    console.error(`unknown icon: ${name}`)
+    return <svg width={size} height={size} viewBox="0 0 16 16" className={className} style={style} aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" strokeDasharray="3 2" /></svg>
+  }
   const vb = def.vb || 24
   return (
     <svg

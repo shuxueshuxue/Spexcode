@@ -51,11 +51,12 @@ export default {
     specs: 'Specs',
     files: 'Files',
   },
-  filesTree: {
+  diskTree: {
     loading: 'loading…',
   },
   dockModes: {
     collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar',
     aria: 'dock mode',
     explorer: 'Explorer',
     sessions: 'Sessions',
@@ -94,8 +95,13 @@ export default {
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
+    settings: 'Settings',
     issueNew: 'New issue',
     openInNewTab: 'Open in a new tab',
+    menuLabel: 'tab actions',
+    menuClose: 'Close',
+    menuCloseOthers: 'Close others',
+    menuSplit: 'Send to split pane',
     surfaceTerminal: 'terminal',
     surfaceConversation: 'conversation',
     surfaceDiff: 'diff',
@@ -117,6 +123,7 @@ export default {
   },
   nav: {
     railLabel: 'main navigation',
+    graph: 'Spec Node Graph',
     explorer: 'Explorer',
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
@@ -230,9 +237,16 @@ export default {
     restore: 'restore hidden status items',
     // the ambient board tallies; each names its own door, because each item IS that door.
     nodes: ({ n }) => `${n} spec nodes — merged · active · drift · pending. Open the graph`,
-    evals: ({ pass, fail }) => `fresh evals: ${pass} passing, ${fail} failing — open the evals board`,
+    evals: ({ pass, fail, stalePass, staleFail, empty }) =>
+      `eval scenarios: ${pass} fresh pass, ${fail} fresh fail, ${stalePass} stale pass, ${staleFail} stale fail, ${empty} unmeasured`,
+    openEvals: 'open the Evals board',
     issues: ({ n }) => `${n} open issues — open the issues board`,
     sessions: ({ run, need }) => `${run} running, ${need} waiting on you — open the sessions console`,
+  },
+  backend: {
+    offline: 'backend unavailable — displayed data may be stale',
+    retry: 'retry',
+    stale: 'stale',
   },
   hud: {
     helpTitle: 'help — keymap & legend',
@@ -585,11 +599,8 @@ export default {
     },
   },
 
-  // the bottom-left board-stats strip — the per-node badges COUNTED across the whole tree (distinct things,
-  // never a sum of badges), except coverage which counts SCENARIOS (the unit of eval loss). Each chip's
-  // title says what it counts; clicking WALKS focus through the nodes behind it, one per click.
+  // The shell ledger's graph walk: per-node badges count distinct things; coverage counts scenarios.
   stats: {
-    aria: 'graph statistics',
     totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
     driftTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} whose code is ahead of its spec — click to walk them`,
@@ -718,7 +729,7 @@ export default {
     issuesReplyPlaceholder: 'reply…',
     issuesConcernPlaceholder: 'concern — one line',
     issuesBodyPlaceholder: 'details (optional)',
-    inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
+    inputPlaceholder: 'describe the work · @ session · [[ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',
     menuPresets: 'command presets',
     menuSpecNodes: 'spec nodes',
@@ -731,8 +742,13 @@ export default {
     tabTerminal: 'terminal',
     tabConversation: 'conversation',
     tabDiff: 'diff',
+    surfaceSwitcher: 'session surface',
+    enableTerminalInput: 'enable terminal input',
+    terminalInputEnabled: 'terminal input enabled — click the terminal to focus it',
     diffLoading: 'loading diff…',
     diffEmpty: 'no branch changes',
+    diffMerged: 'merged into {base}',
+    diffCommit: 'open commit {commit}',
     diffFailed: 'diff unavailable: {message}',
     diffScope: 'branch diff',
     diffClose: 'leave the branch diff, back to the session',

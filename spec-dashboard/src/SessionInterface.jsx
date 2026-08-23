@@ -20,6 +20,7 @@ import { apiFetch } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
+  SESSION_SURFACE_TERMINAL,
   SESSION_SURFACE_DIFF,
   getSessionBaseSurface,
   isSessionSurface,
@@ -27,6 +28,7 @@ import {
   resourceSurface,
   resourceSurfaceKey,
   resourceTabKey,
+  setSessionBaseSurface,
   subscribeSessionSurface,
 } from './sessionSurface.js'
 import { firesEvent, withShortcut } from './bindings.js'
@@ -41,6 +43,14 @@ import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
+
+// @@@ a warm terminal belongs to a LIVE pane — a row must SAY it has one.
+// The archive index is a row summary, not a session record: it carries an id, a title and a closedAt and
+// no liveness, harness or capabilities at all. Asking `liveness !== 'offline'` read that ABSENCE as alive,
+// so every retired session mounted an xterm and opened a socket — measured on this project's board, 66 of
+// the 76 warm terminals belonged to closed sessions. Ask for the live pane instead of for the absence of a
+// dead one, and a row that reports nothing reports no pane.
+const hasLivePane = (session) => !session?.archived && session?.liveness === 'online'
 
 const closedTime = (session) => {
   if (typeof session?.closedAt !== 'string') return null
@@ -158,12 +168,18 @@ const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 let nextAttachmentKey = 0
 
 const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
-// The launch state is the quietest surface in the product: an empty room waiting for one sentence. It used
-// to open with six lines of box-drawing pixel art — a terminal's idea of a logo, painted in a gradient, at a
-// size no other thing on the board is allowed. The name is now just the name, set once at the page's single
-// statement size and left muted, so the lit thing in the room is the input the reader came to type in.
+const HERO_WORDMARK = [
+  '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
+  '██╔════╝██╔══██╗██╔════╝╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝',
+  '███████╗██████╔╝█████╗   ╚███╔╝ ██║     ██║   ██║██║  ██║█████╗  ',
+  '╚════██║██╔═══╝ ██╔══╝   ██╔██╗ ██║     ██║   ██║██║  ██║██╔══╝  ',
+  '███████║██║     ███████╗██╔╝ ██╗╚██████╗╚██████╔╝██████╔╝███████╗',
+  '╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝',
+].join('\n')
+// The launch state is the quietest surface in the product: an empty room waiting for one sentence. Its
+// six-line wordmark is the product identity cue; the input remains the first interactive control below it.
 export function LaunchHero() {
-  return <p className="si-hero">spexcode</p>
+  return <pre className="si-hero" aria-label="SpexCode">{HERO_WORDMARK}</pre>
 }
 
 function ActionOutcome({ outcome }) {
@@ -208,6 +224,20 @@ function ResourceMenu({ options, onOpen }) {
 function RegisteredDocumentAction({ document, action }) {
   useDocumentAction(document, action)
   return null
+}
+
+function SessionSurfaceSwitcher({ current, choices, onSelect, label, labels }) {
+  return (
+    <div className="session-surface-switcher" role="tablist" aria-label={label}>
+      {choices.map((surface) => (
+        <button key={surface} type="button" role="tab" aria-selected={current === surface}
+          className={`session-surface-choice${current === surface ? ' on' : ''}`}
+          onClick={() => onSelect(surface)}>
+          {labels[surface]}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function SessionDocumentActions({ document, actions }) {
@@ -460,6 +490,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
+  const [writableSession, setWritableSession] = useState(null)
   const [resourceFocusRequest, setResourceFocusRequest] = useState(0)
   const [dragTarget, setDragTarget] = useState(null)
   const [attachments, setAttachments] = useState([])
@@ -504,6 +535,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
 
   const [archiveRows, setArchiveRows] = useState(null)
+  const [pendingSession, setPendingSession] = useState(null)
   const refreshArchive = useCallback(() => {
     if (archiveRequestRef.current) return archiveRequestRef.current
     const request = fetch(apiUrl('/api/sessions/archive-index'))
@@ -535,8 +567,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const allSessions = useMemo(() => {
     const byId = new Map(sessions.map((s) => [s.id, s]))
     for (const s of archiveRows || []) if (!byId.has(s.id)) byId.set(s.id, s)
+    if (pendingSession && !byId.has(pendingSession.id)) byId.set(pendingSession.id, pendingSession)
     return [...byId.values()]
-  }, [sessions, archiveRows])
+  }, [sessions, archiveRows, pendingSession])
+  useEffect(() => {
+    if (pendingSession && sessions.some((session) => session.id === pendingSession.id)) setPendingSession(null)
+  }, [sessions, pendingSession])
   const archivedSessions = useMemo(() => archiveOrder(allSessions.filter((session) => session.archived)), [allSessions])
   const validIds = useMemo(() => new Set(['new', ...allSessions.map((s) => s.id)]), [allSessions])
   // content mode: 'new' or a session id. The archive index is a transient overlay.
@@ -563,6 +599,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : requestedSurface || getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
   const diffSurface = activeBaseSurface === SESSION_SURFACE_DIFF
+  useEffect(() => { setWritableSession(null) }, [open, active, activeBaseSurface])
   const baseSurfaceForSession = (id) => {
     const session = allSessions.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
@@ -598,8 +635,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     })
     activateResource(tab)
     setResourceMenu(false)
-    // opening a resource is an ordinary navigation: it lands in the current slot like every other plain
-    // click ([[tab-strip]]). The preview stays warm because the slot IS a tab for its address.
+    // A resource is a file-class workspace tab: navigation appends its address and leaves the session tab's
+    // selected base face unchanged. The preview stays warm because the resource address is its own tab.
     navigate('sessions', tab.sessionId, { query: { surface: resourceSurface(tab.id) } })
   }
   const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
@@ -703,7 +740,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [resourceMenu])
   // Esc leaves the diff overlay for the session's own base address, the same exit a resource surface has.
   // Diff is never a base surface, so the address it returns to is the bare one.
-  useEscLayer(diffSurface, () => navigate('sessions', active))
+  useEscLayer(diffSurface, () => navigate('sessions', active, { replace: true }))
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (value) => setDrafts((draft) => ({
@@ -726,7 +763,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     } else {
       setTerminalFocusRequest((request) => request + 1)
     }
-    if (remember || id === active) navigate('sessions', id, { query: { surface } })
+    if (remember || id === active) navigate('sessions', id, { replace: true, query: { surface } })
   }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
@@ -762,7 +799,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setOpened((prev) => {
       const valid = new Set(allSessions.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
-      for (const s of allSessions) if (!isHeadlessSession(s) && s.liveness !== 'offline') next.add(s.id)
+      for (const s of allSessions) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
       if (active !== 'new') {
         const selected = sessions.find((s) => s.id === active)
         if (selected && isHeadlessSession(selected)) next.add(active)
@@ -782,7 +819,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const valid = new Set(allSessions.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
       const selected = active === 'new' ? null : allSessions.find((s) => s.id === active)
-      if (selected && (selected.archived || selected.liveness === 'offline' || isHeadlessSession(selected)
+      // the other half of the same rule: whatever has no live pane to show is shown as a Conversation, so
+      // no selection can land on a session with neither layer mounted (a corrupt row's `unknown` liveness
+      // used to fall through both when the terminal gate stopped naming dead states one by one).
+      if (selected && (!hasLivePane(selected) || isHeadlessSession(selected)
         || conversationSurface)) next.add(selected.id)
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
       return next
@@ -826,17 +866,32 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       return s ? `[[${s.id}]] (${s.path})` : m
     })
 
-  // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
-  // The box NEVER disables or blurs: clear the draft optimistically (so a fresh draft can't be clobbered when
-  // the POST lands) and fire the launch in the BACKGROUND. Gating the box on the in-flight POST + a board re-read
-  // (both seconds of real work — worktree, branch, tmux) left the whole pane greyed and unfocused until they
-  // returned; keeping it live makes the next launch type-ready at once. The empty-draft check guards double-fire.
+  // launch a session, then follow the published id into its document. The box NEVER disables or blurs: clear the
+  // draft optimistically (so a fresh draft can't be clobbered when the POST lands) and keep the launch request in
+  // the background while the pending document shows its creation stages. The empty-draft check guards double-fire.
   const submit = () => {
     const raw = encodePrompt(prompt, codeSelections)
     if (!raw) return
     setPrompt('')
     setCodeSelections([])
-    createSession(raw, launcher).then(() => reload?.())
+    createSession(raw, launcher).then((result) => {
+      if (result.ok && result.id) {
+        setPendingSession({
+          id: result.id,
+          ...(result.session || {}),
+          label: result.session?.label || raw.split(/\s+/).slice(0, 8).join(' ') || result.id,
+          title: result.session?.title || result.session?.label || raw.split(/\s+/).slice(0, 8).join(' ') || result.id,
+          status: result.session?.status || 'queued', liveness: result.session?.liveness || 'offline',
+          archived: false, capabilities: result.session?.capabilities || { headless: true },
+        })
+        // The create response is the publication fence: move the reader into the new document immediately,
+        // while its queued/starting row and live execution trace catch up through the board stream.
+        navigate('sessions', result.id)
+        reload?.()
+      } else if (!result.ok) {
+        notify(result.error || t('session.launchFailed'), { kind: 'error' })
+      }
+    })
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@` session references
@@ -1299,6 +1354,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const documentKey = sessionActive
     ? routeHash('sessions', active, requestedSurface ? { surface: requestedSurface } : null)
     : null
+  const surfaceChoices = terminalFree || readOnlyPane
+    ? [SESSION_SURFACE_CONVERSATION]
+    : [SESSION_SURFACE_CONVERSATION, SESSION_SURFACE_TERMINAL, SESSION_SURFACE_DIFF]
   const documentActions = sessionActive ? [
     {
       id: 'resource-picker', icon: 'plus', label: t('session.addResourceTab'), priority: 100,
@@ -1320,6 +1378,30 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setCtxMenu((current) => (current ? null : { x: box.left, y: box.bottom, session: selSession }))
       },
     },
+    ...(!activeResource && surfaceChoices.length > 1 ? [{
+      id: 'surface-switcher', label: t('session.surfaceSwitcher'), priority: 80,
+      menuKey: `${activeBaseSurface}:${surfaceChoices.join(',')}`,
+      node: <SessionSurfaceSwitcher
+        current={diffSurface ? SESSION_SURFACE_DIFF : activeBaseSurface}
+        choices={surfaceChoices}
+        label={t('session.surfaceSwitcher')}
+        labels={{
+          [SESSION_SURFACE_CONVERSATION]: t('tabs.surfaceConversation'),
+          [SESSION_SURFACE_TERMINAL]: t('tabs.surfaceTerminal'),
+          [SESSION_SURFACE_DIFF]: t('tabs.surfaceDiff'),
+        }}
+        onSelect={(next) => {
+          setResourceMenu(false)
+          if (next === SESSION_SURFACE_CONVERSATION || next === SESSION_SURFACE_TERMINAL) setSessionBaseSurface(active, next)
+          showBaseSurface(active, next, true)
+        }} />,
+    }] : []),
+    ...(!activeResource && activeBaseSurface === 'terminal' && !readOnlyPane ? [{
+      id: 'enable-terminal-input', icon: 'keyboard', priority: 60,
+      pressed: writableSession === active,
+      label: t(writableSession === active ? 'session.terminalInputEnabled' : 'session.enableTerminalInput'),
+      onClick: () => setWritableSession(active),
+    }] : []),
     ...uiCmds.filter((command) => command.button && !activeResource && (activeBaseSurface === 'terminal' || command.name !== 'merge')).map((command) => ({
       id: command.name,
       icon: command.icon,
@@ -1342,18 +1424,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         { id: 'copy-resource', icon: 'copy', label: activeResource.value, priority: 38, onClick: () => { void copyFilePath(activeResource.value) } },
       ] : []),
     ] : []),
-    // The diff face is an OVERLAY of the session's base surface, never a base surface of its own. One door,
-    // lit while it is open, and pressing it again returns to the BARE session address — which always
-    // resolves the stored base. A one-way door left the tab strip and the finding dock as the only ways
-    // back, and neither is guaranteed to be showing.
-    ...(!activeResource ? [{
-      id: 'open-diff', icon: 'file-diff', priority: 30, pressed: diffSurface,
-      label: t(diffSurface ? 'session.diffClose' : 'session.diffScope'),
-      onClick: () => {
-        setResourceMenu(false)   // one surface, one open menu: navigating must not leave a picker hanging
-        navigate('sessions', active, diffSurface ? undefined : { query: { surface: SESSION_SURFACE_DIFF } })
-      },
-    }] : []),
   ] : []
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
@@ -1520,6 +1590,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         }}>
                           <SessionTerm sessionId={id} active={open && terminalShown}
                             focused={open && terminalShown && !commandOpen}
+                            writable={writableSession === id && open && terminalShown}
                             focusRequest={id === active ? terminalFocusRequest : 0} />
                         </div>
                       )}
@@ -1531,7 +1602,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         }}>
                           <TimelineChat s={session} sessions={allSessions} active={open && conversationShown}
                             footerState={sessionFooterState(session)}
-                            onRestore={id === active ? resumeAndReturnToWorking : undefined}
+                            onRestore={id === active && session.status !== 'retired' ? resumeAndReturnToWorking : undefined}
                             actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />
                         </div>
                       )}

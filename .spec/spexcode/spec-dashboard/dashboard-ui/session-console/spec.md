@@ -117,8 +117,8 @@ The [[dock-modes]] sessions projection is the desktop's sole session list. This 
 renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
 the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
 while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
-dock remains read-only: drag-to-reparent and multi-select are explicitly retired with the duplicate list because
-their mutable state cannot belong to a finding projection. The keyboard fresh-session binding remains unchanged.
+dock remains list-owned: multi-select is explicitly retired with the duplicate list, while row movement belongs
+to the dock's sole session list ([[dock-modes]]). The keyboard fresh-session binding remains unchanged.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -135,13 +135,15 @@ The two compose the launch grammar `/<preset> [[node]]… <free text>`, from whi
 (the first `[[<id>]]`). Both menus only edit text; the New prompt has **no** `/` slash-command menu (presets
 only). A preset launched with **no node target** never assumes a node — the agent takes scope from the prompt,
 else asks first.
-**Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
+**Submitting launches and opens the new document**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to
 finish. Disabling the box for the whole in-flight window was the bug: on a slow or remote launch the entire pane sat
-greyed and unfocused until the POST *and* a board re-read returned. You stay on New Session — the new session just
-appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
-auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
+greyed and unfocused until the POST *and* a board re-read returned. The pending document remains selected while the
+immediate board refresh (else the next poll) surfaces its full row. Creation is the one deliberate selection change;
+after that, only a tab's *removal* (below) moves your selection for you. Once the create response publishes an id, the
+current slot navigates to `#/sessions/<id>`; a `queued`/`starting` row keeps the stable
+session name and shows the shared tab spinner while creation readiness catches up.
 
 Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A
 launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
@@ -175,34 +177,46 @@ base to decide whether to mount the conversation left `?surface=conversation` sh
 session whose stored base was Terminal — terminal layer hidden, conversation layer never created, and with it
 the composer that is the human's only way to speak to a running session. The address decides what is on
 screen; the store decides only what a bare address means.
-Opening a published resource is an ORDINARY navigation to that address: it lands in the strip's current slot
-like every other plain click, dedupes onto an already-open tab, and mints a tab of its own only from the
-gestures that mint any tab ([[tab-strip]]). It used to force a resident tab, which is exactly the reflex that
-filled the strip with things nobody decided to keep. Closing that tab closes the resource view;
+Opening a published resource is an ORDINARY navigation to that address: it appends a file-class workspace tab
+while the session object tab and its selected Terminal/Conversation face remain untouched ([[tab-strip]]). The
+resource never replaces the session document's main face; closing it returns to the held session tab and its
+warm terminal/PTY. It used to overlay the session page and force a tab hunt to get back, which is exactly the
+"把我的终端和 conversation 页直接覆盖掉了…太诡异了" regression this boundary prevents. The dock's sessions
+projection remains a free return to any session.
+The resource tab is a pinned hold from birth, so later file navigation cannot evict it; only its close action
+removes that held workspace object.
 the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
 For a live session that footer is only the enabled message composer. For an offline session it contains the
 same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
-action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
-ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
+action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读`; its
+archive restore action remains available. A `retired` record is the other legislated offline exception: it keeps
+the `⚑` badge that says its worktree is gone and has no relaunch action. These are data states of one footer
+component, not separate panels. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
 once when selected and does not poll. A pane-backed offline or archived record remains Conversation and cannot
-be switched to Terminal. `queued` remains the one exception to offline relaunch: it has intentionally
-not launched and self-starts as a slot frees.
+be switched to Terminal. `queued` and `archive` are the two legislated exceptions to the ordinary offline
+projection: queued has intentionally not launched and self-starts as a slot frees, while archive is closed and
+restored explicitly.
+
+Conversation status rows expose one keyboard-reachable disclosure button (`aria-expanded`) for each `▸ N turns · M tools` transcript entry. Every entry starts folded on first load, after a timeline/status refresh, and when a different session is selected; no data arrival or remount may open it. The disclosure choice is keyed to the status event, not to the current transcript interval, so a later status that closes the interval keeps an already-open entry open and keeps an untouched entry closed. The timeline body is selectable text: Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an accidental editable surface.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
 terminal mount keys on **liveness, never the lifecycle label**: a session whose process is gone reads `offline`
 whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead
-id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
+id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat** and read-safe: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
-pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
+pane's bottom edge. Opening or selecting the session attaches this pane read-only and never focuses or writes
+to it. The document action slot's explicit input button unlocks writing without moving focus; only a later
+press inside xterm begins an interactive turn, and leaving the session locks it again ([[terminal-input]]).
+`Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
 session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,
 diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
-top [[tab-strip]] names the session object with an i18n face suffix; Evals keeps its one canonical scoped address
+top [[tab-strip]] names the session object with its headline and status dot, with no face suffix; Evals keeps its one canonical scoped address
 and is reached by navigation.
 The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
@@ -270,11 +284,11 @@ relaunch, and selected-resource actions register with the shell's [[document-act
 right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness;
 disabled merge remains visible with the exact localized availability reason as its tooltip. The resource picker
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
-Surface choice is address state (`?surface=…`), not an in-document switch control; the diff door uses the distinct
-`file-diff` glyph and navigates to the diff address, and on the diff face that same door stays in the slot,
-LIT, and navigates back to the bare session address — an overlay's door opens and closes, because a door that
-only opens makes the surface a trap for a reader whose tab strip holds one deep link and whose dock is closed.
-The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
+Surface choice is address state (`?surface=…`) controlled by the shell's three-state segmented switcher in the
+document-actions slot. The current segment is lit; each segment replaces the URL and leaves the session tab
+alone, so the diff face has the same one-click return to conversation or terminal and can never trap a deep link.
+The switcher is omitted when the session has only one available face (headless, offline, or archived). The slot
+also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
 to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
 is the right-click on a finding-dock session row ([[dock-modes]]) — one menu, two ways in, the slot for the
 session you are reading and the dock for any other. Other document kinds register nothing, so their tab-row edge
@@ -366,8 +380,8 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
 action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert. Bulk close leaves select mode immediately but aggregates every returned
-refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.
+renders no action alert. The retired multi-select contract is not a current bulk-close path; any future batch
+operation must be specified as an explicit selection mode owned by the dock session list.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
 stop, close, or merge would falsely claim the dashboard sent the agent a prompt.
@@ -378,8 +392,7 @@ a passive [[mentions]] reference, while `@new` uses the selected session as the 
 parent and therefore folds that child below it. File paste, drop, and pick reuse [[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename, archive or close
-([[session-rename]] / [[archive]]), select for bulk archive/close and drag-to-reparent
-([[session-multi-select]]), and **attach** for a live row ([[attach-menu]], which hands over the
+([[session-rename]] / [[archive]]), and **attach** for a live row ([[attach-menu]], which hands over the
 `spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
 suppression. Archive and close share the menu's danger group and each confirms before its lifecycle request.
 Lock on graph locks the board to that session and navigates to
@@ -397,7 +410,20 @@ cancel affordance — so one failed item never collapses a batch into a generic 
 
 Pane-backed terminals are **warm and always connected**: every live pane mounts and opens its socket when the
 console is first entered — never lazily on focus — and stays mounted even while the console is closed, so
-switching tabs **never loses your place** (socket + last painted buffer survive), New Session included. A
+switching tabs **never loses your place** (socket + last painted buffer survive), New Session included.
+
+**A warm terminal belongs to a live pane, and a row must SAY it has one.** The mount gate asks for a
+positive live report — unarchived and online — never for the absence of a dead state. That distinction is
+the whole rule, because the console's list is the working sessions JOINED with the archive index, and an
+archive-index row is a row *summary*: an id, a title, a `closedAt`, and no liveness, harness, or
+capabilities at all. A gate phrased as "not offline" reads that **absence** as alive and mounts a terminal
+plus a socket for every session the project ever retired — measured on this project's board, 66 of 76 warm
+terminals and 66 of 76 sockets belonged to closed sessions, and their 4,290 never-painted row elements were
+the whole of the console's return-to-tab cost ([[workspace-shell]]). The paired half keeps the surface
+total: whatever has **no** live pane — archived, offline, `unknown`, headless — is shown as the
+Conversation, so no selection can land on a session with neither layer mounted.
+
+A
 pane-backed Conversation mounts only on its first visit, then remains mounted after deselection or going offline
 so its timeline cursor and rendered history survive revisits; its refresh timer runs only while selected.
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
@@ -424,8 +450,8 @@ routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based fo
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. The base surface is selected by its route address; there is no pane-backed Terminal/Conversation
-switch control, painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
+hover tooltips. The base surface is selected by its route address and the segmented switcher; there is no painted
+divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live. The
@@ -476,11 +502,17 @@ a 204px default width (15% below the former 240px) and caption-size row text; th
 in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
 status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
-over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), a dim
-header leading each — and within a zone the **newest** session sits on top. The **offline** zone is keyed on
-**liveness, not the authored lifecycle**: a session whose process died while it was `asking`/`review`/`error`
-keeps that pre-death lifecycle, yet it cannot act until relaunched, so it sorts to **offline** rather than
-wrongly sitting under *needs you*; a merely booting session (`starting`/`queued`) stays under *running*. The
+over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), plus the
+fourth **archive** zone for closed records, a dim header leading each — and within a zone the **newest** session
+sits on top. One `sessionDisplayState` projection drives both this bucket and the row glyph: archived wins first;
+otherwise offline liveness (or an explicit offline status) wins over lifecycle and maps the row's effective status
+to `offline`; the two legislated exceptions are `queued`, which has not launched and remains runnable, and
+`archive`, which is a closed zone rendered with the muted offline mark (`○`). Online lifecycle then selects
+needs-you versus running. A session whose process died while it was
+`asking`/`review`/`error` keeps that pre-death lifecycle in the record, yet it cannot act until relaunched, so it
+sorts to **offline** and displays the offline glyph rather than wrongly sitting under *needs you*; a merely
+booting session (`starting`/`queued`) stays under *running*. A parent-child display edge is retained only within
+the same derived zone, so an offline child becomes an offline root instead of following an online parent. The
 **offline zone rests folded behind its own header** — the ONE disclosure for session history. Its header is a
 single row with the COUNT badge first and the `OFFLINE` label second; it contains no `>`/chevron/caret/`▸`
 direction symbol. Retired and
@@ -504,12 +536,16 @@ into history always lands on its visible row. ↑/↓ walk only the visible rows
 selected row is marked by the **highlight wash alone**, no caret. The SessionInterface sidebar, the finding
 dock's projection, and the phone Sessions list share this grouping + compact one-line layout.
 
-All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
-liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
-everywhere they appear (window row, console sidebar row, @-mention and search rows, the mobile card).
+The session-list row surfaces share name and status from `session.js`, whose `sessionDisplayState` projection
+and single **`STATUS_COLOR`** map paint the liveness dot, the status word, **and** the compact sidebar's status
+**glyph** (`STATUS_GLYPH`) the SAME hue everywhere those rows appear (window row, console sidebar row, and the
+mobile card). @-mention and search entries remain their own thin joins and do not mint a second session forest.
 The document-action slot deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour
 only answers *does this session need me?* so a glance sorts the board without a legend; the word still spells the
 exact state. Green for `working` also matches the avatar's liveness ring, so dot, word, and ring never disagree.
+
+The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
+terminal-input ownership; such shell changes do not create a second session-console surface.

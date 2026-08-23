@@ -1,5 +1,5 @@
 ---
-title: dock-projection
+title: dock-modes
 status: active
 hue: 210
 desc: The left finding dock's explorer and sessions projections, selected by the rail.
@@ -20,7 +20,7 @@ The dock is one finding surface with two projections: **explorer** finds governe
 **sessions** finds active sessions.
 
 The explorer itself discloses two SECTIONS — the spec tree ([[file-tree]], open by default) and the real
-directory tree ([[files-tree]], closed). That is not a third projection: a projection decides what the dock
+directory tree ([[disk-tree]], closed). That is not a third projection: a projection decides what the dock
 is FOR right now and is chosen from the rail, while a section is a disclosure inside the one list the
 explorer already is. The distinction survives the band rule below because a section head owns its own
 disclosure control and scrolls with its list, so the dock is still exactly one band with either section
@@ -28,35 +28,18 @@ open, both, or neither.
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
 projection it shows and whether it exists at all. A session document belongs with the session list; a node
-or a governed file belongs with the explorer. **Evals, issues and settings have no natural sidebar, so they
-render none and the main area takes the full width.** That is isolation, not suppression: a board must not
-INHERIT the dock the previous tab was showing. Inheriting it is what made the sidebar feel like a setting
-being maintained beside the work — a tree left open beside a page that has no use for it, costing width, a
-render, and a question in the reader's head about what it is for. Moving between tabs therefore moves the
-sidebar with them, which is the whole activity-bar idea and the reason the rail's lit button reads as
-"where this document belongs" instead of "which button was pressed last". The dock's WIDTH stays one
-window-wide memory; what is isolated is whether it shows and which projection, not how wide the reader
-likes it.
+or a governed file belongs with the explorer. **Bare evals, issues and settings boards have no sidebar,
+while their object details retain the dock.** A bare sessions route is not a session document and starts
+with explorer on a cold workspace. Projection selection is secondary state: graph and sessions route links
+may select explorer or sessions, but the rail light remains route-only. The dedicated mirrored rail panel
+control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
+[[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
+a plain click navigates to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it
+as its own tab.
 
-A rail mode button still selects a projection by hand, and that choice is a **temporary override**: it
-holds while the reader stays on the same document and lapses the moment focus moves to another one. That is
-what makes it an override rather than a second, competing setting; the derived answer is always one focus
-change away. The mode is still persisted, so a reload opens on the last projection in force.
-
-The rail mode buttons change only the finding projection; they never change the active document or the tab
-list — with one exception that is the same principle: asking for **sessions** when the workspace already
-holds a session tab focuses the most recently opened one, because "show me sessions" means the session the
-reader has, not a launch page nobody asked for. When nothing is held the button is merely ARMED: the dock
-opens on that projection and waits for a row to be picked. On a sidebar-less tab the buttons stage the
-choice rather than forcing a dock onto a surface that has none — it appears with the next tab that owns
-one, and the sessions button's return-to-a-held-session makes that immediate. Clicking the already-selected button collapses
-the dock; clicking the other opens the dock in that projection. Explorer rows retain [[file-tree]]'s route
-behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]: a plain click navigates
-to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it as its own tab.
-
-**The dock closes from its own header, and the closing is a movement.** The rail button that opened a
-projection still collapses it; the header carries the same door for the reader who is done with the panel
-they are looking at — one state, two doors, never two states. Opening and closing SLIDE, for one shared
+**The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
+mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
+projection doors only. Opening and closing SLIDE, for one shared
 `--dur-panel` token rather than a duration invented per panel, and the element outlives the state that
 hides it by exactly that long so the reverse is visible too. The animated property is max-width: the dock's
 width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
@@ -66,25 +49,38 @@ Reduced-motion drops the animation and keeps both doors.
 **THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
 its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how
 thick the dock is — which is the [[ui-state-model]] budget made structural rather than remembered. A
-projection may not mint a strip of its own; the explorer's own count row, the sessions `+` row and the
-archive door were three separate strips stacked around one list, three answers to a question this row
-already answers once.
+projection may not mint a strip of its own. **Historical:** the explorer count row, sessions `+` row, and
+archive door were once three separate strips stacked around one list; that arrangement is retired in favor of
+this single header row.
+
+The header and zone tallies are last-good projections during a backend outage. They stay visible for context
+but carry the same translated `stale` marker as the status bar until the shared transport proves reachability
+again; the dock never paints an old count as silently current and never invents a replacement zero.
 
 **SEARCH IS ONE OF THOSE DOORS, and each head opens it on what that head LISTS.** The sessions head searches
 sessions; the explorer head searches nodes. It is the same palette either way — same rows, same keys, same
-matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). Search used to be a
-rail button ([[side-nav]]), where it had to name a scope it could not know: it sat above both projections
-and opened exactly one of them, so a reader asking "search what?" got whichever answer the button's author
-had picked. Sitting inside the head row, the button needs no answer — the row it is in has already given
+matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). **Historical:** search
+used to be a rail button ([[side-nav]]) that had to guess a scope above both projections. That button is retired;
+sitting inside the head row, the current door needs no answer — the row it is in has already given
 one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
 force, so the key and the visible door can never disagree.
 
 The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
-route-selected highlight (`activeSessionId`). The header's `+` navigates to `sessions/new` and its archive
+route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
+archived records form the fourth archive zone; otherwise offline liveness wins over lifecycle and puts the row in
+offline. The two legislated exceptions are `queued`, which has not launched and remains runnable under running,
+and `archive`, which is a closed zone rendered with the muted offline mark (`○`). While online
+asking/review/done/close-pending/error form needs-you and the remaining online states
+form running. A parent-child display edge is kept only within one derived zone, so an offline child is a root in
+the offline bucket rather than a row under an online parent. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
-overlay and all session content remain in the holding region. Rows are read-only navigation: plain click
-replaces the current tab and ctrl/command-click holds a new one.
+overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
+else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
+separate gesture with its own section below, and it changes no address.
+When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
+keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
+well; the reveal is derived from `activeSessionId`, not a second selection state.
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim
@@ -101,9 +97,48 @@ being a menu's anchor is not mutation state living in the dock: the row still on
 action the menu offers is performed by the menu.
 
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
-document tools. Drag-to-reparent and multi-select are deliberately removed in this milestone rather than
-silently disappearing: they were mutable gestures whose only home was the withdrawn list, and the dock's
-finding projection must not grow mutation state. The existing keyboard fresh-session binding remains active.
+document tools. Multi-select stayed retired with the list that owned it. The existing keyboard fresh-session
+binding remains active.
+
+## a row can be MOVED, and that is not navigation
+
+**Dragging a session row is how a session is moved, and it belongs wherever the sessions are listed.** It
+was withdrawn with the old list on the reasoning that the dock's finding projection must not grow mutation
+state — and that reasoning was one word too broad. What a finding surface must not grow is a second place
+where a session's *state* is decided; where a session SITS is not its state, it is the shape of the list
+itself, and a list is the only surface that can express a move at all. Withdrawing the gesture did not move
+it somewhere better, it deleted it: there has since been no pointer route anywhere in the window for
+"put this session under that one". Right-click already proved the shape — the row is a menu's anchor without
+the dock owning what the menu does ([[session-row]]) — and a drag is the same bargain: the dock says WHERE,
+the existing backend call does the moving.
+
+Three landings, and each is a place that was already on screen:
+
+- **Onto another row** — that row becomes the parent. Three landings refuse themselves and read as no
+  landing at all: a row onto itself, a row onto a descendant of its own (which would make a cycle out of a
+  tree), and a row onto the parent it already has.
+- **Into the list's own GAP, below the rows** — out of the subtree, to the top level. A tree has nowhere to
+  point at "no parent", so the empty space answers for it, and the list outlines itself while a nested row
+  is in hand. The outline is deliberate and so is what it replaced: the first version inserted a dashed
+  strip at the head of the list when a drag began, which pushed every row down by its own height at the
+  exact moment the reader was aiming at one — the row they were reaching for moved out from under the
+  pointer. An affordance for a move must not itself move anything.
+- **Onto the ARCHIVE DOOR in the header** — the same door that opens the archive takes what is dropped on
+  it. One door, one meaning ("where filed sessions go"), reached two ways; a separate drop strip would be a
+  second answer to a question this button already answers. It arms itself while a session is carried and
+  goes hot in the danger accent when the session is over it, because the drop removes a worktree.
+
+**A drop on the archive door asks the SAME confirm the menu's close asks** ([[session-rename]]'s menu). The
+removal is identical, so it is one prompt with two openers rather than two prompts for one destruction —
+two dialogs is two places for the wording, the danger styling and the background-removal semantics to
+drift. That a drag is a more deliberate gesture than a right-click does not make the removal less
+destructive.
+
+The pointer behaviour is the workspace's shared gesture ([[drag-gesture]]): six pixels of slack, so click,
+double-click-to-hold, alt-click-to-lock and the context menu are all untouched, and the click the browser
+emits after a real drag is eaten so a drop never also navigates. The move itself is the backend's existing
+reparent for both directions — the top level is the parent `null`, which is what it already was in the
+record, so there is no second notion of "detach" anywhere.
 When the dock is in sessions mode, `SessionInterface` renders no `si-list`, board scrollport, list resizer, or
 48px stub: the terminal or timeline owns the entire document content region. This is the [[workspace-shell]]
 four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on the right, AMBIENT at

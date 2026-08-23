@@ -4,7 +4,7 @@ import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
-import FilesTree from './FilesTree.jsx'
+import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
 
@@ -78,7 +78,8 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
-              onClick={() => navigate('spec', node.id)} />
+              onClick={(e) => (e.ctrlKey || e.metaKey ? pinTab : navigate)('file', `.spec/${node.id}/${f.name}`)}
+              onDoubleClick={() => pinTab('file', `.spec/${node.id}/${f.name}`)} />
           ))}
           {children.map((c) => (
             <NodeRow key={c.id} node={c} depth={depth + 1} kids={kids} focusId={focusId} onOpenFile={onOpenFile} />
@@ -92,7 +93,7 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
 // THE EXPLORER HAS TWO DISCLOSURES, and they are two PROJECTIONS of one project rather than two features.
 // SPECS is the tree above — the project shaped the way this product is about it, and it stays open by
 // default because it is the main body of the explorer, not one option among two. FILES is the disk, listed
-// as the disk ([[files-tree]]), closed by default: it answers the other thing a reader does constantly —
+// as the disk ([[disk-tree]]), closed by default: it answers the other thing a reader does constantly —
 // open a file whose location they know — which the spec tree cannot answer, because a path only appears
 // there if some node happens to claim it.
 //
@@ -145,7 +146,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
         </Section>
         {/* mounted only while open, so a reader who never opens it never costs the backend a listing */}
         <Section name={t('fileTree.files')} open={sections.files} onToggle={() => toggle('files')}>
-          <FilesTree />
+          <DiskTree />
         </Section>
       </div>
       {!embedded && <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />}

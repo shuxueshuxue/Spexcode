@@ -32,7 +32,7 @@ export const UI_COMMANDS = [
     when: (session) => !!session?.status, availability: mergeAvailability,
     labelKey: 'session.merge', titleKey: 'session.cmd.mergeTitle', descKey: 'session.cmd.mergeDesc' },
   { name: 'relaunch', color: 'blue', icon: 'rotate-ccw', button: true, typed: false,
-    when: (session) => !!session?.status && session.status !== 'queued' && session.liveness === 'offline',
+    when: (session) => !!session?.status && session.status !== 'queued' && session.status !== 'retired' && session.liveness === 'offline',
     labelKey: 'session.relaunch', titleKey: 'session.relaunchTitle' },
   { name: 'stop',  color: 'muted',  button: false, when: (session) => !!session?.status && session.status !== 'offline' && session.status !== 'queued' && session.liveness !== 'offline',
     titleKey: 'session.cmd.stopTitle', descKey: 'session.cmd.stopDesc' },

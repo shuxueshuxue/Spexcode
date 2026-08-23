@@ -8,11 +8,9 @@ desc: SpexCode's presence on a host it does not own — shipped as one package, 
 
 ## raw source
 
-SpexCode claims software engineering's HEAD — the recording of intent — and its TAIL — the storage of
-measurement — and deliberately leaves the MIDDLE, construction, to the harness/agent/test framework;
-freshness stitches the two ends into a closed loop. That position sizes the footprint: what SpexCode
-plants in a host is the head+tail ASSET (the spec tree and its readings, tracked like any source) plus the
-derived wiring that reaches an agent — and nothing of the middle.
+SpexCode claims software engineering's HEAD (intent) and TAIL (measurement), while the harness/agent/test
+framework owns the MIDDLE (construction). [[residence]] is the canonical contract for how that head+tail asset,
+derived wiring, and machine facts live in a host; this node only indexes the lifecycle stations below.
 
 SpexCode is always a guest — on a user's machine, in an existing repo, inside an agent the user launched
 themselves. A guest's footprint must be one deliberate lifecycle: arrive as a single installable unit,

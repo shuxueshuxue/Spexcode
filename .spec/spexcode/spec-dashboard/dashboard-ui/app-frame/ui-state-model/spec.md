@@ -33,10 +33,8 @@ A workspace state is a point in the product of five axes. [[workspace-shell]] ow
 [[session-console]] the fifth.
 
 - **R — route kind** ∈ {graph, evals, issues, settings, empty, spec, file, session}. What the address
-  names; [[view-registry]] maps it to what renders. `graph` stays in the axis as a **legacy address**: the
-  rail no longer offers it and nothing lands on it, but it is still reachable by typing it, so it is still
-  a state the frame has to hold ([[node-graph]]). Retiring an entrance does not shrink the state space —
-  only deleting the address would, and the address is deliberately kept.
+  names; [[view-registry]] maps it to what renders. `graph` is a live rail destination and deep-link address.
+  Bare review/settings boards are full-width, while object detail routes remain document states with a dock.
 - **D — left dock** ∈ {closed, explorer, sessions}. Open/closed and the projection are one axis, because
   a dock with no projection is not a state ([[dock-modes]]).
 - **C — right context** ∈ {closed, open}. Meaningful only when R = spec; forced closed everywhere else,
@@ -65,6 +63,12 @@ things are deliberately **not** bands, because each was a tempting way to smuggl
 - **Resize handles are not bands.** A grab strip between two panes is a seam, not a row ([[resizable-panes]]).
 - **The preview slot is a tab property**, not a band. What a tab is previewing changes the content, not the
   frame around it.
+- **A wrapped tab strip is one band, at any height.** The strip lays its working set out on as many rows as
+  it needs rather than scrolling ([[tab-strip]]); the rows are the strip's internal layout, and a model that
+  counted them would be counting the reader's open documents as chrome. This is the one place the model
+  separates a band's COUNT from its thickness, and the separation is deliberate: the budget bounds how many
+  things frame the content, never how tall any one of them is. Thickness here is the reader's own — it grows
+  only when someone holds another document, and it shrinks when they close one.
 
 A vertical scrollport is where the content begins: everything below it belongs to the document, so nothing
 inside one is chrome, whatever its position ([[page-scroll]]). Membership is **declared, not measured** —
@@ -80,7 +84,7 @@ says the dock is ONE band, so a mode row stacked above its header is a breach th
 
     B(state) = 1(rail) + dock + 1(tabstrip) + 1(statusbar) + context
 
-    dock    = 1  iff  D ≠ closed  and  R ∉ {evals, issues, settings}
+    dock    = 1  iff  D ≠ closed  and  R is not a bare evals/issues/settings board
     context = 1  iff  R = spec    and  C = open
 
 Rail, tab strip and status bar are unconditional: one persistent way to change destination
@@ -89,10 +93,9 @@ Rail, tab strip and status bar are unconditional: one persistent way to change d
 it stays on every route, so the working set is always in reach ([[tab-strip]]). The dock and the context
 dock are the only conditional bands, and the dock's condition has **two** factors because the sidebar is a
 property of the focused tab and not a window-wide setting ([[dock-modes]]): the reader's own open/closed
-choice, and whether the focused tab has a natural sidebar at all. Evals, issues and settings do not — they
-are singleton tabs with their own whole surface — so they render none and the main area takes the full
-width. The rule is ISOLATION, not suppression: a board never inherits the dock the previous tab was showing,
-which is what kept the sidebar feeling like a setting to maintain rather than a fact about what is held.
+choice, and whether the focused tab has a natural sidebar at all. Only bare evals, issues and settings boards
+lack that sidebar; object details retain it. The rule is ISOLATION, not suppression: a bare board never
+inherits the dock the previous tab was showing, which keeps the sidebar a fact about what is held.
 Split adds a **column**, never a band. U picks what fills the content area, never how much chrome frames it.
 
 **Theorem: 3 ≤ B ≤ 5 over every reachable state.** The floor is a closed dock on a non-spec route
@@ -106,7 +109,13 @@ area, below the scrollport, or take the place of a band rather than stack on one
 a representative traversal of the state space in a real browser against the running dashboard — every route
 kind against every dock value, the context axis doubled on the one route that owns it, both guaranteeable
 session surfaces, and a split state — classifies the bands the DOM actually renders, and fails any state
-where measured ≠ predicted, ranked by excess and named by offending class. The classifier is seeded with
+where measured ≠ predicted, ranked by excess and named by offending class.
+
+**Every state is entered with a WORKING SET DEEP ENOUGH TO WRAP the strip,** and the row count is printed
+beside the band count. Measuring the fattest strip rather than an empty one is the stronger gate — an empty
+strip is the one shape in which a stowaway band has nowhere to hide — and it turns "one band however many
+rows" from a claim into a measurement. The gate fails if the strip stops wrapping, because a property that
+is no longer exercised is a property no longer checked, even while every state still passes. The classifier is seeded with
 the shell's known chrome inventory so a band thicker than the geometric threshold is still caught by name,
 and falls back to geometry — a non-growing, statically-positioned container that spans its region's long
 axis and stays thin on the short one — so chrome the inventory has never heard of is caught anyway.

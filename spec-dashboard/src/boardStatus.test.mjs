@@ -17,6 +17,13 @@ test('the shell owns one complete board ledger on every route', () => {
   }
 })
 
+test('board tally actions use the shared icon registry', () => {
+  assert.match(shell, /name="triangle-alert" size=\{13\}/)
+  assert.match(shell, /name="issue-opened" size=\{13\}/)
+  assert.doesNotMatch(shell, /title=\{t\('stats\.driftTitle',[\s\S]*?>⚠<\/BoardStat>/)
+  assert.doesNotMatch(shell, /title=\{page === 'graph'[\s\S]*?>◆<\/BoardStat>/)
+})
+
 test('the retired graph contribution keeps only the shared walk step', () => {
   assert.match(graphStats, /nextGraphStatNode = \(ids, focusId\) => cycleNext\(ids, focusId\)/)
   assert.doesNotMatch(graphStats, /useStatusItem|id: 'graph-stats'|className="graph-stats"/)

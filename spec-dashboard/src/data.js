@@ -3,46 +3,34 @@ import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the single-layer expansion frontier chosen by
-// GraphView. Coordinates depend only on tree shape plus that frontier, never on the focused id. A node's
-// visible child block owns one slot per visible descendant block, so adjacent branches reserve the total
-// height of the next layer before their parents are centred. This is the part the old independent-centre
-// recursion missed: two wide sibling blocks could otherwise occupy the same rows.
+// GraphView. Each depth is its own column: roots are evenly spaced around the origin, then the children of
+// the spine node in the previous column are evenly spaced around that parent's y. A later column therefore
+// never contributes row budget to an earlier one.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })
   const pos = {}
-  // The span is deliberately based on each node's immediate visible child block. Deeper expansion can
-  // add nodes in a later column without re-spacing an unrelated column unless that later block itself needs
-  // more rows; every occupied row still has the same centre-to-centre step and a four-pixel clear gap.
-  const spans = new Map()
-  const span = (id) => {
-    if (spans.has(id)) return spans.get(id)
-    const cs = expanded.has(id) ? (kids[id] || []) : []
-    const value = cs.length ? cs.reduce((total, child) => total + span(child), 0) : 1
-    spans.set(id, value)
-    return value
-  }
-  const place = (id, depth, slot) => {
-    pos[id] = { x: depth * X_GAP, y: slot * Y_GAP }
-    const cs = expanded.has(id) ? (kids[id] || []) : []
-    if (!cs.length) return
-    const total = cs.reduce((sum, child) => sum + span(child), 0)
-    let cursor = slot - total / 2
-    cs.forEach((child) => {
-      const width = span(child)
-      place(child, depth + 1, cursor + width / 2)
-      cursor += width
-    })
-  }
   const roots = nodes.filter((n) => !n.parent)
-  const total = roots.reduce((sum, root) => sum + span(root), 0)
-  let cursor = -total / 2
-  roots.forEach((root) => {
-    const width = span(root)
-    place(root.id, 0, cursor + width / 2)
-    cursor += width
-  })
+  const placeColumn = (ids, depth, centerY) => {
+    const start = centerY - ((ids.length - 1) / 2) * Y_GAP
+    ids.forEach((id, index) => { pos[id] = { x: depth * X_GAP, y: start + index * Y_GAP } })
+  }
+
+  if (!roots.length) return pos
+  placeColumn(roots.map((root) => root.id), 0, 0)
+
+  // The normal frontier has one expanded spine node per depth. Keeping the column walk explicit makes
+  // the single-layer contract visible: only that node's direct children enter the next column.
+  let spine = roots.find((root) => expanded.has(root.id))?.id
+  let depth = 1
+  while (spine) {
+    const children = expanded.has(spine) ? (kids[spine] || []) : []
+    if (!children.length) break
+    placeColumn(children, depth, pos[spine].y)
+    spine = children.find((id) => expanded.has(id))
+    depth += 1
+  }
   return pos
 }
 

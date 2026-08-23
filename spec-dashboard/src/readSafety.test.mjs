@@ -16,6 +16,8 @@ test('live terminals are writable by default and only suspended input asks for c
   assert.match(session, /resumeRequired=\{session\.status === 'asking'\}/)
   assert.match(term, /setInputConfirmOpen\(true\)/)
   assert.match(term, /setPendingInput\(data\)/)
+  assert.match(term, /isTerminalPointerReport[\s\S]*startsWith\('\\x1b\[M'\)/)
+  assert.match(term, /isTerminalPointerReport[\s\S]*\^\\x1b\\\[\[0-9;\]\+\[Mm\]\$/)
   assert.match(term, /resumeInputConfirm/)
   assert.doesNotMatch(term, /resumeInputConfirm[^\n]*autoFocus/)
 })

@@ -72,4 +72,5 @@ fall through as `\x03`/SIGINT into the application), and it stands down only for
 field's** own selection — the helper textarea's mirrored selection *is* the terminal's, never a
 stand-down reason. Without a selection the chord stays the terminal's ordinary interrupt. Motion
 tracking is filtered at the adapter so hovering emits nothing; only wheel reports leave the browser,
-routed by tmux's native bindings ([[live-view]] owns that contract).
+routed by tmux's native bindings ([[live-view]] owns that contract). Every xterm mouse report format
+(SGR, X10, and URXVT) is pointer traffic at the input boundary, never the first resume key.

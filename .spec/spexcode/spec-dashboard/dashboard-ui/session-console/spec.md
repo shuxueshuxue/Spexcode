@@ -373,8 +373,8 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
 action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert. Bulk close leaves select mode immediately but aggregates every returned
-refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.
+renders no action alert. The retired multi-select contract is not a current bulk-close path; any future batch
+operation must be specified as an explicit selection mode owned by the dock session list.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
 stop, close, or merge would falsely claim the dashboard sent the agent a prompt.
@@ -385,8 +385,7 @@ a passive [[mentions]] reference, while `@new` uses the selected session as the 
 parent and therefore folds that child below it. File paste, drop, and pick reuse [[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename, archive or close
-([[session-rename]] / [[archive]]), select for bulk archive/close and drag-to-reparent
-([[session-multi-select]]), and **attach** for a live row ([[attach-menu]], which hands over the
+([[session-rename]] / [[archive]]), and **attach** for a live row ([[attach-menu]], which hands over the
 `spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
 suppression. Archive and close share the menu's danger group and each confirms before its lifecycle request.
 Lock on graph locks the board to that session and navigates to

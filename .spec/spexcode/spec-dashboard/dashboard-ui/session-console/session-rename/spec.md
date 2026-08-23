@@ -71,7 +71,8 @@ derived label. Renaming an unknown session fails loudly — the endpoint answers
 success.
 
 Archive is reached from the sessions dock's bottom `View all` door and remains a document overlay; it is not
-part of this tools menu. Multi-select is retired with the withdrawn duplicate list. Moving a session by drag
+part of this tools menu. Multi-select is retired with the withdrawn duplicate list; any future batch operation belongs
+to a future explicit selection mode in the dock session list, as [[session-multi-select]] records. Moving a session by drag
 is NOT retired and is not this node's: it lives with the list that shows the sessions ([[dock-modes]]),
 because where a session sits is the shape of that list rather than an action on one session.
 

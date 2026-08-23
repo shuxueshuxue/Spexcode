@@ -1,6 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import * as sessionModule from './session.js'
 import { sessionAncestorIds, sessionDisplayState, sessionFooterState, sessionForest, sessionPresentationOrder, sessionZone, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+
+test('retired session projection exports stay removed', () => {
+  for (const name of ['ZONE_ORDER', 'splitArchived', 'sessionTitle']) {
+    assert.equal(name in sessionModule, false, `${name} is a dead compatibility export`)
+  }
+})
 
 test('display projection uses the package status for both zone and glyph', () => {
   const cases = [

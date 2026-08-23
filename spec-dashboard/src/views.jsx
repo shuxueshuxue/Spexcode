@@ -73,26 +73,30 @@ function IssuesView({ param, query }) {
 }
 function SettingsView() { return <Settings /> }
 
-// `document(page, param)` marks what the working set may hold. Only an OBJECT qualifies: a node, a file, a
-// session, an eval detail, or an issue detail. Bare evals/issues/settings boards are destinations, not
-// documents, regardless of whether they were reached from the rail, a cold link, or a query-bearing chip.
+// `surface` selects the host chrome; `document(page, param)` marks what the workspace working set may hold.
+// Review findings are deliberately not workspace objects: evals/issues list and detail addresses stay on
+// their own surface regardless of whether they were reached from the rail, a cold link, or a query-bearing
+// chip. Only workspace objects (nodes, files, and identified sessions) can enter the strip.
 // What is left out is what has no object: graph (the hidden-tab workspace bottom sheet), bare sessions, the
 // sessions launch page (a form), review/settings boards, and `empty`, which is parsed as graph and has no
 // separate view.
 export const VIEWS = {
   // `graph` is registered as the document-free workspace bottom sheet ([[node-graph]]).
-  graph:    { component: GraphView,    document: false, className: 'view-graph' },
-  spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
-  file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
+  graph:    { component: GraphView,    surface: 'workspace', document: false, className: 'view-graph' },
+  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-spec' },
+  file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
-  sessions: { component: SessionsView, document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
-  evals:    { component: EvalsView,    document: (_page, param) => param != null, className: 'view-evals' },
-  issues:   { component: IssuesView,   document: (_page, param) => param != null, className: 'view-issues' },
-  settings: { component: SettingsView, document: false, className: 'view-settings' },
+  sessions: { component: SessionsView, surface: 'workspace', document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
+  // Findings are a separate review surface. They never enter the workspace working set, including
+  // detail addresses that used to be misclassified as ordinary documents.
+  evals:    { component: EvalsView,    surface: 'review', document: false, className: 'view-evals' },
+  issues:   { component: IssuesView,   surface: 'review', document: false, className: 'view-issues' },
+  settings: { component: SettingsView, surface: 'settings', document: false, className: 'view-settings' },
 }
 
 export const viewFor = (page) => VIEWS[page] || VIEWS.sessions
+export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
 export const isDocument = (page, param = null) => typeof VIEWS[page]?.document === 'function'
   ? VIEWS[page].document(page, param)
   : !!VIEWS[page]?.document

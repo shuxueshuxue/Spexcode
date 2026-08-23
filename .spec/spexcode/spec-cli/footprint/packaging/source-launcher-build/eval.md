@@ -12,6 +12,17 @@ scenarios:
       path: spec-cli/src/launcher-tsx.test.ts
       name: a source workspace launcher builds its missing runtime closure before it invokes it
     code: spec-cli/src/launcher-tsx.test.ts
+
+  - name: concurrent-source-launchers-single-flight-build
+    tags: [cli]
+    description: >
+      Start two source-workspace launchers while the runtime closure is absent.
+    expected: >
+      Exactly one workspace build runs; both launcher processes execute the resulting compiled CLI.
+    test:
+      path: spec-cli/src/launcher-tsx.test.ts
+      name: concurrent source launchers single-flight the workspace build
+    code: spec-cli/src/launcher-tsx.test.ts
 ---
 
 # source launcher build loss

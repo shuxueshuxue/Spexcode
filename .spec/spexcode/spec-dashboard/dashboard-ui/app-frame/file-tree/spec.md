@@ -31,11 +31,11 @@ built for scanning.
 wherever they are listed rather than teaching the reader two vocabularies for one thing.
 
 **A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]; a governed file row opens
-[[file-view]]. The dock used to open a layer over the frame, because the frame had no content area to open
+[[file-view]], and an attachment row opens the same FileView through its `.spec/<node>/<name>` logical
+address. The dock used to open a layer over the frame, because the frame had no content area to open
 anything into — that limitation is gone with [[workspace-shell]], and with it the layer. Clicking here and
-clicking a tab now reach the same place by the same address. A plain click opens the spec/file preview slot;
-ctrl/⌘-click or double-click HOLDS the document as a resident tab. The preview slot is the only replaceable
-address and is fenced to spec/file by [[tab-strip]].
+clicking a tab now reach the same place by the same address. Plain, ctrl/⌘, and double-click placement are
+the shared [[tab-strip]] gestures; the tree does not carry a second tab policy.
 
 **The tree names itself through the dock, not through a strip of its own.** "Explorer" and the node tally
 live in [[dock-modes]]' single header row, because they describe the dock that is currently projecting the

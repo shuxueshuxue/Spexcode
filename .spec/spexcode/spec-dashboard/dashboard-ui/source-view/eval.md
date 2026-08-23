@@ -3,16 +3,15 @@ scenarios:
   - name: governed-file-opens-in-place
     tags: [frontend-e2e]
     description: >-
-      Drive a real browser to the board, focus a node that governs a file, open the `i` popup, and click the
-      `code:` chip. Read the rendered DOM — the editor's `contenteditable`, the gutter's line count, the
-      footer text, and the first line — and screenshot the result. File with `spex eval add source-view
-      --scenario governed-file-opens-in-place --image <png> --pass`.
+      Drive a real browser to a spec document, confirm no source reader is mounted there, click its `code:`
+      chip, and read the independent `#/file/<path>` document. Inspect the editor's `contenteditable`, the
+      gutter's line count, the progress state, and the first line; screenshot both settled states. File with
+      `spex eval add source-view --scenario governed-file-opens-in-place --image <png> --pass`.
     expected: >-
-      The file's own bytes render under the prose that claims it, inside the same scroll, with the editor
-      reporting `contenteditable="false"` — there is no editing surface on the board. The gutter numbers the
-      real lines, and the footer states the file's true size rather than the size of whatever window has
-      arrived. A `code:` entry naming a symbol (`File.jsx#Symbol`) opens the FILE; several such entries do
-      not open several viewers.
+      The spec document is prose-only with no `.specview-code` and no automatic `SourceView`. Clicking a
+      `code:` entry focuses its independent file tab at `#/file/<path>`; the editor reports
+      `contenteditable="false"`, the gutter numbers real lines, and progress reflects the file's true size.
+      Several entries naming one file still resolve to that one file address.
   - name: viewer-follows-the-board-theme
     tags: [frontend-e2e]
     description: >-

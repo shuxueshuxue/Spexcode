@@ -39,8 +39,8 @@ as its own tab.
 
 **The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
-projection doors only. Opening and closing SLIDE, for one shared
-`--dur-panel` token rather than a duration invented per panel, and the element outlives the state that
+projection doors only. Opening and closing slide with one shared `--dur-panel` token rather than a duration
+invented per panel, and the element outlives the state that
 hides it by exactly that long so the reverse is visible too. The animated property is max-width: the dock's
 width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
 inside a keyframe is ignored by the spec, which is how the first version of this animated nothing at all.
@@ -152,8 +152,8 @@ the bottom — so one window cannot expose two competing navigation lists.
 The dock mode is not a second navigation model and the DOCK does not read the global address: the shell
 derives the projection from the focused document and passes it down, exactly as it passes the board data.
 Whether the dock renders is therefore two facts and not one — the reader's open/closed choice, and whether
-the focused tab has a sidebar at all ([[ui-state-model]] counts the band from exactly those two). Below the one header row the dock renders
-content only — the tree, or the session forest. There is no dock modebar.
+the focused tab has a sidebar at all ([[ui-state-model]] counts the band from exactly those two). Beneath that
+header, the dock renders content only — the tree, or the session forest. There is no dock modebar.
 
 **Its resting width is a margin, not a column.** The dock opens at 200px and will not be dragged below
 160px: wide enough that a session headline or a file name reads before it ellipses, narrow enough that the

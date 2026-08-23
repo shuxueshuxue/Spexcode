@@ -54,7 +54,7 @@ anchor: focus→nearest child midpoint at the `43%` canvas token, or parent↔fo
 focus row on the vertical axis and a vertical clamp that keeps the visible frontier reachable. If the visible
 bbox already fits at the current user zoom, the camera fits it with one left gutter at or below that user zoom;
 fit may lower zoom to make content fit, never raise a deliberate user zoom. Anchored navigation preserves the
-user's zoom and lowers it only when the anchored frontier cannot fit. The existing smooth transition remains, clicks absorb the instantaneous 0px layout delta, and
+user’s zoom and lowers it only when the anchored frontier cannot fit. The existing smooth transition remains, clicks absorb the instantaneous 0px layout delta, and
 graph-space coordinates are untouched.
 
 - **Move by relationship, not geometry.** Navigation walks the parent / child / column structure (see [[node-graph]]), never pixel distance: up/down within the focus column, left to the parent, right to the nearest child. The one exception is a leaf's right key — with no child below it, it steps to the nearest node in the columns to its right, in grid cells (column and row gaps weigh equally) and only rightward, so the parent key walks back.

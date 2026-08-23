@@ -98,8 +98,10 @@ icon system: solid outer rings are current; dashed outer rings are stale; the in
 the last verdict.
 
 Last-good tallies remain useful during a backend outage, but they are not current truth. While the shared
-transport is offline, every numeric workspace tally visibly carries the translated `stale` marker and muted
-treatment; the global shell banner names the outage and owns retry. A successful transport response removes
+transport is offline, every numeric workspace tally visibly carries a compact `~` stale marker (with the
+translated `stale` word retained as its accessible name and tooltip) and muted treatment; the global shell
+banner names the outage and owns retry. The compact marker keeps the complete right group within the 480px
+bound even while all last-good digits remain rendered and actionable. A successful transport response removes
 the marker without replacing the numbers with invented zeroes.
 
 **Restraint is the resting state.** A tally is muted text plus the board's own status marks; it spends a

@@ -261,7 +261,7 @@ const storedGraphFocus = () => {
 function BoardStatus({ specs, sessions, page }) {
   const t = useT()
   const { offline } = useBackendHealth()
-  const stale = offline ? <span className="sb-stale">{t('backend.stale')}</span> : null
+  const stale = offline ? <span className="sb-stale" aria-label={t('backend.stale')} data-tip={t('backend.stale')}>~</span> : null
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.

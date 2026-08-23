@@ -318,7 +318,11 @@ body {
 }
 .dock-head-name { color: var(--ink2); font-weight: var(--weight-medium); }
 .dock-head-count { color: var(--muted); font-variant-numeric: tabular-nums; }
-.dock-stale, .sb-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
+.dock-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
+.sb-stale {
+  display: inline-flex; align-items: center; justify-content: center; width: 8px; height: 14px; margin-left: 2px;
+  color: var(--yellow); font-style: normal; font-size: var(--type-caption); line-height: var(--line-status);
+}
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;

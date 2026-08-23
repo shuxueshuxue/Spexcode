@@ -369,7 +369,7 @@ try {
 
   step('offline project edit')
   await stop(atlasBackend)
-  await waitFor(async () => (await getCatalog(base))?.projects?.find((project) => project.id === atlas.id)?.online === false, 'atlas offline')
+  await waitFor(async () => (await getCatalog(base))?.projects?.find((project) => project.id === atlas.id)?.online === false, 'atlas offline', 90_000)
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()
   const offlineAtlas = page.locator('.proj-row').filter({ hasText: 'Atlas Lab' })

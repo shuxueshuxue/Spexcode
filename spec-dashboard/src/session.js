@@ -25,33 +25,17 @@ export const STATUS_GLYPH = {
   corrupt: '⚠', retired: '⚑',
 }
 
-// the three triage zones the session list groups into — "whose turn is it?". `offline` = the process is
-// DEAD/dormant (can't act until relaunched) — checked FIRST (except queued, which is not launched yet), because a session whose process died while
-// asking/review/error keeps that pre-death lifecycle, yet it belongs at the bottom, not under Needs You.
-// `need` = the ball is with the HUMAN (asking / review / done / close-pending / error → answer, review,
-// close, fix); `run` = self-driving, the agent's turn (working / parked / starting / queued / idle — booting
-// counts as running, not dead). Closed sessions occupy the final archive zone. Same partition drives every
-// session-list surface.
-// `corrupt` joins them: an unreadable record cannot resolve itself and no agent can act on it, so it is
-// squarely the human's — and it carries liveness `unknown` (never probed), so the offline check above does not
-// claim it first. `retired` is deliberately NOT here: its agent really is down, so it sorts with the offline
-// rows and its badge, not its zone, is what says the worktree is gone.
+// Fixed board buckets consume the status published by the session package. The dashboard does not replace an
+// authored lifecycle with a liveness probe: a dead review/asking/close-pending record remains needs-you.
 const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error', 'corrupt'])
-const zoneFor = (s) => {
-  if (s?.archived) return 'archive'
-  // queued is the one liveness-offline exception: it has not launched yet and remains runnable when a slot opens.
-  if (s?.status !== 'queued' && (s?.liveness === 'offline' || s?.status === 'offline')) return 'offline'
-  return NEED_STATUS.has(s?.status) ? 'need' : 'run'
-}
-// One board projection feeds both the zone bucket and every compact row mark. Offline liveness wins over
-// the retained lifecycle (except queued, which has not launched and remains runnable): a dead asking/review/error
-// session is still shown as offline until relaunched.
-// Archive is an explicit fourth zone; archived records are closed and therefore use the same muted offline mark.
 export const sessionDisplayState = (s) => {
-  const zone = zoneFor(s)
-  const status = s?.status === 'retired'
-    ? 'retired'
-    : (zone === 'offline' || zone === 'archive' ? 'offline' : s?.status)
+  const status = s?.status || 'idle'
+  const zone = s?.archived
+    ? 'archive'
+    : NEED_STATUS.has(status)
+      ? 'need'
+      : status === 'offline' || status === 'retired' ? 'offline'
+        : 'run'
   return {
     zone,
     status,
@@ -64,9 +48,8 @@ export const ZONE_ORDER = ['need', 'run', 'offline', 'archive']
 
 export const isArchived = (s) => !!s?.archived
 export const sessionFooterState = (s) => {
-  const zone = sessionDisplayState(s).zone
-  if (zone === 'archive') return 'archived'
-  if (zone === 'offline') return 'offline'
+  if (isArchived(s)) return 'archived'
+  if (s?.status !== 'queued' && (s?.status === 'offline' || s?.liveness === 'offline')) return 'offline'
   return 'live'
 }
 export const splitArchived = (sessions = []) => ({
@@ -79,7 +62,7 @@ export const splitArchived = (sessions = []) => ({
 // login) resolves to null, honestly.
 export const liveSession = (sessions, id) => {
   const s = id ? (sessions || []).find((x) => x.id === id) : null
-  return s && sessionZone(s) !== 'offline' && sessionZone(s) !== 'archive' ? s : null
+  return s && s.status !== 'offline' && s.liveness !== 'offline' && !isArchived(s) ? s : null
 }
 // the ONE source-session PRESENCE join ([[live-session-filter]] — the session:present|missing facet):
 // does the id still resolve to a session on the current board at ALL, any zone? Presence, not liveness —
@@ -113,8 +96,6 @@ export function nestSessions(sessions) {
   const childrenOf = new Map()
   const roots = []
   for (const s of sessions) {
-    // A parent-child edge cannot cross a liveness/lifecycle zone. Otherwise a dead child follows a live
-    // root through `emit` and is rendered under the wrong zone header. It becomes a root in its own bucket.
     const parent = s?.parent && s.parent !== s.id ? byId.get(s.parent) : null
     const p = parent && present.has(parent.id) && sessionZone(parent) === sessionZone(s) ? parent.id : null
     if (p) { const arr = childrenOf.get(p) || []; arr.push(s); childrenOf.set(p, arr) }

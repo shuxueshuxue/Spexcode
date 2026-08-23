@@ -295,8 +295,25 @@ function readRecord(id: string): SessRec | null {
   const entry = readAliasedRecordEntry(id)
   if (entry.kind === 'absent') return null
   if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
-  try { return fromRaw(entry.raw) }
+  try {
+    const record = fromRaw(entry.raw)
+    // After cutover, session.json is only the runtime/worktree record. Lifecycle is owned by the
+    // session application. Overlaying here keeps every internal caller on the same fact instead of
+    // letting a stale JSON snapshot steer a launch, close, or hook decision.
+    const application = configuredSessionApplicationIfCutover()
+    if (!application || !record.governed) return record
+    const state = application.readState(record.session)
+    if (!state) throw new ResourceConflict(`session ${record.session} has no canonical application state after JSON cutover`)
+    return {
+      ...record,
+      status: state.status as SessionLifecycle,
+      proposal: isSessionProposal(state.proposal) ? state.proposal : null,
+      note: state.note,
+      parent: state.parentSessionId,
+    }
+  }
   catch (error) {
+    if (error instanceof ResourceConflict) throw error
     throw new SessionRecordUnusable('corrupt', id,
       `session record is unreadable: ${sessionRecordPath(id)} — ${error instanceof Error ? error.message : String(error)}. The file is kept as-is; nothing will rewrite it.`)
   }
@@ -454,6 +471,16 @@ function assertLegacyJsonWritesAllowed(): void {
 
 function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
+  const application = configuredSessionApplicationIfCutover()
+  // The JSON file remains the durable runtime/worktree envelope, but it is not a lifecycle writer after
+  // cutover; state transitions happen through application.transitionSession().
+  // Once the application row exists, preserve the old lifecycle bytes exactly as migration evidence. Do not
+  // copy canonical state back into them: that would create a second writer and make a stale JSON snapshot look
+  // current. New records still need the envelope fields until their canonical row is created.
+  const envelope = application && rec.governed ? readAliasedRecordEntry(rec.session) : null
+  const lifecycle = envelope?.kind === 'ok'
+    ? { status: envelope.raw.status, proposal: envelope.raw.proposal, note: envelope.raw.note, parent: envelope.raw.parent }
+    : { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const obj = {
@@ -464,11 +491,11 @@ function writeRecord(rec: SessRec): void {
     node: rec.node ?? '',
     title: rec.title ?? '',
     name: rec.name ?? '',
-    parent: rec.parent ?? '',
-    status: rawLifecycleStatus(rec),
-    proposal: rec.proposal ?? '',
+    parent: lifecycle.parent ?? '',
+    status: lifecycle.status,
+    proposal: lifecycle.proposal ?? '',
     merges: rec.merges,
-    note: rec.note ?? '',
+    note: lifecycle.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
@@ -518,7 +545,7 @@ function writeRecord(rec: SessRec): void {
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
   const previousPublic = previous ? publicRecord(previous) : null
   const nextPublic = publicRecord(rec)
-  if (!configuredSessionApplicationIfCutover() && rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
+  if (!application && rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
     || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
     recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
     scheduleWatchNotifications(rec)
@@ -1787,8 +1814,10 @@ export function canonicalWatchRecipients(
 ): string[] {
   const recipients = new Set<string>()
   for (const edge of application.topology.parents(sessionId)) {
-    if (!edge.relationType.startsWith('watch')) continue
-    if (status === 'active' && edge.relationType === 'watch:parent') continue
+    // The canonical topology stores the structural parent edge as the durable parent-watch source. Older
+    // migrated rows may also have an explicit watch:parent edge; both represent the same policy source.
+    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
+    if (status === 'active' && (edge.relationType === 'parent' || edge.relationType === 'watch:parent')) continue
     recipients.add(edge.fromSessionId)
   }
   return [...recipients]
@@ -1818,10 +1847,9 @@ export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'st
   rec: T,
   canonical: { status: string; proposal: string | null; note: string | null; parentSessionId: string | null } | null | undefined,
 ): T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null } {
-  // Canonical state may lag a legacy record during archive/stop or an authored waiting/error transition.
-  // Those durable states are terminal/needs-you facts and must never be resurrected as active by a stale
-  // application row. Active/idle/queued records remain canonical-led, as intended after cutover.
-  if (!canonical || rec.archived || rec.stopped || !['active', 'idle', 'queued'].includes(rec.status)) {
+  // The application row is the only lifecycle fact after cutover. A JSON status is historical envelope data,
+  // so it must not win merely because it says waiting/error/archived while the canonical row says otherwise.
+  if (!canonical) {
     return rec as T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null }
   }
   return {
@@ -3234,10 +3262,15 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     const application = configuredSessionApplicationIfCutover()
     if (application) {
       const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
+      const note = opts.note ?? null
+      const current = application.readState(id)
+      if (current && current.status === status && current.proposal === proposal && current.note === note) return true
+      const recipients = canonicalWatchRecipients(application, id, status)
       application.transitionSession(id, {
         status,
         proposal,
-        note: opts.note ?? null,
+        note,
+        recipientSessionIds: recipients,
       })
       return true
     }
@@ -3251,7 +3284,6 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
   })
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
-export const markError = (sessionId?: string) => markState('error', { sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {
@@ -3259,7 +3291,10 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
     if (!rec || rec.status !== 'active' || rec.stopped || rec.archived) return false
     const application = configuredSessionApplicationIfCutover()
     if (application) {
-      application.transitionSession(sessionId, { status: 'error', proposal: null, note })
+      application.transitionSession(sessionId, {
+        status: 'error', proposal: null, note,
+        recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'error'),
+      })
       return true
     }
     writeRecord({ ...rec, status: 'error', proposal: null, note })
@@ -4745,6 +4780,8 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const application = configuredSessionApplicationIfCutover()
   if (application) {
+    let message: ReturnType<ProductionSessionApplication['protocol']['enqueue']>
+    let replayed = false
     try {
       const rec = readRecord(id)
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
@@ -4754,21 +4791,30 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       const existing = idempotencyKey
         ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
-      const message = existing ?? application.enqueueConversationMessage(id, {
+      message = existing ?? application.enqueueConversationMessage(id, {
           kind: 'session.prompt.v1',
           body: Buffer.from(prompt.text, 'utf8'),
           senderSessionId: from ?? null,
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
-      if (!opts.deferDrain) await drainSession(id)
-      const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
-      return {
-        ok: true,
-        delivery: pending ? 'queued' : 'accepted',
-        ...(opts.idempotency || opts.deliveryKey ? { replayed: !!existing } : {}),
-      }
+      replayed = !!existing
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
+    }
+    // Acceptance and handover are separate boundaries. A committed SQLite message remains a successful
+    // command even when the runtime is currently unbound; binding/resume is the explicit event that makes
+    // the durable debt drainable. Reporting the post-commit refusal as an append failure made command-box
+    // callers show a false error despite the prompt already being safely queued.
+    if (!opts.deferDrain) {
+      try { await drainSession(id) } catch (error) {
+        if (!(error instanceof ResourceConflict) || !/no bound spex-governed runtime/u.test(error.message)) throw error
+      }
+    }
+    const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+    return {
+      ok: true,
+      delivery: pending ? 'queued' : 'accepted',
+      ...(opts.idempotency || opts.deliveryKey ? { replayed } : {}),
     }
   }
   let replayed = false

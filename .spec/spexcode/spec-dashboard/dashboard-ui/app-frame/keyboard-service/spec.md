@@ -88,6 +88,11 @@ help legend and settings editor, and for the shortcut hint a tooltip prints, pre
 one-registry/N-readers invariant. Every chord a surface reserves is declared in that table — a chord matched
 inline in a handler's own body is invisible to the other readers and cannot be rendered or rebound.
 
+The `?` help legend is shell-owned chrome, not a graph-only modal. The status-bar help door and the global
+`graph.help` binding open the same Legend on every desktop route; a hidden graph document cannot leave a second
+help modal or keyboard owner behind. Escape and a second `?` peel the legend through the shared overlay contract,
+and `j`/`k` (or arrow equivalents) scroll its body.
+
 ## tab grammar
 
 The tab commands are new registry entries with non-browser-reserved defaults: close the active tab, select

@@ -57,12 +57,12 @@ test('canonical delivery retry waits for a runtime binding instead of polling an
   assert.equal(reads, 1)
 })
 
-test('a stale canonical active row cannot resurrect a stopped or waiting record', () => {
+test('canonical lifecycle always wins over stale JSON status bytes', () => {
   const canonical = { status: 'active', proposal: null, note: null, parentSessionId: null }
   const archived = { status: 'asking' as const, stopped: true, archived: true, proposal: 'close' as const, note: 'needs review', parent: null }
   const waiting = { status: 'awaiting' as const, stopped: false, archived: false, proposal: 'close' as const, note: 'ready', parent: null }
-  assert.equal(canonicalRecordProjection(archived, canonical).status, 'asking')
-  assert.equal(canonicalRecordProjection(waiting, canonical).status, 'awaiting')
+  assert.equal(canonicalRecordProjection(archived, canonical).status, 'active')
+  assert.equal(canonicalRecordProjection(waiting, canonical).status, 'active')
 })
 
 test('session diff commit links preserve the full forge repository and commit identity', () => {

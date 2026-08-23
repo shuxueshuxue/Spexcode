@@ -24,7 +24,7 @@ reversible, and nothing auto-disappears.
 
 ## expanded spec
 
-The session **state** is the source of truth (never an in-memory map). It lives NOT in the worktree but in a
+The session **lifecycle state** is the source of truth (never an in-memory map). It lives NOT in the worktree but in a
 per-user GLOBAL store, keyed by the governed **SpexCode session id**. For Claude this is also the harness
 `session_id`; for Codex, whose thread id is minted internally and cannot be pinned, the governed record keeps
 SpexCode's id as `session_id` and stores the real Codex thread id separately as `harness_session_id` once
@@ -34,11 +34,11 @@ the backend's `codex-launch` has completed `thread/start` for that worktree. The
 checkout (`dirname` of the shared git **common** dir), which resolves identically from main or any linked
 worktree — so the board (running at main) and a hook (running in a worktree) compute the **same** dir; resolving
 it from `git rev-parse --show-toplevel` would not (in a worktree that is the worktree). The record itself is
-`session.json`, written one-field-per-line with every key always present — which is what lets the pure-shell
-hot-path hook (mark-active) READ it with exact-line greps and no jq: "already `active`, with nothing stale to
-clear?" is the common every-tool answer and costs no spawn. Every WRITE, including that hook's own, goes
-through the single structured writer ([[sessions-core]]); no hook ever edits the file's text, because a note is
-arbitrary prose and a substituting writer eventually meets a quote and destroys the record. Keying by
+`session.json` remains the runtime/worktree envelope, written one-field-per-line for identity and launch metadata.
+After JSON migration, lifecycle (`status`, `proposal`, `note`, and `parent`) is owned only by the session
+application's SQLite state/events. Readers overlay that row; lifecycle writers never copy it back into the
+envelope, so stale JSON cannot resurrect, hide, or rename work. The migration bytes remain only as evidence for
+old records and are not a second fact. Keying by
 session_id, not worktree path, is deliberate: it keeps the worktree **completely clean** (zero SpexCode files —
 the launcher products live in the store too, see [[runtime]]) AND gives EACH agent its own record, so a user may
 run several claude/codex in one folder without their states clobbering (a path key could not). The board
@@ -207,24 +207,22 @@ first prompt, then stages the returned thread id for the lifecycle owner to bind
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)
 record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), because a self-launched agent has no board
-to feed, so the Stop gate must NOT misfire its declare-demand. EVERY one of them — mark-active included — shells to
-`spex session … --session <id>` to write, so the TS layer owns the JSON; they pass the id explicitly because there is
-no worktree `.session` to fall back on. mark-active stays cheap by reading, not by writing differently: its
-exact-line greps answer the no-op case without a spawn, and only a real state change costs one. A writer that
+to feed, so the Stop gate must NOT misfire its declare-demand. The board-lifecycle hooks pass the id explicitly
+to the canonical session application because there is no worktree `.session` to fall back on. mark-active has one
+path: it asks the package to compare against canonical state, and a semantic no-op emits no event. A writer that
 refuses (an unreadable record, a retired session — [[sessions-core]]) says so instead of silently repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.
 
 For the two known pre-structured `mark-active` source blobs still tracked by existing projects, the dispatcher
-executes the package-owned structured implementation without rewriting the tracked hook; that bounded compatibility
-is specified by [[dispatcher-runtime]]. Thus a package upgrade protects frozen worktrees immediately, while a
-project's eventual source migration remains an explicit reviewed change rather than a hidden materialize effect.
+executes the package-owned structured implementation without rewriting the tracked hook; that bounded migration
+bridge is specified by [[dispatcher-runtime]]. Thus a package upgrade protects frozen worktrees immediately, while
+a project's eventual source migration remains an explicit reviewed change rather than a hidden materialize effect.
 
 For the known pre-structured `mark-active` source bytes still tracked by existing projects, the dispatcher
-executes the package-owned structured implementation without rewriting the tracked hook; that bounded compatibility
-is specified by [[dispatcher-runtime]]. Thus a package upgrade protects frozen worktrees immediately, while a
-project's eventual source migration remains an explicit reviewed change rather than a hidden materialize effect.
+executes the package-owned implementation without rewriting the tracked hook; that bounded migration bridge is
+specified by [[dispatcher-runtime]]. It is a transport bridge only: it does not restore JSON as a lifecycle writer.
 
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips

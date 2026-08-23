@@ -44,6 +44,7 @@ const ICONS = {
   'star-filled': { node: <path d="m12 3 2.9 5.9 6.6.9-4.8 4.6 1.2 6.5L12 17.8 6.1 20.9l1.2-6.5L2.5 9.8l6.6-.9Z" fill="currentColor" /> },
   filter: { node: <><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></> },
   info: { node: <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></>, sw: 2 },
+  'triangle-alert': { node: <><path d="m12 3 9 17H3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></>, sw: 1.8 },
   pencil: { node: <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></> },
   terminal: { node: <><path d="m4 17 6-6-6-6" /><path d="M12 19h8" /></>, sw: 2 },
   command: { node: <path d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z" /> },

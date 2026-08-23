@@ -50,7 +50,9 @@ different surface's chrome because it is never mounted inside that surface's hos
 keeping its own list. Evals, Issues, and Settings are resident top-level tabs; parameterized detail routes
 canonicalize their tab identity to the board address while preserving detail URL state. The user-facing
 distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
-this node supplies the machine predicate and storage normalization.
+this node supplies the machine predicate, storage normalization, and the optional `icon` identity used by
+both the activity rail and resident workspace tabs. A page icon has one owner here; consumers do not keep
+parallel page-to-glyph maps.
 
 Left out: graph (including its focused node — an addressable legacy view that is no longer a workspace
 destination), bare sessions, and `empty`, which is a real non-document

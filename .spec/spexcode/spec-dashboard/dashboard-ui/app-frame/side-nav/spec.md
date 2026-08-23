@@ -69,6 +69,8 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
 - **Route peers.** The URL is hash state (`#/sessions`, `#/evals`, `#/issues`, `#/settings`, plus
   document/detail tails). Page switches push history; list-to-detail and filter changes push; automatic route
   echoes replace. Bare evals/issues/settings boards are navigation destinations, not documents, so ordinary
-  anchor navigation never creates or focuses a strip tab. Legacy review addresses normalize at the route layer.
+  anchor navigation never creates or focuses a strip tab. Their resident workspace tabs are the exception:
+  when already held, a board/detail route focuses the same page tab and keeps the page icon declared by
+  [[view-registry]]. Legacy review addresses normalize at the route layer.
 - **Public graph.** The sealed graph-only face keeps the graph anchor and renders the other rail destinations
   muted and inert (`aria-disabled` with no href or handler); it mounts no live dock or transport.

@@ -27,6 +27,52 @@ test('parseProcStat keeps PID identity separate from process name punctuation', 
   })
 })
 
+test('resource sweep keeps resolvable owners visible beside an unknown historical harness', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-resource-unknown-harness-'))
+  const known = `resource-known-${process.pid}`
+  const unknown = `resource-unknown-${process.pid}`
+  let child: ReturnType<typeof spawn> | null = null
+  process.env.SPEXCODE_HOME = home
+  try {
+    const root = runtimeRoot()
+    const record = (id: string, harness: string) => ({
+      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`, node: null,
+      title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0,
+      note: null, sortkey: null, createdAt: Date.now(), harness, harness_session_id: null,
+      stopped: false, archived: false, launcher: harness, launch_cmd: harness,
+    })
+    for (const [id, harness] of [[known, 'codex'], [unknown, 'removed-plugin-harness']] as const) {
+      const dir = join(root, 'sessions', id)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, harness), null, 2)}\n`)
+    }
+    child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+      env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: known },
+    })
+    for (let attempt = 0; attempt < 50 && !processStartToken(child.pid!); attempt++) await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.ok(processStartToken(child.pid!), 'known owner fixture acquired a process-start token')
+
+    const report = await collectResourceReport({ persist: false })
+    const knownOwner = report.owners.find((owner) => owner.kind === 'session' && owner.id === known)
+    const unknownOwner = report.owners.find((owner) => owner.kind === 'session' && owner.id === unknown)
+    assert.ok(knownOwner, 'a resolvable owner remains in the host report')
+    assert.ok(!knownOwner?.findings.some((finding) => finding.startsWith('harness-unresolved:')), 'known owner is not contaminated by another row')
+    assert.equal(unknownOwner?.liveness, 'unknown', 'an unresolvable historical row cannot claim liveness')
+    assert.ok(unknownOwner?.findings.includes('harness-unresolved:removed-plugin-harness'))
+    assert.equal(unknownOwner?.reclaim?.eligible, false, 'unknown adapter ownership is never reclaimable')
+  } finally {
+    if (child?.pid && processStartToken(child.pid)) {
+      try { child.kill('SIGTERM') } catch {}
+      await once(child, 'exit').catch(() => {})
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('shared runtime spawn records an observed detached process boundary', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-detached-runtime-'))
   const pidFile = join(root, 'runtime.pid')

@@ -3157,7 +3157,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rail-btn.proj-chip {
   padding: 2.5px; color: var(--ink2); overflow: hidden;
 }
-.rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { color: var(--blue); }
+.rail-btn.proj-chip:hover, .rail-btn.proj-chip-open { color: var(--blue); }
 .proj-menu {
   position: absolute; left: calc(100% + 6px); top: 0; z-index: 60; min-width: 180px; max-width: 280px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px;

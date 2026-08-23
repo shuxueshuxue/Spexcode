@@ -179,7 +179,7 @@ function SessionDock({ sessions, activeId }) {
 // nodes. Same palette, same keys, same rows — only the lead plane differs ([[node-graph]]'s palette).
 function DockHead({ mode, specs, sessions }) {
   const t = useT()
-  const { setDock, openPalette } = useWorkspaceApi()
+  const { openPalette } = useWorkspaceApi()
   const sessionMode = mode === 'sessions'
   const count = sessionMode ? (sessions?.length || 0) : (specs?.length || 0)
   const searchLabel = t(sessionMode ? 'dockModes.searchSessions' : 'dockModes.searchNodes')
@@ -187,8 +187,7 @@ function DockHead({ mode, specs, sessions }) {
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
       <span className="dock-head-count">{count}</span>
-      {/* ONE doors cluster, whatever the projection: the projection's own doors, then collapse. A second
-          cluster would be a second row's worth of answers in a header that exists to give one. */}
+      {/* The header owns projection doors only; open/closed belongs to the dedicated rail panel switch. */}
       <span className="dock-head-acts">
         <button type="button" className="dock-head-act" data-tip={withShortcut(searchLabel, 'graph.search')}
           aria-label={searchLabel} onClick={() => openPalette(sessionMode ? 'sessions' : 'nodes')}>
@@ -210,13 +209,6 @@ function DockHead({ mode, specs, sessions }) {
             </button>
           </>
         )}
-        {/* collapsing belongs on the thing being collapsed as well as on the rail button that opened it:
-            the rail is where you ASK for a projection, and this is where you are done with it. One state,
-            two doors — never two states. */}
-        <button type="button" className="dock-head-act dock-collapse" data-tip={t('dockModes.collapse')}
-          aria-label={t('dockModes.collapse')} onClick={() => setDock(false)}>
-          <Icon name="panel-left" size={13} />
-        </button>
       </span>
     </div>
   )

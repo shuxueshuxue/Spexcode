@@ -21,16 +21,19 @@ It knows there is an address, that an address names a view, and where on the scr
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-- **Where is everything? — FINDING, on the left.** The rail is an **activity bar**: the explorer and
-  sessions projection buttons, search, then the singleton boards (evals, issues, settings pinned at the
-  bottom). The dock beside it is one finding surface with two projections. Looking must be free: browsing a
-  finding surface never grows any state but the camera's.
+- **Where is everything? — FINDING, on the left.** The rail is an **activity bar** of route anchors
+  (`graph`, `sessions`, `evals`, `issues`, `settings`) whose one light means the current route. A separate
+  mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
+  surface with two projections; projection styling belongs to the dock header, never the route light.
+  Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer, and a singleton board brings no
-  sidebar at all, taking the full width instead of inheriting the tree the last tab was showing. So the
-  sidebar describes the working set rather than being a setting maintained beside it, and the rail's lit
-  button reads as *where this document belongs* ([[dock-modes]]). A rail click overrides the derivation by
-  hand and the override lapses at the next focus change ([[file-tree]]).
+  brings the session list, a node or a governed file brings the explorer, and a bare singleton board
+  (`#/evals`, `#/issues`, `#/settings`) brings no sidebar at all, taking the full width instead of inheriting
+  the tree the last tab was showing. Singleton object details remain documents and retain the dock. A bare
+  sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
+  route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
+  beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
+  dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
   active tab; everything readable is a document with an address — a node, a file, a session, an eval, an
   issue, and the **singleton boards** (evals, issues, settings), which are tabs you keep rather than places
@@ -56,8 +59,8 @@ whole shell hangs off, re-derived from what the product is rather than from what
   stopped being where a reader lands; the shape of an item and where it lands is [[status-bar]]'s.
 
 A control belongs to the region whose question it answers, and to exactly one owner there — the dock's
-explorer/sessions mode buttons sit on the rail with the other finding controls, not in a second dock modebar
-or on the status bar. The dock itself is content-only.
+  projection is named in its header, while the permanently mounted rail's mirrored panel control owns dock
+  open/closed and exposes `aria-pressed`. The dock itself is content-only and has no second collapse door.
 
 **Each region gets ONE band, and a band is a row that earns its place.** [[ui-state-model]] states the
 budget and measures it; the shell's obligation is to have no spacer that stands in for a band it does not

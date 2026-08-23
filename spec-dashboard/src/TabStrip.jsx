@@ -7,7 +7,7 @@ import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR, sessionHandle } from './session.js'
-import { getSessionBaseSurface, isSessionSurface, isResourceSurface, resourceSurfaceKey, resourceTabKey, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
+import { isResourceSurface, resourceSurfaceKey, resourceTabKey } from './sessionSurface.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
@@ -69,7 +69,7 @@ function label(tab, { specs, sessions, names, t }) {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param)) || pendingSessionFor(tab.param)
     const title = s ? sessionHandle(s) : tab.param.slice(0, 8)
-    const requestedSurface = isSessionSurface(tab.query?.surface) ? tab.query.surface : null
+    const requestedSurface = tab.query?.surface
     if (isResourceSurface(requestedSurface)) {
       const key = resourceSurfaceKey(requestedSurface)
       const resource = [
@@ -78,10 +78,7 @@ function label(tab, { specs, sessions, names, t }) {
       ].find((item) => item.id === key)
       return `${title} · ${resource?.label || key}`
     }
-    const surface = s?.capabilities?.headless === true || s?.liveness === 'offline' || s?.archived
-      ? SESSION_SURFACE_CONVERSATION
-      : (requestedSurface || getSessionBaseSurface(s?.id || tab.param))
-    return `${title} · ${t(`tabs.surface${surface[0].toUpperCase()}${surface.slice(1)}`)}`
+    return title
   }
   return t(`tabs.${tab.page}`)
 }
@@ -182,8 +179,9 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
       onCancel: () => { setDrag(null); abandon.current = null },
     })
   }
+  const activeAddress = routeHash(route.page, route.param, route.query)
   const activeActions = [...actions.values()]
-    .filter((action) => action.document === activeKey)
+    .filter((action) => action.document === activeAddress)
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
   // The band and the SCROLLER are two jobs, and they were one element. A strip that scrolls its tabs must
   // clip, and a clipping band cannot let an action's dropdown out — the resource picker rendered correctly
@@ -232,13 +230,13 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
             const label = action.disabled ? (action.disabledReason || action.label) : action.label
             return (
               <div key={action.key || `${action.document}:${action.id}`} className="document-action">
-                <IconButton icon={action.icon} size={14} label={label}
+                {action.node || <IconButton icon={action.icon} size={14} label={label}
                   className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
                   data-action={action.id}
                   aria-pressed={action.pressed}
                   aria-haspopup={action.haspopup ? 'menu' : undefined}
                   disabled={action.disabled}
-                  onClick={action.onClick} />
+                  onClick={action.onClick} />}
                 {action.menu}
               </div>
             )

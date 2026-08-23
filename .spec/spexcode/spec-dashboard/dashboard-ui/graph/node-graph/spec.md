@@ -22,11 +22,16 @@ related:
 ---
 # node-graph
 
-A **drill-down** tidy-tree of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. Only the focused node's **ancestor spine is expanded** — every other subtree collapses to a single tile — so the **root layer is always a short, readable column** no matter how deep or bushy the real tree is. (A point-per-node tidy tree otherwise spends vertical space equal to its *leaf count*, sprawling the high-level nodes — the ones you most want to grasp together — worst.) The tree **re-plots as focus moves** and the **camera follows focus**, framing the focused tile at the graph pane's geometric centre while its neighbourhood expands and collapses around it. Layout is horizontal left→right: depth is the column (root at the left); each layer is an **evenly-spaced column** and an expanded node's children form a block **centred on that node** — so focus moving within a column never reflows it, and a deep expansion can no longer spread the shallow rows apart. Tiles never touch; edges read bold when they touch the focus, faint otherwise. A **collapsed node** (children hidden) carries a small **`▸N` tab on its right edge** naming its hidden direct-child count, so a leaf and a closed branch never look alike; it picks up the focus colour on the focused node. Keys follow the same relationships (see [[keyboard-nav]]): ←/→ drill out/in, ↑/↓ walk siblings in the focused column.
+A **drill-down** tidy-tree of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. The focused node's **ancestor spine is expanded**, and the frontier fully opens the focused node's parent layer so the **focused layer and its complete next layer are visible together** — two visible layers of neighbourhood at once — while every deeper subtree collapses to a single tile. The next layer's total height is the layout budget, so sibling branches are visible together instead of folding into one tile. The tree **re-plots as focus moves** and the **camera follows focus**, framing the focused tile at the graph pane's geometric centre while its neighbourhood expands and collapses around it. Layout is horizontal left→right: depth is the column (root at the left); each layer is an **evenly-spaced column** and an expanded node's children form a block **centred on that node**. Coordinates are a function of tree shape and the expansion frontier, never of focus identity: changing focus only adds or removes frontier nodes; every tile that remains visible keeps its x/y. Tiles never touch; edges read bold when they touch the focus, faint otherwise. A **collapsed node** (children hidden) carries a small **`▸N` tab on its right edge** naming its hidden direct-child count, so a leaf and a closed branch never look alike; it picks up the focus colour on the focused node. Keys follow the same relationships (see [[keyboard-nav]]): ←/→ drill out/in, ↑/↓ walk siblings in the focused column.
 
 Every spec node, including the reserved `.plugins` branch, renders its backend identity unchanged. The ordinary drill-down rule applies uniformly: a collapsed node shows its raw title, version, and direct-child `▸N` tab; focusing it reveals its immediate children. The graph does not invent visual node classes, subtree totals, or presentation-only partitions from a path name.
 
 A re-plot separates **structure** from **navigation feedback**. In graph coordinates the structure updates atomically: newly revealed tiles and their solid tree edges appear together at final geometry, persisting tiles never interpolate between slots, and removed branches leave together. Above that stable topology, a keyboard or programmatic focus move gives direction in screen coordinates: the camera eases onto the target at constant zoom and focus-neighbour opacity settles gently; a pending reparent's dashed overlay arrow flows in its author's colour. None of those cues changes a tile's graph position or a solid edge endpoint, so the tree stays connected throughout the camera move. Mouse focus still expands in place without moving the camera.
+
+The two-layer frontier stays bounded on the full board. A live 362-node board, focused on its deepest depth-6
+node, rendered 63 visible tiles; Chrome CDP measured `ScriptDuration=0.301s`, `LayoutDuration=0.074s`, and
+`TaskDuration=0.668s` after settle (1440×900). This is the worst-depth two-layer sample recorded for the
+contract, not a promise that every machine has the same wall time.
 
 Each node is a tight **two-row tile** — not a card — so the whole tree fits one screen; a reader sees at a glance both *what this node is* and *who/when*.
 
@@ -44,14 +49,12 @@ Because this vocabulary is dense, a **floating legend** decodes it on demand (`?
 
 The board and the session console are **bidirectionally linked**: live editors map to live sessions by exact id, driving Row 2's avatars (see [[session-console]]); clicking a session row focuses its first changed node, and nodes with no live editor focus on click.
 
-**Inside the workspace this view is retired to an address.** `#/graph` and `#/graph/<node>` still parse,
-still render, and still behave exactly as described above — a typed address, a bookmark, or an old link
-reaches them intact. What was withdrawn is every standing invitation: no rail entry ([[side-nav]]), not
-the face a fresh window or an unknown address lands on ([[workspace-shell]]), and no door in the empty
-workspace ([[tab-strip]]). The reason is the one the human gave — the workspace's day is sessions, evals
-and issues, and a top-level entry for a map of the spec tree earned a place on the rail that the reader's
-actual traffic did not. Finding a node is the dock's explorer tree and the search palette; both land on
-the node's DOCUMENT, which is where a node is read.
+**Inside the workspace this view is the hidden-tab bottom sheet.** `#/graph` and `#/graph/<node>` still
+parse, still render, and still behave exactly as described above. With no document focus, the shell lands on
+`#/graph`: the graph is the workspace bottom sheet, the same kind of quiet first surface as the New Session
+hero. It remains `document:false`, never enters the tab strip, and its camera/expansion are workspace state.
+The palette and explorer still reach graph nodes. This supersedes the earlier "empty is an explicit state"
+ruling: **这个 Node Graph 其实可以留着…相当于一个隐藏着的 tab** (human ruling).
 
 **The sealed public face is untouched by that retirement** ([[public-spec-graph]]): it is a graph and
 nothing else, so it has no workspace to retire from. This is why the view is demoted rather than deleted —

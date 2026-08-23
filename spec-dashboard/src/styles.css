@@ -258,7 +258,17 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.app-shell { display: flex; flex-direction: column; height: 100vh; }
+.backend-frame { display:flex; flex-direction:column; height:100vh; min-height:0; }
+.backend-frame > .app-shell { flex:1; min-height:0; }
+.backend-offline-banner {
+  flex:0 0 32px; display:flex; align-items:center; justify-content:center; gap:8px; min-width:0;
+  padding:0 12px; color:var(--yellow); background:color-mix(in srgb, var(--yellow) 12%, var(--ground));
+  border-bottom:1px solid color-mix(in srgb, var(--yellow) 35%, var(--edge)); font-size:var(--type-meta);
+}
+.backend-offline-banner span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.backend-offline-banner button { padding:2px 8px; color:var(--ink2); background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); font:inherit; cursor:pointer; }
+.backend-offline-banner button:hover { border-color:var(--yellow); }
+.app-shell { display: flex; flex-direction: column; height: 100%; }
 .app { flex: 1; min-height: 0; display: flex; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle {
@@ -306,6 +316,7 @@ body {
 }
 .dock-head-name { color: var(--ink2); font-weight: var(--weight-medium); }
 .dock-head-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.dock-stale, .sb-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
@@ -3199,7 +3210,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 /* branch diff document ([[diff-document]]) */
 .diff-document { display:flex; flex-direction:column; min-height:0; height:100%; overflow:auto; background:var(--paper); color:var(--ink); }
-.diff-toolbar { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:9px; min-height:34px; padding:0 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-toolbar { position:sticky; top:0; z-index:2; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; min-height:34px; padding:6px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-refs { display:inline-flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
+.diff-refs strong { font-weight:var(--weight-medium); }
+.diff-oids { min-width:0; color:var(--muted); overflow-wrap:anywhere; white-space:normal; }
 .diff-toolbar-spacer { flex:1; }
 .diff-file { border-bottom:1px solid var(--line); }
 .diff-file-head { display:flex; width:100%; gap:12px; align-items:center; padding:7px 12px; border:0; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 28%, var(--paper)); color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
@@ -3212,6 +3226,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-comment-line { color:var(--blue); font-family:var(--mono); white-space:nowrap; }
 .diff-state { padding:24px; color:var(--muted); }
 .diff-state.error { color:var(--red); }
+.diff-state.diff-merged { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+.diff-state.diff-merged strong { color:var(--ink2); }
+.diff-state.diff-merged a, .diff-state.diff-merged code { max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
 .diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--paper); box-shadow: var(--shadow); }
 .diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
 .diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }

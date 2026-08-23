@@ -13,6 +13,7 @@ import { Icon } from './icons.jsx'
 import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useBackendHealth } from './BackendStatus.jsx'
 
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
@@ -23,6 +24,7 @@ import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 // stacked around one list; that is three answers to a question the shell already answers once.
 function SessionDock({ sessions, activeId }) {
   const t = useT()
+  const { offline } = useBackendHealth()
   const { expanded, toggle, expand } = useFold()
   const { lockedSource } = useWorkspace()
   const { lockGraphTo } = useWorkspaceApi()
@@ -132,7 +134,7 @@ function SessionDock({ sessions, activeId }) {
             const label = t(`sessionZone.${item.zone}`)
             return <button key={`zone-${item.zone}`} type="button" className={`dock-session-zone dock-session-zone-${item.zone}`}
               aria-expanded={foldable ? !item.folded : undefined} onClick={foldable ? () => setOfflineOpen((open) => !open) : undefined}>
-              <span>{label}</span><span className="dock-session-count">{item.count}</span>
+              <span>{label}</span><span className="dock-session-count">{item.count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
             </button>
           }
           // This row is the one place a session is claimed. Plain click reads it IN THE CURRENT SLOT — a
@@ -188,6 +190,7 @@ function SessionDock({ sessions, activeId }) {
 // nodes. Same palette, same keys, same rows — only the lead plane differs ([[node-graph]]'s palette).
 function DockHead({ mode, specs, sessions }) {
   const t = useT()
+  const { offline } = useBackendHealth()
   const { openPalette } = useWorkspaceApi()
   const sessionMode = mode === 'sessions'
   const count = sessionMode ? (sessions?.length || 0) : (specs?.length || 0)
@@ -195,7 +198,7 @@ function DockHead({ mode, specs, sessions }) {
   return (
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
-      <span className="dock-head-count">{count}</span>
+      <span className="dock-head-count">{count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
       {/* The header owns projection doors only; open/closed belongs to the dedicated rail panel switch. */}
       <span className="dock-head-acts">
         <button type="button" className="dock-head-act" data-tip={withShortcut(searchLabel, 'graph.search')}

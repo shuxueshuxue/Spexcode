@@ -20,6 +20,7 @@ import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
+import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
@@ -167,6 +168,8 @@ function ShellStatus() {
 // the ambient copy cannot offer, and one bar must never print the same number twice.
 function BoardStatus({ specs, sessions, quiet }) {
   const t = useT()
+  const { offline } = useBackendHealth()
+  const stale = offline ? <span className="sb-stale">{t('backend.stale')}</span> : null
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.
@@ -192,6 +195,7 @@ function BoardStatus({ specs, sessions, quiet }) {
             <i className="bstat-dot" style={{ background: STATUS[k].color }} />{tally.status[k].length}
           </span>
         ))}
+        {stale}
       </span>
     ),
   })
@@ -200,20 +204,20 @@ function BoardStatus({ specs, sessions, quiet }) {
     kind: fail > 0 ? 'error' : undefined,
     tooltip: t('statusBar.evals', { pass, fail }),
     onClick: () => navigate('evals'),
-    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span>{stale}</span>,
   })
   useStatusItem(quiet ? null : {
     id: 'board-issues', side: 'right', priority: 43,
     tooltip: t('statusBar.issues', { n: tally.issueCount }),
     onClick: () => navigate('issues'),
-    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span>{stale}</span>,
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
     kind: live.need > 0 ? 'warning' : undefined,
     tooltip: t('statusBar.sessions', { run: live.run, need: live.need }),
     onClick: () => navigate('sessions'),
-    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span>{stale}</span>,
   })
   return null
 }

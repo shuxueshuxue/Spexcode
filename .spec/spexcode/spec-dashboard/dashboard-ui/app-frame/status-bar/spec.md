@@ -67,6 +67,11 @@ how the work is doing. They ride the right group because that is where the graph
 because the left group is the identity strip; the region law that assigns them an owner is
 [[workspace-shell]]'s, and the owner is the frame.
 
+Last-good tallies remain useful during a backend outage, but they are not current truth. While the shared
+transport is offline, every numeric workspace tally visibly carries the translated `stale` marker and muted
+treatment; the global shell banner names the outage and owns retry. A successful transport response removes
+the marker without replacing the numbers with invented zeroes.
+
 On the graph the ambient copies **stand down**: [[graph-stats]] registers the same numbers there as a
 focus-walk the ambient items cannot offer, and one bar printing a number twice is worse than either.
 

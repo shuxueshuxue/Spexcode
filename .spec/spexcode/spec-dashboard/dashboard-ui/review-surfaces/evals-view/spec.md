@@ -170,6 +170,10 @@ filter (default off) picking the root.
   or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
   detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
   gets the not-found face.
+- **Backend outage is global while the detail failure stays precise.** A network refusal or 502/503/504 keeps
+  the load-failed detail face and also raises [[dashboard-shell]]'s global offline banner with retry. It never
+  renders `no eval found` for the same request. Any last-good dock/status numbers visible around that face are
+  explicitly marked stale until a later API response proves the backend reachable.
 - **One data protocol over two source roots.** The project list and scoped list request the same
   paged-review endpoint/shape; the backend projects the current graph/eval aggregate for trunk and the
   worktree-rooted session-eval model for `scope:` before filtering/count/slice. The browser never receives

@@ -11,6 +11,7 @@ import {
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { BoardProvider, WorkspaceProvider } from './workspace.jsx'
 import { KeyboardServiceProvider } from './KeyboardService.jsx'
+import { useBackendHealth } from './BackendStatus.jsx'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
@@ -36,6 +37,7 @@ window.addEventListener('vite:preloadError', (e) => {
 
 export default function App() {
   const t = useT()
+  const backendHealth = useBackendHealth()
   const isMobile = useIsMobile()
   const [board, setBoard] = useState(null)
   const [boardLive, setBoardLive] = useState(false)
@@ -110,6 +112,9 @@ export default function App() {
       })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
   }, [applyBoard])
+  useEffect(() => {
+    if (backendHealth.retryKey) reload()
+  }, [backendHealth.retryKey, reload])
   // push-first freshness ([[graph-stream]]/[[graph-delta]]): the delta stream carries whole boards (a full on
   // connect, then applied patches) straight into setBoard — no refetch per change. A pushed board is the
   // freshest by channel order, so it bumps the seq to invalidate any older in-flight fetch. The interval is

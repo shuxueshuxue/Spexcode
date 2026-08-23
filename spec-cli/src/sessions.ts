@@ -3468,23 +3468,51 @@ export type ReviewPayload = {
 
 export type SessionDiffFile = ReviewDiffFile & { patch: string; diffIdentity: string }
 export type SessionDiffPayload = {
-  id: string; scope: 'branch'; base: string; head: string; mergeBase: string
+  id: string; scope: 'branch'; branch: string; baseRef: string; base: string; head: string; mergeBase: string
+  mergedIntoBase: boolean; commitUrl: string | null
   files: SessionDiffFile[]; comments: DiffComment[]
 }
 
-async function diffHeadPair(wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ base: string; head: string; mergeBase: string }> {
+export function commitUrlForRemote(remote: string, commit: string): string | null {
+  const raw = remote.trim()
+  let host = '', path = ''
+  try {
+    const url = new URL(raw)
+    if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'ssh:') {
+      host = url.host
+      path = url.pathname
+    }
+  } catch {
+    const scp = /^(?:[^@/]+@)?([^:/]+):(.+)$/.exec(raw)
+    if (scp) [, host, path] = scp
+  }
+  path = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '')
+  if (!host || !path) return null
+  const commitPath = host.toLowerCase().includes('gitlab') ? '-/commit' : 'commit'
+  return `https://${host}/${path}/${commitPath}/${commit}`
+}
+
+async function diffHeadPair(wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; mergedIntoBase: boolean; commitUrl: string | null }> {
   if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`)
-  const base = wt.rec.base || mainBranch()
+  const baseRef = wt.rec.base || mainBranch()
   const [headOut, baseOut] = await Promise.all([
     gitA(['-C', wt.path, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`]),
-    gitA(['-C', wt.path, 'rev-parse', '--verify', `${base}^{commit}`]),
+    gitA(['-C', wt.path, 'rev-parse', '--verify', `${baseRef}^{commit}`]),
   ])
   const head = headOut.trim(), resolvedBase = baseOut.trim()
   if (!isGitObjectId(wt.path, head) || !isGitObjectId(wt.path, resolvedBase))
     throw new ResourceConflict(`session ${wt.rec.session} diff heads are unproven`)
   const mergeBase = (await gitA(['-C', wt.path, 'merge-base', resolvedBase, head])).trim()
   if (!isGitObjectId(wt.path, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`)
-  return { base: resolvedBase, head, mergeBase }
+  const [ancestor, remote] = await Promise.all([
+    gitTry(['-C', wt.path, 'merge-base', '--is-ancestor', head, resolvedBase]),
+    gitTry(['-C', wt.path, 'remote', 'get-url', 'origin']),
+  ])
+  return {
+    branch: wt.branch, baseRef, base: resolvedBase, head, mergeBase,
+    mergedIntoBase: ancestor.ok,
+    commitUrl: remote.ok ? commitUrlForRemote(remote.stdout, head) : null,
+  }
 }
 
 export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000): Promise<SessionDiffPayload | null> {
@@ -3499,7 +3527,7 @@ export async function sessionDiff(id: string, filePath?: string, offset = 0, lim
     const patch = await gitA(['-C', wt.path, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
     return { ...file, patch: patch.slice(offset, offset + limit), diffIdentity: identity }
   }))
-  return { id, scope: 'branch', base: pair.base, head: pair.head, mergeBase: pair.mergeBase, files: result, comments: wt.rec.diffComments ?? [] }
+  return { id, scope: 'branch', ...pair, files: result, comments: wt.rec.diffComments ?? [] }
 }
 
 export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' | 'sentAt'> & { id?: string }): Promise<DiffComment | null> {

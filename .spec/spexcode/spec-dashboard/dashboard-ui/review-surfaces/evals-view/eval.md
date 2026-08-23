@@ -1,5 +1,16 @@
 ---
 scenarios:
+  - name: backend-outage-is-global-and-stale
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/App.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/Dock.jsx]
+    description: >-
+      Load a real board, then open a real eval detail while its API lane returns 502. Read the detail face,
+      global frame, dock and status tallies; press Retry after restoring the backend.
+    expected: >-
+      The detail says load failed and never also says no eval found. One global backend-offline banner is
+      visible with an explicit Retry button. Every still-visible numeric dock/status projection carries a
+      visible stale marker. Retry reissues the product read, the real detail returns, and the banner plus all
+      stale markers disappear without zeroing or duplicating the last-good tallies.
   - name: evals-list-page
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#ReviewState, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]

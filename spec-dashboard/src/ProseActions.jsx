@@ -119,6 +119,15 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     if (!host) return undefined
     const onMenu = (event) => {
       if (frozen.current) return
+      // CodeMirror owns source selections and may not expose them through the browser Selection API.
+      // The parent has already captured the lossless range, so right-clicking that source uses the same
+      // action group and pointer anchor as prose without guessing from DOM text.
+      if (codeSelection) {
+        event.preventDefault()
+        setPanel(null)
+        setHit({ lines: { startLine: codeSelection.startLine, endLine: codeSelection.endLine }, x: event.clientX, y: event.clientY + 18 })
+        return
+      }
       const sel = document.getSelection()
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
       const lines = stampedRange(sel.getRangeAt(0), host)
@@ -129,7 +138,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     }
     host.addEventListener('contextmenu', onMenu)
     return () => host.removeEventListener('contextmenu', onMenu)
-  }, [hostRef])
+  }, [hostRef, codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
 
   useEscLayer(!!panel, dismiss)
   useEscLayer(!!(hit || codeSelection) && !panel, clear)

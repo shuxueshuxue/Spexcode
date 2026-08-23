@@ -113,8 +113,9 @@ not `sessionName`, is what keeps this guarantee from eroding again — a new pic
 label by reflex ([[session-label]]).
 
 The selected console sidebar row is also the terminal pane's **sole visible identity/state surface**. Its primary label is
-the stable session handle (`label`/name/title/slug); lifecycle, liveness, and readiness notes are secondary glyph/tooltip
-data and never replace that label. The toolbar deliberately carries neither `sessionHeadline` nor lifecycle/liveness text:
+the shared visible session title (`sessionHeadline`/`title`); lifecycle, liveness, and readiness notes are secondary glyph/tooltip
+data and never replace that title. The stable session handle remains available only for matching and tooltip detail. The toolbar deliberately carries neither
+`sessionHeadline` nor lifecycle/liveness text:
 repeating the selected row spent vertical space, competed with Eval/actions, and leaked arbitrarily long prompt or
 HTML-derived text into tooltips and accessible names. Removing that duplicate is not a second naming rule; it leaves the
 shared row face as the one place the console identifies the selected session.

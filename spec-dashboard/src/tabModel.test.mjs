@@ -92,19 +92,30 @@ test('resource closing returns to its held session before the new-session page',
   assert.deepEqual(closeDestination(resource, [session], 0), session)
 })
 
-// Review surfaces are destinations, not workspace documents. The same predicate is used for new routes and
-// persisted storage, so old eval/issue tabs are removed on the next read.
-test('review entries are cleared during normalization', () => {
-  const isDocument = (page) => !['evals', 'issues', 'settings'].includes(page)
+test('resident review routes normalize to one top-level Evals or Issues tab', () => {
+  const isDocument = () => true
   const raw = [
     { page: 'evals', param: null, query: { state: 'open' }, pinned: true },
-    { page: 'issues', param: null, query: { q: 'needle' }, pinned: false },
-    { page: 'settings', param: null, pinned: true },
     { page: 'evals', param: 'node/scenario', pinned: false },
+    { page: 'issues', param: null, query: { q: 'needle' }, pinned: true },
+    { page: 'settings', param: null, pinned: true },
     { page: 'issues', param: '42', pinned: false },
   ]
   const tabs = normalizeTabs(raw, isDocument)
-  assert.deepEqual(tabs, [])
+  assert.deepEqual(tabs.map(tabKey), ['#/evals', '#/issues', '#/settings'])
+  assert.ok(tabs.every((tab) => tab.pinned))
+})
+
+test('opening a scenario or issue focuses its resident top-level tab without replacing documents', () => {
+  let tabs = placeTab(placeTab([], spec('node'), 'pin'), session('s1'), 'pin')
+  tabs = placeTab(tabs, { page: 'evals', param: 'node/scenario', query: null })
+  tabs = placeTab(tabs, { page: 'issues', param: '42', query: null })
+  assert.deepEqual(tabs.map(tabKey), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
+  assert.deepEqual(tabs.slice(2).map(({ page, param }) => ({ page, param })), [
+    { page: 'evals', param: 'node/scenario' },
+    { page: 'issues', param: '42' },
+  ])
+  assert.ok(tabs.slice(2).every((tab) => tab.pinned))
 })
 
 // REORDERING IS A SPLICE, and the properties that matter are the ones a drag can violate: the set of open

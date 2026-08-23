@@ -19,20 +19,21 @@ related:
 ---
 # tab-strip
 
-**The strip holds workspace OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, or `#/sessions/<id>`. Evals and Issues are review-surface addresses, not workspace
-documents: `#/evals/<node>/<scenario>` and `#/issues/<id>` never enter the strip, even when opened from a
-spec panel or status chip. A session's
+**The strip holds the workspace working set.** Object tabs include `#/spec/<id>`, `#/file/<path>`, and
+`#/sessions/<id>`. Evals, Issues, and Settings are resident top-level tabs (`#/evals`, `#/issues`,
+`#/settings`); opening a scenario or issue keeps its detail address in the URL while focusing that board's
+top-level tab. A detail never replaces a Spec, File, or Session tab. A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
-own identity, appended beside the unchanged session tab. Bare
-`#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
-are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
-also review destinations and never become workspace objects. The rail is therefore navigation only; it does
-not create, pin, or focus a board tab ([[side-nav]]).
+own identity, appended beside the unchanged session tab. The rail navigates into this same working set and
+does not own a second focus state. Graph remains the one addressable view that never becomes a top-level tab.
+
+Review and settings destinations still have an icon: it belongs to their one active route entry in the activity
+rail, where the route is actually selected. A board's list tabs (for example Open/Closed) are view-local
+filters, not workspace addresses; this split keeps one owner for both the icon and the route light.
 
 What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
-addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
+addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, and **`#/sessions/new`** —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
 This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints

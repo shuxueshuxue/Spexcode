@@ -1,5 +1,5 @@
 
-import { ACT, keyCap } from './keymap.js'
+import { ACT, displayKeysOf, keyCap } from './keymap.js'
 
 const LS_KEY = 'spex.keybindings.v1'
 const byId = Object.fromEntries(ACT.map((a) => [a.id, a]))
@@ -54,7 +54,7 @@ export function firesEvent(id, event) {
 export function shortcutHint(...ids) {
   const caps = []
   for (const id of ids) {
-    const cap = keyCap(keysOf(id)[0])
+    const cap = keyCap(displayKeysOf(byId[id], keysOf(id))[0])
     if (cap && !caps.includes(cap)) caps.push(cap)
   }
   return caps.join(' · ')

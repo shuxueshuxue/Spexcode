@@ -114,6 +114,9 @@ their order and hands each xterm-produced byte string to the helper, which write
 This is the same client whose stdout paints xterm, so terminal modes, paste protocol, control keys, and IME
 commits are decided by xterm and the TUI rather than re-encoded by the dashboard. Hidden, lingering, detached,
 or disconnected viewers cannot inject and never queue input for later replay.
+An accepted non-mouse input is also a human turn entry: if the session is `asking` or inferred `idle`, the
+canonical lifecycle moves to `active` after the PTY write. Mouse reports are navigation and do not change the
+authored lifecycle.
 
 The browser view contains the pane, not tmux's client chrome. Before native attach the helper disables the
 target session's status line, so a browser grid of N rows gives the pane N rows instead of N-1 pane rows plus

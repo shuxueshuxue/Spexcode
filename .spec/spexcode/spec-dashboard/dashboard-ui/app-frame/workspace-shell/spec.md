@@ -30,16 +30,15 @@ whole shell hangs off, re-derived from what the product is rather than from what
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer. Review and settings routes are
-  separate surfaces: they bring their own board/page layout and no workspace sidebar, taking the full width
-  instead of inheriting the tree the last tab was showing. Review details are not workspace documents. A bare
+  brings the session list, a node or a governed file brings the explorer. Evals, Issues, and Settings use the
+  shared workspace/tab strip; Issues omits the activity rail while retaining the strip. A bare
   sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
   route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything held is an object document with an address — a node, a file, or a session. Evals/issues
-  boards and their details are review destinations, not workspace documents or tabs; Settings is its own surface.
+  active tab; everything held is an address — a node, a file, a session, or a resident Evals/Issues/Settings board.
+  Board detail routes focus their corresponding resident tab.
   **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
@@ -200,8 +199,10 @@ white screen, which is the failure this exists to prevent. The other half of the
 stale dist: a lazy chunk that 404s after a redeploy retries twice, then reloads the page once (guarded, so
 it can only happen once per tab) before surfacing here ([[view-registry]]).
 
-**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view. A door
-that is not built is shut more firmly than a door that closes itself, which is why that face no longer
+**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view, but it
+still mounts the frame's bottom ambient status bar. The public About disclosure is registered there, so the
+static graph's release facts have a real visible owner instead of a provider entry that can never paint. A
+door that is not built is shut more firmly than a door that closes itself, which is why that face no longer
 redirects away from live addresses — it never renders one.
 
 **Two views at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second view

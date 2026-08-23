@@ -39,9 +39,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   detail, or an issue detail. Bare evals/issues/settings boards are destinations, not tabs. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
-  ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the
-  center says it holds nothing and names the ways back in, because no view may arrive as a substitute for
-  the reader's own answer.
+  ([[tab-strip]]). With no document focus the center lands on the graph bottom sheet (`#/graph`) and names
+  the ways back in through the explorer/palette; the graph is the hidden tab the human explicitly retained,
+  not a document substitute.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
   [[context-dock]]: a spec node's scenarios and open issues. Context is about the current document, which is
   why it is not a finding surface and not a tab. **The frame owns its resting state, and that state is

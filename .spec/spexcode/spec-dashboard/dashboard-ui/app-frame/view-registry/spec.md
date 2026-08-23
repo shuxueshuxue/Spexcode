@@ -33,9 +33,8 @@ Bare evals/issues/settings boards are destinations, not documents, regardless of
 so they never enter the strip. Persisted entries are filtered through this same predicate during storage
 normalization, which clears board tabs written by older versions.
 
-Left out: graph (including its focused node — a legacy address), bare sessions, bare evals/issues/settings
-boards, and `empty`, which is what
-shows when nothing is held at all. **`/sessions/new` was a document and is not one now**: it names no
+Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), bare sessions, bare
+evals/issues/settings boards, and `empty`, which is retained only as a compatibility alias for graph. **`/sessions/new` was a document and is not one now**: it names no
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
 form, and the session it starts becomes a document the moment it has an id.
 

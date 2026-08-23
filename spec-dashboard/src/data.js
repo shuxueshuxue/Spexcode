@@ -2,7 +2,8 @@ import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
-// drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
+// drill-down tidy-tree layout ([[node-graph]]); `expanded` is the two-layer expansion frontier chosen by
+// GraphView. Coordinates depend only on tree shape plus that frontier, never on the focused id.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
   const kids = {}

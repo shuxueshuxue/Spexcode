@@ -5,7 +5,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
 function labelFor(session) {
-  return sessionHandle(session) || session?.id?.slice(0, 8) || ''
+  return sessionHeadline(session) || session?.id?.slice(0, 8) || ''
 }
 
 export function SessionPickerRow({ session, active = false, selected = false, onPick, onHover, onOpen, compact = false, newSession = false, name = null, className = '' }) {
@@ -42,7 +42,7 @@ export default function SessionPicker({ sessions = [], value = '', onChange, onO
   const [active, setActive] = useState(0)
   const choices = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
-    const rows = sessions.filter((session) => !needle || [labelFor(session), session.id, sessionHeadline(session)].some((text) => text?.toLocaleLowerCase().includes(needle)))
+    const rows = sessions.filter((session) => !needle || [labelFor(session), sessionHandle(session), session.id].some((text) => text?.toLocaleLowerCase().includes(needle)))
     return includeNew ? [...rows, { id: 'new', __new: true }] : rows
   }, [includeNew, query, sessions])
   useEffect(() => { setActive((index) => Math.min(index, Math.max(choices.length - 1, 0))) }, [choices.length])

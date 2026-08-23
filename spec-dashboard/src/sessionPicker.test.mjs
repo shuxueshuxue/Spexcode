@@ -21,6 +21,11 @@ test('one session picker owns target selection and keyboard choice', () => {
   assert.match(mentions, /<SessionPickerRow key=\{it\.id\}/)
 })
 
+test('picker rows paint the shared visible title while retaining the handle for matching', () => {
+  assert.match(picker, /function labelFor\(session\) \{[\s\S]*return sessionHeadline\(session\)/)
+  assert.match(picker, /\[labelFor\(session\), sessionHandle\(session\), session\.id\]/)
+})
+
 test('picker and graph badge use shared compact geometry', () => {
   assert.match(css, /\.session-picker-row\s*\{[\s\S]*\.session-picker-status/s)
   assert.match(css, /\.sess-badge\s*\{[\s\S]*position: absolute/s)

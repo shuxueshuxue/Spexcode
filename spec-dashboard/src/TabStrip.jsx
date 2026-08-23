@@ -6,7 +6,7 @@ import { moveTab, pinTab, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
-import { STATUS_COLOR, sessionHandle } from './session.js'
+import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey, resourceTabKey } from './sessionSurface.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
@@ -68,7 +68,7 @@ function label(tab, { specs, sessions, names, t }) {
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param)) || pendingSessionFor(tab.param)
-    const title = s ? sessionHandle(s) : tab.param.slice(0, 8)
+    const title = s ? sessionHeadline(s) : tab.param.slice(0, 8)
     const requestedSurface = tab.query?.surface
     if (isResourceSurface(requestedSurface)) {
       const key = resourceSurfaceKey(requestedSurface)

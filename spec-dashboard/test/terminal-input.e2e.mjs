@@ -69,8 +69,10 @@ try {
   }))
 
   await page.goto(`${BASE}/#/sessions/${scratch}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.si-tool.command').waitFor({ state: 'visible', timeout: 30_000 })
-  await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
+  const visibleTerminal = '.si-term-layer[style*="visibility: visible"]'
+  await page.waitForFunction((selector) => !!document.querySelector(`${selector} .xterm`), visibleTerminal)
+  await page.waitForFunction((selector) => (document.querySelector(`${selector} .xterm-rows`)?.textContent || '').trim().length > 20, visibleTerminal)
+  await page.waitForFunction((selector) => document.activeElement?.closest?.(selector)?.querySelector('.xterm-helper-textarea'), visibleTerminal)
   await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('IME_READY'))
   frames.length = 0
   step('native xterm focused without a mode')

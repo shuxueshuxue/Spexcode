@@ -5,6 +5,7 @@ import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 import { apiUrl } from './project.js'
 import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.js'
+import { useT } from './i18n/index.jsx'
 
 const SYNC_BEGIN = '\x1b[?2026h'
 const SYNC_END = '\x1b[?2026l'
@@ -55,7 +56,8 @@ function execCopyFallback(text) {
   return ok
 }
 
-export default function SessionTerm({ sessionId, active = true, focused = active, writable = false, focusRequest = 0 }) {
+export default function SessionTerm({ sessionId, active = true, focused = active, writable = true, resumeRequired = false, focusRequest = 0 }) {
+  const t = useT()
   const hostRef = useRef(null)
   const termRef = useRef(null)
   // Last locally fitted or backend-requested grid. Visible measurement waits for the native transaction;
@@ -68,18 +70,26 @@ export default function SessionTerm({ sessionId, active = true, focused = active
   const activeRef = useRef(active)
   const focusedRef = useRef(focused)
   const writableRef = useRef(writable)
+  const resumeRequiredRef = useRef(resumeRequired)
+  const resumeConfirmedRef = useRef(!resumeRequired)
+  const sendInputRef = useRef(null)
   const hideRef = useRef(null)
   activeRef.current = active
   focusedRef.current = focused
   writableRef.current = writable
+  resumeRequiredRef.current = resumeRequired
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
+  const [inputConfirmOpen, setInputConfirmOpen] = useState(false)
+  const [pendingInput, setPendingInput] = useState('')
+  const [resumeConfirmed, setResumeConfirmed] = useState(!resumeRequired)
+  resumeConfirmedRef.current = resumeConfirmed
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
   const [conn, setConn] = useState('connecting')
   useEffect(() => {
     const term = new Terminal({
       ...terminalTypography(),
-      cursorBlink: true, disableStdin: !writable, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input after the reader unlocks it
+      cursorBlink: true, disableStdin: !writable, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input on a live pane
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
       // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
@@ -258,9 +268,24 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     // native tmux client share the browser tab's lifetime even before the server heartbeat backstop fires.
     const onPageHide = () => sock?.close()
     window.addEventListener('pagehide', onPageHide)
+    const sendInput = (data) => {
+      if (!data || !writableRef.current || !focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return false
+      sock.send(JSON.stringify({ t: 'input', data }))
+      return true
+    }
+    sendInputRef.current = sendInput
     const inputSub = term.onData((data) => {
       if (!writableRef.current || !focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
-      sock.send(JSON.stringify({ t: 'input', data }))
+      // A suspended TUI may put a token-consuming resume prompt under the cursor. The first real key is
+      // the user's intent boundary; keep it out of tmux until the separate confirmation is answered.
+      const pointerReport = data.startsWith('\x1b[<')
+      if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
+        setPendingInput(data)
+        setInputConfirmOpen(true)
+        term.blur()
+        return
+      }
+      sendInput(data)
     })
 
     // Wheel navigation is xterm-native: reports ride the ordinary onData→input path to this viewer's
@@ -334,10 +359,35 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
       termRef.current = null
+      sendInputRef.current = null
       measureRef.current = null
       hideRef.current = null
     }
   }, [sessionId])
+
+  useEffect(() => {
+    const confirmed = !resumeRequired
+    setResumeConfirmed(confirmed)
+    resumeConfirmedRef.current = confirmed
+    setPendingInput('')
+    setInputConfirmOpen(false)
+  }, [sessionId, resumeRequired])
+
+  const confirmPendingInput = () => {
+    const data = pendingInput
+    setInputConfirmOpen(false)
+    setPendingInput('')
+    setResumeConfirmed(true)
+    resumeConfirmedRef.current = true
+    sendInputRef.current?.(data)
+    requestAnimationFrame(() => {
+      if (writableRef.current && focusedRef.current && activeRef.current && document.visibilityState !== 'hidden') termRef.current?.focus()
+    })
+  }
+  const cancelPendingInput = () => {
+    setInputConfirmOpen(false)
+    setPendingInput('')
+  }
 
   // Keep the stable cached renderer as the first visible paint. The resize message is also the single helper
   // activation path; there is no separate raw-terminal prewarm or size-ownership transition.
@@ -392,6 +442,18 @@ export default function SessionTerm({ sessionId, active = true, focused = active
   return (
     <div className="st-wrap">
       <div className="st-host" ref={hostRef} />
+      {inputConfirmOpen && (
+        <div className="st-input-confirm-backdrop" role="presentation">
+          <div className="st-input-confirm" role="dialog" aria-modal="true" aria-labelledby="st-input-confirm-title">
+            <h2 id="st-input-confirm-title">{t('session.resumeInputTitle')}</h2>
+            <p>{t('session.resumeInputMessage')}</p>
+            <div className="st-input-confirm-actions">
+              <button type="button" onClick={cancelPendingInput}>{t('common.cancel')}</button>
+              <button type="button" onClick={confirmPendingInput}>{t('session.resumeInputConfirm')}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* subtle corner caption: the copy confirmation, or a loud "reconnecting…" while the socket re-opens. */}
       {copied && <div className="st-copyhint copied">copied ✓</div>}
       {!copied && conn === 'reconnecting' && <div className="st-copyhint reconnecting">reconnecting…</div>}

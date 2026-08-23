@@ -209,9 +209,10 @@ terminal mount keys on **liveness, never the lifecycle label**: a session whose 
 whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead
 id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat** and read-safe: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
-pane's bottom edge. Opening or selecting the session attaches this pane read-only and never focuses or writes
-to it. The document action slot's explicit input button unlocks writing without moving focus; only a later
-press inside xterm begins an interactive turn, and leaving the session locks it again ([[terminal-input]]).
+pane's bottom edge. Opening or selecting a live session keeps this pane writable: typing is the basic terminal
+operation. Opening or switching never resumes a stopped process, consumes a token, or replays input. A live
+suspended TUI gates only its first actual key behind the non-focused resume confirmation described by
+[[terminal-input]]; archived/offline records have no terminal pane and remain read-only Conversation surfaces.
 `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
 session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,
@@ -284,11 +285,11 @@ relaunch, and selected-resource actions register with the shell's [[document-act
 right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness;
 disabled merge remains visible with the exact localized availability reason as its tooltip. The resource picker
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
-Surface choice is address state (`?surface=…`) controlled by the shell's three-state segmented switcher in the
-document-actions slot. The current segment is lit; each segment replaces the URL and leaves the session tab
-alone, so the diff face has the same one-click return to conversation or terminal and can never trap a deep link.
-The switcher is omitted when the session has only one available face (headless, offline, or archived). The slot
-also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
+Surface choice is address state (`?surface=…`) controlled by two compact icon buttons in the document-actions slot:
+one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
+`file-diff` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
+base face and leaves the session tab alone. Both are omitted when the session has only one available face (headless,
+offline, or archived). The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
 to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
 is the right-click on a finding-dock session row ([[dock-modes]]) — one menu, two ways in, the slot for the
 session you are reading and the dock for any other. Other document kinds register nothing, so their tab-row edge
@@ -450,8 +451,10 @@ routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based fo
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. The base surface is selected by its route address and the segmented switcher; there is no painted
-divider, wrapper boundary, or extra gutter separating the document actions: the whole
+hover tooltips. The base surface is selected by its route address and the document-actions slot exposes one compact
+terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `file-diff` icon
+enters or leaves the diff URL with `aria-pressed`; it returns to the remembered base face and is visually distinct from
+the merge action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live. The
@@ -504,15 +507,11 @@ status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
 over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), plus the
 fourth **archive** zone for closed records, a dim header leading each — and within a zone the **newest** session
-sits on top. One `sessionDisplayState` projection drives both this bucket and the row glyph: archived wins first;
-otherwise offline liveness (or an explicit offline status) wins over lifecycle and maps the row's effective status
-to `offline`; the two legislated exceptions are `queued`, which has not launched and remains runnable, and
-`archive`, which is a closed zone rendered with the muted offline mark (`○`). Online lifecycle then selects
-needs-you versus running. A session whose process died while it was
-`asking`/`review`/`error` keeps that pre-death lifecycle in the record, yet it cannot act until relaunched, so it
-sorts to **offline** and displays the offline glyph rather than wrongly sitting under *needs you*; a merely
-booting session (`starting`/`queued`) stays under *running*. A parent-child display edge is retained only within
-the same derived zone, so an offline child becomes an offline root instead of following an online parent. The
+sits on top. One `sessionDisplayState` projection drives both this bucket and the row glyph directly from the
+`/api/sessions` status: archived records form archive; asking/review/done/close-pending/error form needs-you;
+working/queued and other active values form running; offline/retired form offline. Liveness is secondary detail
+and never rewrites the package status, so a dead asking/review record remains in needs-you with its lifecycle glyph.
+Parentage follows the stored relationship rather than a dashboard liveness split. The
 **offline zone rests folded behind its own header** — the ONE disclosure for session history. Its header is a
 single row with the COUNT badge first and the `OFFLINE` label second; it contains no `>`/chevron/caret/`▸`
 direction symbol. Retired and

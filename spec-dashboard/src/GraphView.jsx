@@ -11,7 +11,7 @@ import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
-import { layout, X_GAP, Y_GAP } from './data.js'
+import { layout, singleLayerFrontier, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
@@ -134,28 +134,7 @@ function GraphView({ param, query }) {
     setFocusId(id)
   }, [])
   const focusRaw = rawById[focusId] || specs.find((s) => !s.parent) || specs[0]
-  const expanded = useMemo(() => {
-    const set = new Set()
-    if (!focusRaw) return set
-    let depth = 0
-    for (let cur = focusRaw; cur?.parent; cur = rawById[cur.parent]) depth += 1
-    const depthById = {}
-    const visit = (node, d) => {
-      if (!node || depthById[node.id] != null) return
-      depthById[node.id] = d
-      for (const child of specs) if (child.parent === node.id) visit(child, d + 1)
-    }
-    for (const root of specs) if (!root.parent) visit(root, 0)
-    for (let cur = focusRaw; cur; cur = cur.parent ? rawById[cur.parent] : null) set.add(cur.id)
-    // Keep the ancestor spine, then fully open the focused layer and its parent layer. That exposes the
-    // focused layer's complete sibling set plus the complete next layer, without opening unrelated shallow
-    // branches across the whole tree.
-    for (const node of specs) {
-      const d = depthById[node.id]
-      if (d === depth - 1 || d === depth) set.add(node.id)
-    }
-    return set
-  }, [focusRaw, rawById, specs])
+  const expanded = useMemo(() => singleLayerFrontier(specs, focusRaw?.id), [specs, focusRaw])
   // VISIBLE nodes are exactly those the layout placed (root, or a child of an expanded node); they carry
   // the x/y all geometry/render below works on. Hidden subtrees simply aren't in `specs2`.
   const placed = useMemo(() => layout(specs, expanded), [specs, expanded])

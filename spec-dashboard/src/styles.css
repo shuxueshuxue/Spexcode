@@ -584,18 +584,6 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   padding: 0 var(--space-3);
 }
 .document-action { position: relative; display: inline-flex; align-items: center; }
-.session-surface-switcher {
-  display: inline-flex; align-items: center; height: 24px; border: 1px solid var(--line); border-radius: var(--radius);
-  overflow: hidden; background: var(--panel2);
-}
-.session-surface-choice {
-  height: 22px; padding: 0 7px; color: var(--muted); background: transparent; border: 0;
-  border-right: 1px solid var(--line); font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
-}
-.session-surface-choice:last-child { border-right: 0; }
-.session-surface-choice:hover, .session-surface-choice:focus-visible { color: var(--ink2); background: var(--panel); }
-.session-surface-choice.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
-.session-surface-choice:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .document-action-button {
   appearance: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
   padding: 0; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius);
@@ -2321,6 +2309,19 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    caret-reveal scrolls it sideways to chase xterm's composition textarea when an IME opens at the
    rightmost columns (the pane lurched left by the composition's width). clip removes the scroller. */
 .st-host { width: 100%; height: 100%; overflow: clip; }
+.st-input-confirm-backdrop {
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center;
+  background: rgba(0, 0, 0, .28); pointer-events: auto;
+}
+.st-input-confirm {
+  width: min(420px, calc(100% - 32px)); padding: 16px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel); color: var(--ink); box-shadow: var(--shadow);
+}
+.st-input-confirm h2 { margin: 0 0 8px; font-size: var(--type-control); line-height: var(--leading-ui); }
+.st-input-confirm p { margin: 0; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-relaxed); }
+.st-input-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.st-input-confirm-actions button { padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel2); color: var(--ink2); cursor: pointer; }
+.st-input-confirm-actions button:last-child { border-color: var(--blue); color: var(--blue); }
 /* one-glance copy hint, a small LEGIBLE chip in the bottom-right of the dark pane. Click-through so it
    never blocks the live output, but readable at a glance (no straining): a bordered pill with light text
    on a solid dark backing. It flips to a solid GREEN "copied ✓" badge when the copy chord fires, then

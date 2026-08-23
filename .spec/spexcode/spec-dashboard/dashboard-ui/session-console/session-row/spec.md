@@ -28,16 +28,16 @@ import is not an implementation detail of any one feature.
 
 `SessionWindow.jsx` owns the row and the forest around it.
 
-The row and the forest consume one `sessionDisplayState` projection from `session.js`. It derives a zone from
-`archived` first, then offline liveness (or an explicit offline status), then the authored lifecycle. Two
-projection exceptions are legislated: `queued` has not launched and remains runnable under **running**, while
-`archive` is its own closed-record zone and uses the muted offline mark (`○`). Online
-`asking`/`review`/`done`/`close-pending`/`error` is **needs you**, other online lifecycles are **running**, a
-dead process is **offline**, and archived records are the fourth **archive** zone. A dead session keeps its
-authored lifecycle in the record, but its row status/glyph is projected as offline; a `retired` record keeps
-its `⚑` badge because that badge says the worktree is gone. A parent-child display edge
-is retained only when both rows have the same derived zone; a child whose liveness changes zones becomes a root
-in that zone, so a row's offline glyph and its zone header cannot disagree.
+The row and the forest consume one `sessionDisplayState` projection from `session.js`. The session package is
+the ground truth: the dashboard renders its `status` and maps that value directly to a fixed bucket and glyph.
+`asking`/`review`/`done`/`close-pending`/`error` are **needs you**; `working`/`queued` and other active values
+are **running**; `offline`/`retired` are **offline**; archived records are the fourth **archive** zone and use
+the muted archive mark (`○`). A dead process does not rewrite a retained review or asking status, so it remains
+visible in needs-you with its lifecycle glyph and liveness only as secondary row detail. Parentage follows the
+stored parent relationship; the dashboard does not split a tree because a process changed liveness.
+
+Historical correction: the `2486cb152` offline-zone projection made liveness dominate the package status. That
+overcorrection is revoked: 人类判词是“不要再新增机制…把这套状态改对,因为它原来就是对的,只不过写了一堆屎山把对的搞错了。”
 
 **The row.** `SessionRow` renders one session: its status colour and glyph come from `session.js`
 (`STATUS_COLOR` / `STATUS_GLYPH`), its identity from `sessionHandle` and `sessionHeadline`, and its

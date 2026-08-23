@@ -78,6 +78,11 @@ identity is still present and its native loaded-reference census, governed bindi
 are all zero. Reclamation rechecks those facts immediately before acting. Names, command lines,
 or a matching socket filename are never ownership evidence. Ambiguity retains both roots.
 
+The project backend performs this zero-reference reclaim sweep when it starts and after generation rotation.
+The sweep is advisory and fail-closed: an unhealthy census, an ambiguous identity, or a protected binding
+leaves the draining root in place for the next pass. It never signals the current generation or a session's
+shared control plane on the strength of a stale record alone.
+
 ### Death
 
 A root can also stop existing with no SpexCode action at all: the host restarts, the OOM killer fires, a temp
@@ -102,6 +107,12 @@ merely unaddressable — its process alive, its exact identity or socket no long
 death: nothing is retired, nothing is re-pinned, and both the launch and resume boundaries refuse loudly. No
 boundary may hand a client an endpoint it has not proven live; a printed socket that cannot be connected is
 the same defect as a wrong one.
+
+Backend death is a separate runtime incident from generation death and must remain diagnosable. The supervisor
+records each backend child termination with its exit code or signal, the relevant supervisor action, and a
+bounded pointer to the backend stdout/stderr and host OOM evidence. A later health-check restart may restore
+service, but it must not erase that termination record or present a restart as a clean exit. Missing evidence is
+reported as `unknown`, never inferred from a port probe or a readiness warning.
 
 An operation may wait only for the finite publication interval in which the same endpoint has not yet assembled
 its PID, detached receipt, and socket proof. It retries a complete fresh proof under one bounded operation budget;

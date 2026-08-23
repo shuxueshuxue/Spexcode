@@ -191,7 +191,12 @@ try {
   await page.screenshot({ path: join(out, 'command-box-new-spawned.png'), fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.waitForTimeout(1_000)
+  await page.keyboard.press('Alt+i')
+  await page.keyboard.press('Alt+i')
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
+  await input.fill('@new:fake mobile top-right notice ' + 'y '.repeat(80))
+  await page.locator('.si-command-send').click()
+  await page.locator('.tn-notice.success').last().waitFor({ state: 'visible', timeout: 15_000 })
   const mobileNotice = await page.locator('.tn-notice.success').last().evaluate((node) => {
     const rect = node.getBoundingClientRect()
     return { bottom: rect.bottom, width: rect.width }

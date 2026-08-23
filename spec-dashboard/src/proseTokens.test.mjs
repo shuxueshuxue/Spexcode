@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseProseTokens } from './proseTokens.js'
+import { parseProseTokens, renderProseTokens } from './proseTokens.js'
 
 test('prose token adapter keeps source maps and promotes SpexCode marks', () => {
   const source = [
@@ -26,4 +26,23 @@ test('prose token adapter keeps source maps and promotes SpexCode marks', () => 
   const evidence = tokens.flatMap((token) => token.children || []).find((token) => token.type === 'prose_evidence')
   assert.equal(evidence?.meta.hash, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
   assert.deepEqual(evidence?.map, [4, 5])
+})
+
+test('the mapper renders semantic marks in place through caller handlers', () => {
+  const source = '▶0:07 · inspect\n\nReply [[node-a]] ![frame](/api/evidence/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa).'
+  const seen = []
+  const h = (type, props, ...children) => ({ type, props: props || {}, children })
+  const output = renderProseTokens(parseProseTokens(source), {
+    h,
+    renderTimeAnchor: (meta) => { seen.push(['time', meta.tMs]); return h('button', {}, meta.label) },
+    renderSpecRef: (id) => { seen.push(['ref', id]); return h('a', {}, id) },
+    renderEvidence: (meta) => { seen.push(['evidence', meta.hash]); return h('span', {}, meta.alt) },
+  })
+  assert.deepEqual(seen, [
+    ['time', 7_000],
+    ['ref', 'node-a'],
+    ['evidence', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+  ])
+  assert.equal(output[0].type, 'button')
+  assert.equal(output[1].type, 'p')
 })

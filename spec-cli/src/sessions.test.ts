@@ -529,6 +529,10 @@ exec sleep 30
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
+  writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${process.pid}\n`)
+  writeFileSync(join(sessionStoreDir(id), 'watchers.json'), `${JSON.stringify([{
+    watcher: `watcher-${id}`, createdAt: new Date().toISOString(), sources: ['parent'], snapshotPending: 'readiness-timeout-snapshot',
+  }])}\n`)
 
   const proofPath = sessionArtifactPath(id, 'launch.receipt')
   const proof = (overrides: Record<string, unknown> = {}) => ({
@@ -544,7 +548,7 @@ exec sleep 30
     ;(codexHarness as any).launchReady = async () => {
       if (rejectPostProofReadiness) {
         rejectPostProofReadiness = false
-        throw new Error('forced post-proof queued liveness rejection')
+        throw new Error('forced post-proof launch readiness timed out')
       }
       return { proof: { kind: 'fixture-post-proof-live' }, validate: async () => true }
     }
@@ -574,12 +578,16 @@ exec sleep 30
     assert.deepEqual(handedOver, [])
     assert.equal(stageHarnessLaunchProof(id, 'thread-queued', launchPayload), true)
     assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch receipt/)
-    await waitUntil(() => /forced post-proof queued liveness rejection/.test(
+    await waitUntil(() => /forced post-proof launch readiness timed out/.test(
       JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).note || ''), 'post-proof queued liveness note')
     await sleep(0)
 
     const rejectedLiveness = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(rejectedLiveness.harness_session_id, 'thread-queued')
+    assert.equal(rejectedLiveness.status, 'active', 'an online worker remains active after readiness timeout')
+    assert.equal(rejectedLiveness.stopped, false, 'an online worker is not marked stopped by readiness timeout')
+    assert.match(rejectedLiveness.note, /^launch readiness warning:/)
+    assert.match(readFileSync(join(sessionStoreDir(id), 'watchers.json'), 'utf8'), /readiness-timeout-snapshot/, 'watcher snapshot debt survives the warning')
     assert.equal(existsSync(sessionArtifactPath(id, 'launch')), false)
     assert.equal(existsSync(proofPath), false)
     assert.equal(readFileSync(invocationCount, 'utf8'), '1')

@@ -1765,7 +1765,7 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
-function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string): void {
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string, live = false): void {
   const reason = error instanceof Error ? error.message : String(error)
   const note = `${label ?? (terminal ? 'queued launch readiness failed' : 'launch readiness warning')}: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
@@ -1778,8 +1778,11 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
       publishCanonicalLifecycle(rec, 'error', null, note)
       writeRecord({ ...rec, status: 'error', proposal: null, stopped: true, note, launchOwner: null, launchReadinessStartedAt: null })
     } else {
-      publishCanonicalLifecycle(rec, rec.status, rec.proposal, note)
-      writeRecord({ ...rec, note, launchReadinessStartedAt: null })
+      const status = live && (rec.status === 'error' || rec.stopped) ? 'active' : rec.status
+      const stopped = live ? false : rec.stopped
+      const restored = { ...rec, status, stopped, note, launchOwner: null, launchReadinessStartedAt: null }
+      publishCanonicalLifecycle(restored, status, restored.proposal, note)
+      writeRecord(restored)
     }
   }
 }
@@ -1841,23 +1844,19 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = 
       const reason = error instanceof Error ? error.message : String(error)
       const timedOut = /timed out|did not become ready/i.test(reason)
       let live = false
-      if (timedOut) {
-        const current = readRecord(id)
-        if (current) live = await launchReadinessWitnessAlive(id, harness, current)
-      }
-      const terminal = timedOut && !live
+      let terminal = timedOut
       try {
-        await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(
-          id,
-          error,
-          terminal,
-          live ? 'launch readiness warning' : undefined,
-        ))
+        await withRecordLock(id, async () => {
+          const current = readRecord(id)
+          if (timedOut && current) live = await launchReadinessWitnessAlive(id, harness, current)
+          terminal = timedOut && !live
+          noteQueuedLaunchFailureUnlocked(id, error, terminal, live ? 'launch readiness warning' : undefined, live)
+        })
       }
       catch (recordError) {
         console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${reason}`)
       }
-      await clearPendingWatchSnapshots(id)
+      if (!live) await clearPendingWatchSnapshots(id)
     })
     .finally(() => launching.delete(id))
 }
@@ -1967,6 +1966,7 @@ async function drainQueueUnlocked(): Promise<void> {
             priorReason,
             !live,
             live ? 'launch readiness warning' : undefined,
+            live,
           ))
           continue
         }

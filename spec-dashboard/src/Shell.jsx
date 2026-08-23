@@ -26,6 +26,8 @@ import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
+import { useLaunchers } from './launch.js'
+import { HARNESS_BY_ID } from './harness.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -77,7 +79,7 @@ const DOCK_ANIMATION_MS = 170
 // RENDER ORDER IS INSERTION ORDER, never recency. Reordering keyed children moves real DOM nodes, and a
 // moved node re-attaches its iframes and canvases — which is a reload wearing a different name. Recency
 // lives in a counter used only to pick the victim.
-function ViewPool({ page, param, query }) {
+function ViewPool({ page, param, query, inactive = false }) {
   const key = poolKey(page, param)
   const address = routeHash(page, param, query)
   const seq = useRef(0)
@@ -98,7 +100,7 @@ function ViewPool({ page, param, query }) {
       return next
     })
   }, [key, address])
-  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={entry.key === key} />)
+  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={!inactive && entry.key === key} />)
 }
 
 // One mounted document. It is MEMOISED, and that is not a micro-optimization: the shell re-renders on
@@ -129,14 +131,15 @@ const PoolPane = memo(function PoolPane({ entry, showing }) {
 
 // The SECOND pane is not a pool. It holds one document the reader deliberately sent there, so it is the
 // one place where keying on the address is the whole contract — there is no browsing history to keep warm.
-function ViewHost({ page, param, query }) {
+function ViewHost({ page, param, query, inactive = false }) {
   const t = useT()
   const { component: View, className } = viewFor(page)
   const address = routeHash(page, param, query)
   return (
-    <div className={`viewhost ${className}`}>
+    <div className={`viewhost ${className}`} aria-hidden={inactive ? 'true' : undefined}
+      style={inactive ? { display: 'none' } : undefined}>
       <ViewErrorBoundary resetKey={address}>
-        <PaneProvider value={{ address, active: true }}>
+        <PaneProvider value={{ address, active: !inactive }}>
           <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
             <View key={poolKey(page, param)} param={param} query={query} />
           </Suspense>
@@ -266,21 +269,80 @@ const storedGraphFocus = () => {
 // This is the only ledger on every route, graph included. On the graph its category buttons reuse
 // [[graph-stats]]'s walk; elsewhere issue/eval buttons keep opening their boards, while node categories
 // enter the graph already focused on the first node they count.
+function LauncherSessionTally({ launcher, sessions, onOpen, tooltip }) {
+  const harnessId = launcher.harness?.replace(/-headless$/, '') || 'claude'
+  const harness = HARNESS_BY_ID[launcher.harness] || HARNESS_BY_ID[harnessId] || HARNESS_BY_ID.claude
+  const Glyph = harness.Glyph
+  const namedVariant = launcher.name !== harnessId
+  const counts = sessions.reduce((result, session) => {
+    const zone = sessionZone(session)
+    if (zone === 'run') result.running += 1
+    else if (zone === 'need') result.needsYou += 1
+    else result.other += 1
+    return result
+  }, { running: 0, needsYou: 0, other: 0 })
+  return (
+    <button type="button" className="sb-launcher-group" data-launcher={launcher.name}
+      data-tip={tooltip} aria-label={tooltip} onClick={onOpen}>
+      <span className="sb-launcher-glyph" aria-hidden="true">
+        <Glyph />
+        {namedVariant && <span className="sb-launcher-badge">{launcher.name.slice(0, 1).toUpperCase()}</span>}
+      </span>
+      <span className="sb-launcher-name">{launcher.name}</span>
+      <span className="sb-launcher-counts" aria-hidden="true">
+        <span className="sb-launcher-running">{counts.running}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-needs">{counts.needsYou}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-other">{counts.other}</span>
+      </span>
+    </button>
+  )
+}
+
+function LauncherSessionSummary({ launchers, sessions, onOpen, tooltip }) {
+  if (!sessions.length) return null
+  const counts = sessions.reduce((result, session) => {
+    const zone = sessionZone(session)
+    if (zone === 'run') result.running += 1
+    else if (zone === 'need') result.needsYou += 1
+    else result.other += 1
+    return result
+  }, { running: 0, needsYou: 0, other: 0 })
+  return (
+    <button type="button" className="sb-launcher-summary" data-launcher-summary={launchers.map((l) => l.name).join(',')}
+      data-tip={tooltip} aria-label={tooltip} onClick={onOpen}>
+      <span className="sb-launcher-summary-mark" aria-hidden="true">{launchers.length}</span>
+      <span className="sb-launcher-counts" aria-hidden="true">
+        <span className="sb-launcher-running">{counts.running}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-needs">{counts.needsYou}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-other">{counts.other}</span>
+      </span>
+    </button>
+  )
+}
+
+function launcherSessionGroups(launchers, sessions) {
+  const configured = (launchers || []).filter((launcher) =>
+    (sessions || []).some((session) => session.launcher === launcher.name))
+    .map((launcher) => ({ ...launcher, sessions: sessions.filter((session) => session.launcher === launcher.name) }))
+  const known = new Set((launchers || []).map((launcher) => launcher.name))
+  const unmatched = (sessions || []).filter((session) => !known.has(session.launcher))
+  return unmatched.length ? [...configured, { name: 'other', harness: 'claude', sessions: unmatched }] : configured
+}
+
 function BoardStatus({ specs, sessions, page }) {
   const t = useT()
   const { offline } = useBackendHealth()
+  const { launchers } = useLaunchers()
+  const launcherGroups = useMemo(() => launcherSessionGroups(launchers, sessions || []), [launchers, sessions])
+  const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
   const stale = offline ? <span className="sb-stale" aria-label={t('backend.stale')} data-tip={t('backend.stale')} /> : null
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.
-  const live = useMemo(() => {
-    const zones = { need: 0, run: 0 }
-    for (const session of sessions || []) {
-      const zone = sessionZone(session)
-      if (zone in zones) zones[zone] += 1
-    }
-    return zones
-  }, [sessions])
   const { fail } = tally.scoreCount
   const walkGraph = (ids) => {
     const id = nextGraphStatNode(ids, storedGraphFocus())
@@ -347,10 +409,21 @@ function BoardStatus({ specs, sessions, page }) {
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
-    kind: live.need > 0 ? 'warning' : undefined,
-    tooltip: t('statusBar.sessions', { run: live.run, need: live.need }),
-    onClick: () => navigate('sessions'),
-    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span>{stale}</span>,
+    kind: needsYou > 0 ? 'warning' : undefined,
+    tooltip: t('statusBar.sessions'),
+    node: (
+      <span className="sb-launcher-groups">
+        <span className="sb-launcher-list">
+          {launcherGroups.map((launcher) => {
+            return <LauncherSessionTally key={launcher.name} launcher={launcher} sessions={launcher.sessions}
+              tooltip={t('statusBar.launcher', { name: launcher.name })} onOpen={() => navigate('sessions')} />
+          })}
+        </span>
+        <LauncherSessionSummary launchers={launcherGroups} sessions={sessions || []} onOpen={() => navigate('sessions')}
+          tooltip={t('statusBar.launcherSummary', { n: launcherGroups.length })} />
+        {stale}
+      </span>
+    ),
   })
   return null
 }
@@ -358,22 +431,22 @@ function BoardStatus({ specs, sessions, page }) {
 // One view, or two. The second is a second route and a place to put it — nothing in any view changes,
 // because a view was already receiving its route rather than reading it. That is the whole return on the
 // hinge: two-up stopped being a rewrite and became a layout.
-function Content({ page, param, query }) {
+function Content({ page, param, query, inactive = false }) {
   const t = useT()
   const { split } = useWorkspace()
   const { closeSplit } = useWorkspaceApi()
   const [width, onDrag, reset] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
-  if (!split) return <ViewPool page={page} param={param} query={query} />
+  if (!split) return <ViewPool page={page} param={param} query={query} inactive={inactive} />
   return (
     <div className="content-split">
-      <ViewHost page={page} param={param} query={query} />
+      <ViewHost page={page} param={param} query={query} inactive={inactive} />
       <div className="content-divider" onMouseDown={onDrag} onDoubleClick={reset}
         role="separator" aria-orientation="vertical" />
       <div className="content-second" style={{ width }}>
         <button type="button" className="content-close" onClick={closeSplit} aria-label={t('tabs.close')}>
           <Icon name="x" size={12} />
         </button>
-        <ViewHost page={split.page} param={split.param} query={split.query} />
+        <ViewHost page={split.page} param={split.param} query={split.query} inactive={inactive} />
       </div>
     </div>
   )
@@ -388,9 +461,10 @@ function ContextToggle({ visible, onToggle }) {
   </button>
 }
 
-export default function Shell() {
+export default function Shell({ routeOverride = null, inactive = false }) {
   const t = useT()
-  const { page, param, query } = useRoute()
+  const route = useRoute()
+  const { page, param, query } = routeOverride || route
   const { specs, sessions, identity, graphOnly } = useBoard()
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
@@ -460,6 +534,7 @@ export default function Shell() {
   }, [place, identity?.title, needsYou])
 
   const onShellKey = useCallback((event) => {
+    if (inactive) return false
     // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
     if (palette) {
       if (event.key === 'Escape') { event.preventDefault(); closePalette(); return true }
@@ -521,8 +596,21 @@ export default function Shell() {
       return true
     }
     return false
-  }, [closePalette, dockKind, dockMode, graphOnly, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
-  useKeyboardScope(onShellKey, -100)
+  }, [closePalette, dockKind, dockMode, graphOnly, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
+  useKeyboardScope(onShellKey, inactive ? -1000 : -100)
+
+  // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review
+  // tree at all. Keep only the inactive content pool and the ambient ledger registrations; this prevents
+  // DOM queries and accessibility trees from seeing a second rail, dock, or tab strip.
+  if (inactive) {
+    return (
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <Content page={page} param={param} query={query} inactive />
+        <ShellStatus />
+        <BoardStatus specs={specs} sessions={sessions} page={page} />
+      </div>
+    )
+  }
 
   // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.
   if (graphOnly) {
@@ -555,7 +643,7 @@ export default function Shell() {
                   on the current document, so it rides the strip's own trailing cluster. */}
               <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
                 trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
-              <Content page={page} param={param} query={query} />
+              <Content page={page} param={param} query={query} inactive={inactive} />
             </div>
             <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
           </div>

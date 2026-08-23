@@ -637,13 +637,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .sb-group { display: flex; align-items: center; min-width: 0; }
 /* the right group renders OUTWARD-IN: appended items land at the outer edge, so a higher priority sits
    nearer the centre without the contributor computing a position. */
-.sb-right { flex-direction: row-reverse; }
+.sb-right { flex-direction: row-reverse; min-width: 0; flex: 0 1 auto; }
 .sb-left { overflow: hidden; }
 .sb-item {
   display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; max-width: 100%;
   font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--line-status); color: inherit;
   background: none; border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.sb-item:has(.sb-launcher-groups) { padding-inline: 0; }
 button.sb-item { cursor: pointer; }
 button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transparent); }
 button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
@@ -679,6 +680,32 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-tally-button:disabled { opacity: .45; cursor: default; }
 .sb-tally-sep { width: 1px; height: 12px; margin: 0 1px; background: var(--line); }
 .sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.sb-launcher-groups { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-list { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-group {
+  display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; min-width: max-content; max-width: 100%; padding: 0; border: 0;
+  color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer;
+}
+.sb-launcher-group:hover { color: var(--ink2); }
+.sb-launcher-group:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.sb-launcher-glyph { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 12px; height: 12px; color: var(--ink2); }
+.sb-launcher-glyph .si-agent-glyph { width: 12px; height: 12px; }
+.sb-launcher-badge { position: absolute; right: -4px; bottom: -4px; display: inline-flex; align-items: center; justify-content: center; width: 7px; height: 7px; border: 1px solid var(--ground); border-radius: 50%; background: var(--blue); color: var(--ground); font-size: var(--type-hero); line-height: var(--leading-ui); }
+.sb-launcher-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-launcher-counts { display: inline-flex; align-items: center; flex: none; }
+.sb-launcher-running { color: var(--green); }
+.sb-launcher-needs { color: var(--yellow); }
+.sb-launcher-other { color: var(--muted); }
+.sb-launcher-slash { color: var(--muted); padding: 0 1px; }
+.sb-launcher-summary { display: none; align-items: center; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer; }
+.sb-launcher-summary:hover { color: var(--ink2); }
+.sb-launcher-summary:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.sb-launcher-summary-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 12px; height: 12px; padding: 0 2px; border: 1px solid var(--muted); border-radius: 2px; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-none); }
+/* Compact desktop widths hide the launcher list as one unit, so no KDA digit can be flex-shrunk or clipped. */
+@media (max-width: 900px) {
+  .sb-launcher-list { display: none; }
+  .sb-launcher-summary { display: inline-flex; }
+}
 
 /* ---- left navigation rail ---- */
 .side-rail {

@@ -16,6 +16,18 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
 const ENTRIES = RAIL_PAGES
 
+// Review routes have no workspace tab to remember them. Keep the last addressed review location as the
+// rail's own navigation memory, so leaving a detail and pressing Evals/Issues returns to that detail instead
+// of manufacturing a second tab or throwing the reader back to an unrelated board state.
+const lastReviewAddress = new Map()
+export const rememberReviewAddress = ({ page, param = null, query = null } = {}) => {
+  if (page === 'evals' || page === 'issues') lastReviewAddress.set(page, { page, param, query })
+}
+const railHref = (page) => {
+  const remembered = lastReviewAddress.get(page)
+  return routeHash(page, remembered?.param ?? null, remembered?.query ?? null)
+}
+
 // Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
 // so an entry names the binding by id and the hint is resolved at render — never typed into the label.
 // Evals lists two because two keys genuinely open it. The dock panel switch has no page key: it is a
@@ -58,7 +70,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
       data-tip={label}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
-      href={routeHash(page)}
+      href={railHref(page)}
       // Boards are navigation destinations, not documents. Modified clicks stay the browser's (new window,
       // new browser tab, copy address).
       onClick={(event) => {
@@ -74,14 +86,14 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
   )
 }
 
-export default function SideBar({ page, graphOnly = false, needsYou = 0 }) {
+export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDockToggle = false }) {
   const t = useT()
   const { setDock, setDockMode } = useWorkspaceApi()
   return (
     // the rail is inert chrome for pointer focus ([[focus-return]]): a press navigates without taking DOM
     // focus, so chrome never becomes the focus-return ticket. Keyboard Tab still reaches every entry.
     <nav className="side-rail" aria-label={t('nav.railLabel')} onMouseDownCapture={inertChromePress}>
-      <DockToggle />
+      {!hideDockToggle && <DockToggle />}
       {ENTRIES.map((p) => (
         <RailLink key={p} page={p} active={page === p}
           label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}

@@ -1781,7 +1781,9 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
       const status = live && (rec.status === 'error' || rec.stopped) ? 'active' : rec.status
       const stopped = live ? false : rec.stopped
       const restored = { ...rec, status, stopped, note, launchOwner: null, launchReadinessStartedAt: null }
-      publishCanonicalLifecycle(restored, status, restored.proposal, note)
+      // A live post-receipt timeout is a diagnostic, not a parent-watch lifecycle transition. The record/file
+      // projection still updates the local row; the canonical event stream remains quiet until a real state change.
+      if (!live) publishCanonicalLifecycle(restored, status, restored.proposal, note)
       writeRecord(restored)
     }
   }

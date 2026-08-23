@@ -567,6 +567,7 @@ function GraphView({ param, query }) {
   // Clicking a node focuses it and drills it open. The same reading-pair camera target used by keyboard
   // navigation is applied after the frontier re-plots; it does NOT open a session.
   const onNodeClick = useCallback((_e, n) => {
+    setSelectedNodeIds([])
     focusNode(n.id)
   }, [focusNode])
 
@@ -574,6 +575,7 @@ function GraphView({ param, query }) {
   // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
   // leaves it.
   const onNodeDoubleClick = useCallback((e, n) => {
+    setSelectedNodeIds([])
     focusNode(n.id)
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.

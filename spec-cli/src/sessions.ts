@@ -1796,9 +1796,13 @@ export function canonicalWatchRecipients(
 
 export function sessionHasPendingDelivery(
   id: string,
-  application: Pick<ProductionSessionApplication, 'protocol'> | null = configuredSessionApplicationIfCutover() ?? null,
+  application: Pick<ProductionSessionApplication, 'protocol'>
+    & Partial<Pick<ProductionSessionApplication, 'resolveRuntime'>>
+    | null = configuredSessionApplicationIfCutover() ?? null,
 ): boolean {
   if (!application) return owesDelivery(id)
+  const runtime = application.resolveRuntime?.(id, 'spex-governed')
+  if (runtime === null) return false
   try {
     return application.protocol.listPending(id).length > 0
   } catch (error) {
@@ -1812,7 +1816,7 @@ export function sessionHasPendingDelivery(
 
 export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'stopped' | 'archived'>>(
   rec: T,
-  canonical: { status: string; proposal: Proposal | null; note: string | null; parentSessionId: string | null } | null,
+  canonical: { status: string; proposal: string | null; note: string | null; parentSessionId: string | null } | null | undefined,
 ): T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null } {
   // Canonical state may lag a legacy record during archive/stop or an authored waiting/error transition.
   // Those durable states are terminal/needs-you facts and must never be resurrected as active by a stale
@@ -1823,7 +1827,7 @@ export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'st
   return {
     ...rec,
     status: canonical.status as Lifecycle,
-    proposal: canonical.proposal,
+    proposal: canonical.proposal as Proposal | null,
     note: canonical.note,
     parent: canonical.parentSessionId,
   }

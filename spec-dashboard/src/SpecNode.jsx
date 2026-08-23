@@ -3,8 +3,8 @@ import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
-export { middleEllipsis } from './middleEllipsis.js'
-import { middleEllipsis } from './middleEllipsis.js'
+import { middleEllipsis } from './specMeta.js'
+export { middleEllipsis } from './specMeta.js'
 
 // compact "Nm/Nh/Nd ago"; returns null for a missing/unparseable date so the caller can render nothing.
 function timeAgo(iso, t) {

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { middleEllipsis } from './middleEllipsis.js'
+import { middleEllipsis } from './specMeta.js'
 
 test('middle ellipsis biases the 14-character budget toward distinguishing suffixes', () => {
   const labels = [

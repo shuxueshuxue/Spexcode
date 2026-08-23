@@ -238,6 +238,7 @@ export default {
     issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
     sessions: '按 launcher 分组的会话 —— 打开会话面板',
     launcher: ({ name }) => `${name}：运行中 / 等你 / 其他 —— 打开会话面板`,
+    launcherSummary: ({ n }) => `${n} 个 launcher：运行中 / 等你 / 其他 —— 打开会话面板`,
   },
   backend: {
     offline: '后端不可达 —— 当前显示的数据可能已陈旧',

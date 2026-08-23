@@ -243,6 +243,7 @@ export default {
     issues: ({ n }) => `${n} open issues — open the issues board`,
     sessions: 'sessions by launcher — open the sessions console',
     launcher: ({ name }) => `${name}: running / needs-you / other — open the sessions console`,
+    launcherSummary: ({ n }) => `${n} launchers: running / needs-you / other — open the sessions console`,
   },
   backend: {
     offline: 'backend unavailable — displayed data may be stale',

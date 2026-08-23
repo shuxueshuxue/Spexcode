@@ -5058,7 +5058,7 @@ function rawKeyArgs(id: string, key: string): string[] | null {
 // (browser + server + send-keys all parallel) and scramble the sequence; a single serialised batch cannot.
 // An unknown token is skipped without dropping the rest; false only if the tmux session is gone or nothing sent.
 export async function rawKey(id: string, key: string | string[]): Promise<boolean> {
-  return withRecordLock(id, async () => {
+  const sent = await withRecordLock(id, async () => {
     const list = (Array.isArray(key) ? key : [key]).filter((k) => typeof k === 'string' && k.length > 0)
     if (list.length === 0 || !(await alive(id))) return false
     let sent = false
@@ -5069,4 +5069,6 @@ export async function rawKey(id: string, key: string | string[]): Promise<boolea
     }
     return sent
   })
+  if (sent) markHumanPromptActive(id)
+  return sent
 }

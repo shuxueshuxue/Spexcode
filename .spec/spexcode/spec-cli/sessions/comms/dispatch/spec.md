@@ -52,7 +52,8 @@ adapter accepts it, and it never weakens the stranded refusal for a caller's new
 A prompt accepted from a human (the input route with no `from` session) is also the explicit re-entry for a waiting
 turn: `asking` and inferred `idle` become canonical `active` at that same acceptance boundary. Agent-to-agent
 messages and managed watch events keep the recipient's authored waiting state. Native terminal input follows the
-same rule after the PTY write; mouse reports are navigation, not a prompt, and do not wake a session.
+same rule after the PTY write; the raw-key face follows it after its ordered tmux batch. Mouse reports are
+navigation, not a prompt, and do not wake a session.
 
 Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,

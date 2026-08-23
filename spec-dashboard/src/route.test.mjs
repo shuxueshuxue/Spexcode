@@ -15,11 +15,10 @@ test('parseRoute splits path and query inside the hash', () => {
     { page: 'evals', param: 'my-node/my scenario', query: { q: 'scope:abc' } })
   assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc', query: {} })
   assert.deepEqual(parseRoute('#/sessions/abc?surface=terminal'), { page: 'sessions', param: 'abc', query: { surface: 'terminal' } })
-  // an unknown address lands on the workspace's daily face, and carries no selector: its tail was written
-  // for a page that does not exist, so handing it to sessions would name an object nobody asked for.
-  assert.deepEqual(parseRoute('#/nope'), { page: 'sessions', param: null, query: {} })
-  assert.deepEqual(parseRoute('#/nope/abc'), { page: 'sessions', param: null, query: {} })
-  assert.deepEqual(parseRoute(''), { page: 'sessions', param: null, query: {} })
+  // an unknown address and a cold hash land on the graph bottom sheet, with no selector.
+  assert.deepEqual(parseRoute('#/nope'), { page: 'graph', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/nope/abc'), { page: 'graph', param: null, query: {} })
+  assert.deepEqual(parseRoute(''), { page: 'graph', param: null, query: {} })
 })
 
 test('session eval face redirects to the canonical scoped Evals address', () => {
@@ -38,12 +37,11 @@ test('resource faces stay on the session object address and round-trip as a norm
   assert.equal(sessionSurfaceHash(addressHash(address)), null)
 })
 
-// the empty workspace is an address ([[tab-strip]]): it can be landed on, reloaded and left. It names no
-// object, so like settings it never carries a selector.
-test('parseRoute knows the empty workspace and gives it no selector', () => {
-  assert.deepEqual(parseRoute('#/empty'), { page: 'empty', param: null, query: {} })
-  assert.deepEqual(parseRoute('#/empty/anything'), { page: 'empty', param: null, query: {} })
-  assert.equal(routeHash('empty'), '#/empty')
+// `empty` is the retired address spelling; it aliases graph and carries no selector.
+test('parseRoute aliases the retired empty address to graph', () => {
+  assert.deepEqual(parseRoute('#/empty'), { page: 'graph', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/empty/anything'), { page: 'graph', param: null, query: {} })
+  assert.equal(routeHash('graph'), '#/graph')
 })
 
 test('routeHash round-trips through parseRoute, q leading and the rest sorted', () => {

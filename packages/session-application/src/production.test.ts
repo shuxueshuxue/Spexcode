@@ -78,6 +78,38 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.deepEqual(localityCalls, [databasePath, databasePath])
 })
 
+test('lifecycle publication applies parent and manual watch policies as a union', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-watch-policy-'))
+  const app = openProjectSessionApplication({ databasePath: join(root, 'sessions.sqlite'), locality: () => {} })
+  try {
+    app.createSession({ sessionId: 'parent' })
+    app.createSession({ sessionId: 'child', parentSessionId: 'parent', status: 'queued' })
+    while (app.protocol.dequeue('parent')) { /* discard the creation snapshot */ }
+
+    app.attachWatcher('parent', 'child', 'watch:parent')
+    app.transitionSession('child', { status: 'active', reason: 'working' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'queued creation gets one ready-active correction')
+    app.protocol.dequeue('parent')
+
+    app.transitionSession('child', { status: 'active', reason: 'working' })
+    assert.equal(app.protocol.listPending('parent').length, 0, 'parent-only watch suppresses routine working')
+
+    app.transitionSession('child', { status: 'awaiting', proposal: 'merge', note: 'ready' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'parent-only watch receives actionable transitions')
+    app.protocol.dequeue('parent')
+
+    app.attachWatcher('parent', 'child', 'watch:manual')
+    app.transitionSession('child', { status: 'active', proposal: null, note: null, reason: 'working' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'manual watch opts into working transitions')
+    app.protocol.dequeue('parent')
+
+    app.transitionSession('child', { status: 'awaiting', proposal: 'close', note: 'ready to close' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'overlapping sources enqueue one unioned notification')
+  } finally {
+    app.close()
+  }
+})
+
 test('production composition refuses missing locality and relative database paths before opening', () => {
   assert.throws(
     () => openProjectSessionApplication({ databasePath: 'relative.sqlite', locality: () => {} }),

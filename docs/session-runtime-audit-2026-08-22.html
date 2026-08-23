@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Runtime Audit - 2026-08-22</title>
+  <style>
+    :root { color-scheme: light; font: 15px/1.55 system-ui, sans-serif; background: #f4f5f7; color: #20242a; }
+    body { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1, h2 { line-height: 1.2; color: #11151a; }
+    h1 { margin-bottom: 4px; }
+    .meta { color: #5d6670; margin-top: 0; }
+    section { background: #fff; border: 1px solid #d9dde2; border-radius: 6px; padding: 20px; margin: 18px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; vertical-align: top; border-top: 1px solid #e4e7ea; padding: 8px 10px; }
+    th { color: #454d57; background: #fafbfc; }
+    code { background: #f0f2f4; padding: 1px 4px; border-radius: 3px; }
+    .pass { color: #176b3a; font-weight: 600; }
+    .warn { color: #855d00; font-weight: 600; }
+    .fail { color: #a12a2a; font-weight: 600; }
+    .small { color: #5d6670; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Session Runtime Audit</h1>
+  <p class="meta">Evidence captured 2026-08-22 from the live SpexCode checkout. Scope: session packages, CLI/runtime composition, watch policy, process health, and polling/lock costs.</p>
+
+  <section>
+    <h2>Executive Result</h2>
+    <p><span class="fail">P1 fixed in this audit:</span> the canonical cutover transition path enqueued state changes to every topology recipient. That bypassed the existing policy that parent-only supervision suppresses routine <code>active</code>/<code>working</code>, while manual watch opts into it. The fix keeps the package neutral and lets the CLI pass a validated recipient set.</p>
+    <p><span class="warn">Not fixed here:</span> process/app-server accumulation, synchronous SQLite busy retry, and dashboard liveness poll cadence. These are real operational costs, but changing them needs separate fail/pass evidence and can affect launch/recovery semantics.</p>
+    <p><span class="pass">Policy conclusion:</span> parent and manual are additive sources, not overriding modes. For one watcher/target pair the union is one delivery: non-active transitions go to either source; routine active goes only when the manual source is present.</p>
+  </section>
+
+  <section>
+    <h2>Live Health Snapshot</h2>
+    <table>
+      <thead><tr><th>Observation</th><th>Value</th><th>Interpretation</th></tr></thead>
+      <tbody>
+        <tr><td>Session records</td><td>122 total</td><td>98 archived; 24 live.</td></tr>
+        <tr><td>Live authored state</td><td>13 asking, 1 awaiting/close-pending, 2 parked, 4 active</td><td>Lifecycle is separate from liveness; waiting states are not failures.</td></tr>
+        <tr><td>Live liveness</td><td>16 online, 3 offline, 1 unknown, 4 active/online</td><td>Three asking and one parked record are offline while retaining authored lifecycle. This is a health signal to investigate, not permission to rewrite lifecycle.</td></tr>
+        <tr><td>Topology</td><td>107 parent edges, 105 parent-watch edges, 3 manual-watch edges</td><td>The current parent has one manual edge to the parent session itself; the large working-message volume was not explained by dozens of manual watches.</td></tr>
+        <tr><td>Processes</td><td>33 Codex processes, 12 Codex app-server processes</td><td>High for 24 live records and consistent with the reported app-server pair accumulation. Process ownership/reaping remains an infrastructure item.</td></tr>
+        <tr><td>Backend</td><td>8787 listening at capture</td><td>Reachable during this snapshot; prior unexplained restarts remain an unresolved incident.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Watch Policy</h2>
+    <table>
+      <thead><tr><th>Source set on one watcher/target</th><th>Initial snapshot</th><th>Later active/working</th><th>Later actionable state</th></tr></thead>
+      <tbody>
+        <tr><td>parent</td><td>yes</td><td>no</td><td>yes</td></tr>
+        <tr><td>manual</td><td>yes</td><td>yes</td><td>yes</td></tr>
+        <tr><td>parent + manual</td><td>one snapshot</td><td>one delivery</td><td>one delivery</td></tr>
+        <tr><td>none</td><td>none</td><td>none</td><td>none</td></tr>
+      </tbody>
+    </table>
+    <p>The legacy path already implemented this union in <code>shouldDeliverWatchTransition</code>. The cutover path lost it because <code>transitionSession</code> called neutral <code>topology.recipients</code> without a policy result. The corrected boundary is a generic optional <code>recipientSessionIds</code> input; parent/manual interpretation remains in <code>sessions.ts</code>.</p>
+  </section>
+
+  <section>
+    <h2>Package Review</h2>
+    <table>
+      <thead><tr><th>Area</th><th>Finding</th><th>Severity</th></tr></thead>
+      <tbody>
+        <tr><td>Protocol storage</td><td>SQLite transactions, topology, events, and runtime bindings share one composition and one commit boundary. This is the right ownership shape.</td><td class="pass">OK</td></tr>
+        <tr><td>Watch policy</td><td>Was bypassed by the cutover caller; now restored through an explicit caller-owned recipient set without adding relation semantics to the neutral package.</td><td class="pass">Fixed</td></tr>
+        <tr><td>Polling</td><td>Session packages add no production <code>setInterval</code>. Record-lock waits are 10ms sync/async polling; delivery lock waits are 25ms with a bounded 25ms acquisition budget. The 30s record-lock timeout is a hard refusal, not a background poll.</td><td class="warn">Measure under load</td></tr>
+        <tr><td>Busy retry</td><td><code>session-protocol</code> uses synchronous <code>Atomics.wait(..., 20ms)</code> retries up to the 5s busy budget during open/migration. This can block a Node event loop during contention.</td><td class="warn">P1 follow-up</td></tr>
+        <tr><td>Runtime duplication</td><td>SpexCode still owns adapter probing, graph liveness, legacy record compatibility, launch queues, and dashboard pollers. The core package owns durable state/events/topology/queue, so this is a layering boundary rather than proof of accidental duplication.</td><td class="warn">Architecture review</td></tr>
+        <tr><td>Process cleanup</td><td>Live process census shows 12 app-servers for 33 Codex processes. The reported pair leakage and backend restarts need owner-aware reap and exit-cause evidence.</td><td class="fail">P1 open</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Immediate Change</h2>
+    <p>Production transition accepts an optional validated recipient set. The CLI derives it from active <code>watch:parent</code>/<code>watch:manual</code> edges, deduplicates watcher ids, suppresses parent-only active transitions, and sends all actionable transitions. The HTTP runtime state route uses the same resolver. Existing callers that omit the option retain neutral topology broadcast semantics.</p>
+    <p>Regression coverage: session-application <strong>12/12</strong>, CLI typecheck PASS, CLI build PASS, Dashboard tests <strong>258/258</strong>, spec lint <strong>0 errors</strong> (warnings are existing/drift warnings).</p>
+  </section>
+
+  <section>
+    <h2>Open Work</h2>
+    <ol>
+      <li>Reproduce and repair app-server ownership/reaping, startup sweep, and Codex launch serialization. Record exact process identity and exit cause.</li>
+      <li>Reproduce the three reported liveness holes (receipt witness, codex-headless, self-heal target) before changing adapters.</li>
+      <li>Replace synchronous busy retry with a measured contention strategy or move the blocking boundary; retain the fail-loud timeout.</li>
+      <li>Measure dashboard hot/warm/cold pollers at zero, one, and many SSE subscribers. They are consumer behavior, not session-package polling.</li>
+      <li>Re-run a real parent/manual YATU flow against the deployed backend and verify no working receipt reaches a parent-only watcher.</li>
+    </ol>
+  </section>
+
+  <p class="small">Limitations: this report is a point-in-time process/database census. It does not claim the unresolved external backend restart cause, full leak stress table, or live browser deployment proof.</p>
+</body>
+</html>

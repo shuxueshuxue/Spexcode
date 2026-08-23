@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -607,12 +607,15 @@ app.post('/api/session-runtime/:id/state', async (c) => {
   if (body?.note !== undefined && body.note !== null && typeof body.note !== 'string') return c.json({ error: 'note must be a string or null' }, 400)
   if (body?.parentSessionId !== undefined && body.parentSessionId !== null && typeof body.parentSessionId !== 'string') return c.json({ error: 'parentSessionId must be a string or null' }, 400)
   try {
+    const sessionId = c.req.param('id')
+    const nextStatus = (body?.status as string | undefined) ?? application.readState(sessionId)?.status
     return c.json(application.transitionSession(c.req.param('id'), {
       status: body?.status as string | undefined,
       proposal: body?.proposal as string | null | undefined,
       note: body?.note as string | null | undefined,
       parentSessionId: body?.parentSessionId as string | null | undefined,
       reason: typeof body?.reason === 'string' ? body.reason : null,
+      recipientSessionIds: nextStatus === undefined ? undefined : canonicalWatchRecipients(application, sessionId, nextStatus),
     }))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)

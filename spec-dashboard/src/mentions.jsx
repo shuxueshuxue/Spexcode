@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
+import { STATUS } from './specMeta.js'
 import { useT } from './i18n/index.jsx'
 
 // The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (session)
@@ -226,7 +227,7 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
           onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
           onMouseEnter={() => onHover(i)}
         >
-          {!session && <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />}
+          {!session && <span className="mention-dot" style={{ background: STATUS[it.status]?.color || STATUS.pending.color }} />}
           <span className="mention-id">{launcher ? <>@new:{highlight(it.label, menu.query)}</> : session ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
           <span className="mention-path">{session ? it.sub : specPath(it.path)}</span>
         </li>

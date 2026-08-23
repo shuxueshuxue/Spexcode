@@ -705,7 +705,7 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
   position: absolute; top: -3px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px;
   display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
   color: var(--paper); background: var(--yellow); border: 1px solid var(--ground); border-radius: var(--radius-full);
-  font: var(--weight-semibold) var(--type-micro)/1 var(--ui-font); pointer-events: none;
+  font: var(--weight-semibold) var(--type-caption)/1 var(--ui-font); pointer-events: none;
 }
 
 /* ---- routed page containers — ONE pane boundary for every page ([[side-nav]]) ---- */

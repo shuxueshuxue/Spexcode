@@ -15,6 +15,7 @@ related:
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/styles.test.mjs
+  - spec-dashboard/src/statusVocabulary.test.mjs
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/textarea.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
@@ -37,6 +38,10 @@ related:
 at-a-glance summary. Both are **thin views of `/api/graph`** (i.e. `spex graph --json`): the dashboard renders only
 what the backend reports and never invents session state, so a human watching the dashboard and an agent
 driving the same sessions through the CLI see identical state.
+
+The backend's closed `DisplayStatus` vocabulary is the one lifecycle word source for the dashboard. The
+session projection, both locale dictionaries, and every status-word surface cover the full set, including
+`unknown`, `corrupt`, and `retired`; an untranslated `status.*` key is never a valid display.
 
 A persisted session **rename** is a graph-stream action, not a private action-refetch: after the route commits
 the name and nudges the sessions domain, the visible row advances from the delta stream. A

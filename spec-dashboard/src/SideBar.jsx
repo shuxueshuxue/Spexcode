@@ -29,7 +29,8 @@ const PAGE_KEYS = {
 }
 
 // The dock's one rail control owns only open/closed state. Projection choice belongs to the route link
-// that led there; it never gets the route's active styling and never navigates by itself.
+// that led there; it never gets the route's active styling and never navigates by itself. It is deliberately
+// a smaller, muted control separated from the route group, so it reads as frame chrome rather than a sixth tab.
 function DockToggle() {
   const t = useT()
   const { dock } = useWorkspace()

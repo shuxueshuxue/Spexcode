@@ -272,8 +272,8 @@ body {
 .backend-offline-banner span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .backend-offline-banner button { padding:2px 8px; color:var(--ink2); background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); font:inherit; cursor:pointer; }
 .backend-offline-banner button:hover { border-color:var(--yellow); }
-.app-shell { height: 100%; min-height: 0; }
-.app { width: 100%; height: 100%; min-height: 0; display: flex; }
+.app-shell { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.app { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; }
 .app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
@@ -620,10 +620,10 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   box-shadow: var(--shadow);
 }
 
-/* [[status-bar]] — the content column's footer, not a floating chip or a bar over the sidebar. Numbers are VS Code's, which Zed's 4px padding
+/* [[status-bar]] — the window footer, not a floating chip or a bar over the sidebar. Numbers are VS Code's, which Zed's 4px padding
    plus 8px group gap reproduces in visual weight: 22px content box, 12px text, 0 5px per item. */
 .statusbar {
-  flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
+  width: 100%; flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
   background: var(--ground); border-top: 1px solid var(--line);
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-status); color: var(--muted);
   overflow: hidden;
@@ -683,6 +683,15 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
   background: none; border: none; border-radius: var(--radius); cursor: pointer; color: var(--muted);
   text-decoration: none;
 }
+.rail-panel-toggle {
+  width: 20px; height: 20px; margin-bottom: var(--space-2); padding: 0; color: var(--muted); background: transparent;
+}
+.rail-panel-toggle::after {
+  content: ''; position: absolute; left: 5px; right: 5px; bottom: -5px; border-bottom: 1px solid var(--edge);
+}
+.rail-panel-toggle:hover { color: var(--ink2); background: transparent; }
+.rail-panel-toggle:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.rail-panel-toggle svg { width: 14px; height: 14px; }
 .rail-btn:hover { background: var(--panel2); color: var(--ink2); }
 .rail-btn.disabled { color: var(--line); cursor: not-allowed; }
 .rail-btn.disabled:hover { background: none; color: var(--line); }
@@ -1185,6 +1194,11 @@ a.scenario-count:hover { background: var(--panel2); }
 /* row 1, the headline: the session's live self-summary (or prompt placeholder). flex:1 eats the line so the
    ever-changing tmux task description has room; min-width:0 lets the ellipsis engage in a flex child. */
 .sess-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-parent-mark {
+  flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: var(--type-meta); font-weight: var(--weight-regular); cursor: pointer;
+}
+.sess-parent-mark:hover { color: var(--ink2); text-decoration: underline; }
 .sess-lock { font-size: var(--type-caption); flex: none; line-height: var(--leading-none); filter: saturate(0); }
 .sess-meta {
   /* rendered before the headline in source (SessionRow) but kept visually LAST by order:1 in every flex

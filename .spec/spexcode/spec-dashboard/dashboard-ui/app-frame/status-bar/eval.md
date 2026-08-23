@@ -7,11 +7,12 @@ scenarios:
       content row, sidebar, xterm screen and final xterm row against the status bar, then take settled full,
       lower-left-junction, and lower-right-junction screenshots.
     expected: >-
-      Rail and optional dock continue to the viewport bottom. The status bar is the final unshrinking child
-      of the right content column, starts exactly at the sidebar's right edge, and has the content row ending
-      at its top edge. The xterm screen and its complete last rendered row end at or above that same edge;
-      neither output nor caret is covered. The vertical sidebar/content and horizontal content/status seams
-      are single 1px `--line` strokes with clean lower-left and lower-right junctions.
+      The status bar is the final unshrinking full-window flow row after the app row. Rail and optional dock
+      stop at its top edge; the bar starts at x=0 and ends at the viewport's right edge. The content row ends
+      at the bar's top edge, and the xterm screen and its complete last rendered row end at or above that same
+      edge; neither output nor caret is covered. The vertical sidebar/content and horizontal full-width
+      content/status seams are single 1px `--line` strokes with a clean lower-left T junction and flush
+      lower-right edge.
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/styles.css]
   - name: project-identity-is-one-status-door
     tags: [frontend-e2e, desktop]

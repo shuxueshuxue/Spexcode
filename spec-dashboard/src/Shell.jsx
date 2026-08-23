@@ -553,9 +553,9 @@ export default function Shell() {
           </div>
           <ShellStatus />
           <BoardStatus specs={specs} sessions={sessions} page={page} />
-          <StatusBar />
         </div>
       </div>
+      <StatusBar />
       {/* the one shared palette: it floats above whichever view is showing, so it is the shell's. A view
           being hidden must never be able to swallow it — the reason it was hoisted here in the first place. */}
       {palette && (

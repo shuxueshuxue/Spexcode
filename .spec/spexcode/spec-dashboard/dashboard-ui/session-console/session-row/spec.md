@@ -45,6 +45,12 @@ activity from `opSummary`, which folds an op list into per-op counts using the s
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.
 
+When the dock has a root row whose existing wire `parent` is present in the board but belongs to another
+display zone, the row keeps that relationship visible with a muted `↑<parent handle>` mark. The handle is
+truncated in the row and carries the full parent name as its tooltip; clicking it navigates to the parent
+session document. Same-zone nesting has no mark because its rails already express the relationship. The
+dashboard never derives a replacement parent when the wire field is absent.
+
 **The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
 face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current
 forest item; it does not serialize a second appearance shape. The one permitted visual difference is a 75% scale

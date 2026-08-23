@@ -4,8 +4,8 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard on the spec-node graph. Look at the tree: depth flows left→right, the root
-      layer is a short readable column, and the focused layer plus its complete next layer are visible
-      together while deeper subtrees collapse to a single tile carrying a `▸N` right-edge tab. Each node is a
+      layer is a short readable column, and the focused node's immediate children are visible while sibling
+      subtrees collapse to a single tile carrying a `▸N` right-edge tab. Each node is a
       tight two-row tile — Row 1: status dot · title, with the pending-op glyphs (when overlays exist)
       or else the bare last-edited age at the right edge; Row 2: version, badges, and any live editors'
       avatars. Press → to drill into a child and ← to drill back out;
@@ -13,8 +13,8 @@ scenarios:
       geometric centre. Measure the focused tile centre against the graph rectangle after the pan settles. Record the navigation as
       video and screenshot the settled framing; file both with the pass verdict.
     expected: >-
-      The drill-down tidy-tree renders: a short root column, two visible focused layers with deeper
-      sibling subtrees collapsed to `▸N` tiles, and each node a two-row tile showing its identity and
+      The drill-down tidy-tree renders: a short root column, one focused layer with sibling subtrees
+      collapsed to `▸N` tiles, and each node a two-row tile showing its identity and
       recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera keeps the focused
       tile centred on both axes of the graph pane. The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
       and a pass verdict.
@@ -71,7 +71,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       Against the real project board (not a fixture), focus the deepest available node in the 362-node
-      graph and wait for the two-layer frontier to settle. Through CDP, read every visible
+      graph and wait for the single-layer frontier to settle. Through CDP, read every visible
       `.react-flow__node` bounding box and assert that every pair has a separating edge; record the node
       count, the minimum same-column centre gap, and the pair count. Capture one zoomed-out panorama and
       one settled focus crop from the same run.

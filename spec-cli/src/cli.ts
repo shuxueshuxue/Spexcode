@@ -1380,7 +1380,10 @@ if (cmd === 'serve') {
       // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
       // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
       const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
-      const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd))
+      const { withCodexGenerationMutex } = await import('./codex-runtime-generations.js')
+      const { runtimeRoot: projectRuntimeRoot } = await import('@spexcode/spec-core')
+      const r = await withCodexGenerationMutex(projectRuntimeRoot(cwd), () =>
+        codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd)))
       if (!r.ok) { console.error(r.error); process.exit(1) }
       if (prompt) {
         const t = await codexTurn(sock, r.threadId, prompt, cwd)

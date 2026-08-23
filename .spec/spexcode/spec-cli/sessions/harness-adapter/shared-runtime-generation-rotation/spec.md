@@ -78,6 +78,11 @@ identity is still present and its native loaded-reference census, governed bindi
 are all zero. Reclamation rechecks those facts immediately before acting. Names, command lines,
 or a matching socket filename are never ownership evidence. Ambiguity retains both roots.
 
+The project backend performs this zero-reference reclaim sweep when it starts and after generation rotation.
+The sweep is advisory and fail-closed: an unhealthy census, an ambiguous identity, or a protected binding
+leaves the draining root in place for the next pass. It never signals the current generation or a session's
+shared control plane on the strength of a stale record alone.
+
 ### Death
 
 A root can also stop existing with no SpexCode action at all: the host restarts, the OOM killer fires, a temp

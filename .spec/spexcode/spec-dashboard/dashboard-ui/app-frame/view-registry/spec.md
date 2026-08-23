@@ -19,8 +19,8 @@ The map from an address kind to the thing that renders it, its surface, and the 
 
 ## Extension boundary
 
-The built-in map is seeded into one runtime registry. Product extensions use its `registerView(name,
-definition, owner)` or `registerPlugin({ id, views })` API; they do not mutate the exported built-in object.
+The core map is seeded into one runtime registry. Product extensions use its `registerView(name,
+definition, owner)` or `registerPlugin({ id, views })` API; they do not mutate the exported core object.
 Names are lowercase kebab-case, every definition must provide a component function, and registration is
 fail-closed: an existing core or plugin view cannot be replaced. Plugin registration validates every view
 before mutating the registry, so a collision leaves all prior entries intact. A plugin can be removed by id,
@@ -28,6 +28,10 @@ which removes only the views it owns. The registry is the sole lookup used by `v
 document predicates, so an extension receives the same route-props contract and shell ownership as a built-in
 view. This is an extension seam, not a second navigation system: plugins provide views, while routing and tab
 identity remain shell-owned.
+
+The existing Settings destination is the first built-in extension that enters through this API at startup.
+Its plugin supplies only the view definition; the canonical `#/settings` address, rail destination, resident
+tab identity, and workspace host remain owned by the same route and shell modules as every core view.
 
 Everything else it needs — the board, the workspace — it asks for by context, so no component has to own
 another component's props. That is what dissolved the god component: its size was not the problem, its

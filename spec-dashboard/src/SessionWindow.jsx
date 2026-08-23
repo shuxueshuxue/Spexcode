@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { GLYPH, middleEllipsis } from './specMeta.js'
+import { GLYPH } from './specMeta.js'
 import { sessionDisplayState, sessionHandle } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
@@ -60,7 +60,7 @@ export function FoldPod({ expanded, rollup, kin, onToggle, inert = false }) {
 }
 
 // The console's live row and inert drag projection share this complete tree. Only their outer semantics differ.
-export function SessionConsoleTreeRow({ item, activeId, dragging = false, dropTarget = false, onToggleFold, rowProps = {}, inert = false, style, parentMark = null }) {
+export function SessionConsoleTreeRow({ item, activeId, dragging = false, dropTarget = false, onToggleFold, rowProps = {}, inert = false, style }) {
   const { s } = item
   const selected = activeId === s.id
   const lead = (item.expandable || item.depth)
@@ -70,7 +70,7 @@ export function SessionConsoleTreeRow({ item, activeId, dragging = false, dropTa
   const treeClass = `sess-tree-row si-tree-row${dragging ? ' dragging' : ''}${dropTarget ? ' drop-target' : ''}${inert ? ' si-session-drag-ghost' : ''}`
   const itemClass = `si-item${selected ? ' on' : ''}`
   const face = <>
-    <SessionRow s={s} locked={false} showAvatar={false} lead={lead} parentMark={parentMark} />
+    <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
   </>
   const treeStyle = { '--ov': labelColor(s.id), '--sess-fold-indent': `${item.depth * 14}px`, ...style }
   return (
@@ -102,7 +102,7 @@ export function useFold() {
 // per-surface flex is `showAvatar`: the map-side SessionWindow (beside the spec-node graph) KEEPS the
 // avatar so a session cross-references its node avatars; the console sidebar and the phone drop it
 // (redundant next to the headline). `lead` is the optional nesting fold gutter.
-export function SessionRow({ s, locked, showAvatar = true, lead = null, parentMark = null }) {
+export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const display = sessionDisplayState(s)
@@ -122,8 +122,6 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null, parentMa
           aria-label={s.note ? `${statusWord} · ${s.note}` : statusWord}>{display.glyph}</span>
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
-      {parentMark && <span className="sess-parent-mark" role="link" tabIndex={-1} data-tip={parentMark.title} aria-label={parentMark.title}
-        onClick={(event) => { event.stopPropagation(); parentMark.onClick() }}>↑{middleEllipsis(parentMark.label)}</span>}
       <span className="sess-id" data-tip={headline}>{headline}</span>
       {s.archiveHazard && <span className="sess-hazard" data-tip={s.archiveHazard} aria-label={s.archiveHazard}><Icon name="issue-opened" size={13} /></span>}
       {locked && <span className="sess-lock" data-tip={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}

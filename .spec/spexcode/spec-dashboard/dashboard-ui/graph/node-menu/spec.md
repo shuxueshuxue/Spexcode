@@ -36,9 +36,9 @@ work, never a direct server op, so a mis-aimed right-click can't destroy anythin
 
 **Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
 currently touch it (`overlay.source === session.source`) — the menu appends, below a divider from the
-five fixed actions, **one item per overlaying session**: the `sessionDisplayState` status-coloured glyph plus the session's **headline** —
-the SAME live line the board rows show ([[session-activity]]'s one-name-every-surface / `sessionHeadline`),
-never the stable label, so a session reads identically here and on the board it overlays.
+five fixed actions, **one item per overlaying session** using the shared [[session-picker]] row: the
+deterministic avatar, `sessionDisplayState` status-coloured glyph, and stable session handle. The handle is
+the same identity used by the dock, mentions, and prose dispatch, so a session reads identically everywhere.
 Picking one opens that session in the console ([[session-console]]) through the shared [[session-picker]] row
 language. This is the **one place a crossing
 into an *existing* session lives** — the graph deliberately has no bare keystroke for it and the

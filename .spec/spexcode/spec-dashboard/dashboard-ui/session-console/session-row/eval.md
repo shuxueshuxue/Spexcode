@@ -1,22 +1,18 @@
 ---
 scenarios:
-  - name: console-drag-projection-shares-row-tree
+  - name: dock-row-drag-keeps-one-live-tree
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
-    code: spec-dashboard/src/SessionWindow.jsx
-    related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/styles.css]
+    test: spec-dashboard/test/session-row-dock.e2e.mjs
+    code: [spec-dashboard/src/SessionWindow.jsx, spec-dashboard/src/Dock.jsx]
+    related: spec-dashboard/src/styles.css
     description: >-
-      In Chromium, select a nested session with a title long enough to fill the selected three-line cap, then
-      pointer-drag its rendered console row while the fixture keeps the current forest and selection live.
-      Inspect the source and fixed drag projection's row element/state, title line boxes, marker float, nesting
-      lead, and fold pod before releasing the pointer.
+      In Chromium, open the current sessions dock with a present parent/child pair and a separate root target.
+      Drag the child row toward the target while the dashboard keeps the live forest rendered.
     expected: >-
-      The live row and inert projection are one tree shape from the same current forest item: they have the
-      same focused state, optional checkbox/lead/fold content, three visible title lines, and a right-floated
-      status marker that only narrows line one. The projection has no focusable interaction, but no separate
-      appearance snapshot or manual layout can change its content geometry.
+      The dock keeps one live row tree: the source row receives its dragging state, a valid target receives
+      drop-target state, and no checkbox or inert ghost is rendered. Releasing sends the ordinary reparent
+      request; no second selection model or duplicate row appearance is created.
 ---
 
-Measure through the rendered desktop console in a real Chromium browser. The row-tree assertion is geometric:
-compare visible `Range` line boxes and the rendered marker float while the pointer owns the drag, alongside a
-drag screenshot and video; source inspection alone cannot prove the formatting context is shared.
+Measure through the rendered desktop dock in a real Chromium browser. The YATU assertion reads the source and
+target row classes while the pointer owns the drag and confirms the reparent request boundary.

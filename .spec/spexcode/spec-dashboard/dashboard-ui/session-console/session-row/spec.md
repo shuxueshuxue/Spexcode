@@ -34,10 +34,9 @@ the ground truth: the dashboard renders its `status` and maps that value directl
 are **running**; `offline`/`retired` are **offline**; archived records are the fourth **archive** zone and use
 the muted archive mark (`○`). A dead process does not rewrite a retained review or asking status, so it remains
 visible in needs-you with its lifecycle glyph and liveness only as secondary row detail. Parentage follows the
-stored parent relationship; the dashboard does not split a tree because a process changed liveness.
-
-Historical correction: the `2486cb152` offline-zone projection made liveness dominate the package status. That
-overcorrection is revoked: 人类判词是“不要再新增机制…把这套状态改对,因为它原来就是对的,只不过写了一堆屎山把对的搞错了。”
+stored parent relationship; every present child remains under its present parent regardless of either session's
+status or liveness. The family sits in the root's zone: **glyph ≡ the session's own status; zone ≡ the
+family's root status**.
 
 **The row.** `SessionRow` renders one session: its status colour and glyph come from `session.js`
 (`STATUS_COLOR` / `STATUS_GLYPH`), its identity from `sessionHandle` and `sessionHeadline`, and its
@@ -45,19 +44,16 @@ activity from `opSummary`, which folds an op list into per-op counts using the s
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.
 
-When the dock has a root row whose existing wire `parent` is present in the board but belongs to another
-display zone, the row keeps that relationship visible with a muted `↑<parent handle>` mark. The handle is
-truncated in the row and carries the full parent name as its tooltip; clicking it navigates to the parent
-session document. Same-zone nesting has no mark because its rails already express the relationship. The
-dashboard never derives a replacement parent when the wire field is absent.
+The governing human ruling is: “我们的显示模式一直都只看 parent session 是不是 running。就算你这个是 needs you 状态,
+它也应该放在那个 running 的 parent session 底下,而不是自己跳到上面去、再加一个回到 parent 的链接。我们本来完全没有这套机制的…给我狠狠的删!”
+It replaces cross-zone root splitting and the `○`-out-of-zone partition rule. The stored parent relationship is
+the only nesting input, and the root alone chooses the family's zone.
 
-**The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
-face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current
-forest item; it does not serialize a second appearance shape. The one permitted visual difference is a 75% scale
-of the ghost, so a selected row's expanded headline does not cover the receiving object; the pointer anchor is
-adjusted to that scale. The other difference is semantic: the live row is a button with its handlers while the
-ghost is inert. The ghost therefore keeps selected headline wrapping and its right-side marker in the same
-formatting context as the source row before the final visual scale is applied.
+**The console projection.** The desktop dock's tree wrapper, item, shared row face, and fold pod are one
+presentational tree. Multi-select checkboxes and the former inert drag ghost are retired; the live row is the
+only rendered session face. Dragging keeps the source row marked and highlights a valid target in the same
+tree, while the backend owns the reparent operation. No second appearance shape or hidden selection state is
+minted for the gesture.
 
 **The rails.** `RowLead` draws the tree connectors to the left of a row. A guide array describes the
 ancestry: each entry says whether that column continues below, so the last entry becomes a tee or an

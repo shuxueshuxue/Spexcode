@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import FileTree from './FileTree.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { SessionConsoleTreeRow, useFold } from './SessionWindow.jsx'
-import { crossZoneParent, sessionAncestorIds, sessionForest, sessionHandle, sessionZone } from './session.js'
+import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
@@ -142,12 +142,6 @@ function SessionDock({ sessions, activeId }) {
           // when the slot moves on. Ctrl/⌘ or a double-click holds it as its own tab, and ⌥ scopes the
           // graph to its worktree — the gesture the retired map-side glance used to own.
           const locked = !!item.s.source && item.s.source === lockedSource
-          const parent = crossZoneParent(sessions || [], item.s)
-          const parentMark = parent ? {
-            label: sessionHandle(parent),
-            title: `Parent session: ${sessionHandle(parent)}`,
-            onClick: () => navigate('sessions', parent.id),
-          } : null
           return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId}
             dragging={drag?.id === item.s.id}
             dropTarget={drag?.target === item.s.id}
@@ -167,7 +161,7 @@ function SessionDock({ sessions, activeId }) {
                 event.preventDefault()
                 setMenu({ x: event.clientX, y: event.clientY, session: item.s })
               },
-            }} parentMark={parentMark} />
+            }} />
         }) : <div className="dock-empty">—</div>}
       </div>
       {/* what the gap MEANS, said only while it means something. It floats over the list's foot and takes

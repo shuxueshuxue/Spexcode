@@ -128,7 +128,17 @@ async function assertEditorLayout(drawer, { minHeight, maxHeight, label }) {
 
 async function assertSwitcherMarks(page) {
   const menu = page.locator('.proj-menu')
-  await menu.waitFor()
+  await menu.waitFor({ state: 'attached' })
+  const [menuBox, slotBox] = await Promise.all([
+    menu.boundingBox(),
+    page.locator('.sb-project-slot').boundingBox(),
+  ])
+  const viewport = page.viewportSize()
+  assert.ok(menuBox && slotBox, 'project menu and trigger slot are measurable')
+  assert.ok(Math.abs(menuBox.x - slotBox.x) <= 1, 'project menu left edge follows the trigger slot')
+  assert.ok(menuBox.y + menuBox.height <= slotBox.y + 1, 'project menu opens above the trigger slot')
+  assert.ok(viewport && menuBox.x + menuBox.width <= viewport.width + 1, 'project menu stays inside the viewport')
+  assert.equal(await page.locator('.sb-project-trigger').getAttribute('aria-controls'), 'status-project-menu')
   const atlasItem = menu.getByRole('menuitem', { name: 'Atlas Lab', exact: true })
   const rocketItem = menu.getByRole('menuitem', { name: 'Rocket Yard', exact: true })
   const allItem = menu.getByRole('menuitem', { name: 'All projects', exact: true })
@@ -313,14 +323,27 @@ try {
   await assertProjectStatusChrome(page)
 
   step('switcher identity marks')
+  await page.locator('.sb-project-trigger[aria-haspopup="menu"]').waitFor()
   await page.locator('.sb-project-trigger').click()
   const desktopSwitcher = await assertSwitcherMarks(page)
   assert.match(await desktopSwitcher.menu.getByRole('menuitem', { name: 'Atlas Lab', exact: true }).locator('.proj-menu-mark').getAttribute('style'), /lucide\/radar\.svg/)
   assert.match(await desktopSwitcher.menu.getByRole('menuitem', { name: 'All projects', exact: true }).locator('.proj-menu-mark').getAttribute('style'), /simple-icons\/github\.svg/)
   await page.screenshot({ path: join(out, 'atlas-switcher-desktop-dracula.png'), fullPage: true })
 
+  step('900px switcher geometry and Escape')
+  await page.keyboard.press('Escape')
+  await page.locator('.status-project-menu').waitFor({ state: 'detached' })
+  await page.setViewportSize({ width: 900, height: 900 })
+  await page.locator('.sb-project-trigger').click()
+  await assertSwitcherMarks(page)
+  await page.screenshot({ path: join(out, 'atlas-switcher-900-dracula.png'), fullPage: false })
+  await page.keyboard.press('Escape')
+  await page.locator('.status-project-menu').waitFor({ state: 'detached' })
+  await page.locator('.sb-project-trigger').click()
+  const desktopSwitcherAgain = await assertSwitcherMarks(page)
+
   step('switch to rocket')
-  await desktopSwitcher.rocketItem.click()
+  await desktopSwitcherAgain.rocketItem.click()
   await page.locator('.side-rail').waitFor()
   await waitFor(async () => (await page.title()).endsWith('Rocket Yard'), 'rocket title')
   const rocketHref = await favicon(page)

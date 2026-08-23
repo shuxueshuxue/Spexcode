@@ -177,32 +177,10 @@ test('close refusals remain visible instead of being swallowed by the background
 
 test('bulk close is retired with multi-select', () => {
   assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|onBulkClosed/)
-  return
-/*
-  assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
-  assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
-  assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
-  assert.match(selectBar, /icon="trash"[\s\S]{0,180}setConfirming\('close'\)/)
-  assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/close`/)
-  assert.doesNotMatch(selectBar, /setConfirming\('archive'\)|\/archive/)
-  assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
-*/
 })
 
 test('select mode is retired with multi-select', () => {
   assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|startSessionDrag|draggable/)
-  return
-/*
-  assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
-  assert.match(source, /if \(event\.button !== 0\) return/)
-  assert.match(source, /onMouseDown: \(e\) => startSessionDrag\(e, s\)/)
-  assert.match(sessionWindow, /\{selecting && <span className=\{`si-check\$\{isPicked \? ' on' : ''\}`/)
-  assert.doesNotMatch(source, /reparentDrag|si-drag-handle|draggable/)
-  assert.doesNotMatch(css, /si-drag-handle|si-drag-slot|reparent-target/)
-  assert.match(css, /\.si-item:has\(> \.si-check\) ~ \.sess-fold-control \{ margin-left: 20px; \}/)
-  assert.doesNotMatch(icons, /'grip-vertical':/)
-  assert.doesNotMatch(focus, /DRAG_PRESS_TARGETS/)
-*/
 })
 
 test('close remains the only right-click lifecycle removal and asks for confirmation', () => {

@@ -184,7 +184,9 @@ function ShellStatus() {
   const trigger = projects ? (
     <button type="button" className={open ? 'sb-project-trigger open' : 'sb-project-trigger'}
       data-status-project="" data-tip={triggerLabel} aria-label={triggerLabel}
-      aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      aria-haspopup="menu" aria-expanded={open}
+      aria-controls={open ? 'status-project-menu' : undefined}
+      onClick={() => setOpen((value) => !value)}>
       {triggerBody}
     </button>
   ) : (
@@ -192,10 +194,9 @@ function ShellStatus() {
       aria-label={triggerLabel} href={hubHref()}>{triggerBody}</a>
   )
 
-  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', node: trigger })
-  if (!open || !projects) return null
-  return (
-    <div className="proj-menu status-project-menu" role="menu">
+  const menu = open && projects ? (
+    <div id="status-project-menu" className="proj-menu status-project-menu" role="menu"
+      onContextMenu={(event) => event.stopPropagation()}>
       {projects.map((project) => {
         const offline = project.online === false
         const current = project.id === PROJECT_ID
@@ -219,7 +220,14 @@ function ShellStatus() {
         <span className="proj-menu-name">{t('nav.allProjects')}</span>
       </a>
     </div>
-  )
+  ) : null
+
+  // The menu is part of the registered slot so its absolute position is relative to the trigger itself.
+  useStatusItem({
+    id: 'project', side: 'left', priority: 1000, kind: 'prominent', overflow: open,
+    node: <span className="sb-project-slot">{trigger}{menu}</span>,
+  })
+  return null
 }
 
 const SCORE_VIEW = [

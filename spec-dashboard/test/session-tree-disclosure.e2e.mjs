@@ -93,7 +93,7 @@ await page.route('**/api/sessions/reparent', async (route) => {
 
 try {
   await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.si-list').waitFor({ state: 'visible' })
+  await page.locator('.si-panel').waitFor({ state: 'visible' })
   mark('open sessions')
 
   const interfaceParent = page.locator(`.si-tree-row:has(> .si-item[data-sid="${parent.id}"])`)
@@ -319,12 +319,17 @@ try {
   await page.screenshot({ path: `${OUT}/graph-session-search.png` })
   await page.keyboard.press('Escape')
 
-  // The graph's floating session glance is retired: the dock projects the same forest one pane to the
-  // left, so the row/header disclosure ownership is proved THERE — on the surface that still exists.
+  // The graph keeps only a bounded cross-reference; the dock remains the full forest owner. Verify the
+  // badge and its shared picker before moving to the dock's row/header disclosure ownership.
+  const sessionBadge = page.locator('.sess-badge-trigger')
+  await sessionBadge.waitFor({ state: 'visible' })
+  await sessionBadge.click()
+  await page.locator('.sess-badge-panel').waitFor({ state: 'visible' })
+  assert.ok(await page.locator('.sess-badge-panel .session-picker-row').count() > 0)
+  await page.keyboard.press('Escape')
   await page.evaluate(() => { localStorage.setItem('spexcode.dock', '1'); localStorage.setItem('spexcode.dockMode', 'sessions') })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('.dock-session-list').waitFor({ state: 'visible' })
-  assert.equal(await page.locator('.sesswin').count(), 0, 'the map-side session window must not render')
   const dockParent = page.locator('.dock-session-list .sess-tree-row:has(> .sess-fold-control)').first()
   const dockBody = dockParent.locator('> .si-item')
   const dockPod = dockParent.locator('> .sess-fold-control')

@@ -24,7 +24,7 @@ import { listSessions, listArchivedSessionIndex, sendText, interruptSession, raw
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
-import { reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
+import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { TranscriptReadError } from './transcript-reader.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
 import { putBlob } from '@spexcode/spec-eval/cache'
@@ -1023,6 +1023,7 @@ injectWebSocket(server)
 // prove they have no loaded threads. The current generation and any uncertain/shared process remain intact.
 try {
   const root = runtimeRoot()
+  await ensureCodexGenerationLedger(root)
   const descriptors = new Map((codexHarness.sharedRuntimes?.(root) ?? []).map((descriptor) => [descriptor.key, descriptor]))
   const results = await reclaimDrainingCodexGenerations(root, async (endpoint) => {
     const key = endpoint.id === 'legacy' ? 'codex-app-server' : `codex-app-server:${endpoint.id}`

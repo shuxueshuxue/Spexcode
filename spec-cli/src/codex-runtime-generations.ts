@@ -110,6 +110,16 @@ export function readCodexGenerationLedger(root: string): CodexGenerationLedger {
   return parseLedger(JSON.parse(readFileSync(ledgerPath(root), 'utf8')))
 }
 
+// The backend startup sweep must see legacy roots too. Bootstrap only when the legacy residue is present; an
+// empty project remains an empty ledger and no runtime is created by inspection.
+export async function ensureCodexGenerationLedger(root: string): Promise<CodexGenerationLedger> {
+  return withLedgerLock(root, async () => {
+    const current = readCodexGenerationLedger(root)
+    if (existsSync(ledgerPath(root)) || current.revision !== 0) return current
+    return writeLedger(root, current, bootstrapLedger(root))
+  })
+}
+
 type LedgerWrite = Omit<CodexGenerationLedger, 'revision' | 'version'>
 function writeLedger(root: string, previous: CodexGenerationLedger, next: LedgerWrite): CodexGenerationLedger {
   const observed = readCodexGenerationLedger(root)

@@ -26,6 +26,8 @@ import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
+import { useLaunchers } from './launch.js'
+import { HARNESS_BY_ID } from './harness.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -266,21 +268,80 @@ const storedGraphFocus = () => {
 // This is the only ledger on every route, graph included. On the graph its category buttons reuse
 // [[graph-stats]]'s walk; elsewhere issue/eval buttons keep opening their boards, while node categories
 // enter the graph already focused on the first node they count.
+function LauncherSessionTally({ launcher, sessions, onOpen, tooltip }) {
+  const harnessId = launcher.harness?.replace(/-headless$/, '') || 'claude'
+  const harness = HARNESS_BY_ID[launcher.harness] || HARNESS_BY_ID[harnessId] || HARNESS_BY_ID.claude
+  const Glyph = harness.Glyph
+  const namedVariant = launcher.name !== harnessId
+  const counts = sessions.reduce((result, session) => {
+    const zone = sessionZone(session)
+    if (zone === 'run') result.running += 1
+    else if (zone === 'need') result.needsYou += 1
+    else result.other += 1
+    return result
+  }, { running: 0, needsYou: 0, other: 0 })
+  return (
+    <button type="button" className="sb-launcher-group" data-launcher={launcher.name}
+      data-tip={tooltip} aria-label={tooltip} onClick={onOpen}>
+      <span className="sb-launcher-glyph" aria-hidden="true">
+        <Glyph />
+        {namedVariant && <span className="sb-launcher-badge">{launcher.name.slice(0, 1).toUpperCase()}</span>}
+      </span>
+      <span className="sb-launcher-name">{launcher.name}</span>
+      <span className="sb-launcher-counts" aria-hidden="true">
+        <span className="sb-launcher-running">{counts.running}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-needs">{counts.needsYou}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-other">{counts.other}</span>
+      </span>
+    </button>
+  )
+}
+
+function LauncherSessionSummary({ launchers, sessions, onOpen, tooltip }) {
+  if (!sessions.length) return null
+  const counts = sessions.reduce((result, session) => {
+    const zone = sessionZone(session)
+    if (zone === 'run') result.running += 1
+    else if (zone === 'need') result.needsYou += 1
+    else result.other += 1
+    return result
+  }, { running: 0, needsYou: 0, other: 0 })
+  return (
+    <button type="button" className="sb-launcher-summary" data-launcher-summary={launchers.map((l) => l.name).join(',')}
+      data-tip={tooltip} aria-label={tooltip} onClick={onOpen}>
+      <span className="sb-launcher-summary-mark" aria-hidden="true">{launchers.length}</span>
+      <span className="sb-launcher-counts" aria-hidden="true">
+        <span className="sb-launcher-running">{counts.running}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-needs">{counts.needsYou}</span>
+        <span className="sb-launcher-slash">/</span>
+        <span className="sb-launcher-other">{counts.other}</span>
+      </span>
+    </button>
+  )
+}
+
+function launcherSessionGroups(launchers, sessions) {
+  const configured = (launchers || []).filter((launcher) =>
+    (sessions || []).some((session) => session.launcher === launcher.name))
+    .map((launcher) => ({ ...launcher, sessions: sessions.filter((session) => session.launcher === launcher.name) }))
+  const known = new Set((launchers || []).map((launcher) => launcher.name))
+  const unmatched = (sessions || []).filter((session) => !known.has(session.launcher))
+  return unmatched.length ? [...configured, { name: 'other', harness: 'claude', sessions: unmatched }] : configured
+}
+
 function BoardStatus({ specs, sessions, page }) {
   const t = useT()
   const { offline } = useBackendHealth()
+  const { launchers } = useLaunchers()
+  const launcherGroups = useMemo(() => launcherSessionGroups(launchers, sessions || []), [launchers, sessions])
+  const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
   const stale = offline ? <span className="sb-stale" aria-label={t('backend.stale')} data-tip={t('backend.stale')} /> : null
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.
-  const live = useMemo(() => {
-    const zones = { need: 0, run: 0 }
-    for (const session of sessions || []) {
-      const zone = sessionZone(session)
-      if (zone in zones) zones[zone] += 1
-    }
-    return zones
-  }, [sessions])
   const { fail } = tally.scoreCount
   const walkGraph = (ids) => {
     const id = nextGraphStatNode(ids, storedGraphFocus())
@@ -347,10 +408,21 @@ function BoardStatus({ specs, sessions, page }) {
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
-    kind: live.need > 0 ? 'warning' : undefined,
-    tooltip: t('statusBar.sessions', { run: live.run, need: live.need }),
-    onClick: () => navigate('sessions'),
-    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span>{stale}</span>,
+    kind: needsYou > 0 ? 'warning' : undefined,
+    tooltip: t('statusBar.sessions'),
+    node: (
+      <span className="sb-launcher-groups">
+        <span className="sb-launcher-list">
+          {launcherGroups.map((launcher) => {
+            return <LauncherSessionTally key={launcher.name} launcher={launcher} sessions={launcher.sessions}
+              tooltip={t('statusBar.launcher', { name: launcher.name })} onOpen={() => navigate('sessions')} />
+          })}
+        </span>
+        <LauncherSessionSummary launchers={launcherGroups} sessions={sessions || []} onOpen={() => navigate('sessions')}
+          tooltip={t('statusBar.launcherSummary', { n: launcherGroups.length })} />
+        {stale}
+      </span>
+    ),
   })
   return null
 }

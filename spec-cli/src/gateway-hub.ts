@@ -11,6 +11,7 @@
 //                                       mounted, an explicit text/html GET gets the Projects UI instead
 //   PUT|DELETE /projects/admin-password admin: set/clear the admin password
 //   PUT|DELETE /projects/:id/password   admin: set/clear one project's password
+//   DELETE /projects/:id                host extension: high-friction catalog registration removal
 //   /p/:projectId/login|logout          project session for that project
 //   ANY /p/:projectId/*  (+ WS upgrade) authorized → proxied, prefix-stripped, to that project's backend
 // Authorization never trusts the cookie's name or Path — the token's projectId claim is validated against

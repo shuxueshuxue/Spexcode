@@ -8,6 +8,8 @@
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
+//   DELETE /projects/:id                  remove catalog registration only (never the checkout); the
+//                                         server requires an exact `REMOVE <project title>` confirmation
 //   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
 //   POST /projects/:id/serve             start an offline project's backend (detached, record-validated)
 //   POST /login · POST /p/:id/login      the credential posts (JSON {password}; success 302s, wrong 401)
@@ -208,6 +210,22 @@ export async function addProject(root, setup = {}) {
   }
   const project = normalizeProject(data)
   return project ? { ok: true, project, setup: data.setup ?? null } : { ok: false, error: 'unexpected answer' }
+}
+
+// Removing a project from this page is intentionally a separate, explicit operation. The server refuses
+// online backends and active sessions, and repeats the exact-title confirmation so a hidden or scripted
+// request cannot turn a row action into an accidental deletion.
+export async function removeProject(id, confirmation) {
+  let res
+  try {
+    res = await fetch(`/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ confirmation }),
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  return { ok: data?.ok === true, ...(data || {}) }
 }
 
 // Raw portable project settings — the host fixes the file at <root>/spexcode.json and serves it even

@@ -78,6 +78,13 @@ guarantees, exit code + transcript returned), and `/projects/:id/serve` starts a
 backend as a **detached** `spex serve` that publishes its own record and outlives the gateway. A
 malformed catalog degrades loud-but-alive on read and refuses writes — nothing clobbers the file.
 
+**Registration removal is not checkout deletion.** `DELETE /projects/:id` is a deliberately high-friction
+catalog lifecycle operation. It accepts an exact `REMOVE <resolved project title>` confirmation, refuses
+while the instance-validated backend is online or while any project session record is active/unreadable,
+then removes the catalog entry, clears that project's gateway password, and removes only a runtime endpoint
+record whose process is proven gone. It never recursively deletes the project directory, `.git`, source,
+or SpexCode files. A missing project answers 404; a refusal names the blocking backend/session condition.
+
 **Backends never depend on the gateway.** Kill the gateway and every serve keeps serving; direct CLI
 discovery ([[remote-client]]'s ladder) reads the same records straight from the store, gateway or no
 gateway. The gateway obeys the shared port contract (a busy port is a loud non-zero exit via the one bind

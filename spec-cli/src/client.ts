@@ -6,7 +6,7 @@ import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
-import { apiBaseInfo, assertProjectMatch, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 import { resolveMachinePeer } from './machine-peer.js'
 
 export class BackendError extends Error {
@@ -124,7 +124,7 @@ const seg = (id: string) => encodeURIComponent(id)
 function cachedStatus(rec: ReturnType<typeof fromRaw>): DisplayStatus {
   if (!rec.worktreePath || !existsSync(rec.worktreePath)) return 'retired'
   if (rec.archived) return 'offline'
-  if (rec.status === 'awaiting') return rec.proposal === 'merge' ? 'review' : rec.proposal === 'close' ? 'close-pending' : 'done'
+  if (rec.status === 'awaiting') return displayStatusForProposal(rec.proposal)
   return rec.status === 'active' || rec.status === 'idle' ? 'unknown' : rec.status
 }
 

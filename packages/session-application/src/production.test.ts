@@ -89,6 +89,19 @@ test('production composition refuses missing locality and relative database path
   )
 })
 
+test('runtime binding emits the delivery wake after the binding commit', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-runtime-wake-'))
+  const databasePath = join(root, 'sessions.sqlite')
+  const wakes: string[] = []
+  const app = openProjectSessionApplication({ databasePath, locality: () => {}, onRuntimeBound: id => wakes.push(id) })
+  app.createSession({ sessionId: 'bound' })
+  app.enqueueMessage('bound', { kind: 'fixture.pending.v1', body: Buffer.from('pending') })
+  const binding = app.bindRuntime('bound', identity('native', 'start'))
+  assert.equal(binding.status, 'bound')
+  assert.deepEqual(wakes, ['bound'])
+  app.close()
+})
+
 test('conversation enqueue records the public message fact beside protocol debt in one transaction', () => {
   const root = mkdtempSync(join(tmpdir(), 'session-application-conversation-'))
   const databasePath = join(root, 'sessions.sqlite')

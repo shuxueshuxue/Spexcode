@@ -3212,9 +3212,14 @@ export const codexHeadlessHarness: Harness = {
   runtimeOwnership: 'adapter',
   launchOneShot: true,
   launchCmd: (id, runtimeDir, cmd) => codexHeadlessLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),
-  // Record-backed liveness is the family contract for sleeping headless threads. An explicit stop is the one
-  // offline marker; other app-server/thread failures surface through delivery rather than speculative liveness.
-  liveness: recordOnline,
+  // A headless thread has no pane to witness it. The shared app-server generation is therefore the adapter's
+  // minimum liveness witness: a stale session record must not keep a dead project runtime online forever. The
+  // session layer adds the one exact loaded-reference census before publishing this reading on the board.
+  liveness: (rec, _tmuxAlive, runtimeDir) => {
+    if (rec.stopped || rec.archived || !rec.harnessSessionId) return 'offline'
+    const endpoint = codexEndpointForRecord(rec, runtimeDir ?? runtimeRoot())
+    return endpoint && codexRuntimeGenerationProof(runtimeDir ?? runtimeRoot(), endpoint) ? 'online' : 'offline'
+  },
   launchReady: async (current, deadline) => {
     for (;;) {
       const proof = await codexHeadlessReadinessProof(current)

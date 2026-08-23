@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8')
+const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
@@ -25,4 +26,16 @@ test('the strip enters shrink-wrap mode only when its minimums exceed the row', 
 
 test('closing tabs retain their original visual slot while the live list updates', () => {
   assert.match(source, /renderedTabs\.splice\(Math\.max\(0, Math\.min\(entry\.index, renderedTabs\.length\)\)/)
+})
+
+test('session tabs use the shared visible title, not the stable search handle', () => {
+  assert.match(source, /import \{ STATUS_COLOR, sessionHeadline \} from '\.\/session\.js'/)
+  assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)
+})
+
+test('review destinations keep their icon on the route rail instead of inventing board tabs', () => {
+  // Evals, Issues, and Settings are review/settings surfaces, not workspace objects. Their visual marker is
+  // the one route rail icon; putting a second marker into a never-created board tab would split ownership.
+  assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
+  assert.match(sideBar, /<Icon name=\{page\} size=\{18\} \/>/)
 })

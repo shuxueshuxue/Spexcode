@@ -66,7 +66,7 @@ const env = { ...process.env, PORT: String(apiPort), SPEXCODE_HOME: home, SPEXCO
 let backend; let ui; let browser; let context
 try {
   backend = spawn(process.execPath, [tsxCli, backendEntry], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })
-  
+
   let backendLog = ''; backend.stdout.on('data', (chunk) => { backendLog += String(chunk) }); backend.stderr.on('data', (chunk) => { backendLog += String(chunk) })
   try {
     await waitFor(() => fetch(`${api}/health`).then((response) => response.ok).catch(() => false), 'backend')

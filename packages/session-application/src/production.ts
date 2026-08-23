@@ -72,6 +72,8 @@ export interface ProjectSessionApplicationOptions {
   locality: LocalityPrecondition
   now?: () => number
   onCommitted?: (result: Pick<CommittedSessionChange, 'recipients'>) => void
+  /** Runtime binding is the event that makes an existing canonical delivery debt drainable. */
+  onRuntimeBound?: (sessionId: string) => void
 }
 
 export interface CreateSessionInput {
@@ -481,7 +483,9 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     bindRuntime(sessionId, identity, expectedGeneration) {
       requireId(sessionId, 'sessionId')
       initialize(sessionId)
-      return protocol.withTransaction(tx => runtimeBindings.bind(tx, sessionId, identity, { expectedGeneration }))
+      const binding = protocol.withTransaction(tx => runtimeBindings.bind(tx, sessionId, identity, { expectedGeneration }))
+      options.onRuntimeBound?.(sessionId)
+      return binding
     },
 
     resolveRuntime(sessionId, namespace) {

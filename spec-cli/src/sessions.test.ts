@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -57,12 +57,21 @@ test('canonical delivery retry waits for a runtime binding instead of polling an
   assert.equal(reads, 1)
 })
 
-test('a stale canonical active row cannot resurrect a stopped or waiting record', () => {
+test('headless liveness follows the exact resident-reference census', () => {
+  const record = { session: 'headless', harness: 'codex-headless', harnessSessionId: 'thread-1', stopped: false, archived: false } as SessRec
+  assert.equal(adapterResidentLiveness(record, { healthy: true, loaded: true }), 'online')
+  assert.equal(adapterResidentLiveness(record, { healthy: true, loaded: false }), 'offline')
+  assert.equal(adapterResidentLiveness(record, { healthy: false, loaded: false, error: 'app-server unavailable' }), 'unknown')
+  assert.equal(adapterResidentLiveness(record, undefined), 'unknown')
+  assert.equal(adapterResidentLiveness({ ...record, stopped: true }, { healthy: true, loaded: true }), 'offline')
+})
+
+test('canonical lifecycle always wins over stale JSON status bytes', () => {
   const canonical = { status: 'active', proposal: null, note: null, parentSessionId: null }
   const archived = { status: 'asking' as const, stopped: true, archived: true, proposal: 'close' as const, note: 'needs review', parent: null }
   const waiting = { status: 'awaiting' as const, stopped: false, archived: false, proposal: 'close' as const, note: 'ready', parent: null }
-  assert.equal(canonicalRecordProjection(archived, canonical).status, 'asking')
-  assert.equal(canonicalRecordProjection(waiting, canonical).status, 'awaiting')
+  assert.equal(canonicalRecordProjection(archived, canonical).status, 'active')
+  assert.equal(canonicalRecordProjection(waiting, canonical).status, 'active')
 })
 
 test('session diff commit links preserve the full forge repository and commit identity', () => {
@@ -338,7 +347,7 @@ test('launch transport keeps a launch.sh path with spaces and quotes as one shel
   }
 })
 
-function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: string): void {
+function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: string, overrides: Record<string, unknown> = {}): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
@@ -347,6 +356,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',
+    ...overrides,
   }, null, 2)}\n`)
 }
 
@@ -842,6 +852,59 @@ test('successful resume publishes a capacity-queued record as idle after readine
     process.env.PATH = previousPath
     rmSync(home, { recursive: true, force: true })
     assertLiveSessionsUnchanged(liveBefore, 'queued resume state fixture')
+  }
+})
+
+test('successful resume clears a prior terminal error instead of leaving an online worker marked error', serial, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchCmd = codexHeadlessHarness.launchCmd
+  const originalLaunchReady = (codexHeadlessHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-error-resume-state-'))
+  const project = join(home, 'project'); mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  writeFileSync(join(project, 'README.md'), 'fixture\n')
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  process.env.SPEXCODE_HOME = home
+  const id = `error-resume-state-${process.pid}`
+  const commandPath = join(home, 'tmux-command')
+  const launchPidPath = join(home, 'launch.pid')
+  const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, commandPath, launchPidPath)
+  process.env.PATH = `${bin}:${previousPath}`
+  const helper = join(home, 'helper.sh')
+  writeFileSync(helper, '#!/usr/bin/env bash\nexec sleep 30\n'); chmodSync(helper, 0o755)
+  writeResumeFixtureRecord(id, project, helper, {
+    status: 'error', stopped: true, note: 'queued launch readiness failed: previous attempt',
+  })
+  try {
+    codexHeadlessHarness.launchCmd = () => helper
+    ;(codexHeadlessHarness as any).launchReady = async () => ({
+      proof: { kind: 'error-resume-ready' },
+      validate: async () => true,
+    })
+    assert.deepEqual(await resumeSession(id), { ok: true })
+    const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'idle', 'a successful resume returns an errored record to the resting live lifecycle')
+    assert.equal(stored.note, '', 'the prior terminal error is no longer current after successful resume')
+    assert.equal(stored.stopped, false)
+    const publicRow = (await listSessions(true)).find((row) => row.id === id)
+    assert.ok(publicRow)
+    assert.equal(publicRow.lifecycle, 'idle')
+    assert.notEqual(publicRow.status, 'error')
+  } finally {
+    if (existsSync(launchPidPath)) {
+      const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    codexHeadlessHarness.launchCmd = originalLaunchCmd
+    ;(codexHeadlessHarness as any).launchReady = originalLaunchReady
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'error resume state fixture')
   }
 })
 

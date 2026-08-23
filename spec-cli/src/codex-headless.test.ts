@@ -21,7 +21,8 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
   assert.equal(codexHeadlessHarness.headless, true)
   assert.equal(codexHeadlessHarness.runtimeOwnership, 'adapter')
   assert.equal(codexHeadlessHarness.ownsRendezvous, false)
-  assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'offline',
+    'a headless record needs an exact detached-runtime proof before it can be online')
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.equal(typeof codexHeadlessHarness.launchReady, 'function')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)

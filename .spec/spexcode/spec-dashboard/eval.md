@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: direct-dependency-owners-and-exemptions
+    tags: [cli]
+    description: >-
+      Read the committed dashboard package manifest and source import graph. Check that every direct dependency
+      has a live importer or the explicit optional-desktop boundary, and that the CodeMirror, Markdown/KaTeX,
+      shared-core, and public-ranker edges named by the dashboard spec remain reachable.
+    expected: >-
+      No direct dependency is an unexplained ingress: CodeMirror serves SourceView/DiffDocument, Markdown-it and
+      KaTeX serve RichText, spec-core serves browser-safe shared projections, spec-cli serves only its public ranker,
+      and Electron remains outside the root workspace. A new unowned dependency or removal of a required edge fails
+      the accounting check during review.
+    test: spec-dashboard/src/dependencyBoundary.test.mjs
   - name: board-renders
     tags: [frontend-e2e, desktop]
     description: >-

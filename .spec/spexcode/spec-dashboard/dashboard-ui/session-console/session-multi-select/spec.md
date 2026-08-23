@@ -7,6 +7,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/SessionContextMenu.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/subtractive-boundaries.test.mjs
 ---
 
 # session-multi-select
@@ -24,3 +25,8 @@ node exists, no menu item, `SessionSelectBar`, checkbox, or bulk-close endpoint 
 
 The historical `code:` and E2E references in this node remain as migration evidence for the retired surface. They must
 be re-homed or removed only in a later anchor-cleanup batch after the replacement decision is recorded.
+
+The retirement has an executable boundary in `subtractive-boundaries.test.mjs`: the former component and E2E entry
+point must remain absent, and the session-owned files must not regain the withdrawn selection state or bulk-close
+vocabulary. This guards against accidental resurrection; an intentional replacement still needs a new current spec
+and eval contract.

@@ -49,12 +49,15 @@ When the one-shot first-turn process exits non-zero, the adapter reports that ex
 with the Codex exit code; a zero exit and any declaration already written are left untouched. The shared
 app-server remains the liveness address only when it can accept another delivery.
 
-The session record is the liveness address: while it exists and is not explicitly stopped, the adapter reports
-`online` regardless of the empty pane or process probes. `headless: true` keeps it out of the dashboard launcher
-picker by default and the note conversation is the console trunk. Human `stop` tears down the session runtime
-and marks the retained record stopped, so it reads `offline` until a proven resume clears the marker. Resume is
-the no-TUI form: an identified thread resumes by its exact marker, while a pre-identity recovery replays the
-authoritative resolved launch payload; an absent shared server must be
+The durable record identifies the liveness target, but it is not itself proof that the target is addressable. For
+an identified thread the adapter first requires the exact shared generation (detached PID/start receipt and socket)
+and the session layer joins one project-wide loaded-reference census before publishing `online`; a missing or
+unhealthy census is `unknown`, and an identified thread absent from the loaded set is `offline`. A stale record
+therefore cannot keep a dead or unloaded Codex thread online indefinitely. `headless: true` keeps it out of the
+dashboard launcher picker by default and the note conversation is the console trunk. Human `stop` tears down the
+session runtime and marks the retained record stopped, so it reads `offline` until a proven resume clears the
+marker. Resume is the no-TUI form: an identified thread resumes by its exact marker, while a pre-identity recovery
+replays the authoritative resolved launch payload; an absent shared server must be
 recreated through the canonical delegated spawn before the record can return online. The adapter's launch
 readiness is stricter than its steady-state record liveness: it proves one unchanged version-4 detached-launch
 receipt through the shared process adapter (exact PID/start and process group everywhere, plus `/proc` session on

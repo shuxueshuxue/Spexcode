@@ -2,6 +2,7 @@ import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
 import { Icon } from './icons.jsx'
 import { RAIL_PAGES, navigate, routeHash } from './route.js'
+import { focusLatestTab } from './tabs.js'
 import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
@@ -33,7 +34,6 @@ const railHref = (page) => {
 // Evals lists two because two keys genuinely open it. The dock panel switch has no page key: it is a
 // state control, not a destination.
 const PAGE_KEYS = {
-  graph: ['shell.pageGraph'],
   sessions: ['shell.pageSessions'],
   evals: ['shell.pageEvals', 'shell.evals'],
   issues: ['shell.pageIssues'],
@@ -76,8 +76,11 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
       onClick={(event) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         event.preventDefault()
-        onNavigate?.()
-        navigate(page)
+        // A projection request may focus an already-held document. That is still one route/tab grammar:
+        // when it succeeds, the focused document owns the address and the rail light follows it. Only the
+        // empty launch face needs the ordinary route navigation below.
+        const handled = onNavigate?.() === true
+        if (!handled) navigate(page)
       }}
     >
       <Icon name={page} size={18} />
@@ -103,8 +106,13 @@ export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDoc
           badge={p === 'sessions' ? needsYou : 0}
           disabled={graphOnly && p !== 'graph'}
           onNavigate={() => {
-            if (p === 'sessions') { setDock?.(true); setDockMode?.('sessions') }
-            else if (p === 'graph') { setDock?.(true); setDockMode?.('explorer') }
+            if (p === 'sessions') {
+              setDock?.(true)
+              setDockMode?.('sessions')
+              return focusLatestTab((tab) => tab.page === 'sessions' && tab.param)
+            }
+            if (p === 'graph') { setDock?.(true); setDockMode?.('explorer') }
+            return false
           }} />
       ))}
       <div className="rail-spacer" />

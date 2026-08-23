@@ -20,27 +20,6 @@ related:
 The frame, and only the frame. It does not know what a spec is, what a session is, or what any view needs.
 It knows there is an address, that an address names a view, and where on the screen that view goes.
 
-## Ownership: contributions are licensed by the parent
-
-Every UI element has exactly one **parent**. A child may contribute only through the channel its parent exposes;
-there is no ambient right to reach across the tree and write into another surface. Shared chrome — status-bar
-items, document actions, keyboard authority, the search palette, and transient notifications — accepts
-contributions only through the active `ViewHost`'s typed `ViewScope` channel. When a view is not the active route,
-its contributions are automatically suspended; when its host unmounts, the scope is revoked and every contribution
-is disposed. A component that is not the parent therefore cannot construct a contribution into someone else's
-surface. The double-status-bar incident is the reason this is a mechanism contract: *不可能允许非 parent 的组件随意塞东西*.
-
-Navigation has one authority. Only the route/tabs layer may mutate the address. A view requests a typed intent —
-`open`, `hold`, or `own-query` — and the route/tabs owner decides how that intent changes the current slot, held
-documents, or query state. A view cannot write another view's address, replace another view's content, or smuggle
-a cross-view navigation through a shared callback; those operations are structurally unavailable outside the
-navigation owner.
-
-A view renders only inside its own `ViewHost` subtree. It may not mount content into a sibling host, the shell's
-chrome, or another view's document region. Overlays are the shell's authorized layer: a view asks the shell for an
-overlay through its parent scope, and the shell owns placement, stacking, dismissal, and focus return. This keeps
-overlay escape hatches explicit while preserving the same one-parent rule for transient surfaces.
-
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
@@ -221,8 +200,10 @@ white screen, which is the failure this exists to prevent. The other half of the
 stale dist: a lazy chunk that 404s after a redeploy retries twice, then reloads the page once (guarded, so
 it can only happen once per tab) before surfacing here ([[view-registry]]).
 
-**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view. A door
-that is not built is shut more firmly than a door that closes itself, which is why that face no longer
+**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view, but it
+still mounts the frame's bottom ambient status bar. The public About disclosure is registered there, so the
+static graph's release facts have a real visible owner instead of a provider entry that can never paint. A
+door that is not built is shut more firmly than a door that closes itself, which is why that face no longer
 redirects away from live addresses — it never renders one.
 
 **Two views at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second view

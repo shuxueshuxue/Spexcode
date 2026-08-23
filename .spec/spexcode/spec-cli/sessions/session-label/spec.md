@@ -12,6 +12,9 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-dashboard/src/SessionPicker.jsx
+  - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/Shell.jsx
   - spec-dashboard/test/session-note-title.e2e.mjs
   - spec-dashboard/test/session-label-one-name-everywhere.e2e.mjs
 ---

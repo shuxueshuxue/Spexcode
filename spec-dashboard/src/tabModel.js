@@ -12,9 +12,12 @@ import { routeHash } from './route.js'
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
+const RESIDENT_PAGES = new Set(['evals', 'issues', 'settings'])
 export const tabRoute = (route) => route?.page === 'sessions' && route?.param && !isResourceRoute(route)
   ? { ...route, query: null }
-  : route
+  : RESIDENT_PAGES.has(route?.page)
+    ? { ...route, param: null, query: null }
+    : route
 export const tabKey = (t) => {
   const route = tabRoute(t)
   return routeHash(route.page, route.param, route.query)
@@ -27,9 +30,10 @@ export const tabKey = (t) => {
 // workspace (bare boards, for example) are cleared at the same read boundary as new routes.
 export function normalizeTabs(raw, isDocument = () => true) {
   const tabs = raw.filter((t) => isDocument(t.page, t.param ?? null)).map((t) => {
-    const route = { page: t.page, param: t.param ?? null, query: t.query ?? null }
+    const original = { page: t.page, param: t.param ?? null, query: t.query ?? null }
+    const route = tabRoute(original)
     return {
-      page: route.page, param: route.param ?? null, query: route.query ?? null,
+      page: route.page, param: route.param ?? null, query: route.page === 'sessions' ? original.query : route.query ?? null,
       // Published resources are deliberate holds: they must never compete for a replaceable file slot,
       // including when an older persisted record forgot to mark them pinned.
       pinned: isResourceRoute(route) ? true : (t.pinned != null ? t.pinned !== false : t.preview !== true),
@@ -54,7 +58,10 @@ export function normalizeTabs(raw, isDocument = () => true) {
 // slot IN PLACE — keeping that slot's position, so the strip does not reshuffle under the reader — or is
 // appended when it is pinned, or when there is no slot for that kind yet.
 export function placeTab(tabs, route, mode = 'slot') {
-  const normalized = { page: route.page, param: route.param ?? null, query: route.query ?? null }
+  const original = { page: route.page, param: route.param ?? null, query: route.query ?? null }
+  const normalized = tabRoute(original)
+  if (normalized.page === 'sessions') normalized.query = original.query
+  if (RESIDENT_PAGES.has(normalized.page)) mode = 'pin'
   const key = tabKey(normalized)
   const open = tabs.find((t) => tabKey(t) === key)
   if (open) {

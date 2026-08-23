@@ -38,20 +38,16 @@ stored parent relationship; every present child remains under its present parent
 status or liveness. The family sits in the root's zone: **glyph ≡ the session's own status; zone ≡ the
 family's root status**.
 
-Historical correction: the `2486cb152` offline-zone projection made liveness dominate the package status. That
-overcorrection is revoked: 人类判词是“不要再新增机制…把这套状态改对,因为它原来就是对的,只不过写了一堆屎山把对的搞错了。”
-
 **The row.** `SessionRow` renders one session: its status colour and glyph come from `session.js`
 (`STATUS_COLOR` / `STATUS_GLYPH`), its identity from `sessionHandle` and `sessionHeadline`, and its
 activity from `opSummary`, which folds an op list into per-op counts using the shared `GLYPH` map.
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.
 
-Human ruling restored here: “我们的显示模式一直都只看 parent session 是不是 running。就算你这个是 needs you 状态,
+The governing human ruling is: “我们的显示模式一直都只看 parent session 是不是 running。就算你这个是 needs you 状态,
 它也应该放在那个 running 的 parent session 底下,而不是自己跳到上面去、再加一个回到 parent 的链接。我们本来完全没有这套机制的…给我狠狠的删!”
-This replaces the two earlier partition rulings — cross-zone root splitting and the `○`-out-of-zone prohibition
-that forced a child into a separate bucket. There is no cross-zone parent guard and no parent-return link: the
-stored parent relationship is the only nesting input, and the root alone chooses the family's zone.
+It replaces cross-zone root splitting and the `○`-out-of-zone partition rule. The stored parent relationship is
+the only nesting input, and the root alone chooses the family's zone.
 
 **The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
 face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current

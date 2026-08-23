@@ -11,8 +11,9 @@ import { pathToFileURL } from 'node:url'
 const root = resolve(new URL('../..', import.meta.url).pathname)
 const cliRoot = join(root, 'spec-cli')
 const dashboardRoot = join(root, 'spec-dashboard')
-const tsxCli = join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs')
-const viteEntry = join(root, 'node_modules', 'vite', 'dist', 'node', 'index.js')
+const dependencyRoot = existsSync(join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs')) ? root : resolve(root, '..', '..')
+const tsxCli = join(dependencyRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+const viteEntry = join(dependencyRoot, 'node_modules', 'vite', 'dist', 'node', 'index.js')
 const backendEntry = join(cliRoot, 'src', 'index.ts')
 const fakeLauncher = join(cliRoot, 'test', 'fixtures', 'fake-claude')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
@@ -58,7 +59,7 @@ execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
 execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project })
 execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project })
 execFileSync('git', ['add', '.'], { cwd: project })
-execFileSync('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'seed'], { cwd: project })
+execFileSync('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'seed'], { cwd: project, timeout: 20_000 })
 const apiPort = await freePort(); const uiPort = await freePort()
 const api = `http://127.0.0.1:${apiPort}`; const base = `http://127.0.0.1:${uiPort}`
 const env = { ...process.env, PORT: String(apiPort), SPEXCODE_HOME: home, SPEXCODE_TMUX: `spex-shortcuts-${process.pid}`, SPEXCODE_API_URL: '', FAKE_HARNESS_INTERVAL_MS: '80' }
@@ -67,7 +68,11 @@ try {
   backend = spawn(process.execPath, [tsxCli, backendEntry], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })
   
   let backendLog = ''; backend.stdout.on('data', (chunk) => { backendLog += String(chunk) }); backend.stderr.on('data', (chunk) => { backendLog += String(chunk) })
-  await waitFor(() => fetch(`${api}/health`).then((response) => response.ok).catch(() => false), 'backend')
+  try {
+    await waitFor(() => fetch(`${api}/health`).then((response) => response.ok).catch(() => false), 'backend')
+  } catch (error) {
+    throw new Error(`${error.message}; backend log: ${backendLog}`)
+  }
   const json = async (path, init) => {
     const response = await fetch(`${api}${path}`, init); const body = await response.json().catch(() => null)
     assert.equal(response.ok, true, `${path} refused: ${response.status} ${JSON.stringify(body)}`); return body
@@ -90,8 +95,22 @@ try {
   const page = await context.newPage()
   await page.addInitScript(() => { localStorage.setItem('spexcode.dock', '1'); localStorage.setItem('spexcode.dockMode', 'sessions') })
   await page.goto(`${base}/#/sessions/${parent}`, { waitUntil: 'domcontentloaded' })
-  const row = (id) => page.locator(`.si-item[data-sid="${id}"]`)
   const dockRow = (id) => page.locator(`.dock-session-list [data-sid="${id}"]`)
+  const routeState = () => page.evaluate(() => ({
+    hash: location.hash,
+    visibleIds: [...document.querySelectorAll('.dock-session-list [data-sid]')].map((row) => row.dataset.sid),
+    selectedId: document.querySelector('.dock-session-list .si-item.on')?.dataset.sid ?? null,
+  }))
+  const waitForRoute = async (id) => {
+    try {
+      await page.waitForFunction((expected) => (
+        location.hash.includes(`/sessions/${expected}`)
+        && [...document.querySelectorAll('.dock-session-list .si-item.on[data-sid]')].some((row) => row.dataset.sid === expected)
+      ), id)
+    } catch (error) {
+      throw new Error(`${error.message}; route state: ${JSON.stringify(await routeState())}`)
+    }
+  }
   await dockRow(parent).waitFor({ state: 'visible' })
   await dockRow(child).waitFor({ state: 'hidden' })
   const fold = page.locator(`[data-session-drop-id="${parent}"] > .sess-fold-control`)
@@ -102,12 +121,23 @@ try {
   await page.keyboard.press('Alt+Shift+ArrowUp')
   await page.waitForFunction((id) => document.querySelector(`[data-session-drop-id="${id}"] > .sess-fold-control`)?.getAttribute('aria-expanded') === 'false', parent)
   assert.equal(await dockRow(child).count(), 0, 'Alt+Shift+ArrowUp folds the child again')
+  await page.keyboard.press('Alt+Shift+ArrowDown')
+  await page.waitForFunction((id) => document.querySelector(`[data-session-drop-id="${id}"] > .sess-fold-control`)?.getAttribute('aria-expanded') === 'true', parent)
   await page.keyboard.press('Alt+ArrowDown')
-  await page.waitForFunction((id) => location.hash.includes(`/sessions/${id}`), child)
+  await waitForRoute(child)
   assert.equal(await page.locator('.dock-session-list .si-item.on').getAttribute('data-sid'), child)
-  await page.keyboard.press('Alt+ArrowDown')
-  await page.waitForFunction((id) => location.hash.includes(`/sessions/${id}`), leaf)
-  assert.equal(await page.locator('.dock-session-list .si-item.on').getAttribute('data-sid'), leaf)
+  const visibleOrder = await page.locator('.dock-session-list [data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+  const childIndex = visibleOrder.indexOf(child)
+  assert.notEqual(childIndex, -1, `child must remain in the visible forest: ${JSON.stringify(await routeState())}`)
+  const nextId = visibleOrder[childIndex + 1] || visibleOrder[childIndex - 1]
+  assert.ok(nextId, `child must have an adjacent visible session: ${JSON.stringify(await routeState())}`)
+  const nextKey = visibleOrder[childIndex + 1] ? 'Alt+ArrowDown' : 'Alt+ArrowUp'
+  await page.keyboard.press(nextKey)
+  await waitForRoute(nextId)
+  assert.equal(await page.locator('.dock-session-list .si-item.on').getAttribute('data-sid'), nextId)
+  await page.goto(`${base}/#/sessions/${leaf}`, { waitUntil: 'domcontentloaded' })
+  await dockRow(leaf).waitFor({ state: 'visible' })
+  await dockRow(leaf).click()
   await page.keyboard.press('Alt+Shift+ArrowDown')
   assert.equal(await page.locator('.dock-session-list .si-item.on').getAttribute('data-sid'), leaf, 'leaf disclosure is a consumed no-op')
   await page.screenshot({ path: join(out, 'session-shortcuts-final.png'), fullPage: true })

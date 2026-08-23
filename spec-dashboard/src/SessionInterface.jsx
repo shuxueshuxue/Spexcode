@@ -476,7 +476,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
-  const [writableSession, setWritableSession] = useState(null)
   const [resourceFocusRequest, setResourceFocusRequest] = useState(0)
   const [dragTarget, setDragTarget] = useState(null)
   const [attachments, setAttachments] = useState([])
@@ -585,7 +584,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : requestedSurface || getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
   const diffSurface = activeBaseSurface === SESSION_SURFACE_DIFF
-  useEffect(() => { setWritableSession(null) }, [open, active, activeBaseSurface])
   const baseSurfaceForSession = (id) => {
     const session = allSessions.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
@@ -1390,12 +1388,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         },
       },
     ] : []),
-    ...(!activeResource && activeBaseSurface === 'terminal' && !readOnlyPane ? [{
-      id: 'enable-terminal-input', icon: 'keyboard', priority: 60,
-      pressed: writableSession === active,
-      label: t(writableSession === active ? 'session.terminalInputEnabled' : 'session.enableTerminalInput'),
-      onClick: () => setWritableSession(active),
-    }] : []),
     ...uiCmds.filter((command) => command.button && !activeResource && (activeBaseSurface === 'terminal' || command.name !== 'merge')).map((command) => ({
       id: command.name,
       icon: command.icon,
@@ -1584,7 +1576,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         }}>
                           <SessionTerm sessionId={id} active={open && terminalShown}
                             focused={open && terminalShown && !commandOpen}
-                            writable={writableSession === id && open && terminalShown}
+                            writable={open && terminalShown}
+                            // `asking` is the backend's explicit suspended/human-resume state; ordinary working
+                            // and idle panes stay direct-write so the terminal never grows an unlock ceremony.
+                            resumeRequired={session.status === 'asking'}
                             focusRequest={id === active ? terminalFocusRequest : 0} />
                         </div>
                       )}

@@ -209,9 +209,10 @@ terminal mount keys on **liveness, never the lifecycle label**: a session whose 
 whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead
 id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat** and read-safe: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
-pane's bottom edge. Opening or selecting the session attaches this pane read-only and never focuses or writes
-to it. The document action slot's explicit input button unlocks writing without moving focus; only a later
-press inside xterm begins an interactive turn, and leaving the session locks it again ([[terminal-input]]).
+pane's bottom edge. Opening or selecting a live session keeps this pane writable: typing is the basic terminal
+operation. Opening or switching never resumes a stopped process, consumes a token, or replays input. A live
+suspended TUI gates only its first actual key behind the non-focused resume confirmation described by
+[[terminal-input]]; archived/offline records have no terminal pane and remain read-only Conversation surfaces.
 `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
 session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,

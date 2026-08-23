@@ -1,18 +1,18 @@
 ---
 scenarios:
-  - name: terminal-read-does-not-arm-input
+  - name: terminal-input-default-and-suspended-confirm
     tags: [frontend-e2e, desktop, backend-api]
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionTerm.jsx]
     description: >-
-      Open a live pane-backed session whose TUI is waiting at a token-consuming Enter confirmation. Inspect
-      the terminal, active element, websocket input frames, and document actions; enable input, inspect focus
-      again, then separately press the terminal and type one harmless key. Leave and reopen the session.
+      Open a live pane-backed session and immediately type a harmless key. Then open a suspended session whose
+      TUI is waiting at a token-consuming Enter confirmation and type one key, inspect the confirmation focus and
+      websocket input frames, cancel, repeat, and confirm once. Leave and reopen both sessions.
     expected: >-
-      Opening and reading renders the real terminal but focuses no xterm helper and sends zero input frames.
-      One explicit enable-terminal-input button is visible, not pre-focused, and outside the terminal landing.
-      Pressing it sends no terminal byte and leaves focus on the button. Only the later terminal press permits
-      the harmless key to reach tmux. Leaving or reopening returns to read-only with zero replay, so a token
-      confirmation can never consume quota as a side effect of reading or the reader's next Enter.
+      The active session's terminal accepts the harmless key immediately and renders it in the real tmux pane.
+      Opening or switching sends no resume request and no input frame. The suspended session's first key opens a
+      confirmation that is not pre-focused and is spatially separate from the cursor; Enter cannot confirm it by
+      landing on the control. Cancel sends no key. Confirm sends exactly the held key once. Leaving or reopening
+      does not replay input or resume implicitly. Archived sessions remain Conversation-only and read-only.
   - name: timeline-message-composer-contract
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/timeline-chat-composer.e2e.mjs

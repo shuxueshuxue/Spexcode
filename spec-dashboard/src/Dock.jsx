@@ -39,6 +39,15 @@ function SessionDock({ sessions, activeId }) {
   const [closeRequest, setCloseRequest] = useState(null)   // a row dropped on the archive door, awaiting its confirm
   const abandon = useRef(null)
   useEffect(() => () => abandon.current?.(), [])
+  // Reveal follows the focused document, like an editor's active-file explorer: the row remains selected from
+  // the route while its parent chain is opened in the dock's existing fold state. Offline is a zone fold, so an
+  // active document there opens that disclosure too; no second selection state is needed.
+  useEffect(() => {
+    if (!activeId) return
+    const active = (sessions || []).find((session) => session.id === activeId)
+    expand(sessionAncestorIds(sessions || [], activeId))
+    if (active && (active.liveness === 'offline' || active.status === 'offline')) setOfflineOpen(true)
+  }, [activeId, sessions, expand])
   const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
     keepVisible: (session) => session.id === activeId,

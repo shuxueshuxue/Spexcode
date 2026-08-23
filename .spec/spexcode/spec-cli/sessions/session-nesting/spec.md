@@ -80,6 +80,10 @@ parent, and any descendant are never targets, so a drag cannot create a cycle or
 Releasing away from a target changes nothing. The map-side glance and mobile list remain read-only tree
 presentations rather than acquiring a second drag model.
 
+The modifier router resolves these arrow chords from the physical `ArrowUp`/`ArrowDown` key code, not only
+the layout-dependent `key` value, so macOS Option dead-key reporting and non-US keyboard layouts cannot turn
+a declared session action into a no-op.
+
 The desktop console layers one chord over the existing session-tab navigation: **⌥+Shift+↓ expands the
 currently selected parent session and ⌥+Shift+↑ collapses it**. These chords are consumed before the ordinary
 ⌥+↑/↓ tab move, so they never change session selection; when the selected row has no matching state they are

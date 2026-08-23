@@ -40,6 +40,18 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EmptyView.jsx, spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/tabModel.js, spec-dashboard/src/views.jsx]
     test: spec-dashboard/test/empty-workspace.e2e.mjs
+  - name: review-route-icons-have-one-owner
+    description: >-
+      In a real Chromium dashboard, open the Evals, Issues, and Settings routes from cold URLs and inspect
+      the route rail and workspace strip. Count the active rail entry's SVG and any workspace tabs on each
+      route after the surface settles.
+    expected: >-
+      Each route has exactly one active rail entry with its shared page icon; review/settings surfaces do not
+      mint a workspace tab merely to carry an icon. Board-local filter tabs, when present, remain view-local
+      controls and do not become route tabs.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/ReviewSurface.jsx, spec-dashboard/src/SettingsSurface.jsx, spec-dashboard/src/TabStrip.jsx]
+    test: spec-dashboard/src/tabStrip.test.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

@@ -5,7 +5,6 @@ import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
-import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
@@ -75,7 +74,8 @@ function PagePane({ active, warm = false, className, children }) {
 function GraphView({ param, query }) {
   const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
   const { reload } = useBoardApi()
-  const { openPalette, setCompose, lockGraphTo } = useWorkspaceApi()
+  const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
+  const { helpOpen } = useWorkspace()
   // WHICH SESSION OWNS THE BOARD lives in the workspace ([[workspace-shell]]) because the surface that
   // claims it — a session row in the finding dock — is not this one. The graph only READS the claim and
   // paints it; it no longer needs a session list of its own to have somewhere to click.
@@ -100,17 +100,14 @@ function GraphView({ param, query }) {
   useEffect(() => { try { if (focusId) sessionStorage.setItem('spex.focus', focusId) } catch { /* */ } }, [focusId])
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
-  const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const search = null   // the palette is the shell's ([[workspace-shell]]); the graph only asks for it
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
-  // the `?` legend is the GRAPH's keymap, so the graph contributes it and it leaves the bar when the graph
-  // does. The project name is workspace identity and belongs to the shell — splitting them was the first
-  // thing the view boundary made obvious. `-Infinity` pins help to the far end.
+  // The shell owns the registry-backed help legend, so the graph button uses the same global state.
   useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
-    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: () => setLegend((v) => !v) })
+    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const viewportRef = useRef(null)
@@ -122,7 +119,6 @@ function GraphView({ param, query }) {
   const lastMouseRef = useRef({ x: -1, y: -1 })
   // two instances so the popup pane and the help body keep independent scroll targets (createMomentumScroll, scroll.js)
   const popupScroll = useMemo(() => createMomentumScroll(), [])
-  const legendScroll = useMemo(() => createMomentumScroll(), [])
 
   // resolve focus on the RAW tree first (resilient to a polled-away merged/closed node), then expand.
   const rawById = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
@@ -415,7 +411,7 @@ function GraphView({ param, query }) {
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
   // Never <body>. Pages (the session board, evals, issues, settings) are surfaces with their own focus discipline,
   // not transient overlays, so they stay out of this set.
-  const anyOverlay = overlay || legend || !!search
+  const anyOverlay = overlay || !!search
   const hadOverlay = useRef(anyOverlay)
   useEffect(() => {
     if (hadOverlay.current && !anyOverlay) returnFocus()
@@ -434,6 +430,16 @@ function GraphView({ param, query }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
+      if (helpOpen) {
+        if (e.key === 'Escape' || firesKey('graph.help', e.key)) { e.preventDefault(); e.stopPropagation(); toggleHelp(); return true }
+        if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault(); e.stopPropagation()
+          const body = document.querySelector('.legend-body')
+          if (body) body.scrollTop += (e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
+          return true
+        }
+        return true
+      }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
       // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
@@ -497,18 +503,6 @@ function GraphView({ param, query }) {
         return true // anything else does NOT move the board behind the popup
       }
       // graph mode. The help modal owns its keys while open (only ?/Esc close it)
-      if (legend) {
-        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setLegend(false); return true }
-        // j/k and ↑/↓ scroll the (often taller-than-viewport) help body — same momentum glide as the
-        // popup pane, via the legend's own scroller instance. The `.legend` panel is the overflow box.
-        if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault(); e.stopPropagation()
-          legendScroll(document.querySelector('.legend'), e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
-          return true
-        }
-        return true
-      }
-      if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return true }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); lockGraphTo(null, { toggle: false }); return true }
       if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return true }
       if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return true }
@@ -680,8 +674,6 @@ function GraphView({ param, query }) {
             </button>
           </div>
         )}
-
-        {legend && <Legend onClose={() => setLegend(false)} />}
 
         {/* the `i`/Enter lens ([[node-popup]]): follows the focus, remounts per node. The surgery that
             extracted this view once dropped this line entirely while keeping all its key handling — a

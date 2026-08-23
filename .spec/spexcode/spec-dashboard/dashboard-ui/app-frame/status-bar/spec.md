@@ -84,8 +84,11 @@ opened, its catalog menu is anchored to that button's own slot, opening upward f
 sharing its left edge, and shrinking to the viewport when the window is narrow.
 On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
 its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
-pass/fail, unmeasured); the deduped open-issue total; and live sessions split into self-driving and
-waiting-on-you. Beside them ride the document's own facts: the routed file's path when
+pass/fail, unmeasured); the deduped open-issue total; and live sessions grouped by the configured
+`sessions.launchers` names. Each launcher group leads with the harness mark from the shared icon vocabulary
+and renders a compact `running/needs-you/other` slash tally using the existing green/yellow/muted status
+tokens. Every group opens the sessions console, and its tooltip names the launcher and all three tally
+meanings. Beside them ride the document's own facts: the routed file's path when
 [[file-view]] is the document, the session console's unread-resource signal, the public-graph disclosure.
 
 **The tallies are the workspace's, and the shell registers them.** They are true of the window on every

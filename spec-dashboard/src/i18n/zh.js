@@ -236,7 +236,8 @@ export default {
       `评测场景：${pass} 最新通过，${fail} 最新失败，${stalePass} 过期通过，${staleFail} 过期失败，${empty} 未测量`,
     openEvals: '打开 Evals 看板',
     issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
-    sessions: ({ run, need }) => `${run} 个在跑，${need} 个等你 —— 打开会话面板`,
+    sessions: '按 launcher 分组的会话 —— 打开会话面板',
+    launcher: ({ name }) => `${name}：运行中 / 等你 / 其他 —— 打开会话面板`,
   },
   backend: {
     offline: '后端不可达 —— 当前显示的数据可能已陈旧',

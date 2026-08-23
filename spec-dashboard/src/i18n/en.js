@@ -241,7 +241,8 @@ export default {
       `eval scenarios: ${pass} fresh pass, ${fail} fresh fail, ${stalePass} stale pass, ${staleFail} stale fail, ${empty} unmeasured`,
     openEvals: 'open the Evals board',
     issues: ({ n }) => `${n} open issues — open the issues board`,
-    sessions: ({ run, need }) => `${run} running, ${need} waiting on you — open the sessions console`,
+    sessions: 'sessions by launcher — open the sessions console',
+    launcher: ({ name }) => `${name}: running / needs-you / other — open the sessions console`,
   },
   backend: {
     offline: 'backend unavailable — displayed data may be stale',

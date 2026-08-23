@@ -53,7 +53,6 @@ const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
-const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
 const openSession = (id) => navigate('sessions', id)
 
@@ -77,11 +76,11 @@ function SettingsView() { return <Settings /> }
 // `document(page, param)` marks what the working set may hold. Only an OBJECT qualifies: a node, a file, a
 // session, an eval detail, or an issue detail. Bare evals/issues/settings boards are destinations, not
 // documents, regardless of whether they were reached from the rail, a cold link, or a query-bearing chip.
-// What is left out is what has no object: graph (a legacy address), bare sessions, the sessions launch page
-// (a form), review/settings boards, and `empty` — a tab for any of these would contradict the strip.
+// What is left out is what has no object: graph (the hidden-tab workspace bottom sheet), bare sessions, the
+// sessions launch page (a form), review/settings boards, and `empty`, which is parsed as graph and has no
+// separate view.
 export const VIEWS = {
-  // `graph` is still registered and still renders at its own address; it is simply no longer anywhere the
-  // workspace SENDS a reader ([[node-graph]]). A retired entrance is not a deleted view.
+  // `graph` is registered as the document-free workspace bottom sheet ([[node-graph]]).
   graph:    { component: GraphView,    document: false, className: 'view-graph' },
   spec:     { component: SpecView,     document: (_page, param) => param != null, className: 'view-spec' },
   file:     { component: FileView,     document: (_page, param) => param != null, className: 'view-file' },
@@ -91,7 +90,6 @@ export const VIEWS = {
   evals:    { component: EvalsView,    document: (_page, param) => param != null, className: 'view-evals' },
   issues:   { component: IssuesView,   document: (_page, param) => param != null, className: 'view-issues' },
   settings: { component: SettingsView, document: false, className: 'view-settings' },
-  empty:    { component: EmptyView,    document: false, className: 'view-empty' },
 }
 
 export const viewFor = (page) => VIEWS[page] || VIEWS.sessions

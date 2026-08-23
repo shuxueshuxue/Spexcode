@@ -120,7 +120,8 @@ test('the ground ladder is three tones deep and every theme carries all three', 
 })
 
 test('the status bar owns a flex row and cannot cover the content viewport', () => {
-  assert.match(css, /\.app-shell\s*\{[^}]*height:\s*100vh;/s)
+  assert.match(css, /\.backend-frame\s*\{[^}]*height:\s*100vh;[^}]*min-height:\s*0;/s)
+  assert.match(css, /\.app-shell\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/s)
   assert.match(css, /\.app\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*display:\s*flex;/s)
   assert.match(css, /\.app-content-column\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*flex-direction:\s*column;/s)
   assert.match(css, /\.app-content-row\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*display:\s*flex;/s)
@@ -164,7 +165,8 @@ test('pointer is the browser\'s; motion never reports; wheel-only reporting reac
   assert.match(terminal, /MOTION_TRACKING_MODES\s*=\s*new Set\(\[9, 1002, 1003, 1005, 1015\]\)/)
   assert.match(terminal, /onlyMotionTrackingModes/)
   assert.match(xtermRuntime, /shouldForceSelection\(e\)\{return!0\}/)
-  assert.match(terminal, /disableStdin:\s*false/)
+  assert.match(terminal, /disableStdin:\s*!writable/)
+  assert.match(terminal, /term\.options\.disableStdin = !writable/)
   assert.match(terminal, /term\.onData\(\(data\)/)
   assert.match(terminal, /sock\.send\(JSON\.stringify\(\{ t: 'input', data \}\)\)/)
   assert.match(terminal, /const initialFocusFrame = requestAnimationFrame\([\s\S]*term\.focus\(\)/)

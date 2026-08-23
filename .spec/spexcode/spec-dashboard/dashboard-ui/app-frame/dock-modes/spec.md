@@ -1,5 +1,5 @@
 ---
-title: dock-projection
+title: dock-modes
 status: active
 hue: 210
 desc: The left finding dock's explorer and sessions projections, selected by the rail.
@@ -49,16 +49,19 @@ Reduced-motion drops the animation and keeps both doors.
 **THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
 its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how
 thick the dock is — which is the [[ui-state-model]] budget made structural rather than remembered. A
-projection may not mint a strip of its own; the explorer's own count row, the sessions `+` row and the
-archive door were three separate strips stacked around one list, three answers to a question this row
-already answers once.
+projection may not mint a strip of its own. **Historical:** the explorer count row, sessions `+` row, and
+archive door were once three separate strips stacked around one list; that arrangement is retired in favor of
+this single header row.
+
+The header and zone tallies are last-good projections during a backend outage. They stay visible for context
+but carry the same translated `stale` marker as the status bar until the shared transport proves reachability
+again; the dock never paints an old count as silently current and never invents a replacement zero.
 
 **SEARCH IS ONE OF THOSE DOORS, and each head opens it on what that head LISTS.** The sessions head searches
 sessions; the explorer head searches nodes. It is the same palette either way — same rows, same keys, same
-matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). Search used to be a
-rail button ([[side-nav]]), where it had to name a scope it could not know: it sat above both projections
-and opened exactly one of them, so a reader asking "search what?" got whichever answer the button's author
-had picked. Sitting inside the head row, the button needs no answer — the row it is in has already given
+matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). **Historical:** search
+used to be a rail button ([[side-nav]]) that had to guess a scope above both projections. That button is retired;
+sitting inside the head row, the current door needs no answer — the row it is in has already given
 one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
 force, so the key and the visible door can never disagree.
 

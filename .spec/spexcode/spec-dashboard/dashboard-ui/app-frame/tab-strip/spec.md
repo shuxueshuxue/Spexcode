@@ -12,7 +12,6 @@ related:
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
-  - spec-dashboard/src/EmptyView.jsx
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
@@ -53,7 +52,7 @@ and chrome that only appears when a second document exists would jump the layout
 the reader's first hold.
 
 **The row is always there, and it always says something.** On the routes that mint no tab — the graph, the
-review/settings boards, the sessions launch page, the empty workspace — the strip names the PLACE instead: the same projection the
+review/settings boards, and the sessions launch page — the strip names the PLACE instead: the same projection the
 document title uses, drawn quiet, because orientation is not a title. This is what makes the row honest
 rather than reserved: the shell used to hold the space with a wrapper that drew a blank band on exactly
 those routes, which is a band that says nothing while costing the budget the same as one that does.
@@ -161,22 +160,14 @@ of drifting to the middle of a band that grew.
 open documents as chrome. The budget gate enters every state with a working set deep enough to wrap and
 prints the row count beside the band count, so the claim is measured rather than asserted.
 
-**Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
-the reason every editor uses it: the reader's eye is already where the closed tab was.
+**Closing the ACTIVE tab returns focus to the graph bottom sheet**, `#/graph`; it does not select a
+neighbour. Other tabs remain in their stored order on the strip. This supersedes the former right/left
+neighbour rule. In the human's words: *"我 Close 掉一个 Spec 工作区的 Tab 之后…如果我还有其他 Spec 工作区的
+Tab…它会退回到那个 spec node graph 的页面"*. Closing a non-active tab leaves the current route alone.
+Closing the last tab is the same graph landing, not a separate `empty` state; `#/empty` is retained only as
+a compatibility alias for `#/graph`.
 
-**Closing the LAST tab yields the explicit empty state**, `#/empty` — not a substitute document. Closing
-used to navigate to the graph: a gesture that asked for nothing put a document on screen, and the board
-appeared to surface from underneath the reader's own work, which is the disorientation this rule exists to
-remove. An empty workspace is a real state and it says so — the frame stays whole (rail, dock, status
-bar), the content area names the state, and it offers the ways back into a document: search and the
-explorer. There were three, and the third was the graph; it left with the graph's retirement from the
-workspace ([[node-graph]]), because a door here has to lead somewhere the workspace still sends people.
-`empty` is an ADDRESS so the state can be landed on, reloaded and left, but it is not a
-document ([[view-registry]]): a tab for it would be the one address that contradicts the strip it sits in.
-Only closing the last tab mints it — a fresh load with no tabs opens `#/sessions`, because starting with
-nothing held is not the same event as putting your last document down.
-
-`settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
+ `settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
 the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
 parameterized detail objects may be held.
 

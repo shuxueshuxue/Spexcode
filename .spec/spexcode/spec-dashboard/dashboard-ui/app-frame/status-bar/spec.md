@@ -97,6 +97,11 @@ pairs, not truncating the ledger. Fresh and stale score states use different ico
 icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves
 the last verdict.
 
+Last-good tallies remain useful during a backend outage, but they are not current truth. While the shared
+transport is offline, every numeric workspace tally visibly carries the translated `stale` marker and muted
+treatment; the global shell banner names the outage and owns retry. A successful transport response removes
+the marker without replacing the numbers with invented zeroes.
+
 **Restraint is the resting state.** A tally is muted text plus the board's own status marks; it spends a
 `kind` colour only where the number is asking for something — a failing eval, a session waiting on a human.
 A count that is merely large stays quiet. Per-chip items would give the user finer hiding, and the registry

@@ -19,7 +19,9 @@ related:
 ---
 # keyboard-nav
 
-Move through the spec tree by **relationship, not geometry** — the tree sits at fixed positions and never re-plots; the camera moves.
+Move through the spec tree by **relationship, not geometry** — the tree uses a stable structural embedding for
+the current two-layer frontier; focus changes add/remove frontier tiles while persistent tiles keep their
+coordinates, and the camera moves.
 
 ## keymap
 
@@ -49,7 +51,7 @@ A **game controller** drives this same registry from **inside the page** — [[g
 ## principles
 
 - **Move by relationship, not geometry.** Navigation walks the parent / child / column structure (see [[node-graph]]), never pixel distance: up/down within the focus column, left to the parent, right to the nearest child. The one exception is a leaf's right key — with no child below it, it steps to the nearest node in the columns to its right, in grid cells (column and row gaps weigh equally) and only rightward, so the parent key walks back.
-- **The camera follows the keyboard, not the mouse.** Arrow nav flat-pans onto the new node at constant zoom, never zoom-to-fit. A **mouse click re-focuses and drills the clicked node open, but the board stays** — the camera does not move. This is safe because node positions are a **fixed structural embedding**: a node's x/y is a function of tree shape alone (see [[node-graph]]), never of which node currently has focus, so expanding in place shifts nothing already on screen. Only a keyboard move — or a **programmatic jump** (search, board-stats, a session row) onto a possibly-offscreen node — pans the camera.
+- **The camera follows the keyboard, not the mouse.** Arrow nav flat-pans onto the new node at constant zoom, never zoom-to-fit. A **mouse click re-focuses and drills the clicked node open, but the board stays** — the camera does not move. This is safe because node positions are a **fixed structural embedding for the active frontier**: a node's x/y is a function of tree shape and the two-layer expansion frontier (see [[node-graph]]), never of focus identity within that frontier; changing the frontier only adds/removes tiles and never moves a tile that remains on screen. Only a keyboard move — or a **programmatic jump** (search, board-stats, a session row) onto a possibly-offscreen node — pans the camera.
 - **While the keyboard drives, the mouse steps aside.** A nav keystroke puts the board in *keyboard mode*: the cursor hides and the board takes no pointer events — suppression that reaches into React Flow's own node/edge layers, which otherwise re-enable pointers — so a still cursor can't fire a hover affordance (the issue popover, any future hover reveal). The focused node's own popover still shows — a focus reveal, not hover. Only a real pointer move exits the mode, not a pan under a still cursor.
 - **A modal owns the keys — but the node-info popup is a lens, not a modal.** While a *true* modal — help overlay, settings, search palette, or a session interface — is open it captures every key, and nav never leaks to the board behind it. The node-info popup claims only the **unmodified** keys (its pane/scroll/close vocabulary); **Shift+nav passes through** to the ordinary relationship walk, and the popup follows the focus. The distinction is what the surface *is*: help/settings/search are about themselves, so keys behind them are noise; the popup is about the focused node, so moving the focus is the reading gesture, not a leak.
 

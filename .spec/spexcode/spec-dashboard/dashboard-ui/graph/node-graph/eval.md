@@ -4,8 +4,8 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard on the spec-node graph. Look at the tree: depth flows left→right, the root
-      layer is a short readable column, and only the focused node's ancestor spine is expanded while
-      every other subtree collapses to a single tile carrying a `▸N` right-edge tab. Each node is a
+      layer is a short readable column, and the focused layer plus its complete next layer are visible
+      together while deeper subtrees collapse to a single tile carrying a `▸N` right-edge tab. Each node is a
       tight two-row tile — Row 1: status dot · title, with the pending-op glyphs (when overlays exist)
       or else the bare last-edited age at the right edge; Row 2: version, badges, and any live editors'
       avatars. Press → to drill into a child and ← to drill back out;
@@ -13,11 +13,19 @@ scenarios:
       geometric centre. Measure the focused tile centre against the graph rectangle after the pan settles. Record the navigation as
       video and screenshot the settled framing; file both with the pass verdict.
     expected: >-
-      The drill-down tidy-tree renders: a short root column, the focused node's spine expanded with
+      The drill-down tidy-tree renders: a short root column, two visible focused layers with deeper
       sibling subtrees collapsed to `▸N` tiles, and each node a two-row tile showing its identity and
       recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera keeps the focused
       tile centred on both axes of the graph pane. The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
       and a pass verdict.
+  - name: close-active-tab-returns-to-graph
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open two spec documents as tabs, focus one, then close the active tab. Leave the other tab on the
+      strip and inspect the routed surface and active-tab styling after the close.
+    expected: >-
+      Closing the active document returns to `#/graph` (the document-free bottom sheet) without focusing
+      the neighbour; the other spec tab remains in its original strip order and is visibly inactive.
   - name: tiles-carry-no-handle-dots
     tags: [frontend-e2e, desktop]
     description: >-

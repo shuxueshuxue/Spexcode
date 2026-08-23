@@ -26,8 +26,9 @@ test('board-stable history and review identity preserve or reset the right state
 
 test('trunk and scoped list/detail rows use bounded demand endpoints instead of graph or full models', () => {
   assert.match(page, /useReviewPage\('evals', queryText, page, \{ enabled: !param/)
-  assert.match(page, /useEvalDetail\(param, sessionId, sessionProjection, !!param, issuesStamp\)/)
-  assert.match(page, /fetch\(apiUrl\(`\/api\/evals\/detail\?\$\{query\}`\)/)
+  assert.match(page, /const freshness = `\$\{issuesStamp \?\? ''\}\|\$\{backendHealth\.retryKey\}`/)
+  assert.match(page, /useEvalDetail\(param, sessionId, sessionProjection, !!param, freshness\)/)
+  assert.match(page, /apiFetch\(apiUrl\(`\/api\/evals\/detail\?\$\{query\}`\)/)
   assert.doesNotMatch(page, /\/api\/sessions\/\$\{[^}]+\}\/evals`|specUrl\(node, 'evals'\)/)
   assert.doesNotMatch(detail, /specUrl\([^)]*, 'evals'\)|\/api\/specs\/.*\/evals/)
   assert.doesNotMatch(feed, /export function currentEntries/)

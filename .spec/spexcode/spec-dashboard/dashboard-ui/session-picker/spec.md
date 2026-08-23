@@ -16,8 +16,9 @@ related:
 # session-picker
 
 The dashboard has one session identity language. A picker row leads with the deterministic avatar generated
-from the session id, then the stable session handle, and carries the lifecycle glyph from the shared
-`sessionDisplayState` vocabulary. It never invents a second status colour or a second name accessor.
+from the session id, then the shared visible session title, and carries the lifecycle glyph from the shared
+`sessionDisplayState` vocabulary. It never invents a second status colour or a second name accessor. The
+stable session handle remains a matching key and tooltip detail; it is never painted as a second visible name.
 
 `SessionPicker` is the active choice surface for an existing session. Its optional filter narrows the rows
 locally, ↑/↓ moves the active row, Enter chooses it, and Escape leaves the draft untouched for the caller to

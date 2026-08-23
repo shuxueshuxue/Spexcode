@@ -26,3 +26,8 @@ test('the strip enters shrink-wrap mode only when its minimums exceed the row', 
 test('closing tabs retain their original visual slot while the live list updates', () => {
   assert.match(source, /renderedTabs\.splice\(Math\.max\(0, Math\.min\(entry\.index, renderedTabs\.length\)\)/)
 })
+
+test('session tabs use the shared visible title, not the stable search handle', () => {
+  assert.match(source, /import \{ STATUS_COLOR, sessionHeadline \} from '\.\/session\.js'/)
+  assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)
+})

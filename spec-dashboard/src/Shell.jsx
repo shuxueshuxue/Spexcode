@@ -18,7 +18,7 @@ import { PROJECT_ID, hubHref, projectHref } from './project.js'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
 import { ScoreBadge } from './score.jsx'
 import { nextGraphStatNode } from './GraphStats.jsx'
-import { sessionHandle, sessionZone } from './session.js'
+import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
@@ -476,7 +476,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     if (!previous) return
     for (const session of sessions || []) {
       if (session.status !== 'asking' || previous.get(session.id) === 'asking') continue
-      notify(`${sessionHandle(session)} · ${t('status.asking')}`, {
+      notify(`${sessionHeadline(session)} · ${t('status.asking')}`, {
         kind: 'info',
         onClick: () => navigate('sessions', session.id),
       })

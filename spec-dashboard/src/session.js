@@ -26,7 +26,7 @@ export const STATUS_GLYPH = {
 }
 
 // the three triage zones the session list groups into — "whose turn is it?". `offline` = the process is
-// DEAD/dormant (can't act until relaunched) — checked FIRST, because a session whose process died while
+// DEAD/dormant (can't act until relaunched) — checked FIRST (except queued, which is not launched yet), because a session whose process died while
 // asking/review/error keeps that pre-death lifecycle, yet it belongs at the bottom, not under Needs You.
 // `need` = the ball is with the HUMAN (asking / review / done / close-pending / error → answer, review,
 // close, fix); `run` = self-driving, the agent's turn (working / parked / starting / queued / idle — booting
@@ -37,17 +37,36 @@ export const STATUS_GLYPH = {
 // claim it first. `retired` is deliberately NOT here: its agent really is down, so it sorts with the offline
 // rows and its badge, not its zone, is what says the worktree is gone.
 const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error', 'corrupt'])
-export const sessionZone = (s) => {
+const zoneFor = (s) => {
   if (s?.archived) return 'archive'
-  if (s?.liveness === 'offline' || s?.status === 'offline') return 'offline'
+  // queued is the one liveness-offline exception: it has not launched yet and remains runnable when a slot opens.
+  if (s?.status !== 'queued' && (s?.liveness === 'offline' || s?.status === 'offline')) return 'offline'
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'
 }
+// One board projection feeds both the zone bucket and every compact row mark. Offline liveness wins over
+// the retained lifecycle (except queued, which has not launched and remains runnable): a dead asking/review/error
+// session is still shown as offline until relaunched.
+// Archive is an explicit fourth zone; archived records are closed and therefore use the same muted offline mark.
+export const sessionDisplayState = (s) => {
+  const zone = zoneFor(s)
+  const status = s?.status === 'retired'
+    ? 'retired'
+    : (zone === 'offline' || zone === 'archive' ? 'offline' : s?.status)
+  return {
+    zone,
+    status,
+    color: STATUS_COLOR[status] || STATUS_COLOR.idle,
+    glyph: STATUS_GLYPH[status] || STATUS_GLYPH.idle,
+  }
+}
+export const sessionZone = (s) => sessionDisplayState(s).zone
 export const ZONE_ORDER = ['need', 'run', 'offline', 'archive']
 
 export const isArchived = (s) => !!s?.archived
 export const sessionFooterState = (s) => {
-  if (isArchived(s)) return 'archived'
-  if (s?.liveness === 'offline' && s?.status !== 'queued') return 'offline'
+  const zone = sessionDisplayState(s).zone
+  if (zone === 'archive') return 'archived'
+  if (zone === 'offline') return 'offline'
   return 'live'
 }
 export const splitArchived = (sessions = []) => ({
@@ -90,10 +109,14 @@ export const zoneSort = (sessions) => {
 
 export function nestSessions(sessions) {
   const present = new Set(sessions.map((s) => s?.id))
+  const byId = new Map(sessions.map((s) => [s?.id, s]))
   const childrenOf = new Map()
   const roots = []
   for (const s of sessions) {
-    const p = s?.parent && s.parent !== s.id && present.has(s.parent) ? s.parent : null
+    // A parent-child edge cannot cross a liveness/lifecycle zone. Otherwise a dead child follows a live
+    // root through `emit` and is rendered under the wrong zone header. It becomes a root in its own bucket.
+    const parent = s?.parent && s.parent !== s.id ? byId.get(s.parent) : null
+    const p = parent && present.has(parent.id) && sessionZone(parent) === sessionZone(s) ? parent.id : null
     if (p) { const arr = childrenOf.get(p) || []; arr.push(s); childrenOf.set(p, arr) }
     else roots.push(s)
   }
@@ -124,8 +147,9 @@ export function subtreeRollup(id, childrenOf) {
       if (seen.has(c.id)) continue
       seen.add(c.id)
       count++
-      if (NEED_STATUS.has(c.status)) need = true
-      else if (STATUS_COLOR[c.status] === STATUS_COLOR.working) run = true
+      const display = sessionDisplayState(c)
+      if (NEED_STATUS.has(display.status)) need = true
+      else if (STATUS_COLOR[display.status] === STATUS_COLOR.working) run = true
       walk(c.id, seen)
     }
   }

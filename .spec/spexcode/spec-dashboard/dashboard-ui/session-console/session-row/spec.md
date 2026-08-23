@@ -28,6 +28,17 @@ import is not an implementation detail of any one feature.
 
 `SessionWindow.jsx` owns the row and the forest around it.
 
+The row and the forest consume one `sessionDisplayState` projection from `session.js`. It derives a zone from
+`archived` first, then offline liveness (or an explicit offline status), then the authored lifecycle. Two
+projection exceptions are legislated: `queued` has not launched and remains runnable under **running**, while
+`archive` is its own closed-record zone and uses the muted offline mark (`○`). Online
+`asking`/`review`/`done`/`close-pending`/`error` is **needs you**, other online lifecycles are **running**, a
+dead process is **offline**, and archived records are the fourth **archive** zone. A dead session keeps its
+authored lifecycle in the record, but its row status/glyph is projected as offline; a `retired` record keeps
+its `⚑` badge because that badge says the worktree is gone. A parent-child display edge
+is retained only when both rows have the same derived zone; a child whose liveness changes zones becomes a root
+in that zone, so a row's offline glyph and its zone header cannot disagree.
+
 **The row.** `SessionRow` renders one session: its status colour and glyph come from `session.js`
 (`STATUS_COLOR` / `STATUS_GLYPH`), its identity from `sessionHandle` and `sessionHeadline`, and its
 activity from `opSummary`, which folds an op list into per-op counts using the shared `GLYPH` map.

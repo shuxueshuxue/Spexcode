@@ -143,12 +143,14 @@ receipts fail rather than repairing themselves from weaker input.
 Readiness is a bounded launch transaction, not an advisory note. If the native identity/first-turn receipt or
 post-receipt liveness fence misses its deadline, the launch owner re-reads the same record and consults the
 existing real agent/adapter liveness witness before deciding its lifecycle. A live registered process or online
-resource is not terminalized by a readiness timeout: it retains `active`/online truth and receives a loud,
-non-terminal readiness warning; the first-turn receipt and runtime binding are not replayed. Only a proven-dead
-process/resource may publish one explicit terminal failure on the record: lifecycle `error`, stopped/offline
-liveness, and the complete `queued launch readiness failed: ...` reason. That write uses the ordinary
-transition/watch path, so a parent watcher is notified and the row cannot remain queued/active while claiming
-launch is still in progress. A backend restart reconciles every durable
+resource is not terminalized by a readiness timeout: it retains `active`/online truth, restores `stopped:false`
+if a racing timeout already wrote a terminal projection, and receives a loud, non-terminal readiness warning;
+the first-turn receipt and runtime binding are not replayed. The witness and recovery write are one record-locked
+decision, and an online warning leaves any pending watcher snapshot debt intact for the existing queue. Only a
+proven-dead process/resource may publish one explicit terminal failure on the record: lifecycle `error`,
+stopped/offline liveness, and the complete `queued launch readiness failed: ...` reason. That write uses the
+ordinary transition/watch path, so a parent watcher is notified and the row cannot remain queued/active while
+claiming launch is still in progress. A backend restart reconciles every durable
 launch residue: a live registered runtime gets its readiness observer rebuilt without replaying the first turn;
 an expired or provably dead residue is failed closed with the same terminal record. No launch residue may remain
 an indefinitely in-progress row.

@@ -31,12 +31,13 @@ are reached (rail, cold link, status/chip query) and never enter the strip. Thei
 also review destinations and never become workspace objects. The rail is therefore navigation only; it does
 not create, pin, or focus a board tab ([[side-nav]]).
 
-What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy
-address, [[node-graph]]), bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
+What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
+addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
 This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
-nothing.
+nothing. `#/empty` is the explicit state reached after the last workspace object is closed; it is not a
+fresh-boot alias and it never enters the strip.
 
 **The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
 has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
@@ -196,10 +197,9 @@ tabs additionally classify their fallback so a session can never hand focus to t
 
 **Closing hands focus back by document kind.** A spec or file tab closes to the graph backdrop, preserving the
 existing reading path. A session tab never falls to graph: the nearest remaining session tab on its right wins,
-then the nearest session on its left; when none remains, close lands on `#/sessions/new`, the explicit New Session
-page. This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
-graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule; the explicit `empty` state remains
-the fallback only for a working set with no classified heir. `empty` is an ADDRESS so the state can be landed on,
+then the nearest session on its left; when none remains, close lands on the explicit empty workspace `#/empty`.
+This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
+graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule. `empty` is an ADDRESS so the state can be landed on,
 reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
 contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
 is not the same event as putting your last document down.

@@ -4699,10 +4699,17 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused'
-type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
+type AcceptedDispatch = DispatchResult & {
+  replayed?: boolean
+  code?: DispatchAcceptCode
+  delivery?: 'accepted' | 'queued'
+}
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency
+  // Dashboard callers keep this opaque key while a transport retry is pending. Canonical protocol
+  // idempotency makes the retry address the existing queue row instead of appending a duplicate prompt.
+  deliveryKey?: string
   acceptGuard?: (record: SessRec) => Promise<void>
   deferDrain?: boolean
   // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
@@ -4730,7 +4737,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
       await opts.acceptGuard?.(rec)
       const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-      const idempotencyKey = opts.idempotency?.requestDigest ?? null
+      const idempotencyKey = opts.idempotency?.requestDigest ?? (opts.deliveryKey?.trim() || null)
       const existing = idempotencyKey
         ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
@@ -4741,7 +4748,12 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       if (!opts.deferDrain) await drainSession(id)
-      return { ok: true, ...(opts.idempotency ? { replayed: !!existing } : {}) }
+      const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+      return {
+        ok: true,
+        delivery: pending ? 'queued' : 'accepted',
+        ...(opts.idempotency || opts.deliveryKey ? { replayed: !!existing } : {}),
+      }
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
     }
@@ -4802,6 +4814,30 @@ export async function drainSession(id: string): Promise<void> {
     if (!rec) return
     const binding = application.resolveRuntime(id, 'spex-governed')
     if (!binding || binding.status !== 'bound') {
+      // Claude's TUI has no native conversation id to bind. Preserve the legacy rendezvous identity (the
+      // governed tmux session) while the record is missing a harness session id, then acknowledge the same
+      // canonical queue directly. Codex and records with a binding problem remain fail-closed.
+      if (rec.harness === 'claude' && !rec.harnessSessionId) {
+        const h = harnessById(rec.harness || defaultHarness.id)
+        await withDeliveryLocks([id], async () => {
+          for (;;) {
+            const pending = application.protocol.listPending(id)
+            const msg = pending[0]
+            if (!msg) return
+            const text = canonicalMessageText(msg, rec)
+            if (h.deliveryBlockedBy) {
+              try {
+                if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+              } catch { /* no pane to consult — let the adapter decide */ }
+            }
+            const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
+            if (!delivered.ok) return
+            const removed = application.protocol.dequeue(id)
+            if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+          }
+        })
+        return
+      }
       throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
     }
     const h = harnessById(rec.harness || defaultHarness.id)

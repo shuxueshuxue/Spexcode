@@ -162,6 +162,6 @@ test('closing a session stays in the session identity domain', () => {
     { page: 'file', param: 'README.md', query: null, pinned: true },
   ]
   assert.deepEqual(closeDestination(session('closed'), remaining, 0), session('right'))
-  assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'sessions', param: 'new', query: null })
+  assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'empty', param: null, query: null })
   assert.deepEqual(closeDestination({ page: 'spec', param: 'node' }, [], 0), { page: 'graph', param: null, query: null })
 })

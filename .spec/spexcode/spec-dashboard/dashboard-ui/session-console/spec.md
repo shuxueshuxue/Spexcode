@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/sessionSurface.js
+  - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/harness.jsx
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
@@ -22,6 +23,7 @@ related:
   - spec-dashboard/test/session-web.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
+  - spec-dashboard/test/session-shortcuts.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
@@ -368,11 +370,12 @@ never sends; plain Enter sends, while Shift+Enter adds a line.
 
 Command Box dispatches by **appending to the target's durable log** ([[dispatch]]), never typed into the pane,
 so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows only the
-in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry, and carries
-no delivery marker of its own: a send either put the bytes in the log or did not, so a retry can only ever
-repeat something that never landed. Once either result settles, it visibly acknowledges through the shared
-[[transient-notices]] stack — a short-lived delivery/failure result outside the Command Box's geometry —
-before a successful send clears the draft and closes the box. A `/` line
+in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry. Each draft carries
+one opaque delivery key while pending, so a retry addresses the existing durable queue entry instead of appending
+a duplicate. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
+the shared notice says retry is safe; only adapter handover clears the draft and closes the box. Once either result
+settles, it visibly acknowledges through the shared [[transient-notices]] stack — a short-lived delivery/failure
+result outside the Command Box's geometry — before a successful send clears the draft and closes the box. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every document-action twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable

@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/sessionShortcuts.js
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/session.test.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
@@ -65,7 +66,7 @@ belonging is *drawn*, like a notes-app tree, not a blank margin. Recursive to an
 by default, so a fleet reads as one row until
 opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
 
-The desktop console is also the one mutable tree surface. A primary-pointer drag starts only after a small
+The desktop sessions dock is the one mutable tree surface (the former full-width document list is retired). Its fixed registry bindings are ⌥+↑/↓ for moving the selected session through visible rows, and ⌥+Shift+↓/↑ for expanding/collapsing that selected parent; the latter are consumed as no-ops on a leaf and never move selection. A primary-pointer drag starts only after a small
 movement threshold, then the source row fades and its **whole console tree row** (headline, live status,
 selection reveal, nesting lead, fold pod, and checkbox included) follows the pointer as a fixed ghost at **75%**
 of its visual size, with its pointer anchor adjusted to the same scale. The

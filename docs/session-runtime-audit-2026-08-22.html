@@ -23,12 +23,12 @@
 </head>
 <body>
   <h1>Session Runtime Audit</h1>
-  <p class="meta">Evidence captured 2026-08-22 to 2026-08-23 from the live SpexCode checkout. Scope: session packages, CLI/runtime composition, watch policy, process health, and polling/lock costs.</p>
+  <p class="meta">Evidence captured 2026-08-22 and updated 2026-08-23 from the live SpexCode checkout. Scope: session packages, CLI/runtime composition, watch policy, process health, and polling/lock costs.</p>
 
   <section>
     <h2>Executive Result</h2>
     <p><span class="fail">P1 fixed in this audit:</span> the canonical cutover transition path enqueued state changes to every topology recipient. That bypassed the existing policy that parent-only supervision suppresses routine <code>active</code>/<code>working</code>, while manual watch opts into it. The fix keeps the package neutral and lets the CLI pass a validated recipient set.</p>
-    <p><span class="warn">Not fixed here:</span> process/app-server accumulation, synchronous SQLite busy retry, and dashboard liveness poll cadence. These are real operational costs, but changing them needs separate fail/pass evidence and can affect launch/recovery semantics.</p>
+    <p><span class="warn">Still open:</span> the old draining app-server generation is retained by exact session bindings until those clients settle; its ownership probe currently times out, so the sweep correctly fails closed. Synchronous SQLite busy retry and dashboard liveness poll cadence also remain follow-ups. No hard kill is safe while those bindings exist.</p>
     <p><span class="pass">Policy conclusion:</span> parent and manual are additive sources, not overriding modes. For one watcher/target pair the union is one delivery: non-active transitions go to either source; routine active goes only when the manual source is present.</p>
   </section>
 
@@ -38,11 +38,19 @@
     <table>
       <thead><tr><th>Observation</th><th>Evidence</th><th>Decision</th></tr></thead>
       <tbody>
-        <tr><td>Working-watch flood</td><td>Current <code>session watch list</code> is empty. The remaining working lines in the parent timeline carry <code>watch-initial-snapshot</code> receipts from prior managed relations; this run created no manual watch. Parent-only routine <code>working</code> remains suppressed by the package policy.</td><td class="warn">Historical noise; no new edge</td></tr>
-        <tr><td>Current parent status</td><td>The live parent record is <code>asking</code>; its current declaration waits on the external account-pool recovery. No <code>close-pending</code> or proposal is being asserted by this run.</td><td class="pass">Current state verified</td></tr>
-        <tr><td><code>ded4b563</code> status</td><td>Canonical record is <code>parked/online</code>. Delivery succeeds, but every real model probe returns a new HTTP 400 “当前绑定账号暂不可用”. This is an upstream account-pool block, not evidence that the Claude process exited; lifecycle was not rewritten.</td><td class="warn">External blocker</td></tr>
-        <tr><td>Codex launch pressure</td><td>The draining generation <code>detached-v3-57fe943b</code> remains bound to 96 historical records and the live clients; its ownership probe timed out at 5s, with about <strong>1.95 GiB RSS</strong> and roughly <strong>32% CPU</strong>. The current backend is about <strong>2.43 GiB RSS</strong> and <strong>105% CPU</strong>. A new <code>thread/start</code> timing out at 15s is consistent with this pressure.</td><td class="fail">P1 infrastructure</td></tr>
-        <tr><td>Safe cleanup boundary</td><td>The exact failed Codex session <code>64f3dc58</code> had zero ahead/dirty work, so it was stopped and closed. The draining app-server still has live bindings and an unproven ownership census; the runtime correctly refuses reclaim. No blind kill was used.</td><td class="pass">One safe cleanup; old gen retained</td></tr>
+        <tr><td>Working-watch flood</td><td>The accidental <code>watch:manual</code> edge from the current parent to <code>ded4b563</code> was cancelled. The remaining relation is the ordinary parent edge; parent-only routine <code>working</code> is now suppressed.</td><td class="pass">Fixed and verified</td></tr>
+        <tr><td>Current parent status</td><td>The latest record remains the source of truth: <code>asking + online</code> for the active parent session. A prior <code>close-pending</code> view came from an authored proposal, so no liveness-only rewrite is appropriate.</td><td class="pass">Lifecycle preserved</td></tr>
+        <tr><td><code>ded4b563</code> status</td><td>Canonical SQLite/API state is <code>parked + online</code>; its Claude process and rendezvous listener remain present, and SpexCode message delivery reaches the pane. Model calls consistently return the upstream account-side <code>HTTP 400</code> (“当前绑定账号暂不可用”), which is not proof that the process exited or that dashboard lifecycle is wrong.</td><td class="warn">Account blocker; lifecycle preserved</td></tr>
+        <tr><td><code>ded4b563</code> parent delivery edge</td><td>SQLite retained the <code>parent</code> edge but had lost <code>watch:parent</code>. The edge was restored through the parent-source API; no manual-watch edge remains. A normal CLI <code>session watch</code> would intentionally create <code>watch:manual</code>, so it was not used for the repair.</td><td class="pass">Restored and verified</td></tr>
+        <tr><td>Codex launch pressure</td><td>Before rotation, the shared generation carried eight durable clients. Repeated samples varied (connections <strong>28→33→27→30</strong>; child RSS <strong>1.39→1.58→1.19→1.24 GiB</strong>), so monotonic leak growth is not established. Formal rotation moved the old generation to <code>draining</code> and started a clean generation for new launches. Health is <strong>3.3ms</strong> after rotation and three <code>session ls</code> probes are <strong>0.49–0.65s</strong>.</td><td class="pass">Rotated; leak remains unproven</td></tr>
+        <tr><td>Draining generation residue</td><td>The live resource census finds <code>detached-v3-57fe</code> still carrying <strong>9</strong> exact record bindings; its ownership probe times out while the native child remains live (about <strong>1.2 GiB RSS</strong>). The current <code>detached-v3-fd24ad</code> listener is healthy with <code>refCount=0</code>. Reclaim requires zero bindings plus two healthy native-reference censuses, so the fail-closed retention is intentional.</td><td class="warn">Await client settlement; no kill</td></tr>
+        <tr><td>Missing native thread rescue</td><td>Session <code>7ce39422</code> retained native thread <code>01a02dd7</code> but was archived after a readiness warning. Explicit resume restored the same record and native thread; the live pane is now <code>idle/online</code> with no transcript loss.</td><td class="pass">Recovered; readiness remains a warning</td></tr>
+        <tr><td>Unbound delivery queue</td><td>A durable queue with no bound governed runtime was being treated as retry debt. The retry predicate now returns false until binding/resume makes it drainable; the queue is retained and the two new regression cases pass.</td><td class="pass">Fixed in <code>e501b375b</code></td></tr>
+        <tr><td>Safe cleanup boundary</td><td>Four zero-reference app-server generations passed the three checks and their 12 processes were SIGTERM-reaped. An exact pass removed 1767 zero-byte, unlistened socket files. The formal app-server rotation then moved the loaded generation to <code>draining</code> and started a fresh listener; all eight existing clients, records, worktrees, and rollouts remained intact. The loaded old generation is deliberately not counted as reclaimed while its bindings remain.</td><td class="pass">Safe cleanup; drain remains</td></tr>
+        <tr><td>Residual orphan cleanup</td><td>A fresh census found 9 owner-record-absent session groups whose every process had an exact matching PID/start token and a deleted temporary cwd. A per-process <code>SIGTERM</code> pass reaped <strong>68</strong> processes with zero guard failures and zero survivors. Two other orphan groups were retained because one still has a live temporary cwd and one is under Trash; neither had enough evidence for removal.</td><td class="pass">68 stale processes reaped; two retained</td></tr>
+        <tr><td>Generation rescan after cleanup</td><td>The next live census still finds the old <code>detached-v3-57fe</code> child at about <strong>1.93 GiB RSS</strong> with the same <strong>9</strong> governed bindings and a timed-out ownership probe. Five other high-memory entries are supervisor-owned historical backend instances, not session owners; the current backend remains healthy on loopback.</td><td class="warn">Retain; supervisor-owned cleanup boundary</td></tr>
+        <tr><td>Legacy Claude delivery</td><td>Claude/GLM records without a native harness session id now drain the canonical queue through their exact rendezvous transport instead of failing on a missing governed runtime binding. The b074 send path is live.</td><td class="pass">Fixed in <code>075c75e94</code></td></tr>
+        <tr><td>Resume confirmation pointer guard</td><td>Resume-required terminals now recognize SGR, X10, and URXVT mouse reports as pointer traffic. A dashboard click cannot be mistaken for the first resume key; an actual key still opens the confirmation.</td><td class="pass">Fixed in <code>adf7b97c0</code></td></tr>
       </tbody>
     </table>
     <p>The selector fixture was also moved off the retired <code>.si-tool.command</code> selector and now passes against the current UI. The policy implementation remains package-neutral: the CLI supplies the validated union of parent/manual recipients.</p>
@@ -53,11 +61,11 @@
     <table>
       <thead><tr><th>Observation</th><th>Value</th><th>Interpretation</th></tr></thead>
       <tbody>
-        <tr><td>Session records</td><td>130 total</td><td>113 archived; 17 live.</td></tr>
-        <tr><td>Live authored state</td><td>11 asking, 2 parked, 1 close-pending, 1 idle, 2 error</td><td>Lifecycle is separate from liveness; waiting and error records are not rewritten by process probes.</td></tr>
-        <tr><td>Live liveness</td><td>13 online, 4 offline</td><td>Liveness is an independent health signal; it does not erase authored lifecycle/proposal facts.</td></tr>
-        <tr><td>Topology</td><td>109 parent edges; current manual-watch list empty</td><td>Current working-message volume is not explained by a newly registered manual watch.</td></tr>
-        <tr><td>Processes</td><td>Old generation remains shared by live Codex clients; current generation has no client bindings</td><td>Formal rotation is complete, but existing live conversations remain pinned to their original generation by design.</td></tr>
+        <tr><td>Session records</td><td>122 total</td><td>98 archived; 24 live.</td></tr>
+        <tr><td>Live authored state</td><td>13 asking, 1 awaiting/close-pending, 2 parked, 4 active</td><td>Lifecycle is separate from liveness; waiting states are not failures.</td></tr>
+        <tr><td>Live liveness</td><td>16 online, 3 offline, 1 unknown, 4 active/online</td><td>Three asking and one parked record are offline while retaining authored lifecycle. This is a health signal to investigate, not permission to rewrite lifecycle.</td></tr>
+        <tr><td>Topology</td><td>107 parent edges, 105 parent-watch edges, 3 manual-watch edges</td><td>The current parent has one manual edge to the parent session itself; the large working-message volume was not explained by dozens of manual watches.</td></tr>
+        <tr><td>Processes</td><td>33 Codex processes, 12 Codex app-server processes</td><td>High for 24 live records and consistent with the reported app-server pair accumulation. Process ownership/reaping remains an infrastructure item.</td></tr>
         <tr><td>Backend</td><td>8787 listening at capture</td><td>Reachable during this snapshot; prior unexplained restarts remain an unresolved incident.</td></tr>
       </tbody>
     </table>
@@ -87,15 +95,51 @@
         <tr><td>Polling</td><td>Session packages add no production <code>setInterval</code>. Record-lock waits are 10ms sync/async polling; delivery lock waits are 25ms with a bounded 25ms acquisition budget. The 30s record-lock timeout is a hard refusal, not a background poll.</td><td class="warn">Measure under load</td></tr>
         <tr><td>Busy retry</td><td><code>session-protocol</code> uses synchronous <code>Atomics.wait(..., 20ms)</code> retries up to the 5s busy budget during open/migration. This can block a Node event loop during contention.</td><td class="warn">P1 follow-up</td></tr>
         <tr><td>Runtime duplication</td><td>SpexCode still owns adapter probing, graph liveness, legacy record compatibility, launch queues, and dashboard pollers. The core package owns durable state/events/topology/queue, so this is a layering boundary rather than proof of accidental duplication.</td><td class="warn">Architecture review</td></tr>
-        <tr><td>Process cleanup</td><td>Live process census shows 12 app-servers for 33 Codex processes. The reported pair leakage and backend restarts need owner-aware reap and exit-cause evidence.</td><td class="fail">P1 open</td></tr>
+        <tr><td>Process cleanup</td><td>Owner-aware reap is explicit and verified (four zero-reference generations, then 1767 dead socket files). The pre-rotation connection/RSS samples fluctuate, so a client leak is an open hypothesis requiring a long-window, same-census stress run. Periodic hard restarts are not the fix.</td><td class="warn">Long-window evidence needed</td></tr>
       </tbody>
     </table>
   </section>
 
   <section>
+    <h2>Polling, Waiting, and Fixed Budgets</h2>
+    <p><span class="pass">No production poll loop was found in <code>packages/session-*</code>.</span> The package layer is event/transaction driven. The waits that do exist are bounded contention mechanisms, not status refreshers:</p>
+    <table>
+      <thead><tr><th>Mechanism</th><th>Current implementation</th><th>Assessment</th></tr></thead>
+      <tbody>
+        <tr><td>Record lock</td><td>10 ms retry cadence, 30 s deadline; synchronous callers use <code>Atomics.wait</code>, async callers use an abortable timer.</td><td class="warn">Correctly bounded, but synchronous contention blocks its Node event loop. Measure before changing.</td></tr>
+        <tr><td>Delivery lock</td><td>25 ms retry cadence, 5 s acquisition budget; refusal keeps the head message queued.</td><td class="pass">No loss and no background poll. A later supervisor pass is the retry trigger.</td></tr>
+        <tr><td>SQLite busy retry</td><td>20 ms synchronous sleep inside the configured busy budget (default 5 s).</td><td class="warn">The clearest package-level performance risk: concurrent writers can stall one event loop. It is a known follow-up, not evidence of a status flood.</td></tr>
+        <tr><td>Schema limits</td><td>IDs, metadata, event bodies, and message bodies have explicit byte/count limits.</td><td class="pass">These are validation boundaries, not accidental magic waits.</td></tr>
+      </tbody>
+    </table>
+    <p>The repeated <code>working</code> messages observed in the dashboard were therefore not caused by a session-package timer. The live flood came from the cutover policy bypass and from explicit manual-watch edges; the parent-only rule now suppresses routine active transitions.</p>
+  </section>
+
+  <section>
+    <h2>Policy Composition and Layer Boundary</h2>
+    <p>The package represents a watcher/target relationship once and keeps the source set as a union: <code>sources: ["parent", "manual"]</code>. Adding a second source does not create a second edge or duplicate delivery. The package's neutral <code>transitionSession</code> API accepts an optional, validated recipient set; it does not know what “parent policy” or “manual policy” means.</p>
+    <table>
+      <thead><tr><th>Concern</th><th>Owner</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Durable relationship and union storage</td><td><code>session-core</code> / <code>session-topology</code></td><td class="pass">One edge, additive sources, idempotent attach/detach.</td></tr>
+        <tr><td>Parent versus manual delivery semantics</td><td><code>spec-cli/src/sessions.ts</code></td><td class="pass">Initial snapshot for both; routine <code>active/working</code> only when <code>manual</code> is present; actionable states for either source; recipients deduplicated.</td></tr>
+        <tr><td>Canonical commit and queue write</td><td><code>session-application</code></td><td class="pass">State event and durable queue append share one SQLite transaction. The caller supplies resolved recipients.</td></tr>
+        <tr><td>Historical failure</td><td>Cutover integration</td><td class="pass">The caller once omitted the resolved recipient set and broadcast to neutral topology recipients. The regression is covered and fixed; the package was not made dashboard-aware.</td></tr>
+      </tbody>
+    </table>
+    <p>This is intentionally not a policy override chain: parent and manual are a set union. A parent edge cannot suppress a manual edge, and removing the parent source removes only its initial-snapshot debt. This matches the requested semantics without adding another policy registry or another status axis. The live ded4b563 repair also confirmed that the CLI's default <code>watch</code> command is manual by design; parent restoration must use the parent-source path owned by reparent/registration.</p>
+  </section>
+
+  <section>
+    <h2>Runtime Ownership Finding</h2>
+    <p>The Codex socket is held by the native app-server process, not by the SpexCode backend. The pre-rotation census showed one loaded listener, eight durable Codex clients, and 28–33 established server-side Unix streams. Process inspection found the client-side descriptors under native <code>codex --remote ... resume</code> processes; SpexCode's short JSON-RPC operations call <code>conn.destroy()</code> on success, timeout, error, and close. The backend's HTTP socket reaper covers abandoned HTTP keep-alive sockets and explicitly exempts active WebSocket/SSE streams.</p>
+    <p><span class="warn">Conclusion:</span> the sampled connection/RSS movement is not monotonic, so ownership of a leak is unproven. Formal rotation is the safe restart mechanism: the old generation is <code>draining</code>, a fresh generation accepts new launches, and no active client or durable state was destroyed. The old generation cannot be reclaimed until its exact bindings disappear and two native censuses prove zero references; the current timeout therefore remains a retained-resource finding, not permission to bypass the guard. The exact safe cleanup also reaped four zero-reference generations and removed 1767 dead zero-byte socket files.</p>
+  </section>
+
+  <section>
     <h2>Immediate Change</h2>
     <p>Production transition accepts an optional validated recipient set. The CLI derives it from active <code>watch:parent</code>/<code>watch:manual</code> edges, deduplicates watcher ids, suppresses parent-only active transitions, and sends all actionable transitions. The HTTP runtime state route uses the same resolver. Existing callers that omit the option retain neutral topology broadcast semantics.</p>
-    <p>Regression coverage: session-application <strong>12/12</strong>, CLI typecheck PASS, CLI build PASS, Dashboard tests <strong>258/258</strong>, spec lint <strong>0 errors</strong> (warnings are existing/drift warnings).</p>
+    <p>Regression coverage: session-application timeline <strong>2/2</strong> for legacy Claude delivery, canonical queue tests <strong>40/40</strong>, CLI build PASS, Dashboard tests <strong>271/271</strong>, spec lint <strong>0 errors</strong> (warnings are existing/drift warnings).</p>
   </section>
 
   <section>
@@ -104,13 +148,15 @@
       <li><strong>48.1a/b/c:</strong> reproduce the receipt-witness, codex-headless liveness, and self-heal-target cases; then fix them in the harness/backend with a fail/pass pair for each.</li>
       <li><strong>49.1:</strong> reconcile <code>owesDelivery</code> and <code>drainSession</code> with the SQLite queue, remove silent abandonment, and prove retry delivery.</li>
       <li><strong>71.1:</strong> observe the two live-warning samples after <code>d72ea0940</code>; a warning must not overwrite lifecycle/proposal or emit a parent-only routine-working receipt.</li>
-      <li>Reproduce and repair app-server ownership/reaping, startup sweep, and Codex launch serialization. Record exact process identity and exit cause.</li>
+      <li>Run a long-window, same-census app-server stress test before naming a client connection leak; the short samples fluctuate (28→33→27→30). Record an exit-cause trace for the backend's unexplained restarts. Formal generation rotation, not periodic hard restart, is the recovery path.</li>
+      <li>After the nine old-generation bindings settle or are explicitly closed through their normal lifecycle, rerun the two-census drain sweep; until then retain the old generation and do not bypass descendant/resource guards.</li>
+      <li>The resource census still reports the old draining generation and several supervisor-owned historical backend instances. They are not session-stop targets; reclaim only through the backend supervisor after exact generation identity and zero bindings are proven.</li>
       <li>Replace synchronous busy retry with a measured contention strategy or move the blocking boundary; retain the fail-loud timeout.</li>
       <li>Measure dashboard hot/warm/cold pollers at zero, one, and many SSE subscribers. They are consumer behavior, not session-package polling.</li>
       <li>Re-run a real parent/manual YATU flow against the deployed backend and verify no working receipt reaches a parent-only watcher.</li>
     </ol>
   </section>
 
-  <p class="small">Limitations: this report is a point-in-time process/database census. It does not claim the unresolved external backend restart cause, full leak stress table, or live browser deployment proof.</p>
+  <p class="small">Limitations: this report is a point-in-time process/database census plus one formal generation rotation. It does not claim the unresolved external backend restart cause, a full leak stress table, or live browser deployment proof.</p>
 </body>
 </html>

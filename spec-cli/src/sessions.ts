@@ -1765,20 +1765,23 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
-function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true): void {
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, broadcast = terminal): void {
   const reason = error instanceof Error ? error.message : String(error)
   const note = `queued launch readiness failed: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
   if (rec && !retirementReason(rec) && (rec.note !== note || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null)))) {
-    // Readiness failure is terminal for this launch attempt. Keep the exact reason on the record,
-    // publish an offline/error transition, and clear every durable/in-memory ownership marker so close
-    // and a later explicit resume have an honest starting point.
+    // A pre-receipt failure is terminal for this launch attempt. A post-receipt timeout uses the warning branch
+    // below, preserving lifecycle/proposal and the exact native identity for a later retry.
     if (terminal) {
-      publishCanonicalLifecycle(rec, 'error', null, note)
+      if (broadcast) publishCanonicalLifecycle(rec, 'error', null, note)
       writeRecord({ ...rec, status: 'error', proposal: null, stopped: true, note, launchOwner: null, launchReadinessStartedAt: null })
-    } else {
+    } else if (broadcast) {
       publishCanonicalLifecycle(rec, rec.status, rec.proposal, note)
+      writeRecord({ ...rec, note, launchReadinessStartedAt: null })
+    } else {
+      // A readiness timeout is a transient observation, not a lifecycle fact. Keep the queued/active record
+      // and its proposal untouched, while retaining the diagnostic for the next drain or operator inspection.
       writeRecord({ ...rec, note, launchReadinessStartedAt: null })
     }
   }
@@ -1829,8 +1832,10 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = 
     })
     .catch(async (error) => {
       const reason = error instanceof Error ? error.message : String(error)
-      const terminal = /timed out|did not become ready/i.test(reason)
-      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error, terminal)) }
+      // Missing native identity is a deterministic terminal launch failure. Once identity exists, readiness is
+      // only an adapter liveness warning: do not overwrite lifecycle/proposal or emit a parent-watch transition.
+      const terminal = /native identity and first-turn rollout receipt did not arrive/i.test(reason)
+      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error, terminal, terminal)) }
       catch (recordError) {
         console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${reason}`)
       }
@@ -1937,7 +1942,8 @@ async function drainQueueUnlocked(): Promise<void> {
         // before any queue/watch work so a backend restart cannot resurrect the old active/limbo projection.
         if (rec.status !== 'queued' && /^queued launch readiness failed:/.test(rec.note || '') && (rec.status !== 'error' || !rec.stopped)) {
           const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
-          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(session.id, priorReason))
+          const terminal = /native identity and first-turn rollout receipt did not arrive/i.test(priorReason)
+          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(session.id, priorReason, terminal, terminal))
           continue
         }
         // A pre-fix active row may still carry the authoritative launch artifact without a timestamp. Its

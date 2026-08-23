@@ -243,6 +243,13 @@ async function withLedgerLock<T>(root: string, body: () => Promise<T>): Promise<
   finally { releaseLedgerLock(root, owner) }
 }
 
+// Codex accepts only a bounded amount of concurrent thread/start work. The generation ledger lock is already
+// the cross-process project mutex with exact stale-owner recovery, so use it for native thread admission too.
+// This keeps launch serialization in the runtime owner rather than making callers invent their own queue.
+export async function withCodexGenerationMutex<T>(root: string, body: () => Promise<T>): Promise<T> {
+  return withLedgerLock(root, body)
+}
+
 function withLedgerLockSync<T>(root: string, body: () => T): T {
   const owner = acquireLedgerLockSync(root)
   try { return body() }
@@ -759,4 +766,20 @@ export async function reclaimDrainingCodexGeneration(
     writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations, bindings: previous.bindings })
     return { reclaimed: true, reason: 'exact drained generation reclaimed after zero-reference census' }
   })
+}
+
+// Startup/rotation callers use this sweep to make stale generation cleanup a property of the shared runtime
+// owner. The census remains adapter-supplied and fail-closed; a missing or unhealthy descriptor is retained.
+export async function reclaimDrainingCodexGenerations(
+  root: string,
+  census: (endpoint: CodexGenerationEndpoint) => Promise<{ healthy: boolean; referenceIds: string[]; peerCount: number }>,
+): Promise<Array<{ generationId: string; reclaimed: boolean; reason: string }>> {
+  const generations = readCodexGenerationLedger(root).generations
+  const results: Array<{ generationId: string; reclaimed: boolean; reason: string }> = []
+  for (const [generationId, generation] of Object.entries(generations)) {
+    if (generation.state !== 'draining') continue
+    const result = await reclaimDrainingCodexGeneration(root, generationId, census)
+    results.push({ generationId, ...result })
+  }
+  return results
 }

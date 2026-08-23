@@ -3,11 +3,21 @@ import { join } from 'node:path'
 import {
   openProjectSessionApplication,
   migrateJsonSessionRecords,
+  type CommittedSessionChange,
   type ProductionSessionApplication,
 } from '@spexcode/session-application'
 import { requireLocalDatabasePath, resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { runtimeRoot } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
+
+// The application store is the durable state writer, while the board stream is the live delivery owner.
+// Keep the seam here as a tiny observer instead of importing graphStream (which imports sessions and would
+// create a cycle). The observer is installed by the HTTP composition before the first request is served.
+let committedObserver: ((result: CommittedSessionChange) => void) | undefined
+
+export function setSessionApplicationCommitObserver(observer: ((result: CommittedSessionChange) => void) | undefined): void {
+  committedObserver = observer
+}
 
 let cached: ProductionSessionApplication | undefined
 let freshStoreOwned = false
@@ -21,6 +31,11 @@ export function configuredSessionApplication(): ProductionSessionApplication {
   cached = openProjectSessionApplication({
     databasePath,
     locality: path => { requireLocalDatabasePath(path) },
+    onCommitted: result => {
+      // Legacy record publication follows the canonical transaction synchronously. Defer the board nudge
+      // until that publication has completed, otherwise a fast graph rebuild can read the old lifecycle row.
+      if (committedObserver) setImmediate(() => committedObserver?.(result)).unref()
+    },
   })
   return cached
 }

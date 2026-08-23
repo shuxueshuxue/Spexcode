@@ -8,7 +8,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig, readAliasedRawRecord } from '@spexcode/spec-core'
+import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig, readAliasedRawRecord, runtimeRoot } from '@spexcode/spec-core'
 import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
 import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
@@ -23,7 +23,8 @@ import { cockpitReview } from './cockpit.js'
 import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
-import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
+import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
+import { reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { TranscriptReadError } from './transcript-reader.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
 import { putBlob } from '@spexcode/spec-eval/cache'
@@ -44,7 +45,7 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplicationIfCutover, setSessionApplicationCommitObserver } from './session-application.js'
 import { editSpecBody, readSpecBodyEdit, SpecBodyEditError } from './spec-body-edit.js'
 
 installEvalHost()
@@ -55,6 +56,9 @@ installProcessGuards()
 startWorktreeTrashReaper()
 
 const app = new Hono()
+// Canonical lifecycle commits do not touch a watched JSON file. Bridge those commits into the existing board
+// stream so status/proposal/parent changes arrive without waiting for a later human send or delivery tick.
+setSessionApplicationCommitObserver(() => notifyBoardChanged('sessions'))
 startUploadReaper()
 app.use('/api/*', cors())
 app.onError((error, c) => {
@@ -1015,6 +1019,22 @@ const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' })
 installConnectionReaper(server as unknown as HttpServer)
 injectWebSocket(server)
+// Reclaim only stale, draining Codex generations whose exact detached identity and native reference census
+// prove they have no loaded threads. The current generation and any uncertain/shared process remain intact.
+try {
+  const root = runtimeRoot()
+  const descriptors = new Map((codexHarness.sharedRuntimes?.(root) ?? []).map((descriptor) => [descriptor.key, descriptor]))
+  const results = await reclaimDrainingCodexGenerations(root, async (endpoint) => {
+    const key = endpoint.id === 'legacy' ? 'codex-app-server' : `codex-app-server:${endpoint.id}`
+    const residency = descriptors.get(key)?.residency
+    if (!residency) return { healthy: false, referenceIds: [], peerCount: 0 }
+    const result = await residency()
+    return { healthy: result.healthy, referenceIds: result.referenceIds, peerCount: 0 }
+  })
+  for (const result of results) if (result.reclaimed) console.log(`[codex] reclaimed stale generation ${result.generationId}`)
+} catch (error) {
+  console.error(`[codex] stale generation sweep retained resources: ${(error as Error).message}`)
+}
 superviseBridges()   // restore visible helpers after failure; their viewer subscriptions survive replacement
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTurnFailures() // reconcile adapter-owned native failure subscriptions across backend replacement

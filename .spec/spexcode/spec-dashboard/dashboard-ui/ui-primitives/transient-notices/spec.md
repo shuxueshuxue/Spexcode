@@ -35,17 +35,17 @@ keyboard-focused, and resumes only after both have left, so readable copy is not
 interacting with it. A close or expiry removes only that notice; separate actions remain a compact newest-last
 stack rather than overwriting one another.
 
-The viewport is fixed to the dashboard edge, above page content and below modal/popup layers. Its calm,
+The viewport is fixed to the dashboard's **top-right** edge, above page content and below modal/popup layers. Its calm,
 single-row Obsidian-like grammar is the existing palette: a small semantic icon, concise text, and a familiar
-close icon in a lightly raised, theme-native surface. The newest notice occupies the stable bottom edge; later
-notices grow the sequence upward with a tight, consistent gap and matching width. The stack is bounded to half
+close icon in a lightly raised, theme-native surface. The first notice occupies the stable top edge; later
+notices grow the sequence downward with a tight, consistent gap and matching width. The stack is bounded to half
 the viewport height for bursts, scrolls when necessary, and pins new feedback into view instead of covering the
 whole working surface. Notices with an expiry also show a two-pixel semantic-color progress rule along their
 bottom edge; it is the visual lifecycle cue only, with no remaining-time label. The rule pauses and resumes with
 the notice timer while hovered or keyboard-focused, and is omitted for persistent notices. It uses dashboard CSS
 variables only, including the existing unified type scale; a theme flip reskins it without component logic. On
-narrow screens it respects the safe edges, uses the available width, and sits above the fixed phone tab bar rather
-than covering a thumb-reachable navigation control.
+narrow screens it respects the safe top and right edges, uses the available width, and remains in the top half
+rather than covering a thumb-reachable navigation control.
 
 This is a completion/failure surface, not a substitute for state. A control that is actively posting keeps
 its local disabled/busy state, and a form error that a person must repair stays next to that form. Once an

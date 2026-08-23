@@ -18,6 +18,8 @@ import { EVAL_QUERY_DEFAULT, setToken } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
 import ProseActions from './ProseActions.jsx'
 import { useSpecContent } from './specContent.js'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 export { useSpecContent } from './specContent.js'
 
@@ -59,18 +61,45 @@ const pageFilterModel = (data, t) => {
 // op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
 const OP_GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
-// minimal inline markdown the spec bodies use — `code`, **bold**, [[links]]; anything else is plain text (no markdown dep)
+const safeUrl = (value) => /^(?:https?:|mailto:|#)/i.test(String(value || '')) ? String(value) : null
+
+const mathHtml = (source, display = false) => {
+  try {
+    return katex.renderToString(source, { throwOnError: false, strict: 'ignore', displayMode: display })
+  } catch {
+    return null
+  }
+}
+
+// Inline Markdown for the body slice. [[id]] stays a held document anchor; ordinary links/images and
+// formulas use the same authored meaning without changing the line-level provenance around their block.
 function inline(text) {
   const out = []
-  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]/g
+  const re = /!\[([^\]]*)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|\[([^\]]+)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]|(?<!\$)\$([^$\n]+?)\$(?!\$)|\\\(([^\n]+?)\\\)/g
   let last = 0, m, k = 0
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index))
-    if (m[1] != null) out.push(<code key={k++}>{m[1]}</code>)
-    else if (m[2] != null) out.push(<strong key={k++}>{m[2]}</strong>)
+    if (m[1] != null) {
+      const src = safeUrl(m[2])
+      if (src) out.push(<img className="doc-image" key={k++} src={src} alt={m[1]} title={m[3] || undefined} />)
+      else out.push(m[1])
+    } else if (m[4] != null) {
+      const href = safeUrl(m[5])
+      if (href) out.push(<a className="doc-link doc-external" key={k++} href={href} target="_blank" rel="noreferrer">{m[4]}</a>)
+      else out.push(m[4])
+    } else if (m[7] != null) out.push(<code key={k++}>{m[7]}</code>)
+    else if (m[8] != null) out.push(<strong key={k++}>{m[8]}</strong>)
     else {
-      const href = routeHash('spec', m[3])
-      out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[3]}</a>)
+      if (m[9] != null) {
+        const href = routeHash('spec', m[9])
+        out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[9]}</a>)
+      } else {
+        const source = m[10] ?? m[11]
+        const rendered = mathHtml(source)
+        out.push(rendered
+          ? <span className="doc-math" key={k++} data-math-source={source} dangerouslySetInnerHTML={{ __html: rendered }} />
+          : <span className="doc-math-error" key={k++}>{source}</span>)
+      }
     }
     last = re.lastIndex
   }
@@ -129,8 +158,44 @@ export function SpecBody({ body, lineBase = 0 }) {
       while (i < lines.length && !/^```/.test(lines[i].trim())) buf.push(lines[i++])
       i++ // closing fence
       out.push(<pre className="doc-pre" key={k++} {...at(from, Math.min(i, lines.length) - 1)}><code>{buf.join('\n')}</code></pre>)
+    } else if (/^(?:\$\$|\\\[)/.test(t)) {
+      const open = t.startsWith('$$') ? '$$' : '\\['
+      const close = open === '$$' ? '$$' : '\\]'
+      const first = lines[i].trim().slice(open.length)
+      const buf = []
+      let end = -1
+      if (first.endsWith(close) && first.length > close.length) {
+        buf.push(first.slice(0, -close.length)); end = i
+      } else {
+        buf.push(first); i++
+        while (i < lines.length) {
+          const value = lines[i].trim()
+          const atClose = value.lastIndexOf(close)
+          if (atClose >= 0 && value.slice(atClose + close.length).trim() === '') {
+            buf.push(value.slice(0, atClose)); end = i; break
+          }
+          buf.push(value); i++
+        }
+      }
+      if (end >= 0 && buf.join('\n').trim()) {
+        const source = buf.join('\n').trim()
+        const rendered = mathHtml(source, true)
+        out.push(rendered
+          ? <div className="doc-math-block" key={k++} {...at(from, end)} data-math-source={source} dangerouslySetInnerHTML={{ __html: rendered }} />
+          : <pre className="doc-math-error" key={k++} {...at(from, end)}>{source}</pre>)
+        i = end + 1
+      } else {
+        // An unclosed display marker is ordinary readable prose, not a swallowed block.
+        i = from
+        const bufText = []
+        while (i < lines.length && lines[i].trim() !== '') bufText.push(lines[i++])
+        out.push(<p key={k++} {...at(from, i - 1)}>{inline(bufText.join(' '))}</p>)
+      }
     } else if (/^#{1,6}\s+/.test(lines[i])) {
-      out.push(<h4 className="doc-h" key={k++} {...at(from, from)}>{inline(lines[i].replace(/^#+\s+/, ''))}</h4>); i++
+      const heading = lines[i].match(/^(#{1,6})\s+(.+)$/)
+      const level = heading[1].length
+      const Heading = `h${level}`
+      out.push(<Heading className={`doc-h doc-h-level doc-h${level}`} key={k++} {...at(from, from)}>{inline(heading[2])}</Heading>); i++
     } else if (t.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) {
       const head = tableCells(lines[i])
       const aligns = tableCells(lines[i + 1]).map(colAlign)
@@ -147,6 +212,14 @@ export function SpecBody({ body, lineBase = 0 }) {
           ))}</tbody>
         </table>
       )
+    } else if (/^>\s?/.test(t)) {
+      const quote = []
+      while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+        quote.push({ text: lines[i].trim().replace(/^>\s?/, ''), line: i }); i++
+      }
+      out.push(<blockquote className="doc-quote" key={k++} {...at(from, i - 1)}>
+        <p>{quote.map((part, j) => <span key={j} {...at(part.line, part.line)}>{j ? <br /> : null}{inline(part.text)}</span>)}</p>
+      </blockquote>)
     } else if (/^-\s+/.test(t)) {
       // each item is stamped on its own: a list is one block to the tokenizer but a reader selects one
       // bullet, and the smallest addressable region should be the smallest thing the renderer can name.

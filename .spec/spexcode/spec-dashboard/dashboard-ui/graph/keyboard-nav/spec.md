@@ -50,6 +50,13 @@ A **game controller** drives this same registry from **inside the page** — [[g
 
 ## principles
 
+**Camera rule (current).** Arrow nav, mouse click, and programmatic jumps all use [[node-graph]]'s reading-pair
+anchor: focus→nearest child midpoint at the `43%` canvas token, or parent↔focus midpoint for a leaf, with the
+focus row on the vertical axis. If the visible bbox already fits at the current zoom, the camera fits it with
+one left gutter instead; it does not zoom a wide deep frontier out just to force this exception.
+The existing smooth transition remains, and graph-space coordinates are untouched.
+The older centre-framing bullet below is historical wording; this camera rule is authoritative.
+
 - **Move by relationship, not geometry.** Navigation walks the parent / child / column structure (see [[node-graph]]), never pixel distance: up/down within the focus column, left to the parent, right to the nearest child. The one exception is a leaf's right key — with no child below it, it steps to the nearest node in the columns to its right, in grid cells (column and row gaps weigh equally) and only rightward, so the parent key walks back.
 - **The camera follows the keyboard, not the mouse.** Arrow nav flat-pans onto the new node at constant zoom, never zoom-to-fit. A **mouse click re-focuses and drills the clicked node open**; if the frontier re-plots, that clicked tile stays at its pre-click screen position and the camera absorbs the layout delta, so the world does not jump under the pointer. Only a keyboard move — or a **programmatic jump** (search, board-stats, a session row) onto a possibly-offscreen node — pans the camera to frame the target.
 - **While the keyboard drives, the mouse steps aside.** A nav keystroke puts the board in *keyboard mode*: the cursor hides and the board takes no pointer events — suppression that reaches into React Flow's own node/edge layers, which otherwise re-enable pointers — so a still cursor can't fire a hover affordance (the issue popover, any future hover reveal). The focused node's own popover still shows — a focus reveal, not hover. Only a real pointer move exits the mode, not a pan under a still cursor.

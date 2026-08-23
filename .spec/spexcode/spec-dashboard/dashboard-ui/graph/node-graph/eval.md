@@ -82,6 +82,10 @@ scenarios:
 ---
 # eval.md — node-graph
 
+Current camera measurements supersede older centre-framing readings: assert the focus→child midpoint at the
+`43%` horizontal token (or parent↔focus for a leaf), with the focus row vertically. When the visible bbox fits,
+assert fit-left with one grid-column gutter instead.
+
 This view is product surface — it is measured by **looking** (YATU), not by a unit test: the agent opens
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,

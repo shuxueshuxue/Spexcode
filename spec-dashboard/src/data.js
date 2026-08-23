@@ -7,6 +7,57 @@ import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAP
 // the spine node in the previous column are evenly spaced around that parent's y. A later column therefore
 // never contributes row budget to an earlier one.
 export const X_GAP = 280, Y_GAP = 54
+
+// The reading anchor intentionally sits left of the geometric centre so the child column remains in view.
+// Keep this as a token: tuning the reading balance must not change graph coordinates.
+export const CAMERA_ANCHOR_RATIO = 0.43
+// One layout column plus a small tile breathing room keeps the root in the requested 35–48% reading band
+// on the measured desktop pane while still reading as a single left gutter.
+export const CAMERA_GUTTER = X_GAP + 16
+
+/**
+ * Return the viewport that frames a focus using the reading-pair anchor.
+ * `visible` contains graph-space node centres; node dimensions are supplied separately because React Flow
+ * measures them after mount while the layout is already stable.
+ */
+export function viewportForFocus({
+  focus, parent = null, child = null, visible = [], width, height, zoom,
+  minZoom = 0.4, maxZoom = 1.6, tileWidth = 176, tileHeight = 50,
+  anchorRatio = CAMERA_ANCHOR_RATIO, gutter = CAMERA_GUTTER, fit = true,
+}) {
+  if (!focus || width <= 0 || height <= 0) return { x: 0, y: 0, zoom }
+
+  const points = visible.length ? visible : [focus]
+  const minX = Math.min(...points.map((node) => node.x - tileWidth / 2))
+  const maxX = Math.max(...points.map((node) => node.x + tileWidth / 2))
+  const minY = Math.min(...points.map((node) => node.y - tileHeight / 2))
+  const maxY = Math.max(...points.map((node) => node.y + tileHeight / 2))
+  const contentWidth = Math.max(1, maxX - minX)
+  const contentHeight = Math.max(1, maxY - minY)
+
+  // A complete neighbourhood gets the whole pane, with one column of breathing room at the left edge.
+  // The zoom remains within React Flow's bounds; a graph wider than the pane falls through to the anchor.
+  const currentFits = Number.isFinite(zoom)
+    && contentWidth * zoom <= width - gutter
+    && contentHeight * zoom <= height
+  const fitZoom = Math.min(maxZoom, (width - gutter) / contentWidth, height / contentHeight)
+  if (fit && currentFits && fitZoom >= minZoom && contentWidth * fitZoom <= width - gutter && contentHeight * fitZoom <= height) {
+    return {
+      x: gutter - minX * fitZoom,
+      y: (height - contentHeight * fitZoom) / 2 - minY * fitZoom,
+      zoom: fitZoom,
+    }
+  }
+
+  const pair = child || parent
+  const anchorX = pair ? (focus.x + pair.x) / 2 : focus.x
+  return {
+    x: width * anchorRatio - anchorX * zoom,
+    y: height / 2 - focus.y * zoom,
+    zoom,
+  }
+}
+
 export function layout(nodes, expanded) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })

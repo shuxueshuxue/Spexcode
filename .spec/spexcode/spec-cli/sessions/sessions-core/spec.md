@@ -162,6 +162,11 @@ claiming launch is still in progress. A backend restart reconciles every durable
 launch residue: a live registered runtime gets its readiness observer rebuilt without replaying the first turn;
 an expired or provably dead residue is failed closed with the same terminal record. No launch residue may remain
 an indefinitely in-progress row.
+An explicit successful `session resume` is a new runtime attempt, not a continuation of a terminal launch or turn
+failure: it clears the prior `error` lifecycle and its failure note, publishes the resumed conversation as `idle`
+until a real activity hook makes it `active`, and never leaves an online worker represented as `error`. Waiting
+declarations (`asking`, `parked`, or an `awaiting` proposal) remain waiting declarations when resumed; only the
+terminal error state is reset by this explicit recovery operation.
 During the one-time JSON-to-application cutover, a legacy active record may still lack a native harness session
 identity and runtime binding. Dispatch does not strand that record behind a false `ok`: the record's adapter-owned
 rendezvous transport remains its exact legacy identity, so the canonical queue may drain through that transport and

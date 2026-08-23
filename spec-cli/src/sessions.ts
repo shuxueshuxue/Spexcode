@@ -3023,7 +3023,11 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
 }
 
 type ResumeOptions = { force?: boolean; guard?: boolean }
-const restingLifecycle = (status: Lifecycle): Lifecycle => status === 'active' || status === 'queued' ? 'idle' : status
+// An explicit successful resume is a new runtime attempt. A prior terminal launch/turn error must not
+// survive that handoff as current lifecycle truth; waiting declarations remain waiting declarations.
+const restingLifecycle = (status: Lifecycle): Lifecycle =>
+  status === 'active' || status === 'queued' || status === 'error' ? 'idle' : status
+const resumeNote = (status: Lifecycle, note: string | null): string | null => status === 'error' ? null : note
 
 const archiveRef = (id: string): string => `refs/spex-archive/${id}`
 
@@ -3146,7 +3150,15 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // Archived sessions have no runtime by invariant. Resume first leaves cold storage, then the normal
   // starting -> online launch path recreates the same conversation.
   const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, closedAt: null, stopped: true, coldProof: null }) : wt.rec
-  const resumed: SessRec = { ...current, archived: false, closedAt: null, coldProof: null, status: restingLifecycle(current.status), stopped: false }
+  const resumed: SessRec = {
+    ...current,
+    archived: false,
+    closedAt: null,
+    coldProof: null,
+    status: restingLifecycle(current.status),
+    note: resumeNote(current.status, current.note),
+    stopped: false,
+  }
   if (force || lv === 'offline') {
     let resumeTail: string
     try { resumeTail = h.resumeArg(wt.rec, readLaunchFile(id)).trim() }
@@ -3175,6 +3187,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
       closedAt: null,
       coldProof: null,
       status: restingLifecycle(latest.status),
+      note: resumeNote(latest.status, latest.note),
       stopped: false,
       launchReadinessPending: launchReadinessPending(preResume),
     }

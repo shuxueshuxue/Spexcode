@@ -1796,9 +1796,13 @@ export function canonicalWatchRecipients(
 
 export function sessionHasPendingDelivery(
   id: string,
-  application: Pick<ProductionSessionApplication, 'protocol'> | null = configuredSessionApplicationIfCutover() ?? null,
+  application: Pick<ProductionSessionApplication, 'protocol'>
+    & Partial<Pick<ProductionSessionApplication, 'resolveRuntime'>>
+    | null = configuredSessionApplicationIfCutover() ?? null,
 ): boolean {
   if (!application) return owesDelivery(id)
+  const runtime = application.resolveRuntime?.(id, 'spex-governed')
+  if (runtime === null) return false
   try {
     return application.protocol.listPending(id).length > 0
   } catch (error) {

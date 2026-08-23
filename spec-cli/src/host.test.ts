@@ -150,6 +150,56 @@ test('reconcile validates instance identity and keeps the durable catalog explic
   } finally { ok.server.close(); bad.server.close(); restarted?.server.close() }
 })
 
+test('reconcile keeps the catalog alive when one project config is unreadable', async () => {
+  const home = freshHome('reconcile-unreadable-config')
+  const repos = join(home, 'repos')
+  const healthy = join(repos, 'healthy')
+  const unreadable = join(repos, 'unreadable')
+  mkdirSync(healthy, { recursive: true })
+  mkdirSync(join(unreadable, 'spexcode.json'), { recursive: true })
+  writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [
+    { root: healthy, addedAt: 'x' },
+    { root: unreadable, addedAt: 'x' },
+  ] }))
+
+  const list = await reconcileProjects()
+  const byRoot = new Map(list.map((project) => [project.root, project]))
+  assert.equal(byRoot.has(healthy), true, 'a healthy project remains listed')
+  assert.equal(byRoot.get(unreadable)?.online, false, 'an unreadable project degrades to offline')
+  assert.deepEqual(byRoot.get(unreadable)?.identity, { title: 'unreadable', icon: 'spexcode' })
+})
+
+test('GET /projects stays available when one cataloged config is unreadable', async () => {
+  const home = freshHome('gw-unread')
+  const repos = join(home, 'repos')
+  const healthy = join(repos, 'healthy')
+  const unreadable = join(repos, 'unreadable')
+  mkdirSync(healthy, { recursive: true })
+  mkdirSync(join(unreadable, 'spexcode.json'), { recursive: true })
+  writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [
+    { root: healthy, addedAt: 'x' },
+    { root: unreadable, addedAt: 'x' },
+  ] }))
+  const dist = mkdtempSync(join(tmpdir(), 'spex-host-unreadable-dist-'))
+  writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
+  const port = await new Promise<number>((resolve) => {
+    const server = net.createServer()
+    server.listen(0, '127.0.0.1', () => {
+      const value = (server.address() as net.AddressInfo).port
+      server.close(() => resolve(value))
+    })
+  })
+  const gateway = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
+  await new Promise<void>((resolve) => gateway.server.once('listening', () => resolve()))
+  await gateway.ready
+  try {
+    const listed = await getJson(`http://127.0.0.1:${port}/projects`)
+    assert.equal(listed.status, 200)
+    assert.equal(listed.body.projects.some((project: any) => project.root === healthy), true)
+    assert.equal(listed.body.projects.find((project: any) => project.root === unreadable)?.online, false)
+  } finally { await gateway.close() }
+})
+
 test('addKnownProject normalizes to the main checkout and requires a git repo', () => {
   freshHome('catalog')
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-repo-'))

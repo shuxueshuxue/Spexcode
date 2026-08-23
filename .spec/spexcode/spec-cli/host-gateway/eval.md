@@ -22,7 +22,10 @@ scenarios:
       returns directory metadata without file contents. A plain folder enters only after explicit Git
       initialization; requested setup runs the real `spex init`, and a failed init returns its transcript
       without writing the catalog. `/projects`, stream, scoped HTTP/WS, TLS, registration, raw config, and
-      shell routing retain their auth and transport contracts.
+      shell routing retain their auth and transport contracts. If one cataloged project's portable config
+      is unreadable, reconciliation logs an actionable warning, keeps that project as an offline/default
+      row, and still returns the other projects with HTTP 200; the strict raw-config endpoint continues
+      to report the underlying read error.
     related: [spec-cli/src/supervise.ts, spec-cli/src/gateway-hub.ts, spec-cli/src/host.test.ts]
 ---
 # measuring host-gateway

@@ -94,6 +94,11 @@ export function readCatalog(): CatalogEntry[] {
   }
 }
 
+// A single project may temporarily be unreadable (for example, macOS privacy controls can deny an
+// iCloud-backed path). That is a project-local condition, so it must not take down the host catalog for
+// every other project. Keep the warning actionable without emitting it on every catalog poll.
+const configReadWarnings = new Set<string>()
+
 function writeCatalog(entries: CatalogEntry[]): void {
   if (existsSync(catalogPath())) {
     try { JSON.parse(readFileSync(catalogPath(), 'utf8')) }
@@ -228,9 +233,12 @@ export async function reconcileProjects(): Promise<ProjectEntry[]> {
     const projectId = encodeProject(root)
     if (byId.has(projectId)) return   // encodeProject is lossy; first root wins a (pathological) collision
     const active = live.get(root) ?? null
-    const source = readProjectConfig(root)
+    const source = readProjectConfigForReconcile(root)
     let identity: ResolvedIdentity
-    try { identity = active?.identity ?? resolveProjectIdentity(root, root) }
+    try {
+      identity = active?.identity
+        ?? (source.readable ? resolveProjectIdentity(root, root) : { title: basename(root), icon: DEFAULT_PROJECT_ICON })
+    }
     catch (e) {
       console.error(`[host] cannot resolve identity for ${root}: ${(e as Error).message}`)
       identity = { title: basename(root), icon: DEFAULT_PROJECT_ICON }
@@ -381,6 +389,20 @@ function readProjectConfig(root: string): ProjectConfigSource {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { content: '{}\n', revision: configRevision(null) }
     throw e
+  }
+}
+
+function readProjectConfigForReconcile(root: string): ProjectConfigSource & { readable: boolean } {
+  try { return { ...readProjectConfig(root), readable: true } }
+  catch (e) {
+    const error = e as NodeJS.ErrnoException
+    const detail = error?.message || String(e)
+    const key = `${root}\0${error?.code || ''}\0${detail}`
+    if (!configReadWarnings.has(key)) {
+      configReadWarnings.add(key)
+      console.error(`[host] cannot read project config for ${root}: ${detail} — listing it with default settings`)
+    }
+    return { content: '{}\n', revision: configRevision(null), readable: false }
   }
 }
 

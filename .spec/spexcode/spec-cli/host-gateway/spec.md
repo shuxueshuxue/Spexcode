@@ -35,6 +35,12 @@ recycled port now serving something else, or a record copied into the wrong stor
 equal `encodeProject(root)`) all fail the match and degrade to "offline project" — never a proxy to the
 wrong backend.
 
+The reconciler is also failure-isolated per project: if a cataloged root's `spexcode.json` cannot be read
+(including a temporary filesystem or privacy-permission error), that root is retained as an offline row
+with default identity/config projection and an actionable host warning. One unreadable checkout never
+turns the whole `GET /projects` catalog into a 500; strict config reads and writes for that project's
+settings surface continue to report their own filesystem error.
+
 **`spex dashboard` is [[gateway-hub]] plus the host registry — one gateway, one seam, nothing duplicated.**
 The hub owns routing, `/p/:projectId/*` proxying (HTTP/SSE/WS, prefix-stripped, gateway cookies
 stripped), and every authorization decision ([[gateway-auth]]: admin scope implicit from

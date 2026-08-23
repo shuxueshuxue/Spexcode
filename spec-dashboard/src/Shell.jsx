@@ -28,6 +28,7 @@ import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useLaunchers } from './launch.js'
 import { HARNESS_BY_ID } from './harness.jsx'
+import Legend from './Legend.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -482,8 +483,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     }
   }, [sessions, notify, t])
   const documentNames = useDocumentNames()
-  const { dock, dockMode, palette } = useWorkspace()
-  const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  const { dock, dockMode, palette, helpOpen } = useWorkspace()
+  const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode, splitTo } = useWorkspaceApi()
   // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
   // explorer docked, opening it leaves the spec prose 383px — under a readable measure, and it takes the
   // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the
@@ -540,6 +541,18 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       if (event.key === 'Escape') { event.preventDefault(); closePalette(); return true }
       return false
     }
+    if (helpOpen) {
+      if (event.key === 'Escape' || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key))) {
+        event.preventDefault(); closeHelp(); return true
+      }
+      if (event.key === 'j' || event.key === 'k' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const body = document.querySelector('.legend-body')
+        if (body) body.scrollTop += (event.key === 'j' || event.key === 'ArrowDown' ? 120 : -120)
+        return true
+      }
+      return true
+    }
     if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
     // [[keyboard-nav]]'s native-control restraint, kept across the hoist to the shell scope: while real
     // DOM focus sits in a typing context — an input, a textarea (the session composer, xterm's helper),
@@ -547,6 +560,10 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     // comma, never navigate to settings. Modifier-carrying chords (the ⌥ page jumps) still pass.
     if (!event.altKey && !event.ctrlKey && !event.metaKey
       && event.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return false
+    // Help is shell chrome, not a graph-only action. Native typing contexts still own a literal '?'.
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key)) {
+      event.preventDefault(); closePalette(); toggleHelp(); return true
+    }
     if (event.altKey && !event.metaKey && !event.ctrlKey) {
       const pageOf = [
         ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],
@@ -596,7 +613,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       return true
     }
     return false
-  }, [closePalette, dockKind, dockMode, graphOnly, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
+  }, [closeHelp, closePalette, dockKind, dockMode, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, toggleHelp, contextOpen])
   useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
   // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review
@@ -628,6 +645,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
+        {helpOpen && <Legend onClose={closeHelp} />}
         <SideBar page={page} needsYou={needsYou} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">

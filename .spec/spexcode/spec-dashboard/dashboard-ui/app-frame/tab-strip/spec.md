@@ -160,8 +160,9 @@ self-limiting: the current-slot-per-kind rule means the strip only grows when so
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 
-**Width has two explicit regimes.** In the normal regime the tab row is `nowrap`: each tab is a content-sized flex
-item clamped to an 80px minimum and a 240px maximum; the active tab keeps a 112px readability floor. The label,
+**Width has two explicit regimes.** In the normal regime the tab row is `nowrap`: each tab is content-sized,
+shrinking toward the 80px minimum when the row overflows, and clamped to a 240px maximum; the active tab keeps a
+112px readability floor. The label,
 status mark and permanently allocated 24px close control determine the preferred width, and the right edge contains
 only that control's normal padding. A short final row therefore keeps its real empty space instead of stretching
 short labels into dead chrome. One `ResizeObserver` watches the tablist and adds `.wrapped` only when

@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: unreadable-project-config-keeps-catalog
+    tags: [backend-api, cli]
+    test:
+      path: spec-cli/src/host.test.ts
+      name: GET /projects stays available when one cataloged config is unreadable
+    description: >-
+      Run the host gateway against an isolated catalog containing a healthy project and a project whose
+      portable `spexcode.json` cannot be read. Request the real `/projects` endpoint through the hub.
+    expected: >-
+      The endpoint answers HTTP 200. The healthy project remains listed, while the unreadable project is
+      retained as an offline row with default identity/config projection and one actionable warning; the
+      unreadable project never turns the host catalog into an internal error.
   - name: host-reconcile-and-proxy
     tags: [backend-api, cli]
     test:

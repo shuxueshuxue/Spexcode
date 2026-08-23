@@ -574,6 +574,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui);
 }
 .tab-label { width: max-content; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-kind-icon { flex: 0 0 13px; }
 .tab-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 2px; }
 .tab-spinner { flex: 0 0 auto; color: var(--blue); animation: tab-spin .9s linear infinite; font-style: normal; }
 @keyframes tab-spin { to { transform: rotate(360deg); } }
@@ -595,7 +596,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   .tab-x { padding-right: var(--space-2); }
 }
 @container (max-width: 100px) {
-  .tab-dot, .tab-spinner { display: none; }
+  .tab-kind-icon, .tab-dot, .tab-spinner { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab, .tab.tab-closing, .tab-x { animation: none; transition: none; }

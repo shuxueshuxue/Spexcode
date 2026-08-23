@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8')
 const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
+const views = readFileSync(new URL('./views.jsx', import.meta.url), 'utf8')
+const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
@@ -38,7 +40,18 @@ test('resident review tabs share the workspace strip while Issues removes the ac
   // Evals, Issues, and Settings are resident tabs. Issues is the focused full-width reading surface; its
   // detail still has the shared strip, while the activity rail is intentionally omitted.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
-  assert.match(sideBar, /<Icon name=\{page\} size=\{18\} \/>/)
+  assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
   assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} \/>/)
   assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
+})
+
+test('resident tabs and the activity rail share view-owned page icons', () => {
+  for (const [page, icon] of [['evals', 'evals'], ['issues', 'issues'], ['settings', 'settings']]) {
+    assert.match(views, new RegExp(`${page}:\\s+\\{[^\\n]*resident: true, icon: '${icon}'`))
+  }
+  assert.match(views, /export const iconFor = \(page\) => viewRegistry\.get\(page\)\?\.icon \|\| null/)
+  assert.match(source, /const icon = isResident\(tab\.page\) \? iconFor\(tab\.page\) : null/)
+  assert.match(source, /<TabKindIcon tab=\{tab\} \/>[\s\S]{0,100}<TabDot tab=\{tab\}/)
+  assert.match(css, /\.tab-kind-icon\s*\{[^}]*flex:\s*0 0 13px;/s)
+  assert.match(css, /@container \(max-width:\s*100px\)\s*\{[^}]*\.tab-kind-icon, \.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
 })

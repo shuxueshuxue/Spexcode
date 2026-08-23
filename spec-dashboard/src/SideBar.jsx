@@ -5,6 +5,7 @@ import { RAIL_PAGES, navigate, routeHash } from './route.js'
 import { focusLatestTab } from './tabs.js'
 import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { iconFor } from './views.jsx'
 
 // The workspace's rail ([[side-nav]]) — an ACTIVITY BAR, not a page menu. Two kinds of entry, in this
 // order: the dock's two PROJECTION buttons (explorer/sessions — they change what helps you look, and are
@@ -60,7 +61,7 @@ function DockToggle() {
 function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0 }) {
   if (disabled) return (
     <span className="rail-btn disabled" data-tip={label} aria-label={label} aria-disabled="true">
-      <Icon name={page} size={18} />
+      <Icon name={iconFor(page) || page} size={18} />
       {badge > 0 && <span className="rail-badge" aria-label={`${badge} needs you`}>{badge > 99 ? '99+' : badge}</span>}
     </span>
   )
@@ -83,7 +84,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
         if (!handled) navigate(page)
       }}
     >
-      <Icon name={page} size={18} />
+      <Icon name={iconFor(page) || page} size={18} />
       {badge > 0 && <span className="rail-badge" aria-label={`${badge} needs you`}>{badge > 99 ? '99+' : badge}</span>}
     </a>
   )

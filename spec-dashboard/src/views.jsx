@@ -83,17 +83,17 @@ function SettingsView() { return <Settings /> }
 export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
   // sends anyone through the rail or a tab close.
-  graph:    { component: GraphView,    surface: 'workspace', document: false, className: 'view-graph' },
-  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-spec' },
-  file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-file' },
+  graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
+  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'graph', className: 'view-spec' },
+  file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
-  sessions: { component: SessionsView, surface: 'workspace', document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
+  sessions: { component: SessionsView, surface: 'workspace', document: (_page, param) => param != null && param !== 'new', icon: 'sessions', className: 'view-sessions' },
   // Findings share the workspace shell. `resident` makes the bare top-level address the one tab identity;
   // `tabModel.tabRoute` collapses detail selectors onto it without losing the detail route in the URL.
-  evals:    { component: EvalsView,    surface: 'workspace', document: true, resident: true, className: 'view-evals' },
-  issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, className: 'view-issues' },
-  settings: { component: SettingsView, surface: 'workspace', document: true, resident: true, className: 'view-settings' },
+  evals:    { component: EvalsView,    surface: 'workspace', document: true, resident: true, icon: 'evals', className: 'view-evals' },
+  issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, icon: 'issues', className: 'view-issues' },
+  settings: { component: SettingsView, surface: 'workspace', document: true, resident: true, icon: 'settings', className: 'view-settings' },
   empty:    { component: EmptyView,    surface: 'workspace', document: false, className: 'view-empty' },
 })
 
@@ -106,6 +106,7 @@ export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
 
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
+export const iconFor = (page) => viewRegistry.get(page)?.icon || null
 export const isDocument = (page, param = null) => {
   const view = viewRegistry.get(page)
   return typeof view?.document === 'function' ? view.document(page, param) : !!view?.document

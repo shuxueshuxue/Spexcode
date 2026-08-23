@@ -12,6 +12,7 @@ import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
+import { iconFor, isResident } from './views.jsx'
 
 const resourceLabel = (url) => {
   try {
@@ -83,6 +84,14 @@ function TabDot({ tab, specs, sessions }) {
     return color ? <i className="tab-dot" style={{ background: color }} /> : null
   }
   return null
+}
+
+// Resident destinations keep one stable workspace identity while their URL selects a list or detail.
+// Their icon therefore comes from the same view definition as the activity rail, instead of a second
+// tab-only page map. Object documents keep their own status marker below.
+function TabKindIcon({ tab }) {
+  const icon = isResident(tab.page) ? iconFor(tab.page) : null
+  return icon ? <Icon name={icon} size={13} className="tab-kind-icon" /> : null
 }
 
 // WHERE AM I is the same question whether or not a document is open, so the strip answers it in both cases:
@@ -228,6 +237,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
             <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
               onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
+              <TabKindIcon tab={tab} />
               <TabDot tab={tab} specs={specs} sessions={sessions} />
               <span className="tab-label">{tabLabel}</span>
             </button>

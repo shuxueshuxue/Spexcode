@@ -84,8 +84,16 @@ opened, its catalog menu is anchored to that button's own slot, opening upward f
 sharing its left edge, and shrinking to the viewport when the window is narrow.
 On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
 its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
-pass/fail, unmeasured); the deduped open-issue total; and live sessions split into self-driving and
-waiting-on-you. Beside them ride the document's own facts: the routed file's path when
+pass/fail, unmeasured); the deduped open-issue total; and live sessions grouped by the configured
+`sessions.launchers` names. Each launcher group leads with the harness mark from the shared icon vocabulary
+and renders a compact `running/needs-you/other` slash tally using the existing green/yellow/muted status
+tokens. Only launchers with at least one session render. Records whose launcher is null, hidden, or no longer
+configured are counted in one `other` group instead of being dropped. Every group opens the sessions console, and its tooltip names the launcher and all three tally
+meanings. At compact desktop widths the launcher list hides as one unit and a single clickable aggregate
+KDA badge takes its place, so the slash tally can never be clipped between digits. Named launcher profiles
+that share a harness mark carry a small profile-initial badge (for example `R` and `C`) so icon-only mode
+still distinguishes them. When any session needs the human, the sessions ledger item also carries the
+existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the routed file's path when
 [[file-view]] is the document, the session console's unread-resource signal, the public-graph disclosure.
 
 **The tallies are the workspace's, and the shell registers them.** They are true of the window on every
@@ -100,9 +108,11 @@ gain [[graph-stats]]'s focus-walk: repeated clicks cycle the counted node ring a
 issue/eval categories open their boards and node categories enter the graph on a matching node. Thus every
 number remains a door without creating a second owner or tying ownership to a mounted view's lifetime.
 
-At a 1440px viewport the complete right group is at most one third of the window (480px), with every digit
-still rendered and actionable. Density comes from one occurrence of each fact and compact glyph/count
-pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
+At every viewport the right group uses the available inline space without a hard viewport fraction or clipping
+overflow. Existing board, eval, and issue ledgers remain complete and actionable; launcher groups are
+non-overlapping fixed-content units, and compact widths swap the whole launcher list for one aggregate
+badge before any slash digit can be cut. Density comes from one occurrence of each fact and compact
+glyph/count pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
 icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves
 the last verdict.
 

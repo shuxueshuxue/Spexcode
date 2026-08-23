@@ -3,7 +3,7 @@ import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import DiffDocument from './DiffDocument.jsx'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionFooterState, sessionHeadline } from './session.js'
+import { sessionFooterState, sessionForest, sessionHeadline } from './session.js'
 import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
@@ -41,6 +41,7 @@ import { useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
+import { expandSessionFolds, toggleSessionFold, useSessionListState } from './sessionListState.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -563,6 +564,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // content mode: 'new' or a session id. The archive index is a transient overlay.
   const active = validIds.has(sel) ? sel : 'new'
   const sessionActive = active !== 'new'
+  // The console stays mounted when the dock is hidden, so its keyboard router needs the same visible
+  // forest the dock renders. The disclosure store is shared with Dock; pointer and keyboard paths therefore
+  // never drift into two competing fold states.
+  const { expanded, offlineOpen } = useSessionListState()
+  const sessionForestRows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
+    zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
+    keepVisible: (session) => session.id === active,
+  }), [sessions, expanded, offlineOpen, active])
+  const sessionOrder = useMemo(() => ['new', ...sessionForestRows
+    .filter((item) => item.type === 'row')
+    .map((item) => item.s.id)], [sessionForestRows])
+  const foldableSessionIds = useMemo(() => new Set(sessionForestRows
+    .filter((item) => item.type === 'row' && item.expandable)
+    .map((item) => item.s.id)), [sessionForestRows])
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. App gates Dashboard on
   // a loaded board, so `sessions` here is the REAL set — an id absent from it is genuinely gone (a dead deep
@@ -1416,7 +1431,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const stateRef = useRef({})
   stateRef.current = {
     active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-    commandAvailable, setCommandOpen, closeCommandBox,
+    commandAvailable, setCommandOpen, closeCommandBox, sessionOrder, expanded, foldableSessionIds,
   }
   // The console's whole keyboard contract, registered as ONE service scope (priority 10 — above the
   // shell's globals, below any modal). Consumption is signalled the way the branches always did — via
@@ -1426,7 +1441,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const onKey = (e) => {
       const {
         active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-        commandAvailable, setCommandOpen, closeCommandBox,
+        commandAvailable, setCommandOpen, closeCommandBox, sessionOrder, expanded, foldableSessionIds,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       if (e.target?.closest?.('[data-focus-overlay]')) return // a transient modal owns its focused control's native keys
@@ -1448,6 +1463,30 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
       if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
+      // Option+Shift is the disclosure grammar for the selected session. Consume it even for a leaf or an
+      // already-matching state: otherwise the ordinary Option+Arrow session move would run immediately after
+      // a no-op and the key would appear to change selection. The Dock observes the same shared fold store.
+      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault(); e.stopPropagation()
+        if (foldableSessionIds.has(active)) {
+          if (e.key === 'ArrowDown' && !expanded.has(active)) expandSessionFolds([active])
+          if (e.key === 'ArrowUp' && expanded.has(active)) toggleSessionFold(active)
+        }
+        return
+      }
+      // Option+Arrow is the unconditional session switch: it works while xterm, a composer, or inert chrome
+      // owns focus. Use the visible forest order so a folded child never becomes a hidden navigation target.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault(); e.stopPropagation()
+        let index = sessionOrder.indexOf(active)
+        if (index < 0) index = 0
+        const next = Math.max(0, Math.min(sessionOrder.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)))
+        if (sessionOrder[next] !== active) {
+          if (onPickSession) onPickSession(sessionOrder[next])
+          else setSel(sessionOrder[next])
+        }
+        return
+      }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
       if (menu) {
@@ -1458,6 +1497,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       }
       if (commandOpen && e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation(); closeCommandBox(); return
+      }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        // Plain arrows remain native in xterm and editable composers. Inert console chrome (including the
+        // conversation reading surface) uses the same visible order as the modifier route.
+        if (e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'INPUT' || e.target?.isContentEditable) return
+        e.preventDefault(); e.stopPropagation()
+        let index = sessionOrder.indexOf(active)
+        if (index < 0) index = 0
+        const next = Math.max(0, Math.min(sessionOrder.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)))
+        if (sessionOrder[next] !== active) {
+          if (onPickSession) onPickSession(sessionOrder[next])
+          else setSel(sessionOrder[next])
+        }
+        return
       }
       if (e.key === 'Enter' && !e.shiftKey && !composingKey(e) && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
     }

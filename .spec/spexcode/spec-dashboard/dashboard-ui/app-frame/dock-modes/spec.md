@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/styles.css
 ---
 # dock-modes

@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/sessionSurface.js
+  - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/harness.jsx
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css

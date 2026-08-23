@@ -4674,8 +4674,13 @@ export async function drainSession(id: string): Promise<void> {
     const rec = readRecord(id)
     if (!rec) return
     const binding = application.resolveRuntime(id, 'spex-governed')
-    if (!binding || binding.status !== 'bound') return
     const h = harnessById(rec.harness || defaultHarness.id)
+    // Records created before the one-time application cutover have neither a runtime start token nor a
+    // native session id. Their harness rendezvous socket is still the exact transport identity, so they
+    // must remain reachable without inventing a binding for a native runtime we cannot identify. New
+    // records never take this path: a missing binding there is a launch/ownership failure and stays fail-closed.
+    const legacyTransport = !rec.runtimeStartToken && !rec.harnessSessionId && !rec.stopped && !rec.archived
+    if ((!binding || binding.status !== 'bound') && !legacyTransport) return
     await withDeliveryLocks([id], async () => {
       for (;;) {
         const pending = application.protocol.listPending(id)
@@ -4689,7 +4694,9 @@ export async function drainSession(id: string): Promise<void> {
         }
         const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
         if (!delivered.ok) return
-        const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration)
+        const removed = binding && binding.status === 'bound'
+          ? application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration)
+          : application.protocol.dequeue(id)
         if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
       }
     })

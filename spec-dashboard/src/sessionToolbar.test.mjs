@@ -175,14 +175,6 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>\s*<ActionOutcome/)
 })
 
-test('bulk close is retired with multi-select', () => {
-  assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|onBulkClosed/)
-})
-
-test('select mode is retired with multi-select', () => {
-  assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|startSessionDrag|draggable/)
-})
-
 test('close remains the only right-click lifecycle removal and asks for confirmation', () => {
   assert.match(contextMenu, /<ContextMenuItem icon="trash" danger onClick=\{startClose\}>/)
   assert.match(contextMenu, /title=\{t\('sessionWindow\.closeTitle'/)

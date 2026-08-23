@@ -525,15 +525,6 @@ export default {
     attachCopied: '已复制',
   },
 
-  // 多选栏中的受控生命周期动作（[[session-multi-select]]）。
-  sessionSelect: {
-    selected: ({ n }) => `已选 ${n} 个`,
-    drag: '拖到另一个会话以设为其子会话',
-    close: '关闭',
-    closeTitle: ({ n }) => `关闭 ${n} 个会话？`,
-    closeConfirm: '这将关闭每个选中的会话并删除其工作树。任何未提交的更改都会丢失。',
-  },
-
   lockHint: {
     cycleBefore: '按 ',
     cycleNext: ' 下一个',

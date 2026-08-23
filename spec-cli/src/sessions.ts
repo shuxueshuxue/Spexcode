@@ -4802,6 +4802,30 @@ export async function drainSession(id: string): Promise<void> {
     if (!rec) return
     const binding = application.resolveRuntime(id, 'spex-governed')
     if (!binding || binding.status !== 'bound') {
+      // Claude's TUI has no native conversation id to bind. Preserve the legacy rendezvous identity (the
+      // governed tmux session) while the record is missing a harness session id, then acknowledge the same
+      // canonical queue directly. Codex and records with a binding problem remain fail-closed.
+      if (rec.harness === 'claude' && !rec.harnessSessionId) {
+        const h = harnessById(rec.harness || defaultHarness.id)
+        await withDeliveryLocks([id], async () => {
+          for (;;) {
+            const pending = application.protocol.listPending(id)
+            const msg = pending[0]
+            if (!msg) return
+            const text = canonicalMessageText(msg, rec)
+            if (h.deliveryBlockedBy) {
+              try {
+                if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+              } catch { /* no pane to consult — let the adapter decide */ }
+            }
+            const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
+            if (!delivered.ok) return
+            const removed = application.protocol.dequeue(id)
+            if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+          }
+        })
+        return
+      }
       throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
     }
     const h = harnessById(rec.harness || defaultHarness.id)

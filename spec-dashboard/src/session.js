@@ -104,6 +104,15 @@ export function nestSessions(sessions) {
   return { roots, childrenOf }
 }
 
+// A parent that is present but in another display zone is rendered as a root by nestSessions. Keep that
+// existing wire relationship visible to the dock without inventing a replacement parent or ancestry.
+export function crossZoneParent(sessions, session) {
+  const parentId = session?.parent
+  if (!parentId || parentId === session?.id) return null
+  const parent = (sessions || []).find((candidate) => candidate?.id === parentId)
+  return parent && sessionZone(parent) !== sessionZone(session) ? parent : null
+}
+
 // Present ancestors of one session, nearest first. This mirrors nestSessions' rule that a missing parent
 // makes its child a root, and bounds malformed cycles so an external jump can safely reveal the row.
 export function sessionAncestorIds(sessions, id) {

@@ -72,7 +72,8 @@ the status published by `/api/sessions` is ground truth. `asking`/`review`/`done
 needs-you; `working`/`queued` and other active values form running; `offline`/`retired` form offline; archived
 records form the fourth archive zone and use the muted archive mark (`○`). Liveness never overrides the status,
 so a dead review or asking session stays in needs-you with its lifecycle glyph. Parentage follows the stored
-relationship and does not split when liveness changes. The header's `+` navigates to `sessions/new` and its archive
+relationship across all status zones: a child never leaves its parent. **Glyph ≡ the session's own status; zone ≡
+the family's root status.** The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
@@ -82,7 +83,11 @@ keeps the route-selected row visible and highlighted. An active row in the folde
 well; the reveal is derived from `activeSessionId`, not a second selection state.
 
 Historical correction: `2486cb152` made liveness dominate the package status and moved dead review/asking rows
-into offline. That overcorrection is revoked. 人类判词：“不要再新增机制…把这套状态改对,因为它原来就是对的,只不过写了一堆屎山把对的搞错了。”
+into offline. That overcorrection is revoked. Human ruling restored: “我们的显示模式一直都只看 parent session
+是不是 running。就算你这个是 needs you 状态,它也应该放在那个 running 的 parent session 底下,而不是自己跳到上面去、
+再加一个回到 parent 的链接。我们本来完全没有这套机制的…给我狠狠的删!” This replaces the earlier cross-zone
+root split and the `○`-out-of-zone prohibition; `nestSessions` follows only the stored parent relationship,
+with no guard and no upward parent link.
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim

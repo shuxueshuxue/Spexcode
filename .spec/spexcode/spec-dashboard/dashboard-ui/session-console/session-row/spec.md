@@ -34,7 +34,9 @@ the ground truth: the dashboard renders its `status` and maps that value directl
 are **running**; `offline`/`retired` are **offline**; archived records are the fourth **archive** zone and use
 the muted archive mark (`○`). A dead process does not rewrite a retained review or asking status, so it remains
 visible in needs-you with its lifecycle glyph and liveness only as secondary row detail. Parentage follows the
-stored parent relationship; the dashboard does not split a tree because a process changed liveness.
+stored parent relationship; every present child remains under its present parent regardless of either session's
+status or liveness. The family sits in the root's zone: **glyph ≡ the session's own status; zone ≡ the
+family's root status**.
 
 Historical correction: the `2486cb152` offline-zone projection made liveness dominate the package status. That
 overcorrection is revoked: 人类判词是“不要再新增机制…把这套状态改对,因为它原来就是对的,只不过写了一堆屎山把对的搞错了。”
@@ -45,11 +47,11 @@ activity from `opSummary`, which folds an op list into per-op counts using the s
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.
 
-When the dock has a root row whose existing wire `parent` is present in the board but belongs to another
-display zone, the row keeps that relationship visible with a muted `↑<parent handle>` mark. The handle is
-truncated in the row and carries the full parent name as its tooltip; clicking it navigates to the parent
-session document. Same-zone nesting has no mark because its rails already express the relationship. The
-dashboard never derives a replacement parent when the wire field is absent.
+Human ruling restored here: “我们的显示模式一直都只看 parent session 是不是 running。就算你这个是 needs you 状态,
+它也应该放在那个 running 的 parent session 底下,而不是自己跳到上面去、再加一个回到 parent 的链接。我们本来完全没有这套机制的…给我狠狠的删!”
+This replaces the two earlier partition rulings — cross-zone root splitting and the `○`-out-of-zone prohibition
+that forced a child into a separate bucket. There is no cross-zone parent guard and no parent-return link: the
+stored parent relationship is the only nesting input, and the root alone chooses the family's zone.
 
 **The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
 face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current

@@ -1175,11 +1175,6 @@ a.scenario-count:hover { background: var(--panel2); }
 /* row 1, the headline: the session's live self-summary (or prompt placeholder). flex:1 eats the line so the
    ever-changing tmux task description has room; min-width:0 lets the ellipsis engage in a flex child. */
 .sess-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sess-parent-mark {
-  flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--muted); font-size: var(--type-meta); font-weight: var(--weight-regular); cursor: pointer;
-}
-.sess-parent-mark:hover { color: var(--ink2); text-decoration: underline; }
 .sess-lock { font-size: var(--type-caption); flex: none; line-height: var(--leading-none); filter: saturate(0); }
 .sess-meta {
   /* rendered before the headline in source (SessionRow) but kept visually LAST by order:1 in every flex

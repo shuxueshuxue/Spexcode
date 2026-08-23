@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './views.jsx'
 import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
@@ -115,9 +115,11 @@ export function focusLatestTab(match) {
   return true
 }
 
-export function useTabs() {
+export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)
+  const onCloseStartRef = useRef(onCloseStart)
+  useEffect(() => { onCloseStartRef.current = onCloseStart }, [onCloseStart])
   useEffect(() => {
     listeners.add(setTabs)
     setTabs(getTabs())
@@ -146,6 +148,7 @@ export function useTabs() {
     const prev = getTabs()
     const i = prev.findIndex((t) => tabKey(t) === key)
     if (i < 0) return
+    onCloseStartRef.current?.(tab)
     const next = prev.filter((_, n) => n !== i)
     putTabs(next)
     if (key === activeKey) {
@@ -156,7 +159,9 @@ export function useTabs() {
 
   const closeOthers = useCallback((tab) => {
     const key = tabKey(tab)
-    putTabs(getTabs().filter((t) => tabKey(t) === key))
+    const prev = getTabs()
+    prev.filter((t) => tabKey(t) !== key).forEach((closingTab) => onCloseStartRef.current?.(closingTab))
+    putTabs(prev.filter((t) => tabKey(t) === key))
     if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
   }, [activeKey])
 

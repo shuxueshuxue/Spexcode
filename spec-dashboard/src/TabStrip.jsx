@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
@@ -119,7 +119,20 @@ export function placeLabel(route, ctx) {
 
 export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const t = useT()
-  const { tabs, activeKey, open, close, closeOthers, move } = useTabs()
+  const [closing, setClosing] = useState([])
+  const startTabClose = useCallback((tab) => {
+    const key = tabKey(tab)
+    setClosing((current) => {
+      if (current.some((entry) => entry.key === key)) return current
+      const index = tabsRef.current.findIndex((item) => tabKey(item) === key)
+      return [...current, { key, tab, index }]
+    })
+    const duration = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 150
+    window.setTimeout(() => setClosing((current) => current.filter((entry) => entry.key !== key)), duration)
+  }, [])
+  const tabsRef = useRef([])
+  const { tabs, activeKey, open, close, closeOthers, move } = useTabs({ onCloseStart: startTabClose })
+  tabsRef.current = tabs
   const names = useDocumentNames()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
@@ -192,8 +205,10 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
     <div className="tabstrip">
       <div className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
-      {tabs.map((tab, index) => {
+      {[...tabs, ...closing.filter((entry) => !tabs.some((tab) => tabKey(tab) === entry.key))
+        .sort((a, b) => a.index - b.index).map((entry) => entry.tab)].map((tab, index) => {
         const key = tabKey(tab)
+        const isClosing = closing.some((entry) => entry.key === key) && !tabs.some((item) => tabKey(item) === key)
         const active = key === activeKey
         const tabLabel = label(tab, { specs, sessions, names, t })
         // the insertion marker rides the tab the moved one would land in front of — or, for the end of the
@@ -202,22 +217,23 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
         const marks = `${drag?.key === key ? ' tab-moving' : ''}${drag?.before === key ? ' tab-drop-before' : ''}`
           + `${drag && drag.before === null && index === tabs.length - 1 ? ' tab-drop-after' : ''}`
         return (
-          <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${tab.pinned ? '' : ' slot'}${marks}`}
+          <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${tab.pinned ? '' : ' slot'}${isClosing ? ' tab-closing' : ''}${marks}`}
             role="tab" aria-selected={active} aria-grabbed={drag?.key === key || undefined}
-            onMouseDown={(e) => startTabDrag(e, tab)}
+            aria-hidden={isClosing ? 'true' : undefined}
+            onMouseDown={(e) => { if (!isClosing) startTabDrag(e, tab) }}
             onDoubleClick={(e) => {
               if (!tab.pinned && !e.target.closest('.tab-x')) pinTab(tab.page, tab.param, tab.query)
             }}
-            onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab, key }) }}
-            onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); close(tab) } }}>
+            onContextMenu={(e) => { if (isClosing) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab, key }) }}
+            onAuxClick={(e) => { if (!isClosing && e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
             <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
-              onClick={(e) => (e.altKey ? splitTo(tab) : open(tab))}>
+              onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
               <TabDot tab={tab} specs={specs} sessions={sessions} />
               <span className="tab-label">{tabLabel}</span>
             </button>
-            <button type="button" className="tab-x" onClick={() => close(tab)} aria-label={t('tabs.close')}>
+            <button type="button" className="tab-x" onClick={() => { if (!isClosing) close(tab) }} aria-label={t('tabs.close')}>
               <Icon name="x" size={11} />
             </button>
           </div>

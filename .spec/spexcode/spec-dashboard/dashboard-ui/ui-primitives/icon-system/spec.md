@@ -42,7 +42,9 @@ the accessible name impossible to forget.
   [[icon-presets]] registry because the same data must serialize into browser favicons. That one renderer
   is the deliberate sibling to the chrome glyph vocabulary; pages still never hand-write SVG variants.
 - **Review state never falls back to text glyphs.** [[review-chrome]]'s ONE data mapping composes this
-  registry's Primer issue pair with Lucide circle-check/circle-x/circle-minus/circle-dashed verdict marks.
+  registry's Primer issue pair with solid-ring circle-check/circle-x for current verdicts, dashed-ring
+  circle-check/circle-x for stale verdicts, and circle-minus/circle-dashed for empty/missing. Fresh and
+  stale therefore never reuse one shape with only colour or tooltip carrying the semantic difference.
   The same mapping feeds eval list, detail status, and every A/B selector, plus issue list/detail. ListView
   state marks share a normalized 16-grid outer ring and optical stroke with the Primer pair, then
   [[review-chrome]] places them in one fixed box — domain/state changes never shift a row. ListView

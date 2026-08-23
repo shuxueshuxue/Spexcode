@@ -232,7 +232,9 @@ export default {
     restore: '恢复隐藏的状态项',
     // 环境态的看板计数；每一项本身就是它命名的那扇门。
     nodes: ({ n }) => `${n} 个规格节点 —— 已合并 · 进行中 · 漂移 · 待建。打开节点图`,
-    evals: ({ pass, fail }) => `新鲜评测：${pass} 通过，${fail} 失败 —— 打开评测看板`,
+    evals: ({ pass, fail, stalePass, staleFail, empty }) =>
+      `评测场景：${pass} 最新通过，${fail} 最新失败，${stalePass} 过期通过，${staleFail} 过期失败，${empty} 未测量`,
+    openEvals: '打开 Evals 看板',
     issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
     sessions: ({ run, need }) => `${run} 个在跑，${need} 个等你 —— 打开会话面板`,
   },
@@ -587,9 +589,8 @@ export default {
     },
   },
 
-  // 左下角的看板统计条 —— 把节点徽章在整棵树上「计数」（去重的不同对象，而非徽章求和），唯独覆盖度按「场景」计数（评测损失的真实单位）。每个小块的悬停说明标明它统计什么；点击会沿其背后的节点逐个走查（每点一次走到下一个）。
+  // shell 账本的 graph 走查：节点徽章按不同对象计数，覆盖度按场景计数。
   stats: {
-    aria: '看板统计',
     totalTitle: ({ n }) => `树中共有 ${n} 个规格节点`,
     statusTitle: ({ n, status }) => `${n} 个${status} —— 点击逐个走查`,
     driftTitle: ({ n }) => `${n} 个节点的代码领先于其规格 —— 点击逐个走查`,

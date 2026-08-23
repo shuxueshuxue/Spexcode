@@ -86,8 +86,9 @@ pick). A denied global catalog is handled by that same shell-level credential ca
 page mounts, so the denied probe is not repeated by a second page instance. A `/p/<id>/` shell contains only project-owned views and never mounts the page or advertises its
 management controls in the rail. The old direct `/p/<id>/#/projects` address remains a compatibility door:
 arrival performs one full-page redirect to `/projects`, leaving no duplicate in-shell admin route behind.
-The rail's current-project chip and catalog-backed switcher remain the scoped project's one project-changing
-control. The switcher reflects instance-validated liveness: online (or legacy/unknown) rows remain
+The status bar's compact project identity button is the scoped project's one project-changing control;
+the rail carries no duplicate chip. Its catalog-backed switcher reflects instance-validated liveness:
+online (or legacy/unknown) rows remain
 switchable links, while an offline row is visibly stopped and non-navigable; the global `/projects` row is
 the repair door for starting it. As a document-shaped global face, `/projects` consumes [[page-scroll]] directly: the page shell
 defines the full viewport while the shared primitive owns its inset scrollbar, one-axis overflow, and
@@ -104,8 +105,8 @@ card's locked variant is a dead end by design, naming the loopback repair path. 
 401 strikes in-app; an admin session bypasses project prompts because the admin cookie authorizes every
 `/p/*` route server-side. A direct-project guest never sees the catalog or any global management control:
 the probe is denied, so the switcher menu is absent and the project shell exposes only its current-project
-identity and project-owned pages — absence of data, not a hidden element. The current-project chip remains
-an explicit `/projects` login door when that catalog is denied, but never opens a fleet menu or leaks rows.
+identity and project-owned pages — absence of data, not a hidden element. The status-bar identity button
+remains an explicit `/projects` login door when that catalog is denied, but never opens a fleet menu or leaks rows.
 A denied catalog is an answered state: its five-second refresh pauses until the credential card reports an
 unlock, so an unauthenticated browser does not hammer an already-denied route.
 

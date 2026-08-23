@@ -128,3 +128,8 @@ before, simply unstamped.
 Inline `[[id]]` references emitted by this renderer are document anchors, not decoration: they point to
 `#/spec/<id>` and use [[tab-strip]]'s hold gesture for Ctrl/Command-click. The popup and full document
 therefore expose the same plain navigation contract.
+
+The current body slice also keeps ordinary Markdown visible as its authored structure: ATX headings retain
+their level (`h1` through `h6`), blockquotes remain quoted blocks, standard HTTP(S) links are real anchors,
+and Markdown images remain bounded to the body width. These forms share the same line stamps as the blocks
+that contain them; unsupported or malformed markup remains escaped readable prose.

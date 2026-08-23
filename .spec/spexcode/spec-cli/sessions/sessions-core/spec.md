@@ -82,7 +82,9 @@ the canonical application row is the lifecycle fact and always wins the public p
 not update the envelope bytes. A retired protocol address is likewise not delivery debt: the retry sweep
 must drop that impossible lookup rather than polling and logging it forever.
 An existing queue with no bound governed runtime is also retained but not polled; binding/resume is the event
-that makes it drainable again. Canonical acceptance is still successful in this state: the caller is told
+that makes it drainable again. The application emits the ordinary post-commit delivery wake after a runtime
+binding is durable, so a queue accepted before native readiness drains without a later human message or
+dashboard poll. Canonical acceptance is still successful in this state: the caller is told
 `delivery: queued` after the SQLite message commit, rather than receiving a false append failure because the
 post-commit drain correctly refused an unbound runtime.
 Creation and

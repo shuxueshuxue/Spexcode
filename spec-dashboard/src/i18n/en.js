@@ -742,6 +742,7 @@ export default {
     tabTerminal: 'terminal',
     tabConversation: 'conversation',
     tabDiff: 'diff',
+    surfaceSwitcher: 'session surface',
     enableTerminalInput: 'enable terminal input',
     terminalInputEnabled: 'terminal input enabled — click the terminal to focus it',
     diffLoading: 'loading diff…',

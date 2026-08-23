@@ -731,6 +731,7 @@ export default {
     tabTerminal: '终端',
     tabConversation: '对话',
     tabDiff: '差异',
+    surfaceSwitcher: '会话视图',
     enableTerminalInput: '允许终端输入',
     terminalInputEnabled: '终端输入已允许 —— 再点击终端以聚焦',
     diffLoading: '正在加载差异……',

@@ -3050,9 +3050,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
 
-/* [[transient-notices]]: fixed feedback belongs above page content, but yields to menus and modals. */
+/* [[transient-notices]]: fixed feedback belongs at the top-right, above page content, but yields to menus and modals. */
 .tn-viewport {
-  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 50;
+  position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); bottom: auto; z-index: 50;
   display: flex; flex-direction: column; gap: 6px; width: min(400px, calc(100vw - 32px)); max-block-size: min(50dvh, 32rem);
   overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: thin;
 }
@@ -3083,7 +3083,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @keyframes tn-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tn-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 640px) {
-  .tn-viewport { right: max(10px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); }
+  .tn-viewport { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); bottom: auto; width: min(440px, calc(100vw - 20px)); }
 }
 @media (prefers-reduced-motion: reduce) { .tn-notice, .tn-progress { animation: none; } .tn-progress { transform: scaleX(1); } }
 

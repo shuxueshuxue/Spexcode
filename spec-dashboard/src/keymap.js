@@ -19,11 +19,10 @@ export const ACT = [
   { id: 'graph.cycleRev',  keys: ['O'],      rebind: true, desc: 'legend.graph.overlayCycle' },
   { id: 'graph.fresh',     keys: ['['],      rebind: true, desc: 'legend.graph.fresh' },
   { id: 'graph.evals',     keys: ['f'],      rebind: true, desc: 'legend.graph.evals' },
-  // node chords — structural (a two-key grammar, not a single binding)
-  // The handler consumes the leader first, then the repeated key. Keep the leader in `keys` for dispatch and
-  // expose the complete fixed sequence to help/settings so the reader sees nn/dd, never the misleading n/d.
-  { id: 'graph.newChild',  keys: ['n'],      display: ['nn'], rebind: false, desc: 'legend.graph.newChild' },
-  { id: 'graph.del',       keys: ['d'],      display: ['dd'], rebind: false, desc: 'legend.graph.del' },
+  // node chords — structural (a two-key grammar, not a single binding). `keys` is the leader that starts
+  // the state machine; `sequence` is the complete physical grammar used by dispatch and every reader.
+  { id: 'graph.newChild',  keys: ['n'], sequence: ['n', 'n'], rebind: false, desc: 'legend.graph.newChild' },
+  { id: 'graph.del',       keys: ['d'], sequence: ['d', 'd'], rebind: false, desc: 'legend.graph.del' },
   // modals
   { id: 'graph.settings',  keys: [','],      rebind: true, desc: 'legend.graph.settings' },
   { id: 'graph.help',      keys: ['?'],      rebind: true, desc: 'legend.graph.help' },
@@ -79,9 +78,14 @@ export const keyCap = (k) => {
   return parts.map((mod) => MOD_GLYPH[mod] || `${mod}+`).join('') + capOne(key)
 }
 
-// Structural chords have a display sequence that is longer than their dispatch leader. Rebindable actions
-// must always display the live resolved keys instead, otherwise a localStorage override silently disappears
-// from both the legend and Settings.
+const byId = Object.fromEntries(ACT.map((action) => [action.id, action]))
+
+// A structural chord has one leader for the state machine and a complete sequence for its readers. Keeping
+// this lookup beside ACT means dispatch cannot silently grow a second spelling of the same gesture.
+export const chordSequence = (id) => byId[id]?.sequence || []
+
+// Structural chords display their complete sequence. Rebindable actions display the live resolved keys,
+// otherwise a localStorage override silently disappears from both the legend and Settings.
 export const displayKeysOf = (action, resolved = null) => action?.rebind
   ? (resolved || action.keys || [])
-  : (action?.display || action?.keys || [])
+  : (action?.sequence ? [action.sequence.join('')] : (action?.keys || []))

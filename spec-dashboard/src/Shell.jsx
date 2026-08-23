@@ -21,6 +21,7 @@ import { nextGraphStatNode } from './GraphStats.jsx'
 import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
+import { useEscLayer } from './escStack.js'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
@@ -187,6 +188,7 @@ function ShellStatus() {
   const t = useT()
   const { identity, catalog } = useBoard()
   const [open, setOpen] = useState(false)
+  useEscLayer(open, () => setOpen(false))
   const catalogOk = catalog?.state === 'ok'
   const denied = catalog?.state === 'denied'
   const projects = catalogOk ? catalog.projects : null
@@ -198,14 +200,9 @@ function ShellStatus() {
     const onDown = (event) => {
       if (!event.target.closest?.('[data-status-project], .status-project-menu')) setOpen(false)
     }
-    const onKey = (event) => {
-      if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) }
-    }
     document.addEventListener('mousedown', onDown, true)
-    window.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('mousedown', onDown, true)
-      window.removeEventListener('keydown', onKey, true)
     }
   }, [open])
 

@@ -401,12 +401,7 @@ function SessionEvalStats({ summary }) {
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
-  useEffect(() => {
-    if (!pop) return
-    const onKey = (e) => { if (e.key === 'Escape') setPop(false) }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [pop])
+  useEscLayer(pop, () => setPop(false))
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
   const selected = launchers.find((l) => l.name === launcher)

@@ -463,16 +463,10 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .content-close { position: absolute; top: 4px; right: 6px; z-index: 3; display: inline-flex; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); cursor: pointer; }
 .content-close:hover { color: var(--ink2); border-color: var(--blue); }
 
-/* [[spec-view]] — the document: prose on the left, the code it governs on the right, both on open. */
+/* [[spec-view]] — the document is full-width prose; files open at their own address. */
 .specview { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .specview-prose { flex: 1; min-width: 0; overflow: auto; padding: 0 4px 0 0; scrollbar-gutter: stable; }
 .specview-prose .pane-doc { padding: 18px 22px 28px; }
-.specview-split { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .5; }
-.specview-split:hover { opacity: 1; background: var(--blue); }
-.specview-code { flex: 0 0 auto; min-width: 0; max-width: 58%; display: flex; flex-direction: column; border-left: 1px solid var(--edge); background: var(--paper); }
-.specview-code .srcview { flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; }
-.specview-code .srcview-body { height: auto; flex: 1; min-height: 0; }
-.specview-code .srcview { display: flex; flex-direction: column; }
 
 /* [[file-view]] — a governed file addressed on its own. */
 .fileview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -938,14 +932,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-gov-files { display: flex; flex-wrap: wrap; gap: 5px; }
 .gov-f { font-family: var(--mono); font-size: var(--type-meta); color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: var(--radius); cursor: pointer; }
 .gov-f:hover { border-color: var(--blue); }
-.gov-f.on { background: color-mix(in srgb, var(--blue) 18%, var(--panel2)); border-color: var(--blue); color: var(--ink2); }
 .doc-gov.prose .doc-gov-h { font-style: italic; }
 /* [[node-attachments]] — the rest of the node's folder, sharing the governed-file chip so a reader learns
    one affordance, not two, for opening what a node holds. */
 .doc-att { margin-top: -8px; }
 .doc-att .gov-f { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 22%, var(--line)); }
-.doc-att .gov-f:hover, .doc-att .gov-f.on { border-color: var(--cyan); }
-.doc-att .gov-f.on { background: color-mix(in srgb, var(--cyan) 16%, var(--panel2)); color: var(--ink2); }
+.doc-att .gov-f:hover { border-color: var(--cyan); }
 
 /* [[source-view]]: a governed file opened in place, under the prose that claims it. Bounded height — it is
    a reading window inside the spec pane, never a curtain that buries the body below it. */

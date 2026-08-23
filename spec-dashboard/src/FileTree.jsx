@@ -78,7 +78,8 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
-              onClick={() => navigate('spec', node.id)} />
+              onClick={(e) => (e.ctrlKey || e.metaKey ? pinTab : navigate)('file', `.spec/${node.id}/${f.name}`)}
+              onDoubleClick={() => pinTab('file', `.spec/${node.id}/${f.name}`)} />
           ))}
           {children.map((c) => (
             <NodeRow key={c.id} node={c} depth={depth + 1} kids={kids} focusId={focusId} onOpenFile={onOpenFile} />

@@ -2,7 +2,7 @@
 title: source-view
 status: active
 hue: 200
-desc: The read-only face of a governed source file — a virtualising editor component over [[source-read]]'s windows, wired to the board's own palette.
+desc: The read-only face of a file document — a virtualising editor over governed-source or node-attachment windows, wired to the board's own palette.
 code:
   - spec-dashboard/src/SourceView.jsx
 related:
@@ -14,8 +14,9 @@ related:
 ---
 # source-view
 
-The component that renders a governed file. It pulls [[source-read]]'s windows and shows them; it cannot
-write.
+The component that renders a file document. It pulls windows from either [[source-read]] or the node
+attachment reader and shows them; it cannot write. SpecView never mounts this component automatically:
+the file address and tab are the only source surface.
 
 **Why an editor engine for a read-only view.** Because virtualisation is the whole problem and nothing else
 solves it. Measured: CodeMirror renders a 200,000-line document in about 30 ms with roughly 86 DOM nodes,

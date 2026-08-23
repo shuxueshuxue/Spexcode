@@ -5,11 +5,12 @@ import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
-import { fetchNodeFiles, fetchNodeFileSlice, loadPublicSpecContent, specUrl } from './data.js'
+import { fetchNodeFiles, loadPublicSpecContent, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
-import SourceView from './SourceView.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
+import { holdAnchor } from './tabs.js'
+import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
@@ -227,75 +228,61 @@ export function useSpecContent(id, version, { embedded = false, publicGraph = fa
   return content
 }
 
-// The `code:` list stops being a list of NAMES and becomes a list of DOORS: a governed file opens in place,
-// under the spec prose that claims it, in the same scroll. A separate tab would have put the claim and the
-// claimed thing on two screens again — the exact separation this is meant to close. One file open at a time,
-// so the pane stays a reading surface rather than a stack of viewers competing for height.
-// A `viewer` is a place the document already has to PUT a file — the spec document's code column. Given
-// one, these chips address it; without one (the popup, the phone) they expand a viewer of their own. Either
-// way the claim is listed exactly once, inside the prose that makes it, and never repeated as a picker strip
-// welded above the code.
-function GovernedFiles({ files, count, onSelection, viewer }) {
+// The `code:` list is a row of file doors. The claim stays in the spec prose, while the bytes live at the
+// file's own address. Plain clicks remain ordinary anchors so the workspace slot semantics stay in tabs.js;
+// ctrl/⌘ uses the same hold helper as the explorer.
+function GovernedFiles({ files, count }) {
   const t = useT()
-  const [open, setOpen] = useState(null)
   // a `code:` entry may name a SYMBOL inside a file (`SpecNode.jsx#SpecNode`) — several entries then point
-  // at one file. The chip keeps the claim's own wording; the door behind it is the file.
+  // at one file. The chip keeps the claim's own wording; the door is the file address.
   const pathOf = (entry) => entry.split('#')[0]
-  const shown = viewer ? viewer.open : open
-  const pick = (path) => (viewer ? viewer.pick(path) : setOpen(open === path ? null : path))
   return (
     <div className="doc-gov">
       <span className="doc-gov-h">{t('nodeView.governs')} <b>{count}</b></span>
       <div className="doc-gov-files">
         {files.map((f) => {
           const path = pathOf(f)
+          const href = routeHash('file', path)
           return (
-            <button key={f} type="button" className={`gov-f${shown === path ? ' on' : ''}`}
-              aria-expanded={shown === path} onClick={() => pick(path)}>{f}</button>
+            <a key={f} className="gov-f" href={href} onClick={(event) => holdAnchor(event, href)}>{f}</a>
           )
         })}
       </div>
-      {!viewer && open && <SourceView path={open} className="doc-gov-src" onSelection={onSelection} />}
     </div>
   )
 }
 
 // [[node-attachments]]: the rest of what a node's folder holds. A node has always been a FOLDER — its eval
 // contract, an evidence directory, a raw capture, a note written beside the spec that cites it — and the
-// board could see exactly one file in it. These open in the same viewer, with the same one-at-a-time rule,
-// as a governed file: the reader should not have to learn that bytes from the spec tree behave differently
-// from bytes from the worktree, even though the gate that admits them is not the same gate.
-function NodeAttachments({ nodeId, enabled, viewer }) {
+// board could see exactly one file in it. These remain in the same chip row as governed files, but their
+// logical `.spec/<node>/<name>` address lets FileView use the node-owned read gate without an embedded reader.
+const attachmentPath = (nodeId, name) => `.spec/${nodeId}/${name}`
+
+function NodeAttachments({ nodeId, enabled }) {
   const t = useT()
   const [files, setFiles] = useState(null)
-  const [open, setOpen] = useState(null)
   useEffect(() => {
     if (!enabled) return undefined
     let live = true
-    setOpen(null)
     fetchNodeFiles(nodeId).then((f) => live && setFiles(f)).catch(() => live && setFiles([]))
     return () => { live = false }
   }, [nodeId, enabled])
-  const read = useCallback((offset) => fetchNodeFileSlice(nodeId, open, offset), [nodeId, open])
   if (!files?.length) return null
-  const shown = viewer ? viewer.open : open
-  const pick = (name) => (viewer ? viewer.pick(name) : setOpen(open === name ? null : name))
   return (
     <div className="doc-gov doc-att">
       <span className="doc-gov-h">{t('nodeView.carries')} <b>{files.length}</b></span>
       <div className="doc-gov-files">
-        {files.map((f) => (
-          <button key={f.name} type="button" className={`gov-f${shown === f.name ? ' on' : ''}`}
-            aria-expanded={shown === f.name} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
-            onClick={() => pick(f.name)}>{f.name}</button>
-        ))}
+        {files.map((f) => {
+          const href = routeHash('file', attachmentPath(nodeId, f.name))
+          return <a key={f.name} className="gov-f" href={href} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
+            onClick={(event) => holdAnchor(event, href)}>{f.name}</a>
+        })}
       </div>
-      {!viewer && open && <SourceView key={open} path={open} read={read} className="doc-gov-src" />}
     </div>
   )
 }
 
-export function SpecPane({ node, graphOnly = false, onSelection, viewer = null }) {
+export function SpecPane({ node, graphOnly = false }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -313,11 +300,11 @@ export function SpecPane({ node, graphOnly = false, onSelection, viewer = null }
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
       {node.code?.length > 0 ? (
-        <GovernedFiles files={node.code} count={node.code.length} onSelection={onSelection} viewer={viewer} />
+        <GovernedFiles files={node.code} count={node.code.length} />
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
-      {!graphOnly && <NodeAttachments nodeId={node.id} enabled viewer={viewer} />}
+      {!graphOnly && <NodeAttachments nodeId={node.id} enabled />}
       {(() => {
         // body/parts are lazy-loaded ([[graph-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
         // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an
@@ -721,7 +708,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false, onSelection }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false }) {
   const t = useT()
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
   const updateFilter = (kind, patch) => setFilters((current) => ({
@@ -770,7 +757,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [], 
           <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
-          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} onSelection={onSelection} /></div>}
+          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} /></div>}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
           {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/views.jsx
 related:
   - spec-dashboard/src/Shell.jsx
+  - spec-dashboard/src/viewRegistry.js
   - spec-dashboard/src/route.js
   - spec-dashboard/src/tabs.js
 ---
@@ -15,6 +16,18 @@ related:
 The map from an address kind to the thing that renders it, its surface, and the single contract a view signs:
 
 > **A view receives `{ param, query }` as props and does not read the global address.**
+
+## Extension boundary
+
+The built-in map is seeded into one runtime registry. Product extensions use its `registerView(name,
+definition, owner)` or `registerPlugin({ id, views })` API; they do not mutate the exported built-in object.
+Names are lowercase kebab-case, every definition must provide a component function, and registration is
+fail-closed: an existing core or plugin view cannot be replaced. Plugin registration validates every view
+before mutating the registry, so a collision leaves all prior entries intact. A plugin can be removed by id,
+which removes only the views it owns. The registry is the sole lookup used by `viewFor`, `surfaceFor`, and the
+document predicates, so an extension receives the same route-props contract and shell ownership as a built-in
+view. This is an extension seam, not a second navigation system: plugins provide views, while routing and tab
+identity remain shell-owned.
 
 Everything else it needs — the board, the workspace — it asks for by context, so no component has to own
 another component's props. That is what dissolved the god component: its size was not the problem, its

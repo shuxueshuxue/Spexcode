@@ -9,7 +9,7 @@ scenarios:
       with no Explorer, dock, or tab strip. Graph renders the workspace surface with Explorer, dock, and tab
       strip, and Back restores that workspace surface without changing the persisted workspace tab set.
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/views.jsx, spec-dashboard/src/Root.jsx, spec-dashboard/src/App.jsx]
+    code: [spec-dashboard/src/views.jsx, spec-dashboard/src/viewRegistry.js, spec-dashboard/src/viewRegistry.test.mjs, spec-dashboard/src/Root.jsx, spec-dashboard/src/App.jsx]
 ---
 
 Measure through the built dashboard in this worktree and a real browser against the running Spex backend.

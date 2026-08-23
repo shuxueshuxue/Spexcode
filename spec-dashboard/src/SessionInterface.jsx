@@ -1639,9 +1639,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <SessionTerm sessionId={id} active={open && terminalShown}
                             focused={open && terminalShown && !commandOpen}
                             writable={open && terminalShown}
-                            // `asking` is the backend's explicit suspended/human-resume state; ordinary working
-                            // and idle panes stay direct-write so the terminal never grows an unlock ceremony.
-                            resumeRequired={session.status === 'asking'}
+                            // `asking` is lifecycle intent (a human reply is needed), not proof that the live
+                            // TUI is suspended. Keep the first-key resume gate opt-in for an explicit witness.
                             focusRequest={id === active ? terminalFocusRequest : 0} />
                         </div>
                       )}

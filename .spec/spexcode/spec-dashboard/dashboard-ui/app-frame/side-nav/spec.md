@@ -33,7 +33,8 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   (`evals/<node>/<scenario>`, `issues/<id>`) light their page anchor. The rail never lights for dock mode.
 - **Click is navigation plus projection selection.** A plain click remains an ordinary same-document route
   navigation (modified clicks keep browser behavior). The sessions anchor also opens the dock on the sessions
-  projection. The selection is idempotent: clicking the current
+  projection and focuses the most recently held session document when one exists; with no held session it
+  lands on the bare sessions launch face. The selection is idempotent: clicking the current
   sessions anchor again navigates only and never folds the dock. Document routes select their related
   projection through the shell's derivation. Review and settings surfaces render full width; review detail
   addresses remain on that surface and never acquire the workspace dock. Because review addresses are not

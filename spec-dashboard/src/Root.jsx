@@ -8,6 +8,7 @@ import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
+import { BackendStatusFrame } from './BackendStatus.jsx'
 
 const App = lazy(() => import('./App.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
@@ -51,7 +52,7 @@ function ReviewEntry({ page, param, query }) {
   )
 }
 
-export default function Root() {
+function RootContent() {
   const t = useT()
   const { page, param, query } = useRoute()
   const coldReviewRoute = page === 'evals' || (page === 'issues' && !param)
@@ -80,4 +81,8 @@ export default function Root() {
       </Suspense>
     </DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
   )
+}
+
+export default function Root() {
+  return <BackendStatusFrame><RootContent /></BackendStatusFrame>
 }

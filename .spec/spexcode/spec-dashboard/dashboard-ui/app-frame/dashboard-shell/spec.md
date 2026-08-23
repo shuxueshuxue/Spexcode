@@ -6,10 +6,13 @@ desc: The desktop dashboard's root shell + shared substrate — the App.jsx root
 code:
   - spec-dashboard/src/App.jsx#App
 related:
+  - spec-dashboard/src/BackendStatus.jsx
+  - spec-dashboard/src/Root.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/PageScroll.jsx
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/readSafety.test.mjs
   - spec-dashboard/src/project.js
   - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/streamHeartbeat.test.mjs
@@ -37,7 +40,15 @@ placeholder default in the head poisons the browser's per-URL favicon memory, [[
 root — it mounts the [[side-nav]] rail and swaps the routed page through **one shared page-pane
 boundary**: every page gets the same pane and the same loading fallback, and warm pages — the graph, the
 session board — declare warmth to stay mounted and display-toggle across switches), `data.js` (the shared polled board
-data every view reads), and `styles.css` (the global stylesheet). **The project scope is a shell concern**
+data every view reads), and `styles.css` (the global stylesheet).
+
+**Backend reachability is one shell fact.** Every dashboard API read reports through the shared data transport.
+A network refusal or gateway 502/503/504 marks the whole live dashboard offline, even when a page still holds a
+last-good board. The frame renders one global offline banner with an explicit retry; a later reachable API
+response clears it. Feature pages still show their precise local failure, but they do not own a second health
+model and they never let last-good projections masquerade as current while the transport is down.
+
+**The project scope is a shell concern**
 ([[projects-hub]]): `project.js` reads the served pathname once (`/p/<id>/` vs the root) and every `/api`
 URL in the data layer — fetch, SSE, the terminal WebSocket — routes through its one prefixing seam, so a
 scoped page talks to `/p/<id>/api/*` while an unscoped serve stays byte-identical to before; the entry's

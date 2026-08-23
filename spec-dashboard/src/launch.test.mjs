@@ -12,7 +12,7 @@ test('ordinary interactive launch posts only the prompt and named launcher', asy
 
   try {
     const result = await createSession('/tidy [[mobile-ui]] keep the composer', 'codex-local', 'must not cross the Dashboard boundary')
-    assert.deepEqual(result, { ok: true, error: undefined })
+    assert.deepEqual(result, { ok: true, error: undefined, id: 'session-1', session: { id: 'session-1' } })
     assert.equal(request.url, '/api/sessions')
     assert.equal(request.init.method, 'POST')
     assert.ok(request.init.headers['Idempotency-Key'], 'one create attempt carries a recoverable identity')

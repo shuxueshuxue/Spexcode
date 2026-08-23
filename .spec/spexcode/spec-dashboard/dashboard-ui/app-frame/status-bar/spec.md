@@ -67,6 +67,11 @@ how the work is doing. They ride the right group because that is where the graph
 because the left group is the identity strip; the region law that assigns them an owner is
 [[workspace-shell]]'s, and the owner is the frame.
 
+Last-good tallies remain useful during a backend outage, but they are not current truth. While the shared
+transport is offline, every numeric workspace tally visibly carries the translated `stale` marker and muted
+treatment; the global shell banner names the outage and owns retry. A successful transport response removes
+the marker without replacing the numbers with invented zeroes.
+
 On the graph the ambient copies **stand down**: [[graph-stats]] registers the same numbers there as a
 focus-walk the ambient items cannot offer, and one bar printing a number twice is worse than either.
 
@@ -79,3 +84,6 @@ already supports it; that is an unclaimed improvement, not a hidden limitation.
 belongs to the bar for the same reason the project name does — it is persistently true of what the window
 is showing — and the alternative was a title strip of its own, which is a chrome band [[ui-state-model]]
 does not allot. The bar is where a persistent readout goes precisely so that no surface has to grow one.
+
+Session lifecycle attention reuses the same transient-notice provider as every other acknowledged action. A transition
+into `asking` emits one clickable notice that opens that session document; no session-specific notification channel exists.

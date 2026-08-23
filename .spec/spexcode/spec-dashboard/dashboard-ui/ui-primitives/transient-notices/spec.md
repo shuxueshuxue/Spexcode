@@ -52,3 +52,8 @@ its local disabled/busy state, and a form error that a person must repair stays 
 operation settles, its compact acknowledgement belongs here. The stack is `role=status` for ordinary and
 successful feedback; an error is announced with `role=alert`. New messages therefore surface to assistive
 technology without moving keyboard focus or interrupting the current task.
+
+Some acknowledgements are also doors into an already-existing document. A caller may provide a click action; the
+notice then exposes the same action to pointer and Enter/Space keyboard activation while its close button remains
+independent. This is still the one transient-notice channel: the provider owns the interaction and lifecycle, and
+the caller only supplies the destination action.

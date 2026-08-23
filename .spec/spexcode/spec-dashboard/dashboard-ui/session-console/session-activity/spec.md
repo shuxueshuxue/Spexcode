@@ -84,9 +84,9 @@ default width is 204px (15% narrower than its former 240px default) and its row 
 caption token: the list is a dense index, and the saved user-resized width still wins. Resting rows share one
 explicit 18px line box with 5px vertical padding, yielding a consistent 28px content height whether or not a
 row has a nesting rail. A selected row reveals more context in
-place, but the expansion is **capped at three lines**. Three lines make the current task recognizable without
-letting one generated title turn the remaining sessions into a moving target; the row's tooltip and
-accessible name retain the complete text. Reveal is tied to selection, never hover. The small **markers**
+place, but the expansion is **capped at three lines**. Three lines make the stable session name recognizable without
+letting a lifecycle note or infrastructure warning rename the row; those volatile details remain in the status glyph
+tooltip and the accessible name retains the complete identity. Reveal is tied to selection, never hover. The small **markers**
 (status glyph, op tally) stay pinned to the selected title's first-line top-right while later lines use the
 available width. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule;
 the meta line stays the parking spot for any further at-a-glance metadata added later.
@@ -112,11 +112,12 @@ by, while raw id/node/branch fragments are deliberately not promised searchable.
 not `sessionName`, is what keeps this guarantee from eroding again — a new pick-list can't grab the stable
 label by reflex ([[session-label]]).
 
-The selected console sidebar row is also the terminal pane's **sole visible identity/state surface**. The
-toolbar deliberately carries neither `sessionHeadline` nor lifecycle/liveness text: repeating the selected row
-spent vertical space, competed with Eval/actions, and leaked arbitrarily long prompt or HTML-derived text into
-tooltips and accessible names. Removing that duplicate is not a second naming rule; it leaves the shared row face
-as the one place the console identifies the selected session.
+The selected console sidebar row is also the terminal pane's **sole visible identity/state surface**. Its primary label is
+the stable session handle (`label`/name/title/slug); lifecycle, liveness, and readiness notes are secondary glyph/tooltip
+data and never replace that label. The toolbar deliberately carries neither `sessionHeadline` nor lifecycle/liveness text:
+repeating the selected row spent vertical space, competed with Eval/actions, and leaked arbitrarily long prompt or
+HTML-derived text into tooltips and accessible names. Removing that duplicate is not a second naming rule; it leaves the
+shared row face as the one place the console identifies the selected session.
 
 Keyboard selection always remains visible: after a session change the sidebar scrolls the selected row to the
 nearest edge, matching the app's other keyboard-driven lists. The resize divider keeps its 180–480px clamp and

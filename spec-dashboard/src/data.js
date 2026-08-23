@@ -25,12 +25,39 @@ export function layout(nodes, expanded) {
 // scoped through apiUrl ([[dashboard-shell]]'s project-scope seam, project.js), so callers keep writing
 // plain '/api/...' whether the page is the root dashboard or a /p/<id>/ scoped one.
 const BACKOFF = [150, 350, 600, 900]   // waits between 5 attempts (~2.0s total)
+const UNREACHABLE_STATUS = new Set([502, 503, 504])
+const backendHealthListeners = new Set()
+let backendHealth = { offline: false, retryKey: 0 }
+
+function publishBackendHealth(offline) {
+  if (backendHealth.offline === offline) return
+  backendHealth = { ...backendHealth, offline }
+  backendHealthListeners.forEach((listener) => listener())
+}
+
+export function getBackendHealth() { return backendHealth }
+export function subscribeBackendHealth(listener) {
+  backendHealthListeners.add(listener)
+  return () => backendHealthListeners.delete(listener)
+}
+export function retryBackend() {
+  backendHealth = { ...backendHealth, retryKey: backendHealth.retryKey + 1 }
+  backendHealthListeners.forEach((listener) => listener())
+}
+
 export async function apiFetch(input, init) {
   const url = typeof input === 'string' ? apiUrl(input) : input
   for (let i = 0; ; i++) {
-    try { return await fetch(url, init) }
+    try {
+      const response = await fetch(url, init)
+      publishBackendHealth(UNREACHABLE_STATUS.has(response.status))
+      return response
+    }
     catch (e) {
-      if (i >= BACKOFF.length) throw e
+      if (i >= BACKOFF.length) {
+        publishBackendHealth(true)
+        throw e
+      }
       await new Promise((r) => setTimeout(r, BACKOFF[i]))
     }
   }

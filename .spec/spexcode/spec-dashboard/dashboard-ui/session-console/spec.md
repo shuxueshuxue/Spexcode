@@ -135,13 +135,15 @@ The two compose the launch grammar `/<preset> [[node]]… <free text>`, from whi
 (the first `[[<id>]]`). Both menus only edit text; the New prompt has **no** `/` slash-command menu (presets
 only). A preset launched with **no node target** never assumes a node — the agent takes scope from the prompt,
 else asks first.
-**Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
+**Submitting launches and opens the new document**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to
 finish. Disabling the box for the whole in-flight window was the bug: on a slow or remote launch the entire pane sat
-greyed and unfocused until the POST *and* a board re-read returned. You stay on New Session — the new session just
-appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
-auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
+greyed and unfocused until the POST *and* a board re-read returned. The pending document remains selected while the
+immediate board refresh (else the next poll) surfaces its full row. Creation is the one deliberate selection change;
+after that, only a tab's *removal* (below) moves your selection for you. Once the create response publishes an id, the
+current slot navigates to `#/sessions/<id>`; a `queued`/`starting` row keeps the stable
+session name and shows the shared tab spinner while creation readiness catches up.
 
 Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A
 launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
@@ -198,9 +200,12 @@ Conversation status rows expose one keyboard-reachable disclosure button (`aria-
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
 terminal mount keys on **liveness, never the lifecycle label**: a session whose process is gone reads `offline`
 whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead
-id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
+id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat** and read-safe: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
-pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
+pane's bottom edge. Opening or selecting the session attaches this pane read-only and never focuses or writes
+to it. The document action slot's explicit input button unlocks writing without moving focus; only a later
+press inside xterm begins an interactive turn, and leaving the session locks it again ([[terminal-input]]).
+`Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
 session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,
 diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
@@ -528,3 +533,6 @@ light plus grey**: green = on track, no action from you (`working`, or `parked` 
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour
 only answers *does this session need me?* so a glance sorts the board without a legend; the word still spells the
 exact state. Green for `working` also matches the avatar's liveness ring, so dot, word, and ring never disagree.
+
+The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
+terminal-input ownership; such shell changes do not create a second session-console surface.

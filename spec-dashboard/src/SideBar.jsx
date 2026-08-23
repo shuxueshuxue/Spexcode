@@ -10,11 +10,8 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 
 // The workspace's rail ([[side-nav]]) — an ACTIVITY BAR, not a page menu. Two kinds of entry, in this
 // order: the dock's two PROJECTION buttons (explorer/sessions — they change what helps you look, and are
-// buttons), then the SINGLETON BOARDS (evals · issues, settings pinned at the bottom). A board
-// entry is create-or-focus: it opens its tab if the workspace does not hold one and focuses it if it does,
-// which is what "singleton" means in the strip ([[tab-strip]]). It stays a real anchor carrying its
-// address, so middle-click/new-tab/copy-address still come free and the plain click is intercepted only to
-// hold the tab rather than to spend the current slot on it.
+// buttons), then the review/settings BOARD destinations pinned at the bottom. Board entries are navigation
+// only: their plain click changes the route and never creates or focuses a strip tab.
 // Glyphs come from the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria —
 // the rail stays slim.
 // Under the multi-project gateway ([[projects-hub]]) a scoped page adds the persistent current-project
@@ -53,10 +50,11 @@ function DockToggle() {
   )
 }
 
-function RailLink({ page, active, label, disabled = false, onNavigate }) {
+function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0 }) {
   if (disabled) return (
     <span className="rail-btn disabled" data-tip={label} aria-label={label} aria-disabled="true">
       <Icon name={page} size={18} />
+      {badge > 0 && <span className="rail-badge" aria-label={`${badge} needs you`}>{badge > 99 ? '99+' : badge}</span>}
     </span>
   )
   return (
@@ -66,10 +64,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate }) {
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       href={routeHash(page)}
-      // create-or-focus, and an ORDINARY navigation is already exactly that: a singleton board is resident
-      // by address ([[view-registry]]), so the strip holds it whoever asked. The rail used to pin by hand,
-      // which made residency a property of this button — and every other door into the same board (the
-      // status tally, a pasted link) got the slot instead. Modified clicks stay the browser's (new window,
+      // Boards are navigation destinations, not documents. Modified clicks stay the browser's (new window,
       // new browser tab, copy address).
       onClick={(event) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -79,6 +74,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate }) {
       }}
     >
       <Icon name={page} size={18} />
+      {badge > 0 && <span className="rail-badge" aria-label={`${badge} needs you`}>{badge > 99 ? '99+' : badge}</span>}
     </a>
   )
 }
@@ -154,7 +150,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, denied, t }) {
   )
 }
 
-export default function SideBar({ page, identity, catalog, graphOnly = false }) {
+export default function SideBar({ page, identity, catalog, graphOnly = false, needsYou = 0 }) {
   const t = useT()
   const { setDock, setDockMode } = useWorkspaceApi()
   const catalogOk = catalog?.state === 'ok'
@@ -173,7 +169,9 @@ export default function SideBar({ page, identity, catalog, graphOnly = false }) 
       />}
       <DockToggle />
       {ENTRIES.map((p) => (
-        <RailLink key={p} page={p} active={page === p} label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
+        <RailLink key={p} page={p} active={page === p}
+          label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
+          badge={p === 'sessions' ? needsYou : 0}
           disabled={graphOnly && p !== 'graph'}
           onNavigate={() => {
             if (p === 'sessions') { setDock?.(true); setDockMode?.('sessions') }

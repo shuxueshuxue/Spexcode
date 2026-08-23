@@ -28,6 +28,9 @@ that filed or opened the thread, so activating it must open that session's conso
 session route. A human reply's @session reference remains in the stored prose and returns no outcome; an exact
 @new keeps that stored prose and returns the spawned-worker receipt.
 
+Backend retry is another freshness axis, separate from review identity and the board's issue stamp. Retrying an
+unreachable detail reissues that bounded detail read without discarding the last honest review identity.
+
 ## expanded spec
 
 The event detail derives one review identity from source scope + node/scenario + viewed reading and uses it

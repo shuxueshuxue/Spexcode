@@ -53,6 +53,10 @@ projection may not mint a strip of its own; the explorer's own count row, the se
 archive door were three separate strips stacked around one list, three answers to a question this row
 already answers once.
 
+The header and zone tallies are last-good projections during a backend outage. They stay visible for context
+but carry the same translated `stale` marker as the status bar until the shared transport proves reachability
+again; the dock never paints an old count as silently current and never invents a replacement zero.
+
 **SEARCH IS ONE OF THOSE DOORS, and each head opens it on what that head LISTS.** The sessions head searches
 sessions; the explorer head searches nodes. It is the same palette either way — same rows, same keys, same
 matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). Search used to be a
@@ -69,6 +73,9 @@ door navigates to the sessions document's archive overlay. Both are finding-surf
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
 separate gesture with its own section below, and it changes no address.
+When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
+keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
+well; the reveal is derived from `activeSessionId`, not a second selection state.
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim

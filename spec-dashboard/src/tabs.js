@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { navigate, parseRoute, routeHash, useRoute } from './route.js'
-import { isDocument, isResident } from './views.jsx'
+import { isDocument } from './views.jsx'
 import { moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 export { moveTab, placeTab, tabKey }
@@ -10,7 +10,7 @@ export { moveTab, placeTab, tabKey }
 //
 // A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. The strip holds the documents the reader asked it to hold,
 // plus one current slot per document kind that ordinary navigation lands in and reuses. Every plain click —
-// an explorer row, a dock session row, a board row, a link inside a document — replaces the same-kind slot;
+// an explorer row, a dock session row, an object row, a link inside a document — replaces the same-kind slot;
 // an address of another kind gets its own slot rather than evicting a different kind. Holding is explicit:
 // ctrl/⌘-click, a double-click, or a document's own "open in a new tab" action. That is the whole rule, and
 // it keeps the old anti-proliferation guarantee without allowing cross-kind eviction.
@@ -26,7 +26,7 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string' && isDocument(t.page, t.param)), isResident) : []
+    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string'), isDocument) : []
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -128,12 +128,10 @@ export function useTabs() {
   // while the reader looked at something absent from it would be lying. Every caller runs this and the
   // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
   useEffect(() => {
-    if (!isDocument(route.page, route.param)) return
     const key = routeHash(route.page, route.param, route.query)
-    // a SINGLETON BOARD is held however it was reached ([[view-registry]]'s residency): it is a place, not
-    // something the reader spends the slot on, so opening a detail from one of its rows cannot evict it.
-    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
     if (pinKey && pinKey !== key) pinKey = null
+    if (!isDocument(route.page, route.param)) return
+    const mode = pinKey === key ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 

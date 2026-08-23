@@ -28,21 +28,13 @@ itself from whatever was opened next. Both now take `{ param, query }` like ever
 review entry hands them the same props the shell does.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. Two kinds qualify. Parameterized OBJECTS: spec, file, session, eval detail, issue
-detail. And the SINGLETON boards — evals, issues, settings — whose bare address names a place the reader
-keeps rather than one they bounce off; they are singletons only because their address carries no selector,
-so the strip's own identity rule resolves a second opening to the same tab.
+keeping its own list. Only parameterized OBJECTS qualify: spec, file, session, eval detail, and issue detail.
+Bare evals/issues/settings boards are destinations, not documents, regardless of their entry point or query,
+so they never enter the strip. Persisted entries are filtered through this same predicate during storage
+normalization, which clears board tabs written by older versions.
 
-**`resident` is the second answer the registry owes the strip**, and it is asked of the ADDRESS, not of the
-gesture: a singleton board is `resident` and therefore never occupies the current slot, while the same
-page's DETAIL address (`#/evals/<node>/<scenario>`, `#/issues/<id>`) is an ordinary object that does.
-`param == null` is the entire difference, so the two answers cannot drift apart the way they did while
-residency lived in the rail button's click handler — a board opened from anywhere else got the slot, and
-its own first row click evicted it. Registering it here is the same reason `document` is here: what the
-strip may hold and how it holds it are one fact about an address, in one place.
-
-Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), and bare sessions.
-`empty` is retained only as a compatibility alias for graph; it is not a separate view. **`/sessions/new` was a document and is not one now**: it names no
+Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), bare sessions, bare
+evals/issues/settings boards, and `empty`, which is retained only as a compatibility alias for graph. **`/sessions/new` was a document and is not one now**: it names no
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
 form, and the session it starts becomes a document the moment it has an id.
 

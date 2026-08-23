@@ -13,6 +13,7 @@ import { Icon } from './icons.jsx'
 import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useBackendHealth } from './BackendStatus.jsx'
 
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
@@ -23,6 +24,7 @@ import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 // stacked around one list; that is three answers to a question the shell already answers once.
 function SessionDock({ sessions, activeId }) {
   const t = useT()
+  const { offline } = useBackendHealth()
   const { expanded, toggle, expand } = useFold()
   const { lockedSource } = useWorkspace()
   const { lockGraphTo } = useWorkspaceApi()
@@ -39,6 +41,15 @@ function SessionDock({ sessions, activeId }) {
   const [closeRequest, setCloseRequest] = useState(null)   // a row dropped on the archive door, awaiting its confirm
   const abandon = useRef(null)
   useEffect(() => () => abandon.current?.(), [])
+  // Reveal follows the focused document, like an editor's active-file explorer: the row remains selected from
+  // the route while its parent chain is opened in the dock's existing fold state. Offline is a zone fold, so an
+  // active document there opens that disclosure too; no second selection state is needed.
+  useEffect(() => {
+    if (!activeId) return
+    const active = (sessions || []).find((session) => session.id === activeId)
+    expand(sessionAncestorIds(sessions || [], activeId))
+    if (active && (active.liveness === 'offline' || active.status === 'offline')) setOfflineOpen(true)
+  }, [activeId, sessions, expand])
   const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
     keepVisible: (session) => session.id === activeId,
@@ -123,7 +134,7 @@ function SessionDock({ sessions, activeId }) {
             const label = t(`sessionZone.${item.zone}`)
             return <button key={`zone-${item.zone}`} type="button" className={`dock-session-zone dock-session-zone-${item.zone}`}
               aria-expanded={foldable ? !item.folded : undefined} onClick={foldable ? () => setOfflineOpen((open) => !open) : undefined}>
-              <span>{label}</span><span className="dock-session-count">{item.count}</span>
+              <span>{label}</span><span className="dock-session-count">{item.count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
             </button>
           }
           // This row is the one place a session is claimed. Plain click reads it IN THE CURRENT SLOT — a
@@ -179,6 +190,7 @@ function SessionDock({ sessions, activeId }) {
 // nodes. Same palette, same keys, same rows — only the lead plane differs ([[node-graph]]'s palette).
 function DockHead({ mode, specs, sessions }) {
   const t = useT()
+  const { offline } = useBackendHealth()
   const { openPalette } = useWorkspaceApi()
   const sessionMode = mode === 'sessions'
   const count = sessionMode ? (sessions?.length || 0) : (specs?.length || 0)
@@ -186,7 +198,7 @@ function DockHead({ mode, specs, sessions }) {
   return (
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
-      <span className="dock-head-count">{count}</span>
+      <span className="dock-head-count">{count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
       {/* The header owns projection doors only; open/closed belongs to the dedicated rail panel switch. */}
       <span className="dock-head-acts">
         <button type="button" className="dock-head-act" data-tip={withShortcut(searchLabel, 'graph.search')}

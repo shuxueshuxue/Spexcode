@@ -14,12 +14,14 @@ import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
-import { sessionZone } from './session.js'
+import { sessionHandle, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
+import { useBackendHealth } from './BackendStatus.jsx'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -34,10 +36,10 @@ import { useDocumentNames } from './documentActions.jsx'
 
 // THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]) — which projection it shows, and whether
 // it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Bare
-// singleton boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
+// review/settings boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
 // empty, and the bare sessions board have no opinion and preserve the current projection.
 const dockFor = (page, param) => {
-  // Bare singleton boards are full-width. Their object detail is a document and keeps the dock, so the
+  // Bare review/settings boards are full-width. Their object detail is a document and keeps the dock, so the
   // rail's explorer projection remains truthful beside it (C2/C4).
   if ((page === 'evals' || page === 'issues') && param == null) return 'none'
   if (page === 'settings') return 'none'
@@ -166,6 +168,8 @@ function ShellStatus() {
 // the ambient copy cannot offer, and one bar must never print the same number twice.
 function BoardStatus({ specs, sessions, quiet }) {
   const t = useT()
+  const { offline } = useBackendHealth()
+  const stale = offline ? <span className="sb-stale">{t('backend.stale')}</span> : null
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.
@@ -191,6 +195,7 @@ function BoardStatus({ specs, sessions, quiet }) {
             <i className="bstat-dot" style={{ background: STATUS[k].color }} />{tally.status[k].length}
           </span>
         ))}
+        {stale}
       </span>
     ),
   })
@@ -199,20 +204,20 @@ function BoardStatus({ specs, sessions, quiet }) {
     kind: fail > 0 ? 'error' : undefined,
     tooltip: t('statusBar.evals', { pass, fail }),
     onClick: () => navigate('evals'),
-    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">✓{pass}</span><span className="sb-tally-part">✗{fail}</span>{stale}</span>,
   })
   useStatusItem(quiet ? null : {
     id: 'board-issues', side: 'right', priority: 43,
     tooltip: t('statusBar.issues', { n: tally.issueCount }),
     onClick: () => navigate('issues'),
-    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">◆{tally.issueCount}</span>{stale}</span>,
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
     kind: live.need > 0 ? 'warning' : undefined,
     tooltip: t('statusBar.sessions', { run: live.run, need: live.need }),
     onClick: () => navigate('sessions'),
-    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span></span>,
+    node: <span className="sb-tally"><span className="sb-tally-part">●{live.run}</span><span className="sb-tally-part">?{live.need}</span>{stale}</span>,
   })
   return null
 }
@@ -254,6 +259,21 @@ export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
+  const { notify } = useTransientNotice()
+  const previousSessionStatus = useRef(null)
+  const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
+  useEffect(() => {
+    const previous = previousSessionStatus.current
+    previousSessionStatus.current = new Map((sessions || []).map((session) => [session.id, session.status]))
+    if (!previous) return
+    for (const session of sessions || []) {
+      if (session.status !== 'asking' || previous.get(session.id) === 'asking') continue
+      notify(`${sessionHandle(session)} · ${t('status.asking')}`, {
+        kind: 'info',
+        onClick: () => navigate('sessions', session.id),
+      })
+    }
+  }, [sessions, notify, t])
   const documentNames = useDocumentNames()
   const { dock, dockMode, palette } = useWorkspace()
   const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
@@ -303,8 +323,8 @@ export default function Shell() {
   // window still says which workspace it belongs to when several are open side by side.
   const place = placeLabel({ page, param, query }, { specs, sessions, names: documentNames, t })
   useEffect(() => {
-    document.title = `${place} · ${identity?.title || 'spexcode'}`
-  }, [place, identity?.title])
+    document.title = `${needsYou > 0 ? `(${needsYou}) ` : ''}${place} · ${identity?.title || 'spexcode'}`
+  }, [place, identity?.title, needsYou])
 
   const onShellKey = useCallback((event) => {
     // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
@@ -327,9 +347,8 @@ export default function Shell() {
       const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
       if (target) {
         event.preventDefault(); closePalette()
-        // the keyboard twin of the rail button, and the same ordinary navigation: a singleton board is
-        // resident by address ([[view-registry]]), so it is held rather than spent through the current
-        // slot without this chord asking for it. The sealed face has one view and no destinations.
+        // the keyboard twin of the rail button. Review/settings boards are destinations, not documents, so
+        // this navigation leaves the strip untouched. The sealed face has one view and no destinations.
         if (!graphOnly) navigate(target)
         return true
       }
@@ -388,7 +407,7 @@ export default function Shell() {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} identity={identity} catalog={catalog} />
+        <SideBar page={page} identity={identity} catalog={catalog} needsYou={needsYou} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}

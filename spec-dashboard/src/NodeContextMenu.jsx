@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
-import { STATUS_COLOR, STATUS_GLYPH, sessionHeadline } from './session.js'
+import { sessionDisplayState, sessionHeadline } from './session.js'
 import { copyAddress, graphNodeAddress } from './address.js'
 
 export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewChild, onDelete, sessions = [], onOpenSession }) {
@@ -61,16 +61,19 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewC
         <>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            {sessions.map((s) => (
-              <ContextMenuItem
-                key={s.id}
-                className="sess-menu-sess"
-                leading={<span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} aria-hidden="true">{STATUS_GLYPH[s.status]}</span>}
-                onClick={open(s.id)}
-              >
-                {sessionHeadline(s)}
-              </ContextMenuItem>
-            ))}
+            {sessions.map((s) => {
+              const display = sessionDisplayState(s)
+              return (
+                <ContextMenuItem
+                  key={s.id}
+                  className="sess-menu-sess"
+                  leading={<span className="sess-glyph" style={{ color: display.color }} aria-hidden="true">{display.glyph}</span>}
+                  onClick={open(s.id)}
+                >
+                  {sessionHeadline(s)}
+                </ContextMenuItem>
+              )
+            })}
           </ContextMenuGroup>
         </>
       )}

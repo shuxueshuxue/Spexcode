@@ -67,7 +67,13 @@ force, so the key and the visible door can never disagree.
 
 The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
-route-selected highlight (`activeSessionId`). The header's `+` navigates to `sessions/new` and its archive
+route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
+archived records form the fourth archive zone; otherwise offline liveness wins over lifecycle and puts the row in
+offline. The two legislated exceptions are `queued`, which has not launched and remains runnable under running,
+and `archive`, which is a closed zone rendered with the muted offline mark (`○`). While online
+asking/review/done/close-pending/error form needs-you and the remaining online states
+form running. A parent-child display edge is kept only within one derived zone, so an offline child is a root in
+the offline bucket rather than a row under an online parent. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
-import { ACT, keyCap } from './keymap.js'
+import { ACT, displayKeysOf, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
 import { PageScroll } from './PageScroll.jsx'
@@ -47,7 +47,7 @@ function Shortcuts({ t }) {
               onClick={() => a.rebind && setCap(a.id)}
             >
               {cap === a.id ? <span className="bind-hint">{t('settings.bindPrompt')}</span>
-                : keysOf(a.id).map((k, i) => <kbd key={i}>{keyCap(k)}</kbd>)}
+                : displayKeysOf(a, keysOf(a.id)).map((k, i) => <kbd key={i}>{keyCap(k)}</kbd>)}
             </button>
           </div>
         ))}

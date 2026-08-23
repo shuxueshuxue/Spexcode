@@ -184,8 +184,19 @@ test('the source-session facet speaks presence, never liveness', () => {
 test('shared list key ownership preserves native controls and focused anchors', () => {
   const source = shell.match(/export const listOwnsKey = ([\s\S]*?\n})\n\nconst visibleMenuItems/)?.[1]
   assert.ok(source, 'listOwnsKey stays a directly testable shared predicate')
-  const owns = Function(`return (${source})`)()
-  const target = (tagName, anchor = false) => ({ tagName, closest: () => (anchor ? {} : null) })
+  // The production predicate delegates typing ownership to KeyboardService. Supply that shared contract
+  // explicitly when evaluating the extracted function; leaving it as an implicit global made this source
+  // fixture fail even though the browser module had the dependency.
+  const isTypingTarget = (target) => Boolean(target && (
+    ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      || target.isContentEditable
+      || target.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
+  ))
+  const owns = Function('isTypingTarget', `return (${source})`)(isTypingTarget)
+  const target = (tagName, anchor = false) => ({
+    tagName,
+    closest: (selector) => (anchor && selector === 'a[href]' ? {} : null),
+  })
 
   for (const tag of ['INPUT', 'TEXTAREA', 'SELECT']) {
     assert.equal(owns(target(tag), 'j'), false)

@@ -37,7 +37,8 @@ import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
-import { useKeyboardScope } from './KeyboardService.jsx'
+import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
+import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
@@ -1482,24 +1483,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // Option+Shift is the disclosure grammar for the selected session. Consume it even for a leaf or an
       // already-matching state: otherwise the ordinary Option+Arrow session move would run immediately after
       // a no-op and the key would appear to change selection. The Dock observes the same shared fold store.
-      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      const sessionShortcut = resolveSessionShortcut(sessionForestRows, active, e)
+      if (sessionShortcut) {
         e.preventDefault(); e.stopPropagation()
-        if (foldableSessionIds.has(active)) {
-          if (e.key === 'ArrowDown' && !expanded.has(active)) expandSessionFolds([active])
-          if (e.key === 'ArrowUp' && expanded.has(active)) toggleSessionFold(active)
-        }
-        return
-      }
-      // Option+Arrow is the unconditional session switch: it works while xterm, a composer, or inert chrome
-      // owns focus. Use the visible forest order so a folded child never becomes a hidden navigation target.
-      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        e.preventDefault(); e.stopPropagation()
-        let index = sessionOrder.indexOf(active)
-        if (index < 0) index = 0
-        const next = Math.max(0, Math.min(sessionOrder.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)))
-        if (sessionOrder[next] !== active) {
-          if (onPickSession) onPickSession(sessionOrder[next])
-          else setSel(sessionOrder[next])
+        if (sessionShortcut.type === 'move' && sessionShortcut.id !== active) {
+          if (onPickSession) onPickSession(sessionShortcut.id)
+          else setSel(sessionShortcut.id)
+        } else if (sessionShortcut.type === 'expand' && foldableSessionIds.has(active) && !expanded.has(active)) {
+          expandSessionFolds([active])
+        } else if (sessionShortcut.type === 'collapse' && foldableSessionIds.has(active) && expanded.has(active)) {
+          toggleSessionFold(active)
         }
         return
       }
@@ -1517,7 +1510,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // Plain arrows remain native in xterm and editable composers. Inert console chrome (including the
         // conversation reading surface) uses the same visible order as the modifier route.
-        if (e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'INPUT' || e.target?.isContentEditable) return
+        if (isTypingTarget(e.target)) return
         e.preventDefault(); e.stopPropagation()
         let index = sessionOrder.indexOf(active)
         if (index < 0) index = 0
@@ -1646,9 +1639,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <SessionTerm sessionId={id} active={open && terminalShown}
                             focused={open && terminalShown && !commandOpen}
                             writable={open && terminalShown}
-                            // `asking` is the backend's explicit suspended/human-resume state; ordinary working
-                            // and idle panes stay direct-write so the terminal never grows an unlock ceremony.
-                            resumeRequired={session.status === 'asking'}
+                            // `asking` is lifecycle intent (a human reply is needed), not proof that the live
+                            // TUI is suspended. Keep the first-key resume gate opt-in for an explicit witness.
                             focusRequest={id === active ? terminalFocusRequest : 0} />
                         </div>
                       )}

@@ -53,8 +53,9 @@ workspace host for these routes both on a cold URL and after in-app navigation. 
 second surface's chrome because no standalone review host exists.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. Evals, Issues, and Settings are resident top-level tabs; parameterized detail routes
-canonicalize their tab identity to the board address while preserving detail URL state. The user-facing
+keeping its own list. Spec, Evals, Issues, and Settings are resident top-level tabs; parameterized Spec,
+Evals, and Issues detail routes canonicalize their tab identity to the resident address while preserving
+detail URL state. The user-facing
 distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
 this node supplies the machine predicate, storage normalization, and the optional `icon` identity used by
 both the activity rail and resident workspace tabs. A page icon has one owner here; consumers do not keep

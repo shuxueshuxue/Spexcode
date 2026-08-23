@@ -56,7 +56,7 @@ test('empty workspace remains a real route and view entry', () => {
   assert.match(views, /\bempty:\s*\{[^\n]*component:\s*EmptyView\b/)
 })
 
-test('resident review details focus one top-level tab without evicting documents', () => {
+test('resident details focus one top-level tab without evicting documents', () => {
   const spec = { page: 'spec', param: 'node', query: null }
   const session = { page: 'sessions', param: 's1', query: null }
   let tabs = placeTab(placeTab([], spec, 'pin'), session, 'pin')
@@ -66,7 +66,7 @@ test('resident review details focus one top-level tab without evicting documents
 
   assert.equal(tabKey(evalDetail), '#/evals')
   assert.equal(tabKey(issueDetail), '#/issues')
-  assert.deepEqual(tabs.map(tabKey), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
+  assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
   assert.deepEqual(tabs.slice(2).map(({ page, param, pinned }) => ({ page, param, pinned })), [
     { page: 'evals', param: 'node/scenario', pinned: true },
     { page: 'issues', param: '42', pinned: true },

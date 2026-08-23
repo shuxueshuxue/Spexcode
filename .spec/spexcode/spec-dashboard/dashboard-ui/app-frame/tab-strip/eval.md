@@ -3,17 +3,28 @@ scenarios:
   - name: page-kind-slot-regression
     description: >
       Open the running dashboard in a real browser. From a session document, use the Explorer to open the
-      tab-strip spec and confirm both documents remain; navigate from one spec to another and confirm the
-      spec slot is replaced while the session remains; click three session rows in the dock and confirm one
+      tab-strip spec and confirm the resident Spec tab focuses while the session remains; navigate from one
+      spec to another and confirm the detail URL changes without minting a second Spec tab; click three
+      session rows in the dock and confirm one
       session tab is reused; ctrl-click a session row and confirm it creates a pinned tab; open Settings and
       confirm its tab label is Settings.
     expected: >
-      The strip contains both a session and the opened spec after the cross-kind navigation. A second spec
-      replaces the first spec in its same-kind slot. Three plain session clicks leave one session tab whose
+      The strip contains both a session and one resident Spec tab after the cross-kind navigation. A second
+      spec keeps the same `#/spec` tab identity while its detail address changes. Three plain session clicks leave one session tab whose
       address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
       Settings, never the internal key tabs.settings.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
+  - name: spec-resident-detail-focus
+    description: >-
+      In a real Chromium dashboard, open two canonical `#/spec/<id>` detail URLs and inspect the workspace
+      strip after each route settles; then open a `#/file/<path>` detail.
+    expected: >-
+      Both Spec details keep one active top-level Spec tab labelled Spec. The URL retains each selected
+      `#/spec/<id>` detail address, and the file route opens an independent File tab beside the Spec tab.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/views.jsx, spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
+    test: spec-dashboard/test/spec-resident-tab.e2e.mjs
   - name: divider-seam-and-group-head-geometry
     description: >-
       In a real Chromium dashboard, open a spec document with the Explorer dock and a session document with

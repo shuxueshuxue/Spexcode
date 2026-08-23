@@ -12,7 +12,7 @@ import { routeHash } from './route.js'
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
-const RESIDENT_PAGES = new Set(['evals', 'issues', 'settings'])
+const RESIDENT_PAGES = new Set(['spec', 'evals', 'issues', 'settings'])
 export const tabRoute = (route) => route?.page === 'sessions' && route?.param && !isResourceRoute(route)
   ? { ...route, query: null }
   : RESIDENT_PAGES.has(route?.page)

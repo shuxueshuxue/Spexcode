@@ -27,19 +27,21 @@ single top-level board address. The empty workspace remains an explicit `#/empty
 it is not replaced by the graph when the last document closes. The executable boundary test covers these
 subtractive and resident-tab invariants alongside the pure tab model.
 
-**The strip holds the workspace working set.** Object tabs include `#/spec/<id>`, `#/file/<path>`, and
-`#/sessions/<id>`. Evals, Issues, and Settings are resident top-level tabs (`#/evals`, `#/issues`,
-`#/settings`); opening a scenario or issue keeps its detail address in the URL while focusing that board's
-top-level tab. A detail never replaces a Spec, File, or Session tab. A session's
+**The strip holds the workspace working set.** Object tabs include `#/file/<path>` and `#/sessions/<id>`.
+Spec, Evals, Issues, and Settings are resident top-level tabs (`#/spec`, `#/evals`, `#/issues`,
+`#/settings`); opening a spec node, scenario, or issue keeps its detail address in the URL while focusing
+that surface's top-level tab. A file or session detail never replaces another kind's resident/document tab.
+A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
 own identity, appended beside the unchanged session tab. The rail navigates into this same working set and
 does not own a second focus state. Graph remains the one addressable view that never becomes a top-level tab.
 
-Resident Evals, Issues, and Settings tabs render the page icon declared by [[view-registry]], the same
-identity their activity-rail entries use. A detail URL keeps that resident tab identity while its scenario or
-issue selection remains route state. A board's list tabs (for example Open/Closed) are view-local filters,
-not workspace addresses.
+Resident Spec, Evals, Issues, and Settings tabs render the page icon declared by [[view-registry]], the same
+identity their activity-rail entries use. A detail URL keeps that resident tab identity while its node,
+scenario, or issue selection remains route state. A board's list tabs (for example Open/Closed) are view-local
+filters, not workspace addresses. SpecView still owns the `#/spec/<id>` detail address, and file chips still
+open independent `#/file/<path>` document tabs.
 
 What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
 addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, and **`#/sessions/new`** —
@@ -217,7 +219,8 @@ The earlier human rule "退回到 spec node graph" described spec/file workspace
 report "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" narrows that rule: session tabs
 use the classified session fallback above, while spec/file tabs retain the graph return.
 
-Settings, Evals, and Issues are resident documents even though their bare addresses are board destinations;
+Spec, Settings, Evals, and Issues are resident documents even though their bare addresses are board destinations
+or detail entrypoints;
 their detail/query state does not mint another identity. The same resident tab remains selected for a bare
 board or any parameterized detail URL.
 

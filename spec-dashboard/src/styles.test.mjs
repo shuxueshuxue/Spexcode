@@ -134,6 +134,12 @@ test('the status bar owns a flex row and cannot cover the content viewport', () 
   assert.match(css, /\.dock\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
 })
 
+test('the dock toggle reads as frame chrome, not a sixth route tab', () => {
+  assert.match(css, /\.rail-panel-toggle\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px;[^}]*color:\s*var\(--muted\);/s)
+  assert.match(css, /\.rail-panel-toggle\s+svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px;/s)
+  assert.match(css, /\.rail-panel-toggle::after\s*\{[^}]*border-bottom:\s*1px solid var\(--edge\);/s)
+})
+
 test('the chrome bands the budget does not allow are gone from the sheet', () => {
   // [[ui-state-model]]'s band budget is the structural gate; these are the strips it named. Each one is
   // removed at the source — merged into the band that already existed, folded into scrolling content, or

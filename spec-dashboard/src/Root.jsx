@@ -49,9 +49,9 @@ function ReviewEntry({ page, param, query }) {
               </div>
             </div>
           </div>
-          <StatusBar />
         </div>
       </div>
+      <StatusBar />
     </div>
   )
 }

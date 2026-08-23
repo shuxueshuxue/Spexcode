@@ -38,9 +38,10 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   object details retain the dock.
 - **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted mirrored panel
   button: `panel-left` while open and `panel-right` while closed, with `aria-pressed` reporting the same
-  boolean. It changes only dock open/closed state, never the route, projection, tab list, or route light. The
-  dock header has no collapse control. Folding removes only the dock panel; the same rail DOM control remains
-  at the same position and reopens it immediately.
+  boolean. It changes only dock open/closed state, never the route, projection, tab list, or route light. It
+  is a smaller 14px muted control with a restrained separator and spacing from the navigation group, so it
+  reads as frame chrome rather than an independent tab. The dock header has no collapse control. Folding
+  removes only the dock panel; the same rail DOM control remains at the same position and reopens it immediately.
 - **Projection styling is secondary.** Explorer and sessions are projections, not rail destinations. Their
   names and tallies live in the dock header; neither projection may reuse `.rail-btn.on` or `aria-current`.
   If a route selection changes a projection, that state must remain visually distinct from the route light.

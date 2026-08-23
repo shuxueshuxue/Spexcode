@@ -664,6 +664,15 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
   background: none; border: none; border-radius: var(--radius); cursor: pointer; color: var(--muted);
   text-decoration: none;
 }
+.rail-panel-toggle {
+  width: 20px; height: 20px; margin-bottom: var(--space-2); color: var(--muted); background: transparent;
+}
+.rail-panel-toggle::after {
+  content: ''; position: absolute; left: 5px; right: 5px; bottom: -5px; border-bottom: 1px solid var(--edge);
+}
+.rail-panel-toggle:hover { color: var(--ink2); background: transparent; }
+.rail-panel-toggle:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.rail-panel-toggle svg { width: 14px; height: 14px; }
 .rail-btn:hover { background: var(--panel2); color: var(--ink2); }
 .rail-btn.disabled { color: var(--line); cursor: not-allowed; }
 .rail-btn.disabled:hover { background: none; color: var(--line); }

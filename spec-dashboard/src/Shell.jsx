@@ -541,6 +541,18 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       if (event.key === 'Escape') { event.preventDefault(); closePalette(); return true }
       return false
     }
+    if (helpOpen) {
+      if (event.key === 'Escape' || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key))) {
+        event.preventDefault(); closeHelp(); return true
+      }
+      if (event.key === 'j' || event.key === 'k' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const body = document.querySelector('.legend-body')
+        if (body) body.scrollTop += (event.key === 'j' || event.key === 'ArrowDown' ? 120 : -120)
+        return true
+      }
+      return true
+    }
     if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
     // [[keyboard-nav]]'s native-control restraint, kept across the hoist to the shell scope: while real
     // DOM focus sits in a typing context — an input, a textarea (the session composer, xterm's helper),
@@ -601,7 +613,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       return true
     }
     return false
-  }, [closePalette, dockKind, dockMode, graphOnly, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, toggleHelp, contextOpen])
+  }, [closeHelp, closePalette, dockKind, dockMode, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, toggleHelp, contextOpen])
   useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
   // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review

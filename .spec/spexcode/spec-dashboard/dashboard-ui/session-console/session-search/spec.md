@@ -35,7 +35,8 @@ pressed state.
   dashboard ordering change reaches the empty ⌥+/ list without a search-specific repair.
 - **Select target.** A result selects the product surface that owns that kind of thing, through the shared
   [[address-routing]] vocabulary. Picking a **session** opens (or switches to) that session's
-  tab. Picking a **spec node** routes to the graph page and focuses that node. Picking an **issue** routes to
+  tab. Picking a **spec node** opens its `#/spec/<id>` document; the graph remains the legacy focused-tree
+  address. Picking an **issue** routes to
   the Issues page's own detail address (`#/issues/<issue-id>`). Picking a **scenario** routes to the Evals
   page's own detail address (`#/evals/<node>/<scenario>`). The palette no longer collapses every non-session
   match back to the graph: issues and scenarios are first-class review objects, and their search hits land

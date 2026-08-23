@@ -33,6 +33,9 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   usable as local, transient graph navigation and leave the address unchanged. A new explicit address
   navigation or a copy action names the target node; high-frequency board movement never makes the address
   bar flicker.
+- `spec` opens the node's document at `#/spec/<node-id>`; the same independently encoded id is used by the
+  search palette and prose references, so a document link is ordinary navigation and the tab strip places it in
+  the spec slot. This is distinct from `graph-node`, which remains the legacy focused graph address.
 - `session` opens `#/sessions/<id>`; a session face is the query axis on that same document address:
   `#/sessions/<id>?surface=conversation|terminal|diff|resource:<resourceTabKey>`. A bare session address keeps
   its existing meaning — the per-session base-surface preference — while the explicit query is the only visible

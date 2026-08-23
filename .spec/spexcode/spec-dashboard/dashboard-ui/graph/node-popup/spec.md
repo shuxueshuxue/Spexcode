@@ -125,3 +125,7 @@ in the body passes that offset, and a caller that cannot (an issue body is not a
 and gets no stamps at all — a wrong line number would be worse than no addressing. The two-part card
 places each part against the whole body before rendering it, and a part it cannot place renders exactly as
 before, simply unstamped.
+
+Inline `[[id]]` references emitted by this renderer are document anchors, not decoration: they point to
+`#/spec/<id>` and use [[tab-strip]]'s hold gesture for Ctrl/Command-click. The popup and full document
+therefore expose the same plain navigation contract.

@@ -20,6 +20,11 @@ document. SpecView never mounts a source reader and never chooses a file to show
 the same node must never be two implementations that can disagree about what the node says. The popup keeps
 its place as a quick lens on board focus; this is where a node is READ.
 
+Inline `[[id]]` references in that shared renderer are real document anchors: they use the canonical
+`#/spec/<id>` address, ordinary clicks replace the spec slot, and Ctrl/Command-click uses [[tab-strip]]'s
+`holdAnchor` gesture to keep a second document. The popup and both document panes therefore expose the same
+working link, not a styled but inert span.
+
 `code:` entries naming symbols resolve to file addresses — several entries can name the same file, but no
 source face is embedded in the spec. A node's attachments ([[node-attachments]]) use the same chip row and
 the same file-document address grammar. Attachments are still read through their node-owned API gate, not

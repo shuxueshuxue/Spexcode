@@ -58,8 +58,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything held is an object document with an address — a node, a file, a session, an eval
-  detail, or an issue detail. Bare evals/issues/settings boards are destinations, not tabs. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
+  active tab; everything held is an object document with an address — a node, a file, or a session. Evals/issues
+  boards and their details are review destinations, not workspace documents or tabs; Settings is its own surface.
+  **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). With no document focus the center lands on the graph bottom sheet (`#/graph`) and names

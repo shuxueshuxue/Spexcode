@@ -2,7 +2,7 @@ import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
-// drill-down tidy-tree layout ([[node-graph]]); `expanded` is the two-layer expansion frontier chosen by
+// drill-down tidy-tree layout ([[node-graph]]); `expanded` is the single-layer expansion frontier chosen by
 // GraphView. Coordinates depend only on tree shape plus that frontier, never on the focused id. A node's
 // visible child block owns one slot per visible descendant block, so adjacent branches reserve the total
 // height of the next layer before their parents are centred. This is the part the old independent-centre

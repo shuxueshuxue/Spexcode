@@ -12,13 +12,15 @@ const tree = [
   { id: 'a1x', parent: 'a1' },
 ]
 
-test('two-layer frontier lays out both sibling branches at the focused depth', () => {
-  const expanded = new Set(['root', 'a', 'b', 'a1', 'a2', 'b1'])
+test('single-layer frontier opens only the focused branch', () => {
+  const expanded = new Set(['root', 'a'])
   const pos = layout(tree, expanded)
-  assert.deepEqual(Object.keys(pos).sort(), ['a', 'a1', 'a1x', 'a2', 'b', 'b1', 'root'])
+  assert.deepEqual(Object.keys(pos).sort(), ['a', 'a1', 'a2', 'b', 'root'])
   assert.equal(pos.a.x, pos.b.x)
   assert.equal(pos.a1.x, pos.a2.x)
-  assert.equal(pos.a1x.x > pos.a1.x, true)
+  assert.equal(pos.a1.x > pos.a.x, true)
+  assert.equal(pos.b1, undefined)
+  assert.equal(pos.a1x, undefined)
 })
 
 test('adding a deeper expansion only adds nodes and preserves existing coordinates', () => {

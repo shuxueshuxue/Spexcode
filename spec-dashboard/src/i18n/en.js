@@ -95,6 +95,7 @@ export default {
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
+    settings: 'Settings',
     issueNew: 'New issue',
     openInNewTab: 'Open in a new tab',
     surfaceTerminal: 'terminal',

@@ -13,7 +13,7 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState } from './session-application.js'
+import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
@@ -1765,9 +1765,9 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
-function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true): void {
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string): void {
   const reason = error instanceof Error ? error.message : String(error)
-  const note = `queued launch readiness failed: ${reason}`
+  const note = `${label ?? (terminal ? 'queued launch readiness failed' : 'launch readiness warning')}: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
   if (rec && !retirementReason(rec) && (rec.note !== note || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null)))) {
@@ -1793,6 +1793,16 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
     return
   }
   application.transitionSession(rec.session, { status, proposal, note, parentSessionId: rec.parent })
+}
+
+async function launchReadinessWitnessAlive(id: string, harness: Harness, current: SessRec): Promise<boolean> {
+  if (agentAlive(id) === true) return true
+  try {
+    const snap = await liveSnapshot(id)
+    return harness.liveness(current, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online'
+  } catch {
+    return false
+  }
 }
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): void {
@@ -1829,8 +1839,21 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = 
     })
     .catch(async (error) => {
       const reason = error instanceof Error ? error.message : String(error)
-      const terminal = /timed out|did not become ready/i.test(reason)
-      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error, terminal)) }
+      const timedOut = /timed out|did not become ready/i.test(reason)
+      let live = false
+      if (timedOut) {
+        const current = readRecord(id)
+        if (current) live = await launchReadinessWitnessAlive(id, harness, current)
+      }
+      const terminal = timedOut && !live
+      try {
+        await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(
+          id,
+          error,
+          terminal,
+          live ? 'launch readiness warning' : undefined,
+        ))
+      }
       catch (recordError) {
         console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${reason}`)
       }
@@ -1937,7 +1960,14 @@ async function drainQueueUnlocked(): Promise<void> {
         // before any queue/watch work so a backend restart cannot resurrect the old active/limbo projection.
         if (rec.status !== 'queued' && /^queued launch readiness failed:/.test(rec.note || '') && (rec.status !== 'error' || !rec.stopped)) {
           const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
-          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(session.id, priorReason))
+          const harness = harnessById(rec.harness || defaultHarness.id)
+          const live = await launchReadinessWitnessAlive(session.id, harness, rec)
+          await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(
+            session.id,
+            priorReason,
+            !live,
+            live ? 'launch readiness warning' : undefined,
+          ))
           continue
         }
         // A pre-fix active row may still carry the authoritative launch artifact without a timestamp. Its
@@ -2000,6 +2030,14 @@ const requestQueueDrain = (): void => {
     console.error(`spex: queue drain failed: ${error instanceof Error ? error.message : String(error)}`)
   })
 }
+
+// Canonical state commits already own the durable recipient queue. This is only the post-commit wake that hands
+// each queued recipient to its existing runtime; a failed or absent runtime leaves the message pending for retry.
+setSessionApplicationCommitWake((recipients) => {
+  queueMicrotask(() => {
+    for (const recipient of recipients) void drainSession(recipient)
+  })
+})
 
 let supervisingQueue = false
 export function superviseQueue(intervalMs = 3000): void {

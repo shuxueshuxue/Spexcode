@@ -92,6 +92,7 @@ export default {
     sessions: '会话',
     evals: '评测',
     issues: '议题',
+    settings: '设置',
     issueNew: '新建议题',
     openInNewTab: '在新标签打开',
     surfaceTerminal: '终端',

@@ -12,6 +12,14 @@ test('palette entries carry executable spec and session addresses', () => {
 })
 
 test('spec prose references are real held anchors', () => {
-  assert.match(nodeView, /const href = routeHash\('spec', m\[3\]\)/)
+  assert.match(nodeView, /const href = routeHash\('spec', m\[9\]\)/)
   assert.match(nodeView, /<a className="doc-link"[^>]+href=\{href\}[^>]+onClick=\{\(event\) => holdAnchor\(event, href\)\}/)
+})
+
+test('spec prose keeps standard Markdown blocks and links', () => {
+  assert.match(nodeView, /const Heading = `h\$\{level\}`/)
+  assert.match(nodeView, /className=\{`doc-h doc-h-level doc-h\$\{level\}`\}/)
+  assert.match(nodeView, /<blockquote className="doc-quote"/)
+  assert.match(nodeView, /<a className="doc-link doc-external"/)
+  assert.match(nodeView, /<img className="doc-image"/)
 })

@@ -1097,10 +1097,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-body li { margin: 2px 0; }
 .doc-body code { font-size: var(--type-control); background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: var(--radius); }
 .doc-body strong { color: var(--ink2); }
-.doc-h { font-size: var(--type-control); color: var(--ink2); font-weight: var(--weight-semibold); margin: 14px 0 6px; }
+.doc-h { color: var(--ink2); font-weight: var(--weight-semibold); margin: 14px 0 6px; line-height: var(--leading-tight); }
+.doc-h1 { font-size: var(--type-title); }
+.doc-h2 { font-size: var(--type-subtitle); }
+.doc-h3 { font-size: var(--type-body); }
+.doc-h4, .doc-h5, .doc-h6 { font-size: var(--type-control); }
 .doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: var(--radius); overflow-x: auto; font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
+.doc-external { text-decoration: underline; text-underline-offset: 2px; }
+.doc-quote { margin: 0 0 10px; padding: 4px 12px; color: var(--muted); border-left: 2px solid var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
+.doc-quote p { margin: 0; }
+.doc-image { display: block; max-width: 100%; height: auto; margin: 6px 0; border-radius: var(--radius); }
+.doc-math, .doc-math-block { overflow-x: auto; }
+.doc-math-block { margin: 8px 0; padding: 2px 0; }
+.doc-math-error { color: var(--red); white-space: pre-wrap; }
 /* GFM tables in a spec body — compact, bordered, header-tinted; scrolls on its own if too wide. */
 .doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: var(--type-control); display: block; overflow-x: auto; }
 .doc-table th, .doc-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }

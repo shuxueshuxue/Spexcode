@@ -72,10 +72,10 @@ whole shell hangs off, re-derived from what the product is rather than from what
   toggle rides the tab strip's trailing cluster and the choice persists, so this decides only what an
   unopinionated window looks like.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
-  land above its right end, never over content. Rail and optional dock are the through-bottom left region;
-  the view/context row and status row form the right content column. The bar is an unshrinking sibling after
-  the view row, so it consumes its own height, starts only at the sidebar edge, and never covers a view; a
-  terminal's final xterm row fits above it. One-pixel `--line` borders own the vertical and horizontal seams.
+  land above its right end, never over content. It is a full-window flow row after the app row, so rail and
+  optional dock stop at its top edge and the view/context row gets the rest of the height. The bar consumes
+  its own `--line-status` height and never covers a view; a terminal's final xterm row fits above it. One-pixel
+  `--line` borders own the vertical and horizontal seams, meeting as a T at the lower-left rail junction.
   The frame itself is what fills it: the workspace identity
   and the ONE BOARD LEDGER — spec nodes by state plus drift, every eval scenario state, open issues, live
   sessions — is true of the window on every route, so no view may own a duplicate and each group is

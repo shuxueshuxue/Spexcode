@@ -2,7 +2,7 @@
 title: status-bar
 status: active
 hue: 210
-desc: The content column's bottom row and a registry behind it — items are declared data, not widgets someone positions.
+desc: The window's bottom row and a registry behind it — items are declared data, not widgets someone positions.
 code:
   - spec-dashboard/src/StatusBar.jsx
 related:
@@ -16,9 +16,11 @@ related:
 ---
 # status-bar
 
-A strip along the bottom of the content column, beginning at the current sidebar's right edge, and — the
-part that matters — a **registry** rather than a place to hang things. Rail and dock continue to the bottom
-of the window; the strip does not cross them or claim a visually higher frame layer.
+A strip along the bottom of the **whole window**, and — the part that matters — a **registry** rather than a
+place to hang things. It is one unshrinking flow row after the shell's rail, optional dock, and content row;
+rail and dock end at the row's top edge, so the bar crosses the full viewport without covering content. The
+project identity stays at the far left of that global line, where the human's requested global feeling is
+visible even when the dock is folded or absent.
 
 **What it replaced.** Every persistent readout used to be its own absolutely-positioned block: the project
 HUD in one corner, the tally strip in another, the public-graph disclosure in a third, each with its own
@@ -48,16 +50,21 @@ Registration is a hook, so an item's lifetime is its contributor's lifetime and 
 re-rendering — there is no imperative handle to keep in sync with React's own. Outside a provider the hook
 is inert, which is what lets the phone face and the sealed public build skip a bar they do not draw.
 
-**It is a row in layout, not an overlay.** The shell's horizontal flex has a through-bottom left region
-(rail plus optional dock) and one right content column. Inside that content column, the view/context row
-and this strip are siblings: the view takes the remaining height, and the strip takes one unshrinking
-`--line-status` row. No `position: fixed|absolute`, bottom offset, or page-owned padding reserves its
-space. The consequence is observable in every view, especially the terminal: xterm's last fitted row ends
-above the status bar and remains fully visible rather than painting underneath it.
+**It is a row in layout, not an overlay.** The shell's top-level flex has one app row (rail, optional dock,
+and content) followed by this strip. Within the app row the view/context row takes the remaining height;
+the strip takes one unshrinking `--line-status` row of its own. No `position: fixed|absolute`, bottom offset,
+or page-owned padding reserves its space. The consequence is observable in every view, especially the
+terminal: xterm's last fitted row ends above the status bar and remains fully visible rather than painting
+underneath it.
 
-The vertical rail-or-dock/content seam and the horizontal content/status seam are each a one-pixel
-`--line` border. The status border begins only after the left region, so the lower-left junction is one
-clean L rather than a doubled pixel or a broken stroke; the lower-right edge ends flush with the viewport.
+The vertical rail-or-dock/content seam and the horizontal full-width status seam are each a one-pixel
+`--line` border. The rail and dock borders terminate at the status seam, making the lower-left junction a
+clean T rather than the former L; the status line runs flush from the left viewport edge to the right.
+
+**Human re-judgment.** The earlier direction was: "底下那个 status line 还是按之前那样,做成一整条全屏宽度的横线…"
+and "左边那个图标以及项目管理按钮放那边也更合适,否则…没有一种全局感。" This revision follows that
+second judgment: global feeling outranks column-local feeling. The change is geometry only; the identity,
+ledger, freshness marks, width budget, and terminal row contract remain unchanged.
 
 **Its own geometry is a token, not a literal.** The strip is `--line-status`, joining the existing
 `--line-input` / `--line-badge` / `--line-session-row` family of named fixed line boxes. This is not

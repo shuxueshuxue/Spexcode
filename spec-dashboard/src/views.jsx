@@ -2,6 +2,7 @@ import { lazy } from 'react'
 import { useBoard, useBoardApi } from './workspace.jsx'
 import { navigate } from './route.js'
 import { createViewRegistry } from './viewRegistry.js'
+import { createSettingsViewPlugin } from './builtInViewPlugins.js'
 
 // [[view-registry]]: the map from an address kind to the thing that renders it.
 //
@@ -93,7 +94,6 @@ export const VIEWS = Object.freeze({
   // `tabModel.tabRoute` collapses detail selectors onto it without losing the detail route in the URL.
   evals:    { component: EvalsView,    surface: 'workspace', document: true, resident: true, icon: 'evals', className: 'view-evals' },
   issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, icon: 'issues', className: 'view-issues' },
-  settings: { component: SettingsView, surface: 'workspace', document: true, resident: true, icon: 'settings', className: 'view-settings' },
   empty:    { component: EmptyView,    surface: 'workspace', document: false, className: 'view-empty' },
 })
 
@@ -103,6 +103,8 @@ export const viewRegistry = createViewRegistry(VIEWS)
 export const registerView = (...args) => viewRegistry.registerView(...args)
 export const registerPlugin = (plugin) => viewRegistry.registerPlugin(plugin)
 export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
+
+registerPlugin(createSettingsViewPlugin(SettingsView))
 
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'

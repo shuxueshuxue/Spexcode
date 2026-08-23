@@ -10,6 +10,16 @@ scenarios:
     tags: [frontend-e2e]
     test: spec-dashboard/src/viewRegistry.test.mjs
     code: [spec-dashboard/src/viewRegistry.js, spec-dashboard/src/viewRegistry.test.mjs]
+  - name: built-in-settings-plugin-consumer
+    description: >
+      Install the dashboard's settings extension descriptor into an isolated registry, then inspect the
+      product startup source that installs the same descriptor into the live registry.
+    expected: >
+      Settings is owned by the dashboard-settings plugin with its canonical resident workspace metadata,
+      while the product startup invokes registerPlugin and does not seed settings into the core view map.
+    tags: [frontend-e2e]
+    test: spec-dashboard/src/viewRegistry.test.mjs
+    code: [spec-dashboard/src/builtInViewPlugins.js, spec-dashboard/src/views.jsx, spec-dashboard/src/viewRegistry.test.mjs]
 ---
 
 Measure the registry contract with the focused dashboard test. This is an auxiliary contract check for the

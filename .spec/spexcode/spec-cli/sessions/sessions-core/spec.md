@@ -33,6 +33,8 @@ assembly (the rendezvous env + the harness's own command + the spec-pointer/prom
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
 the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop.
+Lifecycle writes have one typed entry point, `markState`; the retired `markError` convenience export is not part of
+the module surface, so callers name the state transition they are making instead of adding a second error mechanism.
 Creation authority is checked before any fresh-project canonical store is initialized: rejected, abandoned, fenced,
 or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a successfully admitted fresh create
 may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses

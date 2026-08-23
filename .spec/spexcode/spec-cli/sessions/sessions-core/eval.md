@@ -1,5 +1,16 @@
 ---
 scenarios:
+  - name: retired-error-facade-stays-absent
+    tags: [cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Load the real sessions module and inspect its public exports after the error convenience wrapper has been
+      retired. This is a source-boundary guard, not a reimplementation of lifecycle behaviour: the same module
+      must still expose the typed `markState` writer while no longer exporting `markError`.
+    expected: >
+      The module exports `markState` and does not export `markError`; a future reintroduction of the wrapper fails
+      this guard before it can become a second lifecycle mechanism.
+    test: spec-cli/src/subtractive-mechanisms.test.ts
   - name: public-create-authority-routes-on-instance-identity
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

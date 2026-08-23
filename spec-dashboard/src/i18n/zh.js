@@ -639,10 +639,6 @@ export default {
     del: '删除节点…',
   },
 
-  sourceView: {
-    useSelection: '在新会话中使用选区',
-  },
-
   // [[prose-dispatch]] —— 选中一段 spec 正文之后能做的事。
   proseActions: {
     groupLabel: '选中的正文 —— 发给会话，或就地编辑',

@@ -66,13 +66,10 @@ export default function SourceView({ path, read, className = '', onSelection }) 
   const view = useRef(null)
   const cursor = useRef({ offset: 0, eof: false, size: 0, busy: false })
   const [status, setStatus] = useState({ phase: 'loading', size: 0, loaded: 0, error: null })
-  const [selection, setSelection] = useState(null)
-
   useEffect(() => {
     let live = true
     cursor.current = { offset: 0, eof: false, size: 0, busy: false }
     setStatus({ phase: 'loading', size: 0, loaded: 0, error: null })
-    setSelection(null)
 
     // Pull the next window and APPEND it. The append is a plain transaction at the document end, so the
     // reader's scroll position and selection survive it — paging must never yank the view.
@@ -99,11 +96,16 @@ export default function SourceView({ path, read, className = '', onSelection }) 
     const watchScroll = EditorView.updateListener.of((u) => {
       if (u.selectionSet) {
         const { from, to } = u.state.selection.main
-        if (from === to) setSelection(null)
+        if (from === to) onSelection?.(null)
         else {
           const startLine = u.state.doc.lineAt(from).number
           const endLine = u.state.doc.lineAt(Math.max(from, to - 1)).number
-          setSelection({ path, startLine, endLine, text: u.state.sliceDoc(from, to) })
+          const start = u.view.coordsAtPos(from)
+          const end = u.view.coordsAtPos(to)
+          const x = start ? Math.min(start.left, end?.left ?? start.left) : 0
+          const y = start ? Math.max(start.bottom, end?.bottom ?? start.bottom) : 0
+          const next = { path, startLine, endLine, text: u.state.sliceDoc(from, to), x, y }
+          onSelection?.(next)
         }
       }
       if (!u.geometryChanged && !u.docChanged) return
@@ -138,10 +140,11 @@ export default function SourceView({ path, read, className = '', onSelection }) 
 
     return () => {
       live = false
+      onSelection?.(null)
       view.current?.destroy()
       view.current = null
     }
-  }, [path, read])
+  }, [path, read, onSelection])
 
   const pct = status.size > 0 ? Math.min(100, Math.round((status.loaded / status.size) * 100)) : 0
   // The viewer shows the file, and nothing about the file. Its path is already the address, the tab and the
@@ -153,12 +156,6 @@ export default function SourceView({ path, read, className = '', onSelection }) 
     <div className={`srcview ${className}`.trim()}>
       <div className="srcview-body">
         <div className="srcview-cm" ref={host} />
-        {selection && onSelection && (
-          <button type="button" className="srcview-select-action" onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onSelection(selection)}>
-            {t('sourceView.useSelection')}
-          </button>
-        )}
         {(status.error || reading) && (
           <div className={`srcview-progress${status.error ? ' is-error' : ''}`} role="status">
             {status.error || (status.phase === 'loading' ? t('common.loading') : `${pct}%`)}

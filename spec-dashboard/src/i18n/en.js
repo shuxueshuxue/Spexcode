@@ -649,10 +649,6 @@ export default {
     del: 'delete node…',
   },
 
-  sourceView: {
-    useSelection: 'use selection in a new session',
-  },
-
   // [[prose-dispatch]] — what a reader does with a selected passage of spec prose.
   proseActions: {
     groupLabel: 'selected passage — send to a session, or edit it here',

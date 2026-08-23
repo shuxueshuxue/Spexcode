@@ -23,7 +23,6 @@ import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useStatusItem } from './StatusBar.jsx'
-import { encodeCodeSelection } from './codeSelection.js'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -169,9 +168,6 @@ function GraphView({ param, query }) {
 
   const openSession = useCallback((id) => navigate('sessions', id), [])
   const startNew = useCallback((text) => { setSeed(text); navigate('sessions', 'new') }, [setSeed])
-  const startFromSelection = useCallback((selection) => {
-    startNew(encodeCodeSelection(selection))
-  }, [startNew])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
@@ -635,7 +631,7 @@ function GraphView({ param, query }) {
             extracted this view once dropped this line entirely while keeping all its key handling — a
             popup with working keys and no body. */}
         {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
-          onSelection={graphOnly ? undefined : startFromSelection} onClose={() => setOverlay(false)} />}
+          onClose={() => setOverlay(false)} />}
       </div>
     </div>
   )

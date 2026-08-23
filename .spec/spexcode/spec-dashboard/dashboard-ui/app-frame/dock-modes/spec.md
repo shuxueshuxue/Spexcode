@@ -28,35 +28,18 @@ open, both, or neither.
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
 projection it shows and whether it exists at all. A session document belongs with the session list; a node
-or a governed file belongs with the explorer. **Evals, issues and settings have no natural sidebar, so they
-render none and the main area takes the full width.** That is isolation, not suppression: a board must not
-INHERIT the dock the previous tab was showing. Inheriting it is what made the sidebar feel like a setting
-being maintained beside the work — a tree left open beside a page that has no use for it, costing width, a
-render, and a question in the reader's head about what it is for. Moving between tabs therefore moves the
-sidebar with them, which is the whole activity-bar idea and the reason the rail's lit button reads as
-"where this document belongs" instead of "which button was pressed last". The dock's WIDTH stays one
-window-wide memory; what is isolated is whether it shows and which projection, not how wide the reader
-likes it.
+or a governed file belongs with the explorer. **Bare evals, issues and settings boards have no sidebar,
+while their object details retain the dock.** A bare sessions route is not a session document and starts
+with explorer on a cold workspace. Projection selection is secondary state: graph and sessions route links
+may select explorer or sessions, but the rail light remains route-only. The dedicated mirrored rail panel
+control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
+[[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
+a plain click navigates to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it
+as its own tab.
 
-A rail mode button still selects a projection by hand, and that choice is a **temporary override**: it
-holds while the reader stays on the same document and lapses the moment focus moves to another one. That is
-what makes it an override rather than a second, competing setting; the derived answer is always one focus
-change away. The mode is still persisted, so a reload opens on the last projection in force.
-
-The rail mode buttons change only the finding projection; they never change the active document or the tab
-list — with one exception that is the same principle: asking for **sessions** when the workspace already
-holds a session tab focuses the most recently opened one, because "show me sessions" means the session the
-reader has, not a launch page nobody asked for. When nothing is held the button is merely ARMED: the dock
-opens on that projection and waits for a row to be picked. On a sidebar-less tab the buttons stage the
-choice rather than forcing a dock onto a surface that has none — it appears with the next tab that owns
-one, and the sessions button's return-to-a-held-session makes that immediate. Clicking the already-selected button collapses
-the dock; clicking the other opens the dock in that projection. Explorer rows retain [[file-tree]]'s route
-behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]: a plain click navigates
-to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it as its own tab.
-
-**The dock closes from its own header, and the closing is a movement.** The rail button that opened a
-projection still collapses it; the header carries the same door for the reader who is done with the panel
-they are looking at — one state, two doors, never two states. Opening and closing SLIDE, for one shared
+**The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
+mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
+projection doors only. Opening and closing SLIDE, for one shared
 `--dur-panel` token rather than a duration invented per panel, and the element outlives the state that
 hides it by exactly that long so the reverse is visible too. The animated property is max-width: the dock's
 width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`

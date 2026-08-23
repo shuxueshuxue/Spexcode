@@ -55,6 +55,7 @@ export default {
   },
   dockModes: {
     collapse: '收起侧边栏',
+    expand: '展开侧边栏',
     aria: '停靠栏模式',
     explorer: '资源管理器',
     sessions: '会话',
@@ -113,6 +114,7 @@ export default {
   },
   nav: {
     railLabel: '主导航',
+    graph: '规格节点图',
     explorer: '资源管理器',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',

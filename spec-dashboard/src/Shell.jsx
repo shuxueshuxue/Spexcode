@@ -32,15 +32,17 @@ import { useDocumentNames } from './documentActions.jsx'
 // happens to be current.
 
 // THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]) — which projection it shows, and whether
-// it exists at all. A session document belongs with the session list; a node or a governed file belongs
-// with the explorer. The singleton boards have NO natural sidebar, so they render none and the main area
-// takes the whole width: a board must not inherit the previous tab's dock, because inheriting it is what
-// makes a sidebar feel like a setting the reader is maintaining instead of a fact about what they hold.
-// `keep` is the third answer — the graph and the empty workspace have no opinion and change nothing.
-const SIDEBARLESS = new Set(['evals', 'issues', 'settings'])
-const dockFor = (page) => {
-  if (SIDEBARLESS.has(page)) return 'none'
-  if (page === 'sessions') return 'sessions'
+// it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Bare
+// singleton boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
+// empty, and the bare sessions board have no opinion and preserve the current projection.
+const dockFor = (page, param) => {
+  // Bare singleton boards are full-width. Their object detail is a document and keeps the dock, so the
+  // rail's explorer projection remains truthful beside it (C2/C4).
+  if ((page === 'evals' || page === 'issues') && param == null) return 'none'
+  if (page === 'settings') return 'none'
+  // A bare sessions board is not a session document. Its initial projection stays explorer; clicking the
+  // sessions route may explicitly select sessions through SideBar, while a session object derives it.
+  if (page === 'sessions' && param != null) return 'sessions'
   if (page === 'spec' || page === 'file') return 'explorer'
   return 'keep'
 }
@@ -276,7 +278,7 @@ export default function Shell() {
   // selects a projection by hand — that override simply lasts until the reader moves to another DOCUMENT,
   // which is what makes it an override rather than a second setting. The effect is keyed on the document,
   // not the address, so switching a session's own face is not a focus change.
-  const dockKind = dockFor(page)
+  const dockKind = dockFor(page, param)
   const documentKey = `${page}/${param ?? ''}`
   // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
   // slides out ([[dock-modes]]). One timer, cleared on reopen; the reader can never end up with a ghost

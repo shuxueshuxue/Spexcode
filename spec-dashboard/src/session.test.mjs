@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { crossZoneParent, sessionAncestorIds, sessionDisplayState, sessionFooterState, sessionForest, sessionPresentationOrder, sessionZone, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+import { sessionAncestorIds, sessionDisplayState, sessionFooterState, sessionForest, sessionPresentationOrder, sessionZone, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 
 test('display projection uses the package status for both zone and glyph', () => {
   const cases = [
@@ -33,23 +33,16 @@ test('forest keeps parentage independent from liveness', () => {
   assert.equal(child.depth, 1)
 })
 
-test('forest splits a cross-zone child into its own zone root', () => {
+test('forest keeps a child under its parent even when their statuses use different zones', () => {
   const items = sessionForest([
     { id: 'working-parent', status: 'working', liveness: 'online', sortKey: 20 },
     { id: 'dead-asking-child', parent: 'working-parent', status: 'asking', liveness: 'offline', sortKey: 30 },
   ], () => true)
-  assert.deepEqual(items.filter((item) => item.type === 'zone').map((item) => item.zone), ['need', 'run'])
+  assert.deepEqual(items.filter((item) => item.type === 'zone').map((item) => item.zone), ['run'])
+  assert.equal(items.find((item) => item.type === 'zone').count, 2)
   const child = items.find((item) => item.type === 'row' && item.s.id === 'dead-asking-child')
-  assert.equal(child.depth, 0)
+  assert.equal(child.depth, 1)
   assert.equal(sessionDisplayState(child.s).glyph, STATUS_GLYPH.asking)
-})
-
-test('cross-zone roots retain the existing parent for the dock marker', () => {
-  const parent = { id: 'parent', label: 'parent', status: 'working' }
-  const child = { id: 'child', parent: 'parent', status: 'asking' }
-  assert.equal(crossZoneParent([parent, child], child), parent)
-  assert.equal(crossZoneParent([parent, { ...child, status: 'working' }], { ...child, status: 'working' }), null)
-  assert.equal(crossZoneParent([{ ...parent, id: 'other' }, child], child), null)
 })
 
 test('footer state keeps queued live and archived ahead of offline', () => {

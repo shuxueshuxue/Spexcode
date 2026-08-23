@@ -91,26 +91,16 @@ export const zoneSort = (sessions) => {
 // changing activity line is the content being read, not the session identity.
 
 export function nestSessions(sessions) {
-  const present = new Set(sessions.map((s) => s?.id))
   const byId = new Map(sessions.map((s) => [s?.id, s]))
   const childrenOf = new Map()
   const roots = []
   for (const s of sessions) {
     const parent = s?.parent && s.parent !== s.id ? byId.get(s.parent) : null
-    const p = parent && present.has(parent.id) && sessionZone(parent) === sessionZone(s) ? parent.id : null
+    const p = parent ? parent.id : null
     if (p) { const arr = childrenOf.get(p) || []; arr.push(s); childrenOf.set(p, arr) }
     else roots.push(s)
   }
   return { roots, childrenOf }
-}
-
-// A parent that is present but in another display zone is rendered as a root by nestSessions. Keep that
-// existing wire relationship visible to the dock without inventing a replacement parent or ancestry.
-export function crossZoneParent(sessions, session) {
-  const parentId = session?.parent
-  if (!parentId || parentId === session?.id) return null
-  const parent = (sessions || []).find((candidate) => candidate?.id === parentId)
-  return parent && sessionZone(parent) !== sessionZone(session) ? parent : null
 }
 
 // Present ancestors of one session, nearest first. This mirrors nestSessions' rule that a missing parent

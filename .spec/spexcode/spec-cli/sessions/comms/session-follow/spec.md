@@ -33,7 +33,9 @@ harnesses have.
 
 But a governed supervisor already has a durable address: its ordinary [[dispatch]] queue. Establish that
 relationship once, then a target's authored state transition can enter that queue through the same send path
-as every other agent message. A caller with no governed address cannot pretend to receive such a delivery; it
+as every other agent message. Each committed authored transition is its own queue item and post-commit
+transport wake, so consecutive changes arrive one-by-one without a human message or dashboard poll to flush
+them. A caller with no governed address cannot pretend to receive such a delivery; it
 waits on the target's log in its own background command instead.
 
 ## expanded spec

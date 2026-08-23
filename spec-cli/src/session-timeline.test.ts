@@ -250,7 +250,7 @@ test('creation parent watch publishes its initial snapshot only after active rea
       }
       const failedRecord = JSON.parse(readFileSync(sessionRecordPath(failed), 'utf8'))
       assert.equal(failedRecord.status, 'active', 'readiness failure preserves the existing active resource contract')
-      assert.match(failedRecord.note, /queued launch readiness failed: forced creation readiness failure/)
+      assert.match(failedRecord.note, /launch readiness warning: forced creation readiness failure/)
       assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 2,
         'readiness failure does not fabricate a working snapshot')
       const failedRows = JSON.parse(readFileSync(sessionArtifactPath(failed, 'watchers.json'), 'utf8')) as Array<Record<string, unknown>>

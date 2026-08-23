@@ -71,7 +71,7 @@ export interface ProjectSessionApplicationOptions {
   databasePath: string
   locality: LocalityPrecondition
   now?: () => number
-  onCommitted?: (result: CommittedSessionChange) => void
+  onCommitted?: (result: Pick<CommittedSessionChange, 'recipients'>) => void
 }
 
 export interface CreateSessionInput {
@@ -228,7 +228,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     }
   }
 
-  const notifyCommitted = (result: CommittedSessionChange): void => {
+  const notifyCommitted = (result: Pick<CommittedSessionChange, 'recipients'>): void => {
     options.onCommitted?.(result)
   }
 
@@ -240,7 +240,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     runtimeBindings,
 
     notifyRecipients(subjectSessionId, message) {
-      return protocol.withTransaction(tx => {
+      const result = protocol.withTransaction(tx => {
         const recipients = topology.recipients(subjectSessionId, tx)
         const messages = recipients.map(recipient => tx.enqueue(recipient, {
           ...message,
@@ -248,10 +248,12 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         }))
         return { edge: null, recipients, messages }
       })
+      notifyCommitted(result)
+      return result
     },
 
     attachAndNotify(fromSessionId, subjectSessionId, relationType, message) {
-      return protocol.withTransaction(tx => {
+      const result = protocol.withTransaction(tx => {
         const edge = topology.attach(tx, fromSessionId, subjectSessionId, relationType)
         const recipients = topology.recipients(subjectSessionId, tx)
         const messages = recipients.map(recipient => tx.enqueue(recipient, {
@@ -260,6 +262,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
         }))
         return { edge, recipients, messages }
       })
+      notifyCommitted(result)
+      return result
     },
 
     createSession(input) {

@@ -129,6 +129,12 @@ export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'revie
 export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
+// Awaiting is the durable lifecycle row; its proposal selects the user-facing display status. Keep this
+// projection in the session package so backend reconciliation and offline client reads cannot drift apart.
+export function displayStatusForProposal(proposal: Proposal | null | undefined): DisplayStatus {
+  return PROPOSAL_STATUS[proposal ?? 'nothing']
+}
+
 export type Session = {
   id: string; node: string | null; branch: string | null; path: string
   label: string; title: string   // `label` remains the stable search handle; `title` is the one visible session name
@@ -631,7 +637,7 @@ function managedWatchRecord(id: string): SessRec {
 
 function watchMessage(target: SessRec): string {
   const status = target.status === 'awaiting'
-    ? PROPOSAL_STATUS[target.proposal ?? 'nothing']
+    ? displayStatusForProposal(target.proposal)
     : target.status === 'active' ? 'working' : target.status
   const note = target.note ? ` — ${target.note}` : ''
   return `[spex watch] ${target.session} is ${status}${note}`
@@ -1173,7 +1179,7 @@ function reconcile(rec: SessRec, snap: LiveSnap, residentLiveness?: Liveness): D
   // about. It reads `retired` — a terminal, human-closable row, never a lifecycle a hook can write back over.
   if (rec.archived) return 'offline'
   if (retirementReason(rec)) return 'retired'
-  if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
+  if (rec.status === 'awaiting') return displayStatusForProposal(rec.proposal)
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
   const lv = residentLiveness ?? liveness(rec, snap)
   if (lv !== 'online') return lv  // 'offline' | 'starting' | 'unknown'
@@ -2797,7 +2803,7 @@ async function cleanupSessionCandidate(root: string, id: string, path: string, b
 function existingCreateReceipt(rec: SessRec): Session {
   const h = harnessById(rec.harness || defaultHarness.id)
   if (rec.status === 'queued') return toSession(rec, 'queued', 'offline')
-  const status = rec.status === 'active' ? 'working' : rec.status === 'awaiting' ? PROPOSAL_STATUS[rec.proposal ?? 'nothing'] : rec.status
+  const status = rec.status === 'active' ? 'working' : rec.status === 'awaiting' ? displayStatusForProposal(rec.proposal) : rec.status
   return toSession(rec, status, rec.stopped ? 'offline' : h.headless ? 'online' : 'starting')
 }
 

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { liveness, launcherCmd, type LiveSnap, type SessRec } from './sessions.js'
+import { displayStatusForProposal, liveness, launcherCmd, type LiveSnap, type SessRec } from './sessions.js'
 
 // Pins the session-stability contract the mass-restore incident violated:
 //  - a PROBE FAILURE (tmux timed out under load) → `unknown`, NEVER a false `offline` (board honesty, tooth 1, [[state]]).
@@ -15,6 +15,14 @@ const rec = (over: Partial<SessRec> = {}): SessRec => ({
   ...over,
 })
 const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), titles: new Map(), sockets: new Set(), unproven: new Set(), ...over })
+
+test('awaiting proposals use one canonical display projection', () => {
+  assert.equal(displayStatusForProposal('merge'), 'review')
+  assert.equal(displayStatusForProposal('nothing'), 'done')
+  assert.equal(displayStatusForProposal('close'), 'close-pending')
+  assert.equal(displayStatusForProposal(null), 'done')
+  assert.equal(displayStatusForProposal(undefined), 'done')
+})
 
 test('probe FAILURE reads unknown, never a false offline (board honesty under load)', () => {
   const r = rec()

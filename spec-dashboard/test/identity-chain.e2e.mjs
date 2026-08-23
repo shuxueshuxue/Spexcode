@@ -199,6 +199,12 @@ try {
   await startRocket()
   await startGateway()
   const base = `http://127.0.0.1:${gatewayPort}`
+  for (const project of [atlas, rocket]) {
+    const registered = await fetch(`${base}/projects`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root: project.dir }),
+    })
+    assert.equal(registered.ok, true, `register ${project.title} in the durable catalog`)
+  }
   await waitFor(async () => (await getCatalog(base))?.projects?.filter((project) => project.online).length === 2, 'two online projects')
 
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
@@ -369,7 +375,7 @@ try {
 
   step('offline project edit')
   await stop(atlasBackend)
-  await waitFor(async () => (await getCatalog(base))?.projects?.find((project) => project.id === atlas.id)?.online === false, 'atlas offline', 90_000)
+  await waitFor(async () => (await getCatalog(base))?.projects?.find((project) => project.id === atlas.id)?.online === false, 'atlas offline')
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()
   const offlineAtlas = page.locator('.proj-row').filter({ hasText: 'Atlas Lab' })

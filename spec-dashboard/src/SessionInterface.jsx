@@ -226,20 +226,6 @@ function RegisteredDocumentAction({ document, action }) {
   return null
 }
 
-function SessionSurfaceSwitcher({ current, choices, onSelect, label, labels }) {
-  return (
-    <div className="session-surface-switcher" role="tablist" aria-label={label}>
-      {choices.map((surface) => (
-        <button key={surface} type="button" role="tab" aria-selected={current === surface}
-          className={`session-surface-choice${current === surface ? ' on' : ''}`}
-          onClick={() => onSelect(surface)}>
-          {labels[surface]}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function SessionDocumentActions({ document, actions }) {
   return actions.map((action) => <RegisteredDocumentAction key={action.id} document={document} action={action} />)
 }
@@ -1357,6 +1343,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const surfaceChoices = terminalFree || readOnlyPane
     ? [SESSION_SURFACE_CONVERSATION]
     : [SESSION_SURFACE_CONVERSATION, SESSION_SURFACE_TERMINAL, SESSION_SURFACE_DIFF]
+  const baseSurface = activeBaseSurface === SESSION_SURFACE_DIFF
+    ? getSessionBaseSurface(active)
+    : activeBaseSurface
   const documentActions = sessionActive ? [
     {
       id: 'resource-picker', icon: 'plus', label: t('session.addResourceTab'), priority: 100,
@@ -1378,24 +1367,29 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setCtxMenu((current) => (current ? null : { x: box.left, y: box.bottom, session: selSession }))
       },
     },
-    ...(!activeResource && surfaceChoices.length > 1 ? [{
-      id: 'surface-switcher', label: t('session.surfaceSwitcher'), priority: 80,
-      menuKey: `${activeBaseSurface}:${surfaceChoices.join(',')}`,
-      node: <SessionSurfaceSwitcher
-        current={diffSurface ? SESSION_SURFACE_DIFF : activeBaseSurface}
-        choices={surfaceChoices}
-        label={t('session.surfaceSwitcher')}
-        labels={{
-          [SESSION_SURFACE_CONVERSATION]: t('tabs.surfaceConversation'),
-          [SESSION_SURFACE_TERMINAL]: t('tabs.surfaceTerminal'),
-          [SESSION_SURFACE_DIFF]: t('tabs.surfaceDiff'),
-        }}
-        onSelect={(next) => {
+    ...(!activeResource && surfaceChoices.length > 1 ? [
+      {
+        id: 'surface-switcher', icon: baseSurface === SESSION_SURFACE_TERMINAL ? 'message-square' : 'terminal',
+        label: t(baseSurface === SESSION_SURFACE_TERMINAL ? 'session.switchToConversation' : 'session.switchToTerminal'),
+        priority: 80,
+        menuKey: `${baseSurface}:${diffSurface ? 'diff' : 'base'}`,
+        onClick: () => {
           setResourceMenu(false)
-          if (next === SESSION_SURFACE_CONVERSATION || next === SESSION_SURFACE_TERMINAL) setSessionBaseSurface(active, next)
+          const next = baseSurface === SESSION_SURFACE_TERMINAL ? SESSION_SURFACE_CONVERSATION : SESSION_SURFACE_TERMINAL
+          setSessionBaseSurface(active, next)
           showBaseSurface(active, next, true)
-        }} />,
-    }] : []),
+        },
+      },
+      {
+        id: 'diff-switcher', icon: 'file-diff', label: t(diffSurface ? 'session.diffClose' : 'session.diffScope'),
+        priority: 79, pressed: diffSurface,
+        menuKey: diffSurface ? 'diff' : 'base',
+        onClick: () => {
+          setResourceMenu(false)
+          showBaseSurface(active, diffSurface ? getSessionBaseSurface(active) : SESSION_SURFACE_DIFF, true)
+        },
+      },
+    ] : []),
     ...(!activeResource && activeBaseSurface === 'terminal' && !readOnlyPane ? [{
       id: 'enable-terminal-input', icon: 'keyboard', priority: 60,
       pressed: writableSession === active,

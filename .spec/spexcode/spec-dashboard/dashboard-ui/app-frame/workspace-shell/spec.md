@@ -27,17 +27,16 @@ whole shell hangs off, re-derived from what the product is rather than from what
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer, and a bare singleton board
+  brings the session list, a node or a governed file brings the explorer, and a bare review/settings board
   (`#/evals`, `#/issues`, `#/settings`) brings no sidebar at all, taking the full width instead of inheriting
-  the tree the last tab was showing. Singleton object details remain documents and retain the dock. A bare
+  the tree the last tab was showing. Parameterized review details remain documents and retain the dock. A bare
   sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
   route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything readable is a document with an address — a node, a file, a session, an eval, an
-  issue, and the **singleton boards** (evals, issues, settings), which are tabs you keep rather than places
-  you bounce off. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
+  active tab; everything held is an object document with an address — a node, a file, a session, an eval
+  detail, or an issue detail. Bare evals/issues/settings boards are destinations, not tabs. **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). An empty workspace is an explicit state, not a gap the frame fills with a document: the

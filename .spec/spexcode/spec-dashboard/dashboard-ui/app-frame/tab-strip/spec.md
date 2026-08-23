@@ -9,6 +9,7 @@ related:
   - spec-dashboard/src/tabModel.js
   - spec-dashboard/src/tabModel.test.mjs
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/EmptyView.jsx
@@ -19,33 +20,22 @@ related:
 ---
 # tab-strip
 
-**The strip holds objects and singletons.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A SINGLETON
-tab is a bare board — `#/evals`, `#/issues`, `#/settings` — a place the reader keeps open rather than one
-they bounce off. It is a tab like any other, closable like any other; "singleton" is not a second tab kind
-but a consequence of the identity rule: the address carries no selector, so opening it twice is opening the
-same address twice, which the strip already resolves to one tab. The rail button is therefore
-create-or-focus without needing to know it is ([[side-nav]]).
+**The strip holds OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
+`#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. Bare
+`#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
+are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
+ordinary objects and may be held like every other document. The rail is therefore navigation only; it does
+not create, pin, or focus a board tab ([[side-nav]]).
 
-**A singleton board is RESIDENT, and residency belongs to the address.** A board never takes the current
-slot: it is a place, and a place is not something the reader spends the slot on. This is the other half of
-"singleton", and leaving it out cost exactly what the whole-address reasoning predicts — a board reached by
-an ordinary navigation (the status-bar tally, a pasted link) sat in the slot, so its own first row click
-replaced the list with the detail. The reader asked to read one scenario and lost the list they were
-reading it from. The rail button used to hold the board by hand, which made residency a property of that
-button rather than of the board; every other door got the slot. [[view-registry]] answers residency for the
-address (`resident`, and only while the address carries no selector), so no door has to remember. The
-DETAIL addresses of those same pages are ordinary objects and land in the slot like everything else.
-
-What the strip does NOT hold is what has neither an object nor residency: `#/graph` (including
-`#/graph/<node>` focus — a legacy address, [[node-graph]]), bare `#/sessions`, and **`#/sessions/new`** —
+What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy
+address, [[node-graph]]), bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
 This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
 nothing.
 
-**The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a board
-tab has none ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
+**The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
+has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
 各个 tab，各个 tab 才相当于是工作区，而不是左侧边栏。"* The left rail is a way to change destination and the
 dock only describes the current tab; the strip is what you are working on, and none of the three is
 interchangeable with another.
@@ -63,7 +53,7 @@ and chrome that only appears when a second document exists would jump the layout
 the reader's first hold.
 
 **The row is always there, and it always says something.** On the routes that mint no tab — the graph, the
-sessions launch page, the empty workspace — the strip names the PLACE instead: the same projection the
+review/settings boards, the sessions launch page, the empty workspace — the strip names the PLACE instead: the same projection the
 document title uses, drawn quiet, because orientation is not a title. This is what makes the row honest
 rather than reserved: the shell used to hold the space with a wrapper that drew a blank band on exactly
 those routes, which is a band that says nothing while costing the budget the same as one that does.
@@ -81,8 +71,7 @@ the strip does not reshuffle under the reader. A tab is born only from this whit
 1. ctrl/⌘-click on a row;
 2. a double-click, on a row or on the slot tab itself;
 3. a document's own explicit "open in a new tab" action — including a review row's context menu;
-4. a deep link into a workspace that has no slot yet;
-5. arriving at a RESIDENT address (a singleton board), which is held by what it is rather than by a gesture.
+4. a deep link into a workspace that has no slot yet (for an object document; boards do not qualify).
 
 Everything else reuses the unpinned slot **within the route's page kind**. The two human rules sit beside
 each other: "弹新 tab 需用户准许" prevents kind-internal browsing from proliferating tabs, while
@@ -187,11 +176,9 @@ document ([[view-registry]]): a tab for it would be the one address that contrad
 Only closing the last tab mints it — a fresh load with no tabs opens `#/sessions`, because starting with
 nothing held is not the same event as putting your last document down.
 
-`settings` used to be described as a destination people bounce off, and was therefore kept out of the
-strip. Two things were true at once and only one of them was the reason: a strip that filled with *visits*
-would stop being a list of what you are working on — but that is what the current slot solves, for every
-kind of address at once. Settings is a singleton tab now, held when it is asked for by name and closed like
-anything else.
+`settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
+the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
+parameterized detail objects may be held.
 
 **Labels come from the board's own projections** — a node's title, a session's headline plus its i18n face
 suffix — never from a

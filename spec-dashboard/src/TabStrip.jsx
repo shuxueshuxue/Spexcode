@@ -9,6 +9,8 @@ import { STATUS } from './specMeta.js'
 import { STATUS_COLOR } from './session.js'
 import { getSessionBaseSurface, isSessionSurface, isResourceSurface, resourceSurfaceKey, resourceTabKey, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
+import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
+import { useEscLayer } from './escStack.js'
 
 const resourceLabel = (url) => {
   try {
@@ -49,7 +51,7 @@ function label(tab, { specs, sessions, names, t }) {
   // a DETAIL of a board is not the board: `#/evals` is the list and `#/evals/<node>/<scenario>` is one
   // reading, and while both said "Evals" the strip could hold three tabs nothing distinguished. The
   // scenario is the leaf and the node is the folder it sits in, so the tab reads container · leaf — the
-  // same grammar a session tab uses, and both halves come from the address plus the resident node title.
+  // same grammar a session tab uses, and both halves come from the address plus the board's node title.
   if (tab.page === 'evals' && tab.param) {
     const { node, scenario } = evalDetailParts(tab.param)
     const title = specs?.find((s) => s.id === node)?.title || node
@@ -57,7 +59,7 @@ function label(tab, { specs, sessions, names, t }) {
   }
   if (tab.page === 'issues' && tab.param) {
     if (tab.param === 'new') return t('tabs.issueNew')
-    // an issue has no resident projection to be named from ([[document-actions]]): the detail reports the
+    // an issue has no board projection to be named from ([[document-actions]]): the detail reports the
     // concern it already loaded, and until it has, the id is shown rather than a blank chip. The 220px tab
     // does the truncating, so the label stays the whole sentence and the ellipsis lands where it fits.
     return names?.get(routeHash('issues', tab.param)) || issueNumber(tab.param)
@@ -88,7 +90,7 @@ function label(tab, { specs, sessions, names, t }) {
 function TabDot({ tab, specs, sessions }) {
   // an eval detail wears the dot of the NODE it measures. Its own verdict is not on the board — it takes a
   // detail request to know — and a tab must never mint a fetch to draw itself; the node it belongs to is
-  // resident, is what the reader navigated through to get here, and is the same dot that node's tile wears.
+  // is what the reader navigated through to get here, and is the same dot that node's tile wears.
   const specId = tab.page === 'spec' ? tab.param : (tab.page === 'evals' && tab.param ? evalDetailParts(tab.param).node : null)
   if (specId) {
     const node = specs?.find((s) => s.id === specId)
@@ -127,8 +129,23 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   // changes during a drag: the active document stays active, no address is written, and a release outside
   // any tab leaves the order exactly as it was.
   const [drag, setDrag] = useState(null)
+  const [menu, setMenu] = useState(null)
   const abandon = useRef(null)
   useEffect(() => () => abandon.current?.(), [])
+  useEffect(() => {
+    if (!menu) return undefined
+    const dismiss = (event) => {
+      if (event.target?.closest?.('.sess-menu')) return
+      setMenu(null)
+    }
+    window.addEventListener('click', dismiss)
+    window.addEventListener('contextmenu', dismiss, true)
+    return () => {
+      window.removeEventListener('click', dismiss)
+      window.removeEventListener('contextmenu', dismiss, true)
+    }
+  }, [menu])
+  useEscLayer(!!menu, () => setMenu(null))
 
   // The insertion point under a pointer: the tab it is over, and which HALF of that tab. Past the midpoint
   // means after — which on the last tab is the end of the strip, the one landing place no tab can name. A
@@ -190,7 +207,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
             onDoubleClick={(e) => {
               if (!tab.pinned && !e.target.closest('.tab-x')) pinTab(tab.page, tab.param, tab.query)
             }}
-            onContextMenu={(e) => { e.preventDefault(); closeOthers(tab) }}
+            onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab, key }) }}
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
@@ -225,6 +242,24 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
           })}
           {trailing}
         </div>
+      )}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.key} label={t('tabs.menuLabel')}>
+          <ContextMenuGroup>
+            <ContextMenuItem icon="x" danger onClick={(e) => { e.stopPropagation(); setMenu(null); close(menu.tab) }}>
+              {t('tabs.menuClose')}
+            </ContextMenuItem>
+            <ContextMenuItem icon="circle-minus" danger onClick={(e) => { e.stopPropagation(); setMenu(null); closeOthers(menu.tab) }}>
+              {t('tabs.menuCloseOthers')}
+            </ContextMenuItem>
+          </ContextMenuGroup>
+          <ContextMenuSeparator />
+          <ContextMenuGroup>
+            <ContextMenuItem icon="panel-right" onClick={(e) => { e.stopPropagation(); setMenu(null); splitTo(menu.tab) }}>
+              {t('tabs.menuSplit')}
+            </ContextMenuItem>
+          </ContextMenuGroup>
+        </ContextMenu>
       )}
     </div>
   )

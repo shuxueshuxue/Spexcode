@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { layout } from './data.js'
+import { layout, singleLayerFrontier, X_GAP, Y_GAP } from './data.js'
 
 const tree = [
   { id: 'root', parent: null },
@@ -39,4 +39,31 @@ test('wide sibling child blocks reserve the next-layer total height', () => {
   const left = tree.filter((node) => node.parent === 'left')
   const right = tree.filter((node) => node.parent === 'right')
   for (const a of left) for (const b of right) assert.ok(Math.abs(pos[a.id].y - pos[b.id].y) >= 50)
+})
+
+test('every focus stop exposes exactly its ancestor spine and immediate children', () => {
+  for (const focus of tree) {
+    const expanded = singleLayerFrontier(tree, focus.id)
+    const expected = new Set()
+    for (let node = focus; node; node = node.parent ? tree.find((candidate) => candidate.id === node.parent) : null) {
+      expected.add(node.id)
+    }
+    const visible = new Set(Object.keys(layout(tree, expanded)))
+    const expectedVisible = new Set(tree.filter((node) => !node.parent || expected.has(node.parent)).map((node) => node.id))
+    assert.deepEqual(visible, expectedVisible, `focus ${focus.id} leaked a non-frontier node`)
+  }
+})
+
+test('every focus stop has no overlapping source-of-truth tile boxes', () => {
+  const width = 250, height = 50
+  for (const focus of tree) {
+    const positions = layout(tree, singleLayerFrontier(tree, focus.id))
+    const ids = Object.keys(positions)
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = positions[ids[i]], b = positions[ids[j]]
+      const separated = Math.abs(a.x - b.x) >= width || Math.abs(a.y - b.y) >= height
+      assert.equal(separated, true, `focus ${focus.id} overlaps ${ids[i]} and ${ids[j]}`)
+    }
+  }
+  assert.ok(X_GAP >= width && Y_GAP >= height)
 })

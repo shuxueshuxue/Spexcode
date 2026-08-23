@@ -11,7 +11,7 @@ import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
-import { layout, X_GAP, Y_GAP } from './data.js'
+import { layout, singleLayerFrontier, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
@@ -134,15 +134,7 @@ function GraphView({ param, query }) {
     setFocusId(id)
   }, [])
   const focusRaw = rawById[focusId] || specs.find((s) => !s.parent) || specs[0]
-  const expanded = useMemo(() => {
-    const set = new Set()
-    if (!focusRaw) return set
-    for (let cur = focusRaw; cur; cur = cur.parent ? rawById[cur.parent] : null) set.add(cur.id)
-    // Keep the ancestor spine and open only the focused node. Its siblings remain visible through their
-    // expanded parent, while their children stay collapsed to ▸N count tiles.
-    set.add(focusRaw.id)
-    return set
-  }, [focusRaw, rawById])
+  const expanded = useMemo(() => singleLayerFrontier(specs, focusRaw?.id), [specs, focusRaw])
   // VISIBLE nodes are exactly those the layout placed (root, or a child of an expanded node); they carry
   // the x/y all geometry/render below works on. Hidden subtrees simply aren't in `specs2`.
   const placed = useMemo(() => layout(specs, expanded), [specs, expanded])

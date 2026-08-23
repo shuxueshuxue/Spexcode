@@ -46,6 +46,15 @@ export function layout(nodes, expanded) {
   return pos
 }
 
+// The graph's single-layer frontier: every ancestor needed to reach focus, plus focus itself.
+export function singleLayerFrontier(nodes, focusId) {
+  const byId = Object.fromEntries(nodes.map((node) => [node.id, node]))
+  const focus = byId[focusId] || nodes.find((node) => !node.parent) || nodes[0]
+  const expanded = new Set()
+  for (let node = focus; node; node = node.parent ? byId[node.parent] : null) expanded.add(node.id)
+  return expanded
+}
+
 // retry a thrown (transient: refused/reset) fetch with bounded backoff so a zero-downtime backend reload is
 // invisible; an actual HTTP response (even 4xx/5xx) is returned, never retried. Every `/api` path is
 // scoped through apiUrl ([[dashboard-shell]]'s project-scope seam, project.js), so callers keep writing

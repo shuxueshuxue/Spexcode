@@ -72,6 +72,7 @@
      jump, short enough that nobody waits for it — and a token, so the whole frame moves at one speed
      instead of each panel picking its own. */
   --dur-panel: 170ms;
+  --dur-tab: 150ms;
   /* GEOMETRY. One corner radius for every box that is not a circle, and one spacing ladder. New rules
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
@@ -512,27 +513,42 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    set behind a gesture — the documents you are holding are off-screen and there is no mark saying so —
    while wrapping keeps the whole set legible and pays for it in a thickness the reader can see and control.
    The band's height is therefore the working set, not a constant; the strip is `flex: 0 0 auto` and the
-   rows are what make it tall. `flex-basis: 0` is deliberate: line formation sees each tab's minimum first,
-   so the strip shrinks every tab before it creates another row, then flex-grow fills each row again. */
+   rows are what make it tall. Each tab uses its intrinsic content width, then flex-shrink sees the 80px floor
+   before line formation creates another row. */
 .tabstrip {
   flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
   background: var(--panel); border-bottom: 1px solid var(--edge);
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch;
-  flex-wrap: wrap; align-content: flex-start; container-type: inline-size;
+  flex-wrap: nowrap; align-content: flex-start; container-type: inline-size;
 }
+.tabstrip-tabs.wrapped { flex-wrap: wrap; }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
   display: inline-flex; align-items: center; padding: 0 var(--space-5);
   color: var(--muted); font-size: var(--type-meta); white-space: nowrap;
 }
 .tab {
-  position: relative; flex: 1 1 0; height: 30px;
+  position: relative; flex: 0 1 auto; width: auto; height: 30px;
   display: flex; align-items: center; min-width: 80px; max-width: 240px;
   border-right: 1px solid var(--edge); color: var(--muted); container-type: inline-size;
+  overflow: hidden; animation: tab-in var(--dur-tab) ease backwards;
+  transition: background-color var(--dur-tab) ease, color var(--dur-tab) ease, border-color var(--dur-tab) ease;
 }
-.tab.on { min-width: 112px; background: var(--paper); color: var(--ink2); }
+.tabstrip-tabs:not(.wrapped) .tab { container-type: normal; }
+.tabstrip-tabs.wrapped .tab { flex: 1 1 0; width: auto; }
+.tab.on {
+  min-width: 112px; background: var(--paper); color: var(--ink2);
+  border-right-color: transparent; border-radius: var(--radius) var(--radius) 0 0;
+}
+.tab:not(.on):hover { background: var(--panel2); color: var(--ink2); }
+@keyframes tab-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes tab-out { to { opacity: 0; transform: scaleX(.72); } }
+.tab.tab-closing {
+  border: 0; transform-origin: left center;
+  animation: tab-out var(--dur-tab) ease backwards; pointer-events: none;
+}
 /* A DRAG SAYS WHERE, NEVER WHAT. The moved tab fades to say it is in hand and the landing place wears a
    single hairline on the edge the tab would arrive at — drawn ON a tab rather than between them, so it is
    at home in any row of a wrapped strip. Nothing lifts and nothing casts a shadow: the strip stays one
@@ -548,20 +564,23 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    through unless the reader holds it ([[tab-strip]]). */
 .tab.slot { opacity: .72; font-style: italic; }
 .tab-face {
-  display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-5); height: 100%;
+  flex: 1 1 auto; display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-5); height: 100%;
   background: none; border: 0; color: inherit; cursor: pointer;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui);
 }
-.tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-label { width: max-content; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 2px; }
 .tab-spinner { flex: 0 0 auto; color: var(--blue); animation: tab-spin .9s linear infinite; font-style: normal; }
 @keyframes tab-spin { to { transform: rotate(360deg); } }
 .tab-x {
-  display: inline-flex; align-items: center; padding: 0 var(--space-4) 0 var(--space-1); height: 100%;
-  background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
+  flex: 0 0 24px; width: 24px; display: inline-flex; align-items: center; overflow: hidden;
+  padding: 0 var(--space-4) 0 var(--space-1); height: 100%; background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
+  transition: opacity var(--dur-tab) ease, color var(--dur-tab) ease, background-color var(--dur-tab) ease;
 }
-.tab.on .tab-x, .tab:hover .tab-x { opacity: 1; }
-.tab-x:hover { color: var(--ink2); }
+.tab.on .tab-x, .tab:hover .tab-x {
+  opacity: 1;
+}
+.tab-x:hover { color: var(--ink2); background: var(--panel2); }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 /* At the narrow end of the same flex scale, text gets the space first. The full label remains on the face's
    accessible name and tooltip, so the second half of a session label can disappear without losing it. Status
@@ -572,6 +591,9 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 }
 @container (max-width: 100px) {
   .tab-dot, .tab-spinner { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab, .tab.tab-closing, .tab-x { animation: none; transition: none; }
 }
 /* The action cluster sits at the band's LAST row, against the content it acts on. It is a sibling of the
    wrapping list rather than a member of it, so it reserves its own column and no tab can ever run under
@@ -1001,13 +1023,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .srcview-body { position: relative; height: min(46vh, 420px); overflow: hidden; }
 .srcview-cm, .srcview-cm .cm-editor { height: 100%; }
 .srcview-body .cm-editor.cm-focused { outline: none; }
-.srcview-select-action {
-  position: absolute; right: 10px; top: 9px; z-index: 2; display: inline-flex; align-items: center;
-  padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--blue) 55%, var(--line)); border-radius: var(--radius);
-  color: var(--blue); background: color-mix(in srgb, var(--paper) 94%, transparent); font-family: var(--ui-font);
-  font-size: var(--type-caption); cursor: pointer; box-shadow: var(--shadow);
-}
-.srcview-select-action:hover { background: var(--panel2); }
 /* the read's progress, floated over the text while it is still news; a z-layer, never a strip. */
 .srcview-progress {
   position: absolute; right: var(--space-5); bottom: var(--space-4); z-index: 3;
@@ -3295,6 +3310,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .pa-act:hover, .pa-act:focus-visible { outline: none; background: var(--panel2); color: var(--ink2); }
 .pa-act-icon { color: var(--muted); }
 .pa-act:hover .pa-act-icon, .pa-act:focus-visible .pa-act-icon { color: currentColor; }
+.pa-act:disabled { opacity: .45; cursor: default; }
+.pa-loading { position: fixed; z-index: 60; display: inline-flex; padding: 4px; color: var(--muted); }
 
 .pa-card {
   position: fixed; z-index: 61; display: grid; gap: var(--space-4); padding: var(--space-5);

@@ -133,8 +133,9 @@ ordinary focused document control, so opening the menu never steals focus from t
 
 The pop-over is the one home for selected-session document actions. Its **lock on graph** item invokes the console's
 existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.
-The same menu also hosts [[attach-menu]]'s live-only attach item. List-only multi-select, drag, and reparent
-actions are not offered after the list's retirement; their removal is explicit in [[dock-modes]].
+The same menu also hosts [[attach-menu]]'s live-only attach item. List-only multi-select is not offered after the
+list's retirement. Row drag/reparent is a dock-list gesture, not a selected-session menu action, and its owner is
+[[dock-modes]].
 
 Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text rows, grouped commands, and a
 separate destructive close row. This node supplies the session actions; it never forks the menu chrome.

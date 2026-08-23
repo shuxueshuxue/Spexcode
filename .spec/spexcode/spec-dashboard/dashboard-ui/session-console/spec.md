@@ -117,8 +117,8 @@ The [[dock-modes]] sessions projection is the desktop's sole session list. This 
 renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
 the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
 while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
-dock remains read-only: drag-to-reparent and multi-select are explicitly retired with the duplicate list because
-their mutable state cannot belong to a finding projection. The keyboard fresh-session binding remains unchanged.
+dock remains list-owned: multi-select is explicitly retired with the duplicate list, while row movement belongs
+to the dock's sole session list ([[dock-modes]]). The keyboard fresh-session binding remains unchanged.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -179,8 +179,9 @@ the composer that is the human's only way to speak to a running session. The add
 screen; the store decides only what a bare address means.
 Opening a published resource is an ORDINARY navigation to that address: it lands in the strip's current slot
 like every other plain click, dedupes onto an already-open tab, and mints a tab of its own only from the
-gestures that mint any tab ([[tab-strip]]). It used to force a resident tab, which is exactly the reflex that
-filled the strip with things nobody decided to keep. Closing that tab closes the resource view;
+gestures that mint any tab ([[tab-strip]]). **Historical: an earlier implementation forced a resident tab**,
+which filled the strip with things nobody decided to keep; that behavior is retired. Closing the ordinary
+resource tab closes the resource view;
 the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived

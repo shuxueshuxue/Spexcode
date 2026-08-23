@@ -47,8 +47,8 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
 - **Pointer and keyboard behavior.** Rail links are real anchors with translated labels/tooltips and current
   keymap hints. Pointer presses are inert chrome for focus acquisition, while Tab and native Enter/Space
   activation remain available. The rail never scrolls or overlays page content. It and the optional dock
-  extend to the viewport bottom as the shell's left region; the content status row begins after their
-  one-pixel `--line` right seam rather than crossing underneath them.
+  fill the app row and stop at the full-width status row; their one-pixel `--line` right seam meets that row
+  as a clean T rather than continuing through its bottom edge.
 - **Route controls only.** The permanently mounted controls are the dock toggle and the five route entries.
   The former top project chip is absent: its mark, visible name, catalog menu, offline rules, guest login
   door, and `/projects` management entry moved together to the status row, so project switching has one

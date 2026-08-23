@@ -401,12 +401,7 @@ function SessionEvalStats({ summary }) {
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
-  useEffect(() => {
-    if (!pop) return
-    const onKey = (e) => { if (e.key === 'Escape') setPop(false) }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [pop])
+  useEscLayer(pop, () => setPop(false))
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
   const selected = launchers.find((l) => l.name === launcher)
@@ -801,8 +796,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
-      const valid = new Set(allSessions.map((s) => s.id))
-      const next = new Set([...prev].filter((id) => valid.has(id)))
+      // A terminal is a live-pane resource, not a historical session cache. When a pane goes offline or is
+      // archived, remove its id here so SessionTerm cleanup closes the browser socket and native client. The
+      // separate conversation set retains readable timeline history without retaining an xterm/WS pair.
+      const next = new Set([...prev].filter((id) => {
+        const session = allSessions.find((candidate) => candidate.id === id)
+        return session && !isHeadlessSession(session) && hasLivePane(session)
+      }))
       for (const s of allSessions) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
       if (active !== 'new') {
         const selected = sessions.find((s) => s.id === active)

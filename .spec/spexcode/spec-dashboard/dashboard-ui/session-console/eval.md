@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: live-pane-disposes-on-offline-transition
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/resource-terminal-lifecycle.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/SessionTerm.jsx, spec-dashboard/src/TimelineChat.jsx]
+    description: >-
+      Open a pane-backed session in Chromium with a live board projection, then deliver an authoritative board
+      frame marking that same session offline and archived. Observe the real mounted terminal and the replacement
+      Conversation surface after the projection settles.
+    expected: >-
+      The live frame mounts exactly one xterm layer. The offline/archived frame disposes that layer and its socket
+      while retaining one readable Conversation layer; no hidden terminal remains to charge the retired session.
   - name: terminal-input-default-and-suspended-confirm
     tags: [frontend-e2e, desktop, backend-api]
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionTerm.jsx]

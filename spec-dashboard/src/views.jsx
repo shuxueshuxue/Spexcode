@@ -92,8 +92,7 @@ export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
   // sends anyone through the rail or a tab close.
   graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
-  // Spec detail links remain canonical `#/spec/<id>` addresses; residency gives them one stable Spec tab
-  // identity without changing the SpecView/FileView document boundary.
+  // Spec detail links keep their canonical `#/spec/<id>` URL while the working set owns one `#/spec` tab.
   spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, resident: true, icon: 'graph', className: 'view-spec' },
   file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is

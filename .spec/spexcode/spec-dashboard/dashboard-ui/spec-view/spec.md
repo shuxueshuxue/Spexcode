@@ -22,9 +22,9 @@ the same node must never be two implementations that can disagree about what the
 its place as a quick lens on board focus; this is where a node is READ.
 
 Inline `[[id]]` references in that shared renderer are real detail anchors: they use the canonical
-`#/spec/<id>` address, ordinary clicks focus the resident Spec tab, and Ctrl/Command-click uses
-[[tab-strip]]'s `holdAnchor` gesture to retain the same resident working-set identity. The popup and both
-document panes therefore expose the same working link, not a styled but inert span.
+`#/spec/<id>` address, ordinary clicks focus the resident Spec tab, and Ctrl/Command-click uses [[tab-strip]]'s
+`holdAnchor` gesture to keep a second document. The popup and both document panes therefore expose the same
+working link, not a styled but inert span.
 
 `code:` entries naming symbols resolve to file addresses — several entries can name the same file, but no
 source face is embedded in the spec. A node's attachments ([[node-attachments]]) use the same chip row and
@@ -43,7 +43,7 @@ send it to a session, or edit it in place and commit ([[prose-dispatch]]). That 
 prose column and is made entirely of z-layers: the document's geometry with a selection is exactly its
 geometry without one, and the chips are untouched by it.
 
-**B5 acceptance.** A spec detail has no `.specview-code`, no automatic `SourceView`, and no split divider or
-`spex.docSplit` state. Opening a governance chip or attachment produces an independent file tab, leaves the
-resident Spec tab in the working set, focuses the file, and lets a second chip replace the same file slot.
+**B5 acceptance.** A spec detail has no `.specview-code`, no automatic `SourceView`, and no split
+divider or `spex.docSplit` state. Opening a governance chip or attachment produces an independent file tab,
+leaves the spec tab in the working set, focuses the file, and lets a second chip replace the same file slot.
 An alt-click on that file tab still sends it to the shell's second pane ([[tab-strip]]).

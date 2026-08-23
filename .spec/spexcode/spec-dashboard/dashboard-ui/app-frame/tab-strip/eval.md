@@ -5,23 +5,23 @@ scenarios:
       Open the running dashboard in a real browser. From a session document, use the Explorer to open the
       tab-strip spec and confirm the resident Spec tab focuses while the session remains; navigate from one
       spec to another and confirm the detail URL changes without minting a second Spec tab; click three
-      session rows in the dock and confirm one session tab is reused; ctrl-click a session row and confirm it
-      creates a pinned tab; open Settings and confirm its tab label is Settings.
+      session rows in the dock and confirm one
+      session tab is reused; ctrl-click a session row and confirm it creates a pinned tab; open Settings and
+      confirm its tab label is Settings.
     expected: >
       The strip contains both a session and one resident Spec tab after the cross-kind navigation. A second
-      spec keeps the same `#/spec` tab identity while its `#/spec/<id>` detail address changes. Three plain
-      session clicks leave one session tab whose address is the last session. Ctrl-click adds a second
-      non-slot session tab. The Settings tab reads Settings, never the internal key tabs.settings.
+      spec keeps the same `#/spec` tab identity while its detail address changes. Three plain session clicks leave one session tab whose
+      address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
+      Settings, never the internal key tabs.settings.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
   - name: spec-resident-detail-focus
     description: >-
-      In a real Chromium dashboard, open a canonical `#/spec/<id>` detail URL, then inspect the settled
-      workspace strip and navigate to a second canonical spec detail through an inline spec reference.
+      In a real Chromium dashboard, open two canonical `#/spec/<id>` detail URLs and inspect the workspace
+      strip after each route settles; then open a `#/file/<path>` detail.
     expected: >-
-      The strip exposes one active top-level Spec tab labelled Spec. The URL retains the selected
-      `#/spec/<id>` detail address, and changing the selected node keeps the same Spec tab identity rather
-      than creating a second object tab. File chips still navigate to independent `#/file/<path>` tabs.
+      Both Spec details keep one active top-level Spec tab labelled Spec. The URL retains each selected
+      `#/spec/<id>` detail address, and the file route opens an independent File tab beside the Spec tab.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/views.jsx, spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/test/spec-resident-tab.e2e.mjs

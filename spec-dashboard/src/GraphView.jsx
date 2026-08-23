@@ -17,6 +17,7 @@ import {
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
+import { chordSequence } from './keymap.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
@@ -46,12 +47,13 @@ const NODE_HANDLES = [
 ]
 const clamp = (z) => Math.max(GRAPH_MIN_ZOOM, Math.min(GRAPH_MAX_ZOOM, z))
 
-// nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
 // prompt-driven work, never a server op ([[mentions]]: the issue store is the only programmatic surface).
+const NEW_CHILD_CHORD = chordSequence('graph.newChild').join('')
+const DELETE_CHORD = chordSequence('graph.del').join('')
 const CHORDS = {
-  nn: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
-  dd: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
+  [NEW_CHILD_CHORD]: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
+  [DELETE_CHORD]: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
 }
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
@@ -668,8 +670,8 @@ function GraphView({ param, query }) {
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => navigate('spec', focusRef.current.id)}
           onFresh={(id) => startNew(`[[${id}]] `)}
-          onNewChild={(id) => startNew(CHORDS.nn(id))}
-          onDelete={(id) => startNew(CHORDS.dd(id))}
+          onNewChild={(id) => startNew(CHORDS[NEW_CHILD_CHORD](id))}
+          onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}
         />}

@@ -94,6 +94,12 @@ The `?` help legend is shell-owned chrome, not a graph-only modal. The status-ba
 help modal or keyboard owner behind. Escape and a second `?` peel the legend through the shared overlay contract,
 and `j`/`k` (or arrow equivalents) scroll its body.
 
+Structural node commands are two-key chords. `keymap.js` declares the leader in `keys` and the complete physical
+sequence in `sequence` (`nn` for `graph.newChild`, `dd` for `graph.del`). `chordSequence()` and `displayKeysOf()`
+are the only readers of that declaration: Graph dispatch, Legend, and Settings must not carry a second literal
+`nn`/`dd` grammar. Rebinding remains unavailable for structural chords, while their complete sequence stays visible
+to the reader.
+
 The Escape stack is an input owner of that same service, above routed scopes. `escStack.js` exposes the stack
 consumer but does not attach a second window listener; one Escape closes only the top registered layer. Review
 lists and video detail register their own j/k or player controls through `useKeyboardScope`, so their handlers

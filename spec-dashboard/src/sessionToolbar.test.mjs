@@ -82,6 +82,7 @@ test('file previews use one selectable resource tab, keep Markdown restricted, e
 
 test('pane-backed and headless consoles share one warm TimelineChat Conversation surface', () => {
   assert.match(source, /const isHeadlessSession = \(session\) => session\?\.capabilities\?\.headless === true/)
+  assert.match(source, /const next = new Set\(\[\.\.\.prev\]\.filter\(\(id\) => \{[\s\S]*?return session && !isHeadlessSession\(session\) && hasLivePane\(session\)[\s\S]*?\}\)\)/)
   assert.match(source, /\(headless \|\| openedConversations\.has\(id\)\) && \(/)
   assert.match(source, /<TimelineChat s=\{session\} sessions=\{allSessions\} active=\{open && conversationShown\}/)
   assert.match(source, /setOpenedConversations\(\(prev\) => \(prev\.has\(id\) \? prev : new Set\(prev\)\.add\(id\)\)\)/)

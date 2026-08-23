@@ -6,14 +6,14 @@ import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './ta
 // The regression this exists to catch is the one that shipped: browsing minted a tab per click, so a
 // reader who clicked five things was holding five documents they never decided to keep.
 
-const file = (id) => ({ page: 'file', param: id, query: null })
-const spec = (id) => ({ page: 'spec', param: id, query: null })
+const spec = (id) => ({ page: 'file', param: id, query: null })
+const residentSpec = (id) => ({ page: 'spec', param: id, query: null })
 const session = (id) => ({ page: 'sessions', param: id, query: null })
 const keys = (tabs) => tabs.map((t) => `${t.pinned ? '*' : '~'}${tabKey(t)}`)
 
 test('plain navigation reuses one slot per document kind', () => {
   let tabs = []
-  for (const id of ['a', 'b', 'c', 'd', 'e']) tabs = placeTab(tabs, file(id))
+  for (const id of ['a', 'b', 'c', 'd', 'e']) tabs = placeTab(tabs, spec(id))
   assert.deepEqual(keys(tabs), ['~#/file/e'])
   // A different kind gets its own slot, so browsing sessions cannot evict the current spec.
   for (const id of ['s1', 's2', 's3']) tabs = placeTab(tabs, session(id))
@@ -25,31 +25,31 @@ test('ctrl/⌘ pins a second tab and the pinned one is never replaced', () => {
   tabs = placeTab(tabs, session('s1'), 'pin')        // explicit hold
   assert.deepEqual(keys(tabs), ['~#/file/a', '*#/sessions/s1'])
   // the slot moves on; the pinned tab stays exactly where it is, address intact
-  tabs = placeTab(tabs, file('b'))
+  tabs = placeTab(tabs, spec('b'))
   assert.deepEqual(keys(tabs), ['~#/file/b', '*#/sessions/s1'])
   // and a pinned tab is never the one a plain navigation lands in, even when it is first in the strip
-  let pinnedFirst = placeTab([], file('a'), 'pin')
-  pinnedFirst = placeTab(pinnedFirst, file('b'))
+  let pinnedFirst = placeTab([], spec('a'), 'pin')
+  pinnedFirst = placeTab(pinnedFirst, spec('b'))
   assert.deepEqual(keys(pinnedFirst), ['*#/file/a', '~#/file/b'])
 })
 
 test('the slot keeps its POSITION when its address changes', () => {
-  let tabs = placeTab([], file('pin1'), 'pin')
-  tabs = placeTab(tabs, file('slot'))
-  tabs = placeTab(tabs, file('pin2'), 'pin')
+  let tabs = placeTab([], spec('pin1'), 'pin')
+  tabs = placeTab(tabs, spec('slot'))
+  tabs = placeTab(tabs, spec('pin2'), 'pin')
   assert.deepEqual(keys(tabs), ['*#/file/pin1', '~#/file/slot', '*#/file/pin2'])
-  tabs = placeTab(tabs, file('slot2'))
+  tabs = placeTab(tabs, spec('slot2'))
   assert.deepEqual(keys(tabs), ['*#/file/pin1', '~#/file/slot2', '*#/file/pin2'])
 })
 
 test('re-opening an address activates it instead of stacking; pinning promotes it in place', () => {
   let tabs = placeTab(placeTab([], file('a'), 'pin'), file('b'))
   const before = tabs
-  assert.equal(placeTab(tabs, file('a')), before)          // already open: nothing moves
-  tabs = placeTab(tabs, file('b'), 'pin')                  // double-click on the slot
+  assert.equal(placeTab(tabs, spec('a')), before)          // already open: nothing moves
+  tabs = placeTab(tabs, spec('b'), 'pin')                  // double-click on the slot
   assert.deepEqual(keys(tabs), ['*#/file/a', '*#/file/b'])
   // with every tab pinned, the next plain navigation has no slot to reuse and opens one
-  tabs = placeTab(tabs, file('c'))
+  tabs = placeTab(tabs, spec('c'))
   assert.deepEqual(keys(tabs), ['*#/file/a', '*#/file/b', '~#/file/c'])
 })
 
@@ -118,7 +118,7 @@ test('opening a spec keeps its detail address while focusing the resident Spec t
 })
 
 test('opening a scenario or issue focuses its resident top-level tab without replacing documents', () => {
-  let tabs = placeTab(placeTab([], spec('node'), 'pin'), session('s1'), 'pin')
+  let tabs = placeTab(placeTab([], residentSpec('node'), 'pin'), session('s1'), 'pin')
   tabs = placeTab(tabs, { page: 'evals', param: 'node/scenario', query: null })
   tabs = placeTab(tabs, { page: 'issues', param: '42', query: null })
   assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
@@ -127,6 +127,15 @@ test('opening a scenario or issue focuses its resident top-level tab without rep
     { page: 'issues', param: '42' },
   ])
   assert.ok(tabs.slice(2).every((tab) => tab.pinned))
+})
+
+test('opening a spec keeps its detail address while focusing one resident Spec tab', () => {
+  let tabs = placeTab([], residentSpec('first'))
+  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
+  assert.equal(tabs[0].param, 'first')
+  tabs = placeTab(tabs, residentSpec('second'))
+  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
+  assert.equal(tabs[0].param, 'second')
 })
 
 // REORDERING IS A SPLICE, and the properties that matter are the ones a drag can violate: the set of open
@@ -152,13 +161,13 @@ test('a move that changes nothing returns the same array', () => {
 })
 
 test('the slot survives a reorder as the slot, wherever it is dragged', () => {
-  let tabs = placeTab(placeTab([], file('pin1'), 'pin'), file('slotted'))
-  tabs = placeTab(tabs, file('pin2'), 'pin')
+  let tabs = placeTab(placeTab([], spec('pin1'), 'pin'), spec('slotted'))
+  tabs = placeTab(tabs, spec('pin2'), 'pin')
   assert.deepEqual(keys(tabs), ['*#/file/pin1', '~#/file/slotted', '*#/file/pin2'])
   tabs = moveTab(tabs, '#/file/slotted', '#/file/pin1')
   assert.deepEqual(keys(tabs), ['~#/file/slotted', '*#/file/pin1', '*#/file/pin2'])
   // and ordinary navigation still lands in it, in its new place
-  tabs = placeTab(tabs, file('next'))
+  tabs = placeTab(tabs, spec('next'))
   assert.deepEqual(keys(tabs), ['~#/file/next', '*#/file/pin1', '*#/file/pin2'])
 })
 

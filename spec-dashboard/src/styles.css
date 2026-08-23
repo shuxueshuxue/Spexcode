@@ -609,6 +609,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-status); color: var(--muted);
   overflow: hidden;
 }
+.statusbar.has-overlay { overflow: visible; }
 .sb-group { display: flex; align-items: center; min-width: 0; }
 /* the right group renders OUTWARD-IN: appended items land at the outer edge, so a higher priority sits
    nearer the centre without the contributor computing a position. */
@@ -637,6 +638,9 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-project-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .sb-project-mark { display: block; flex: 0 0 14px; width: 14px; height: 14px; }
 .sb-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-overflow { overflow: visible; }
+.sb-left:has(.sb-overflow) { overflow: visible; }
+.sb-project-slot { position: relative; min-width: 0; height: var(--line-status); display: inline-flex; align-items: center; }
 /* the ambient board tallies: one item per board, each a row of glyph+count pairs. The node dots reuse the
    board's own four-state marks so a count in the bar and a dot on a tile say the same thing. */
 .sb-tally { position: relative; display: inline-flex; align-items: center; gap: 4px; }
@@ -3225,8 +3229,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   display: flex; flex-direction: column; gap: 1px; font-family: var(--ui-font);
 }
 .status-project-menu {
-  position: absolute; left: 4px; bottom: calc(var(--line-status) + 4px);
-  max-height: min(320px, calc(100vh - var(--line-status) - 12px)); overflow-y: auto;
+  position: absolute; left: 0; right: auto; top: auto; bottom: calc(100% + 4px);
+  width: min(280px, calc(100vw - 8px)); max-height: min(320px, calc(100vh - var(--line-status) - 12px));
+  box-sizing: border-box; overflow-y: auto;
 }
 .proj-menu-item {
   display: flex; align-items: center; gap: 7px; text-decoration: none; cursor: pointer;

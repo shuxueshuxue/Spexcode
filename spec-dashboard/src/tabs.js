@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { navigate, parseRoute, routeHash, useRoute } from './route.js'
+import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './views.jsx'
-import { moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
-export { moveTab, placeTab, tabKey }
+export { closeDestination, moveTab, placeTab, tabKey }
 
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
@@ -73,7 +73,7 @@ export function runTabCommand(name, ...args) {
 // one they were holding. Naming the address removes the race: if the tab is already in the list it is
 // pinned here, and if the navigation is still in flight the mark makes the placement itself pinned.
 export function pinTab(page, param = null, query = null) {
-  const key = routeHash(page, param, query)
+  const key = tabKey({ page, param, query })
   pinKey = key
   const held = getTabs()
   if (held.some((tab) => tabKey(tab) === key)) {
@@ -128,14 +128,14 @@ export function useTabs() {
   // while the reader looked at something absent from it would be lying. Every caller runs this and the
   // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
   useEffect(() => {
-    const key = routeHash(route.page, route.param, route.query)
+    const key = tabKey(route)
     if (pinKey && pinKey !== key) pinKey = null
     if (!isDocument(route.page, route.param)) return
     const mode = pinKey === key ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 
-  const activeKey = routeHash(route.page, route.param, route.query)
+  const activeKey = tabKey(route)
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
@@ -152,9 +152,8 @@ export function useTabs() {
     const next = prev.filter((_, n) => n !== i)
     putTabs(next)
     if (key === activeKey) {
-      const heir = next[i] || next[i - 1]
-      if (heir) navigate(heir.page, heir.param, { query: heir.query })
-      else navigate('empty')
+      const destination = closeDestination(tab, next, i)
+      navigate(destination.page, destination.param, { query: destination.query })
     }
   }, [activeKey])
 

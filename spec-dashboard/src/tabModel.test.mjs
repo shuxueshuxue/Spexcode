@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 // [[tab-strip]]'s law, checked without a browser: **a new tab is a gesture, never a side effect.**
 // The regression this exists to catch is the one that shipped: browsing minted a tab per click, so a
@@ -52,10 +52,36 @@ test('re-opening an address activates it instead of stacking; pinning promotes i
   assert.deepEqual(keys(tabs), ['*#/spec/a', '*#/spec/b', '~#/spec/c'])
 })
 
-test('a query is part of the identity, so two faces of one session are two addresses', () => {
+test('session surfaces share one tab identity and keep the base address in the strip', () => {
   let tabs = placeTab([], { page: 'sessions', param: 's1', query: { surface: 'terminal' } }, 'pin')
   tabs = placeTab(tabs, { page: 'sessions', param: 's1', query: { surface: 'conversation' } })
-  assert.deepEqual(keys(tabs), ['*#/sessions/s1?surface=terminal', '~#/sessions/s1?surface=conversation'])
+  assert.deepEqual(keys(tabs), ['*#/sessions/s1'])
+  assert.deepEqual(tabs[0].query, { surface: 'conversation' })
+})
+
+test('base session surfaces share identity while resources remain separate file-class tabs', () => {
+  const base = { page: 'sessions', param: 's1', query: null }
+  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
+  assert.notEqual(tabKey(base), tabKey(resource))
+  const tabs = placeTab([], base, 'pin')
+  const withResource = placeTab(tabs, resource)
+  assert.equal(withResource.length, 2)
+  assert.equal(withResource[0], tabs[0])
+})
+
+test('persisted session face duplicates collapse to one tab and preserve an explicit hold', () => {
+  const tabs = normalizeTabs([
+    { page: 'sessions', param: 's1', query: { surface: 'terminal' }, pinned: false },
+    { page: 'sessions', param: 's1', query: { surface: 'diff' }, pinned: true },
+  ])
+  assert.deepEqual(tabs.map(tabKey), ['#/sessions/s1'])
+  assert.equal(tabs[0].pinned, true)
+})
+
+test('resource closing returns to its held session before the new-session page', () => {
+  const session = { page: 'sessions', param: 's1', query: null, pinned: true }
+  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' }, pinned: false }
+  assert.deepEqual(closeDestination(resource, [session], 0), session)
 })
 
 // Boards are destinations, not documents. The same predicate is used for new routes and persisted storage,
@@ -119,4 +145,16 @@ test('legacy storage migrates to one slot per document kind', () => {
     { page: 'sessions', param: 's1', pinned: false },
   ])
   assert.deepEqual(kinds.map((t) => t.pinned), [false, false])
+})
+
+test('closing a session stays in the session identity domain', () => {
+  const session = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
+  const remaining = [
+    { page: 'spec', param: 'node', query: null, pinned: true },
+    session('right'),
+    { page: 'file', param: 'README.md', query: null, pinned: true },
+  ]
+  assert.deepEqual(closeDestination(session('closed'), remaining, 0), session('right'))
+  assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'sessions', param: 'new', query: null })
+  assert.deepEqual(closeDestination({ page: 'spec', param: 'node' }, [], 0), { page: 'graph', param: null, query: null })
 })

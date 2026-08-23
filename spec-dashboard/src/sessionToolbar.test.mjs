@@ -19,11 +19,13 @@ const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('session faces are routed and the console has no second tab rail', () => {
-  assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"|surface-switch/)
+  assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"/)
+  assert.match(source, /function SessionSurfaceSwitcher\(/)
+  assert.match(source, /id: 'surface-switcher'/)
+  assert.match(source, /setSessionBaseSurface\(active, next\)/)
   assert.match(source, /surface = null/)
   assert.match(source, /const requestedSurface = isSessionSurface\(surface\) \? surface : null/)
   assert.match(source, /const activeBaseSurface = terminalFree \|\| readOnlyPane \? SESSION_SURFACE_CONVERSATION : requestedSurface \|\| getSessionBaseSurface\(active\)/)
-  assert.doesNotMatch(source, /setSessionBaseSurface\(active, requestedSurface\)/)
   // opening a resource is an ordinary navigation: it lands in the strip's current slot like every other
   // plain click, and never mints a tab of its own ([[tab-strip]]).
   assert.match(source, /navigate\('sessions', tab\.sessionId, \{ query: \{ surface: resourceSurface\(tab\.id\) \} \}\)/)

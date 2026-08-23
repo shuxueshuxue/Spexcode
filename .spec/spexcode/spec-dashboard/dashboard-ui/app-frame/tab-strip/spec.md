@@ -21,7 +21,10 @@ related:
 # tab-strip
 
 **The strip holds OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, `#/sessions/<id>[?surface=…]`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. Bare
+`#/file/<path>`, `#/sessions/<id>`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A session's
+`?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
+identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
+own identity, appended beside the unchanged session tab. Bare
 `#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
 are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
 ordinary objects and may be held like every other document. The rail is therefore navigation only; it does
@@ -114,10 +117,14 @@ that owns storage and the route subscription. The law above is therefore checkab
 is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
 pinned tab must survive them all.
 
-**Identity is the canonical hash.** Two routes that print the same address *are* the same tab, so
-re-opening an already-open document activates it instead of stacking a duplicate, and nothing has to dedupe
-by hand. The current address is always in the strip — by replacement or by keep — because a strip that
-claimed to show what is open while the reader looked at something absent from it would be lying.
+**Identity is the canonical object hash.** Two routes that print the same object address *are* the same tab,
+and session surface queries are deliberately ignored: `#/sessions/a?surface=terminal` and
+`#/sessions/a?surface=diff` activate the same `#/sessions/a` tab. Surface navigation uses URL replace, so the
+face changes without creating, replacing, or reordering a tab. A published file/web resource instead appends a
+file-class tab and leaves the session tab and its selected face untouched. The current object is always in the
+strip — by replacement or by keep — because a strip that claimed to show what is open while the reader looked at
+something absent from it would be lying. This is the regression guard for the human's report: "点进去(diff)之后当前 tab
+就废掉了" and "一个 session 的视图可以在 terminal 和 conversation 视图之间切换".
 
 **The slot is visibly italic and weakened.** It is still a real route and can be copied, reloaded, closed,
 or pinned; the visual treatment names its replaceable status without inventing another tab kind.
@@ -161,27 +168,25 @@ of drifting to the middle of a band that grew.
 open documents as chrome. The budget gate enters every state with a working set deep enough to wrap and
 prints the row count beside the band count, so the claim is measured rather than asserted.
 
-**Closing hands focus to the right-hand neighbour, else the left.** That is the rule every editor uses, for
-the reason every editor uses it: the reader's eye is already where the closed tab was.
+**Closing hands focus to the right-hand neighbour, else the left, within the tab's kind.** That is the rule every
+editor uses, for the reason every editor uses it: the reader's eye is already where the closed tab was. Session
+tabs additionally classify their fallback so a session can never hand focus to the graph.
 
-**Closing the LAST tab yields the explicit empty state**, `#/empty` — not a substitute document. Closing
-used to navigate to the graph: a gesture that asked for nothing put a document on screen, and the board
-appeared to surface from underneath the reader's own work, which is the disorientation this rule exists to
-remove. An empty workspace is a real state and it says so — the frame stays whole (rail, dock, status
-bar), the content area names the state, and it offers the ways back into a document: search and the
-explorer. There were three, and the third was the graph; it left with the graph's retirement from the
-workspace ([[node-graph]]), because a door here has to lead somewhere the workspace still sends people.
-`empty` is an ADDRESS so the state can be landed on, reloaded and left, but it is not a
-document ([[view-registry]]): a tab for it would be the one address that contradicts the strip it sits in.
-Only closing the last tab mints it — a fresh load with no tabs opens `#/sessions`, because starting with
-nothing held is not the same event as putting your last document down.
+**Closing hands focus back by document kind.** A spec or file tab closes to the graph backdrop, preserving the
+existing reading path. A session tab never falls to graph: the nearest remaining session tab on its right wins,
+then the nearest session on its left; when none remains, close lands on `#/sessions/new`, the explicit New Session
+page. This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
+graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule; the explicit `empty` state remains
+the fallback only for a working set with no classified heir. `empty` is an ADDRESS so the state can be landed on,
+reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
+contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
+is not the same event as putting your last document down.
 
 `settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
 the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
 parameterized detail objects may be held.
 
-**Labels come from the board's own projections** — a node's title, a session's headline plus its i18n face
-suffix — never from a
+**Labels come from the board's own projections** — a node's title, a session's headline — never from a
 second lookup table that could drift from them. A tab for a node carries the same four-state dot its tile
 does, so the strip speaks the board's vocabulary rather than inventing a tab-specific one. When a selector
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
@@ -209,4 +214,9 @@ the second pane. The strip only names the gesture; the pane is workspace state, 
 
 The row's right edge is the shell-owned [[document-actions]] slot. It is the active document's action projection,
 not another navigation surface: changing tabs changes the registered buttons, and a document with no registered
-actions leaves the edge blank.
+actions leaves the edge blank. A session registers one three-state segmented switcher there — conversation,
+terminal, diff — with terminal/diff omitted when the session is headless or offline. The selected face is the
+only highlighted segment; each press replaces the session surface URL and leaves the session tab count unchanged.
+The tab itself shows only the session name and status dot, never "· terminal" or "· diff". The reader's words
+remain the test: "为什么要在 tab 上去写 terminal 这种东西" and "一个 session 的视图可以在 terminal 和
+conversation 视图之间切换,这是存在很长时间的功能,怎么能就这么消失了".

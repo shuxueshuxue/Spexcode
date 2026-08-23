@@ -177,10 +177,12 @@ base to decide whether to mount the conversation left `?surface=conversation` sh
 session whose stored base was Terminal — terminal layer hidden, conversation layer never created, and with it
 the composer that is the human's only way to speak to a running session. The address decides what is on
 screen; the store decides only what a bare address means.
-Opening a published resource is an ORDINARY navigation to that address: it lands in the strip's current slot
-like every other plain click, dedupes onto an already-open tab, and mints a tab of its own only from the
-gestures that mint any tab ([[tab-strip]]). It used to force a resident tab, which is exactly the reflex that
-filled the strip with things nobody decided to keep. Closing that tab closes the resource view;
+Opening a published resource is an ORDINARY navigation to that address: it appends a file-class workspace tab
+while the session object tab and its selected Terminal/Conversation face remain untouched ([[tab-strip]]). The
+resource never replaces the session document's main face; closing it returns to the held session tab and its
+warm terminal/PTY. It used to overlay the session page and force a tab hunt to get back, which is exactly the
+"把我的终端和 conversation 页直接覆盖掉了…太诡异了" regression this boundary prevents. The dock's sessions
+projection remains a free return to any session.
 the dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
 Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
@@ -209,7 +211,7 @@ press inside xterm begins an interactive turn, and leaving the session locks it 
 xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
 session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,
 diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
-top [[tab-strip]] names the session object with an i18n face suffix; Evals keeps its one canonical scoped address
+top [[tab-strip]] names the session object with its headline and status dot, with no face suffix; Evals keeps its one canonical scoped address
 and is reached by navigation.
 The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
@@ -277,10 +279,9 @@ relaunch, and selected-resource actions register with the shell's [[document-act
 right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness;
 disabled merge remains visible with the exact localized availability reason as its tooltip. The resource picker
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
-Surface choice is address state (`?surface=…`), not an in-document switch control; the diff door uses the distinct
-`file-diff` glyph and navigates to the diff address, and on the diff face that same door stays in the slot,
-LIT, and navigates back to the bare session address — an overlay's door opens and closes, because a door that
-only opens makes the surface a trap for a reader whose tab strip holds one deep link and whose dock is closed.
+Surface choice is address state (`?surface=…`) controlled by the shell's three-state segmented switcher in the
+document-actions slot. The current segment is lit; each segment replaces the URL and leaves the session tab
+alone, so the diff face has the same one-click return to conversation or terminal and can never trap a deep link.
 The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
 to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
 is the right-click on a finding-dock session row ([[dock-modes]]) — one menu, two ways in, the slot for the
@@ -444,8 +445,8 @@ routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based fo
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. The base surface is selected by its route address; there is no pane-backed Terminal/Conversation
-switch control, painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
+hover tooltips. The base surface is selected by its route address and the segmented switcher; there is no painted
+divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live. The

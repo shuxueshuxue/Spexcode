@@ -331,7 +331,7 @@ body.is-session-dragging .dock-archive-door { color: var(--blue); box-shadow: in
 body.is-session-dragging .dock-archive-door:hover {
   color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
 }
-.ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: stable; }
+.ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: auto; }
 .ft-row {
   display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
   background: none; border: 0; cursor: pointer; text-align: left;
@@ -403,7 +403,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* the row that currently owns the graph ([[workspace-shell]]'s lock) wears the claim, so the dock is where
    both the claiming and the claimed state are visible. */
 .dock-session-list .si-item[data-locked] { box-shadow: inset 2px 0 0 var(--blue); }
-.dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: auto; }
+.ft-body, .dock-session-list, .ds-side, .m-sesslist, .m-sessdetail {
+  scrollbar-width: none;
+}
+.ft-body::-webkit-scrollbar, .dock-session-list::-webkit-scrollbar, .ds-side::-webkit-scrollbar,
+.m-sesslist::-webkit-scrollbar, .m-sessdetail::-webkit-scrollbar {
+  display: none;
+}
 .dock-session-list .si-item { padding-left: 8px; padding-right: 8px; }
 /* the zone heading — the session list's own group grammar (.si-zone below) at dock density: a small-caps
    label in the zone's hue, a bordered count pod, and a trailing hairline that separates the group WITHOUT
@@ -555,6 +562,18 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   padding: 0 var(--space-3);
 }
 .document-action { position: relative; display: inline-flex; align-items: center; }
+.session-surface-switcher {
+  display: inline-flex; align-items: center; height: 24px; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; background: var(--panel2);
+}
+.session-surface-choice {
+  height: 22px; padding: 0 7px; color: var(--muted); background: transparent; border: 0;
+  border-right: 1px solid var(--line); font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
+}
+.session-surface-choice:last-child { border-right: 0; }
+.session-surface-choice:hover, .session-surface-choice:focus-visible { color: var(--ink2); background: var(--panel); }
+.session-surface-choice.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.session-surface-choice:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .document-action-button {
   appearance: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
   padding: 0; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius);
@@ -1990,11 +2009,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
-/* the page's ONE statement size, spent on the name and then not spent again. Muted on purpose: the lit
-   thing in an empty room is the input, not the sign above it. */
 .si-hero {
-  margin: 0 0 var(--space-7); color: var(--muted); font-size: var(--type-display);
-  font-weight: var(--weight-regular); line-height: var(--leading-tight); user-select: none;
+  margin: 0 0 2px; font-family: var(--mono); font-size: var(--type-hero); line-height: var(--leading-hero);
+  white-space: pre; user-select: none; background: linear-gradient(180deg, var(--blue), var(--magenta));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .si-inputwrap {
   position: relative;

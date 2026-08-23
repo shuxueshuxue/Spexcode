@@ -217,7 +217,7 @@ const renderInline = (h, children = [], options) => {
       current().push(value ?? h('a', { ...attrs(token, options.lineBase), className: 'doc-evidence', href: token.meta.src, 'data-evidence-hash': token.meta.hash }, token.meta.alt))
     } else if (token.type === 'image') {
       const src = safeUrl(attr(token, 'src'))
-      current().push(src ? h('img', { ...attrs(token, options.lineBase), className: 'doc-image', src, alt: attr(token, 'alt') || '', title: attr(token, 'title') || undefined }) : token.content)
+      current().push(src ? h('img', { ...attrs(token, options.lineBase), className: 'doc-image', src, alt: token.content || attr(token, 'alt') || '', title: attr(token, 'title') || undefined }) : token.content)
     } else if (token.type === 'link_open' || token.type === 'strong_open' || token.type === 'em_open' || token.type === 's_open') {
       stack.push({ token, children: [] })
     } else if (token.type === 'link_close' || token.type === 'strong_close' || token.type === 'em_close' || token.type === 's_close') {

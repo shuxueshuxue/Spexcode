@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { SpecBody } from './NodeView.jsx'
+import Prose from './Prose.js'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete, matchSlash, SlashMenu, TriggerButton, typeTrigger } from './mentions.jsx'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
@@ -9,6 +9,8 @@ import { SideValue } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { useLaunchers } from './launch.js'
+import { routeHash } from './route.js'
+import { holdAnchor } from './tabs.js'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
@@ -34,7 +36,6 @@ const ANCHOR_RE = /^▶\s*(\d+):([0-5]?\d)(?:\s*·\s*([^\n]*))?/
 // yields the bare hash, so rendering/fetching always goes through the live route. Writes emit only the new shape.
 const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/(?:evidence|yatsu\/blob)\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
 const BLOB_URL = /\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})/g
-const BLOB_MD = /!\[[^\]]*\]\(\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
 export const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 // the first line of a body, parsed as an anchor: { tMs, step, label, rest } or null. `rest` is the body
 // with the anchor line stripped, so the moment renders as a chip and the prose renders below it.
@@ -124,24 +125,15 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
     } finally { setActing(null) }
   }
   return replies.map((r, i) => {
-    const parsed = parseAnchor(r.body)
-    const a = resolveAnchor(parsed, events)              // E2: canonical step → the current clip's live tMs
-    const src = parsed ? parsed.rest : r.body
-    const media = [...src.matchAll(BLOB_MD)].map((m) => m[1])   // linked blobs render as media, not raw md
-    const prose = (media.length ? src.replace(BLOB_MD, '') : src).trim()
     const isRemark = r.rid !== undefined
     const remarkCls = isRemark ? (r.resolved ? ' remark resolved' : ' remark open') : ''
     const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}${remarkCls}`
-    const seek = a && a.seekable && onSeek ? () => (onSelect ? onSelect(i, a.tMs) : onSeek(a.tMs)) : null
     const ref = isRemark && threadId ? `${threadId}#${r.rid}` : null
     return (
       <div className={cls} key={i}>
         <div className="fv-reply-meta">
           <span className="fv-reply-by">{r.by}</span>
           {r.at && <span className="fv-reply-at">{r.at}</span>}
-          {a && (seek
-            ? <button type="button" className="fv-anchor" onClick={seek} data-tip="seek the clip to this moment">{a.label}</button>
-            : <span className={`fv-anchor static${a.degraded ? ' degraded' : ''}`} data-tip={a.degraded ? t('thread.anchorDegraded') : undefined}>{a.label}{a.degraded ? ' ⚠' : ''}</span>)}
           {isRemark && (r.resolved
             ? <span className="fv-remark-state resolved" data-tip={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
             : <span className="fv-remark-state open" data-tip={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
@@ -150,12 +142,27 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
             : <button type="button" className="fv-remark-act resolve" disabled={!!acting} data-tip={t('thread.resolveTitle')} onClick={() => act('resolve', ref)}>{t('thread.resolve')}</button>)}
         </div>
         {actErr && actErr.ref === ref && <div className="fv-error">{actErr.msg}</div>}
-        {prose && <div className="fvd-body"><SpecBody body={prose} /></div>}
-        {media.length > 0 && (
-          <div className="fv-reply-media">
-            {media.map((h, k) => <BlobMedia hash={h} alt="evidence" key={`${h}-${k}`} />)}
-          </div>
-        )}
+        {r.body && <div className="fvd-body">
+          <Prose className="doc-body"
+            renderSpecRef={(id, token, provenance) => {
+              const href = routeHash('spec', id)
+              return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+            }}
+            renderTimeAnchor={(meta, token, provenance) => {
+              const resolved = resolveAnchor({ tMs: meta.tMs, step: meta.step, label: meta.label }, events)
+              const jump = resolved?.seekable && onSeek
+                ? () => (onSelect ? onSelect(i, resolved.tMs) : onSeek(resolved.tMs))
+                : null
+              const label = resolved?.label || meta.label
+              return jump
+                ? <button type="button" className="fv-anchor" {...provenance} onClick={jump} data-tip="seek the clip to this moment">{label}</button>
+                : <span className={`fv-anchor static${resolved?.degraded ? ' degraded' : ''}`} {...provenance}
+                  data-tip={resolved?.degraded ? t('thread.anchorDegraded') : undefined}>{label}{resolved?.degraded ? ' ⚠' : ''}</span>
+            }}
+            renderEvidence={(meta, token, provenance) => <span className="fv-reply-media" {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
+            {r.body}
+          </Prose>
+        </div>}
       </div>
     )
   })

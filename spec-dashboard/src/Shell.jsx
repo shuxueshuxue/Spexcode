@@ -48,7 +48,7 @@ import Legend from './Legend.jsx'
 const dockFor = (page, param) => {
   // Bare review/settings boards are full-width. Their object detail is a document and keeps the dock, so the
   // rail's explorer projection remains truthful beside it (C2/C4).
-  if ((page === 'evals' || page === 'issues') && param == null) return 'none'
+  if (page === 'issues' || (page === 'evals' && param == null)) return 'none'
   if (page === 'settings') return 'none'
   // A bare sessions board is not a session document. Its initial projection stays explorer; clicking the
   // sessions route may explicitly select sessions through SideBar, while a session object derives it.
@@ -647,7 +647,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       <div className="app">
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
-        <SideBar page={page} needsYou={needsYou} />
+        {page !== 'issues' && <SideBar page={page} needsYou={needsYou} />}
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}

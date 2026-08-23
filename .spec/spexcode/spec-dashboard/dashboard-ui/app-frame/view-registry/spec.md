@@ -28,19 +28,19 @@ itself from whatever was opened next. Both now take `{ param, query }` like ever
 review entry hands them the same props the shell does.
 
 **`surface` is the shell boundary.** `workspace` owns Explorer, tab strip, document pool, and dock;
-`review` owns the evals/issues board and detail layout with the rail but no Explorer, tab strip, or working
-set; `settings` owns its own settings page. Root resolves `surfaceFor(page)` from this registry once, and
+`workspace` owns the evals/issues board and detail layout with the shared Explorer/tab strip/working set;
+Issues omits the activity rail while retaining the shared strip. Settings is a resident workspace tab. Root resolves `surfaceFor(page)` from this registry once, and
 the same surface component tree renders for a cold URL and an in-app navigation. A view cannot acquire a
 different surface's chrome because it is never mounted inside that surface's host.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. Evals and Issues are always `document: false`, including parameterized detail routes;
-legacy persisted entries are discarded by `normalizeTabs` at the storage boundary. The user-facing
+keeping its own list. Evals, Issues, and Settings are resident top-level tabs; parameterized detail routes
+canonicalize their tab identity to the board address while preserving detail URL state. The user-facing
 distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
 this node supplies the machine predicate and storage normalization.
 
 Left out: graph (including its focused node — an addressable legacy view that is no longer a workspace
-destination), bare sessions, bare evals/issues/settings boards, and `empty`, which is a real non-document
+destination), bare sessions, and `empty`, which is a real non-document
 workspace state. **`/sessions/new` was a document and is not one now**: it names no
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
 form, and the session it starts becomes a document the moment it has an id.

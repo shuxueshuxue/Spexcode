@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
-import { isDocument } from './views.jsx'
-import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { isDocument, isResident } from './views.jsx'
+import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
 
 export { closeDestination, moveTab, placeTab, tabKey }
 
@@ -79,7 +79,7 @@ export function runTabCommand(name, ...args) {
 // one they were holding. Naming the address removes the race: if the tab is already in the list it is
 // pinned here, and if the navigation is still in flight the mark makes the placement itself pinned.
 export function pinTab(page, param = null, query = null) {
-  const key = tabKey({ page, param, query })
+  const key = tabKey(tabRoute({ page, param, query }))
   pinKey = key
   const held = getTabs()
   if (held.some((tab) => tabKey(tab) === key)) {
@@ -139,10 +139,11 @@ export function useTabs({ onCloseStart } = {}) {
     const key = tabKey(route)
     if (pinKey && pinKey !== key) pinKey = null
     if (!isDocument(route.page, route.param)) return
-    const mode = pinKey === key ? 'pin' : 'slot'
+    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 
+  // Resident board routes keep their detail address in the URL but focus the one top-level board tab.
   const activeKey = tabKey(route)
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])

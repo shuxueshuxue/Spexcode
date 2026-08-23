@@ -18,6 +18,15 @@ scenarios:
       strip; graph has all three. Returning to graph preserves the remaining workspace tab set.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/WorkspaceSurface.jsx, spec-dashboard/src/tabs.js]
+  - name: registry-owns-view-route-boundary
+    description: >
+      Exercise a ViewScope with the registry route contract and submit an intent for an unregistered page,
+      followed by a registered page and a resident document predicate.
+    expected: >
+      The unregistered route fails before shell dispatch; the registered route dispatches one frozen intent;
+      the registry is the only source for document/resident ownership.
+    tags: [desktop]
+    code: [spec-dashboard/src/viewScope.js, spec-dashboard/src/viewScope.test.mjs, spec-dashboard/src/viewRegistry.js, spec-dashboard/src/viewRegistry.test.mjs, spec-dashboard/src/views.jsx, spec-dashboard/src/Shell.jsx]
 ---
 
 Measure YATU through the built dashboard in this worktree and a real browser against the running Spex backend.

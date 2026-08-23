@@ -32,6 +32,17 @@ test('registry exposes immutable built-ins and rejects replacement', () => {
   assert.throws(() => registry.registerView('Bad Name', { component }), /kebab-case/)
 })
 
+test('registry route contract is the single owner allow-list for ViewScope hosts', () => {
+  const registry = createViewRegistry({ sessions: { component }, evals: { component, document: true, resident: true } })
+  assert.equal(registry.routeContract.isDocument('evals'), true)
+  assert.equal(registry.routeContract.isResident('evals'), true)
+  assert.equal(registry.routeContract.isDocument('sessions', 'new'), false)
+  assert.deepEqual(registry.routeContract.assertAddress({ page: 'sessions', param: null, query: null }), {
+    page: 'sessions', param: null, query: null,
+  })
+  assert.throws(() => registry.routeContract.assertAddress({ page: 'missing' }), /not a registered view/)
+})
+
 test('registry accepts React.lazy component objects and rejects unknown tagged objects', () => {
   const lazyComponent = lazy(() => Promise.resolve({ default: component }))
   const registry = createViewRegistry({ evals: { component: lazyComponent } })

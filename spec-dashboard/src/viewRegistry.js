@@ -2,6 +2,8 @@
 // the same definition shape; plugins cannot replace a view owned by another plugin.
 const NAME = /^[a-z][a-z0-9-]*$/
 
+const isAddress = (value) => value && typeof value === 'object' && !Array.isArray(value)
+
 function assertName(name) {
   if (typeof name !== 'string' || !NAME.test(name)) {
     throw new TypeError(`view name must be lowercase kebab-case: ${String(name)}`)
@@ -94,6 +96,29 @@ export function createViewRegistry(initial = {}) {
     return true
   }
 
+  // The shell passes this contract to every ViewScope.  Keeping the lookup here means route
+  // ownership and tab/document policy cannot drift into a second map maintained by the shell.
+  const routeContract = Object.freeze({
+    assertAddress: (address, label = 'address') => {
+      if (!isAddress(address) || typeof address.page !== 'string' || !views.has(address.page)) {
+        throw new TypeError(`${label}.page is not a registered view: ${String(address?.page)}`)
+      }
+      const param = address.param ?? null
+      if (param != null && typeof param !== 'string') throw new TypeError(`${label}.param must be a string or null`)
+      const definition = views.get(address.page)
+      if (typeof definition.document === 'function' && param === 'new' && address.page === 'sessions') {
+        // The launch form is a route, but deliberately not a document/tab.
+        return address
+      }
+      return address
+    },
+    isDocument: (page, param = null) => {
+      const definition = views.get(page)
+      return typeof definition?.document === 'function' ? definition.document(page, param) : !!definition?.document
+    },
+    isResident: (page, param = null) => !!views.get(page)?.resident && param == null,
+  })
+
   return Object.freeze({
     get: (name) => views.get(name),
     has: (name) => views.has(name),
@@ -102,5 +127,6 @@ export function createViewRegistry(initial = {}) {
     registerView,
     registerPlugin,
     unregisterPlugin,
+    routeContract,
   })
 }

@@ -16,7 +16,9 @@ if (!node) throw new Error('a fixture spec node is required')
 const body = [
   '# Fixture title',
   '',
-  '## Section heading',
+  '▶0:07 · inspect',
+  '',
+  '## Section heading [[prose-renderer]]',
   '',
   '### Nested heading',
   '',
@@ -31,6 +33,8 @@ const body = [
   '4. fourth item',
   '',
   '![Diagram](https://example.test/diagram.svg "fixture image")',
+  '',
+  '![Frame](/api/evidence/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)',
   '',
   '$$\\int_0^1 x^2 dx$$',
 ].join('\n')
@@ -73,6 +77,9 @@ try {
       return {
         headings: [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el) => el.tagName),
         quote: root.querySelector('.doc-quote')?.innerText || '',
+        timeAnchor: root.querySelector('.fv-anchor[data-time-ms]')?.textContent || null,
+        specRef: root.querySelector('.doc-link[href*="prose-renderer"]')?.textContent || null,
+        evidence: root.querySelector('.doc-evidence[data-evidence-hash]')?.getAttribute('data-evidence-hash') || null,
         link: root.querySelector('.doc-external')?.getAttribute('href') || null,
         image: { src: root.querySelector('.doc-image')?.getAttribute('src') || null, loaded: root.querySelector('.doc-image')?.complete && root.querySelector('.doc-image')?.naturalWidth > 0 },
         math: root.querySelectorAll('.doc-math, .doc-math-block').length,
@@ -86,6 +93,9 @@ try {
     })
     assert.deepEqual(probe.headings, ['H2', 'H3'], `${name}: heading levels survive`)
     assert.equal(probe.quote, 'Quoted line\nsecond line', `${name}: blockquote survives`)
+    assert.equal(probe.timeAnchor, '▶0:07 · inspect', `${name}: time anchor remains a semantic token`)
+    assert.equal(probe.specRef, 'prose-renderer', `${name}: spec reference remains a held anchor`)
+    assert.equal(probe.evidence, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', `${name}: evidence remains a semantic token`)
     assert.equal(probe.link, 'https://example.com', `${name}: link is live`)
     assert.equal(probe.image.loaded, true, `${name}: image decodes`)
     assert.equal(probe.math, 3, `${name}: dollar, bracket, and display math render`)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, TabCount, TagChips } from './score.jsx'
 import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/spec-core/review'
 import { EvidenceItem } from './Evidence.jsx'
@@ -14,6 +14,7 @@ import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
+import { parseProseTokens, renderProseTokens, stripProseTitle } from './proseTokens.js'
 import { EVAL_QUERY_DEFAULT, setToken } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
 import ProseActions from './ProseActions.jsx'
@@ -142,7 +143,7 @@ function colAlign(cell) {
 // `lineBase` is the 1-based body line of this text's first line; 0 means the caller cannot vouch for one
 // (an issue body is not a spec body) and then nothing is stamped at all — a wrong line number is worse
 // than no addressing.
-export function SpecBody({ body, lineBase = 0 }) {
+function LegacySpecBody({ body, lineBase = 0 }) {
   if (!body) return null
   const stripped = body.replace(/^#\s+[^\n]*\n+/, '')
   // the dropped title line(s) shift every stamp below them; count what the strip actually consumed rather
@@ -260,6 +261,24 @@ export function SpecBody({ body, lineBase = 0 }) {
       out.push(<p key={k++} {...at(from, i - 1)}>{inline(buf.join(' '))}</p>)
     }
   }
+  return <div className="doc-body">{out}</div>
+}
+
+// Compatibility shell: all body callers now cross the shared markdown-it token boundary. The legacy
+// implementation above remains named (and removable in the later surface migrations), but is no longer
+// reachable from a dashboard surface.
+export function SpecBody({ body, lineBase = 0 }) {
+  if (!body) return null
+  const { source, removedLines } = stripProseTitle(body)
+  const base = lineBase > 0 ? lineBase + removedLines : 0
+  const out = renderProseTokens(parseProseTokens(source), {
+    h: createElement,
+    lineBase: base,
+    renderSpecRef: (id, token, provenance) => {
+      const href = routeHash('spec', id)
+      return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+    },
+  })
   return <div className="doc-body">{out}</div>
 }
 

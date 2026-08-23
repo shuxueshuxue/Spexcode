@@ -10,5 +10,8 @@ test('graph marquee selection is a real React Flow selection and dispatches thro
   assert.match(graph, /onSelectionChange=\{\(selection\) => setSelectedNodeIds\(selection\.nodes\.map\(\(node\) => node\.id\)\)\}/)
   assert.match(graph, /selectedNodes\.map\(\(node\) => `\[\[\$\{node\.id\}\]\]`\)/)
   assert.match(graph, /className="graph-selection-actions"/)
+  assert.match(graph, /startNew\(`\$\{selectedNodes\.map/)
+  assert.match(graph, /setSelectedNodeIds\(\[\]\)/)
+  assert.match(graph, /!graphOnly && selectedNodes\.length > 0/)
   assert.match(spec, /real \*\*marquee selection\*\*/) 
 })

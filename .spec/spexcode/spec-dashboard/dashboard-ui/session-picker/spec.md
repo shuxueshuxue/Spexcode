@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/ProseActions.jsx
   - spec-dashboard/src/mentions.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/SelectionAttachment.jsx
   - spec-dashboard/src/sessionPicker.test.mjs
 ---
 # session-picker
@@ -27,4 +28,6 @@ remain owned by the caller.
 
 Mention autocomplete and the graph context menu may use the row primitive without taking ownership of the
 picker state. The dock keeps its tree and fold semantics, but its session face uses the same row identity.
-No surface renders a native `<select>` for session choice.
+No surface renders a native `<select>` for session choice. A source-selection send card may carry a
+`SelectionAttachment` beside this picker; that attachment is the shared removable prompt-context row, not a
+second session selector or a page-local visual dialect.

@@ -36,7 +36,8 @@ import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
-import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
+import { decodePrompt, encodePrompt } from './codeSelection.js'
+import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
@@ -1290,12 +1291,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return (
       <div className="si-code-selection-queue" aria-label={t('session.codeSelectionAttachments')}>
         {codeSelections.map((selection, index) => (
-          <div key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} className="si-code-selection-chip">
-            <Icon name="terminal" size={12} />
-            <span className="si-code-selection-label" title={selection.text}>{selectionLabel(selection)}</span>
-            <IconButton icon="x" size={12} className="si-code-selection-remove" label={t('session.removeCodeSelection')}
-              onClick={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
-          </div>
+          <SelectionAttachment key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} selection={selection}
+            onRemove={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
         ))}
       </div>
     )

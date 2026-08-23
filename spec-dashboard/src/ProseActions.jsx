@@ -11,6 +11,7 @@ import { createSession, useLaunchers } from './launch.js'
 import { useSpecContent } from './specContent.js'
 import { sessionFooterState, sessionHeadline } from './session.js'
 import SessionPicker from './SessionPicker.jsx'
+import SelectionAttachment from './SelectionAttachment.jsx'
 import { navigate } from './route.js'
 
 // [[prose-dispatch]]: what a reader can DO with a passage of spec prose they just selected.
@@ -225,7 +226,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       {!panel && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
       {panel?.kind === 'send' && (
         <SendPopover t={t} panel={panel} selection={selection} sessions={live} target={target} setTarget={setTarget}
-          draft={draft} setDraft={setDraft} busy={busy} error={error} onSend={send} onClose={dismiss} />
+          draft={draft} setDraft={setDraft} busy={busy} error={error} onSend={send} onRemove={clear} onClose={dismiss} />
       )}
       {panel?.kind === 'manual' && (
         <ManualEditor t={t} panel={panel} node={node} lines={hit.lines} draft={draft} setDraft={setDraft}
@@ -254,26 +255,16 @@ function ActionGroup({ t, hit, onPick, disabled = false, manualEnabled = true })
   )
 }
 
-function SelectionChip({ t, selection }) {
-  return (
-    <div className="pa-chip" title={selection.text}>
-      <Icon name="file-diff" size={12} />
-      <span className="pa-chip-label">{t('proseActions.lines', { a: selection.startLine, b: selection.endLine })}</span>
-      <span className="pa-chip-node">{selection.node || selection.path}</span>
-    </div>
-  )
-}
-
 // The message box beside the pointer: an optional note, the three preset intents, who receives it, and the
 // two send modes. Nothing here is required — an empty message sends the passage alone, which is the whole
 // point of "here, look at this".
-function SendPopover({ t, panel, selection, sessions, target, setTarget, draft, setDraft, busy, error, onSend, onClose }) {
+function SendPopover({ t, panel, selection, sessions, target, setTarget, draft, setDraft, busy, error, onSend, onRemove, onClose }) {
   const [ref, style] = useAnchored(panel.x, panel.y, [])
   const box = useRef(null)
   useEffect(() => { box.current?.focus() }, [])
   return (
     <div ref={ref} className="pa-card pa-send" role="dialog" aria-label={t('proseActions.sendLabel')} style={style}>
-      <SelectionChip t={t} selection={selection} />
+      <SelectionAttachment selection={selection} onRemove={onRemove} />
       <textarea ref={box} className="pa-input" rows={3} value={draft} placeholder={t('proseActions.messagePlaceholder')}
         onChange={(event) => setDraft(event.target.value)} />
       <div className="pa-presets">

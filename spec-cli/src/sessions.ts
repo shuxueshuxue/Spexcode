@@ -4770,7 +4770,9 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     // the durable debt drainable. Reporting the post-commit refusal as an append failure made command-box
     // callers show a false error despite the prompt already being safely queued.
     if (!opts.deferDrain) {
-      try { await drainSession(id) } catch { /* the committed queue is the retry contract */ }
+      try { await drainSession(id) } catch (error) {
+        if (!(error instanceof ResourceConflict) || !/no bound spex-governed runtime/u.test(error.message)) throw error
+      }
     }
     const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
     return {

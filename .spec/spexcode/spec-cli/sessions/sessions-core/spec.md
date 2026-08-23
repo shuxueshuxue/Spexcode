@@ -162,11 +162,11 @@ claiming launch is still in progress. A backend restart reconciles every durable
 launch residue: a live registered runtime gets its readiness observer rebuilt without replaying the first turn;
 an expired or provably dead residue is failed closed with the same terminal record. No launch residue may remain
 an indefinitely in-progress row.
-During the one-time JSON-to-application cutover, a legacy active record may still lack both a native runtime
-binding and the new runtime-start token. Dispatch does not strand that record behind a false `ok`: the record's
-adapter-owned rendezvous transport remains its exact legacy identity, so the canonical queue may drain through that
-transport and then dequeue the delivered message. This exception is limited to records missing both identity fields;
-new records and records with a binding problem remain fail-closed until their runtime binding is repaired.
+During the one-time JSON-to-application cutover, a legacy active record may still lack a native harness session
+identity and runtime binding. Dispatch does not strand that record behind a false `ok`: the record's adapter-owned
+rendezvous transport remains its exact legacy identity, so the canonical queue may drain through that transport and
+then dequeue the delivered message. This exception is limited to Claude records missing the harness session id;
+new records and other records with a binding problem remain fail-closed until their runtime binding is repaired.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],

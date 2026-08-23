@@ -13,6 +13,7 @@ related:
   - spec-cli/src/sessions-hot.test.ts
   - packages/spec-core/src/layout.ts
   - spec-cli/src/session-public-projection.api.test.ts
+  - spec-cli/src/session-managed-watch-realtime.yatu.test.ts
   - spec-cli/src/session-record-integrity.test.ts
   - spec-cli/test/session-record-integrity-fixture.ts
 ---
@@ -74,9 +75,9 @@ registered process is alive but its native transport is temporarily absent; the 
 contract, and the next transport sweep drains it. This durable watch path never treats `asking`, `parked`, `error`,
 or either `awaiting` proposal (`review`/`close-pending`) as terminal or requires a dashboard poll, and it does not
 change the lifecycle or cutover rules of either session.
-When legacy record metadata still carries a waiting, error, stopped, or archived lifecycle, a stale canonical
-application row may not project it back to `active`; the durable record fact wins until an explicit lifecycle
-transition updates both authorities. A retired protocol address is likewise not delivery debt: the retry sweep
+When legacy record metadata carries a waiting, error, stopped, or archived lifecycle, it is only migration evidence;
+the canonical application row is the lifecycle fact and always wins the public projection. Lifecycle transitions do
+not update the envelope bytes. A retired protocol address is likewise not delivery debt: the retry sweep
 must drop that impossible lookup rather than polling and logging it forever.
 An existing queue with no bound governed runtime is also retained but not polled; binding/resume is the event
 that makes it drainable again.
@@ -254,18 +255,20 @@ receipt retains the ordinary descendant refusal before shared-runtime mutation a
 
 ### Record integrity — one writer, three readings, no revival
 
-**Every SpexCode-managed field of `session.json` is produced by ONE writer here**, by serializing the typed
+**The runtime/worktree envelope of `session.json` is produced by ONE writer here**, by serializing the typed
 record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
-not a shell, not a route. A record whose `runtime_owner` names an external controller is instead written by
+not a shell, not a route. After JSON migration, lifecycle (`status`, `proposal`, `note`, and `parent`) is owned
+only by the canonical session application and its events; the envelope keeps its old bytes as migration evidence
+and is never written from canonical state. A record whose `runtime_owner` names an external controller is instead written by
 [[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
 stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
 format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
 ownership mode is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
 existing JSON eventually meets a quote, a backslash, or a newline and leaves a record nothing can parse. Both
 note-carrying entries — the agent's typed declaration and the hook's capture of an asked question — therefore
-land through the same call, and a note round-trips byte-for-byte on every surface. The shell hooks keep the
-cheap half: the one-field-per-line shape lets them READ ("already active, nothing stale to clear?") with
-exact-line greps and no jq, and every WRITE goes back through the CLI to this writer ([[state]]).
+land through the canonical application, and a note round-trips byte-for-byte on every surface. The shell hooks
+call that package entry point for every event; it compares canonical state and emits no event for a semantic
+no-op. They do not inspect or write JSON lifecycle fields ([[state]]).
 
 A published create record is also the durable fence for any private pre-publication candidate receipt whose
 best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and

@@ -13,15 +13,15 @@
 # request_user_input tool) — read via hp_is_ask, so this hook never names a harness tool.
 # Fires BEFORE the tool runs, so a `spex session done` declaration (itself a tool) lands AFTER this and wins;
 # the next real tool flips back to active, forcing a fresh Stop-gate declaration.
-# @@@ read cheap, write through the ONE writer - this hook is on the hot path (every tool call), so it does
-# its own READ in pure shell: three exact-line greps answer "already active, nothing stale to clear?", which
-# is the overwhelmingly common case, and that path exits without spawning anything. When there IS a change to
-# make it hands the write to `spex internal session-state`, the same structured writer the CLI declarations
-# use. It never edits session.json itself: an asking note is arbitrary human/agent prose, and a writer that
-# substitutes prose into existing JSON meets a quote, a backslash, or a newline and leaves a record nothing
-# can parse — which is how a live session came to report "no session record" ([[sessions-core]]).
-# @@@ global store - state lives NOT in the worktree but in the per-session GLOBAL record session.json, keyed
-# by the harness session_id, grouped per-project (see hp_store_dir). GATED on `governed`: a user-self-launched
+# @@@ one writer - this hook is on the hot path (every tool call), but it must not inspect session.json to
+# decide whether a transition is needed. After the SQLite cutover that file is only a runtime/worktree
+# envelope; using its lifecycle snapshot as a cheap cache is exactly how JSON=active and SQLite=asking drifted.
+# The structured writer is idempotent for an unchanged state, so the canonical application remains the only
+# lifecycle authority and the hook cannot short-circuit on a second fact. It never edits session.json itself:
+# an asking note is arbitrary prose, and shell substitution is not a record writer ([[sessions-core]]).
+# @@@ global store - the lifecycle state lives in the canonical session application, keyed by the harness
+# session_id, grouped per-project (see hp_store_dir). The sibling session.json is only the runtime/worktree
+# envelope. GATED on `governed`: a user-self-launched
 # (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 payload=$(cat 2>/dev/null)
@@ -38,11 +38,6 @@ rec="$sdir/session.json"
 # board-lifecycle gate: only a GOVERNED (dashboard-launched) session has a board state to maintain.
 grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
 
-# does FIELD's line hold exactly VALUE? The record is written one-field-per-line by the single writer
-# (sessions.ts writeRecord), so a whole-line match is exact — and, unlike a value regex, it cannot be fooled
-# by an escaped quote inside a neighbouring note.
-jline_is() { grep -q "^[[:space:]]*\"$1\"[[:space:]]*:[[:space:]]*\"$2\",\?$" "$rec" 2>/dev/null; }
-
 # The writer's own stdout is a human confirmation, not hook output — swallow it so a PreToolUse handler never
 # emits a decision-shaped line; its stderr (a refusal — a corrupt or retired record) still surfaces. We always
 # exit 0: this hook observes freshness, it is not a gate on the tool that triggered it.
@@ -53,7 +48,7 @@ if [ -n "$(hp_is_ask "$payload")" ]; then
   exit 0
 fi
 
-# cheap path: already active with nothing stale to clear → no-op (the common every-tool case), no spawn.
-jline_is status active && jline_is proposal '' && jline_is note '' && exit 0
+# Always ask the canonical lifecycle writer. It performs the semantic no-op check against SQLite; no JSON
+# snapshot is allowed to decide whether this event changes state.
 ${SPEX:-spex} internal session-state active --session "$sid" >/dev/null
 exit 0

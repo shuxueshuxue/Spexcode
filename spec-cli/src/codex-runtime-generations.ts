@@ -332,17 +332,25 @@ function bootstrapBindings(root: string, generationId: string): Record<string, C
   return result
 }
 
-function pendingBindingHasRecord(root: string, sessionId: string, binding: CodexGenerationBinding): boolean {
-  if (!sessionId || sessionId.includes('/') || sessionId.includes('\\')) return false
+function readBindingRecord(root: string, sessionId: string): Record<string, unknown> | null {
+  if (!sessionId || sessionId.includes('/') || sessionId.includes('\\')) return null
   try {
-    const record = JSON.parse(readFileSync(join(root, 'sessions', sessionId, 'session.json'), 'utf8')) as Record<string, unknown>
-    const harness = record.harness
-    return record.governed === true && (harness === 'codex' || harness === 'codex-headless') && record.harness_session_id === binding.threadId
-  } catch { return false }
+    return JSON.parse(readFileSync(join(root, 'sessions', sessionId, 'session.json'), 'utf8')) as Record<string, unknown>
+  } catch { return null }
+}
+
+function bindingRecordMatches(record: Record<string, unknown> | null, binding: CodexGenerationBinding): boolean {
+  const harness = record?.harness
+  return !!record && record.governed === true && (harness === 'codex' || harness === 'codex-headless') && record.harness_session_id === binding.threadId
 }
 
 function bindingProtectsGeneration(root: string, sessionId: string, binding: CodexGenerationBinding): boolean {
-  return binding.phase === undefined || pendingBindingHasRecord(root, sessionId, binding)
+  // A close transaction remains protective until its record is physically removed. Once a historical
+  // record is archived, its durable rollout is still recoverable but the record no longer routes or pins
+  // a live generation; the native census remains the independent guard for any still-loaded thread.
+  const record = readBindingRecord(root, sessionId)
+  if (!record) return binding.phase !== 'record-pending' && binding.phase !== 'record-removing'
+  return bindingRecordMatches(record, binding) && (binding.phase === 'record-removing' || record.archived !== true)
 }
 
 function bootstrapLedger(root: string): CodexGenerationLedger {

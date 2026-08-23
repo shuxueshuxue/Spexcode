@@ -184,7 +184,8 @@ function ShellStatus() {
   const trigger = projects ? (
     <button type="button" className={open ? 'sb-project-trigger open' : 'sb-project-trigger'}
       data-status-project="" data-tip={triggerLabel} aria-label={triggerLabel}
-      aria-haspopup="menu" aria-expanded={open} aria-controls="status-project-menu"
+      aria-haspopup="menu" aria-expanded={open}
+      aria-controls={open ? 'status-project-menu' : undefined}
       onClick={() => setOpen((value) => !value)}>
       {triggerBody}
     </button>
@@ -223,7 +224,7 @@ function ShellStatus() {
 
   // The menu is part of the registered slot so its absolute position is relative to the trigger itself.
   useStatusItem({
-    id: 'project', side: 'left', priority: 1000, kind: 'prominent', overflow: true,
+    id: 'project', side: 'left', priority: 1000, kind: 'prominent', overflow: open,
     node: <span className="sb-project-slot">{trigger}{menu}</span>,
   })
   return null

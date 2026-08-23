@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
-import { templateConfigPath } from '@spexcode/spec-core'
+import { encodeProject, templateConfigPath } from '@spexcode/spec-core'
 import { tsxBin } from './tsx-bin.js'
 
 // [[spex-init]] / [[residence]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
@@ -24,7 +24,7 @@ const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(templateConfigPath
 const SEEDED_LAUNCHERS = {
   claude: { harness: 'claude', cmd: 'claude' },
   'claude-headless': { harness: 'claude-headless', cmd: 'claude' },
-  codex: { harness: 'codex', cmd: 'codex' },
+  codex: { harness: 'codex', cmd: 'codex --yolo' },
   'codex-headless': { harness: 'codex-headless', cmd: 'codex --yolo' },
   opencode: { harness: 'opencode', cmd: 'opencode' },
   'opencode-headless': { harness: 'opencode-headless', cmd: 'opencode --auto' },
@@ -147,7 +147,7 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
   assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
 })
 
-test('--harness seeds only the selected launchers, with automatic permission limited to the headless runtime that requires it', { skip: !gitAvailable() && 'git not available' }, () => {
+test('--harness seeds only the selected launchers, with Codex launchers using the requested YOLO policy', { skip: !gitAvailable() && 'git not available' }, () => {
   const selections = [['claude'], ['codex'], ['codex-headless'], ['opencode'], ['pi'], ['claude-headless'], ['opencode-headless'], ['pi-headless'], ['claude', 'codex', 'codex-headless', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless']]
   for (const selected of selections) {
     const { proj, codex, spex } = freshRepo()
@@ -160,8 +160,14 @@ test('--harness seeds only the selected launchers, with automatic permission lim
     assert.equal(cfg.dashboard.showHeadlessLaunchers, false, 'fresh init explicitly hides headless dashboard launchers')
     assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands match their runtime form')
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
-    if (!selected.includes('codex-headless'))
-      assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo/, 'clean init never seeds wrapper-specific permission bypasses')
+    const yoloLaunchers = Object.entries(cfg.sessions.launchers)
+      .filter(([, launcher]: any) => launcher.cmd.includes('--yolo'))
+      .map(([name]) => name)
+    assert.deepEqual(
+      yoloLaunchers,
+      expectedNames.filter((name) => name === 'codex' || name === 'codex-headless'),
+      'only Codex launchers receive the explicit YOLO policy',
+    )
     const autoLaunchers = Object.entries(cfg.sessions.launchers).filter(([, launcher]: any) => launcher.cmd.includes('--auto')).map(([name]) => name)
     assert.deepEqual(autoLaunchers, selected.includes('opencode-headless') ? ['opencode-headless'] : [], 'only the explicitly selected headless OpenCode runtime receives --auto')
 
@@ -215,7 +221,7 @@ test('--harness seeds hook nodes only when a selected native adapter can emit th
   assert.ok(!('Notification' in settings.hooks) && !('StopFailure' in settings.hooks), 'unreachable events never enter zcode settings')
 })
 
-test('a fresh selected-harness default drives no-choice session creation and pins its safe command', { skip: !gitAvailable() && 'git not available' }, async () => {
+test('a fresh selected-harness default drives no-choice session creation and pins its YOLO command', { skip: !gitAvailable() && 'git not available' }, async () => {
   const { proj, home, env, spex } = freshRepo()
   spex('init', '.', '--harness', 'codex')
 
@@ -244,11 +250,11 @@ test('a fresh selected-harness default drives no-choice session creation and pin
   assert.equal(created.launcher, 'codex')
   assert.equal(created.harness, 'codex')
 
-  const projectKey = proj.replace(/[/.]/g, '-')
+  const projectKey = encodeProject(realpathSync(proj))
   const rec = JSON.parse(readFileSync(join(home, 'projects', projectKey, 'sessions', created.id, 'session.json'), 'utf8'))
   assert.equal(rec.launcher, 'codex')
   assert.equal(rec.harness, 'codex')
-  assert.equal(rec.launch_cmd, 'codex', 'session creation pins the plain command from the named launcher')
+  assert.equal(rec.launch_cmd, 'codex --yolo', 'session creation pins the YOLO command from the named launcher')
 })
 
 test('post-checkout defers only the session-owned refresh', { skip: !gitAvailable() && 'git not available' }, () => {

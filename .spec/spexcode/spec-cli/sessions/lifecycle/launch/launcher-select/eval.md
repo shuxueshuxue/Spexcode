@@ -8,11 +8,11 @@ scenarios:
       session without an explicit launcher so creation resolves the planted `sessions.defaultLauncher` and
       pins its command without needing the harness binary to run.
     expected: >-
-      Init plants exactly one named launcher per selected harness: the interactive adapters and
-      `claude-headless` use their plain command, while `opencode-headless` alone uses `opencode --auto`
-      because that flag is part of OpenCode's non-interactive runtime form. `sessions.defaultLauncher` names
-      a real planted entry. No clean config contains `--dangerously-skip-permissions` or `--yolo`, and no
-      launcher except `opencode-headless` contains `--auto`. A no-choice session create succeeds through the
+      Init plants exactly one named launcher per selected harness: the seeded `codex` profile uses
+      `codex --yolo`, the other interactive profiles and `claude-headless` use their ordinary commands, and
+      `opencode-headless` uses `opencode --auto` because that flag is part of OpenCode's terminal-free runtime.
+      `sessions.defaultLauncher` names a real planted entry. Only Codex launchers contain `--yolo`, and only
+      `opencode-headless` contains `--auto`. A no-choice session create succeeds through the
       same named-launcher mechanism and stores that entry's harness, launcher name, and exact command in its
       record; no environment-specific branch or implicit bypass rewrites it. Any other bypass command works
       only when the user explicitly defines and selects that launcher.

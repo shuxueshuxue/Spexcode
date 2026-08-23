@@ -46,11 +46,12 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
   fresh repo just works and a mature one can still curate explicit roots. The planted file also carries the
   CHOSEN `harnesses` set (next paragraph) and seeds an ordinary [[launcher-select]] launcher for each
-  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first). Interactive
-  harnesses seed their plain command, preserving the tool's normal permission model; auth wrappers and
-  automatic-permission flags remain explicit user or host-local launcher definitions for those adapters. The
-  independent `opencode-headless` adapter is the deliberate exception: its runnable non-interactive form is
-  `opencode --auto`, so that exact command is its seed rather than a plain command that would reopen the TUI.
+  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first). The seeded
+  Codex profile uses `codex --yolo` so the Dashboard and no-choice CLI session paths start in the requested
+  automatic-permission mode; Claude, OpenCode, and Pi keep their ordinary commands. The independent
+  `opencode-headless` adapter is the deliberate terminal-free exception: its runnable form is `opencode --auto`,
+  so that exact command is its seed rather than a plain command that would reopen the TUI. A project can define
+  another named launcher or a local override when it needs a different permission model.
   Thus session-create works out of the box without seeding launchers for tools the adopter never picked. The same
   starter explicitly plants `dashboard.showHeadlessLaunchers: false`, [[launcher-visibility]]'s portable default.
   The template is also the one numeric-default source for the `uploads` transfer policy; its portable values

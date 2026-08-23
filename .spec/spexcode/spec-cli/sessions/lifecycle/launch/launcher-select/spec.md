@@ -28,14 +28,14 @@ harness rides along for free. Every launcher is a NAMED entry in `spexcode.json`
 `sessions.launchers` map — a `{ harness?, cmd }` pair keyed by a portable name the human chooses
 (`claude-glm`, `reclaude`, …); `harness` defaults to `claude`. `claude` and `codex` are NOT a special
 built-in tier resolved from an env var or a `claudeCmd`/`codexCmd` config field: [[spex-init]] SEEDS each selected
-harness as an ordinary named launcher. Interactive harnesses preserve their normal permission model
-(`claude`, `codex`, `opencode`, and `pi` all use their plain command); the independent [[opencode-headless]]
-runtime is the deliberate exception and seeds `opencode --auto`, because a terminal-free run cannot stop for
-an interactive permission prompt. After seeding, every entry is edited, renamed, or removed like any other
-launcher. A project that intentionally wants another auth wrapper (reclaude) or automatic-permission command
-declares it as an explicit launcher choice in `spexcode.json` or the gitignored `spexcode.local.json`; clean
-init never grants those permissions silently. There is NO runtime env or harness-specific branch that rewrites
-a launcher's command. The complete
+harness as an ordinary named launcher. The seeded Codex profile intentionally uses `codex --yolo`, so the
+Dashboard New Session composer and no-choice CLI creates start Codex with automatic permissions; Claude,
+OpenCode, and Pi keep their ordinary commands. The independent [[opencode-headless]] runtime is the deliberate
+terminal-free exception and seeds `opencode --auto`, because it cannot stop for an interactive permission prompt.
+After seeding, every entry is edited, renamed, or removed like any other launcher. A project that intentionally
+wants another auth wrapper or permission model can define a separate named launcher or override the profile in
+`spexcode.local.json`. There is NO runtime env or harness-specific branch that rewrites a launcher's configured
+command. The complete
 launcher registry therefore lists exactly the config's real launchers, and two names can never resolve to the
 same command as ghost duplicates; the dashboard applies only [[launcher-visibility]]'s adapter-capability
 projection on top. Because a launcher NAMES a harness, picking a launcher is the ONLY user-facing launch

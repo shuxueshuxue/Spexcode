@@ -296,12 +296,18 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
 
   const config = JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8'))
   assert.deepEqual(config.harnesses, [harness.id], `[${name}] selection persists as one harness`)
+  const expectedCommand = harness.id === 'codex' ? 'codex --yolo' : harness.id
   assert.deepEqual(config.sessions, {
-    launchers: { [harness.id]: { harness: harness.id, cmd: harness.id } },
+    launchers: { [harness.id]: { harness: harness.id, cmd: expectedCommand } },
     defaultLauncher: harness.id,
-  }, `[${name}] init seeds one plain launcher command`)
-  assert.doesNotMatch(JSON.stringify(config.sessions), /dangerously-skip-permissions|--yolo|--auto|login/i,
-    `[${name}] launcher grants no permissions and performs no login`)
+  }, `[${name}] init seeds the expected launcher command`)
+  if (harness.id === 'codex') {
+    assert.match(config.sessions.launchers.codex.cmd, /(^|\s)--yolo(?:\s|$)/,
+      `[${name}] Codex's seeded launcher uses the requested YOLO policy`)
+  } else {
+    assert.doesNotMatch(JSON.stringify(config.sessions), /dangerously-skip-permissions|--yolo|--auto|login/i,
+      `[${name}] non-Codex launcher grants no permissions and performs no login`)
+  }
 
   const receipt = parseReceipt(initOutput, name)
   assertReceipt({ entries: receipt, initOutput, project, codexHome, harness, caseName: name })

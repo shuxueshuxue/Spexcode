@@ -23,8 +23,9 @@ scenarios:
       gitignored/host-specific), documents the launcher schema
       (launchers: { <name>: { harness, cmd } } and defaultLauncher), and shows the working split — the
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.
-      It names `claude`, `codex`, `opencode`, and `pi` as the plain clean-init commands and says automatic-
-      permission variants (`--dangerously-skip-permissions`, `--yolo`, `--auto`) require an explicit launcher.
+      It names the clean-init launcher commands, including `codex --yolo` for the seeded Codex profile, and
+      explains that a project can define another named launcher or local override for a different permission
+      model. It still identifies `--dangerously-skip-permissions` and `--auto` as explicit profile choices.
       Field coverage spans layout, dashboard, sessions, serve, issues, deterministic lint policy, and
       doctor health budgets. The layout section says `mainBranch` is stamped once at adoption and remains
       stable across later checkouts. Active altitude and breadth thresholds appear only under `doctor.altitude`

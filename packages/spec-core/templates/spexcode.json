@@ -21,7 +21,7 @@
     "launchers": {
       "claude": { "harness": "claude", "cmd": "claude" },
       "claude-headless": { "harness": "claude-headless", "cmd": "claude" },
-      "codex": { "harness": "codex", "cmd": "codex" },
+      "codex": { "harness": "codex", "cmd": "codex --yolo" },
       "codex-headless": { "harness": "codex-headless", "cmd": "codex --yolo" },
       "opencode": { "harness": "opencode", "cmd": "opencode" },
       "opencode-headless": { "harness": "opencode-headless", "cmd": "opencode --auto" },

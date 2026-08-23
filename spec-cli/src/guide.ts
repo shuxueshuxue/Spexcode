@@ -409,22 +409,21 @@ reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS an ordin
 harness the adopter SELECTED (--harness), from the template pool
   "claude"   → { "harness": "claude",   "cmd": "claude" }
   "claude-headless" → { "harness": "claude-headless", "cmd": "claude" }
-  "codex"    → { "harness": "codex",    "cmd": "codex" }
+  "codex"    → { "harness": "codex",    "cmd": "codex --yolo" }
   "codex-headless" → { "harness": "codex-headless", "cmd": "codex --yolo" }
   "opencode" → { "harness": "opencode", "cmd": "opencode" }
   "opencode-headless" → { "harness": "opencode-headless", "cmd": "opencode --auto" }
   "pi"       → { "harness": "pi",       "cmd": "pi" }
   "pi-headless" → { "harness": "pi-headless", "cmd": "pi" }
-The interactive profiles preserve each harness's normal permission model. \`opencode-headless\` and
-\`codex-headless\` are deliberate seed exceptions: their terminal-free runs require \`opencode --auto\` and
-\`codex --yolo\`; interactive profiles stay plain. Other automatic-permission commands are NEVER clean-init
-defaults: define and select one explicitly only when that access is intended. To run workers under an auth
-wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
-override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir or
-permission variants. Shape:
+The seeded Codex profile intentionally uses \`codex --yolo\`, so the Dashboard New Session composer and a
+no-choice \`spex session new\` start Codex with the requested automatic-permission policy. The
+\`opencode-headless\` and \`codex-headless\` profiles retain their terminal-free commands (\`opencode --auto\`
+and \`codex --yolo\`). A project that needs a different permission model can define another named launcher or
+override the profile in spexcode.local.json; the configured command is never rewritten at launch time. Add more
+profiles when a project needs named auth/config-dir or permission variants. Shape:
   "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi" | "claude-headless" | "codex-headless" | "opencode-headless" | "pi-headless",
                              "cmd": "<launch command>" } }
-\`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. A portable plain command may live
+\`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. A portable command may live
 in committed spexcode.json (as the init seeds do). A host-specific command — an absolute wrapper path,
 credential route, or personal permission choice — belongs in gitignored spexcode.local.json, while its
 portable defaultLauncher NAME may stay in committed spexcode.json; the merge keeps both:

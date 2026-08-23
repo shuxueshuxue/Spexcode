@@ -20,8 +20,9 @@
 # use. It never edits session.json itself: an asking note is arbitrary human/agent prose, and a writer that
 # substitutes prose into existing JSON meets a quote, a backslash, or a newline and leaves a record nothing
 # can parse — which is how a live session came to report "no session record" ([[sessions-core]]).
-# @@@ global store - state lives NOT in the worktree but in the per-session GLOBAL record session.json, keyed
-# by the harness session_id, grouped per-project (see hp_store_dir). GATED on `governed`: a user-self-launched
+# @@@ global store - the lifecycle state lives in the canonical session application, keyed by the harness
+# session_id, grouped per-project (see hp_store_dir). The sibling session.json is only the runtime/worktree
+# envelope. GATED on `governed`: a user-self-launched
 # (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 payload=$(cat 2>/dev/null)

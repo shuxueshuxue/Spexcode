@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
 import { createServer } from 'node:net'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
@@ -77,6 +77,11 @@ async function stop(child) {
     } catch { /* already gone */ }
   }
   services.delete(child)
+}
+
+function clearGatewayPeer() {
+  const peer = join(home, 'gateway', 'peer.sock')
+  if (existsSync(peer)) unlinkSync(peer)
 }
 
 async function waitFor(fn, label, timeout = 45_000) {
@@ -412,6 +417,7 @@ try {
 
   step('restart gateway')
   await stop(gateway)
+  clearGatewayPeer()
   await startGateway()
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()

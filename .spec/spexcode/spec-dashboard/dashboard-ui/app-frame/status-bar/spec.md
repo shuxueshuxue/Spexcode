@@ -79,7 +79,9 @@ offline projects remain visible and inert, and the global Projects row opens `/p
 makes the same identity control the management-login door without exposing rows. The rail has no project
 chip or second switcher. It stays at the status row's left edge rather than moving into the sidebar because
 the dock may fold or be absent on bare boards: this placement keeps the icon, name, and switch action
-complete and stationary on every desktop route while remaining immediately adjacent to the sidebar.
+complete and stationary on every desktop route while remaining immediately adjacent to the sidebar. When
+opened, its catalog menu is anchored to that button's own slot, opening upward from the button's top edge,
+sharing its left edge, and shrinking to the viewport when the window is narrow.
 On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
 its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
 pass/fail, unmeasured); the deduped open-issue total; and live sessions split into self-driving and

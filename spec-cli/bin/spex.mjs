@@ -2,7 +2,7 @@
 // @@@ spex launcher ([[release-launcher]]) - package installs execute the package's compiled CLI directly;
 // tsx remains a development tool and never enters an adopter's runtime closure.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -43,24 +43,55 @@ if (existsSync(sourceRoot)) {
     join(workspace, 'spec-eval', 'dist', 'index.js'),
     join(workspace, 'spec-forge', 'dist', 'index.js'),
   ]
-  const newestSource = srcRoots.reduce((newest, root) => {
-    if (!existsSync(root)) return newest
-    for (const entry of readdirSync(root, { recursive: true })) {
-      const path = join(root, String(entry))
+  const sourceIsStale = () => {
+    const newestSource = srcRoots.reduce((newest, root) => {
+      if (!existsSync(root)) return newest
+      for (const entry of readdirSync(root, { recursive: true })) {
+        const path = join(root, String(entry))
+        try {
+          if (/\.(ts|tsx|js|mjs)$/.test(path)) newest = Math.max(newest, statSync(path).mtimeMs)
+        } catch { /* a concurrent source edit can only make the next invocation rebuild again */ }
+      }
+      return newest
+    }, 0)
+    return runtimeEntries.some((entry) => {
+      try { return statSync(entry).mtimeMs < newestSource } catch { return true }
+    })
+  }
+  if (sourceIsStale()) {
+    // A hook, poller, and human shell can all invoke spex at once. The lock is deliberately at the
+    // launcher boundary: only one process pays the full workspace build, and waiters re-check freshness
+    // after the owner exits. A dead owner is recoverable; a live build gets two minutes before it is stale.
+    const buildLock = join(workspace, '.spex-build.lock')
+    const wait = new Int32Array(new SharedArrayBuffer(4))
+    const deadline = Date.now() + 120_000
+    let owner = false
+    while (!owner) {
       try {
-        if (/\.(ts|tsx|js|mjs)$/.test(path)) newest = Math.max(newest, statSync(path).mtimeMs)
-      } catch { /* a concurrent source edit can only make the next invocation rebuild again */ }
+        mkdirSync(buildLock)
+        owner = true
+      } catch (error) {
+        if (error?.code !== 'EEXIST') throw error
+        try {
+          if (Date.now() - statSync(buildLock).mtimeMs > 120_000) rmSync(buildLock, { recursive: true, force: true })
+        } catch { /* the owner may have completed between the stat and the next check */ }
+        if (Date.now() >= deadline) {
+          console.error('spex: source workspace build lock did not clear; remove .spex-build.lock after confirming no build is running.')
+          process.exit(75)
+        }
+        Atomics.wait(wait, 0, 0, 100)
+      }
     }
-    return newest
-  }, 0)
-  const rebuild = runtimeEntries.some((entry) => {
-    try { return statSync(entry).mtimeMs < newestSource } catch { return true }
-  })
-  if (rebuild) {
-    const build = spawnSync('npm', ['run', 'build'], { cwd: workspace, stdio: 'inherit' })
-    if (build.error || build.status !== 0 || !existsSync(cli)) {
-      console.error('spex: source workspace build failed; fix it, then retry.')
-      process.exit(build.status ?? 1)
+    try {
+      if (sourceIsStale()) {
+        const build = spawnSync('npm', ['run', 'build'], { cwd: workspace, stdio: 'inherit' })
+        if (build.error || build.status !== 0 || !existsSync(cli)) {
+          console.error('spex: source workspace build failed; fix it, then retry.')
+          process.exit(build.status ?? 1)
+        }
+      }
+    } finally {
+      rmSync(buildLock, { recursive: true, force: true })
     }
   }
 }

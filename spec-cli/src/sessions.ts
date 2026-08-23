@@ -4699,10 +4699,17 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused'
-type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
+type AcceptedDispatch = DispatchResult & {
+  replayed?: boolean
+  code?: DispatchAcceptCode
+  delivery?: 'accepted' | 'queued'
+}
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency
+  // Dashboard callers keep this opaque key while a transport retry is pending. Canonical protocol
+  // idempotency makes the retry address the existing queue row instead of appending a duplicate prompt.
+  deliveryKey?: string
   acceptGuard?: (record: SessRec) => Promise<void>
   deferDrain?: boolean
   // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
@@ -4730,7 +4737,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
       await opts.acceptGuard?.(rec)
       const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-      const idempotencyKey = opts.idempotency?.requestDigest ?? null
+      const idempotencyKey = opts.idempotency?.requestDigest ?? (opts.deliveryKey?.trim() || null)
       const existing = idempotencyKey
         ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
@@ -4741,7 +4748,12 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       if (!opts.deferDrain) await drainSession(id)
-      return { ok: true, ...(opts.idempotency ? { replayed: !!existing } : {}) }
+      const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+      return {
+        ok: true,
+        delivery: pending ? 'queued' : 'accepted',
+        ...(opts.idempotency || opts.deliveryKey ? { replayed: !!existing } : {}),
+      }
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
     }

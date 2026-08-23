@@ -927,7 +927,8 @@ app.post('/api/sessions/:id/input', async (c) => {
   if (body?.kind === 'command') {
     const id = c.req.param('id')
     const text = typeof body?.text === 'string' ? body.text : ''
-    const r = await sendText(id, text)
+    const deliveryKey = typeof body?.deliveryId === 'string' && body.deliveryId.trim() ? body.deliveryId.trim() : undefined
+    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey } : {})
     if (!r.ok) return c.json(r, 502)
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })

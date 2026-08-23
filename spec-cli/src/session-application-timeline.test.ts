@@ -73,10 +73,63 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     const result = await sendText(id, 'legacy delivery marker')
-    assert.deepEqual(result, { ok: true })
+    assert.deepEqual(result, { ok: true, delivery: 'accepted' })
     await new Promise(resolve => setTimeout(resolve, 20))
     assert.match(received.join(''), /legacy delivery marker/)
     assert.deepEqual(app.protocol.listPending(id), [])
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()))
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('a transport miss stays queued and a Command Box retry reuses the same canonical message', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-cutover-queued-command-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const databasePath = join(home, 'sessions.sqlite')
+  const id = 'queued-command-session'
+  const deliveryId = 'command-delivery-key-1'
+  let rejectTransport = true
+  let received = ''
+  const server = createServer(socket => {
+    if (rejectTransport) {
+      socket.destroy()
+      return
+    }
+    socket.on('data', chunk => { received += String(chunk) })
+  })
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    title: 'queued', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
+    sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
+    cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'active' })
+  stampRvSock(id)
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
+  try {
+    const first = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
+    assert.deepEqual(first, { ok: true, delivery: 'queued', replayed: false })
+    assert.equal(app.protocol.listPending(id).length, 1, 'the accepted message remains owed after transport refusal')
+
+    const replay = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
+    assert.deepEqual(replay, { ok: true, delivery: 'queued', replayed: true })
+    assert.equal(app.protocol.readMessages(id).filter(message => message.idempotencyKey === deliveryId).length, 1,
+      'retry did not append a duplicate canonical message')
+
+    rejectTransport = false
+    const accepted = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
+    assert.deepEqual(accepted, { ok: true, delivery: 'accepted', replayed: true })
+    assert.equal(app.protocol.listPending(id).length, 0)
+    assert.match(received, /queued prompt/)
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()))
     app.close()

@@ -3285,7 +3285,6 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
   })
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
-export const markError = (sessionId?: string) => markState('error', { sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {
@@ -4782,6 +4781,8 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const application = configuredSessionApplicationIfCutover()
   if (application) {
+    let message: ReturnType<ProductionSessionApplication['protocol']['enqueue']>
+    let replayed = false
     try {
       const rec = readRecord(id)
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
@@ -4791,21 +4792,30 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       const existing = idempotencyKey
         ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
-      const message = existing ?? application.enqueueConversationMessage(id, {
+      message = existing ?? application.enqueueConversationMessage(id, {
           kind: 'session.prompt.v1',
           body: Buffer.from(prompt.text, 'utf8'),
           senderSessionId: from ?? null,
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
-      if (!opts.deferDrain) await drainSession(id)
-      const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
-      return {
-        ok: true,
-        delivery: pending ? 'queued' : 'accepted',
-        ...(opts.idempotency || opts.deliveryKey ? { replayed: !!existing } : {}),
-      }
+      replayed = !!existing
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
+    }
+    // Acceptance and handover are separate boundaries. A committed SQLite message remains a successful
+    // command even when the runtime is currently unbound; binding/resume is the explicit event that makes
+    // the durable debt drainable. Reporting the post-commit refusal as an append failure made command-box
+    // callers show a false error despite the prompt already being safely queued.
+    if (!opts.deferDrain) {
+      try { await drainSession(id) } catch (error) {
+        if (!(error instanceof ResourceConflict) || !/no bound spex-governed runtime/u.test(error.message)) throw error
+      }
+    }
+    const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+    return {
+      ok: true,
+      delivery: pending ? 'queued' : 'accepted',
+      ...(opts.idempotency || opts.deliveryKey ? { replayed } : {}),
     }
   }
   let replayed = false

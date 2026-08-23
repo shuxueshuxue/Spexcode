@@ -34,6 +34,8 @@ assembly (the rendezvous env + the harness's own command + the spec-pointer/prom
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
 the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop.
+Lifecycle writes have one typed entry point, `markState`; the retired `markError` convenience export is not part of
+the module surface, so callers name the state transition they are making instead of adding a second error mechanism.
 Creation authority is checked before any fresh-project canonical store is initialized: rejected, abandoned, fenced,
 or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a successfully admitted fresh create
 may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses
@@ -80,7 +82,9 @@ the canonical application row is the lifecycle fact and always wins the public p
 not update the envelope bytes. A retired protocol address is likewise not delivery debt: the retry sweep
 must drop that impossible lookup rather than polling and logging it forever.
 An existing queue with no bound governed runtime is also retained but not polled; binding/resume is the event
-that makes it drainable again.
+that makes it drainable again. Canonical acceptance is still successful in this state: the caller is told
+`delivery: queued` after the SQLite message commit, rather than receiving a false append failure because the
+post-commit drain correctly refused an unbound runtime.
 Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.

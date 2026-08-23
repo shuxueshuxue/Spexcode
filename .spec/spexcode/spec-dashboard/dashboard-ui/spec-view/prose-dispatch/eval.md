@@ -5,10 +5,11 @@ scenarios:
     test: spec-dashboard/test/source-selection.e2e.mjs
     description: >-
       Open a governed `#/file` document in a real browser, drag-select source lines, and use the shared
-      four-action group to open its send card. Choose an active target and send. Observe the target session's
-      timeline and inspect the received prompt for the path, inclusive line range, and selection token.
+      four-action group to open its send card. Reopen the same selection with the native context menu and
+      verify that it exposes the identical four actions. Choose an active target and send. Observe the target
+      session's timeline and inspect the received prompt for the path, inclusive line range, and selection token.
     expected: >-
-      The file selection opens the same four actions as spec prose, the old one-button affordance is absent,
+      The file selection and its native right-click menu open the same four actions as spec prose, the old one-button affordance is absent,
       an idle session remains in the target list while an offline session is absent, and sending reaches the
       selected live session through its ordinary input route with the code-selection attachment intact.
   - name: popup-body-edit-send-direct-create

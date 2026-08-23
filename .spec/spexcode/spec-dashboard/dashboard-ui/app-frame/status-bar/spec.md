@@ -136,3 +136,8 @@ does not allot. The bar is where a persistent readout goes precisely so that no 
 
 Session lifecycle attention reuses the same transient-notice provider as every other acknowledged action. A transition
 into `asking` emits one clickable notice that opens that session document; no session-specific notification channel exists.
+
+Board tally actions use the shared [[icon-system]] registry for their semantic marks: drift uses the
+`triangle-alert` glyph and issue totals use the official `issue-opened` glyph. Statusbar markup does not
+introduce Unicode warning/diamond stand-ins or a second local icon vocabulary; the tally's count and
+accessible label remain unchanged.

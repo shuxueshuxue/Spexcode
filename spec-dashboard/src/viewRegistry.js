@@ -15,7 +15,10 @@ function copyDefinition(definition) {
   return Object.freeze({ ...definition })
 }
 
-/** Create an isolated registry seeded with product-owned built-ins. */
+/**
+ * Create an isolated registry. `initial` is reserved for product-owned built-ins;
+ * runtime callers must use registerView/registerPlugin so ownership is auditable.
+ */
 export function createViewRegistry(initial = {}) {
   const views = new Map()
   const owners = new Map()

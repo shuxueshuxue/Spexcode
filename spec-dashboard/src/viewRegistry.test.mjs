@@ -45,6 +45,16 @@ test('plugin registration is atomic and records ownership', () => {
   assert.equal(registry.has('valid'), false)
 })
 
+test('invalid plugin definitions cannot leave an earlier view registered', () => {
+  const registry = createViewRegistry()
+  assert.throws(() => registry.registerPlugin({ id: 'broken', views: {
+    valid: { component },
+    invalid: {},
+  } }), /component function/)
+  assert.deepEqual(registry.entries(), [])
+  assert.equal(registry.ownerOf('valid'), undefined)
+})
+
 test('plugin ids and view definitions are validated before mutation', () => {
   const registry = createViewRegistry()
   assert.throws(() => registry.registerPlugin({ views: {} }), /non-empty id/)

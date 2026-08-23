@@ -104,7 +104,7 @@ export const registerView = (...args) => viewRegistry.registerView(...args)
 export const registerPlugin = (plugin) => viewRegistry.registerPlugin(plugin)
 export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
 
-export const viewFor = (page) => viewRegistry.get(page) || VIEWS.sessions
+export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
 export const isDocument = (page, param = null) => {
   const view = viewRegistry.get(page)

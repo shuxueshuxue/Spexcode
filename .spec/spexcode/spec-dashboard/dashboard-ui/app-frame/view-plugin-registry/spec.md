@@ -15,6 +15,6 @@ The dashboard's built-in views are seeded into one runtime registry. Extensions 
 `registerView(name, definition, owner)` or `registerPlugin({ id, views })`; they do not mutate the built-in
 map. Names are lowercase kebab-case and definitions provide a component function. Registration fails closed
 when a name is already owned, and plugin registration validates every definition before changing the registry,
-so a collision cannot leave a partial plugin behind. Unregistering a plugin removes only views owned by that
-plugin. The registry is a view-extension seam, not a second router: route parsing and tab identity remain
-shell-owned, and every registered view receives the same `{ param, query }` contract as a built-in.
+so a collision or invalid definition cannot leave a partial plugin behind. Unregistering a plugin removes only
+views owned by that plugin. The registry is a view-extension seam, not a second router: route parsing and tab
+identity remain shell-owned, and every registered view receives the same `{ param, query }` contract as a built-in.

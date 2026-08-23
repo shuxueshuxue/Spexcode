@@ -53,10 +53,11 @@ function DockToggle() {
   )
 }
 
-function RailLink({ page, active, label, disabled = false, onNavigate }) {
+function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0 }) {
   if (disabled) return (
     <span className="rail-btn disabled" data-tip={label} aria-label={label} aria-disabled="true">
       <Icon name={page} size={18} />
+      {badge > 0 && <span className="rail-badge" aria-label={`${badge} needs you`}>{badge > 99 ? '99+' : badge}</span>}
     </span>
   )
   return (
@@ -79,6 +80,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate }) {
       }}
     >
       <Icon name={page} size={18} />
+      {badge > 0 && <span className="rail-badge" aria-label={`${badge} needs you`}>{badge > 99 ? '99+' : badge}</span>}
     </a>
   )
 }
@@ -154,7 +156,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, denied, t }) {
   )
 }
 
-export default function SideBar({ page, identity, catalog, graphOnly = false }) {
+export default function SideBar({ page, identity, catalog, graphOnly = false, needsYou = 0 }) {
   const t = useT()
   const { setDock, setDockMode } = useWorkspaceApi()
   const catalogOk = catalog?.state === 'ok'
@@ -173,7 +175,9 @@ export default function SideBar({ page, identity, catalog, graphOnly = false }) 
       />}
       <DockToggle />
       {ENTRIES.map((p) => (
-        <RailLink key={p} page={p} active={page === p} label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
+        <RailLink key={p} page={p} active={page === p}
+          label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
+          badge={p === 'sessions' ? needsYou : 0}
           disabled={graphOnly && p !== 'graph'}
           onNavigate={() => {
             if (p === 'sessions') { setDock?.(true); setDockMode?.('sessions') }

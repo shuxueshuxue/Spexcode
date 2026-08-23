@@ -19,6 +19,8 @@ related:
 
 The rail is the activity bar for routed destinations. Its light has exactly one meaning: the current route.
 The dock projection is a separate, secondary fact shown by the dock header, never by the route light.
+The sessions entry may add a needs-you count badge as an overlay; the badge is attention state and never changes
+the route light's meaning. The same count prefixes the browser title when non-zero.
 
 ## expanded spec
 

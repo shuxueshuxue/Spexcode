@@ -6,9 +6,10 @@ import { moveTab, pinTab, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
-import { STATUS_COLOR } from './session.js'
+import { STATUS_COLOR, sessionHandle } from './session.js'
 import { getSessionBaseSurface, isSessionSurface, isResourceSurface, resourceSurfaceKey, resourceTabKey, SESSION_SURFACE_CONVERSATION } from './sessionSurface.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
+import { pendingSessionFor } from './launch.js'
 
 const resourceLabel = (url) => {
   try {
@@ -21,7 +22,7 @@ const resourceLabel = (url) => {
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
 
 // A tab's label comes from the SAME projections the rest of the board reads, never from a second lookup
-// table that could disagree: a node's own title, a session's own headline — or, where no projection holds
+// table that could disagree: a node's own title, a session's stable handle — or, where no projection holds
 // the name at all, the document's own report of it ([[document-actions]]), which has one writer and so
 // cannot disagree with anything. When nothing resolves (a node that has since been deleted, a session
 // closed in another tab, an issue not yet loaded) the raw selector shows rather than a blank chip — an
@@ -64,8 +65,8 @@ function label(tab, { specs, sessions, names, t }) {
   }
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
-    const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param))
-    const title = s?.label || s?.title || tab.param.slice(0, 8)
+    const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param)) || pendingSessionFor(tab.param)
+    const title = s ? sessionHandle(s) : tab.param.slice(0, 8)
     const requestedSurface = isSessionSurface(tab.query?.surface) ? tab.query.surface : null
     if (isResourceSurface(requestedSurface)) {
       const key = resourceSurfaceKey(requestedSurface)
@@ -96,7 +97,8 @@ function TabDot({ tab, specs, sessions }) {
     return <i className="tab-dot" style={{ background: STATUS[node.status].color }} />
   }
   if (tab.page === 'sessions' && tab.param && tab.param !== 'new') {
-    const session = sessions?.find((s) => s.id === tab.param || s.id?.startsWith(tab.param))
+    const session = sessions?.find((s) => s.id === tab.param || s.id?.startsWith(tab.param)) || pendingSessionFor(tab.param)
+    if (session?.status === 'starting' || session?.status === 'queued') return <i className="tab-spinner" aria-hidden="true">⟳</i>
     const color = session && STATUS_COLOR[session.status]
     return color ? <i className="tab-dot" style={{ background: color }} /> : null
   }

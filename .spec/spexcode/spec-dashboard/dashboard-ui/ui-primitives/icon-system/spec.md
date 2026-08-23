@@ -5,6 +5,8 @@ hue: 205
 desc: The dashboard's ONE icon vocabulary — icons.jsx exports <Icon name/> (one data-driven SVG contract, stroke-first with explicit fill geometry for official semantic marks) and <IconButton/> (icon-only button that FORCES title+aria-label), so every glyph lives in one file and icon buttons never ship without a tooltip.
 code:
   - spec-dashboard/src/icons.jsx
+related:
+  - spec-dashboard/src/iconConsistency.test.mjs
 ---
 
 # icon-system
@@ -76,3 +78,7 @@ the accessible name impossible to forget.
   icon from this registry, the Obsidian/Lucide grammar that makes a scan faster without hiding the command.
   The desktop terminal toolbar is the deliberate compact exception: familiar icon-only command tools preserve
   their localized prose in tooltip/`aria-label`, while the ONE session-command registry supplies their meaning.
+
+`spec-dashboard/src/iconConsistency.test.mjs` is the executable boundary for this rule. It rejects component-local
+SVGs (with the deliberate `IdentityIcon` favicon adapter exception), checks every literal `<Icon>`/`<IconButton>`
+name against the registry, and keeps the shared stroke/tooltip/accessibility contract visible in the test suite.

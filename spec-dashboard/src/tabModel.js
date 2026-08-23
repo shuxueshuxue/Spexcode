@@ -36,7 +36,9 @@ export function normalizeTabs(raw, isDocument = () => true) {
       page: original.page, param: original.param, query: original.query,
       // Published resources are deliberate holds: they must never compete for a replaceable file slot,
       // including when an older persisted record forgot to mark them pinned.
-      pinned: isResourceRoute(route) ? true : (t.pinned != null ? t.pinned !== false : t.preview !== true),
+      pinned: isResourceRoute(route) || RESIDENT_PAGES.has(route.page)
+        ? true
+        : (t.pinned != null ? t.pinned !== false : t.preview !== true),
     }
   })
   const unique = []

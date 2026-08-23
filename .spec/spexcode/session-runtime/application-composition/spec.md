@@ -20,3 +20,8 @@ interpreting relation names. Runtime identities and generation expectations are 
 model-facing message fact in `session-events` in the same transaction as the protocol queue write. Generic protocol
 messages remain opaque and do not become conversation history. The composition never reads JSON records or exposes
 an opt-in compatibility switch.
+
+Lifecycle transitions resolve watcher recipients by their durable channel: a `watch:parent` relation suppresses the
+routine `active`/working transition, while `watch:manual` (and the legacy `watch` channel) opts into the complete
+feed. When both channels point at one watcher, the union emits one queue item. Creation still publishes its initial
+snapshot through the ordinary relation transaction; this policy applies to later transitions.

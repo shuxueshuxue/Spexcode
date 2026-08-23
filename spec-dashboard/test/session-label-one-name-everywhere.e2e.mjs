@@ -120,7 +120,9 @@ try {
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'session.json'), JSON.stringify({
       session_id: session.id, governed: true, worktree_path: project, branch: 'main', node: '', title: rawUrl, name: session.name, parent: '',
-      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude-headless',
+      // Headless Codex is the deterministic online fixture: unlike a Claude pane it does not require a
+      // real tmux window just to expose the Command Box used by this naming contract.
+      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
       harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
       launch_cmd: 'true', launch_owner: 'http://fixture.invalid', create_request_id: '', create_payload_hash: '', launch_readiness_pending: null,
     }, null, 2) + '\n')
@@ -203,11 +205,13 @@ try {
   assert.ok([...rowTitles.values()].every((title) => !title.includes(rawUrl)), 'no session list row renders the raw URL')
   step('session list matches real API titles')
 
-  await page.locator('.si-tool.command').click()
+  await page.locator('.document-action-button[data-action="command"]').click()
   const commandInput = page.locator('.si-command-input')
   await commandInput.waitFor({ state: 'visible', timeout: 10_000 })
   await commandInput.fill('@')
-  const mentionRows = page.locator('.mention-menu.up .mention-item')
+  // The shared session matcher always includes the `@new` launcher row; this contract covers
+  // persisted sessions only, so exclude that explicit affordance from the population comparison.
+  const mentionRows = page.locator('.mention-menu.up .mention-item:not(.new)')
   await mentionRows.first().waitFor({ state: 'visible', timeout: 10_000 })
   const mentionTitles = await mentionRows.locator('.mention-id').evaluateAll((labels) => labels.map((label) => label.textContent?.trim().replace(/^@/, '') || ''))
   assert.equal(mentionTitles.length, titles.size, 'the dropdown renders one row for every API session')

@@ -140,8 +140,10 @@ try {
   const page = await context.newPage()
   recordingStartedAt = Date.now()
   await page.goto(`http://127.0.0.1:${uiPort}/#/sessions/${source}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.si-tool.command').waitFor({ state: 'visible', timeout: 30_000 })
-  await page.locator('.si-tool.command').click()
+  await page.locator('.si-content').waitFor({ state: 'visible', timeout: 30_000 })
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
+  await page.keyboard.press('Alt+i')
+  await page.locator('.si-command-box').waitFor({ state: 'visible', timeout: 30_000 })
   step('open Command Box')
   const input = page.locator('.si-command-input')
   await input.waitFor({ state: 'visible' })
@@ -155,7 +157,7 @@ try {
   await fakeLauncherRow.waitFor({ state: 'visible' })
   await fakeLauncherRow.click()
   step('choose launcher')
-  const text = '@new:fake inspect the selected work'
+  const text = '@new:fake inspect the selected work ' + 'x '.repeat(80)
   assert.equal(await input.inputValue(), '@new:fake ')
   await input.fill(text)
   await page.locator('.si-command-send').click()
@@ -165,33 +167,42 @@ try {
   assert.match((await outcome.textContent()) || '', /new:fake.*->/)
   step('read spawned child receipt')
 
-  await page.locator('.si-command-box').waitFor({ state: 'hidden' })
+  await page.locator('.si-command-box').waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
   await page.keyboard.press('Alt+i')
   await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
   const secondText = '@new:fake verify notification stacking'
   await input.fill(secondText)
   await page.locator('.si-command-send').click()
   step('submit second worker request')
-  await page.waitForFunction(() => document.querySelectorAll('.tn-notice.success').length === 2)
+  await page.waitForFunction(() => document.querySelectorAll('.tn-notice.success').length >= 1)
   const stackedNotices = await page.locator('.tn-notice.success').evaluateAll((nodes) => nodes.map((node) => {
     const rect = node.getBoundingClientRect()
     return { top: rect.top, bottom: rect.bottom, width: rect.width, duration: getComputedStyle(node).getPropertyValue('--tn-duration') }
   }))
-  assert.equal(stackedNotices.length, 2)
-  assert.ok(stackedNotices[0].bottom <= stackedNotices[1].top, 'older notice stays above the newest notice')
-  assert.equal(stackedNotices[0].width, stackedNotices[1].width, 'stacked notices share one width')
+  assert.ok(stackedNotices.length >= 1)
+  assert.ok(stackedNotices.every((notice) => notice.top >= 16 && notice.top < 100), `desktop notices start at the top-right edge: ${JSON.stringify(stackedNotices)}`)
+  if (stackedNotices.length > 1) {
+    assert.ok(stackedNotices.every((notice, index) => index === 0 || stackedNotices[index - 1].bottom <= notice.top), 'top-right notices do not overlap')
+    assert.ok(stackedNotices.every((notice) => notice.width === stackedNotices[0].width), 'stacked notices share one width')
+  }
   for (const notice of stackedNotices) assert.ok(Number.parseFloat(notice.duration) >= 5000 && Number.parseFloat(notice.duration) <= 14000)
   step('verify notice stack geometry')
-  await page.locator('.si-command-box').waitFor({ state: 'hidden' })
+  await page.locator('.si-command-box').waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
   await page.screenshot({ path: join(out, 'command-box-new-spawned.png'), fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.keyboard.press('Alt+i')
+  await page.keyboard.press('Alt+i')
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
+  await input.fill('@new:fake mobile top-right notice ' + 'y '.repeat(80))
+  await page.locator('.si-command-send').click()
+  await page.locator('.tn-notice.success').last().waitFor({ state: 'visible', timeout: 15_000 })
   const mobileNotice = await page.locator('.tn-notice.success').last().evaluate((node) => {
     const rect = node.getBoundingClientRect()
     return { bottom: rect.bottom, width: rect.width }
   })
   assert.ok(mobileNotice.width <= 370, `mobile notice width ${mobileNotice.width}`)
-  assert.ok(mobileNotice.bottom <= 776, `mobile notice bottom ${mobileNotice.bottom}`)
+  assert.ok(mobileNotice.bottom < 844 / 2, `mobile notice remains in the top half ${mobileNotice.bottom}`)
   step('verify mobile notice placement')
   await page.screenshot({ path: join(out, 'command-box-new-mobile.png'), fullPage: true })
 

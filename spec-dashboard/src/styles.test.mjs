@@ -139,7 +139,7 @@ test('tab widths shrink elastically before wrapping and keep the active close af
   assert.match(css, /\.tab\s*\{[^}]*flex:\s*1 1 0;[^}]*min-width:\s*80px;[^}]*max-width:\s*240px;[^}]*container-type:\s*inline-size;/s)
   assert.match(css, /\.tab\.on\s*\{[^}]*min-width:\s*112px;/s)
   assert.match(css, /\.tab\.on \.tab-x, \.tab:hover \.tab-x\s*\{[^}]*opacity:\s*1;/s)
-  assert.match(css, /\.tabstrip-tabs:has\(\.tab:nth-child\(8\)\) \.tab\s*\{[^}]*max-width:\s*none;/s)
+  assert.doesNotMatch(css, /\.tabstrip-tabs:has\(\.tab:nth-child\(8\)\)/)
   assert.match(css, /@container \(max-width:\s*140px\)\s*\{[^}]*\.tab-face/s)
   assert.match(css, /@container \(max-width:\s*100px\)\s*\{[^}]*\.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
 })

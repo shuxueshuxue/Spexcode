@@ -515,10 +515,6 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   border-right: 1px solid var(--edge); color: var(--muted); container-type: inline-size;
 }
 .tab.on { min-width: 112px; background: var(--paper); color: var(--ink2); }
-/* Flex has no selector for its final line. Once the working set is large enough to wrap, release the
-   preferred 240px cap so every line, including a short final line, consumes the tablist's full width. A
-   smaller set keeps the cap, preserving compact 2/3/5-tab faces; this is structural CSS, not width JS. */
-.tabstrip-tabs:has(.tab:nth-child(8)) .tab { max-width: none; }
 /* A DRAG SAYS WHERE, NEVER WHAT. The moved tab fades to say it is in hand and the landing place wears a
    single hairline on the edge the tab would arrive at — drawn ON a tab rather than between them, so it is
    at home in any row of a wrapped strip. Nothing lifts and nothing casts a shadow: the strip stays one

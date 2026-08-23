@@ -4,8 +4,10 @@ import { parseProseTokens, renderProseTokens } from './proseTokens.js'
 // The only React entry to the prose token boundary. Consumers provide semantic handlers; they never
 // choose a parser or a rendering dialect. `lineBase` is caller-owned provenance for governed documents.
 export default function Prose({ children, className = '', lineBase = 0, renderSpecRef, renderEvidence, renderTimeAnchor }) {
-  const tokens = useMemo(() => parseProseTokens(children), [children])
-  const content = useMemo(() => renderProseTokens(tokens, {
+  const tokens = useMemo(() => {
+    try { return parseProseTokens(children) } catch { return null }
+  }, [children])
+  const content = useMemo(() => tokens ? renderProseTokens(tokens, {
     h: (() => {
       let key = 0
       return (type, props, ...children) => {
@@ -18,7 +20,7 @@ export default function Prose({ children, className = '', lineBase = 0, renderSp
     renderSpecRef,
     renderEvidence,
     renderTimeAnchor,
-  }), [tokens, lineBase, renderSpecRef, renderEvidence, renderTimeAnchor])
+  }) : createElement('p', null, children == null ? '' : String(children)), [tokens, children, lineBase, renderSpecRef, renderEvidence, renderTimeAnchor])
   return createElement('div', { className }, content)
 }
 

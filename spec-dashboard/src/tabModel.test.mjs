@@ -111,6 +111,10 @@ test('opening a scenario or issue focuses its resident top-level tab without rep
   tabs = placeTab(tabs, { page: 'evals', param: 'node/scenario', query: null })
   tabs = placeTab(tabs, { page: 'issues', param: '42', query: null })
   assert.deepEqual(tabs.map(tabKey), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
+  assert.deepEqual(tabs.slice(2).map(({ page, param }) => ({ page, param })), [
+    { page: 'evals', param: 'node/scenario' },
+    { page: 'issues', param: '42' },
+  ])
   assert.ok(tabs.slice(2).every((tab) => tab.pinned))
 })
 

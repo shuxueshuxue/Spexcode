@@ -33,7 +33,7 @@ export function normalizeTabs(raw, isDocument = () => true) {
     const original = { page: t.page, param: t.param ?? null, query: t.query ?? null }
     const route = tabRoute(original)
     return {
-      page: route.page, param: route.param ?? null, query: route.page === 'sessions' ? original.query : route.query ?? null,
+      page: original.page, param: original.param, query: original.query,
       // Published resources are deliberate holds: they must never compete for a replaceable file slot,
       // including when an older persisted record forgot to mark them pinned.
       pinned: isResourceRoute(route) ? true : (t.pinned != null ? t.pinned !== false : t.preview !== true),
@@ -60,22 +60,23 @@ export function normalizeTabs(raw, isDocument = () => true) {
 export function placeTab(tabs, route, mode = 'slot') {
   const original = { page: route.page, param: route.param ?? null, query: route.query ?? null }
   const normalized = tabRoute(original)
-  if (normalized.page === 'sessions') normalized.query = original.query
   if (RESIDENT_PAGES.has(normalized.page)) mode = 'pin'
   const key = tabKey(normalized)
   const open = tabs.find((t) => tabKey(t) === key)
   if (open) {
     const faceChanged = normalized.page === 'sessions' && !isResourceRoute(normalized)
       && JSON.stringify(open.query || null) !== JSON.stringify(normalized.query || null)
-    if (mode !== 'pin' && !faceChanged) return tabs
+    const residentChanged = RESIDENT_PAGES.has(normalized.page)
+      && (open.param !== original.param || JSON.stringify(open.query || null) !== JSON.stringify(original.query || null))
+    if (mode !== 'pin' && !faceChanged && !residentChanged) return tabs
     return tabs.map((t) => tabKey(t) === key
-      ? { ...t, ...(faceChanged ? { query: normalized.query } : {}), ...(mode === 'pin' ? { pinned: true } : {}) }
+      ? { ...t, ...(faceChanged || residentChanged ? { param: original.param, query: original.query } : {}), ...(mode === 'pin' ? { pinned: true } : {}) }
       : t)
   }
   const entry = {
-    page: normalized.page,
-    param: normalized.param ?? null,
-    query: normalized.query ?? null,
+    page: original.page,
+    param: original.param ?? null,
+    query: original.query ?? null,
     // A resource opened from a session is a held file-class object. It is intentionally durable until
     // explicitly closed, so ordinary file navigation can never evict it.
     pinned: isResourceRoute(normalized) || mode === 'pin',

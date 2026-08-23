@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
-import { LockGlyph } from './SessionWindow.jsx'
+import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
@@ -642,6 +642,10 @@ function GraphView({ param, query }) {
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
+
+        {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId}
+          onPick={(session) => lockGraphTo(session.source)} onOpenSession={openSession}
+          onNew={() => startNew(`[[${focus.id}]] `)} />}
 
         {graphOnly && <PublicGraphAbout />}
 

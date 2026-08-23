@@ -61,6 +61,13 @@ Because this vocabulary is dense, a **floating legend** decodes it on demand (`?
 
 The board and the session console are **bidirectionally linked**: live editors map to live sessions by exact id, driving Row 2's avatars (see [[session-console]]); clicking a session row focuses its first changed node, and nodes with no live editor focus on click.
 
+The graph also carries a compact session cross-reference in its top-right corner. Resting state is a small
+badge with the live-session count and up to three deterministic faces; opening it reveals the shared
+[[session-picker]] rows. A row click applies the existing graph lock to that session, and a double-click
+navigates to `#/sessions/<id>`. This is a graph affordance, not a second full session list: the dock remains
+the desktop list home, while the badge keeps the people attached to the graph's overlays visible without
+another tall panel.
+
 **Inside the workspace this view is the hidden-tab bottom sheet.** `#/graph` and `#/graph/<node>` still
 parse, still render, and still behave exactly as described above. With no document focus, the shell lands on
 `#/graph`: the graph is the workspace bottom sheet, the same kind of quiet first surface as the New Session

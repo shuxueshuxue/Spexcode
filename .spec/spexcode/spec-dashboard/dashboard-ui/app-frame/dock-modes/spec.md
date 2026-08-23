@@ -1,5 +1,5 @@
 ---
-title: dock-projection
+title: dock-modes
 status: active
 hue: 210
 desc: The left finding dock's explorer and sessions projections, selected by the rail.

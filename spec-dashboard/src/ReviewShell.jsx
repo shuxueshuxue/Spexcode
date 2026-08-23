@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
+import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { scanQuery, suggestAt } from '@spexcode/spec-core/review'
 import { PageScroll } from './PageScroll.jsx'
 import { paginationTokens } from './reviewPage.js'
@@ -85,6 +86,7 @@ export const rovingIndex = (index, length, key) => {
 }
 
 export const listOwnsKey = (target, key) => {
+  if (isTypingTarget(target)) return false
   const tag = target?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false
   if (tag === 'BUTTON' && (key === 'Enter' || key === ' ')) return false
@@ -483,24 +485,21 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
   const tabsId = useId()
   const stateRef = useRef({})
   stateRef.current = { rows, cur }
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || !listOwnsKey(event.target, event.key)) return
+  useKeyboardScope((event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || !listOwnsKey(event.target, event.key)) return false
       const nav = stateRef.current.rows.filter((row) => row.href)
-      if (!nav.length) return
+      if (!nav.length) return false
       if (event.key === 'Enter') {
         const row = nav.find((item) => item.key === stateRef.current.cur)
-        if (row) { event.preventDefault(); event.stopPropagation(); window.location.hash = row.href }
-        return
+        if (row) { event.preventDefault(); window.location.hash = row.href; return true }
+        return false
       }
-      event.preventDefault(); event.stopPropagation()
+      event.preventDefault()
       const index = nav.findIndex((row) => row.key === stateRef.current.cur)
       const next = index < 0 ? (event.key === 'j' ? 0 : nav.length - 1) : Math.max(0, Math.min(nav.length - 1, index + (event.key === 'j' ? 1 : -1)))
       setCur(nav[next].key)
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [])
+      return true
+    })
   useEffect(() => { document.querySelector('.lp-row.cur')?.scrollIntoView({ block: 'nearest' }) }, [cur])
   const emptyText = listEmptyText(empty)
   // the tablist ALWAYS exposes one roving tab stop: if a consumer marks no section active (a committed

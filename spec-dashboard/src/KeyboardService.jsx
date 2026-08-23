@@ -1,10 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react'
 import { usePaneActive } from './workspace.jsx'
+import { consumeEscape } from './escStack.js'
 
 // The shell's one capture listener. Scopes return true when they consumed an event; returning false leaves
 // native controls and the next lower-priority owner alone. Registration is ref-backed so stateful views can
 // update their handler without replacing the listener on every render.
 const KeyboardServiceContext = createContext(null)
+
+// A typing surface owns every unmodified key. Keep this predicate beside the shell service so routed
+// views do not grow subtly different copies (the xterm helper is a textarea, as are both composers).
+export function isTypingTarget(target) {
+  if (!target) return false
+  if (target.isContentEditable) return true
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true
+  return Boolean(target.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
+}
 
 export function KeyboardServiceProvider({ children }) {
   const scopes = useRef(new Map())
@@ -18,6 +28,9 @@ export function KeyboardServiceProvider({ children }) {
 
   useEffect(() => {
     const onKey = (event) => {
+      // Escape layers are the highest-priority owner. Keeping this arbitration in the service means no
+      // overlay needs a second capture listener that can race the shell or a routed view.
+      if (consumeEscape(event)) { event.stopPropagation(); return }
       const owners = [...scopes.current.entries()]
         .sort((a, b) => b[1].priority - a[1].priority || b[0] - a[0])
       for (const [, owner] of owners) {

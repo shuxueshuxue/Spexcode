@@ -17,7 +17,7 @@ import {
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
-import { useKeyboardScope } from './KeyboardService.jsx'
+import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
@@ -100,7 +100,6 @@ function GraphView({ param, query }) {
   useEffect(() => { try { if (focusId) sessionStorage.setItem('spex.focus', focusId) } catch { /* */ } }, [focusId])
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
-  const search = null   // the palette is the shell's ([[workspace-shell]]); the graph only asks for it
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
@@ -411,7 +410,7 @@ function GraphView({ param, query }) {
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
   // Never <body>. Pages (the session board, evals, issues, settings) are surfaces with their own focus discipline,
   // not transient overlays, so they stay out of this set.
-  const anyOverlay = overlay || !!search
+  const anyOverlay = overlay
   const hadOverlay = useRef(anyOverlay)
   useEffect(() => {
     if (hadOverlay.current && !anyOverlay) returnFocus()
@@ -440,17 +439,12 @@ function GraphView({ param, query }) {
         }
         return true
       }
-      // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
-      // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
-      // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
-      // sessionUI return so it holds when the palette is opened over the session board.
-      if (search) {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); openPalette(null) }
-        return e.key === 'Escape'
-      }
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return false
+      // The graph document may stay mounted while another route is showing. A focused composer/search field
+      // still owns every unmodified key, including the comma that toggles Settings on the board.
+      if (isTypingTarget(e.target)) return false
       // A focused native control owns its activation keys: Enter/Space on a button, link, or form field is
       // that control's click — tabbing to the HUD `?` and pressing Enter must equal clicking it — so the
       // board vocabulary (board.info's Enter alias included) steps aside and lets the default action fire.

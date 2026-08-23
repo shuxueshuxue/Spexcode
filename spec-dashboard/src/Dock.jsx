@@ -15,6 +15,8 @@ import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
+import { resolveSessionShortcut } from './sessionShortcuts.js'
 
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
@@ -54,6 +56,23 @@ function SessionDock({ sessions, activeId }) {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
     keepVisible: (session) => session.id === activeId,
   }), [sessions, expanded, offlineOpen, activeId])
+
+  // Session navigation lives on the dock now that the old full-width SessionInterface list is retired.
+  // Option arrows remain intentional even while a terminal, Command Box, or composer owns native focus.
+  useKeyboardScope((event) => {
+    const action = resolveSessionShortcut(rows, activeId, event)
+    if (!action) return false
+    event.preventDefault()
+    if (action.type === 'move') navigate('sessions', action.id)
+    else if (action.type === 'expand') {
+      const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
+      if (item && !item.expanded) toggleSessionFold(action.id)
+    } else if (action.type === 'collapse') {
+      const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
+      if (item?.expanded) toggleSessionFold(action.id)
+    }
+    return true
+  }, 20)
 
   // THE MOVE ITSELF is the backend's existing reparent, for both directions: a row dropped on another row
   // names that row as the parent, and a row dropped on the top-level door names none. There is no second

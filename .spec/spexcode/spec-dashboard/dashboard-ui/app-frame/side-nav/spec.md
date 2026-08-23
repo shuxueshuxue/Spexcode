@@ -9,11 +9,18 @@ code:
 related:
   - spec-dashboard/src/route.js
   - spec-dashboard/src/route.test.mjs
+  - spec-dashboard/src/subtractive-boundaries.test.mjs
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/Dock.jsx
 ---
 
 # side-nav
+
+## Anti-regression boundary
+
+The live activity rail is governed by `RAIL_PAGES` and must stay limited to `sessions`, `evals`, `issues`,
+and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs` checks this
+contract directly so a later lane cannot silently restore the graph as a live rail destination.
 
 ## raw source
 

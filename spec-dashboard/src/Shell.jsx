@@ -370,7 +370,7 @@ function BoardStatus({ specs, sessions, page }) {
         <span className="sb-tally-sep" />
         <BoardStat name="drift" count={tally.driftIds.length}
           onClick={tally.driftIds.length ? () => walkGraph(tally.driftIds) : null}
-          title={t('stats.driftTitle', { n: tally.driftIds.length })}>⚠</BoardStat>
+          title={t('stats.driftTitle', { n: tally.driftIds.length })}><Icon name="triangle-alert" size={13} /></BoardStat>
         {stale}
       </span>
     ),
@@ -405,7 +405,7 @@ function BoardStatus({ specs, sessions, page }) {
       onClick={graphOrBoard(tally.issueIds, 'issues')}
       title={page === 'graph'
         ? t('stats.issueTitle', { n: tally.issueCount })
-        : t('statusBar.issues', { n: tally.issueCount })}>◆</BoardStat>{stale}</span>,
+        : t('statusBar.issues', { n: tally.issueCount })}><Icon name="issue-opened" size={13} /></BoardStat>{stale}</span>,
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,

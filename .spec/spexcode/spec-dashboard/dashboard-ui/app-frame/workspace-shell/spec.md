@@ -117,7 +117,9 @@ Adding chrome around that model — a status bar, a tab strip, a file dock — p
 for one screen and still no way to read a spec beside its code. Chrome around the old model is not the new
 model, and building three pieces of it before noticing is the mistake this node exists to have corrected.
 
-**The shell is the only component that reads the global address.** A view receives `{param, query}` as
+**The shell is the only component that reads the global address.** A palette pick hands the shell one app
+address, which it executes through [[address-routing]]; the shell does not inspect node/session data or mint
+another route. A view receives `{param, query}` as
 props ([[view-registry]]). That one rule is the hinge: it is what makes rendering two views at once a
 layout change rather than a rewrite, and what stops a view from silently coupling to whichever address
 happens to be current.

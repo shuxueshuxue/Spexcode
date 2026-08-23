@@ -7,6 +7,7 @@ import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate, routeHash } from './route.js'
+import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor } from './views.jsx'
@@ -412,7 +413,7 @@ export default function Shell() {
       {palette && (
         <SpecSearch specs={specs} sessions={sessions} boost={palette === 'sessions' ? 'session' : null}
           onClose={closePalette}
-          onPick={(hit) => { closePalette(); if (hit?.hash) location.hash = hit.hash; else if (hit?.id) navigate('spec', hit.id) }} />
+          onPick={(hit) => { closePalette(); navigateAddress(hit?.address) }} />
       )}
       <span className="sr-only">{t('nav.railLabel')}</span>
     </div>

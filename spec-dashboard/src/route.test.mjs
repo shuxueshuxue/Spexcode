@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { invalidReviewPageHash, parseRoute, routeHash, legacyEvalHash, legacyReviewHash, queryString, sessionSurfaceHash } from './route.js'
-import { addressHash, addressUrl, evalAddress, graphNodeAddress, sessionEvalAddress, sessionSurfaceAddress } from './address.js'
+import { addressHash, addressUrl, evalAddress, graphNodeAddress, sessionEvalAddress, sessionSurfaceAddress, specAddress } from './address.js'
 
 // The URL layer's two axes ([[side-nav]]): the PATH names the object, the QUERY carries view state — one
 // ?q=<raw token text> for the review lists ([[review-query]]) — and every legacy shape (session-eval
@@ -118,6 +118,11 @@ test('graph node addresses carry the focused node in the graph path', () => {
   assert.equal(addressHash(graphNodeAddress('node with space')), '#/graph/node%20with%20space')
   assert.equal(addressUrl(graphNodeAddress('keyboard-nav'), 'https://example.test/p/spexcode/'),
     'https://example.test/p/spexcode/#/graph/keyboard-nav')
+})
+
+test('spec addresses carry the document node in the spec path', () => {
+  assert.equal(addressHash(specAddress('tab-strip')), '#/spec/tab-strip')
+  assert.equal(addressHash(specAddress('node with space')), '#/spec/node%20with%20space')
 })
 
 test('detailBackHash: each review detail returns to the list on its own data-source axis', async () => {

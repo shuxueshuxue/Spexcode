@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   openProjectSessionApplication,
   migrateJsonSessionRecords,
+  type CommittedSessionChange,
   type ProductionSessionApplication,
 } from '@spexcode/session-application'
 import { requireLocalDatabasePath, resolveDatabasePath } from '@spexcode/session-selflaunch'
@@ -16,10 +17,16 @@ let freshStoreLeases = 0
 
 type SessionApplicationCommitWake = (recipients: readonly string[]) => void
 let commitWake: SessionApplicationCommitWake = () => {}
+let commitObserver: ((change: Pick<CommittedSessionChange, 'recipients'>) => void) | undefined
 
 /** The application owns commit ordering; Spex supplies the adopter transport wake. */
 export function setSessionApplicationCommitWake(wake: SessionApplicationCommitWake): void {
   commitWake = wake
+}
+
+/** Allow the adopter to refresh its board stream after the canonical transaction commits. */
+export function setSessionApplicationCommitObserver(observer: (change: Pick<CommittedSessionChange, 'recipients'>) => void): void {
+  commitObserver = observer
 }
 
 /** The backend's sole session application composition. Path selection is shared with self-launch. */
@@ -29,7 +36,10 @@ export function configuredSessionApplication(): ProductionSessionApplication {
   cached = openProjectSessionApplication({
     databasePath,
     locality: path => { requireLocalDatabasePath(path) },
-    onCommitted: result => commitWake(result.recipients),
+    onCommitted: result => {
+      commitWake(result.recipients)
+      if (commitObserver) setImmediate(() => commitObserver?.(result))
+    },
   })
   return cached
 }

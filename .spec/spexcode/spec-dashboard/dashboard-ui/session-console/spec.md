@@ -188,13 +188,16 @@ Lifecycle does not create another right-pane face. **Every existing session, inc
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
 For a live session that footer is only the enabled message composer. For an offline session it contains the
 same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
-action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
-ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
+action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读`; its
+archive restore action remains available. A `retired` record is the other legislated offline exception: it keeps
+the `⚑` badge that says its worktree is gone and has no relaunch action. These are data states of one footer
+component, not separate panels. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
 once when selected and does not poll. A pane-backed offline or archived record remains Conversation and cannot
-be switched to Terminal. `queued` remains the one exception to offline relaunch: it has intentionally
-not launched and self-starts as a slot frees.
+be switched to Terminal. `queued` and `archive` are the two legislated exceptions to the ordinary offline
+projection: queued has intentionally not launched and self-starts as a slot frees, while archive is closed and
+restored explicitly.
 
 Conversation status rows expose one keyboard-reachable disclosure button (`aria-expanded`) for each `▸ N turns · M tools` transcript entry. Every entry starts folded on first load, after a timeline/status refresh, and when a different session is selected; no data arrival or remount may open it. The disclosure choice is keyed to the status event, not to the current transcript interval, so a later status that closes the interval keeps an already-open entry open and keeps an untouched entry closed. The timeline body is selectable text: Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an accidental editable surface.
 
@@ -496,11 +499,17 @@ a 204px default width (15% below the former 240px) and caption-size row text; th
 in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
 status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
-over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), a dim
-header leading each — and within a zone the **newest** session sits on top. The **offline** zone is keyed on
-**liveness, not the authored lifecycle**: a session whose process died while it was `asking`/`review`/`error`
-keeps that pre-death lifecycle, yet it cannot act until relaunched, so it sorts to **offline** rather than
-wrongly sitting under *needs you*; a merely booting session (`starting`/`queued`) stays under *running*. The
+over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), plus the
+fourth **archive** zone for closed records, a dim header leading each — and within a zone the **newest** session
+sits on top. One `sessionDisplayState` projection drives both this bucket and the row glyph: archived wins first;
+otherwise offline liveness (or an explicit offline status) wins over lifecycle and maps the row's effective status
+to `offline`; the two legislated exceptions are `queued`, which has not launched and remains runnable, and
+`archive`, which is a closed zone rendered with the muted offline mark (`○`). Online lifecycle then selects
+needs-you versus running. A session whose process died while it was
+`asking`/`review`/`error` keeps that pre-death lifecycle in the record, yet it cannot act until relaunched, so it
+sorts to **offline** and displays the offline glyph rather than wrongly sitting under *needs you*; a merely
+booting session (`starting`/`queued`) stays under *running*. A parent-child display edge is retained only within
+the same derived zone, so an offline child becomes an offline root instead of following an online parent. The
 **offline zone rests folded behind its own header** — the ONE disclosure for session history. Its header is a
 single row with the COUNT badge first and the `OFFLINE` label second; it contains no `>`/chevron/caret/`▸`
 direction symbol. Retired and
@@ -524,9 +533,10 @@ into history always lands on its visible row. ↑/↓ walk only the visible rows
 selected row is marked by the **highlight wash alone**, no caret. The SessionInterface sidebar, the finding
 dock's projection, and the phone Sessions list share this grouping + compact one-line layout.
 
-All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
-liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
-everywhere they appear (window row, console sidebar row, @-mention and search rows, the mobile card).
+The session-list row surfaces share name and status from `session.js`, whose `sessionDisplayState` projection
+and single **`STATUS_COLOR`** map paint the liveness dot, the status word, **and** the compact sidebar's status
+**glyph** (`STATUS_GLYPH`) the SAME hue everywhere those rows appear (window row, console sidebar row, and the
+mobile card). @-mention and search entries remain their own thin joins and do not mint a second session forest.
 The document-action slot deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant

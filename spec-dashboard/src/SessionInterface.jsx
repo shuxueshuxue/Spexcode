@@ -1571,7 +1571,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         }}>
                           <TimelineChat s={session} sessions={allSessions} active={open && conversationShown}
                             footerState={sessionFooterState(session)}
-                            onRestore={id === active ? resumeAndReturnToWorking : undefined}
+                            onRestore={id === active && session.status !== 'retired' ? resumeAndReturnToWorking : undefined}
                             actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />
                         </div>
                       )}

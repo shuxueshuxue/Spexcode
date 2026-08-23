@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile)
 const PEER_VERSION = 1
 const PEER_RETRY_MS = 2_000
 const PEER_BODY_LIMIT = 1_048_576
+const PEER_PROBE_TIMEOUT_MS = 500
 
 export type MachinePeer = {
   machineId: string
@@ -154,6 +155,49 @@ function readRequest(req: IncomingMessage): Promise<string> {
 function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' })
   res.end(JSON.stringify(body))
+}
+
+type PeerSocketProbe = { state: 'active' | 'stale' } | { state: 'error'; error: Error }
+
+// A Unix socket path can outlive the process that owned it. Connecting is the only portable way to
+// distinguish that stale pathname from a live Dashboard; filesystem existence alone is insufficient.
+async function probePeerSocket(path: string): Promise<PeerSocketProbe> {
+  return await new Promise((resolve) => {
+    const socket = createConnection(path)
+    let settled = false
+    const finish = (result: PeerSocketProbe): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.removeAllListeners()
+      socket.destroy()
+      resolve(result)
+    }
+    const timer = setTimeout(() => finish({ state: 'active' }), PEER_PROBE_TIMEOUT_MS)
+    timer.unref()
+    socket.once('connect', () => finish({ state: 'active' }))
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOENT' || error.code === 'ENOTSOCK') {
+        finish({ state: 'stale' })
+      } else {
+        finish({ state: 'error', error })
+      }
+    })
+  })
+}
+
+function peerAlreadyRunning(path: string): Error {
+  const error = new Error(`machine peer service already owns ${path} — another \`spex dashboard\` may be running`)
+  error.name = 'BackendError'
+  return error
+}
+
+function removeStalePeerSocket(path: string): void {
+  try {
+    rmSync(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
 }
 
 type PeerProject = { id: string; url: string | null; endpointConflict?: string }
@@ -337,28 +381,48 @@ export class MachinePeerGateway {
   private readonly inbound = new Map<string, HttpServer>()
   private readonly children = new Map<string, ChildProcess>()
   private control: NetServer | null = null
+  private controlPathOwned = false
   private retry: NodeJS.Timeout | null = null
   private closing = false
+  private startPromise: Promise<void> | null = null
+  private closePromise: Promise<void> | null = null
 
-  start(): void {
-    for (const peer of listMachinePeers()) this.startInbound(peer)
-    this.startControl()
-    for (const peer of listMachinePeers()) if (peer.owner) this.ensureTunnel(peer)
-    this.retry = setInterval(() => {
-      for (const peer of listMachinePeers()) if (peer.owner && peer.state === 'connecting') this.ensureTunnel(peer)
-    }, PEER_RETRY_MS)
-    this.retry.unref()
+  start(): Promise<void> {
+    if (this.startPromise) return this.startPromise
+    this.startPromise = this.startInternal()
+    return this.startPromise
   }
 
-  private startControl(): void {
-    const path = peerSocketPath()
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-    if (existsSync(path)) {
-      const error = new Error(`machine peer service already owns ${path} — another \`spex dashboard\` may be running`)
-      error.name = 'BackendError'
+  private async startInternal(): Promise<void> {
+    try {
+      for (const peer of listMachinePeers()) this.startInbound(peer)
+      await this.startControl()
+      if (this.closing) return
+      for (const peer of listMachinePeers()) if (peer.owner) this.ensureTunnel(peer)
+      this.retry = setInterval(() => {
+        for (const peer of listMachinePeers()) if (peer.owner && peer.state === 'connecting') this.ensureTunnel(peer)
+      }, PEER_RETRY_MS)
+      this.retry.unref()
+    } catch (error) {
+      this.closing = true
+      if (this.retry) clearInterval(this.retry)
+      for (const child of this.children.values()) try { child.kill('SIGTERM') } catch { /* already gone */ }
+      this.children.clear()
+      for (const server of this.inbound.values()) server.close()
+      this.inbound.clear()
+      const control = this.control
+      this.control = null
+      if (control) await new Promise<void>((resolve) => control.close(() => resolve()))
+      if (this.controlPathOwned) {
+        this.controlPathOwned = false
+        try { rmSync(peerSocketPath()) } catch { /* already removed */ }
+      }
       throw error
     }
-    this.control = createNetServer({ allowHalfOpen: true }, (socket) => {
+  }
+
+  private createControlServer(): NetServer {
+    return createNetServer({ allowHalfOpen: true }, (socket) => {
       let input = ''
       socket.setEncoding('utf8')
       socket.on('data', (chunk) => { input += chunk })
@@ -367,8 +431,51 @@ export class MachinePeerGateway {
         .catch((error) => socket.end(`${JSON.stringify({ ok: false, error: (error as Error).message })}\n`)))
       socket.on('error', () => socket.destroy())
     })
-    this.control.listen(path)
-    try { chmodSync(path, 0o600) } catch { /* platform lacks unix modes */ }
+  }
+
+  private async bindControl(path: string): Promise<void> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const control = this.createControlServer()
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const onError = (error: Error): void => {
+            control.removeListener('listening', onListening)
+            reject(error)
+          }
+          const onListening = (): void => {
+            control.removeListener('error', onError)
+            resolve()
+          }
+          control.once('error', onError)
+          control.once('listening', onListening)
+          control.listen(path)
+        })
+        this.control = control
+        this.controlPathOwned = true
+        try { chmodSync(path, 0o600) } catch { /* platform lacks unix modes */ }
+        return
+      } catch (error) {
+        try { control.close() } catch { /* bind failed before the server started */ }
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== 'EADDRINUSE' || attempt > 0) throw error
+        const probe = await probePeerSocket(path)
+        if (probe.state === 'active') throw peerAlreadyRunning(path)
+        if (probe.state === 'error') throw probe.error
+        removeStalePeerSocket(path)
+      }
+    }
+  }
+
+  private async startControl(): Promise<void> {
+    const path = peerSocketPath()
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+    if (existsSync(path)) {
+      const probe = await probePeerSocket(path)
+      if (probe.state === 'active') throw peerAlreadyRunning(path)
+      if (probe.state === 'error') throw probe.error
+      removeStalePeerSocket(path)
+    }
+    await this.bindControl(path)
   }
 
   private async handleRpc(raw: string): Promise<RpcResponse> {
@@ -482,7 +589,14 @@ export class MachinePeerGateway {
   }
 
   async close(): Promise<void> {
+    if (this.closePromise) return this.closePromise
+    this.closePromise = this.closeInternal()
+    return this.closePromise
+  }
+
+  private async closeInternal(): Promise<void> {
     this.closing = true
+    if (this.startPromise) await this.startPromise.catch(() => {})
     if (this.retry) clearInterval(this.retry)
     for (const child of this.children.values()) try { child.kill('SIGTERM') } catch { /* already gone */ }
     this.children.clear()
@@ -491,7 +605,10 @@ export class MachinePeerGateway {
     const control = this.control
     this.control = null
     if (control) await new Promise<void>((resolve) => control.close(() => resolve()))
-    try { rmSync(peerSocketPath()) } catch { /* already removed */ }
+    if (this.controlPathOwned) {
+      this.controlPathOwned = false
+      try { rmSync(peerSocketPath()) } catch { /* already removed */ }
+    }
   }
 }
 

@@ -43,6 +43,7 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
   })
   process.env.SPEXCODE_HOME = home
   const gateway = startHostDashboard({ port, host: '127.0.0.1', distDir: join(root, 'spec-dashboard', 'dist') })
+  await gateway.ready
   await once(gateway.server, 'listening')
 
   let browser

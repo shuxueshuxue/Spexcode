@@ -271,6 +271,7 @@ test('structured gateway and offline-project icon writes are admin-only', async 
   const port = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
   const gw = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
   await new Promise<void>((res) => gw.server.once('listening', () => res()))
+  await gw.ready
   try {
     const deniedBrowse = await fetch(`http://127.0.0.1:${port}/projects/browse?path=${encodeURIComponent(repo)}`)
     assert.equal(deniedBrowse.status, 401)
@@ -311,6 +312,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
   const gwPort = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
   const gw = startHostDashboard({ port: gwPort, host: '127.0.0.1', distDir: dist })
   await new Promise<void>((res) => gw.server.once('listening', () => res()))
+  await gw.ready
   const base = `http://127.0.0.1:${gwPort}`
   const liveId = encodeProject(rootLive)
   try {
@@ -509,6 +511,7 @@ test('startHostDashboard passes tls through to the hub: the ONE host gateway ser
   const gwPort = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
   const gw = startHostDashboard({ port: gwPort, host: '127.0.0.1', distDir: dist, tls })
   await new Promise<void>((res) => gw.server.once('listening', () => res()))
+  await gw.ready
   // self-signed → verification off for the probe; what's proven is the transport + the same surfaces
   const getSecure = (path: string): Promise<{ status: number; body: string }> =>
     new Promise((res, rej) => {

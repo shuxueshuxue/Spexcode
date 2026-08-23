@@ -60,6 +60,13 @@ new is therefore parentless, admission-controlled by the remote backend, and ide
 never falls back to launching on the initiating machine. The backend never parses SSH addresses, holds peer
 state, or gains a cross-machine code path.
 
+**The control socket is self-healing but exclusive.** On Dashboard startup the gateway probes an existing
+`~/.spexcode/gateway/peer.sock` instead of treating pathname existence as proof of ownership. A connection
+that is refused (or a non-socket orphan at that path) is stale and is removed before the gateway binds; a
+responsive socket remains authoritative and the second Dashboard fails with the named already-running
+diagnostic. The final bind is still authoritative under a concurrent startup, and a gateway that failed to
+acquire ownership never removes another instance's socket during cleanup.
+
 **Acceptance preserves the existing definition.** A cross-machine send reports `sent` only when the remote
 backend accepted the normal timeline append. Establishing SSH, reaching a peer port, or obtaining an HTTP
 connection does not itself count. A missing peer produces a named `no communication tunnel` error that includes

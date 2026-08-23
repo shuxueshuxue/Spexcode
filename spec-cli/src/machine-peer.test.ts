@@ -3,14 +3,14 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { encodeProject, runtimeRoot } from '@spexcode/spec-core'
 import { clientSendThroughPeer } from './client.js'
-import { MachinePeerGateway, listMachinePeers, peerRpc, peerStorePath, readPeerMachineId } from './machine-peer.js'
+import { MachinePeerGateway, listMachinePeers, peerRpc, peerSocketPath, peerStorePath, readPeerMachineId } from './machine-peer.js'
 
 const SESSION = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const SOURCE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -46,6 +46,59 @@ async function control(request: Parameters<typeof peerRpc>[0]) {
   return await peerRpc(request)
 }
 
+async function orphanUnixSocket(path: string): Promise<void> {
+  const child = spawn(process.execPath, ['--input-type=module', '-e',
+    `import { createServer } from 'node:net'; const server = createServer(); server.listen(${JSON.stringify(path)}, () => process.stdout.write('ready'));`],
+  { stdio: ['ignore', 'pipe', 'ignore'] })
+  try {
+    await once(child.stdout, 'data')
+  } finally {
+    child.kill('SIGKILL')
+    await once(child, 'exit').catch(() => {})
+  }
+}
+
+test('a stale peer socket is removed before the gateway binds', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-stale-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const path = peerSocketPath()
+  mkdirSync(dirname(path), { recursive: true })
+  await orphanUnixSocket(path)
+  assert.equal(existsSync(path), true, 'the killed owner leaves an orphaned Unix socket')
+  const gateway = new MachinePeerGateway()
+  try {
+    await gateway.start()
+    assert.equal(existsSync(path), true, 'the fresh gateway owns the recreated socket')
+    assert.deepEqual(await peerRpc({ op: 'list' }), { ok: true, peers: [] })
+  } finally {
+    await gateway.close()
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('a live peer socket still rejects a second gateway', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-live-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const first = new MachinePeerGateway()
+  const second = new MachinePeerGateway()
+  try {
+    await first.start()
+    await assert.rejects(second.start(), /machine peer service already owns .*another `spex dashboard` may be running/)
+    await second.close()
+    assert.equal(existsSync(peerSocketPath()), true, 'a failed second start must not remove the first gateway socket')
+  } finally {
+    await second.close()
+    await first.close()
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 function project(home: string, id: string, session = SESSION, worktreePath = ''): string {
   const root = join(home, 'projects', id)
   mkdirSync(join(root, 'sessions', session), { recursive: true })
@@ -78,7 +131,7 @@ test('a common-dir session routes to the endpoint published for its linked workt
     const endpointProject = join(home, 'projects', encodeProject(pkgRoot))
     mkdirSync(endpointProject, { recursive: true })
     endpoint(endpointProject, `http://127.0.0.1:${backendPort}`, pkgRoot)
-    gateway.start()
+    await gateway.start()
     const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 31011, remoteOutboundPort: 31012 })
     assert.ok(accepted.ok && accepted.peer)
     const response = await fetch(`http://127.0.0.1:${accepted.peer.inboundPort}/api/sessions/${SESSION}/input`, {
@@ -112,7 +165,7 @@ test('a peer ingress derives one local project then uses its ordinary session in
   try {
     const backendPort = await listen(backend)
     endpoint(project(home, 'one'), `http://127.0.0.1:${backendPort}`)
-    gateway.start()
+    await gateway.start()
     const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 31001, remoteOutboundPort: 31002 })
     assert.equal(accepted.ok, true)
     assert.ok(accepted.ok && accepted.peer)
@@ -193,7 +246,7 @@ test('a peer anchor lists and creates through one derived project without openin
   try {
     const backendPort = await listen(backend)
     endpoint(project(home, 'one'), `http://127.0.0.1:${backendPort}`)
-    gateway.start()
+    await gateway.start()
     const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 31021, remoteOutboundPort: 31022 })
     assert.ok(accepted.ok && accepted.peer)
     const peer = accepted.peer
@@ -238,7 +291,7 @@ test('a known peer makes client send use its forward and missing peers fail befo
   const gateway = new MachinePeerGateway()
   let forward: ReturnType<typeof createServer> | null = null
   try {
-    gateway.start()
+    await gateway.start()
     const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 32001, remoteOutboundPort: 32002 })
     assert.ok(accepted.ok && accepted.peer)
     const peer = accepted.peer
@@ -280,7 +333,7 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
   const gateway = new MachinePeerGateway()
   let forward: ReturnType<typeof createServer> | null = null
   try {
-    gateway.start()
+    await gateway.start()
     const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 33001, remoteOutboundPort: 33002 })
     assert.ok(accepted.ok && accepted.peer)
     const peer = accepted.peer

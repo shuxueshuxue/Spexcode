@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: dashboard-recovers-stale-peer-socket-without-stealing-live-one
+    description: >
+      Start a gateway with an orphaned peer control pathname, then start a second gateway while the first
+      one is live.
+    expected: >
+      The orphaned pathname is replaced and the new gateway answers the control RPC. A responsive socket
+      still rejects the second gateway with the named already-running diagnostic, and the failed second
+      startup does not remove the first gateway's socket.
+    tags: [cli]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: a stale peer socket is removed before the gateway binds
+    code: spec-cli/src/machine-peer.ts
   - name: peer-send-reaches-normal-input-and-preserves-return-identity
     description: >
       Start the host peer service with an established loopback peer forward, then use the real CLI

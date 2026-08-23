@@ -487,7 +487,7 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 // so an operator deployment runs the ONE host gateway directly over TLS — no second proxy in front.
 // Absent tls = the default plain-HTTP loopback `spex dashboard` serves.
 export type HostDashboardOpts = { port: number; host?: string; distDir?: string; tls?: { cert: string; key: string } | null }
-export type HostDashboard = { server: http.Server; close: () => Promise<void> }
+export type HostDashboard = { server: http.Server; ready: Promise<void>; close: () => Promise<void> }
 
 const json = (res: http.ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -505,7 +505,7 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   const distDir = opts.distDir ?? resolveDistDir()
 
   const peers = new MachinePeerGateway()
-  peers.start()
+  const peerReady = peers.start()
 
   const sseClients = new Set<http.ServerResponse>()
   let lastBroadcast = ''
@@ -642,6 +642,19 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
 
   const server = startHubGateway({ port: opts.port, host: opts.host ?? '127.0.0.1', tls: opts.tls ?? null, extensions })
 
+  // Keep the synchronous dashboard factory used by embedded callers, while exposing the asynchronous
+  // machine-peer bind so the CLI can report a real startup failure before the process settles.
+  const ready = peerReady.catch(async (error) => {
+    try {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      server.closeAllConnections?.()
+    } catch { /* preserve the original peer startup error */ }
+    throw error
+  })
+  // Embedded callers may only use `server`; mark the rejection handled while retaining it for explicit
+  // `await dashboard.ready` consumers.
+  void ready.catch(() => {})
+
   // continuous reconciliation: the stream stays live without a client-side poll and the list the hub
   // serves stays fresh. Heartbeat comments keep intermediaries from timing the stream out. Both timers
   // unref'd — the SERVER holds the process open, not the loops.
@@ -652,10 +665,12 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
 
   return {
     server,
+    ready,
     close: async () => {
       clearInterval(loop); clearInterval(ping)
       for (const c of sseClients) c.destroy()
       sseClients.clear()
+      await ready.catch(() => {})
       await peers.close()
       await new Promise<void>((resolve) => server.close(() => resolve()))
       server.closeAllConnections?.()

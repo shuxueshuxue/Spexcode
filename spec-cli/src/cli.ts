@@ -470,7 +470,14 @@ if (cmd === 'serve') {
   const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
   const host = flag('host') ?? '127.0.0.1'
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
-  startHostDashboard({ port, host })
+  const dashboard = startHostDashboard({ port, host })
+  try {
+    await dashboard.ready
+  } catch (error) {
+    console.error(`spex dashboard: ${(error as Error).message}`)
+    await dashboard.close()
+    process.exit(1)
+  }
 } else if (cmd === 'guidance') {
   let out: string | undefined
   for (let i = 3; i < process.argv.length; i++) {

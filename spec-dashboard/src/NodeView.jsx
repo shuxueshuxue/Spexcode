@@ -75,7 +75,7 @@ const mathHtml = (source, display = false) => {
 // formulas use the same authored meaning without changing the line-level provenance around their block.
 function inline(text) {
   const out = []
-  const re = /!\[([^\]]*)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|\[([^\]]+)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]|(?<!\$)\$([^$\n]+?)\$(?!\$)/g
+  const re = /!\[([^\]]*)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|\[([^\]]+)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)|`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]|(?<!\$)\$([^$\n]+?)\$(?!\$)|\\\(([^\n]+?)\\\)/g
   let last = 0, m, k = 0
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index))
@@ -94,10 +94,11 @@ function inline(text) {
         const href = routeHash('spec', m[9])
         out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[9]}</a>)
       } else {
-        const rendered = mathHtml(m[10])
+        const source = m[10] ?? m[11]
+        const rendered = mathHtml(source)
         out.push(rendered
-          ? <span className="doc-math" key={k++} data-math-source={m[10]} dangerouslySetInnerHTML={{ __html: rendered }} />
-          : <span className="doc-math-error" key={k++}>{m[10]}</span>)
+          ? <span className="doc-math" key={k++} data-math-source={source} dangerouslySetInnerHTML={{ __html: rendered }} />
+          : <span className="doc-math-error" key={k++}>{source}</span>)
       }
     }
     last = re.lastIndex

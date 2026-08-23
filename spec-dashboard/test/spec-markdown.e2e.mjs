@@ -23,7 +23,7 @@ const body = [
   '> Quoted line',
   '> second line',
   '',
-  '[Guide](https://example.com) and $E = mc^2$.',
+  '[Guide](https://example.com) and $E = mc^2$ plus \\(a+b\\).',
   '',
   '![Diagram](https://example.test/diagram.svg "fixture image")',
   '',
@@ -80,7 +80,7 @@ try {
     assert.equal(probe.quote, 'Quoted line\nsecond line', `${name}: blockquote survives`)
     assert.equal(probe.link, 'https://example.com', `${name}: link is live`)
     assert.equal(probe.image.loaded, true, `${name}: image decodes`)
-    assert.equal(probe.math, 2, `${name}: inline and display math render`)
+    assert.equal(probe.math, 3, `${name}: dollar, bracket, and display math render`)
     assert.ok(probe.stamps.some((stamp) => stamp[0] === 'H2'), `${name}: heading carries provenance`)
     assert.ok(probe.stamps.some((stamp) => stamp[0] === 'BLOCKQUOTE'), `${name}: quote carries provenance`)
     assert.equal(probe.viewport.scrollWidth, probe.viewport.width, `${name}: prose does not widen viewport`)

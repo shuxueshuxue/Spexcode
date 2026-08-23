@@ -7,6 +7,10 @@ code:
   - spec-dashboard/src/ProseActions.jsx
 related:
   - spec-dashboard/src/SpecView.jsx
+  - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/FileView.jsx
+  - spec-dashboard/src/SourceView.jsx
+  - spec-dashboard/src/specContent.js
   - spec-dashboard/src/proseSelection.js
   - spec-dashboard/src/codeSelection.js
   - spec-dashboard/src/styles.css
@@ -21,6 +25,12 @@ optional message, which session it goes to, three preset intents (edit / polish 
 send: plain send leaves you where you are, **Jump to Session** takes you there. Explain answers in the
 session and does not touch the spec. All of it floats; none of it is a strip.
 
+The same four-action group is reachable from a selected governed source file and from the spec pane in the
+node information popup. A source selection keeps its path and inclusive line range as the ordinary
+`[[code-selection]]` attachment; its manual-edit verb is visibly unavailable because source files remain
+read-only on the board and are changed through a session. A body that is still loading exposes a disabled
+group with a small spinner rather than accepting a no-op click.
+
 ## expanded spec
 
 **Three verbs, and the only difference is where the answer lands.** Hand the passage to a session and keep
@@ -33,10 +43,10 @@ The verb a reader picks is a seed, never a mode: the same box opens for all of t
 **One channel, no second transport.** The passage becomes an ordinary [[code-selection]] token inside an
 ordinary prompt and travels the one input route every other surface uses ([[dispatch]]). [[code-selection]]
 already rules that "no API route, session field, or alternate dispatch path belongs here", and none is
-added: an existing target receives the prompt through the session input route, and **a new session cannot
-receive anything at all** — it does not exist yet — so that target seeds the same one-shot compose handoff
-the board already uses and the human presses send on the launch face. Naming that honestly is what keeps
-"send" from meaning two different things.
+added: an existing target receives the prompt through the session input route. Choosing a new session uses
+the existing `createSession(prompt)` API in the same click, then opens the returned timeline — there is no
+second launch-face send. The target list reads backend status directly and includes only active, working, or
+asking sessions; archived and dormant records are not dispatch targets.
 
 **The verbs seed the box; they are not modes.** Each action opens the same popover, differing only in what
 it puts in the message field and which send mode it defaults to. The three preset buttons are the same

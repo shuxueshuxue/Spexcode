@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
-import { useBoard, useWorkspaceApi } from './workspace.jsx'
+import { useBoard } from './workspace.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useEscLayer } from './escStack.js'
 import { encodePrompt } from './codeSelection.js'
 import { proseSelection, PROSE_PRESETS, regionText, stampedRange } from './proseSelection.js'
 import { postSpecBody, sendSessionText } from './data.js'
-import { useSpecContent } from './NodeView.jsx'
+import { createSession } from './launch.js'
+import { useSpecContent } from './specContent.js'
 import { sessionHeadline } from './session.js'
 import { navigate } from './route.js'
 
@@ -56,13 +57,15 @@ const ACTIONS = [
   { key: 'manual', icon: 'pencil', preset: null, jump: false },
 ]
 
-export default function ProseActions({ node, hostRef }) {
+const LIVE_STATUSES = new Set(['active', 'working', 'asking'])
+
+export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear }) {
   const t = useT()
   const { sessions = [] } = useBoard()
-  const { setCompose } = useWorkspaceApi()
   const { notify } = useTransientNotice()
   const content = useSpecContent(node?.id, node?.version)
   const body = node?.body ?? content?.body ?? ''
+  const bodyReady = !!codeSelection || node?.body != null || content !== null
 
   const [hit, setHit] = useState(null)        // { lines, x, y } — a live selection and where to point at it
   const [panel, setPanel] = useState(null)    // { kind:'send'|'manual', x, y, preset, jump }
@@ -71,9 +74,13 @@ export default function ProseActions({ node, hostRef }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const live = sessions.filter((s) => !s?.archived)
+  const live = sessions.filter((s) => !s?.archived && LIVE_STATUSES.has(s?.status))
   const dismiss = useCallback(() => { setPanel(null); setError(null); setBusy(false) }, [])
-  const clear = useCallback(() => { setHit(null); dismiss() }, [dismiss])
+  const clear = useCallback(() => { setHit(null); onCodeSelectionClear?.(); dismiss() }, [dismiss, onCodeSelectionClear])
+
+  useEffect(() => {
+    if (!codeSelection) { setPanel(null); setError(null); setBusy(false) }
+  }, [codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
 
   // An open card FREEZES the passage it was opened on. The cards are rendered inside the prose pane, so
   // clicking into the message box is a press inside the tracked host and the browser drops the document
@@ -136,19 +143,22 @@ export default function ProseActions({ node, hostRef }) {
     return () => document.removeEventListener('mousedown', onDown, true)
   }, [panel, dismiss])
 
-  const selection = hit ? proseSelection(node, body, hit.lines) : null
+  const selection = codeSelection || (hit && (bodyReady
+    ? proseSelection(node, body, hit.lines)
+    : { node: node?.id, path: node?.path, startLine: hit.lines.startLine, endLine: hit.lines.endLine, text: '' }))
+  const loading = !codeSelection && !!hit && !bodyReady
 
   const open = (action, event) => {
-    const x = event?.clientX ?? hit?.x ?? 0
-    const y = (event?.clientY ?? hit?.y ?? 0) + 14
+    const x = event?.clientX ?? hit?.x ?? selection?.x ?? 0
+    const y = (event?.clientY ?? hit?.y ?? selection?.y ?? 0) + 14
     setError(null)
-    if (action.key === 'manual') {
+    if (action.key === 'manual' && !codeSelection) {
       setDraft(regionText(body, hit.lines.startLine, hit.lines.endLine))
       setPanel({ kind: 'manual', x, y })
       return
     }
     setDraft(action.preset ? t(`proseActions.prompt.${action.preset}`) : '')
-    if (!target && live.length) setTarget(live[0].id)
+    if (!live.some((s) => s.id === target)) setTarget(live[0]?.id || 'new')
     setPanel({ kind: 'send', x, y, jump: action.jump })
   }
 
@@ -156,12 +166,17 @@ export default function ProseActions({ node, hostRef }) {
     if (!selection) return
     const to = target || 'new'
     const prompt = encodePrompt(draft, [selection])
-    // "new" is a DRAFT, not a dispatch: a session that does not exist yet cannot receive a message, so the
-    // passage rides the same one-shot compose handoff the board already uses and the human presses send.
+    // A new target is dispatched in the same request that creates it. The returned id is the only reliable
+    // route to the timeline; handing off to the launch composer would require a second human send.
     if (to === 'new') {
-      setCompose(prompt)
+      setBusy(true)
+      setError(null)
+      const res = await createSession(prompt)
+      setBusy(false)
+      if (!res.ok) { setError(res.error || t('proseActions.sendFailed')); return }
+      notify(t('proseActions.sentTo', { name: sessionHeadline(res.session) || res.id?.slice(0, 8) || t('proseActions.newSession') }), { kind: 'success' })
       clear()
-      navigate('sessions', 'new')
+      if (res.id) navigate('sessions', res.id)
       return
     }
     setBusy(true)
@@ -198,10 +213,16 @@ export default function ProseActions({ node, hostRef }) {
     }
   }
 
-  if (!node || !selection) return null
+  if ((!node && !codeSelection) || (!selection && !loading)) return null
+  const anchor = {
+    lines: hit?.lines || { startLine: selection?.startLine || 1, endLine: selection?.endLine || 1 },
+    x: hit?.x ?? selection?.x ?? 0,
+    y: hit?.y ?? selection?.y ?? 0,
+  }
   return (
     <>
-      {!panel && <ActionGroup t={t} hit={hit} onPick={open} />}
+      {!panel && selection && <ActionGroup t={t} hit={anchor} disabled={loading} manualEnabled={!codeSelection} onPick={open} />}
+      {!panel && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
       {panel?.kind === 'send' && (
         <SendPopover t={t} panel={panel} selection={selection} sessions={live} target={target} setTarget={setTarget}
           draft={draft} setDraft={setDraft} busy={busy} error={error} onSend={send} onClose={dismiss} />
@@ -217,12 +238,13 @@ export default function ProseActions({ node, hostRef }) {
 // The group that follows the passage. `role="menu"` and a fixed position: an overlay, counted as a z-layer
 // and never as chrome. preventDefault on press keeps the browser selection alive under it — losing the
 // selection on the way to acting on it is the one bug this affordance cannot have.
-function ActionGroup({ t, hit, onPick }) {
+function ActionGroup({ t, hit, onPick, disabled = false, manualEnabled = true }) {
   const [ref, style] = useAnchored(hit.x, hit.y - 44, [hit.lines.startLine, hit.lines.endLine])
   return (
     <div ref={ref} className="pa-group" role="menu" aria-label={t('proseActions.groupLabel')} style={style}>
       {ACTIONS.map((action) => (
         <button key={action.key} type="button" role="menuitem" className="pa-act"
+          disabled={disabled || (action.key === 'manual' && !manualEnabled)}
           onMouseDown={(event) => event.preventDefault()} onClick={(event) => onPick(action, event)}>
           <Icon name={action.icon} size={13} className="pa-act-icon" />
           {t(`proseActions.act.${action.key}`)}
@@ -237,7 +259,7 @@ function SelectionChip({ t, selection }) {
     <div className="pa-chip" title={selection.text}>
       <Icon name="file-diff" size={12} />
       <span className="pa-chip-label">{t('proseActions.lines', { a: selection.startLine, b: selection.endLine })}</span>
-      <span className="pa-chip-node">{selection.node}</span>
+      <span className="pa-chip-node">{selection.node || selection.path}</span>
     </div>
   )
 }

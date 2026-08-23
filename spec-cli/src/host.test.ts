@@ -75,6 +75,31 @@ async function withGitIdentity<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+async function withoutGitIdentity<T>(run: () => Promise<T>): Promise<T> {
+  const keys = [
+    'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
+    'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0',
+  ]
+  const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  const configDir = mkdtempSync(join(tmpdir(), 'spex-host-empty-git-config-'))
+  const globalConfig = join(configDir, 'config')
+  writeFileSync(globalConfig, '')
+  for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) delete process.env[key]
+  process.env.GIT_CONFIG_GLOBAL = globalConfig
+  process.env.GIT_CONFIG_NOSYSTEM = '1'
+  process.env.GIT_CONFIG_COUNT = '1'
+  process.env.GIT_CONFIG_KEY_0 = 'user.useConfigOnly'
+  process.env.GIT_CONFIG_VALUE_0 = 'true'
+  try { return await run() }
+  finally {
+    rmSync(configDir, { recursive: true, force: true })
+    for (const key of keys) {
+      if (saved[key] === undefined) delete process.env[key]
+      else process.env[key] = saved[key]
+    }
+  }
+}
+
 const gitHead = (root: string): string | null => {
   const result = spawnSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' })
   return result.status === 0 ? result.stdout.trim() : null
@@ -227,7 +252,7 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.equal(before.gitRoot, null)
   assert.equal(before.initialized, false)
 
-  const added = await addKnownProjectWithSetup(plain, { initGit: true, init: { harness: 'codex' } })
+  const added = await withoutGitIdentity(() => addKnownProjectWithSetup(plain, { initGit: true, init: { harness: 'codex' } }))
   assert.equal(added.ok, true)
   assert.equal(added.gitInitialized, true)
   assert.equal(added.initialCommitCreated, true)
@@ -236,6 +261,7 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.equal(existsSync(join(plain, '.spec')), true)
   assert.match(gitHead(plain) ?? '', /^[0-9a-f]{40,64}$/)
   assert.match(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%s'], { encoding: 'utf8' }), /^chore: 初始化项目\n$/)
+  assert.equal(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%an <%ae>'], { encoding: 'utf8' }), 'SpexCode <spexcode@spexcode.invalid>\n')
   assert.equal(execFileSync('git', ['-C', plain, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' }).split('\n').includes('spexcode.json'), true)
   assert.equal(execFileSync('git', ['-C', plain, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' }).split('\n').includes('notes.md'), true)
   assert.deepEqual(JSON.parse(readFileSync(join(plain, 'spexcode.json'), 'utf8')).harnesses, ['codex'])

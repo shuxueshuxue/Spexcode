@@ -304,12 +304,32 @@ export type AddProjectSetupResult = {
 }
 
 const INITIAL_PROJECT_COMMIT_MESSAGE = 'chore: 初始化项目'
+const BOOTSTRAP_COMMIT_IDENTITY = {
+  name: 'SpexCode',
+  email: 'spexcode@spexcode.invalid',
+} as const
 
 function hasGitCommit(root: string): boolean {
   try {
     return !!git(['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}']).trim()
   } catch {
     return false
+  }
+}
+
+// A new project may not have a Git identity yet. Probe both identities first so a configured author is
+// preserved; when neither is available, pass a process-local bootstrap identity to this one commit.
+// `-c` is inherited by hooks through Git's config environment and never writes user or repository config.
+function bootstrapCommitIdentityArgs(root: string): string[] {
+  try {
+    git(['-C', root, 'var', 'GIT_AUTHOR_IDENT'])
+    git(['-C', root, 'var', 'GIT_COMMITTER_IDENT'])
+    return []
+  } catch {
+    return [
+      '-c', `user.name=${BOOTSTRAP_COMMIT_IDENTITY.name}`,
+      '-c', `user.email=${BOOTSTRAP_COMMIT_IDENTITY.email}`,
+    ]
   }
 }
 
@@ -322,7 +342,7 @@ function createInitialProjectCommit(root: string): void {
   process.env.SPEXCODE_ALLOW_MAIN = '1'
   try {
     git(['-C', root, 'add', '--', '.'])
-    git(['-C', root, 'commit', '--quiet', '-m', INITIAL_PROJECT_COMMIT_MESSAGE])
+    git(['-C', root, ...bootstrapCommitIdentityArgs(root), 'commit', '--quiet', '-m', INITIAL_PROJECT_COMMIT_MESSAGE])
   } catch (error) {
     const rawStderr = (error as { stderr?: unknown })?.stderr
     const stderr = Buffer.isBuffer(rawStderr)

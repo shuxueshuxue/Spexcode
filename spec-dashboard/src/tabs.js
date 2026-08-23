@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './views.jsx'
 import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
@@ -26,7 +26,13 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(raw) ? normalizeTabs(raw.filter((t) => t && typeof t.page === 'string'), isDocument) : []
+    if (!Array.isArray(raw)) return []
+    const valid = raw.filter((t) => t && typeof t.page === 'string')
+    const normalized = normalizeTabs(valid, isDocument)
+    // Persist the migration at the same boundary that reads it: old review entries disappear once and do
+    // not keep resurfacing in another tab or after the next reload.
+    if (JSON.stringify(normalized) !== JSON.stringify(valid)) localStorage.setItem(KEY, JSON.stringify(normalized))
+    return normalized
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
@@ -115,9 +121,11 @@ export function focusLatestTab(match) {
   return true
 }
 
-export function useTabs() {
+export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)
+  const onCloseStartRef = useRef(onCloseStart)
+  useEffect(() => { onCloseStartRef.current = onCloseStart }, [onCloseStart])
   useEffect(() => {
     listeners.add(setTabs)
     setTabs(getTabs())
@@ -146,6 +154,7 @@ export function useTabs() {
     const prev = getTabs()
     const i = prev.findIndex((t) => tabKey(t) === key)
     if (i < 0) return
+    onCloseStartRef.current?.(tab)
     const next = prev.filter((_, n) => n !== i)
     putTabs(next)
     if (key === activeKey) {
@@ -156,7 +165,9 @@ export function useTabs() {
 
   const closeOthers = useCallback((tab) => {
     const key = tabKey(tab)
-    putTabs(getTabs().filter((t) => tabKey(t) === key))
+    const prev = getTabs()
+    prev.filter((t) => tabKey(t) !== key).forEach((closingTab) => onCloseStartRef.current?.(closingTab))
+    putTabs(prev.filter((t) => tabKey(t) === key))
     if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
   }, [activeKey])
 

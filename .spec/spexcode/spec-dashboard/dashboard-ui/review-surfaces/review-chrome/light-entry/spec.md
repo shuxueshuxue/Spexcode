@@ -15,10 +15,10 @@ related:
 
 # light-entry
 
-An external Evals LIST or DETAIL link, or a top-level Issues LIST link, is a review page before it is a
-dashboard visit. The root route selector resolves and normalizes the hash before importing the board
-runtime, and hands the route DOWN to the board it renders, exactly as the shell does — the boards take
-`{ param, query }` as props and never read the global address ([[view-registry]]).
+An external Evals LIST or DETAIL link, or an Issues route, is a review page before it is a dashboard visit.
+The root route selector resolves `surfaceFor(page)` from [[view-registry]] before importing the board runtime,
+and hands the route DOWN to the same review surface component tree used after in-app navigation — the boards
+take `{ param, query }` as props and never read the global address.
 A canonical `#/evals` or
 `#/evals/<node>/<scenario>` address and its legacy session-scoped spelling both mount the SAME
 [[evals-view]] components behind a small responsive shell; canonical `#/issues` mounts the SAME
@@ -26,10 +26,11 @@ A canonical `#/evals` or
 
 The root is also where the frame-wide providers are mounted, so every face — the cold review shell, the
 board, the phone — is inside them without asking whether it is. [[status-bar]]'s registry is one of these:
-the cold shell draws the same bottom strip the board does, and a contributor anywhere below can register an
-item without knowing which face is showing. The registry hook is inert outside a provider, so this costs the
-sealed public build nothing. The same root wraps every face in the shared backend-health frame, so an
-unreachable review request can show one global retry banner without booting the board runtime.
+the cold shell draws the same bottom strip the board does, as a full-window flow row after the app row, and
+a contributor anywhere below can register an item without knowing which face is showing. The registry hook
+is inert outside a provider, so this costs the sealed public build nothing. The same root wraps every face in
+the shared backend-health frame, so an unreachable review request can show one global retry banner without
+booting the board runtime.
 
 The cold review boundary may request one bounded [[paged-review]] page or detail response, its evidence, and
 route-local review resources. It does not fetch `/api/graph`, open [[graph-stream]], read a session
@@ -37,8 +38,8 @@ collection/timeline/detail, open a session terminal socket, or import graph/term
 the ordinary [[side-nav]] rail. Phone width reuses [[mobile-ui]]'s review face and bottom navigation over an
 empty board projection, so responsive chrome does not become a reason to boot the board.
 
-Navigation owns initialization. Following a real anchor from the review shell to the graph, session, issue
-detail, or settings route swaps in [[dashboard-shell]]'s ordinary App runtime; only then do graph freshness,
+Navigation owns initialization. Following a real anchor from the review shell to the graph, session, or
+settings route swaps in [[dashboard-shell]]'s ordinary App runtime; only then do graph freshness,
 session summaries, and any visited terminal transport begin. A node reference preserves its intended graph
 focus through the existing tab-scoped focus key. Once started in a tab, App stays mounted across later route changes exactly as before: graph camera and visited
 terminal warmth survive a return to Evals, and the lightweight entry is not re-entered until a genuinely new

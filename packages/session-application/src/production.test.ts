@@ -159,3 +159,23 @@ test('protocol addresses without migrated application state are absent and read-
   assert.throws(() => reopened.transitionSession('unmigrated', { status: 'active' }), /application state is missing/)
   reopened.close()
 })
+
+test('a caller-owned recipient policy can suppress routine parent delivery without losing actionable state', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-recipient-policy-'))
+  const databasePath = join(root, 'sessions.sqlite')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: 'parent' })
+  app.createSession({ sessionId: 'manual' })
+  app.createSession({ sessionId: 'child' })
+  app.attachWatcher('parent', 'child', 'watch:parent')
+  app.attachWatcher('manual', 'child', 'watch:manual')
+
+  app.transitionSession('child', { status: 'active', recipientSessionIds: ['manual'] })
+  assert.equal(app.protocol.listPending('parent').length, 0)
+  assert.equal(app.protocol.listPending('manual').length, 1)
+
+  app.transitionSession('child', { status: 'awaiting', proposal: 'merge', recipientSessionIds: ['parent', 'manual'] })
+  assert.equal(app.protocol.listPending('parent').length, 1)
+  assert.equal(app.protocol.listPending('manual').length, 2)
+  app.close()
+})

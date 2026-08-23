@@ -34,21 +34,25 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   navigation (modified clicks keep browser behavior). The sessions anchor also opens the dock on the sessions
   projection; the graph anchor opens it on explorer. The selection is idempotent: clicking the current
   sessions anchor again navigates only and never folds the dock. Document routes select their related
-  projection through the shell's derivation. Bare evals/issues/settings boards render full width; their
-  object details retain the dock.
+  projection through the shell's derivation. Review and settings surfaces render full width; review detail
+  addresses remain on that surface and never acquire the workspace dock. Because review addresses are not
+  tabs, the rail remembers the last evals/issues address and returns to it when the matching rail entry is
+  pressed after leaving the surface.
 - **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted mirrored panel
   button: `panel-left` while open and `panel-right` while closed, with `aria-pressed` reporting the same
-  boolean. It changes only dock open/closed state, never the route, projection, tab list, or route light. The
-  dock header has no collapse control. Folding removes only the dock panel; the same rail DOM control remains
-  at the same position and reopens it immediately.
+  boolean. It changes only dock open/closed state, never the route, projection, tab list, or route light. It
+  is a smaller 14px muted control with a restrained separator and spacing from the navigation group, so it
+  reads as frame chrome rather than an independent tab. The dock header has no collapse control. Folding
+  removes only the dock panel; the same rail DOM control remains at the same position and reopens it immediately.
+  Review and settings surfaces omit this control because they have no workspace dock to fold.
 - **Projection styling is secondary.** Explorer and sessions are projections, not rail destinations. Their
   names and tallies live in the dock header; neither projection may reuse `.rail-btn.on` or `aria-current`.
   If a route selection changes a projection, that state must remain visually distinct from the route light.
 - **Pointer and keyboard behavior.** Rail links are real anchors with translated labels/tooltips and current
   keymap hints. Pointer presses are inert chrome for focus acquisition, while Tab and native Enter/Space
   activation remain available. The rail never scrolls or overlays page content. It and the optional dock
-  extend to the viewport bottom as the shell's left region; the content status row begins after their
-  one-pixel `--line` right seam rather than crossing underneath them.
+  fill the app row and stop at the full-width status row; their one-pixel `--line` right seam meets that row
+  as a clean T rather than continuing through its bottom edge.
 - **Route controls only.** The permanently mounted controls are the dock toggle and the five route entries.
   The former top project chip is absent: its mark, visible name, catalog menu, offline rules, guest login
   door, and `/projects` management entry moved together to the status row, so project switching has one

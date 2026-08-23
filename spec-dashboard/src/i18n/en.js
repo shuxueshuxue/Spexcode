@@ -25,6 +25,9 @@ export default {
     error: 'error',
     asking: 'asking',
     queued: 'queued',
+    unknown: 'unknown',
+    corrupt: 'corrupt',
+    retired: 'retired',
     merged: 'merged',
     active: 'active',
     drift: 'drift',
@@ -69,6 +72,13 @@ export default {
     new: 'New session',
     archive: 'Archived sessions',
     rowTip: 'open · ctrl-click holds a tab · alt-click scopes the graph to this session',
+  },
+  sessionPicker: {
+    label: 'choose a session',
+    filter: 'filter sessions',
+    empty: 'no matching sessions',
+    newSession: 'new session…',
+    overlaySessions: 'sessions touching this node',
   },
   contextDock: {
     title: 'Context',
@@ -241,7 +251,9 @@ export default {
       `eval scenarios: ${pass} fresh pass, ${fail} fresh fail, ${stalePass} stale pass, ${staleFail} stale fail, ${empty} unmeasured`,
     openEvals: 'open the Evals board',
     issues: ({ n }) => `${n} open issues — open the issues board`,
-    sessions: ({ run, need }) => `${run} running, ${need} waiting on you — open the sessions console`,
+    sessions: 'sessions by launcher — open the sessions console',
+    launcher: ({ name }) => `${name}: running / needs-you / other — open the sessions console`,
+    launcherSummary: ({ n }) => `${n} launchers: running / needs-you / other — open the sessions console`,
   },
   backend: {
     offline: 'backend unavailable — displayed data may be stale',
@@ -482,6 +494,7 @@ export default {
   },
 
   sessionWindow: {
+    badgeLabel: 'sessions on this graph',
     menuLabel: 'session actions',
     rowTitle: 'click to lock the graph onto this session · double-click to open it',
     lockedTitle: 'graph locked to this session — click again to release',
@@ -649,10 +662,6 @@ export default {
     del: 'delete node…',
   },
 
-  sourceView: {
-    useSelection: 'use selection in a new session',
-  },
-
   // [[prose-dispatch]] — what a reader does with a selected passage of spec prose.
   proseActions: {
     groupLabel: 'selected passage — send to a session, or edit it here',
@@ -742,9 +751,10 @@ export default {
     tabTerminal: 'terminal',
     tabConversation: 'conversation',
     tabDiff: 'diff',
+    resumeInputTitle: 'resume this session?',
+    resumeInputMessage: 'This session is waiting for a resume. Confirm before sending the first key.',
+    resumeInputConfirm: 'resume and send key',
     surfaceSwitcher: 'session surface',
-    enableTerminalInput: 'enable terminal input',
-    terminalInputEnabled: 'terminal input enabled — click the terminal to focus it',
     diffLoading: 'loading diff…',
     diffEmpty: 'no branch changes',
     diffMerged: 'merged into {base}',

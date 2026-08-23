@@ -25,21 +25,17 @@ export const STATUS_GLYPH = {
   corrupt: '⚠', retired: '⚑',
 }
 
-// Fixed board buckets consume the lifecycle status published by the session package. Liveness is a separate
-// fact used by terminal/relaunch affordances; it must never replace an authored error, asking, review, or done
-// state in the row. That separation keeps a dead failed session visible under Needs You instead of hiding it
-// in the generic offline bucket.
+// Fixed board buckets consume the status published by the session package. The dashboard does not replace an
+// authored lifecycle with a liveness probe: a dead review/asking/close-pending record remains needs-you.
 const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error', 'corrupt'])
-const RUN_STATUS = new Set(['working', 'queued', 'parked', 'starting', 'idle'])
 export const sessionDisplayState = (s) => {
-  const status = s?.archived ? 'offline' : (s?.status || 'idle')
+  const status = s?.status || 'idle'
   const zone = s?.archived
     ? 'archive'
     : NEED_STATUS.has(status)
       ? 'need'
-      : status === 'offline' || status === 'retired'
-        ? 'offline'
-        : RUN_STATUS.has(status) ? 'run' : 'offline'
+      : status === 'offline' || status === 'retired' ? 'offline'
+        : 'run'
   return {
     zone,
     status,
@@ -52,9 +48,8 @@ export const ZONE_ORDER = ['need', 'run', 'offline', 'archive']
 
 export const isArchived = (s) => !!s?.archived
 export const sessionFooterState = (s) => {
-  const zone = sessionDisplayState(s).zone
-  if (zone === 'archive') return 'archived'
-  if (zone === 'offline') return 'offline'
+  if (isArchived(s)) return 'archived'
+  if (s?.status !== 'queued' && (s?.status === 'offline' || s?.liveness === 'offline')) return 'offline'
   return 'live'
 }
 export const splitArchived = (sessions = []) => ({
@@ -67,7 +62,7 @@ export const splitArchived = (sessions = []) => ({
 // login) resolves to null, honestly.
 export const liveSession = (sessions, id) => {
   const s = id ? (sessions || []).find((x) => x.id === id) : null
-  return s && sessionZone(s) !== 'offline' && sessionZone(s) !== 'archive' ? s : null
+  return s && s.status !== 'offline' && s.liveness !== 'offline' && !isArchived(s) ? s : null
 }
 // the ONE source-session PRESENCE join ([[live-session-filter]] — the session:present|missing facet):
 // does the id still resolve to a session on the current board at ALL, any zone? Presence, not liveness —
@@ -96,15 +91,12 @@ export const zoneSort = (sessions) => {
 // changing activity line is the content being read, not the session identity.
 
 export function nestSessions(sessions) {
-  const present = new Set(sessions.map((s) => s?.id))
   const byId = new Map(sessions.map((s) => [s?.id, s]))
   const childrenOf = new Map()
   const roots = []
   for (const s of sessions) {
-    // A parent-child edge cannot cross a liveness/lifecycle zone. Otherwise a dead child follows a live
-    // root through `emit` and is rendered under the wrong zone header. It becomes a root in its own bucket.
     const parent = s?.parent && s.parent !== s.id ? byId.get(s.parent) : null
-    const p = parent && present.has(parent.id) && sessionZone(parent) === sessionZone(s) ? parent.id : null
+    const p = parent ? parent.id : null
     if (p) { const arr = childrenOf.get(p) || []; arr.push(s); childrenOf.set(p, arr) }
     else roots.push(s)
   }

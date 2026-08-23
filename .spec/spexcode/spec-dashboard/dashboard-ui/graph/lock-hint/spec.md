@@ -18,8 +18,8 @@ it preserves the registry's actual key spelling (including uppercase reverse-cyc
 the next/previous keycaps unless the locked session changes more than one node. It never invents a
 modifier label or a second binding table.
 
-The banner itself is the user-facing confirmation of a graph lock, and — with the graph's floating session
-glance retired ([[session-row]]) — the only thing on the graph that says a claim is in force. Its
+The banner itself is the user-facing confirmation of a graph lock, and — alongside the graph's bounded session
+badge ([[session-picker]]) — the thing on the graph that says a claim is in force. Its
 surrounding renderer names an empty or single-node scope, and its release control (or Escape) returns the
 graph to the unscoped view. The claim itself is [[workspace-shell]] state, because the surface that makes it
 is the dock and the surface that shows it is the graph; node selection and the overlay-cycle action remain

@@ -2,7 +2,7 @@
 title: status-bar
 status: active
 hue: 210
-desc: The content column's bottom row and a registry behind it — items are declared data, not widgets someone positions.
+desc: The window's bottom row and a registry behind it — items are declared data, not widgets someone positions.
 code:
   - spec-dashboard/src/StatusBar.jsx
 related:
@@ -16,9 +16,11 @@ related:
 ---
 # status-bar
 
-A strip along the bottom of the content column, beginning at the current sidebar's right edge, and — the
-part that matters — a **registry** rather than a place to hang things. Rail and dock continue to the bottom
-of the window; the strip does not cross them or claim a visually higher frame layer.
+A strip along the bottom of the **whole window**, and — the part that matters — a **registry** rather than a
+place to hang things. It is one unshrinking flow row after the shell's rail, optional dock, and content row;
+rail and dock end at the row's top edge, so the bar crosses the full viewport without covering content. The
+project identity stays at the far left of that global line, where the human's requested global feeling is
+visible even when the dock is folded or absent.
 
 **What it replaced.** Every persistent readout used to be its own absolutely-positioned block: the project
 HUD in one corner, the tally strip in another, the public-graph disclosure in a third, each with its own
@@ -48,16 +50,21 @@ Registration is a hook, so an item's lifetime is its contributor's lifetime and 
 re-rendering — there is no imperative handle to keep in sync with React's own. Outside a provider the hook
 is inert, which is what lets the phone face and the sealed public build skip a bar they do not draw.
 
-**It is a row in layout, not an overlay.** The shell's horizontal flex has a through-bottom left region
-(rail plus optional dock) and one right content column. Inside that content column, the view/context row
-and this strip are siblings: the view takes the remaining height, and the strip takes one unshrinking
-`--line-status` row. No `position: fixed|absolute`, bottom offset, or page-owned padding reserves its
-space. The consequence is observable in every view, especially the terminal: xterm's last fitted row ends
-above the status bar and remains fully visible rather than painting underneath it.
+**It is a row in layout, not an overlay.** The shell's top-level flex has one app row (rail, optional dock,
+and content) followed by this strip. Within the app row the view/context row takes the remaining height;
+the strip takes one unshrinking `--line-status` row of its own. No `position: fixed|absolute`, bottom offset,
+or page-owned padding reserves its space. The consequence is observable in every view, especially the
+terminal: xterm's last fitted row ends above the status bar and remains fully visible rather than painting
+underneath it.
 
-The vertical rail-or-dock/content seam and the horizontal content/status seam are each a one-pixel
-`--line` border. The status border begins only after the left region, so the lower-left junction is one
-clean L rather than a doubled pixel or a broken stroke; the lower-right edge ends flush with the viewport.
+The vertical rail-or-dock/content seam and the horizontal full-width status seam are each a one-pixel
+`--line` border. The rail and dock borders terminate at the status seam, making the lower-left junction a
+clean T rather than the former L; the status line runs flush from the left viewport edge to the right.
+
+**Human re-judgment.** The earlier direction was: "底下那个 status line 还是按之前那样,做成一整条全屏宽度的横线…"
+and "左边那个图标以及项目管理按钮放那边也更合适,否则…没有一种全局感。" This revision follows that
+second judgment: global feeling outranks column-local feeling. The change is geometry only; the identity,
+ledger, freshness marks, width budget, and terminal row contract remain unchanged.
 
 **Its own geometry is a token, not a literal.** The strip is `--line-status`, joining the existing
 `--line-input` / `--line-badge` / `--line-session-row` family of named fixed line boxes. This is not
@@ -72,11 +79,21 @@ offline projects remain visible and inert, and the global Projects row opens `/p
 makes the same identity control the management-login door without exposing rows. The rail has no project
 chip or second switcher. It stays at the status row's left edge rather than moving into the sidebar because
 the dock may fold or be absent on bare boards: this placement keeps the icon, name, and switch action
-complete and stationary on every desktop route while remaining immediately adjacent to the sidebar.
+complete and stationary on every desktop route while remaining immediately adjacent to the sidebar. When
+opened, its catalog menu is anchored to that button's own slot, opening upward from the button's top edge,
+sharing its left edge, and shrinking to the viewport when the window is narrow.
 On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
 its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
-pass/fail, unmeasured); the deduped open-issue total; and live sessions split into self-driving and
-waiting-on-you. Beside them ride the document's own facts: the routed file's path when
+pass/fail, unmeasured); the deduped open-issue total; and live sessions grouped by the configured
+`sessions.launchers` names. Each launcher group leads with the harness mark from the shared icon vocabulary
+and renders a compact `running/needs-you/other` slash tally using the existing green/yellow/muted status
+tokens. Only launchers with at least one session render. Records whose launcher is null, hidden, or no longer
+configured are counted in one `other` group instead of being dropped. Every group opens the sessions console, and its tooltip names the launcher and all three tally
+meanings. At compact desktop widths the launcher list hides as one unit and a single clickable aggregate
+KDA badge takes its place, so the slash tally can never be clipped between digits. Named launcher profiles
+that share a harness mark carry a small profile-initial badge (for example `R` and `C`) so icon-only mode
+still distinguishes them. When any session needs the human, the sessions ledger item also carries the
+existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the routed file's path when
 [[file-view]] is the document, the session console's unread-resource signal, the public-graph disclosure.
 
 **The tallies are the workspace's, and the shell registers them.** They are true of the window on every
@@ -91,9 +108,11 @@ gain [[graph-stats]]'s focus-walk: repeated clicks cycle the counted node ring a
 issue/eval categories open their boards and node categories enter the graph on a matching node. Thus every
 number remains a door without creating a second owner or tying ownership to a mounted view's lifetime.
 
-At a 1440px viewport the complete right group is at most one third of the window (480px), with every digit
-still rendered and actionable. Density comes from one occurrence of each fact and compact glyph/count
-pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
+At every viewport the right group uses the available inline space without a hard viewport fraction or clipping
+overflow. Existing board, eval, and issue ledgers remain complete and actionable; launcher groups are
+non-overlapping fixed-content units, and compact widths swap the whole launcher list for one aggregate
+badge before any slash digit can be cut. Density comes from one occurrence of each fact and compact
+glyph/count pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
 icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves
 the last verdict.
 

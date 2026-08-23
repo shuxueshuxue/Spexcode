@@ -24,6 +24,9 @@ export default {
     error: '错误',
     asking: '待答',
     queued: '排队中',
+    unknown: '未知',
+    corrupt: '损坏',
+    retired: '已退役',
     merged: '已合并',
     active: '进行中',
     drift: '偏移',
@@ -66,6 +69,13 @@ export default {
     new: '新建会话',
     archive: '已归档会话',
     rowTip: '打开 · ctrl+点击固定为标签 · alt+点击把图锁定到该会话',
+  },
+  sessionPicker: {
+    label: '选择会话',
+    filter: '筛选会话',
+    empty: '没有匹配的会话',
+    newSession: '新建会话…',
+    overlaySessions: '正在修改此节点的会话',
   },
   contextDock: {
     title: '上下文',
@@ -236,7 +246,9 @@ export default {
       `评测场景：${pass} 最新通过，${fail} 最新失败，${stalePass} 过期通过，${staleFail} 过期失败，${empty} 未测量`,
     openEvals: '打开 Evals 看板',
     issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
-    sessions: ({ run, need }) => `${run} 个在跑，${need} 个等你 —— 打开会话面板`,
+    sessions: '按 launcher 分组的会话 —— 打开会话面板',
+    launcher: ({ name }) => `${name}：运行中 / 等你 / 其他 —— 打开会话面板`,
+    launcherSummary: ({ n }) => `${n} 个 launcher：运行中 / 等你 / 其他 —— 打开会话面板`,
   },
   backend: {
     offline: '后端不可达 —— 当前显示的数据可能已陈旧',
@@ -475,6 +487,7 @@ export default {
   },
 
   sessionWindow: {
+    badgeLabel: '此图上的会话',
     menuLabel: '会话操作',
     rowTitle: '单击将图锁定到此会话 · 双击打开它',
     lockedTitle: '图已锁定到此会话——再次单击解除',
@@ -639,10 +652,6 @@ export default {
     del: '删除节点…',
   },
 
-  sourceView: {
-    useSelection: '在新会话中使用选区',
-  },
-
   // [[prose-dispatch]] —— 选中一段 spec 正文之后能做的事。
   proseActions: {
     groupLabel: '选中的正文 —— 发给会话，或就地编辑',
@@ -731,9 +740,10 @@ export default {
     tabTerminal: '终端',
     tabConversation: '对话',
     tabDiff: '差异',
+    resumeInputTitle: '恢复此会话？',
+    resumeInputMessage: '此会话正在等待恢复。发送第一个按键前请先确认。',
+    resumeInputConfirm: '恢复并发送按键',
     surfaceSwitcher: '会话视图',
-    enableTerminalInput: '允许终端输入',
-    terminalInputEnabled: '终端输入已允许 —— 再点击终端以聚焦',
     diffLoading: '正在加载差异……',
     diffEmpty: '没有分支改动',
     diffMerged: '已合并到 {base}',

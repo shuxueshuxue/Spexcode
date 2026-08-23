@@ -2,12 +2,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { sessionAncestorIds, sessionDisplayState, sessionFooterState, sessionForest, sessionPresentationOrder, sessionZone, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 
-test('display projection keeps lifecycle status visible when liveness is offline', () => {
+test('display projection uses the package status for both zone and glyph', () => {
   const cases = [
     { session: { status: 'asking', liveness: 'online' }, zone: 'need', glyph: STATUS_GLYPH.asking, status: 'asking' },
     { session: { status: 'working', liveness: 'online' }, zone: 'run', glyph: STATUS_GLYPH.working, status: 'working' },
     { session: { status: 'asking', liveness: 'offline' }, zone: 'need', glyph: STATUS_GLYPH.asking, status: 'asking' },
-    { session: { status: 'error', liveness: 'offline' }, zone: 'need', glyph: STATUS_GLYPH.error, status: 'error' },
+    { session: { status: 'review', liveness: 'offline' }, zone: 'need', glyph: STATUS_GLYPH.review, status: 'review' },
+    { session: { status: 'close-pending', liveness: 'offline' }, zone: 'need', glyph: STATUS_GLYPH['close-pending'], status: 'close-pending' },
+    { session: { status: 'done', liveness: 'offline' }, zone: 'need', glyph: STATUS_GLYPH.done, status: 'done' },
     { session: { status: 'working', liveness: 'offline' }, zone: 'run', glyph: STATUS_GLYPH.working, status: 'working' },
     { session: { status: 'retired', liveness: 'offline' }, zone: 'offline', glyph: STATUS_GLYPH.retired, status: 'retired' },
     { session: { status: 'queued', liveness: 'offline' }, zone: 'run', glyph: STATUS_GLYPH.queued, status: 'queued' },
@@ -18,11 +20,10 @@ test('display projection keeps lifecycle status visible when liveness is offline
       zone, status, color: STATUS_COLOR[status], glyph,
     })
   }
-  assert.equal(sessionDisplayState({ archived: true, status: 'working', liveness: 'online' }).status, 'offline')
-  assert.equal(sessionDisplayState({ archived: true, status: 'working', liveness: 'online' }).glyph, STATUS_GLYPH.offline)
+  assert.equal(sessionDisplayState({ archived: true, status: 'offline', liveness: 'offline' }).zone, 'archive')
 })
 
-test('forest keeps a dead child with its authored lifecycle zone', () => {
+test('forest keeps parentage independent from liveness', () => {
   const items = sessionForest([
     { id: 'parent', status: 'asking', liveness: 'online', sortKey: 20 },
     { id: '66019e9b', parent: 'parent', status: 'asking', liveness: 'offline', sortKey: 30 },
@@ -30,6 +31,18 @@ test('forest keeps a dead child with its authored lifecycle zone', () => {
   assert.deepEqual(items.filter((item) => item.type === 'zone').map((item) => item.zone), ['need'])
   const child = items.find((item) => item.type === 'row' && item.s.id === '66019e9b')
   assert.equal(child.depth, 1)
+})
+
+test('forest keeps a child under its parent even when their statuses use different zones', () => {
+  const items = sessionForest([
+    { id: 'working-parent', status: 'working', liveness: 'online', sortKey: 20 },
+    { id: 'dead-asking-child', parent: 'working-parent', status: 'asking', liveness: 'offline', sortKey: 30 },
+  ], () => true)
+  assert.deepEqual(items.filter((item) => item.type === 'zone').map((item) => item.zone), ['run'])
+  assert.equal(items.find((item) => item.type === 'zone').count, 2)
+  const child = items.find((item) => item.type === 'row' && item.s.id === 'dead-asking-child')
+  assert.equal(child.depth, 1)
+  assert.equal(sessionDisplayState(child.s).glyph, STATUS_GLYPH.asking)
 })
 
 test('footer state keeps queued live and archived ahead of offline', () => {

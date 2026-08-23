@@ -1,18 +1,18 @@
 ---
 scenarios:
-  - name: terminal-read-does-not-arm-input
+  - name: terminal-input-default-and-suspended-confirm
     tags: [frontend-e2e, desktop, backend-api]
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionTerm.jsx]
     description: >-
-      Open a live pane-backed session whose TUI is waiting at a token-consuming Enter confirmation. Inspect
-      the terminal, active element, websocket input frames, and document actions; enable input, inspect focus
-      again, then separately press the terminal and type one harmless key. Leave and reopen the session.
+      Open a live pane-backed session and immediately type a harmless key. Then open a suspended session whose
+      TUI is waiting at a token-consuming Enter confirmation and type one key, inspect the confirmation focus and
+      websocket input frames, cancel, repeat, and confirm once. Leave and reopen both sessions.
     expected: >-
-      Opening and reading renders the real terminal but focuses no xterm helper and sends zero input frames.
-      One explicit enable-terminal-input button is visible, not pre-focused, and outside the terminal landing.
-      Pressing it sends no terminal byte and leaves focus on the button. Only the later terminal press permits
-      the harmless key to reach tmux. Leaving or reopening returns to read-only with zero replay, so a token
-      confirmation can never consume quota as a side effect of reading or the reader's next Enter.
+      The active session's terminal accepts the harmless key immediately and renders it in the real tmux pane.
+      Opening or switching sends no resume request and no input frame. The suspended session's first key opens a
+      confirmation that is not pre-focused and is spatially separate from the cursor; Enter cannot confirm it by
+      landing on the control. Cancel sends no key. Confirm sends exactly the held key once. Leaving or reopening
+      does not replay input or resume implicitly. Archived sessions remain Conversation-only and read-only.
   - name: timeline-message-composer-contract
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/timeline-chat-composer.e2e.mjs
@@ -308,7 +308,7 @@ scenarios:
   - name: row-context-and-external-reveal
     tags: [frontend-e2e, desktop]
     description: >-
-      Right-click a nested session row, exercise lock/rename/select/attach/close availability, then open
+      Right-click a nested session row, exercise lock/rename/attach/close availability, then open
       a session hidden below collapsed ancestors from the graph node menu and an originator chip.
     expected: >-
       The shared context menu exposes state-appropriate actions without stealing terminal focus. Close remains
@@ -318,11 +318,14 @@ scenarios:
   - name: session-window-remains-bounded
     tags: [frontend-e2e, desktop]
     description: >-
-      Populate enough sessions to exceed 80% viewport height and inspect the map-side SessionWindow against the
-      graph stats strip while scrolling and selecting rows.
+      Open a graph with live sessions and inspect the compact SessionWindow badge in the graph's upper-right
+      corner. Open the badge, filter the shared picker, choose a session to lock the graph, and double-click a
+      row to navigate into that session.
     expected: >-
-      The window stays bounded above the stats strip and scrolls internally. It retains avatars, shared compact
-      headlines, status glyphs, triage grouping, and graph-lock gestures without becoming the console sidebar.
+      The graph shows a bounded count-and-avatar badge at rest, with no second full session list. Expansion opens
+      the shared SessionPicker with the same avatar, stable handle, and lifecycle glyph language as the dock,
+      graph menu, mentions, and prose dispatch. Choosing a row locks the graph; double-clicking navigates to
+      `#/sessions/<id>`; the full forest remains owned by the dock.
   - name: offline-history-disclosure
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
@@ -371,11 +374,9 @@ scenarios:
       Restore returns the same corrupt row rather than a runtime or readable replacement record.
   - name: lifecycle-confirm-owns-enter
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/session-multi-select.e2e.mjs
     code:
       - spec-dashboard/src/SessionInterface.jsx#SessionInterface
       - spec-dashboard/src/Modal.jsx#Modal
-      - spec-dashboard/src/SessionSelectBar.jsx#SessionSelectBar
       - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
     description: >-
       Keep the console on its New Session tab, enter multi-select mode, then open the bulk archive and close

@@ -19,9 +19,8 @@ related:
 ---
 # keyboard-nav
 
-Move through the spec tree by **relationship, not geometry** — the tree uses a structural embedding for the
-current two-layer frontier; focus changes add/remove frontier tiles while the camera keeps a clicked focus tile
-screen-stable across the re-plot and absorbs its layout delta.
+Move through the spec tree by **relationship, not geometry** — focus changes add/remove frontier tiles while
+the camera keeps the reading pair at its current anchor and absorbs any layout delta.
 
 ## keymap
 
@@ -50,8 +49,16 @@ A **game controller** drives this same registry from **inside the page** — [[g
 
 ## principles
 
+**Camera rule (current).** Arrow nav, mouse click, and programmatic jumps all use [[node-graph]]'s reading-pair
+anchor: focus→nearest child midpoint at the `43%` canvas token, or parent↔focus midpoint for a leaf, with the
+focus row on the vertical axis and a vertical clamp that keeps the visible frontier reachable. If the visible
+bbox already fits at the current user zoom, the camera fits it with one left gutter at or below that user zoom;
+fit may lower zoom to make content fit, never raise a deliberate user zoom. Anchored navigation preserves the
+user’s zoom and lowers it only when the anchored frontier cannot fit. The existing smooth transition remains, clicks absorb the instantaneous 0px layout delta, and
+graph-space coordinates are untouched.
+
 - **Move by relationship, not geometry.** Navigation walks the parent / child / column structure (see [[node-graph]]), never pixel distance: up/down within the focus column, left to the parent, right to the nearest child. The one exception is a leaf's right key — with no child below it, it steps to the nearest node in the columns to its right, in grid cells (column and row gaps weigh equally) and only rightward, so the parent key walks back.
-- **The camera follows the keyboard, not the mouse.** Arrow nav flat-pans onto the new node at constant zoom, never zoom-to-fit. A **mouse click re-focuses and drills the clicked node open**; if the frontier re-plots, that clicked tile stays at its pre-click screen position and the camera absorbs the layout delta, so the world does not jump under the pointer. Only a keyboard move — or a **programmatic jump** (search, board-stats, a session row) onto a possibly-offscreen node — pans the camera to frame the target.
+- **The camera follows keyboard and mouse with one target.** Arrow nav, mouse click, and programmatic jumps use the camera rule above. A **mouse click re-focuses and drills the clicked node open**; if the frontier re-plots, that clicked tile stays at its pre-click screen position and the camera absorbs the layout delta, so the world does not jump under the pointer.
 - **While the keyboard drives, the mouse steps aside.** A nav keystroke puts the board in *keyboard mode*: the cursor hides and the board takes no pointer events — suppression that reaches into React Flow's own node/edge layers, which otherwise re-enable pointers — so a still cursor can't fire a hover affordance (the issue popover, any future hover reveal). The focused node's own popover still shows — a focus reveal, not hover. Only a real pointer move exits the mode, not a pan under a still cursor.
 - **A modal owns the keys — but the node-info popup is a lens, not a modal.** While a *true* modal — help overlay, settings, search palette, or a session interface — is open it captures every key, and nav never leaks to the board behind it. The node-info popup claims only the **unmodified** keys (its pane/scroll/close vocabulary); **Shift+nav passes through** to the ordinary relationship walk, and the popup follows the focus. The distinction is what the surface *is*: help/settings/search are about themselves, so keys behind them are noise; the popup is about the focused node, so moving the focus is the reading gesture, not a leak.
 

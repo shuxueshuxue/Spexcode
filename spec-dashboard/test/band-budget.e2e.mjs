@@ -82,7 +82,7 @@ function enumerateStates() {
 // chrome this list has never heard of.
 const KNOWN_BANDS = [
   'side-rail', 'dock', 'dock-head', 'tabstrip', 'statusbar',
-  'context-dock', 'ctx-head', 'si-tabbar', 'si-selbar', 'si-toolbar',
+  'context-dock', 'ctx-head', 'si-tabbar', 'si-toolbar',
   'diff-toolbar', 'm-composer', 'lp-head', 'ds-head',
   // strips this gate named and the shell then retired. They stay listed so a reintroduction is caught by
   // NAME on its first frame, before anyone has to argue about its geometry.

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
+import { STATUS } from './specMeta.js'
+import { SessionPickerRow } from './SessionPicker.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (session)
@@ -63,7 +65,7 @@ export function matchSessions(sessions, query) {
     scored.push({ s, score })
   }
   scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
-  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
+  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status, session: x.s }))
   const exactCount = scored.filter((x) => x.score === 0).length
   const beforeNew = items.slice(0, Math.min(exactCount, 7))
   return [...beforeNew, { id: 'new', label: 'new', sub: 'choose a launcher' }, ...items.slice(beforeNew.length)].slice(0, 8)
@@ -217,20 +219,22 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   return (
     <ul className={`${up ? 'mention-menu up' : 'mention-menu'}${fixedStyle ? ' fixed' : ''}`} style={fixedStyle || undefined} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
-      {menu.items.map((it, i) => (
-        <li
-          key={it.id}
-          role="option"
-          aria-selected={i === menu.index}
-          className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (menu.kind === 'session' && it.id === 'new') ? ' new' : ''}`}
-          onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
-          onMouseEnter={() => onHover(i)}
-        >
-          {!session && <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />}
-          <span className="mention-id">{launcher ? <>@new:{highlight(it.label, menu.query)}</> : session ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
-          <span className="mention-path">{session ? it.sub : specPath(it.path)}</span>
-        </li>
-      ))}
+      {menu.items.map((it, i) => session && it.session
+        ? <SessionPickerRow key={it.id} session={it.session} compact active={i === menu.index} onPick={() => onPick(it)} onHover={() => onHover(i)} className="mention-item" name={<>{'@'}{highlight(it.label, menu.query)}</>} />
+        : (
+          <li
+            key={it.id}
+            role="option"
+            aria-selected={i === menu.index}
+            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (menu.kind === 'session' && it.id === 'new') ? ' new' : ''}`}
+            onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
+            onMouseEnter={() => onHover(i)}
+          >
+            {!session && <span className="mention-dot" style={{ background: STATUS[it.status]?.color || STATUS.pending.color }} />}
+            <span className="mention-id">{launcher ? <>@new:{highlight(it.label, menu.query)}</> : session ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
+            <span className="mention-path">{session ? it.sub : specPath(it.path)}</span>
+          </li>
+        ))}
     </ul>
   )
 }

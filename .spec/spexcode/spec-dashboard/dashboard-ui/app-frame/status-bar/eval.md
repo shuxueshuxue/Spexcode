@@ -7,11 +7,12 @@ scenarios:
       content row, sidebar, xterm screen and final xterm row against the status bar, then take settled full,
       lower-left-junction, and lower-right-junction screenshots.
     expected: >-
-      Rail and optional dock continue to the viewport bottom. The status bar is the final unshrinking child
-      of the right content column, starts exactly at the sidebar's right edge, and has the content row ending
-      at its top edge. The xterm screen and its complete last rendered row end at or above that same edge;
-      neither output nor caret is covered. The vertical sidebar/content and horizontal content/status seams
-      are single 1px `--line` strokes with clean lower-left and lower-right junctions.
+      The status bar is the final unshrinking full-window flow row after the app row. Rail and optional dock
+      stop at its top edge; the bar starts at x=0 and ends at the viewport's right edge. The content row ends
+      at the bar's top edge, and the xterm screen and its complete last rendered row end at or above that same
+      edge; neither output nor caret is covered. The vertical sidebar/content and horizontal full-width
+      content/status seams are single 1px `--line` strokes with a clean lower-left T junction and flush
+      lower-right edge.
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/styles.css]
   - name: project-identity-is-one-status-door
     tags: [frontend-e2e, desktop]
@@ -25,6 +26,20 @@ scenarios:
       visibly inert offline rows, current-project identity/check state, and a global `/projects` entry. A
       denied guest sees the same identity control as the login door but no catalog rows.
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/SideBar.jsx, spec-dashboard/src/styles.css]
+  - name: launcher-tally-complete-and-compact
+    tags: [frontend-e2e, desktop]
+    description: >-
+      With multiple configured launchers and session records, inspect the settled status bar at 1440px and
+      700px through the real dashboard. Include profiles sharing one harness icon, an unknown or missing
+      launcher record, and at least one needs-you session; click the launcher tally from a non-sessions route.
+    expected: >-
+      The 1440px bar remains exactly one --line-status row and shows each non-empty configured launcher as a
+      non-overlapping icon/name/running-needs-you-other group, plus one other bucket for unmatched records;
+      no session is silently omitted and needs-you uses the existing sb-warning semantic token. At 700px the
+      launcher list is replaced as one unit by a clickable aggregate badge with complete slash digits, the
+      badge stays inside the viewport, shared-harness profiles remain distinguishable by their initials, and
+      the click opens the sessions console without an unrelated archive-index error notice.
+    code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/styles.css]
     test: spec-dashboard/test/identity-chain.e2e.mjs
 ---
 # measuring the status bar

@@ -19,14 +19,16 @@ related:
 ---
 # tab-strip
 
-**The strip holds OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, `#/sessions/<id>`, `#/evals/<node>/<scenario>`, `#/issues/<id>`. A session's
+**The strip holds workspace OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
+`#/file/<path>`, or `#/sessions/<id>`. Evals and Issues are review-surface addresses, not workspace
+documents: `#/evals/<node>/<scenario>` and `#/issues/<id>` never enter the strip, even when opened from a
+spec panel or status chip. A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
 own identity, appended beside the unchanged session tab. Bare
 `#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
 are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
-ordinary objects and may be held like every other document. The rail is therefore navigation only; it does
+also review destinations and never become workspace objects. The rail is therefore navigation only; it does
 not create, pin, or focus a board tab ([[side-nav]]).
 
 What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy
@@ -114,7 +116,8 @@ route, `#/graph`, or the sessions launch page never creates a tab.
 **The semantics are a pure function** (`tabModel.js`: `placeTab`, `normalizeTabs`), separate from the hook
 that owns storage and the route subscription. The law above is therefore checkable without a browser, which
 is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
-pinned tab must survive them all.
+pinned tab must survive them all. Reading persisted tabs writes the normalized result back once, so retired
+review entries are removed from storage rather than merely hidden in memory.
 
 **Identity is the canonical object hash.** Two routes that print the same object address *are* the same tab,
 and session surface queries are deliberately ignored: `#/sessions/a?surface=terminal` and
@@ -160,31 +163,21 @@ self-limiting: the current-slot-per-kind rule means the strip only grows when so
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 
-**Width is elastic before it is wrapped, following VS Code's `wrapTabs` fit behaviour.** Each tab is one flex
-item with a zero basis, an 80px minimum and a 240px preferred maximum (the active tab uses a 112px readability
-floor so its always-visible close control never crowds its title). Flex first shrinks every tab on the current
-row; it creates another row only when the sum of those minimums cannot fit. Each row grows independently until
-the preferred 240px cap; a short final row may retain legal empty space rather than producing an oversized
-outlier. This is one CSS flex rule, not JavaScript width measurement. The close affordance is always present on
-the active tab; an inactive tab shows it only on hover. At the narrow end,
-padding is reduced per tab at 140px, and status dots/spinners disappear per tab at 100px; the face keeps its
-full accessible label and tooltip while its visible title ellipsises.
+**Width has two explicit regimes.** In the normal regime the tab row is `nowrap`: each tab is content-sized,
+shrinking toward the 80px minimum when the row overflows, and clamped to a 240px maximum; the active tab keeps a
+112px readability floor. The label,
+status mark and permanently allocated 24px close control determine the preferred width, and the right edge contains
+only that control's normal padding. A short final row therefore keeps its real empty space instead of stretching
+short labels into dead chrome. One `ResizeObserver` watches the tablist and adds `.wrapped` only when
+`tabCount * 80px > tablistWidth`.
 
-The measured fit matrix below records the real rendered tab width in pixels. The viewport includes the 40px
-rail and the 200px explorer dock; the 36px document-action sibling is also present, so the tablist width is
-`viewport - 276px` (1404/1004/624px). A `*` marks a wrapped layout; the active tab is included in the count,
-and `last=` records a widened final row:
-
-| viewport / tablist | 2 tabs | 3 tabs | 5 tabs | 8 tabs | 12 tabs |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 1680 / 1404px | 240 | 240 | 240 | 175.5 | 117 |
-| 1280 / 1004px | 240 | 240 | 200.8 | 125.5 | 112 + 11x81.1 |
-| 900 / 624px | 240 | 208 | 124.8 | 112 + 6x85.3 (`*`, last=240) | 112 + 6x85.3 (`*`, final 5x124.8) |
-
-The dense 15-tab stress case at 900/624px is three rows of `7 + 7 + 1`; the final tab stops at 240px and
-leaves the remaining space empty by design. The screenshots for this 15-cell matrix plus that 15-tab stress
-case are the review evidence for this paragraph; the widths above are kept in the same commit as the CSS so a
-future change can re-measure the product surface rather than infer it from prose.
+In the pressure regime (`.wrapped`) the verified shrink-wrap rule returns: tabs use `flex-basis: 0`, shrink toward
+their minima, and wrap only after the row cannot fit those minima. The tab itself is the inline-size container in
+this regime, so the 140px padding and 100px status-mark thresholds remain live per tab. The close control keeps its
+24px place in both regimes; hover changes opacity and background only, so moving across tabs cannot resize the row.
+The face keeps its full accessible label and tooltip while its visible title ellipsises. YATU evidence records
+rendered widths for 2, 5 and 12 tabs in both regimes and verifies that a short label's X right edge leaves only
+normal padding to the tab edge.
 
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run

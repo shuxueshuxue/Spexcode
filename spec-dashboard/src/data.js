@@ -3,46 +3,95 @@ import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the single-layer expansion frontier chosen by
-// GraphView. Coordinates depend only on tree shape plus that frontier, never on the focused id. A node's
-// visible child block owns one slot per visible descendant block, so adjacent branches reserve the total
-// height of the next layer before their parents are centred. This is the part the old independent-centre
-// recursion missed: two wide sibling blocks could otherwise occupy the same rows.
+// GraphView. Each depth is its own column: roots are evenly spaced around the origin, then the children of
+// the spine node in the previous column are evenly spaced around that parent's y. A later column therefore
+// never contributes row budget to an earlier one.
 export const X_GAP = 280, Y_GAP = 54
+export const GRAPH_MIN_ZOOM = 0.4, GRAPH_MAX_ZOOM = 1.6
+export const GRAPH_TILE_SIZE = { width: 176, height: 50 }
+
+// The reading anchor intentionally sits left of the geometric centre so the child column remains in view.
+// Keep this as a token: tuning the reading balance must not change graph coordinates.
+export const CAMERA_ANCHOR_RATIO = 0.43
+// One tile plus a compact breathing room keeps the root in the requested 35–48% reading band on the
+// measured desktop pane while still reading as a single left gutter.
+export const CAMERA_GUTTER = GRAPH_TILE_SIZE.width + 44
+
+/**
+ * Return the viewport that frames a focus using the reading-pair anchor.
+ * `visible` contains graph-space node centres; node dimensions are supplied separately because React Flow
+ * measures them after mount while the layout is already stable.
+ */
+export function viewportForFocus({
+  focus, parent = null, child = null, visible = [], width, height, zoom,
+  minZoom = GRAPH_MIN_ZOOM, maxZoom = GRAPH_MAX_ZOOM,
+  tileWidth = GRAPH_TILE_SIZE.width, tileHeight = GRAPH_TILE_SIZE.height,
+  anchorRatio = CAMERA_ANCHOR_RATIO, gutter = CAMERA_GUTTER, fit = true,
+}) {
+  if (!focus || width <= 0 || height <= 0) return { x: 0, y: 0, zoom }
+
+  const points = visible.length ? visible : [focus]
+  const minX = Math.min(...points.map((node) => node.x - tileWidth / 2))
+  const maxX = Math.max(...points.map((node) => node.x + tileWidth / 2))
+  const minY = Math.min(...points.map((node) => node.y - tileHeight / 2))
+  const maxY = Math.max(...points.map((node) => node.y + tileHeight / 2))
+  const contentWidth = Math.max(1, maxX - minX)
+  const contentHeight = Math.max(1, maxY - minY)
+
+  // A complete neighbourhood gets the whole pane, with one column of breathing room at the left edge.
+  const currentFits = Number.isFinite(zoom)
+    && contentWidth * zoom <= width - gutter
+    && contentHeight * zoom <= height
+  const fitZoom = Math.min(maxZoom, (width - gutter) / contentWidth, height / contentHeight)
+  if (fit && currentFits && fitZoom >= minZoom) {
+    const fitZoomAtOrBelowUser = Math.min(fitZoom, zoom)
+    return {
+      x: gutter - minX * fitZoomAtOrBelowUser,
+      y: (height - contentHeight * fitZoomAtOrBelowUser) / 2 - minY * fitZoomAtOrBelowUser,
+      zoom: fitZoomAtOrBelowUser,
+    }
+  }
+
+  const pair = child || parent
+  const anchorX = pair ? (focus.x + pair.x) / 2 : focus.x
+  const anchorZoom = !currentFits && fitZoom >= minZoom ? fitZoom : zoom
+  const desiredY = height / 2 - focus.y * anchorZoom
+  const minPanY = -minY * anchorZoom
+  const maxPanY = height - maxY * anchorZoom
+  const y = minPanY <= maxPanY
+    ? Math.min(maxPanY, Math.max(minPanY, desiredY))
+    : minPanY
+  return {
+    x: width * anchorRatio - anchorX * anchorZoom,
+    y,
+    zoom: anchorZoom,
+  }
+}
+
 export function layout(nodes, expanded) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })
   const pos = {}
-  // The span is deliberately based on each node's immediate visible child block. Deeper expansion can
-  // add nodes in a later column without re-spacing an unrelated column unless that later block itself needs
-  // more rows; every occupied row still has the same centre-to-centre step and a four-pixel clear gap.
-  const spans = new Map()
-  const span = (id) => {
-    if (spans.has(id)) return spans.get(id)
-    const cs = expanded.has(id) ? (kids[id] || []) : []
-    const value = cs.length ? cs.reduce((total, child) => total + span(child), 0) : 1
-    spans.set(id, value)
-    return value
-  }
-  const place = (id, depth, slot) => {
-    pos[id] = { x: depth * X_GAP, y: slot * Y_GAP }
-    const cs = expanded.has(id) ? (kids[id] || []) : []
-    if (!cs.length) return
-    const total = cs.reduce((sum, child) => sum + span(child), 0)
-    let cursor = slot - total / 2
-    cs.forEach((child) => {
-      const width = span(child)
-      place(child, depth + 1, cursor + width / 2)
-      cursor += width
-    })
-  }
   const roots = nodes.filter((n) => !n.parent)
-  const total = roots.reduce((sum, root) => sum + span(root), 0)
-  let cursor = -total / 2
-  roots.forEach((root) => {
-    const width = span(root)
-    place(root.id, 0, cursor + width / 2)
-    cursor += width
-  })
+  const placeColumn = (ids, depth, centerY) => {
+    const start = centerY - ((ids.length - 1) / 2) * Y_GAP
+    ids.forEach((id, index) => { pos[id] = { x: depth * X_GAP, y: start + index * Y_GAP } })
+  }
+
+  if (!roots.length) return pos
+  placeColumn(roots.map((root) => root.id), 0, 0)
+
+  // The normal frontier has one expanded spine node per depth. Keeping the column walk explicit makes
+  // the single-layer contract visible: only that node's direct children enter the next column.
+  let spine = roots.find((root) => expanded.has(root.id))?.id
+  let depth = 1
+  while (spine) {
+    const children = expanded.has(spine) ? (kids[spine] || []) : []
+    if (!children.length) break
+    placeColumn(children, depth, pos[spine].y)
+    spine = children.find((id) => expanded.has(id))
+    depth += 1
+  }
   return pos
 }
 

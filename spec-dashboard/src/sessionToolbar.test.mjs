@@ -7,7 +7,6 @@ import { inboxCommands, mergeAvailability, uiCommandsFor, UI_COMMANDS } from './
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
 const contextMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
-const selectBar = readFileSync(new URL('./SessionSelectBar.jsx', import.meta.url), 'utf8')
 const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const focus = readFileSync(new URL('./focus.js', import.meta.url), 'utf8')
@@ -20,10 +19,14 @@ const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('session faces are routed and the console has no second tab rail', () => {
   assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"/)
-  assert.match(source, /function SessionSurfaceSwitcher\(/)
   assert.match(source, /id: 'surface-switcher'/)
+  assert.match(source, /id: 'diff-switcher'/)
+  assert.match(source, /icon: baseSurface === SESSION_SURFACE_TERMINAL \? 'message-square' : 'terminal'/)
+  assert.match(source, /icon: 'file-diff'/)
+  assert.doesNotMatch(source, /session-surface-switcher|role="tablist" aria-label=\{label\}/)
   assert.match(source, /surfaceChoices\.length > 1/)
   assert.match(source, /setSessionBaseSurface\(active, next\)/)
+  assert.match(source, /showBaseSurface\(active, diffSurface \? getSessionBaseSurface\(active\) : SESSION_SURFACE_DIFF, true\)/)
   assert.match(source, /surface = null/)
   assert.match(source, /const requestedSurface = isSessionSurface\(surface\) \? surface : null/)
   assert.match(source, /const activeBaseSurface = terminalFree \|\| readOnlyPane \? SESSION_SURFACE_CONVERSATION : requestedSurface \|\| getSessionBaseSurface\(active\)/)
@@ -174,32 +177,10 @@ test('close refusals remain visible instead of being swallowed by the background
 
 test('bulk close is retired with multi-select', () => {
   assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|onBulkClosed/)
-  return
-/*
-  assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
-  assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
-  assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
-  assert.match(selectBar, /icon="trash"[\s\S]{0,180}setConfirming\('close'\)/)
-  assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/close`/)
-  assert.doesNotMatch(selectBar, /setConfirming\('archive'\)|\/archive/)
-  assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
-*/
 })
 
 test('select mode is retired with multi-select', () => {
   assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|startSessionDrag|draggable/)
-  return
-/*
-  assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
-  assert.match(source, /if \(event\.button !== 0\) return/)
-  assert.match(source, /onMouseDown: \(e\) => startSessionDrag\(e, s\)/)
-  assert.match(sessionWindow, /\{selecting && <span className=\{`si-check\$\{isPicked \? ' on' : ''\}`/)
-  assert.doesNotMatch(source, /reparentDrag|si-drag-handle|draggable/)
-  assert.doesNotMatch(css, /si-drag-handle|si-drag-slot|reparent-target/)
-  assert.match(css, /\.si-item:has\(> \.si-check\) ~ \.sess-fold-control \{ margin-left: 20px; \}/)
-  assert.doesNotMatch(icons, /'grip-vertical':/)
-  assert.doesNotMatch(focus, /DRAG_PRESS_TARGETS/)
-*/
 })
 
 test('close remains the only right-click lifecycle removal and asks for confirmation', () => {

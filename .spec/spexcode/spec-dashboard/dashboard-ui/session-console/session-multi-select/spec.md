@@ -3,13 +3,10 @@ title: session-multi-select
 status: merged
 hue: 20
 desc: Retired session-list selection contract; bulk operations remain a deferred capability for a future dock-owned explicit selection mode.
-code:
-  - spec-dashboard/src/SessionSelectBar.jsx
 related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/SessionContextMenu.jsx
   - spec-dashboard/src/styles.css
-  - spec-dashboard/test/session-multi-select.e2e.mjs
 ---
 
 # session-multi-select

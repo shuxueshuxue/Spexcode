@@ -14,7 +14,7 @@ import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDi
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
-import { jsonMigrationFencePath } from '@spexcode/session-application'
+import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
 import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
 import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
 import { stripRefSigil } from './mentions.js'
@@ -1789,6 +1789,27 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
   }
 }
 
+export function canonicalWatchRecipients(
+  application: Pick<ProductionSessionApplication, 'topology'>,
+  sessionId: string,
+  status: string,
+): string[] {
+  const recipients = new Set<string>()
+  for (const edge of application.topology.parents(sessionId)) {
+    if (!edge.relationType.startsWith('watch')) continue
+    if (status === 'active' && edge.relationType === 'watch:parent') continue
+    recipients.add(edge.fromSessionId)
+  }
+  return [...recipients]
+}
+
+export function sessionHasPendingDelivery(
+  id: string,
+  application: Pick<ProductionSessionApplication, 'protocol'> | null = configuredSessionApplicationIfCutover() ?? null,
+): boolean {
+  return application ? application.protocol.listPending(id).length > 0 : owesDelivery(id)
+}
+
 function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
   const application = configuredSessionApplicationIfCutover()
   if (!application) return
@@ -1797,7 +1818,13 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
     if (rec.parent) application.attachWatcher(rec.parent, rec.session, 'watch:parent')
     return
   }
-  application.transitionSession(rec.session, { status, proposal, note, parentSessionId: rec.parent })
+  application.transitionSession(rec.session, {
+    status,
+    proposal,
+    note,
+    parentSessionId: rec.parent,
+    recipientSessionIds: canonicalWatchRecipients(application, rec.session, status),
+  })
 }
 
 async function launchReadinessWitnessAlive(id: string, harness: Harness, current: SessRec): Promise<boolean> {
@@ -2037,7 +2064,11 @@ const requestQueueDrain = (): void => {
 // each queued recipient to its existing runtime; a failed or absent runtime leaves the message pending for retry.
 setSessionApplicationCommitWake((recipients) => {
   queueMicrotask(() => {
-    for (const recipient of recipients) void drainSession(recipient)
+    for (const recipient of recipients) {
+      void drainSession(recipient).catch((error) => {
+        console.error(`spex: canonical delivery wake failed for ${recipient}: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
   })
 })
 
@@ -2064,11 +2095,16 @@ export function superviseDelivery(intervalMs = 2000): void {
   supervisingDelivery = true
   const tick = async () => {
     try {
+      const application = configuredSessionApplicationIfCutover()
       for (const id of listSessionIds()) {
-        if (!owesDelivery(id)) continue
-        try { await drainSession(id) } catch { /* an adapter that refused stays owed; next tick retries */ }
+        if (!sessionHasPendingDelivery(id, application)) continue
+        try { await drainSession(id) } catch (error) {
+          console.error(`spex: delivery retry failed for ${id}: ${error instanceof Error ? error.message : String(error)}`)
+        }
       }
-    } catch { /* transient store read; next tick retries */ }
+    } catch (error) {
+      console.error(`spex: delivery retry sweep failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     setTimeout(tick, intervalMs).unref()
   }
   void tick()
@@ -4742,7 +4778,9 @@ export async function drainSession(id: string): Promise<void> {
     const rec = readRecord(id)
     if (!rec) return
     const binding = application.resolveRuntime(id, 'spex-governed')
-    if (!binding || binding.status !== 'bound') return
+    if (!binding || binding.status !== 'bound') {
+      throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
+    }
     const h = harnessById(rec.harness || defaultHarness.id)
     await withDeliveryLocks([id], async () => {
       for (;;) {

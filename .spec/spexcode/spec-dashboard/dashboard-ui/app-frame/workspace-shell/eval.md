@@ -1,0 +1,16 @@
+---
+scenarios:
+  - name: review-does-not-inherit-workspace-chrome
+    description: >
+      In a real browser, seed persisted tabs including legacy evals and issues entries, reload the graph,
+      then navigate to an eval detail and back to graph. Inspect visible chrome and the normalized storage.
+    expected: >
+      Loading silently removes evals/issues entries from persisted tabs. Review has no Explorer, dock, or tab
+      strip; graph has all three. Returning to graph preserves the remaining workspace tab set.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/WorkspaceSurface.jsx, spec-dashboard/src/tabs.js]
+---
+
+Measure YATU through the built dashboard in this worktree and a real browser against the running Spex backend.
+Use the `surface-shell-legacy-tabs` screenshot for migration and the review/workspace surface screenshots for
+the chrome boundary.

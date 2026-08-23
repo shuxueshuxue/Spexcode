@@ -83,24 +83,26 @@ says the dock is ONE band, so a mode row stacked above its header is a breach th
 
 ## the budget
 
-    B(state) = 1(rail) + dock + 1(tabstrip) + 1(statusbar) + context
+    B(state) = rail + dock + 1(tabstrip) + 1(statusbar) + context
 
+    rail    = 0  iff  R = issues (the full-width review board); otherwise 1
     dock    = 1  iff  D ≠ closed  and  R is not a bare evals/issues/settings board
     context = 1  iff  R = spec    and  C = open
 
-Rail, tab strip and status bar are unconditional: one persistent way to change destination
-([[side-nav]]), one place the open documents are named ([[tab-strip]]), one line of ambient state
-([[status-bar]]). The tab strip is unconditional in the strongest sense — it is the workspace itself and
+The tab strip and status bar are unconditional: one place the open documents are named ([[tab-strip]]) and
+one line of ambient state ([[status-bar]]). The Issues board deliberately omits the activity rail so its
+review reading is full-width; every other route keeps one persistent way to change destination
+([[side-nav]]). The tab strip is unconditional in the strongest sense — it is the workspace itself and
 it stays on every route, so the working set is always in reach ([[tab-strip]]). The dock and the context
-dock are the only conditional bands, and the dock's condition has **two** factors because the sidebar is a
+dock are the only other conditional bands, and the dock's condition has **two** factors because the sidebar is a
 property of the focused tab and not a window-wide setting ([[dock-modes]]): the reader's own open/closed
 choice, and whether the focused tab has a natural sidebar at all. Only bare evals, issues and settings boards
 lack that sidebar; object details retain it. The rule is ISOLATION, not suppression: a bare board never
 inherits the dock the previous tab was showing, which keeps the sidebar a fact about what is held.
 Split adds a **column**, never a band. U picks what fills the content area, never how much chrome frames it.
 
-**Theorem: 3 ≤ B ≤ 5 over every reachable state.** The floor is a closed dock on a non-spec route
-(rail + strip + status); the ceiling is a spec document with both docks open. There is no state in which
+**Theorem: 2 ≤ B ≤ 5 over every reachable state.** The floor is the full-width Issues board
+(strip + status); the ceiling is a spec document with both docks open. There is no state in which
 the frame may cost six. A view that needs a control surface of its own must earn it inside the content
 area, below the scrollport, or take the place of a band rather than stack on one.
 

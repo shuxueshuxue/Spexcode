@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/sessionSurface.js
+  - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/harness.jsx
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
@@ -22,6 +23,7 @@ related:
   - spec-dashboard/test/session-web.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
+  - spec-dashboard/test/session-shortcuts.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs

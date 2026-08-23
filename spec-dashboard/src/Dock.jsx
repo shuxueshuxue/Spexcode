@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import FileTree from './FileTree.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
-import { SessionConsoleTreeRow, useFold } from './SessionWindow.jsx'
+import { SessionConsoleTreeRow } from './SessionWindow.jsx'
+import { expandSessionFolds, setSessionOfflineOpen, toggleSessionFold, useSessionListState } from './sessionListState.js'
 import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
@@ -14,6 +15,8 @@ import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
+import { resolveSessionShortcut } from './sessionShortcuts.js'
 
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
@@ -25,12 +28,11 @@ import { useBackendHealth } from './BackendStatus.jsx'
 function SessionDock({ sessions, activeId }) {
   const t = useT()
   const { offline } = useBackendHealth()
-  const { expanded, toggle, expand } = useFold()
+  const { expanded, offlineOpen } = useSessionListState()
   const { lockedSource } = useWorkspace()
   const { lockGraphTo } = useWorkspaceApi()
   const { reload } = useBoardApi()
   const { notify } = useTransientNotice()
-  const [offlineOpen, setOfflineOpen] = useState(false)
   // A session row's right-click menu belongs to the surface that LISTS sessions. It moved here with the
   // rows when the console's own list was retired, and for one release nothing brought it along: the rows
   // carried a click and nothing else, so rename/attach/lock/close had no pointer route left at all.
@@ -47,13 +49,30 @@ function SessionDock({ sessions, activeId }) {
   useEffect(() => {
     if (!activeId) return
     const active = (sessions || []).find((session) => session.id === activeId)
-    expand(sessionAncestorIds(sessions || [], activeId))
-    if (active && sessionZone(active) === 'offline') setOfflineOpen(true)
-  }, [activeId, sessions, expand])
+    expandSessionFolds(sessionAncestorIds(sessions || [], activeId))
+    if (active && sessionZone(active) === 'offline') setSessionOfflineOpen(true)
+  }, [activeId, sessions])
   const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
     keepVisible: (session) => session.id === activeId,
   }), [sessions, expanded, offlineOpen, activeId])
+
+  // Session navigation lives on the dock now that the old full-width SessionInterface list is retired.
+  // Option arrows remain intentional even while a terminal, Command Box, or composer owns native focus.
+  useKeyboardScope((event) => {
+    const action = resolveSessionShortcut(rows, activeId, event)
+    if (!action) return false
+    event.preventDefault()
+    if (action.type === 'move') navigate('sessions', action.id)
+    else if (action.type === 'expand') {
+      const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
+      if (item && !item.expanded) toggleSessionFold(action.id)
+    } else if (action.type === 'collapse') {
+      const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
+      if (item?.expanded) toggleSessionFold(action.id)
+    }
+    return true
+  }, 20)
 
   // THE MOVE ITSELF is the backend's existing reparent, for both directions: a row dropped on another row
   // names that row as the parent, and a row dropped on the top-level door names none. There is no second
@@ -68,12 +87,12 @@ function SessionDock({ sessions, activeId }) {
       const body = await response.json().catch(() => null)
       if (!response.ok || body?.ok === false) throw new Error(body?.error || `session parent update refused (HTTP ${response.status})`)
       // open the new parent, or the row the reader just moved would vanish into a folded subtree
-      if (parent) expand([parent])
+      if (parent) expandSessionFolds([parent])
       reload?.()
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error), { kind: 'error' })
     }
-  }, [sessions, expand, reload, notify])
+  }, [sessions, reload, notify])
 
   // WHAT THE POINTER IS OVER, asked of the document rather than of the event ([[drag-gesture]]): while a
   // drag is live the window holds the pointer, so the event target is still the row the press began on.
@@ -133,7 +152,7 @@ function SessionDock({ sessions, activeId }) {
             const foldable = item.zone === 'offline'
             const label = t(`sessionZone.${item.zone}`)
             return <button key={`zone-${item.zone}`} type="button" className={`dock-session-zone dock-session-zone-${item.zone}`}
-              aria-expanded={foldable ? !item.folded : undefined} onClick={foldable ? () => setOfflineOpen((open) => !open) : undefined}>
+              aria-expanded={foldable ? !item.folded : undefined} onClick={foldable ? () => setSessionOfflineOpen(item.folded) : undefined}>
               <span>{label}</span><span className="dock-session-count">{item.count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
             </button>
           }
@@ -145,7 +164,7 @@ function SessionDock({ sessions, activeId }) {
           return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId}
             dragging={drag?.id === item.s.id}
             dropTarget={drag?.target === item.s.id}
-            onToggleFold={() => toggle(item.s.id)}
+            onToggleFold={() => toggleSessionFold(item.s.id)}
             rowProps={{
               'data-sid': item.s.id,
               'data-locked': locked ? '' : undefined,

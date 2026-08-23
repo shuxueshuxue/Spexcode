@@ -89,12 +89,15 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
 export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDockToggle = false }) {
   const t = useT()
   const { setDock, setDockMode } = useWorkspaceApi()
+  // The sealed public face is a graph product, not the live workspace. Keep its one graph marker while the
+  // live rail intentionally omits graph as a top-level destination.
+  const entries = graphOnly ? ['graph', ...ENTRIES] : ENTRIES
   return (
     // the rail is inert chrome for pointer focus ([[focus-return]]): a press navigates without taking DOM
     // focus, so chrome never becomes the focus-return ticket. Keyboard Tab still reaches every entry.
     <nav className="side-rail" aria-label={t('nav.railLabel')} onMouseDownCapture={inertChromePress}>
       {!hideDockToggle && <DockToggle />}
-      {ENTRIES.map((p) => (
+      {entries.map((p) => (
         <RailLink key={p} page={p} active={page === p}
           label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
           badge={p === 'sessions' ? needsYou : 0}

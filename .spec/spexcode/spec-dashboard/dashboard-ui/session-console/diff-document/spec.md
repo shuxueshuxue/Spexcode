@@ -21,7 +21,12 @@ The session object has a third document face, `#/sessions/<id>?surface=diff`. It
 the recorded fork base (or the source-of-truth branch for legacy records) through one backend diff endpoint. The
 endpoint identifies the merge-base and returns per-file unified patches in bounded byte windows; a file selector
 can fetch one file without loading the whole tree. The browser renders each patch read-only with CodeMirror's
-virtualized editor and source line numbers, and folds naturally by file section.
+virtualized merge editor. Each file has a panel entry with its status and addition/deletion counts, and the reader
+can switch between a synchronized split view and a unified view. Both views use old/new line numbers, collapse long
+unchanged stretches, highlight changed words, and syntax-highlight source (including deleted fragments in unified
+mode). A wrap toggle and previous/next hunk controls stay inside the same file surface. The endpoint remains the
+bounded unified-patch transport; the browser projects each loaded hunk into old/new editor documents instead of
+creating a second transport or eagerly fetching every file.
 
 A reader can click a changed line to author a comment. Comments live in the session record as `{filePath,
 lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending

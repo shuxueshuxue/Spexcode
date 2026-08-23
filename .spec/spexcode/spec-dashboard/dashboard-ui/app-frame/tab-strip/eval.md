@@ -27,6 +27,19 @@ scenarios:
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/styles.css]
     test: spec-dashboard/test/divider-geometry.e2e.mjs
+  - name: empty-workspace-after-last-session
+    description: >-
+      In a real Chromium dashboard, boot without a hash, seed one real session object into the persisted
+      working set, open its session document, and close its visible tab. Then navigate to an unknown hash.
+      Inspect the live rail, URL, visible view classes, and settled empty-state controls at 1440x900.
+    expected: >-
+      A cold boot lands on `#/sessions`. The live rail has no graph anchor. Closing the last session tab
+      lands on `#/empty`, leaves zero tabs, renders the real EmptyView with Search and Explorer doors, and
+      does not revive graph. An unknown hash normalizes to `#/sessions` and still has no live graph rail entry.
+      The browser console has no product errors; the Vite-only fixture's optional catalog 404 is ignored.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EmptyView.jsx, spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/tabModel.js, spec-dashboard/src/views.jsx]
+    test: spec-dashboard/test/empty-workspace.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

@@ -42,6 +42,21 @@ test('canonical delivery retry drops a record whose protocol address was retired
   assert.equal(sessionHasPendingDelivery('legacy-id', missing), false)
 })
 
+test('canonical delivery retry waits for a runtime binding instead of polling an unbound queue', () => {
+  let reads = 0
+  const unbound = {
+    resolveRuntime: () => null,
+    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+  } as any
+  const bound = {
+    resolveRuntime: () => ({ status: 'bound' }),
+    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+  } as any
+  assert.equal(sessionHasPendingDelivery('unbound', unbound), false)
+  assert.equal(sessionHasPendingDelivery('bound', bound), true)
+  assert.equal(reads, 1)
+})
+
 test('a stale canonical active row cannot resurrect a stopped or waiting record', () => {
   const canonical = { status: 'active', proposal: null, note: null, parentSessionId: null }
   const archived = { status: 'asking' as const, stopped: true, archived: true, proposal: 'close' as const, note: 'needs review', parent: null }

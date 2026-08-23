@@ -9,7 +9,7 @@ import test from 'node:test'
 import { openProjectSessionApplication } from '@spexcode/session-application'
 
 import { readTimeline } from './session-timeline.js'
-import { resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { rvSock, stampRvSock } from './harness.js'
 import { sendText } from './sessions.js'
 import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
@@ -67,7 +67,7 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
   }, null, 2) + '\n')
-  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  const app = configuredSessionApplication()
   app.createSession({ sessionId: id, status: 'active' })
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })

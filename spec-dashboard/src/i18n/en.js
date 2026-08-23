@@ -725,7 +725,7 @@ export default {
     issuesReplyPlaceholder: 'reply…',
     issuesConcernPlaceholder: 'concern — one line',
     issuesBodyPlaceholder: 'details (optional)',
-    inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
+    inputPlaceholder: 'describe the work · @ session · [[ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',
     menuPresets: 'command presets',
     menuSpecNodes: 'spec nodes',

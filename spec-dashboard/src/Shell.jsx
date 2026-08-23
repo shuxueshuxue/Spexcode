@@ -14,12 +14,13 @@ import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
-import { sessionZone } from './session.js'
+import { sessionHandle, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -254,6 +255,21 @@ export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
   const { specs, sessions, identity, catalog, graphOnly } = useBoard()
+  const { notify } = useTransientNotice()
+  const previousSessionStatus = useRef(null)
+  const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
+  useEffect(() => {
+    const previous = previousSessionStatus.current
+    previousSessionStatus.current = new Map((sessions || []).map((session) => [session.id, session.status]))
+    if (!previous) return
+    for (const session of sessions || []) {
+      if (session.status !== 'asking' || previous.get(session.id) === 'asking') continue
+      notify(`${sessionHandle(session)} · ${t('status.asking')}`, {
+        kind: 'info',
+        onClick: () => navigate('sessions', session.id),
+      })
+    }
+  }, [sessions, notify, t])
   const documentNames = useDocumentNames()
   const { dock, dockMode, palette } = useWorkspace()
   const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
@@ -303,8 +319,8 @@ export default function Shell() {
   // window still says which workspace it belongs to when several are open side by side.
   const place = placeLabel({ page, param, query }, { specs, sessions, names: documentNames, t })
   useEffect(() => {
-    document.title = `${place} · ${identity?.title || 'spexcode'}`
-  }, [place, identity?.title])
+    document.title = `${needsYou > 0 ? `(${needsYou}) ` : ''}${place} · ${identity?.title || 'spexcode'}`
+  }, [place, identity?.title, needsYou])
 
   const onShellKey = useCallback((event) => {
     // A palette is a true overlay. Escape closes it here; all other keys remain available to its input.
@@ -387,7 +403,7 @@ export default function Shell() {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} identity={identity} catalog={catalog} />
+        <SideBar page={page} identity={identity} catalog={catalog} needsYou={needsYou} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}

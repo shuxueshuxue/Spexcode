@@ -69,6 +69,9 @@ door navigates to the sessions document's archive overlay. Both are finding-surf
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
 separate gesture with its own section below, and it changes no address.
+When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
+keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
+well; the reveal is derived from `activeSessionId`, not a second selection state.
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim

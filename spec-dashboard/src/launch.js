@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { loadPlugins, loadSettings } from './data.js'
 import { apiUrl } from './project.js'
 
+const pendingSessions = new Map()
+export const pendingSessionFor = (id) => pendingSessions.get(id) || null
+
 // The dashboard's ONE session-launch CLIENT path, shared by every face that can start a worker — the desktop
 // console's New Session tab (SessionInterface.jsx) and the phone's composer (MobileApp.jsx). Launcher state,
 // preset discovery, and the raw create POST live here. The backend prompt boundary owns command expansion for
@@ -10,7 +13,8 @@ import { apiUrl } from './project.js'
 // launch a session: the one POST /api/sessions. A launcher SUBSUMES the harness ([[launcher-select]]):
 // send only the chosen launcher name; the backend derives harness from that profile. No launcher yet
 // (picker not loaded) means the backend uses its default. The per-attempt idempotency key makes a lost response
-// recoverable without changing the prompt body contract. Returns { ok, error? }.
+// recoverable without changing the prompt body contract. Returns the created session projection when the
+// backend publishes one, so the caller can open the document as soon as creation is acknowledged.
 export async function createSession(prompt, launcher) {
   try {
     const requestKey = globalThis.crypto?.randomUUID?.() || `session-create-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -19,7 +23,13 @@ export async function createSession(prompt, launcher) {
       body: JSON.stringify({ prompt, ...(launcher ? { launcher } : {}) }),
     })
     const body = await res.json().catch(() => null)
-    return { ok: res.ok, error: body?.error }
+    const result = { ok: res.ok, error: body?.error }
+    if (body?.id) {
+      pendingSessions.set(body.id, body)
+      result.id = body.id
+      result.session = body
+    }
+    return result
   } catch {
     return { ok: false }
   }

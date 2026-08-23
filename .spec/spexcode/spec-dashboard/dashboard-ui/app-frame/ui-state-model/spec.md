@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/SourceView.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/budgetContracts.test.mjs
 ---
 # ui-state-model
 
@@ -122,6 +123,11 @@ axis and stays thin on the short one — so chrome the inventory has never heard
 
 B() lives once, in the gate, mirroring this body. A state's budget is not stored per-route, because a
 per-route budget is a per-route excuse: the frame is uniform or it is not a frame.
+
+The executable source guard in `spec-dashboard/src/budgetContracts.test.mjs` keeps the theorem coupled to its
+two cheap, non-browser invariants: `B` remains the sole 3..5 model in the real Chromium gate, and the keep-alive
+pool's idle script budget remains `0.05s / 10s`. It is not a replacement for the browser readings; it prevents
+the gate's budget and the product's declared pool contract from drifting silently when the shell is refactored.
 
 ## what the count bought
 

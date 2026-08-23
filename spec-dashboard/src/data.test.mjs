@@ -23,22 +23,26 @@ test('single-layer frontier opens only the focused branch', () => {
   assert.equal(pos.a1x, undefined)
 })
 
-test('adding a deeper expansion only adds nodes and preserves existing coordinates', () => {
-  const before = layout(tree, new Set(['root', 'a', 'b']))
-  const after = layout(tree, new Set(['root', 'a', 'b', 'a1', 'a2', 'b1']))
+test('expanding the focused child adds a column without moving the existing columns', () => {
+  const before = layout(tree, new Set(['root', 'a']))
+  const after = layout(tree, new Set(['root', 'a', 'a1']))
   for (const id of Object.keys(before)) assert.deepEqual(after[id], before[id])
+  assert.deepEqual(after.a1, { x: 2 * X_GAP, y: before.a.y - Y_GAP / 2 })
+  assert.deepEqual(after.a2, { x: 2 * X_GAP, y: before.a.y + Y_GAP / 2 })
 })
 
-test('wide sibling child blocks reserve the next-layer total height', () => {
-  const tree = [
-    { id: 'root', parent: null }, { id: 'left', parent: 'root' }, { id: 'right', parent: 'root' },
-    { id: 'l1', parent: 'left' }, { id: 'l2', parent: 'left' }, { id: 'l3', parent: 'left' },
-    { id: 'r1', parent: 'right' }, { id: 'r2', parent: 'right' }, { id: 'r3', parent: 'right' },
-  ]
-  const pos = layout(tree, new Set(tree.map((node) => node.id)))
-  const left = tree.filter((node) => node.parent === 'left')
-  const right = tree.filter((node) => node.parent === 'right')
-  for (const a of left) for (const b of right) assert.ok(Math.abs(pos[a.id].y - pos[b.id].y) >= 50)
+test('switching the focused sibling leaves the parent column unchanged', () => {
+  const before = layout(tree, new Set(['root', 'a']))
+  const after = layout(tree, new Set(['root', 'b']))
+  for (const id of ['root', 'a', 'b']) assert.deepEqual(after[id], before[id])
+  assert.equal(after.b1.x, 2 * X_GAP)
+})
+
+test('each column is evenly spaced around its spine parent', () => {
+  const pos = layout(tree, new Set(['root', 'a', 'a1']))
+  assert.equal(pos.a2.y - pos.a1.y, Y_GAP)
+  assert.equal(pos.a1.y + pos.a2.y, 2 * pos.a.y)
+  assert.equal(pos.a1x.x, 3 * X_GAP)
 })
 
 test('every focus stop exposes exactly its ancestor spine and immediate children', () => {

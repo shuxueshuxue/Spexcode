@@ -32,9 +32,13 @@ test('all routed key owners use the one capture service', () => {
 
 test('typing guard reaches graph and shared list/player owners', () => {
   assert.match(service, /export function isTypingTarget/)
-  assert.match(graph, /isTypingTarget\(e\.target\)/)
-  assert.match(eventDetail, /isTypingTarget\(e\.target\)/)
-  assert.match(reviewShell, /isTypingTarget\(target\)/)
+  assert.match(service, /export function scopeOwnsEvent/)
+  assert.match(service, /scopeOwnsEvent\(event, allowTyping\) && handlerRef\.current\(event\)/)
+  assert.match(service, /allowTyping = false/)
+  assert.match(service, /scopeOwnsEvent\(event, allowTyping\)/)
+  assert.doesNotMatch(graph, /isTypingTarget/)
+  assert.doesNotMatch(eventDetail, /isTypingTarget/)
+  assert.doesNotMatch(reviewShell, /isTypingTarget/)
 })
 
 test('fixed chord display is complete while rebindable display follows live keys', () => {

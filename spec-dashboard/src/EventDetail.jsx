@@ -6,7 +6,7 @@ import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { addressHash, graphNodeAddress } from './address.js'
 import { DetailShell, ReviewState, SideSection, SideValue, usePopover } from './ReviewShell.jsx'
-import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
@@ -389,7 +389,7 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
   // The whole player is keyboard-driven, but its scope is registered through the shell service so its
   // capture listener cannot race the review list, Escape stack, or shell globals. Typing stays native.
   useKeyboardScope((e) => {
-    if (!hasVideo || isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return false
+    if (!hasVideo || e.metaKey || e.ctrlKey || e.altKey) return false
     const v = vid.current
     if (!v) return false
     if (e.key === ' ') { e.preventDefault(); togglePlay(); return true }

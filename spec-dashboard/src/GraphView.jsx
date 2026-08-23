@@ -17,7 +17,7 @@ import {
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
-import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
@@ -443,9 +443,6 @@ function GraphView({ param, query }) {
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return false
-      // The graph document may stay mounted while another route is showing. A focused composer/search field
-      // still owns every unmodified key, including the comma that toggles Settings on the board.
-      if (isTypingTarget(e.target)) return false
       // A focused native control owns its activation keys: Enter/Space on a button, link, or form field is
       // that control's click — tabbing to the HUD `?` and pressing Enter must equal clicking it — so the
       // board vocabulary (board.info's Enter alias included) steps aside and lets the default action fire.

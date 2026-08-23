@@ -24,3 +24,12 @@ test('browser modifier variants do not steal the arrows', () => {
   assert.equal(resolveSessionShortcut(rows, 'parent', key('ArrowDown', { ctrlKey: true })), null)
   assert.equal(resolveSessionShortcut(rows, 'parent', { key: 'ArrowDown', altKey: false }), null)
 })
+
+test('physical arrow code survives an Option dead-key value', () => {
+  assert.deepEqual(resolveSessionShortcut(rows, 'parent', {
+    key: 'Dead', code: 'ArrowDown', altKey: true, ctrlKey: false, metaKey: false,
+  }), { type: 'move', id: 'next' })
+  assert.deepEqual(resolveSessionShortcut(rows, 'parent', {
+    key: 'Dead', code: 'ArrowDown', altKey: true, shiftKey: true, ctrlKey: false, metaKey: false,
+  }), { type: 'expand', id: 'parent' })
+})

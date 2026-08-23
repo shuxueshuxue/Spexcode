@@ -37,6 +37,11 @@ The full TypeScript compiler is deliberately not runtime cargo: it remains a dev
 SpexCode's own typecheck and JS anchors, while an adopter's optional JS-anchor extractor resolves that
 adopter's TypeScript and fails loud when it is absent ([[code-anchor]]).
 
+**The package-build invariant is shared by every runtime leaf.** A package emits production modules from `src`
+to `dist` with NodeNext resolution and declarations; tests remain development-only; consumers receive the
+compiled JavaScript through the declared package dependency, never a source-relative import or consumer-side
+TypeScript build. The `release-build-*` children record only their package-specific config and output delta.
+
 **L0 is the adoption floor, not a daemon fallback.** `spex spec lint`, `spex graph`, `spex materialize`,
 `spex init`, and `spex guide` need only Node and the compiled default CLI closure, so a clean install
 after `npm install --omit=optional` can start and use the spec/code asset without Hono or a native addon.

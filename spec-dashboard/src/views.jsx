@@ -51,7 +51,8 @@ function lazyRetry(importer) {
 const GraphView = lazyRetry(() => import('./GraphView.jsx'))
 const SpecView = lazyRetry(() => import('./SpecView.jsx'))
 const FileView = lazyRetry(() => import('./FileView.jsx'))
-const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
+const importSessionsView = () => import('./SessionsView.jsx')
+const SessionsView = lazyRetry(importSessionsView)
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
@@ -111,6 +112,7 @@ export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
 registerPlugin(createSettingsViewPlugin(SettingsView))
 
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
+export const preloadView = (page) => page === 'sessions' ? importSessionsView() : Promise.resolve()
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
 export const iconFor = (page) => viewRegistry.get(page)?.icon || null
 export const isDocument = (page, param = null) => {

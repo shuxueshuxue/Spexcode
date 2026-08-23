@@ -504,15 +504,12 @@ status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
 over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), plus the
 fourth **archive** zone for closed records, a dim header leading each — and within a zone the **newest** session
-sits on top. One `sessionDisplayState` projection drives both this bucket and the row glyph: archived wins first;
-otherwise offline liveness (or an explicit offline status) wins over lifecycle and maps the row's effective status
-to `offline`; the two legislated exceptions are `queued`, which has not launched and remains runnable, and
-`archive`, which is a closed zone rendered with the muted offline mark (`○`). Online lifecycle then selects
-needs-you versus running. A session whose process died while it was
-`asking`/`review`/`error` keeps that pre-death lifecycle in the record, yet it cannot act until relaunched, so it
-sorts to **offline** and displays the offline glyph rather than wrongly sitting under *needs you*; a merely
-booting session (`starting`/`queued`) stays under *running*. A parent-child display edge is retained only within
-the same derived zone, so an offline child becomes an offline root instead of following an online parent. The
+sits on top. One `sessionDisplayState` projection drives both this bucket and the row glyph: the package
+lifecycle is the source of the effective status; liveness is an independent fact and never masks `error`,
+`asking`, `review`, or `done`. Those authored states stay in **needs-you** after the process dies. **running**
+contains `working`/`parked`/`starting`/`queued`/`idle`, explicit `offline`/`retired` is **offline**, and `archive`
+is a closed zone rendered with the muted offline mark (`○`). A parent-child display edge is retained only within
+the same derived lifecycle zone, so a child with a different lifecycle bucket becomes a root in that bucket. The
 **offline zone rests folded behind its own header** — the ONE disclosure for session history. Its header is a
 single row with the COUNT badge first and the `OFFLINE` label second; it contains no `>`/chevron/caret/`▸`
 direction symbol. Retired and

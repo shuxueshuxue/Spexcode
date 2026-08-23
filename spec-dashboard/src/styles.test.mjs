@@ -136,6 +136,7 @@ test('the status bar owns a flex row and cannot cover the content viewport', () 
 
 test('the dock toggle reads as frame chrome, not a sixth route tab', () => {
   assert.match(css, /\.rail-panel-toggle\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px;[^}]*color:\s*var\(--muted\);/s)
+  assert.match(css, /\.rail-panel-toggle\s*\{[^}]*padding:\s*0;/s)
   assert.match(css, /\.rail-panel-toggle\s+svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px;/s)
   assert.match(css, /\.rail-panel-toggle::after\s*\{[^}]*border-bottom:\s*1px solid var\(--edge\);/s)
 })

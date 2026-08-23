@@ -665,7 +665,7 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
   text-decoration: none;
 }
 .rail-panel-toggle {
-  width: 20px; height: 20px; margin-bottom: var(--space-2); color: var(--muted); background: transparent;
+  width: 20px; height: 20px; margin-bottom: var(--space-2); padding: 0; color: var(--muted); background: transparent;
 }
 .rail-panel-toggle::after {
   content: ''; position: absolute; left: 5px; right: 5px; bottom: -5px; border-bottom: 1px solid var(--edge);

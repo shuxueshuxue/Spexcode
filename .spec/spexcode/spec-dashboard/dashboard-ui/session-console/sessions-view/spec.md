@@ -11,6 +11,11 @@ related:
 ---
 # sessions-view
 
+The session document keeps one tab identity across its internal faces. Opening diff, terminal, or conversation
+changes only the `surface` query with URL replace; the tab count and the session label remain stable. The session
+tab is named by its headline and status dot, not by a face suffix. This restores the long-standing switch path
+the human described: "一个 session 的视图可以在 terminal 和 conversation 视图之间切换".
+
 This is the route/view adapter child of [[session-console]], not a second session surface. `session-console`
 owns the interface behavior; this child owns only how the routed view derives its selection and receives workspace
 compose handoffs.

@@ -36,5 +36,6 @@ origin remote can provide an honest URL. Only an unmerged head whose merge-base 
 there are no branch changes. The UI derives this distinction from the backend's git ancestry result; it never
 guesses from `files.length` or shortens the only identities a reader is given.
 
-The diff face is a tab-shaped session route, uses the existing i18n and icon vocabulary, and never creates a second
-navigation or transport mechanism. Terminal and conversation remain the other two session faces.
+The diff face is a surface of the session object tab, uses the existing i18n and icon vocabulary, and never creates
+a second navigation or transport mechanism. The shell's conversation|terminal|diff switcher replaces the URL while
+the tab remains `#/sessions/<id>`. Terminal and conversation remain the other two session faces.

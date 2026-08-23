@@ -119,6 +119,20 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
 })
 
+test('the status bar owns a flex row and cannot cover the content viewport', () => {
+  assert.match(css, /\.backend-frame\s*\{[^}]*height:\s*100vh;[^}]*min-height:\s*0;/s)
+  assert.match(css, /\.app-shell\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/s)
+  assert.match(css, /\.app\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*display:\s*flex;/s)
+  assert.match(css, /\.app-content-column\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*flex-direction:\s*column;/s)
+  assert.match(css, /\.app-content-row\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*display:\s*flex;/s)
+  const statusRule = css.match(/\.statusbar\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(statusRule, /flex:\s*0 0 var\(--line-status\)/)
+  assert.match(statusRule, /border-top:\s*1px solid var\(--line\)/)
+  assert.doesNotMatch(statusRule, /position:\s*(?:absolute|fixed)/)
+  assert.match(css, /\.side-rail\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
+  assert.match(css, /\.dock\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)
+})
+
 test('the chrome bands the budget does not allow are gone from the sheet', () => {
   // [[ui-state-model]]'s band budget is the structural gate; these are the strips it named. Each one is
   // removed at the source — merged into the band that already existed, folded into scrolling content, or

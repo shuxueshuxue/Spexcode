@@ -108,6 +108,12 @@ death: nothing is retired, nothing is re-pinned, and both the launch and resume 
 boundary may hand a client an endpoint it has not proven live; a printed socket that cannot be connected is
 the same defect as a wrong one.
 
+Backend death is a separate runtime incident from generation death and must remain diagnosable. The supervisor
+records each backend child termination with its exit code or signal, the relevant supervisor action, and a
+bounded pointer to the backend stdout/stderr and host OOM evidence. A later health-check restart may restore
+service, but it must not erase that termination record or present a restart as a clean exit. Missing evidence is
+reported as `unknown`, never inferred from a port probe or a readiness warning.
+
 An operation may wait only for the finite publication interval in which the same endpoint has not yet assembled
 its PID, detached receipt, and socket proof. It retries a complete fresh proof under one bounded operation budget;
 it never sends native work from an incomplete observation or carries any partial proof into the next attempt. Once

@@ -76,17 +76,18 @@ scenarios:
   - name: click-does-not-pan-keyboard-does
     tags: [frontend-e2e, desktop]
     description: >-
-      Open the dashboard and read the React Flow viewport transform (the `.react-flow__viewport`
-      translate). CLICK a node other than the focused one: it becomes focused and drills open, but the
-      viewport transform is UNCHANGED — the board does not pan. Then press an arrow key (or h/j/k/l) to
-      move focus by one step: now the viewport transform DOES change, flat-panning to recentre the new
-      focus. Screenshot the board after the click (still framed as before) and file with
+      Open the dashboard and read the clicked tile's screen centre and the React Flow viewport transform
+      (the `.react-flow__viewport` translate). CLICK a node other than the focused one: it becomes focused and
+      drills open; after the frontier settles, the clicked tile's screen centre remains unchanged while the
+      viewport absorbs the layout delta. Then press an arrow key (or h/j/k/l) to move focus by one step: now
+      the viewport transform DOES change, flat-panning to recentre the new focus. Screenshot the board after
+      the click and file with
       `spex yatsu eval keyboard-nav --image <png> --pass`.
     expected: >-
-      A mouse click re-focuses and expands the clicked node but the camera stays put (viewport transform
-      unchanged) — nothing already on screen moves, because node positions are a fixed structural
-      embedding. A keyboard focus move (arrow/vim) DOES pan the camera to recentre the new focus. The
-      camera follows the keyboard, not the mouse.
+      A mouse click re-focuses and expands the clicked node. If its frontier changes the viewport transform may
+      change, but the clicked tile's screen centre is stable because the camera absorbs the graph-layout delta.
+      A keyboard focus move (arrow/vim) DOES pan the camera to recentre the new focus. The camera follows the
+      keyboard, while mouse focus keeps the world stable under the pointer.
     code:
       - spec-dashboard/src/Shell.jsx
       - spec-dashboard/src/GraphView.jsx

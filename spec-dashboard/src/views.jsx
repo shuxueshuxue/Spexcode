@@ -51,7 +51,12 @@ function lazyRetry(importer) {
 const GraphView = lazyRetry(() => import('./GraphView.jsx'))
 const SpecView = lazyRetry(() => import('./SpecView.jsx'))
 const FileView = lazyRetry(() => import('./FileView.jsx'))
-const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
+// Keep the session console's chunk warm before a graph action navigates into it. The graph is the first
+// cold face, and waiting for the lazy boundary only after a click leaves the mounted view pool showing its
+// loading fallback during that route transition. Preloading is still code-split; it only moves the fetch to
+// idle time while the reader is on the graph.
+const importSessionsView = () => import('./SessionsView.jsx')
+const SessionsView = lazyRetry(importSessionsView)
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
@@ -77,15 +82,17 @@ function IssuesView({ param, query }) {
 function SettingsView() { return <Settings /> }
 
 // `surface` selects the host chrome; `document(page, param)` marks what the workspace working set may hold.
-// Evals and Issues are resident workspace destinations: their top-level tab is one stable address, while
-// a scenario or issue detail is route state shown inside that tab. This keeps the Spec/Session/File working
-// set visible while a finding is focused and prevents a detail from replacing an unrelated document slot.
+// Spec, Evals, and Issues are resident workspace destinations: each top-level tab is one stable address,
+// while an object/detail selector is route state shown inside that tab. This keeps the whole working set
+// visible while a reading or finding is focused and prevents a detail from replacing an unrelated slot.
 // Graph remains an addressable legacy view, not a top-level tab.
 export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
   // sends anyone through the rail or a tab close.
   graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
-  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'graph', className: 'view-spec' },
+  // Spec detail links remain canonical `#/spec/<id>` addresses; residency gives them one stable Spec tab
+  // identity without changing the SpecView/FileView document boundary.
+  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, resident: true, icon: 'graph', className: 'view-spec' },
   file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
@@ -107,6 +114,7 @@ export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
 registerPlugin(createSettingsViewPlugin(SettingsView))
 
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
+export const preloadView = (page) => page === 'sessions' ? importSessionsView() : Promise.resolve()
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
 export const iconFor = (page) => viewRegistry.get(page)?.icon || null
 export const isDocument = (page, param = null) => {

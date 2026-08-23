@@ -10,7 +10,7 @@ import { useRoute, navigate, routeHash } from './route.js'
 import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { viewFor } from './views.jsx'
+import { preloadView, viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
@@ -497,6 +497,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const route = useRoute()
   const { page, param, query } = routeOverride || route
   const { specs, sessions, identity, graphOnly } = useBoard()
+  useEffect(() => {
+    if (page === 'graph' && !graphOnly) void preloadView('sessions')
+  }, [page, graphOnly])
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
   const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])

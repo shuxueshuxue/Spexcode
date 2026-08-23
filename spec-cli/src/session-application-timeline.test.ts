@@ -73,7 +73,7 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     const result = await sendText(id, 'legacy delivery marker')
-    assert.deepEqual(result, { ok: true })
+    assert.deepEqual(result, { ok: true, delivery: 'accepted' })
     await new Promise(resolve => setTimeout(resolve, 20))
     assert.match(received.join(''), /legacy delivery marker/)
     assert.deepEqual(app.protocol.listPending(id), [])

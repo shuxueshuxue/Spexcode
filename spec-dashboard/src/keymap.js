@@ -34,6 +34,10 @@ export const ACT = [
   { id: 'shell.newSession',  keys: ['Alt+KeyN'],   rebind: false, desc: 'legend.shell.newSession' },
   { id: 'shell.evals',       keys: ['Alt+KeyF'],   rebind: false, desc: 'legend.shell.evals' },
   { id: 'shell.search',      keys: ['Alt+Slash'],  rebind: false, desc: 'legend.shell.search' },
+  { id: 'shell.sessionPrevious', keys: ['Alt+ArrowUp'], rebind: false, desc: 'legend.shell.sessionPrevious' },
+  { id: 'shell.sessionNext',     keys: ['Alt+ArrowDown'], rebind: false, desc: 'legend.shell.sessionNext' },
+  { id: 'shell.sessionExpand',   keys: ['Alt+Shift+ArrowDown'], rebind: false, desc: 'legend.shell.sessionExpand' },
+  { id: 'shell.sessionCollapse', keys: ['Alt+Shift+ArrowUp'], rebind: false, desc: 'legend.shell.sessionCollapse' },
   // shell commands — fixed Alt+Shift chords keep Ctrl/Meta browser accelerators untouched.
   { id: 'shell.dockToggle',   keys: ['Alt+Shift+KeyE'],          rebind: false, desc: 'legend.shell.dockToggle' },
   { id: 'shell.dockMode',     keys: ['Alt+Shift+KeyM'],          rebind: false, desc: 'legend.shell.dockMode' },

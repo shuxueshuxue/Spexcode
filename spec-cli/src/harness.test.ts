@@ -2391,7 +2391,7 @@ test('writeCodexTrust strips ALL prior trust for the project (bare + old-format)
 
 // A fake rendezvous daemon with Claude's one-connection behavior. `kickFirst` drops one poke before its
 // write completes; retrying the same timeline mid must be harmless.
-function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean } = {}) {
+function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean; reject?: boolean } = {}) {
   const replies: string[] = []
   let conns = 0
   let prev: import('node:net').Socket | undefined
@@ -2410,7 +2410,9 @@ function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean 
         const line = buf.slice(0, nl)
         buf = buf.slice(nl + 1)
         const m = JSON.parse(line) as { type?: string; text?: string }
+        if (opts.reject) { c.write('{"type":"reply-rejected"}\n'); continue }
         if (m.type === 'reply') replies.push(m.text ?? '')
+        if (m.type === 'repaint') c.write('{"type":"repaint-done"}\n')
       }
     })
   })
@@ -2424,13 +2426,13 @@ function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean 
   }
 }
 
-test('deliverViaRendezvous: writes one idempotent poke without a receipt barrier', async () => {
+test('deliverViaRendezvous: repaint-done confirms parse, one reply and one connection', async () => {
   const id = `unit-rvd-ok-${process.pid}-${Date.now()}`
   const d = fakeRvDaemon(id)
   await d.listen()
   try {
     const r = await deliverViaRendezvous(id, 'hello 多行\nsecond line', 'mid-ok')
-    assert.equal(r.ok, true)
+    assert.equal(r.ok, true, JSON.stringify(r))
     await new Promise((resolve) => setTimeout(resolve, 10))
     assert.deepEqual(d.replies, ['hello 多行\nsecond line'])
     assert.equal(d.connCount(), 1)
@@ -2450,14 +2452,26 @@ test('deliverViaRendezvous: retries a failed poke with the same message id', asy
   } finally { await d.close() }
 })
 
-test('deliverViaRendezvous: a listener need not answer for a poke write to succeed', async () => {
+test('deliverViaRendezvous: a silent-but-open listener is busy, not lost', async () => {
   const id = `unit-rvd-wall-${process.pid}-${Date.now()}`
   const d = fakeRvDaemon(id, { silent: true })
   await d.listen()
   try {
-    const r = await deliverViaRendezvous(id, 'busy claude')
+    const r = await deliverViaRendezvous(id, 'busy claude', undefined, 100)
     assert.equal(r.ok, true)
     assert.equal(d.connCount(), 1, 'wall expiry is ok, never a kick retry')
+  } finally { await d.close() }
+})
+
+test('deliverViaRendezvous: daemon rejection fails loud without retry', async () => {
+  const id = `unit-rvd-reject-${process.pid}-${Date.now()}`
+  const d = fakeRvDaemon(id, { reject: true })
+  await d.listen()
+  try {
+    const r = await deliverViaRendezvous(id, 'rejected prompt')
+    assert.equal(r.ok, false)
+    assert.match(r.error ?? '', /rejected/)
+    assert.equal(d.connCount(), 1)
   } finally { await d.close() }
 })
 
@@ -2488,7 +2502,11 @@ test('deliverViaClaudeRendezvous: a fork roster entry gets auth before the reply
     while ((nl = pending.indexOf('\n')) >= 0) {
       const line = pending.slice(0, nl)
       pending = pending.slice(nl + 1)
-      if (line) frames.push(JSON.parse(line))
+      if (line) {
+        const frame = JSON.parse(line)
+        frames.push(frame)
+        if (frame.type === 'repaint') socket.write('{"type":"repaint-done"}\n')
+      }
     }
   }))
   await new Promise<void>((resolve) => server.listen(sock, resolve))
@@ -2498,7 +2516,7 @@ test('deliverViaClaudeRendezvous: a fork roster entry gets auth before the reply
     const result = await deliverViaClaudeRendezvous(source, 'fork prompt', 'fork-mid')
     assert.equal(result.ok, true, JSON.stringify(result))
     await new Promise((resolve) => setTimeout(resolve, 10))
-    assert.deepEqual(frames.map((frame) => frame.type ?? frame.role), ['controller', 'reply'])
+    assert.deepEqual(frames.filter((frame) => frame.type !== 'repaint').map((frame) => frame.type ?? frame.role), ['controller', 'reply'])
     assert.equal(frames[0].auth, auth)
     assert.equal(frames[1].text, 'fork prompt')
   } finally {
@@ -2529,7 +2547,11 @@ test('deliverViaClaudeRendezvous: a moved stamp selects its exact successor befo
     while ((nl = pending.indexOf('\n')) >= 0) {
       const line = pending.slice(0, nl)
       pending = pending.slice(nl + 1)
-      if (line) frames.push(JSON.parse(line))
+      if (line) {
+        const frame = JSON.parse(line)
+        frames.push(frame)
+        if (frame.type === 'repaint') socket.write('{"type":"repaint-done"}\n')
+      }
     }
   }))
   await new Promise<void>((resolve) => server.listen(sock, resolve))
@@ -2544,7 +2566,7 @@ test('deliverViaClaudeRendezvous: a moved stamp selects its exact successor befo
     const result = await deliverViaClaudeRendezvous(source, 'moved prompt', 'moved-mid', runtimeRoot())
     assert.equal(result.ok, true, JSON.stringify(result))
     await new Promise((resolve) => setTimeout(resolve, 10))
-    assert.deepEqual(frames.map((frame) => frame.type ?? frame.role), ['controller', 'reply'])
+    assert.deepEqual(frames.filter((frame) => frame.type !== 'repaint').map((frame) => frame.type ?? frame.role), ['controller', 'reply'])
     assert.equal(frames[0].auth, auth)
     assert.equal(frames[1].text, 'moved prompt')
   } finally {
@@ -2574,7 +2596,11 @@ test('deliverViaClaudeRendezvous: an unreachable moved successor falls back to t
     while ((nl = pending.indexOf('\n')) >= 0) {
       const line = pending.slice(0, nl)
       pending = pending.slice(nl + 1)
-      if (line) sourceFrames.push(JSON.parse(line))
+      if (line) {
+        const frame = JSON.parse(line)
+        sourceFrames.push(frame)
+        if (frame.type === 'repaint') socket.write('{"type":"repaint-done"}\n')
+      }
     }
   }))
   const previousConfig = process.env.CLAUDE_CONFIG_DIR
@@ -2594,7 +2620,7 @@ test('deliverViaClaudeRendezvous: an unreachable moved successor falls back to t
     const result = await deliverViaClaudeRendezvous(source, 'resumed source prompt', 'source-mid', runtimeRoot())
     assert.equal(result.ok, true, JSON.stringify(result))
     await new Promise((resolve) => setTimeout(resolve, 10))
-    assert.deepEqual(sourceFrames, [{ type: 'reply', text: 'resumed source prompt', mid: 'source-mid' }])
+    assert.deepEqual(sourceFrames.filter((frame) => frame.type !== 'repaint'), [{ type: 'reply', text: 'resumed source prompt', mid: 'source-mid' }])
   } finally {
     if (previousConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR
     else process.env.CLAUDE_CONFIG_DIR = previousConfig

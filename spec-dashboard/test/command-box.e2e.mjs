@@ -30,8 +30,15 @@ const started = Date.now()
 const step = (name) => events.push({ at: Date.now() - started, step: name })
 const inputs = []
 let failNext = false
+let queueNext = false
 let sessionLiveness = 'online'
 let resumeFails = true
+
+const assertCommandBody = (body, text) => {
+  assert.equal(body.kind, 'command')
+  assert.equal(body.text, text)
+  assert.match(body.deliveryId, /^[0-9a-f]{8}-[0-9a-f]{4}-[4-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+}
 
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 const context = await browser.newContext({
@@ -66,11 +73,19 @@ await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
     }) })
     return
   }
+  if (queueNext) {
+    queueNext = false
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true,
+      delivery: 'queued',
+    }) })
+    return
+  }
   if (failNext) {
     await new Promise((resolve) => setTimeout(resolve, 120))
     await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: append unavailable' }) })
   }
-  else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ outcome: 'accepted' }) })
+  else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, outcome: 'accepted', delivery: 'accepted' }) })
 })
 await page.route(`**/api/sessions/${SESSION}/resume`, async (route) => {
   if (resumeFails) {
@@ -198,7 +213,7 @@ assert.equal(await input.inputValue(), `@${offlineReference.id} `)
 await input.fill(`@${SESSION} inspect the focused work`)
 const mentionSubmission = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
 await page.locator('.si-command-send').click()
-assert.deepEqual((await mentionSubmission).postDataJSON(), { kind: 'command', text: `@${SESSION} inspect the focused work` })
+assertCommandBody((await mentionSubmission).postDataJSON(), `@${SESSION} inspect the focused work`)
 await page.locator('.si-command-box .si-action-outcome.delivered').waitFor({ state: 'visible' })
 await command.waitFor({ state: 'hidden' })
 await page.keyboard.press('Alt+i')
@@ -218,7 +233,7 @@ assert.match(newToken, /^@new:[\p{L}\p{N}_.-]+ $/u)
 const newSubmission = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
 await input.fill(`${newToken}delegate the focused work`)
 await page.locator('.si-command-send').click()
-assert.deepEqual((await newSubmission).postDataJSON(), { kind: 'command', text: `${newToken}delegate the focused work` })
+assertCommandBody((await newSubmission).postDataJSON(), `${newToken}delegate the focused work`)
 await page.locator('.tn-notice.success', { hasText: 'child-session' }).waitFor({ state: 'visible' })
 await command.waitFor({ state: 'hidden' })
 await page.keyboard.press('Alt+i')
@@ -273,6 +288,30 @@ await input.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydo
 })))
 assert.equal(inputs.length, beforeIme)
 
+queueNext = true
+const queuedRequest = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
+await page.locator('.si-command-send').click()
+await page.locator('.si-command-box .si-action-outcome.failed').waitFor({ state: 'visible' })
+assert.match((await page.locator('.si-command-box .si-action-outcome.failed').textContent()) || '', /waiting for the terminal transport/i)
+assert.equal(await input.inputValue(), draft)
+const queuedBody = (await queuedRequest).postDataJSON()
+assertCommandBody(queuedBody, expandedDraft)
+
+const queuedRetryRequest = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
+await page.locator('.si-command-send').click()
+await page.locator('.si-command-box .si-action-outcome.delivered').waitFor({ state: 'visible' })
+const queuedRetryBody = (await queuedRetryRequest).postDataJSON()
+assertCommandBody(queuedRetryBody, expandedDraft)
+assert.equal(queuedRetryBody.deliveryId, queuedBody.deliveryId)
+assert.equal(await input.inputValue(), '')
+await command.waitFor({ state: 'hidden' })
+await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
+await page.keyboard.press('Alt+i')
+await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
+await input.fill(draft)
+await page.screenshot({ path: join(OUT, 'command-box-queued-retry.png'), fullPage: true })
+step('queued Command Box delivery keeps the draft and retries the same delivery id')
+
 failNext = true
 await page.locator('.si-command-send').click()
 await page.locator('.si-command-box .si-action-outcome.sending').waitFor({ state: 'visible' })
@@ -292,7 +331,7 @@ assert.equal(await input.inputValue(), '')
 await page.screenshot({ path: join(OUT, 'command-box-delivered.png'), fullPage: true })
 await command.waitFor({ state: 'hidden' })
 await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
-assert.deepEqual(inputs.at(-1), { kind: 'command', text: expandedDraft })
+assertCommandBody(inputs.at(-1), expandedDraft)
 step('successful append-backed send clears, closes, and returns TUI focus')
 
 sessionLiveness = 'offline'

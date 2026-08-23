@@ -76,6 +76,18 @@ scenarios:
       toggles its own diff, while the normal down gesture reveals one next entry after the current open
       entry has been consumed, at desktop and 390px. The filed reading carries the interaction video and
       a pass verdict.
+  - name: spec-body-standard-markdown
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open a spec document containing ordinary Markdown beyond tables: ATX headings at multiple levels,
+      a blockquote, a standard HTTPS link, a remote image, and inline/display KaTeX. Read it at desktop and
+      a narrow desktop viewport. The headings retain their authored levels, the quote remains a quote, the
+      link is a real anchor, the image decodes and stays within the prose column, and both formulas render.
+      File one screenshot per viewport with `spex eval add node-popup --scenario spec-body-standard-markdown`.
+    expected: >-
+      SpecBody exposes h2/h3 (and other authored ATX levels) rather than flattening every heading to h4;
+      blockquotes, HTTPS links, bounded images, and inline/display math are visible in place. Every emitted
+      block keeps its data-l0/data-l1 provenance, and the document has no horizontal viewport overflow.
 ---
 # eval.md — node-popup
 

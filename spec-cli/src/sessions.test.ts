@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -37,36 +37,32 @@ test('canonical delivery retry reads the SQLite queue instead of legacy pending.
   assert.equal(sessionHasPendingDelivery('canonical-empty', empty), false)
 })
 
-test('Command Box delivery can report durable append separately from native handoff', serial, async () => {
-  const previousHome = process.env.SPEXCODE_HOME
-  const originalTransport = claudeHarness.deliveryTransport
-  const originalDeliver = claudeHarness.deliver
-  const home = mkdtempSync(join(tmpdir(), 'spex-command-delivery-pending-'))
-  const id = `command-delivery-pending-${process.pid}`
-  process.env.SPEXCODE_HOME = home
-  try {
-    mkdirSync(sessionStoreDir(id), { recursive: true })
-    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-      session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: 'command-box', title: '', name: '', parent: '',
-      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: id,
-      stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
-    }, null, 2)}\n`)
-    claudeHarness.deliveryTransport = async () => ({ kind: 'unproven' })
-    claudeHarness.deliver = async () => ({ ok: false, error: 'fixture native handoff refused' })
-    const accepted = await sendText(id, 'command box prompt', undefined, { requireDelivery: true })
-    assert.deepEqual(accepted, {
-      ok: false,
-      deliveryPending: true,
-      error: `prompt appended to session ${id}, but native terminal delivery is still pending`,
-    })
-    assert.equal(sessionHasPendingDelivery(id), true, 'durable queue debt remains for retry')
-  } finally {
-    claudeHarness.deliveryTransport = originalTransport
-    claudeHarness.deliver = originalDeliver
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
-    rmSync(home, { recursive: true, force: true })
-  }
+test('canonical delivery retry drops a record whose protocol address was retired', () => {
+  const missing = { protocol: { listPending: () => { const error = new Error('unknown protocol address: legacy-id'); (error as any).code = 'PROTOCOL_SESSION_UNKNOWN'; throw error } } } as any
+  assert.equal(sessionHasPendingDelivery('legacy-id', missing), false)
+})
+
+test('canonical delivery retry waits for a runtime binding instead of polling an unbound queue', () => {
+  let reads = 0
+  const unbound = {
+    resolveRuntime: () => null,
+    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+  } as any
+  const bound = {
+    resolveRuntime: () => ({ status: 'bound' }),
+    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+  } as any
+  assert.equal(sessionHasPendingDelivery('unbound', unbound), false)
+  assert.equal(sessionHasPendingDelivery('bound', bound), true)
+  assert.equal(reads, 1)
+})
+
+test('a stale canonical active row cannot resurrect a stopped or waiting record', () => {
+  const canonical = { status: 'active', proposal: null, note: null, parentSessionId: null }
+  const archived = { status: 'asking' as const, stopped: true, archived: true, proposal: 'close' as const, note: 'needs review', parent: null }
+  const waiting = { status: 'awaiting' as const, stopped: false, archived: false, proposal: 'close' as const, note: 'ready', parent: null }
+  assert.equal(canonicalRecordProjection(archived, canonical).status, 'asking')
+  assert.equal(canonicalRecordProjection(waiting, canonical).status, 'awaiting')
 })
 
 test('session diff commit links preserve the full forge repository and commit identity', () => {
@@ -342,7 +338,7 @@ test('launch transport keeps a launch.sh path with spaces and quotes as one shel
   }
 })
 
-function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: string): void {
+function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: string, overrides: Record<string, unknown> = {}): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
@@ -351,6 +347,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',
+    ...overrides,
   }, null, 2)}\n`)
 }
 
@@ -846,6 +843,59 @@ test('successful resume publishes a capacity-queued record as idle after readine
     process.env.PATH = previousPath
     rmSync(home, { recursive: true, force: true })
     assertLiveSessionsUnchanged(liveBefore, 'queued resume state fixture')
+  }
+})
+
+test('successful resume clears a prior terminal error instead of leaving an online worker marked error', serial, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchCmd = codexHeadlessHarness.launchCmd
+  const originalLaunchReady = (codexHeadlessHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-error-resume-state-'))
+  const project = join(home, 'project'); mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  writeFileSync(join(project, 'README.md'), 'fixture\n')
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  process.env.SPEXCODE_HOME = home
+  const id = `error-resume-state-${process.pid}`
+  const commandPath = join(home, 'tmux-command')
+  const launchPidPath = join(home, 'launch.pid')
+  const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, commandPath, launchPidPath)
+  process.env.PATH = `${bin}:${previousPath}`
+  const helper = join(home, 'helper.sh')
+  writeFileSync(helper, '#!/usr/bin/env bash\nexec sleep 30\n'); chmodSync(helper, 0o755)
+  writeResumeFixtureRecord(id, project, helper, {
+    status: 'error', stopped: true, note: 'queued launch readiness failed: previous attempt',
+  })
+  try {
+    codexHeadlessHarness.launchCmd = () => helper
+    ;(codexHeadlessHarness as any).launchReady = async () => ({
+      proof: { kind: 'error-resume-ready' },
+      validate: async () => true,
+    })
+    assert.deepEqual(await resumeSession(id), { ok: true })
+    const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'idle', 'a successful resume returns an errored record to the resting live lifecycle')
+    assert.equal(stored.note, '', 'the prior terminal error is no longer current after successful resume')
+    assert.equal(stored.stopped, false)
+    const publicRow = (await listSessions(true)).find((row) => row.id === id)
+    assert.ok(publicRow)
+    assert.equal(publicRow.lifecycle, 'idle')
+    assert.notEqual(publicRow.status, 'error')
+  } finally {
+    if (existsSync(launchPidPath)) {
+      const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    codexHeadlessHarness.launchCmd = originalLaunchCmd
+    ;(codexHeadlessHarness as any).launchReady = originalLaunchReady
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'error resume state fixture')
   }
 })
 

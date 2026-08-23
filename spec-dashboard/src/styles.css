@@ -1097,10 +1097,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-body li { margin: 2px 0; }
 .doc-body code { font-size: var(--type-control); background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: var(--radius); }
 .doc-body strong { color: var(--ink2); }
-.doc-h { font-size: var(--type-control); color: var(--ink2); font-weight: var(--weight-semibold); margin: 14px 0 6px; }
+.doc-h { color: var(--ink2); font-weight: var(--weight-semibold); margin: 14px 0 6px; line-height: var(--leading-tight); }
+.doc-h1 { font-size: var(--type-title); }
+.doc-h2 { font-size: var(--type-subtitle); }
+.doc-h3 { font-size: var(--type-body); }
+.doc-h4, .doc-h5, .doc-h6 { font-size: var(--type-control); }
 .doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: var(--radius); overflow-x: auto; font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
+.doc-external { text-decoration: underline; text-underline-offset: 2px; }
+.doc-quote { margin: 0 0 10px; padding: 4px 12px; color: var(--muted); border-left: 2px solid var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
+.doc-quote p { margin: 0; }
+.doc-image { display: block; max-width: 100%; height: auto; margin: 6px 0; border-radius: var(--radius); }
+.doc-math, .doc-math-block { overflow-x: auto; }
+.doc-math-block { margin: 8px 0; padding: 2px 0; }
+.doc-math-error { color: var(--red); white-space: pre-wrap; }
 /* GFM tables in a spec body — compact, bordered, header-tinted; scrolls on its own if too wide. */
 .doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: var(--type-control); display: block; overflow-x: auto; }
 .doc-table th, .doc-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
@@ -3039,9 +3050,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
 
-/* [[transient-notices]]: fixed feedback belongs above page content, but yields to menus and modals. */
+/* [[transient-notices]]: fixed feedback belongs at the top-right, above page content, but yields to menus and modals. */
 .tn-viewport {
-  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 50;
+  position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); bottom: auto; z-index: 50;
   display: flex; flex-direction: column; gap: 6px; width: min(400px, calc(100vw - 32px)); max-block-size: min(50dvh, 32rem);
   overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: thin;
 }
@@ -3072,7 +3083,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @keyframes tn-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tn-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 640px) {
-  .tn-viewport { right: max(10px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); }
+  .tn-viewport { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); bottom: auto; width: min(440px, calc(100vw - 20px)); }
 }
 @media (prefers-reduced-motion: reduce) { .tn-notice, .tn-progress { animation: none; } .tn-progress { transform: scaleX(1); } }
 
@@ -3338,6 +3349,32 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-editor { min-height:80px; max-height:58vh; overflow:auto; }
 .diff-editor .cm-line { cursor:pointer; }
 .diff-editor .cm-line:hover { background:color-mix(in srgb, var(--blue) 14%, transparent); }
+.diff-review-body { display:grid; grid-template-columns:minmax(180px, 240px) minmax(0, 1fr); min-height:0; }
+.diff-file-panel { border-right:1px solid var(--line); overflow:auto; background:color-mix(in srgb, var(--line) 12%, var(--paper)); }
+.diff-file-panel button { display:grid; gap:2px; width:100%; padding:8px 10px; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--ink); text-align:left; font:inherit; cursor:pointer; }
+.diff-file-panel button:hover, .diff-file-panel button[aria-current="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); }
+.diff-file-panel button strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.diff-file-panel button span { color:var(--muted); font-size:var(--type-meta); }
+.diff-files { min-width:0; }
+.diff-file { min-width:0; }
+.diff-hunk-tools { display:flex; justify-content:flex-end; gap:4px; padding:3px 8px; border-bottom:1px solid var(--line); background:var(--paper); }
+.diff-hunk-tools button, .diff-mode button, .diff-toolbar > button { border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); color:var(--ink2); font:inherit; cursor:pointer; padding:2px 7px; }
+.diff-hunk-tools button:hover, .diff-mode button:hover, .diff-toolbar > button:hover, .diff-mode button[aria-pressed="true"], .diff-toolbar > button[aria-pressed="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); color:var(--ink); }
+.diff-mode { display:inline-flex; gap:0; }
+.diff-mode button + button { border-left:0; border-radius:0 var(--radius) var(--radius) 0; }
+.diff-mode button:first-child { border-radius:var(--radius) 0 0 var(--radius); }
+.diff-editor-split { max-height:58vh; overflow:auto; }
+.diff-editor-split .cm-mergeView { display:flex; min-width:max-content; }
+.diff-editor-split .cm-mergeView > .cm-editor { min-width:0; flex:1 1 50%; }
+.diff-editor-split .cm-mergeView > .cm-editor + .cm-editor { border-left:1px solid var(--line); }
+.diff-editor-unified { max-height:58vh; overflow:auto; }
+.diff-editor-unified.is-wrap .cm-line { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media (max-width: 720px) {
+  .diff-review-body { grid-template-columns:1fr; }
+  .diff-file-panel { display:flex; border-right:0; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .diff-file-panel button { min-width:180px; border-bottom:0; border-right:1px solid var(--line); }
+  .diff-editor-split .cm-mergeView { min-width:760px; }
+}
 .diff-comment { display:flex; align-items:flex-start; gap:10px; padding:7px 14px 7px 58px; border-top:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
 .diff-comment.sent { opacity:.7; }
 .diff-comment-line { color:var(--blue); font-family:var(--mono); white-space:nowrap; }

@@ -53,6 +53,7 @@ const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
+const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
 const openSession = (id) => navigate('sessions', id)
 
@@ -77,11 +78,12 @@ function SettingsView() { return <Settings /> }
 // Review findings are deliberately not workspace objects: evals/issues list and detail addresses stay on
 // their own surface regardless of whether they were reached from the rail, a cold link, or a query-bearing
 // chip. Only workspace objects (nodes, files, and identified sessions) can enter the strip.
-// What is left out is what has no object: graph (the hidden-tab workspace bottom sheet), bare sessions, the
-// sessions launch page (a form), review/settings boards, and `empty`, which is parsed as graph and has no
-// separate view.
+// What is left out is what has no object: graph (an addressable legacy view, not a workspace destination),
+// bare sessions, the sessions launch page (a form), review/settings boards, and `empty`, which names the
+// explicit empty workspace state and has no tab of its own.
 export const VIEWS = {
-  // `graph` is registered as the document-free workspace bottom sheet ([[node-graph]]).
+  // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
+  // sends anyone through the rail or a tab close.
   graph:    { component: GraphView,    surface: 'workspace', document: false, className: 'view-graph' },
   spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-spec' },
   file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-file' },
@@ -93,6 +95,7 @@ export const VIEWS = {
   evals:    { component: EvalsView,    surface: 'review', document: false, className: 'view-evals' },
   issues:   { component: IssuesView,   surface: 'review', document: false, className: 'view-issues' },
   settings: { component: SettingsView, surface: 'settings', document: false, className: 'view-settings' },
+  empty:    { component: EmptyView,    surface: 'workspace', document: false, className: 'view-empty' },
 }
 
 export const viewFor = (page) => VIEWS[page] || VIEWS.sessions

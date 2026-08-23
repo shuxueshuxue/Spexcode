@@ -39,8 +39,9 @@ legacy persisted entries are discarded by `normalizeTabs` at the storage boundar
 distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
 this node supplies the machine predicate and storage normalization.
 
-Left out: graph (including its focused node — the hidden-tab workspace bottom sheet), bare sessions, bare
-evals/issues/settings boards, and `empty`, which is retained only as a compatibility alias for graph. **`/sessions/new` was a document and is not one now**: it names no
+Left out: graph (including its focused node — an addressable legacy view that is no longer a workspace
+destination), bare sessions, bare evals/issues/settings boards, and `empty`, which is a real non-document
+workspace state. **`/sessions/new` was a document and is not one now**: it names no
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
 form, and the session it starts becomes a document the moment it has an id.
 

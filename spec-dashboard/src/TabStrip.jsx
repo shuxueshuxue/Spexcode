@@ -120,6 +120,8 @@ export function placeLabel(route, ctx) {
 export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
+  const [wrapped, setWrapped] = useState(false)
+  const tabsHostRef = useRef(null)
   const startTabClose = useCallback((tab) => {
     const key = tabKey(tab)
     setClosing((current) => {
@@ -133,6 +135,18 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const tabsRef = useRef([])
   const { tabs, activeKey, open, close, closeOthers, move } = useTabs({ onCloseStart: startTabClose })
   tabsRef.current = tabs
+  useEffect(() => {
+    const host = tabsHostRef.current
+    if (!host || typeof ResizeObserver === 'undefined') return undefined
+    const update = () => {
+      const next = tabs.length * 80 > host.clientWidth
+      setWrapped((current) => (current === next ? current : next))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [tabs.length])
   const names = useDocumentNames()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
@@ -196,6 +210,10 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   const activeActions = [...actions.values()]
     .filter((action) => action.document === activeAddress)
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
+  const renderedTabs = [...tabs]
+  closing.filter((entry) => !tabs.some((tab) => tabKey(tab) === entry.key))
+    .sort((a, b) => a.index - b.index)
+    .forEach((entry) => renderedTabs.splice(Math.max(0, Math.min(entry.index, renderedTabs.length)), 0, entry.tab))
   // The band and the SCROLLER are two jobs, and they were one element. A strip that scrolls its tabs must
   // clip, and a clipping band cannot let an action's dropdown out — the resource picker rendered correctly
   // and was cut off at the strip's own 30px. Splitting them gives the tabs their scroller, leaves the band
@@ -203,10 +221,9 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   // cluster off the right edge.
   return (
     <div className="tabstrip">
-      <div className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
+      <div ref={tabsHostRef} className={`tabstrip-tabs${wrapped ? ' wrapped' : ''}`} role="tablist" aria-label={t('tabs.aria')}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
-      {[...tabs, ...closing.filter((entry) => !tabs.some((tab) => tabKey(tab) === entry.key))
-        .sort((a, b) => a.index - b.index).map((entry) => entry.tab)].map((tab, index) => {
+      {renderedTabs.map((tab, index) => {
         const key = tabKey(tab)
         const isClosing = closing.some((entry) => entry.key === key) && !tabs.some((item) => tabKey(item) === key)
         const active = key === activeKey

@@ -160,18 +160,20 @@ self-limiting: the current-slot-per-kind rule means the strip only grows when so
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 
-**Width follows content before it fills a row.** Each tab is a `fit-content` flex item clamped to an 80px
-minimum and a 240px maximum; the active tab keeps a 112px readability floor so its always-visible close control
-never crowds its title. The label, status mark and close button determine the preferred width, and the right edge
-contains only the close button's normal padding. A short final row therefore keeps its real empty space instead of
-stretching short labels into dead chrome. This is one CSS flex rule, not JavaScript width measurement.
+**Width has two explicit regimes.** In the normal regime the tab row is `nowrap`: each tab is a content-sized flex
+item clamped to an 80px minimum and a 240px maximum; the active tab keeps a 112px readability floor. The label,
+status mark and permanently allocated 24px close control determine the preferred width, and the right edge contains
+only that control's normal padding. A short final row therefore keeps its real empty space instead of stretching
+short labels into dead chrome. One `ResizeObserver` watches the tablist and adds `.wrapped` only when
+`tabCount * 80px > tablistWidth`.
 
-When the current row cannot fit, flex-shrink reduces every tab toward its minimum before wrapping to another row;
-the shrink semantics are unchanged from the previous fit behaviour. The close affordance is always present on the
-active tab and appears on inactive tabs on hover. At the narrow end, padding is reduced per tab at 140px, and
-status dots/spinners disappear per tab at 100px; the face keeps its full accessible label and tooltip while its
-visible title ellipsises. YATU evidence records rendered widths for 2, 5 and 12 tabs and verifies that a short
-label's X right edge leaves only normal padding to the tab edge.
+In the pressure regime (`.wrapped`) the verified shrink-wrap rule returns: tabs use `flex-basis: 0`, shrink toward
+their minima, and wrap only after the row cannot fit those minima. The tab itself is the inline-size container in
+this regime, so the 140px padding and 100px status-mark thresholds remain live per tab. The close control keeps its
+24px place in both regimes; hover changes opacity and background only, so moving across tabs cannot resize the row.
+The face keeps its full accessible label and tooltip while its visible title ellipsises. YATU evidence records
+rendered widths for 2, 5 and 12 tabs in both regimes and verifies that a short label's X right edge leaves only
+normal padding to the tab edge.
 
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run

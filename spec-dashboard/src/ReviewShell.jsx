@@ -20,8 +20,8 @@ export const REVIEW_STATE_VISUALS = {
   eval: {
     pass: { icon: 'circle-check', tone: 'pass', label: 'score.pass' },
     fail: { icon: 'circle-x', tone: 'fail', label: 'score.fail' },
-    stalePass: { icon: 'circle-check', tone: 'stale', label: 'score.stalePass' },
-    staleFail: { icon: 'circle-x', tone: 'stale', label: 'score.staleFail' },
+    stalePass: { icon: 'circle-check-dashed', tone: 'stale', label: 'score.stalePass' },
+    staleFail: { icon: 'circle-x-dashed', tone: 'stale', label: 'score.staleFail' },
     review: { icon: 'clock', tone: 'review', label: 'reviewList.needsReview' },
     empty: { icon: 'circle-minus', tone: 'empty', label: 'score.empty' },
     missing: { icon: 'circle-dashed', tone: 'empty', label: 'score.missing' },

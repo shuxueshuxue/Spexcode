@@ -271,8 +271,10 @@ body {
 .backend-offline-banner span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .backend-offline-banner button { padding:2px 8px; color:var(--ink2); background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); font:inherit; cursor:pointer; }
 .backend-offline-banner button:hover { border-color:var(--yellow); }
-.app-shell { display: flex; flex-direction: column; height: 100%; }
-.app { flex: 1; min-height: 0; display: flex; }
+.app-shell { height: 100%; min-height: 0; }
+.app { width: 100%; height: 100%; min-height: 0; display: flex; }
+.app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle {
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
@@ -319,7 +321,13 @@ body {
 }
 .dock-head-name { color: var(--ink2); font-weight: var(--weight-medium); }
 .dock-head-count { color: var(--muted); font-variant-numeric: tabular-nums; }
-.dock-stale, .sb-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
+.dock-stale { margin-left:4px; color:var(--yellow); font-style:normal; font-size:var(--type-caption); }
+.sb-stale {
+  position: absolute; right: -5px; top: 0; display: inline-flex; align-items: center; justify-content: center; width: 5px; height: 14px; margin-left: 0;
+  color: var(--yellow); font-style: normal; font-size: var(--type-caption); line-height: var(--line-status);
+  overflow: visible;
+}
+.sb-stale::before { content: '~'; position: absolute; left: 0; top: 0; }
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
@@ -386,7 +394,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* [[dock-modes]] — the dock is one finding surface with two compact projections; mode controls live on the rail. */
 .dock {
   flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
-  background: var(--ground); border-right: 1px solid var(--edge);
+  background: var(--ground); border-right: 1px solid var(--line);
   overflow: hidden; max-width: 640px; animation: dock-in var(--dur-panel) ease;
 }
 /* the sidebar SLIDES rather than blinking: opening animates from nothing, and closing keeps the element on
@@ -605,11 +613,11 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   box-shadow: var(--shadow);
 }
 
-/* [[status-bar]] — a full-width strip, not a floating chip. Numbers are VS Code's, which Zed's 4px padding
+/* [[status-bar]] — the content column's footer, not a floating chip or a bar over the sidebar. Numbers are VS Code's, which Zed's 4px padding
    plus 8px group gap reproduces in visual weight: 22px content box, 12px text, 0 5px per item. */
 .statusbar {
   flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
-  background: var(--ground); border-top: 1px solid var(--edge);
+  background: var(--ground); border-top: 1px solid var(--line);
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-status); color: var(--muted);
   overflow: hidden;
 }
@@ -633,16 +641,33 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-warning { color: var(--yellow); }
 .sb-error { color: var(--red); }
 .sb-restore { color: var(--muted); }
+.sb-project-trigger {
+  min-width: 0; height: var(--line-status); display: inline-flex; align-items: center; gap: 5px; padding: 0;
+  color: inherit; background: none; border: 0; font: inherit; text-decoration: none; cursor: pointer;
+}
+.sb-project-trigger:hover, .sb-project-trigger.open { color: var(--blue); }
+.sb-project-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.sb-project-mark { display: block; flex: 0 0 14px; width: 14px; height: 14px; }
+.sb-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the ambient board tallies: one item per board, each a row of glyph+count pairs. The node dots reuse the
-   board's own four-state marks (.bstat-dot) so a count in the bar and a dot on a tile say the same thing. */
-.sb-tally { display: inline-flex; align-items: center; gap: 6px; }
+   board's own four-state marks so a count in the bar and a dot on a tile say the same thing. */
+.sb-tally { position: relative; display: inline-flex; align-items: center; gap: 4px; }
 .sb-tally-lead { font-weight: var(--weight-semibold); color: var(--ink2); }
 .sb-tally-part { display: inline-flex; align-items: center; gap: 3px; }
+.sb-tally-button {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0; border: 0; color: inherit;
+  background: none; font: inherit; white-space: nowrap; cursor: pointer;
+}
+.sb-tally-button:hover { color: var(--ink2); }
+.sb-tally-button:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.sb-tally-button:disabled { opacity: .45; cursor: default; }
+.sb-tally-sep { width: 1px; height: 12px; margin: 0 1px; background: var(--line); }
+.sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
 
 /* ---- left navigation rail ---- */
 .side-rail {
   flex: 0 0 40px; display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
-  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--edge);
+  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--line);
 }
 .rail-spacer { flex: 1; }
 /* a rail entry is a real anchor ([[side-nav]]); the chip is a button — one look for both */
@@ -779,25 +804,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta);
 }
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
-
-.graph-stats {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink2);
-}
-.bstat-total { font-weight: var(--weight-semibold); color: var(--ink); padding-right: 1px; }
-.bstat {
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 1px 4px; border: 0; border-radius: var(--radius); background: none;
-  font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui); color: inherit; cursor: pointer;
-}
-.bstat:hover:not(:disabled) { background: var(--panel2); color: var(--ink); }
-.bstat:disabled { opacity: .38; cursor: default; }
-.bstat-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }  /* matches .node-dot */
-.bstat-drift { color: var(--yellow); }                                   /* matches .drift-badge */
-.bstat-issue { color: var(--magenta); }                                  /* matches .issue-badge */
-.bstat-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--line); }
-.graph-stats .score-badge { width: 13px; height: 13px; font-size: var(--type-caption); }
-.graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
 
 /* Focus emphasis may settle gently; graph-space positions never transition here because React Flow's
    solid edges already use final coordinates. Direction comes from the viewport pan, not detached tiles. */
@@ -3006,7 +3012,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* ================================================================================================
    projects hub ([[projects-hub]]) — the global `/projects` catalog page, the unified credential card,
-   and the scoped rail's current-project selector. Everything
+   and the scoped status row's current-project selector. Everything
    reads through the shared palette vars, so all themes skin these surfaces with no extra rules. */
 
 /* --- the credential card: ONE visual language for admin sign-in and per-project unlock --- */
@@ -3209,17 +3215,16 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
-/* --- the rail's current-project selector chip + switcher menu --- */
-.proj-chip-wrap { position: relative; }
-.rail-btn.proj-chip {
-  padding: 2.5px; color: var(--ink2); overflow: hidden;
-}
-.rail-btn.proj-chip:hover, .rail-btn.proj-chip-open { color: var(--blue); }
+/* --- the status row's project selector menu --- */
 .proj-menu {
-  position: absolute; left: calc(100% + 6px); top: 0; z-index: 60; min-width: 180px; max-width: 280px;
+  z-index: 60; min-width: 180px; max-width: 280px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px;
   box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 1px; font-family: var(--ui-font);
+}
+.status-project-menu {
+  position: absolute; left: 4px; bottom: calc(var(--line-status) + 4px);
+  max-height: min(320px, calc(100vh - var(--line-status) - 12px)); overflow-y: auto;
 }
 .proj-menu-item {
   display: flex; align-items: center; gap: 7px; text-decoration: none; cursor: pointer;

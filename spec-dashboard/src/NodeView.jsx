@@ -74,7 +74,7 @@ export function SpecBody({ body, lineBase = 0 }) {
       const href = routeHash('spec', id)
       return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
     }}
-    renderEvidence={(meta, token, provenance) => <span className="rich-evidence" {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt} /></span>}>
+    renderEvidence={(meta, token, provenance) => <span className="rich-evidence" data-evidence-hash={meta.hash} {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt} /></span>}>
     {source}
   </Prose>
 }

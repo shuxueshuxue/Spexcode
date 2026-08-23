@@ -79,7 +79,7 @@ try {
         quote: root.querySelector('.doc-quote')?.innerText || '',
         timeAnchor: root.querySelector('.fv-anchor[data-time-ms]')?.textContent || null,
         specRef: root.querySelector('.doc-link[href*="prose-renderer"]')?.textContent || null,
-        evidence: root.querySelector('.doc-evidence[data-evidence-hash]')?.getAttribute('data-evidence-hash') || null,
+        evidence: root.querySelector('[data-evidence-hash]')?.getAttribute('data-evidence-hash') || null,
         link: root.querySelector('.doc-external')?.getAttribute('href') || null,
         image: { src: root.querySelector('.doc-image')?.getAttribute('src') || null, loaded: root.querySelector('.doc-image')?.complete && root.querySelector('.doc-image')?.naturalWidth > 0 },
         math: root.querySelectorAll('.doc-math, .doc-math-block').length,

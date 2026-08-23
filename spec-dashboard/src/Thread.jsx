@@ -159,7 +159,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
                 : <span className={`fv-anchor static${resolved?.degraded ? ' degraded' : ''}`} {...provenance}
                   data-tip={resolved?.degraded ? t('thread.anchorDegraded') : undefined}>{label}{resolved?.degraded ? ' ⚠' : ''}</span>
             }}
-            renderEvidence={(meta, token, provenance) => <span className="fv-reply-media" {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
+            renderEvidence={(meta, token, provenance) => <span className="fv-reply-media" data-evidence-hash={meta.hash} {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
             {r.body}
           </Prose>
         </div>}

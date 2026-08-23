@@ -80,7 +80,7 @@ export default function SpecNode({ data, selected }) {
         <span className="node-dot" style={{ background: s.color }}>
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
-        <span className="node-title">{data.title}</span>
+        <span className="node-title">{data.graphTitle || data.title}</span>
         {/* pending ops replace the age — an overlay means the node is being touched NOW */}
         {ops.length > 0 ? (
           <span className="ov-marks" data-tip={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>

@@ -67,6 +67,18 @@ scenarios:
       path-derived data attribute appears. Its raw identity and direct-child count agree with the payload,
       and normal focus reveals its immediate children. The filed evidence includes initial and expanded
       browser screenshots.
+  - name: deep-frontier-boxes-do-not-overlap
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Against the real project board (not a fixture), focus the deepest available node in the 362-node
+      graph and wait for the two-layer frontier to settle. Through CDP, read every visible
+      `.react-flow__node` bounding box and assert that every pair has a separating edge; record the node
+      count, the minimum same-column centre gap, and the pair count. Capture one zoomed-out panorama and
+      one settled focus crop from the same run.
+    expected: >-
+      The deepest real-data frontier renders without any pairwise box intersection. The reading reports
+      the sampled visible-node count and zero intersecting pairs, and carries both the panorama and local
+      screenshots from the settled browser.
 ---
 # eval.md — node-graph
 

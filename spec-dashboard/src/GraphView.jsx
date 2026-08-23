@@ -11,7 +11,7 @@ import PublicGraphAbout from './PublicGraphAbout.jsx'
 import { useRoute, navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
-import { layout, X_GAP, Y_GAP } from './data.js'
+import { graphTitles, layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
@@ -160,6 +160,7 @@ function GraphView({ param, query }) {
   // the x/y all geometry/render below works on. Hidden subtrees simply aren't in `specs2`.
   const placed = useMemo(() => layout(specs, expanded), [specs, expanded])
   const specs2 = useMemo(() => specs.filter((s) => placed[s.id]).map((s) => ({ ...s, ...placed[s.id] })), [specs, placed])
+  const graphTitle = useMemo(() => graphTitles(specs), [specs])
   const byId = useMemo(() => Object.fromEntries(specs2.map((s) => [s.id, s])), [specs2])
   const focus = byId[focusRaw.id]
   // direct-child count per node — drives the ▸N collapsed hint
@@ -283,13 +284,13 @@ function GraphView({ param, query }) {
     }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
-      data: { ...s, ...extra },
+      data: { ...s, graphTitle: graphTitle.get(s.id) || s.title, ...extra },
       initialWidth: NODE_SIZE.width, initialHeight: NODE_SIZE.height,
       handles: NODE_HANDLES,
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
+  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {

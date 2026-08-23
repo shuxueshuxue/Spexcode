@@ -4,15 +4,14 @@ import { useEffect, useRef } from 'react'
 // Vite HMR keeps the existing listener, so the stack lives on window for re-evaluated modules to share.
 const stack = typeof window !== 'undefined' ? (window.__escStack || (window.__escStack = [])) : []
 
-if (typeof window !== 'undefined' && !window.__escStackBound) {
-  window.__escStackBound = true
-  window.addEventListener('keydown', (e) => {
-    const s = window.__escStack
-    if (e.key !== 'Escape' || !s || s.length === 0) return
-    e.preventDefault()
-    e.stopImmediatePropagation()   // the layer below (a panel, the board) must NOT also close on this press
-    s[s.length - 1].close()
-  }, true)
+// KeyboardService owns the one capture listener. This function is deliberately framework-agnostic so the
+// service can arbitrate the stack before any routed scope; no module-level window listener can race it.
+export function consumeEscape(event) {
+  const s = typeof window !== 'undefined' ? window.__escStack : stack
+  if (event?.key !== 'Escape' || !s || s.length === 0) return false
+  event.preventDefault()
+  s[s.length - 1].close()
+  return true
 }
 
 // useEscLayer - register `onClose` as the top Esc layer while `active`. `onClose` is read through a ref so

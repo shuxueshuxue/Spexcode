@@ -25,8 +25,8 @@ related:
 # keyboard-service
 
 The desktop shell owns one window capture-phase keyboard service. It is mounted with the shell, so its
-global vocabulary remains alive while the routed content changes. No destination view installs its own
-window-level keyboard listener for a key that belongs to the shell.
+global vocabulary remains alive while the routed content changes. Destination views register their active
+surface handlers as service scopes; no destination view installs a competing window-level keyboard listener.
 
 ## audit before the service
 
@@ -93,6 +93,11 @@ The `?` help legend is shell-owned chrome, not a graph-only modal. The status-ba
 help modal or keyboard owner behind. Escape and a second `?` peel the legend through the shared overlay contract,
 and `j`/`k` (or arrow equivalents) scroll its body.
 
+The Escape stack is an input owner of that same service, above routed scopes. `escStack.js` exposes the stack
+consumer but does not attach a second window listener; one Escape closes only the top registered layer. Review
+lists and video detail register their own j/k or player controls through `useKeyboardScope`, so their handlers
+cannot race one another or a shell route when documents remain mounted but hidden.
+
 ## tab grammar
 
 The tab commands are new registry entries with non-browser-reserved defaults: close the active tab, select
@@ -105,4 +110,5 @@ still lands on the explicit empty address and split remains window state as requ
 clause: while DOM focus sits in a typing context (input, textarea, contenteditable — the session composer
 and xterm's helper textarea above all), every unmodified key belongs to that control and the shell scope
 returns unconsumed before matching any plain-key verb. The first build without this line sent a bare comma
-typed into the composer to the settings page.
+typed into the composer to the settings page. `isTypingTarget` is the shared predicate used by graph,
+session, review-list, and review-player scopes, including contenteditable descendants.

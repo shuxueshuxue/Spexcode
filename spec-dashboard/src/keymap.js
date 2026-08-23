@@ -20,8 +20,10 @@ export const ACT = [
   { id: 'graph.fresh',     keys: ['['],      rebind: true, desc: 'legend.graph.fresh' },
   { id: 'graph.evals',     keys: ['f'],      rebind: true, desc: 'legend.graph.evals' },
   // node chords — structural (a two-key grammar, not a single binding)
-  { id: 'graph.newChild',  keys: ['n'],      rebind: false, desc: 'legend.graph.newChild' },
-  { id: 'graph.del',       keys: ['d'],      rebind: false, desc: 'legend.graph.del' },
+  // The handler consumes the leader first, then the repeated key. Keep the leader in `keys` for dispatch and
+  // expose the complete fixed sequence to help/settings so the reader sees nn/dd, never the misleading n/d.
+  { id: 'graph.newChild',  keys: ['n'],      display: ['nn'], rebind: false, desc: 'legend.graph.newChild' },
+  { id: 'graph.del',       keys: ['d'],      display: ['dd'], rebind: false, desc: 'legend.graph.del' },
   // modals
   { id: 'graph.settings',  keys: [','],      rebind: true, desc: 'legend.graph.settings' },
   { id: 'graph.help',      keys: ['?'],      rebind: true, desc: 'legend.graph.help' },
@@ -76,3 +78,10 @@ export const keyCap = (k) => {
   const key = parts.pop()
   return parts.map((mod) => MOD_GLYPH[mod] || `${mod}+`).join('') + capOne(key)
 }
+
+// Structural chords have a display sequence that is longer than their dispatch leader. Rebindable actions
+// must always display the live resolved keys instead, otherwise a localStorage override silently disappears
+// from both the legend and Settings.
+export const displayKeysOf = (action, resolved = null) => action?.rebind
+  ? (resolved || action.keys || [])
+  : (action?.display || action?.keys || [])

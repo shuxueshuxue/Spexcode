@@ -6,6 +6,7 @@ import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { addressHash, graphNodeAddress } from './address.js'
 import { DetailShell, ReviewState, SideSection, SideValue, usePopover } from './ReviewShell.jsx'
+import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
@@ -385,26 +386,22 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
     setSelIdx(a.i); seekMs(a.tMs)
   }, [anchored, selIdx, seekMs])
 
-  // the whole player is keyboard-driven; typing in a field (the composer) is never hijacked.
-  useEffect(() => {
-    if (!hasVideo) return
-    const onKey = (e) => {
-      const el = document.activeElement
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
-      const v = vid.current
-      if (!v) return
-      if (e.key === ' ') { e.preventDefault(); togglePlay() }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); v.currentTime = Math.min(v.duration || v.currentTime, v.currentTime + (e.shiftKey ? 1 : 5)) }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - (e.shiftKey ? 1 : 5)) }
-      else if (e.key === ',') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 1 / 30) }
-      else if (e.key === '.') { e.preventDefault(); if (v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 1 / 30) }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); jumpAnchor(1) }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); jumpAnchor(-1) }
-      else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); annotate(null) }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [hasVideo, togglePlay, jumpAnchor, annotate])
+  // The whole player is keyboard-driven, but its scope is registered through the shell service so its
+  // capture listener cannot race the review list, Escape stack, or shell globals. Typing stays native.
+  useKeyboardScope((e) => {
+    if (!hasVideo || isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return false
+    const v = vid.current
+    if (!v) return false
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); return true }
+    if (e.key === 'ArrowRight') { e.preventDefault(); v.currentTime = Math.min(v.duration || v.currentTime, v.currentTime + (e.shiftKey ? 1 : 5)); return true }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - (e.shiftKey ? 1 : 5)); return true }
+    if (e.key === ',') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 1 / 30); return true }
+    if (e.key === '.') { e.preventDefault(); if (v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 1 / 30); return true }
+    if (e.key === 'ArrowDown') { e.preventDefault(); jumpAnchor(1); return true }
+    if (e.key === 'ArrowUp') { e.preventDefault(); jumpAnchor(-1); return true }
+    if (e.key === 'a' || e.key === 'A') { e.preventDefault(); annotate(null); return true }
+    return false
+  })
 
   // scrubber: click / drag anywhere to seek; hovering previews the moment under the cursor.
   const seekToX = (clientX) => {

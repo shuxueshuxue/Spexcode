@@ -1,6 +1,6 @@
 import Modal from './Modal.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
-import { ACT, keyCap } from './keymap.js'
+import { ACT, displayKeysOf, keyCap } from './keymap.js'
 import { keysOf, withShortcut } from './bindings.js'
 import { useT } from './i18n/index.jsx'
 
@@ -13,7 +13,7 @@ const KEY_SKIP = new Set(['=', '_', 'I', 'H', 'J', 'K', 'L'])
 const BOARD_ROWS = (() => {
   const rows = []
   for (const a of ACT) {
-    const keys = keysOf(a.id).filter((k) => !KEY_SKIP.has(k)).map(keyCap)
+    const keys = displayKeysOf(a, keysOf(a.id)).filter((k) => !KEY_SKIP.has(k)).map(keyCap)
     const last = rows[rows.length - 1]
     if (last && last.desc === a.desc) last.keys.push(...keys)
     else rows.push({ desc: a.desc, keys })

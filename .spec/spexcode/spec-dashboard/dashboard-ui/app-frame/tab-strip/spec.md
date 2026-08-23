@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/tabModel.js
   - spec-dashboard/src/tabModel.test.mjs
+  - spec-dashboard/src/subtractive-boundaries.test.mjs
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
@@ -18,6 +19,13 @@ related:
   - spec-dashboard/src/styles.css
 ---
 # tab-strip
+
+## Anti-regression boundary
+
+Resident Evals and Issues details keep their detail address in the URL while their tab identity remains the
+single top-level board address. The empty workspace remains an explicit `#/empty` route backed by `EmptyView`;
+it is not replaced by the graph when the last document closes. The executable boundary test covers these
+subtractive and resident-tab invariants alongside the pure tab model.
 
 **The strip holds the workspace working set.** Object tabs include `#/spec/<id>`, `#/file/<path>`, and
 `#/sessions/<id>`. Evals, Issues, and Settings are resident top-level tabs (`#/evals`, `#/issues`,

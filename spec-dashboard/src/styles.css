@@ -258,8 +258,10 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.app-shell { display: flex; flex-direction: column; height: 100vh; }
-.app { flex: 1; min-height: 0; display: flex; }
+.app-shell { height: 100vh; }
+.app { width: 100%; height: 100%; min-height: 0; display: flex; }
+.app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle {
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
@@ -372,7 +374,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* [[dock-modes]] — the dock is one finding surface with two compact projections; mode controls live on the rail. */
 .dock {
   flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0;
-  background: var(--ground); border-right: 1px solid var(--edge);
+  background: var(--ground); border-right: 1px solid var(--line);
   overflow: hidden; max-width: 640px; animation: dock-in var(--dur-panel) ease;
 }
 /* the sidebar SLIDES rather than blinking: opening animates from nothing, and closing keeps the element on
@@ -561,11 +563,11 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   box-shadow: var(--shadow);
 }
 
-/* [[status-bar]] — a full-width strip, not a floating chip. Numbers are VS Code's, which Zed's 4px padding
+/* [[status-bar]] — the content column's footer, not a floating chip or a bar over the sidebar. Numbers are VS Code's, which Zed's 4px padding
    plus 8px group gap reproduces in visual weight: 22px content box, 12px text, 0 5px per item. */
 .statusbar {
   flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
-  background: var(--ground); border-top: 1px solid var(--edge);
+  background: var(--ground); border-top: 1px solid var(--line);
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-status); color: var(--muted);
   overflow: hidden;
 }
@@ -589,6 +591,14 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-warning { color: var(--yellow); }
 .sb-error { color: var(--red); }
 .sb-restore { color: var(--muted); }
+.sb-project-trigger {
+  min-width: 0; height: var(--line-status); display: inline-flex; align-items: center; gap: 5px; padding: 0;
+  color: inherit; background: none; border: 0; font: inherit; text-decoration: none; cursor: pointer;
+}
+.sb-project-trigger:hover, .sb-project-trigger.open { color: var(--blue); }
+.sb-project-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.sb-project-mark { display: block; flex: 0 0 14px; width: 14px; height: 14px; }
+.sb-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the ambient board tallies: one item per board, each a row of glyph+count pairs. The node dots reuse the
    board's own four-state marks so a count in the bar and a dot on a tile say the same thing. */
 .sb-tally { display: inline-flex; align-items: center; gap: 4px; }
@@ -607,7 +617,7 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 /* ---- left navigation rail ---- */
 .side-rail {
   flex: 0 0 40px; display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
-  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--edge);
+  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--line);
 }
 .rail-spacer { flex: 1; }
 /* a rail entry is a real anchor ([[side-nav]]); the chip is a button — one look for both */
@@ -2940,7 +2950,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* ================================================================================================
    projects hub ([[projects-hub]]) — the global `/projects` catalog page, the unified credential card,
-   and the scoped rail's current-project selector. Everything
+   and the scoped status row's current-project selector. Everything
    reads through the shared palette vars, so all themes skin these surfaces with no extra rules. */
 
 /* --- the credential card: ONE visual language for admin sign-in and per-project unlock --- */
@@ -3143,17 +3153,16 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
-/* --- the rail's current-project selector chip + switcher menu --- */
-.proj-chip-wrap { position: relative; }
-.rail-btn.proj-chip {
-  padding: 2.5px; color: var(--ink2); overflow: hidden;
-}
-.rail-btn.proj-chip:hover, .rail-btn.proj-chip-open { color: var(--blue); }
+/* --- the status row's project selector menu --- */
 .proj-menu {
-  position: absolute; left: calc(100% + 6px); top: 0; z-index: 60; min-width: 180px; max-width: 280px;
+  z-index: 60; min-width: 180px; max-width: 280px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px;
   box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 1px; font-family: var(--ui-font);
+}
+.status-project-menu {
+  position: absolute; left: 4px; bottom: calc(var(--line-status) + 4px);
+  max-height: min(320px, calc(100vh - var(--line-status) - 12px)); overflow-y: auto;
 }
 .proj-menu-item {
   display: flex; align-items: center; gap: 7px; text-decoration: none; cursor: pointer;

@@ -2,7 +2,7 @@
 title: status-bar
 status: active
 hue: 210
-desc: One strip along the bottom and a registry behind it — items are declared data, not widgets someone positions.
+desc: The content column's bottom row and a registry behind it — items are declared data, not widgets someone positions.
 code:
   - spec-dashboard/src/StatusBar.jsx
 related:
@@ -16,8 +16,9 @@ related:
 ---
 # status-bar
 
-A full-width strip along the bottom of the frame, and — the part that matters — a **registry** rather than
-a place to hang things.
+A strip along the bottom of the content column, beginning at the current sidebar's right edge, and — the
+part that matters — a **registry** rather than a place to hang things. Rail and dock continue to the bottom
+of the window; the strip does not cross them or claim a visually higher frame layer.
 
 **What it replaced.** Every persistent readout used to be its own absolutely-positioned block: the project
 HUD in one corner, the tally strip in another, the public-graph disclosure in a third, each with its own
@@ -47,14 +48,32 @@ Registration is a hook, so an item's lifetime is its contributor's lifetime and 
 re-rendering — there is no imperative handle to keep in sync with React's own. Outside a provider the hook
 is inert, which is what lets the phone face and the sealed public build skip a bar they do not draw.
 
+**It is a row in layout, not an overlay.** The shell's horizontal flex has a through-bottom left region
+(rail plus optional dock) and one right content column. Inside that content column, the view/context row
+and this strip are siblings: the view takes the remaining height, and the strip takes one unshrinking
+`--line-status` row. No `position: fixed|absolute`, bottom offset, or page-owned padding reserves its
+space. The consequence is observable in every view, especially the terminal: xterm's last fitted row ends
+above the status bar and remains fully visible rather than painting underneath it.
+
+The vertical rail-or-dock/content seam and the horizontal content/status seam are each a one-pixel
+`--line` border. The status border begins only after the left region, so the lower-left junction is one
+clean L rather than a doubled pixel or a broken stroke; the lower-right edge ends flush with the viewport.
+
 **Its own geometry is a token, not a literal.** The strip is `--line-status`, joining the existing
 `--line-input` / `--line-badge` / `--line-session-row` family of named fixed line boxes. This is not
 tidiness: the shared-typography guard rejects a hardcoded `line-height`, and it was right to — the height
 of the bar is a shared geometry that other components will eventually measure against, and a literal is
 exactly how the 112px coupling started.
 
-**What is registered today.** On the left, the workspace identity and — while the graph is the document —
-its help key. On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
+**What is registered today.** On the left, one compact project identity button (small project mark plus
+project name) and — while the graph is the document — its help key. The identity button owns the complete
+catalog-backed project switcher formerly opened from the rail: online projects remain same-tab links,
+offline projects remain visible and inert, and the global Projects row opens `/projects`; a denied catalog
+makes the same identity control the management-login door without exposing rows. The rail has no project
+chip or second switcher. It stays at the status row's left edge rather than moving into the sidebar because
+the dock may fold or be absent on bare boards: this placement keeps the icon, name, and switch action
+complete and stationary on every desktop route while remaining immediately adjacent to the sidebar.
+On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
 its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
 pass/fail, unmeasured); the deduped open-issue total; and live sessions split into self-driving and
 waiting-on-you. Beside them ride the document's own facts: the routed file's path when

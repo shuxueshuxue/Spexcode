@@ -33,20 +33,24 @@ function ReviewEntry({ page, param, query }) {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} identity={null} catalog={null} />
-        <div className="app-main">
-          <div className={`page-pane page-${page}`}>
-            <Suspense fallback={loading}>
-              {/* the cold entry hands the route down like the shell does: the boards read their route
-                  from props, never from the global address ([[view-registry]]). */}
-              {page === 'evals'
-                ? <EvalsPage param={param} query={query} onOpenSession={openSession} />
-                : <IssuesPage param={param} query={query} onOpenSession={openSession} />}
-            </Suspense>
+        <SideBar page={page} />
+        <div className="app-content-column">
+          <div className="app-content-row">
+            <div className="app-main">
+              <div className={`page-pane page-${page}`}>
+                <Suspense fallback={loading}>
+                  {/* the cold entry hands the route down like the shell does: the boards read their route
+                      from props, never from the global address ([[view-registry]]). */}
+                  {page === 'evals'
+                    ? <EvalsPage param={param} query={query} onOpenSession={openSession} />
+                    : <IssuesPage param={param} query={query} onOpenSession={openSession} />}
+                </Suspense>
+              </div>
+            </div>
           </div>
+          <StatusBar />
         </div>
       </div>
-      <StatusBar />
     </div>
   )
 }

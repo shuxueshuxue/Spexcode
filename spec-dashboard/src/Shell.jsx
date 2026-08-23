@@ -13,6 +13,8 @@ import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspa
 import { viewFor } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
+import { IdentityIcon } from './IdentityIcon.jsx'
+import { PROJECT_ID, hubHref, projectHref } from './project.js'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
 import { ScoreBadge } from './score.jsx'
 import { nextGraphStatNode } from './GraphStats.jsx'
@@ -143,14 +145,80 @@ function ViewHost({ page, param, query }) {
   )
 }
 
-// The shell's own status contribution: the workspace identity.
+// The shell's own status contribution: one project identity button and its existing catalog switcher.
+// Project identity is ambient window state, so its one persistent door lives beside the other ambient
+// facts. The rail is route/finding chrome and deliberately carries no duplicate project chip.
 function ShellStatus() {
-  const { identity } = useBoard()
-  // workspace identity: which project this window is looking at. It belongs to the shell because it is
-  // true of the window, not of whatever view happens to be showing. The dock toggle moved to the rail
-  // ([[side-nav]]) — the finding controls live together, and one control has one owner.
-  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', text: `$ ${identity?.title || 'spexcode'}` })
-  return null
+  const t = useT()
+  const { identity, catalog } = useBoard()
+  const [open, setOpen] = useState(false)
+  const catalogOk = catalog?.state === 'ok'
+  const denied = catalog?.state === 'denied'
+  const projects = catalogOk ? catalog.projects : null
+  const label = identity?.title || PROJECT_ID || 'spexcode'
+  const triggerLabel = denied ? t('nav.projectChipLogin', { name: label }) : t('nav.projectChip', { name: label })
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (event) => {
+      if (!event.target.closest?.('[data-status-project], .status-project-menu')) setOpen(false)
+    }
+    const onKey = (event) => {
+      if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) }
+    }
+    document.addEventListener('mousedown', onDown, true)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown, true)
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
+
+  const triggerBody = (
+    <>
+      <IdentityIcon icon={identity?.icon} size={14} className="sb-project-mark" />
+      <span className="sb-project-name">{label}</span>
+    </>
+  )
+  const trigger = projects ? (
+    <button type="button" className={open ? 'sb-project-trigger open' : 'sb-project-trigger'}
+      data-status-project="" data-tip={triggerLabel} aria-label={triggerLabel}
+      aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      {triggerBody}
+    </button>
+  ) : (
+    <a className="sb-project-trigger" data-status-project="" data-tip={triggerLabel}
+      aria-label={triggerLabel} href={hubHref()}>{triggerBody}</a>
+  )
+
+  useStatusItem({ id: 'project', side: 'left', priority: 1000, kind: 'prominent', node: trigger })
+  if (!open || !projects) return null
+  return (
+    <div className="proj-menu status-project-menu" role="menu">
+      {projects.map((project) => {
+        const offline = project.online === false
+        const current = project.id === PROJECT_ID
+        const state = offline ? t('nav.projectOffline') : project.online === true ? t('nav.projectOnline') : null
+        const className = `proj-menu-item${current ? ' current' : ''}${offline ? ' offline' : ''}`
+        const content = (
+          <>
+            <IdentityIcon icon={project.identity.icon} size={16} className="proj-menu-mark" />
+            {project.gated && <Icon name="lock" size={11} />}
+            <span className="proj-menu-name">{project.identity.title}</span>
+            {state && <span className={`proj-menu-status ${offline ? 'offline' : 'online'}`} aria-hidden="true">{state}</span>}
+            {current && <Icon name="check" size={12} />}
+          </>
+        )
+        return offline
+          ? <div key={project.id} role="menuitem" aria-disabled="true" className={className}>{content}</div>
+          : <a key={project.id} role="menuitem" className={className} href={projectHref(project.id)}>{content}</a>
+      })}
+      <a role="menuitem" className="proj-menu-item all" href={hubHref()}>
+        <IdentityIcon icon={catalog.gateway.identity?.icon} fallback="gateway" size={16} className="proj-menu-mark" />
+        <span className="proj-menu-name">{t('nav.allProjects')}</span>
+      </a>
+    </div>
+  )
 }
 
 const SCORE_VIEW = [
@@ -310,7 +378,7 @@ function ContextToggle({ visible, onToggle }) {
 export default function Shell() {
   const t = useT()
   const { page, param, query } = useRoute()
-  const { specs, sessions, identity, catalog, graphOnly } = useBoard()
+  const { specs, sessions, identity, graphOnly } = useBoard()
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
   const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
@@ -459,26 +527,30 @@ export default function Shell() {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} identity={identity} catalog={catalog} needsYou={needsYou} />
+        <SideBar page={page} needsYou={needsYou} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />
           </ViewErrorBoundary>
         )}
-        <div className="app-main">
-          {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
-              without an open document, which is one band wearing two names. The context toggle is a control
-              on the current document, so it rides the strip's own trailing cluster. */}
-          <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
-            trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
-          <Content page={page} param={param} query={query} />
+        <div className="app-content-column">
+          <div className="app-content-row">
+            <div className="app-main">
+              {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
+                  without an open document, which is one band wearing two names. The context toggle is a control
+                  on the current document, so it rides the strip's own trailing cluster. */}
+              <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
+                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
+              <Content page={page} param={param} query={query} />
+            </div>
+            <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
+          </div>
+          <ShellStatus />
+          <BoardStatus specs={specs} sessions={sessions} page={page} />
+          <StatusBar />
         </div>
-        <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
       </div>
-      <ShellStatus />
-      <BoardStatus specs={specs} sessions={sessions} page={page} />
-      <StatusBar />
       {/* the one shared palette: it floats above whichever view is showing, so it is the shell's. A view
           being hidden must never be able to swallow it — the reason it was hoisted here in the first place. */}
       {palette && (

@@ -51,10 +51,15 @@ whole shell hangs off, re-derived from what the product is rather than from what
   toggle rides the tab strip's trailing cluster and the choice persists, so this decides only what an
   unopinionated window looks like.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
-  land above its right end, never over content. The frame itself is what fills it: the workspace identity
+  land above its right end, never over content. Rail and optional dock are the through-bottom left region;
+  the view/context row and status row form the right content column. The bar is an unshrinking sibling after
+  the view row, so it consumes its own height, starts only at the sidebar edge, and never covers a view; a
+  terminal's final xterm row fits above it. One-pixel `--line` borders own the vertical and horizontal seams.
+  The frame itself is what fills it: the workspace identity
   and the ONE BOARD LEDGER — spec nodes by state plus drift, every eval scenario state, open issues, live
   sessions — is true of the window on every route, so no view may own a duplicate and each group is
-  registered here. On a graph address the same buttons acquire graph focus-walk behavior; their visual
+  registered here. The identity is one compact project-mark/name button that owns the catalog switcher
+  and `/projects` door; the route rail contains no duplicate chip. On a graph address the same buttons acquire graph focus-walk behavior; their visual
   ownership and lifetime remain the frame's. A view contributes only
   facts about the document it is showing. That division is what stopped the bar from emptying when a view
   stopped being where a reader lands; the shape of an item and where it lands is [[status-bar]]'s.

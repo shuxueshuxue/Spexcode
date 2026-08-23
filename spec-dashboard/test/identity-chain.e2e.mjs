@@ -140,33 +140,34 @@ async function assertSwitcherMarks(page) {
   return { menu, rocketItem }
 }
 
-async function assertProjectChipChrome(page) {
-  const chip = page.locator('.proj-chip')
-  const chrome = () => chip.evaluate((element) => {
+async function assertProjectStatusChrome(page) {
+  const trigger = page.locator('.sb-project-trigger')
+  const chrome = () => trigger.evaluate((element) => {
     const style = getComputedStyle(element)
-    return { backgroundColor: style.backgroundColor, borderTopWidth: style.borderTopWidth }
+    return { backgroundColor: style.backgroundColor, borderTopWidth: style.borderTopWidth, color: style.color }
   })
   const idle = await chrome()
-  await page.screenshot({ path: join(out, 'atlas-rail-chip-idle-dracula.png'), fullPage: true })
-  assert.deepEqual(idle, { backgroundColor: 'rgba(0, 0, 0, 0)', borderTopWidth: '0px' },
-    'the project chip matches a neutral rail button until it is hovered or opened')
-  const [railBox, chipBox, markBox] = await Promise.all([
-    page.locator('.side-rail').boundingBox(),
-    chip.boundingBox(),
-    chip.locator('.identity-iconify').boundingBox(),
+  await page.screenshot({ path: join(out, 'atlas-status-project-idle-dracula.png'), fullPage: true })
+  assert.equal(idle.backgroundColor, 'rgba(0, 0, 0, 0)')
+  assert.equal(idle.borderTopWidth, '0px',
+    'the project identity matches the quiet status row until it is hovered or opened')
+  const [statusBox, triggerBox, markBox] = await Promise.all([
+    page.locator('.statusbar').boundingBox(),
+    trigger.boundingBox(),
+    trigger.locator('.identity-iconify').boundingBox(),
   ])
-  assert.deepEqual(railBox && { width: railBox.width }, { width: 40 })
-  assert.deepEqual(chipBox && { width: chipBox.width, height: chipBox.height }, { width: 32, height: 32 })
-  assert.deepEqual(markBox && { width: markBox.width, height: markBox.height }, { width: 27, height: 27 })
-  assert.ok(chipBox && markBox && Math.abs(markBox.x - chipBox.x - 2.5) < 0.01 && Math.abs(markBox.y - chipBox.y - 2.5) < 0.01,
-    'the mark halves the former 5px gap to the removed border')
+  assert.ok(statusBox && triggerBox && triggerBox.height === statusBox.height,
+    'the compact project trigger occupies the status row without growing it')
+  assert.deepEqual(markBox && { width: markBox.width, height: markBox.height }, { width: 14, height: 14 })
+  assert.ok(triggerBox && markBox && markBox.x >= triggerBox.x && markBox.x + markBox.width < triggerBox.x + triggerBox.width,
+    'the small project mark leaves room for the visible project name')
 
-  await chip.hover()
-  assert.notEqual((await chrome()).backgroundColor, 'rgba(0, 0, 0, 0)', 'hover gives the project chip the standard rail background')
+  await trigger.hover()
+  assert.notEqual((await chrome()).color, idle.color, 'hover accents the status project trigger')
 
-  await chip.click()
-  assert.notEqual((await chrome()).backgroundColor, 'rgba(0, 0, 0, 0)', 'the open switcher keeps the standard rail background')
-  await chip.click()
+  await trigger.click()
+  assert.notEqual((await chrome()).color, idle.color, 'the open switcher keeps the project trigger accented')
+  await trigger.click()
 }
 
 const atlas = makeProject('atlas', 'Atlas Lab', 'compass')
@@ -293,15 +294,15 @@ try {
   step('open atlas scope')
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Atlas Lab', 'atlas title')
+  await waitFor(async () => (await page.title()).endsWith('Atlas Lab'), 'atlas title')
   const atlasHref = await favicon(page)
   assert.ok(atlasHref.endsWith('/lucide/radar.svg'))
-  assert.match(await page.locator('.proj-chip').getAttribute('aria-label'), /Atlas Lab/)
-  assert.match(await page.locator('.proj-chip .identity-iconify').getAttribute('style'), /lucide\/radar\.svg/)
-  await assertProjectChipChrome(page)
+  assert.match(await page.locator('.sb-project-trigger').getAttribute('aria-label'), /Atlas Lab/)
+  assert.match(await page.locator('.sb-project-trigger .identity-iconify').getAttribute('style'), /lucide\/radar\.svg/)
+  await assertProjectStatusChrome(page)
 
   step('switcher identity marks')
-  await page.locator('.proj-chip').click()
+  await page.locator('.sb-project-trigger').click()
   const desktopSwitcher = await assertSwitcherMarks(page)
   assert.match(await desktopSwitcher.menu.getByRole('menuitem', { name: 'Atlas Lab', exact: true }).locator('.proj-menu-mark').getAttribute('style'), /lucide\/radar\.svg/)
   assert.match(await desktopSwitcher.menu.getByRole('menuitem', { name: 'All projects', exact: true }).locator('.proj-menu-mark').getAttribute('style'), /simple-icons\/github\.svg/)
@@ -310,19 +311,20 @@ try {
   step('switch to rocket')
   await desktopSwitcher.rocketItem.click()
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Rocket Yard', 'rocket title')
+  await waitFor(async () => (await page.title()).endsWith('Rocket Yard'), 'rocket title')
   const rocketHref = await favicon(page)
   assert.notEqual(rocketHref, atlasHref)
-  assert.match(await page.locator('.proj-chip').getAttribute('aria-label'), /Rocket Yard/)
+  assert.match(await page.locator('.sb-project-trigger').getAttribute('aria-label'), /Rocket Yard/)
 
   step('return atlas after rocket')
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Atlas Lab', 'atlas title after rocket')
+  await waitFor(async () => (await page.title()).endsWith('Atlas Lab'), 'atlas title after rocket')
   assert.equal(await favicon(page), atlasHref, 'last visited project never leaks into atlas')
 
   step('side nav route contract')
-  assert.equal(await page.locator('.side-rail .rail-btn:not(.proj-chip)').count(), 5)
+  assert.equal(await page.locator('.side-rail .proj-chip').count(), 0, 'the rail has no project identity duplicate')
+  assert.equal(await page.locator('.side-rail a.rail-btn').count(), 5)
   assert.equal(await page.getByRole('button', { name: 'Projects', exact: true }).count(), 0)
   const routes = [
     { name: /^Sessions/, hash: '#/sessions' },
@@ -337,7 +339,7 @@ try {
     assert.equal((await entry.getAttribute('href') || '').startsWith(route.hash), true, `rail entry carries ${route.hash}`)
     await entry.click()
     await waitFor(() => Promise.resolve(page.url().includes(route.hash)), `rail route ${route.hash}`)
-    assert.equal(await page.title(), 'Atlas Lab', `scoped tab title stays the project title on ${route.hash}`)
+    assert.ok((await page.title()).endsWith('Atlas Lab'), `scoped tab title keeps the project identity on ${route.hash}`)
   }
   await page.goBack({ waitUntil: 'domcontentloaded' })
   await waitFor(() => Promise.resolve(page.url().includes('#/settings')), 'browser back to settings')
@@ -382,8 +384,8 @@ try {
   step('offline project stays inert in the scoped switcher')
   await page.goto(`${base}/p/${encodeURIComponent(rocket.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Rocket Yard', 'rocket title with atlas offline')
-  await page.locator('.proj-chip').click()
+  await waitFor(async () => (await page.title()).endsWith('Rocket Yard'), 'rocket title with atlas offline')
+  await page.locator('.sb-project-trigger').click()
   const offlineSwitcherItem = page.locator('.proj-menu').getByRole('menuitem', { name: 'Atlas Lab', exact: true })
   assert.equal(await offlineSwitcherItem.count(), 1, 'offline project remains visible in the switcher')
   assert.equal(await offlineSwitcherItem.getAttribute('aria-disabled'), 'true', 'offline project is marked disabled')
@@ -418,7 +420,7 @@ try {
   await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'everforest') })
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  await page.locator('.proj-chip').click()
+  await page.locator('.sb-project-trigger').click()
   await assertSwitcherMarks(page)
   await page.screenshot({ path: join(out, 'atlas-switcher-narrow-everforest.png'), fullPage: true })
 
@@ -456,7 +458,7 @@ try {
   await page.screenshot({ path: join(out, 'atlas-config-mobile-everforest-saved.png'), fullPage: true })
 
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
-  await waitFor(async () => (await page.title()) === 'Atlas Lab', 'mobile atlas title')
+  await waitFor(async () => (await page.title()).endsWith('Atlas Lab'), 'mobile atlas title')
   assert.ok((await favicon(page)).endsWith('/tabler/radar.svg'), 'mobile broad choice drives the scoped favicon')
   await page.screenshot({ path: join(out, 'atlas-mobile-everforest.png'), fullPage: true })
   assert.notEqual(await favicon(page), atlasLiveHref, 'offline edit persisted through backend and gateway restart')
@@ -474,8 +476,8 @@ try {
   await waitFor(async () => (await guestPage.title()) === atlas.id, 'gated scope titles by URL project id, suffix-free')
   await guestPage.getByRole('button', { name: 'unlock' }).click()
   await guestPage.locator('.side-rail').waitFor()
-  await waitFor(async () => (await guestPage.title()) === 'Atlas Lab', 'unlocked guest title from authorized board identity')
-  assert.equal(await guestPage.locator('.proj-chip').getAttribute('aria-haspopup'), null)
+  await waitFor(async () => (await guestPage.title()).endsWith('Atlas Lab'), 'unlocked guest title from authorized board identity')
+  assert.equal(await guestPage.locator('.sb-project-trigger').getAttribute('aria-haspopup'), null)
   assert.equal(await guestPage.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((response) => response.status)), 401)
   assert.equal(await guestPage.locator('.proj-menu').count(), 0)
   await guest.close()

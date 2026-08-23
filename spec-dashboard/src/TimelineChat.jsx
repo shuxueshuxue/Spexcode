@@ -4,6 +4,9 @@ import { loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSess
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import RichText, { richTextFromRange } from './RichText.js'
+import { BlobMedia } from './Evidence.jsx'
+import { routeHash } from './route.js'
+import { holdAnchor } from './tabs.js'
 import 'katex/dist/katex.min.css'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
@@ -17,6 +20,17 @@ const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 
 const transcriptCache = new Map()
 
+function TimelineRichText({ children, className = '' }) {
+  return <RichText className={className}
+    renderSpecRef={(id, token, provenance) => {
+      const href = routeHash('spec', id)
+      return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+    }}
+    renderEvidence={(meta, token, provenance) => <span className="rich-evidence" {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
+    {children}
+  </RichText>
+}
+
 function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
 // The interval end moves when a later status arrives; expansion belongs to the status event itself.
 function transcriptStatusKey(sessionId, from) { return `${sessionId}:${from}` }
@@ -27,7 +41,7 @@ function TranscriptPayload({ data }) {
     {data.turns.map((turn, index) => (
       <div className={`m-transcript-turn is-${turn.role}`} key={`${turn.id || turn.at}-${index}`}>
         <div className="m-transcript-role">{turn.role}</div>
-        {turn.text && <div className="m-transcript-text"><RichText>{turn.text}</RichText></div>}
+        {turn.text && <div className="m-transcript-text"><TimelineRichText>{turn.text}</TimelineRichText></div>}
         {turn.tools?.map((tool) => (
           <details className="m-transcript-tool" key={tool.id}>
             <summary><span>{tool.name}</span><span>▸ 输出 {tool.outputLines || 0} 行</span></summary>
@@ -468,7 +482,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {expanded && transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} />}
           {e.note && (
             <div className="m-ev-note">
-              <RichText>{e.note}</RichText>
+              <TimelineRichText>{e.note}</TimelineRichText>
               {!hasTimelineHighlight() && (
                 <button type="button" className="m-copy-note" onClick={() => copyText(e.note)}>
                   {t('mobile.copy')}
@@ -485,7 +499,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
             <span className="m-ev-from">{fromLabel(e.from)}</span>
             <span className="m-ev-time">{timeOf(e.ts)}</span>
           </div>
-          <div className="m-ev-text"><RichText>{e.text}</RichText></div>
+          <div className="m-ev-text"><TimelineRichText>{e.text}</TimelineRichText></div>
         </div>,
       )
     }
@@ -499,7 +513,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {detail?.prompt && (
             <details className="m-ev m-ev-prompt">
               <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
-              <div className="m-ev-text"><RichText>{detail.prompt}</RichText></div>
+              <div className="m-ev-text"><TimelineRichText>{detail.prompt}</TimelineRichText></div>
             </details>
           )}
           {events === null

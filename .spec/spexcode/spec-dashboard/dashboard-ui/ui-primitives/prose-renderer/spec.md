@@ -1,8 +1,9 @@
 ---
 title: prose-renderer
-status: pending
+status: active
 hue: 272
-desc: ONE dashboard prose renderer — markdown-it as the only parser, its tokens mapped to React, SpexCode's own marks (node refs, evidence, time anchors) as semantic token plugins, KaTeX the single audited HTML insertion. PENDING.
+desc: ONE dashboard prose renderer — markdown-it as the only parser, its tokens mapped to React, SpexCode's own marks (node refs, evidence, time anchors) as semantic token plugins, KaTeX the single audited HTML insertion. ACTIVE.
+code: spec-dashboard/src/Prose.js
 related:
   - .spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/prose-renderer/migration-payload.md
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
@@ -10,10 +11,11 @@ related:
 
 # prose-renderer
 
-**Status: pending** — this node is the contract; the full token-to-React migration is not complete yet. The
-first migration boundary is the shared `proseTokens` markdown-it adapter: it preserves source maps and
-promotes `[[id]]`, evidence links, and time anchors to semantic tokens. `SpecBody` consumes that boundary as
-a compatibility shell; the remaining surfaces still need migration and the old path still exists elsewhere.
+**Status: active** — the shared token-to-React migration now owns spec bodies, issue/review replies, and the
+session timeline. The `proseTokens` markdown-it adapter preserves source maps and promotes `[[id]]`, evidence
+links, and time anchors to semantic tokens. `SpecBody`, `RichText`, and `Thread` are compatibility names over
+that same boundary; no surface pre-strips marks or injects ordinary prose HTML. The browser migration gate for
+TimelineChat remains a separate acceptance item because its parked-fixture run still needs a healthy backend.
 The current compatibility renderer now covers standard links, remote images, blockquotes, heading levels,
 inline/display KaTeX, emphasis, strikethrough, and ordered/unordered lists; `code:`
 names the one renderer module and `related:` names every surface that consumes it (the node-body view,

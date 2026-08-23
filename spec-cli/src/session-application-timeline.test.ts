@@ -138,3 +138,32 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
     else process.env.SPEXCODE_HOME = previousHome
   }
 })
+
+test('canonical acceptance stays successful when a runtime binding is not ready yet', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-cutover-unbound-command-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const databasePath = join(home, 'sessions.sqlite')
+  const id = 'unbound-command-session'
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    title: 'unbound', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
+    sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: 'native-thread-not-bound', stopped: false, archived: false,
+    cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'active' })
+  try {
+    const result = await sendText(id, 'queued until runtime binding')
+    assert.deepEqual(result, { ok: true, delivery: 'queued' })
+    assert.equal(app.protocol.listPending(id).length, 1, 'accepted bytes remain canonical debt until binding/resume')
+  } finally {
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})

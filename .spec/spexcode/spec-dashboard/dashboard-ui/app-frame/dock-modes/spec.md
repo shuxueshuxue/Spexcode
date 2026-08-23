@@ -53,6 +53,10 @@ projection may not mint a strip of its own; the explorer's own count row, the se
 archive door were three separate strips stacked around one list, three answers to a question this row
 already answers once.
 
+The header and zone tallies are last-good projections during a backend outage. They stay visible for context
+but carry the same translated `stale` marker as the status bar until the shared transport proves reachability
+again; the dock never paints an old count as silently current and never invents a replacement zero.
+
 **SEARCH IS ONE OF THOSE DOORS, and each head opens it on what that head LISTS.** The sessions head searches
 sessions; the explorer head searches nodes. It is the same palette either way — same rows, same keys, same
 matcher — and the projection only sets which plane leads ([[paged-palette]]'s `boost`). Search used to be a

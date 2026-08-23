@@ -10,6 +10,7 @@ related:
   - spec-cli/src/pty-helper.mjs
   - spec-cli/src/index.ts
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/readSafety.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/terminal-input.e2e.mjs
   - spec-dashboard/test/terminal-chrome-focus.e2e.mjs
@@ -18,8 +19,14 @@ related:
 
 # terminal-input
 
-A live session opens focused in its **real TUI**. Selecting a session, reselecting its active row, choosing
-the Terminal tab, or returning from [[command-box]] explicitly activates that TUI and restores its focus.
+A live session opens attached to its **real TUI**, but attached read-only. Selecting a session is a read:
+it may render and copy the current terminal screen, but it sends no terminal bytes and does not focus xterm.
+The document action slot carries the one explicit **enable terminal input** button. It is never pre-focused,
+and pressing it only unlocks input; focus stays on that button, outside the terminal's click landing. A
+separate pointer press on the terminal is therefore required before any key can reach tmux. Leaving the
+session, leaving Terminal, or leaving the Sessions page locks input again. This keeps a harness-owned token or
+resume confirmation visible for inspection without putting its `Enter` confirmation under the reader's next
+keystroke. Returning from [[command-box]] restores terminal focus only within an already explicit writable turn.
 Pointer activation must not blur xterm's hidden textarea before the activation lands: an in-progress browser
 IME composition remains attached to the same input element instead of being ended by dashboard chrome.
 Beyond activation, **console chrome is pointer-inert for focus**: clicking and operating the sidebar list,
@@ -29,7 +36,8 @@ from the TUI — the console's panel-wide blanket cancels the press's focus move
 console that legitimately takes focus — the search palette, a modal — returns it to the TUI on exit
 ([[focus-return]] owns that boundary), so leaving any pop lands you typing again, never on dead chrome.
 
-xterm owns ordinary keyboard input and its hidden textarea owns browser IME composition; SpexCode does not
+xterm owns ordinary keyboard input after the explicit write unlock, and its hidden textarea owns browser IME
+composition; SpexCode does not
 translate DOM keydowns into a second vocabulary. Unmodified printable keys complete through the browser's
 native text events instead of xterm eagerly translating their physical key code on `keydown`; the IME's
 committed text therefore wins when the same comma or period key means `，` or `。`. Once xterm publishes an

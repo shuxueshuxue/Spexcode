@@ -108,6 +108,9 @@ export const VIEWS = Object.freeze({
 // Product-owned views are seeded once; extensions register through this boundary so
 // collisions and ownership are visible instead of silently replacing shell routes.
 export const viewRegistry = createViewRegistry(VIEWS)
+// One registry owns both rendering metadata and the route contract consumed by ViewScopeHost.
+// Consumers must not maintain a parallel page allow-list.
+export const viewRouteContract = viewRegistry.routeContract
 export const registerView = (...args) => viewRegistry.registerView(...args)
 export const registerPlugin = (plugin) => viewRegistry.registerPlugin(plugin)
 export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)

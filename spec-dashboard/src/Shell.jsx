@@ -10,7 +10,7 @@ import { useRoute, navigate, routeHash } from './route.js'
 import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { preloadView, viewFor } from './views.jsx'
+import { preloadView, viewFor, viewRouteContract } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
@@ -90,7 +90,7 @@ function ViewScopeHost({ page, param, query, active, children }) {
     return { accepted: true, intent }
   }, [splitTo])
   const holder = useMemo(() => createViewScope({
-    route: { page, param, query }, dispatch, active,
+    route: { page, param, query }, dispatch, active, contract: viewRouteContract,
   }), []) // the shell updates this holder below; the public scope identity remains stable for the view
   useEffect(() => {
     holder.update({ route: { page, param, query }, active })

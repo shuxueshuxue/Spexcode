@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createViewScope, normalizeAddress, VIEW_INTENTS } from './viewScope.js'
+import { createViewScope, normalizeAddress, VIEW_INTENTS, VIEW_ROUTE_CONTRACT } from './viewScope.js'
 
 const route = { page: 'evals', param: 'node-a/scenario-a', query: { q: 'state:current' } }
 
@@ -16,6 +16,11 @@ test('scope validates addresses and exposes only typed route intents', () => {
   assert.deepEqual(received[2].address, { page: 'evals', param: route.param, query: { q: 'is:open' } })
   assert.throws(() => scope.open({ page: 'Bad Page' }), /lowercase kebab-case/)
   assert.throws(() => scope.ownQuery({ q: { nested: true } }), /primitive value/)
+})
+
+test('the default contract remains explicit and immutable', () => {
+  assert.deepEqual(VIEW_ROUTE_CONTRACT.intents, VIEW_INTENTS)
+  assert.equal(Object.isFrozen(VIEW_ROUTE_CONTRACT), true)
 })
 
 test('inactive pooled scopes suspend dispatch until the shell reactivates them', () => {
@@ -39,4 +44,19 @@ test('scope snapshots are immutable and dispatch receives one atomic intent', ()
   assert.equal(Object.isFrozen(received[0]), true)
   assert.equal(Object.isFrozen(received[0].address), true)
   assert.throws(() => { received[0].address.page = 'sessions' }, TypeError)
+})
+
+test('registry-backed route contract rejects an unowned view before dispatch', () => {
+  const received = []
+  const contract = {
+    assertAddress(address, label = 'address') {
+      if (address.page !== 'evals') throw new TypeError(`${label}.page is not a registered view`)
+      return address
+    },
+  }
+  const { scope } = createViewScope({ route, contract, dispatch: (intent) => { received.push(intent) } })
+  assert.throws(() => scope.open({ page: 'settings' }), /not a registered view/)
+  assert.equal(received.length, 0)
+  assert.equal(scope.open({ page: 'evals', param: null, query: null }).accepted, true)
+  assert.equal(received.length, 1)
 })

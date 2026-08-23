@@ -4,6 +4,15 @@ const PAGE_NAME = /^[a-z][a-z0-9-]*$/
 const QUERY_KEY = /^[A-Za-z0-9_-]+$/
 const INTENTS = Object.freeze(['open', 'hold', 'own-query'])
 
+// This is the executable half of [[workspace-shell]]'s route-ownership rule.  A scope may
+// validate the shape of an address on its own, but only the shell knows which registered
+// address kinds exist.  The registry supplies that second check at the host boundary.
+export const VIEW_ROUTE_CONTRACT = Object.freeze({
+  intents: INTENTS,
+  samePage: (from, to) => normalizeAddress(from, 'from').page === normalizeAddress(to, 'to').page,
+  assertAddress: (address) => normalizeAddress(address),
+})
+
 const isPlainObject = (value) => {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
   const proto = Object.getPrototypeOf(value)
@@ -39,14 +48,18 @@ function accepted(intent, result) {
 // Returns a public scope and a shell-only updater. The updater is deliberately not part of the public
 // object, so a view can request route work but cannot rewrite the route it was mounted with or reactivate a
 // hidden pane. Shell reuses the same scope when a pooled document changes address.
-export function createViewScope({ route, dispatch, active = true } = {}) {
+export function createViewScope({ route, dispatch, active = true, contract = VIEW_ROUTE_CONTRACT } = {}) {
   if (typeof dispatch !== 'function') throw new TypeError('view scope requires a dispatch function')
+  if (!contract || typeof contract.assertAddress !== 'function') {
+    throw new TypeError('view scope requires a route contract')
+  }
   let current = normalizeAddress(route, 'route')
   let enabled = active !== false
 
   const emit = (type, address) => {
     if (!enabled) return { accepted: false, reason: 'inactive', type }
-    const intent = Object.freeze({ type, address: normalizeAddress(address, `${type}.address`) })
+    const normalized = contract.assertAddress(address, `${type}.address`)
+    const intent = Object.freeze({ type, address: normalizeAddress(normalized, `${type}.address`) })
     return accepted(intent, dispatch(intent))
   }
   const scope = {}
@@ -59,7 +72,7 @@ export function createViewScope({ route, dispatch, active = true } = {}) {
   scope.ownQuery = (query) => {
     if (!enabled) return { accepted: false, reason: 'inactive', type: 'own-query' }
     const address = { page: current.page, param: current.param, query: normalizeQuery(query, 'own-query.query') }
-    const intent = Object.freeze({ type: 'own-query', address: normalizeAddress(address, 'own-query.address') })
+    const intent = Object.freeze({ type: 'own-query', address: normalizeAddress(contract.assertAddress(address, 'own-query.address'), 'own-query.address') })
     return accepted(intent, dispatch(intent))
   }
 

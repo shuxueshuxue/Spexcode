@@ -33,6 +33,22 @@
   </section>
 
   <section>
+    <h2>2026-08-23 Incident Update</h2>
+    <p class="meta">This addendum is from the live checkout after the original audit was landed. It supersedes the point-in-time counts above where they conflict.</p>
+    <table>
+      <thead><tr><th>Observation</th><th>Evidence</th><th>Decision</th></tr></thead>
+      <tbody>
+        <tr><td>Working-watch flood</td><td>The accidental <code>watch:manual</code> edge from the current parent to <code>ded4b563</code> was cancelled. The remaining relation is the ordinary parent edge; parent-only routine <code>working</code> is now suppressed.</td><td class="pass">Fixed and verified</td></tr>
+        <tr><td>Current parent status</td><td>The parent record had an authored <code>awaiting + proposal=close</code>, so <code>close-pending</code> was an honest projection of a stale self-declaration. It was restored to <code>active</code> with the proposal cleared.</td><td class="pass">Corrected</td></tr>
+        <tr><td><code>ded4b563</code> status</td><td>Canonical SQLite/API state is <code>active/working + online</code>; its Claude process is alive and accepting turns. The visible <code>400</code> account error is an adapter/account failure, not proof that the process exited. The legacy JSON <code>parked</code> value is stale after SQLite cutover.</td><td class="warn">No forced lifecycle rewrite</td></tr>
+        <tr><td>Codex launch pressure</td><td>At least five long-lived app-server parent/child pairs are PPID 1. The current project server owns live references and exceeds its budget; its Codex child is about <strong>1.07 GiB RSS</strong>. Host swap is about <strong>6.1 GiB</strong>. A new <code>thread/start</code> timing out at 15s is consistent with this pressure.</td><td class="fail">P1 infrastructure</td></tr>
+        <tr><td>Safe cleanup boundary</td><td>The four other PPID 1 servers have exact project roots, but their loaded native reference sets cannot be proven; the runtime correctly marks them ineligible for reclaim. The current endpoint and the 8787 backend are also protected owners.</td><td class="pass">No blind kill</td></tr>
+      </tbody>
+    </table>
+    <p>The selector fixture was also moved off the retired <code>.si-tool.command</code> selector and now passes against the current UI. The policy implementation remains package-neutral: the CLI supplies the validated union of parent/manual recipients.</p>
+  </section>
+
+  <section>
     <h2>Live Health Snapshot</h2>
     <table>
       <thead><tr><th>Observation</th><th>Value</th><th>Interpretation</th></tr></thead>

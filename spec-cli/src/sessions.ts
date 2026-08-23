@@ -3251,7 +3251,6 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
   })
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
-export const markError = (sessionId?: string) => markState('error', { sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {

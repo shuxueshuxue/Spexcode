@@ -1805,7 +1805,7 @@ export function canonicalWatchRecipients(
 
 export function sessionHasPendingDelivery(
   id: string,
-  application: Pick<ProductionSessionApplication, 'protocol'> | null | undefined = configuredSessionApplicationIfCutover(),
+  application: Pick<ProductionSessionApplication, 'protocol'> | null = configuredSessionApplicationIfCutover() ?? null,
 ): boolean {
   return application ? application.protocol.listPending(id).length > 0 : owesDelivery(id)
 }

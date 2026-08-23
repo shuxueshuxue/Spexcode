@@ -26,7 +26,9 @@ const walk = (root) => {
 }
 
 const lineOf = (source, index) => source.slice(0, index).split('\n').length
-const quotedVocabulary = new RegExp(`['"](?:${displayStatus.map((word) => word.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')).join('|')})['"]`, 'g')
+const escapedVocabulary = displayStatus.map((word) => word.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')).join('|')
+const quotedVocabulary = new RegExp(`['"](?:${escapedVocabulary})['"]`, 'g')
+const keyedVocabulary = new RegExp(`(?:^|[,\\{])\\s*(${escapedVocabulary})\\s*:`, 'gm')
 
 // A small balanced-literal reader is enough for this guard: it sees arrays/objects/Set arguments while
 // ignoring function blocks, then reports the opening line so a new hand-written vocabulary is actionable.
@@ -55,6 +57,7 @@ function literals(source) {
     if (end < 0) continue
     const body = source.slice(opener, end + 1)
     const words = new Set([...body.matchAll(quotedVocabulary)].map((item) => item[0].slice(1, -1)))
+    for (const item of body.matchAll(keyedVocabulary)) words.add(item[1])
     const name = source.slice(0, opener).match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:new\s+Set(?:<[^>]+>)?\s*\()?\s*$/)?.[1]
     if (words.size >= 2) out.push({ line: lineOf(source, opener), words, name })
   }
@@ -74,10 +77,11 @@ test('dashboard source does not mint a second multi-status literal', () => {
   const allowed = new Map([
     // Existing consumers are whitelisted one expression at a time: session.js owns the colour/glyph maps and
     // needs-you set; EvalsPage's `keys` is an eval-summary schema; sessionCommands' UI_COMMANDS is the command
-    // capability registry; the two test fixture arrays exercise those consumers. None is a second vocabulary.
+    // capability registry; the test fixture objects exercise those consumers. None is a second vocabulary.
     ['session.js', new Set(['STATUS_COLOR', 'STATUS_GLYPH', 'NEED_STATUS'])],
     ['EvalsPage.jsx', new Set(['keys'])],
     ['sessionCommands.js', new Set(['UI_COMMANDS'])],
+    ['evalsPage.test.mjs', new Set(['summary', 'projection'])],
     ['reviewFilters.test.mjs', new Set(['sessions'])],
     ['session.test.mjs', new Set(['cases', 'sessions'])],
   ])

@@ -8,9 +8,21 @@ function assertName(name) {
   }
 }
 
+const REACT_COMPONENT_TYPES = new Set([
+  Symbol.for('react.lazy'),
+  Symbol.for('react.memo'),
+  Symbol.for('react.forward_ref'),
+])
+
+// React.lazy/memo/forwardRef are valid component values even though React represents them as
+// tagged objects rather than callable functions. Keep the registry boundary strict: only these
+// known React component tags cross it, while arbitrary objects still fail closed.
+const isComponent = (component) => typeof component === 'function'
+  || (component && typeof component === 'object' && REACT_COMPONENT_TYPES.has(component.$$typeof))
+
 function copyDefinition(definition) {
-  if (!definition || typeof definition !== 'object' || typeof definition.component !== 'function') {
-    throw new TypeError('view definition requires a component function')
+  if (!definition || typeof definition !== 'object' || !isComponent(definition.component)) {
+    throw new TypeError('view definition requires a component function or React component')
   }
   return Object.freeze({ ...definition })
 }

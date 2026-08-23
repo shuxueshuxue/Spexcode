@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { lazy } from 'react'
 import { createViewRegistry } from './viewRegistry.js'
 import { createSettingsViewPlugin } from './builtInViewPlugins.js'
 
@@ -29,6 +30,13 @@ test('registry exposes immutable built-ins and rejects replacement', () => {
   assert.equal(registry.get('sessions').component, component)
   assert.throws(() => registry.registerView('sessions', { component }), /already registered/)
   assert.throws(() => registry.registerView('Bad Name', { component }), /kebab-case/)
+})
+
+test('registry accepts React.lazy component objects and rejects unknown tagged objects', () => {
+  const lazyComponent = lazy(() => Promise.resolve({ default: component }))
+  const registry = createViewRegistry({ evals: { component: lazyComponent } })
+  assert.equal(registry.get('evals').component, lazyComponent)
+  assert.throws(() => createViewRegistry({ broken: { component: { $$typeof: Symbol('react.lazy') } } }), /component function/)
 })
 
 test('plugin registration is atomic and records ownership', () => {

@@ -102,6 +102,7 @@ function GraphView({ param, query }) {
   const [pane, setPane] = useState('spec')
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
+  const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
   // The shell owns the registry-backed help legend, so the graph button uses the same global state.
@@ -170,6 +171,12 @@ function GraphView({ param, query }) {
 
   const openSession = useCallback((id) => navigate('sessions', id), [])
   const startNew = useCallback((text) => { setSeed(text); navigate('sessions', 'new') }, [setSeed])
+  const selectedNodes = useMemo(() => selectedNodeIds.map((id) => rawById[id]).filter(Boolean), [rawById, selectedNodeIds])
+  const dispatchSelected = useCallback(() => {
+    if (!selectedNodes.length) return
+    startNew(`${selectedNodes.map((node) => `[[${node.id}]]`).join(' ')} `)
+    setSelectedNodeIds([])
+  }, [selectedNodes, startNew])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
@@ -263,10 +270,10 @@ function GraphView({ param, query }) {
       data: { ...s, graphTitle: graphTitle.get(s.id) || s.title, ...extra },
       initialWidth: NODE_SIZE.width, initialHeight: NODE_SIZE.height,
       handles: NODE_HANDLES,
-      draggable: false, selected: s.id === focusId, className,
+      draggable: false, selected: s.id === focusId || selectedNodeIds.includes(s.id), className,
     }
     })
-  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
+  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded, selectedNodeIds])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -603,6 +610,10 @@ function GraphView({ param, query }) {
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
+          selectionOnDrag
+          selectionMode="partial"
+          panOnDrag={[1, 2]}
+          onSelectionChange={(selection) => setSelectedNodeIds(selection.nodes.map((node) => node.id))}
           onMoveEnd={(event, viewport) => {
             const previous = viewportRef.current
             const changed = !previous
@@ -628,6 +639,16 @@ function GraphView({ param, query }) {
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
+
+        {!graphOnly && selectedNodes.length > 0 && (
+          <div className="graph-selection-actions" role="toolbar" aria-label="Selected spec nodes">
+            <span className="graph-selection-count">{selectedNodes.length} selected</span>
+            <button type="button" className="graph-selection-send" onClick={dispatchSelected}>
+              Send to Session
+            </button>
+            <button type="button" className="graph-selection-clear" onClick={() => setSelectedNodeIds([])} aria-label="Clear selected spec nodes">×</button>
+          </div>
+        )}
 
         {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId}
           onPick={(session) => lockGraphTo(session.source)} onOpenSession={openSession}

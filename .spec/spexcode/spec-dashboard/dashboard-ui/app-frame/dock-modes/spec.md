@@ -68,12 +68,11 @@ force, so the key and the visible door can never disagree.
 The dock's session projection is the **one session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
 route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
-archived records form the fourth archive zone; otherwise offline liveness wins over lifecycle and puts the row in
-offline. The two legislated exceptions are `queued`, which has not launched and remains runnable under running,
-and `archive`, which is a closed zone rendered with the muted offline mark (`○`). While online
-asking/review/done/close-pending/error form needs-you and the remaining online states
-form running. A parent-child display edge is kept only within one derived zone, so an offline child is a root in
-the offline bucket rather than a row under an online parent. The header's `+` navigates to `sessions/new` and its archive
+the status published by `/api/sessions` is ground truth. `asking`/`review`/`done`/`close-pending`/`error` form
+needs-you; `working`/`queued` and other active values form running; `offline`/`retired` form offline; archived
+records form the fourth archive zone and use the muted archive mark (`○`). Liveness never overrides the status,
+so a dead review or asking session stays in needs-you with its lifecycle glyph. Parentage follows the stored
+relationship and does not split when liveness changes. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
 else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
@@ -81,6 +80,9 @@ separate gesture with its own section below, and it changes no address.
 When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
 keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
 well; the reveal is derived from `activeSessionId`, not a second selection state.
+
+Historical correction: `2486cb152` made liveness dominate the package status and moved dead review/asking rows
+into offline. That overcorrection is revoked. 人类判词：“不要再新增机制…把这套状态改对,因为它原来就是对的,只不过写了一堆屎山把对的搞错了。”
 
 **A session row is also where the graph is claimed.** Alt-click scopes the board to that session's worktree
 — its nodes stay lit, every other node dims, and [[lock-hint]] names the claim. The row wears the claim

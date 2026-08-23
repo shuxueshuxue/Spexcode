@@ -11,7 +11,10 @@ related:
 # prose-renderer
 
 **Status: pending** — this node is the contract; the full token-to-React migration is not complete yet. The
-current compatibility renderer now covers standard links, remote images, blockquotes, heading levels,
+first migration boundary is the shared `proseTokens` markdown-it adapter: it preserves source maps and
+promotes `[[id]]`, evidence links, and time anchors to semantic tokens. `SpecBody` consumes that boundary as
+a compatibility shell; the remaining surfaces still need migration and the old path still exists elsewhere.
+The current compatibility renderer now covers standard links, remote images, blockquotes, heading levels,
 inline/display KaTeX, emphasis, strikethrough, and ordered/unordered lists; `code:`
 names the one renderer module and `related:` names every surface that consumes it (the node-body view,
 the Issues detail + compose preview, the thread, the session timeline) plus its parser/math dependencies.

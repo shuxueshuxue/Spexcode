@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -55,6 +55,15 @@ test('canonical delivery retry waits for a runtime binding instead of polling an
   assert.equal(sessionHasPendingDelivery('unbound', unbound), false)
   assert.equal(sessionHasPendingDelivery('bound', bound), true)
   assert.equal(reads, 1)
+})
+
+test('headless liveness follows the exact resident-reference census', () => {
+  const record = { session: 'headless', harness: 'codex-headless', harnessSessionId: 'thread-1', stopped: false, archived: false } as SessRec
+  assert.equal(adapterResidentLiveness(record, { healthy: true, loaded: true }), 'online')
+  assert.equal(adapterResidentLiveness(record, { healthy: true, loaded: false }), 'offline')
+  assert.equal(adapterResidentLiveness(record, { healthy: false, loaded: false, error: 'app-server unavailable' }), 'unknown')
+  assert.equal(adapterResidentLiveness(record, undefined), 'unknown')
+  assert.equal(adapterResidentLiveness({ ...record, stopped: true }, { healthy: true, loaded: true }), 'offline')
 })
 
 test('canonical lifecycle always wins over stale JSON status bytes', () => {

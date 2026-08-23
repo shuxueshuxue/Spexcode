@@ -42,10 +42,10 @@ test('opencode-headless liveness follows its exact session home', () => {
   assert.equal(liveness({ ...headless, stopped: true }, snap({ windows: withHome, probeFailed: true })), 'offline')
 })
 
-test('codex-headless liveness is the intact record, independent of the shared app-server process', () => {
+test('codex-headless liveness requires an exact shared-runtime generation proof', () => {
   const headless = rec({ harness: 'codex-headless' })
-  assert.equal(liveness(headless, snap()), 'online')
-  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+  assert.equal(liveness(headless, snap()), 'offline', 'a stale record without a detached-runtime proof is offline')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown', 'a failed tmux probe remains inconclusive even without runtime proof')
   assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
 })
 

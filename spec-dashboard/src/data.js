@@ -46,45 +46,6 @@ export function layout(nodes, expanded) {
   return pos
 }
 
-// The graph is the one display projection for node identity. Backend ids are canonical and title text is
-// intentionally human-friendly, but a repeated title/leaf must gain the shortest ancestor qualifier that
-// makes the visible labels unique. Non-conflicting nodes retain the raw title unchanged.
-export function graphTitles(nodes) {
-  const byId = Object.fromEntries(nodes.map((node) => [node.id, node]))
-  const leaf = (node) => {
-    const path = typeof node.path === 'string' ? node.path.split(/[\\/]/).filter(Boolean) : []
-    return path.at(-2) || node.id
-  }
-  const base = (node) => node.title || leaf(node)
-  const counts = new Map()
-  nodes.forEach((node) => counts.set(base(node), (counts.get(base(node)) || 0) + 1))
-  const conflicted = nodes.filter((node) => counts.get(base(node)) > 1)
-  const rawLabels = new Set(nodes.map(base))
-  const result = new Map(nodes.map((node) => [node.id, base(node)]))
-  const chain = (node) => {
-    const labels = []
-    for (let current = node; current; current = current.parent ? byId[current.parent] : null) labels.unshift(base(current))
-    return labels
-  }
-  for (const node of conflicted) {
-    const labels = chain(node)
-    let chosen = null
-    for (let size = 2; size <= labels.length; size++) {
-      const candidate = labels.slice(-size).join('/')
-      const clashes = conflicted.some((other) => {
-        if (other.id === node.id) return false
-        const otherLabels = chain(other)
-        return otherLabels.slice(-size).join('/') === candidate
-      })
-      if (!clashes && !rawLabels.has(candidate)) { chosen = candidate; break }
-    }
-    // Two identically titled siblings can share every human ancestor. The canonical id is the final,
-    // deterministic qualifier in that otherwise impossible-to-name pair.
-    result.set(node.id, chosen || `${labels.slice(-Math.min(2, labels.length)).join('/')}/${node.id}`)
-  }
-  return result
-}
-
 // retry a thrown (transient: refused/reset) fetch with bounded backoff so a zero-downtime backend reload is
 // invisible; an actual HTTP response (even 4xx/5xx) is returned, never retried. Every `/api` path is
 // scoped through apiUrl ([[dashboard-shell]]'s project-scope seam, project.js), so callers keep writing

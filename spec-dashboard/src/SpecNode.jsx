@@ -33,6 +33,18 @@ const EDGE_ANCHOR_PROPS = {
 export { STATUS, GLYPH } from './specMeta.js'
 import { STATUS, GLYPH } from './specMeta.js'
 
+// Keep both ends of long identities visible. CSS's tail-only ellipsis made distinct paths look identical
+// when their shared prefix filled the fixed title slot.
+export function middleEllipsis(value, maxChars = 18) {
+  const text = String(value ?? '')
+  if (text.length <= maxChars) return text
+  if (maxChars <= 1) return '…'.slice(0, maxChars)
+  const available = maxChars - 1
+  const head = Math.ceil(available / 2)
+  const tail = Math.floor(available / 2)
+  return `${text.slice(0, head)}…${text.slice(text.length - tail)}`
+}
+
 function Editors({ data }) {
   const t = useT()
   // several pending ops from one session collapse to one face — dedupe by id
@@ -80,7 +92,7 @@ export default function SpecNode({ data, selected }) {
         <span className="node-dot" style={{ background: s.color }}>
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
-        <span className="node-title">{data.graphTitle || data.title}</span>
+        <span className="node-title" title={data.title}>{middleEllipsis(data.title)}</span>
         {/* pending ops replace the age — an overlay means the node is being touched NOW */}
         {ops.length > 0 ? (
           <span className="ov-marks" data-tip={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>

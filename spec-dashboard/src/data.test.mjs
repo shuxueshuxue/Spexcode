@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { graphTitles, layout } from './data.js'
+import { layout } from './data.js'
 
 const tree = [
   { id: 'root', parent: null },
@@ -37,18 +37,4 @@ test('wide sibling child blocks reserve the next-layer total height', () => {
   const left = tree.filter((node) => node.parent === 'left')
   const right = tree.filter((node) => node.parent === 'right')
   for (const a of left) for (const b of right) assert.ok(Math.abs(pos[a.id].y - pos[b.id].y) >= 50)
-})
-
-test('duplicate titles get the shortest ancestor qualifier only when needed', () => {
-  const nodes = [
-    { id: 'alpha', parent: null, title: 'Alpha' },
-    { id: 'one', parent: 'alpha', title: 'Leaf' },
-    { id: 'beta', parent: null, title: 'Beta' },
-    { id: 'two', parent: 'beta', title: 'Leaf' },
-    { id: 'solo', parent: null, title: 'Solo' },
-  ]
-  const titles = graphTitles(nodes)
-  assert.equal(titles.get('one'), 'Alpha/Leaf')
-  assert.equal(titles.get('two'), 'Beta/Leaf')
-  assert.equal(titles.get('solo'), 'Solo')
 })

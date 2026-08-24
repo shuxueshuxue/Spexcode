@@ -92,11 +92,19 @@ try {
 
   await page.goto(`${base}/#/issues`, { waitUntil: 'domcontentloaded' })
   await page.locator('.viewhost.view-issues').waitFor({ state: 'visible' })
-  const issues = await page.evaluate(() => ({ hash: location.hash, rails: document.querySelectorAll('.side-rail').length, docks: document.querySelectorAll('.filetree').length }))
-  assert.deepEqual(issues, { hash: '#/issues', rails: 0, docks: 0 })
+  // Issues keeps the rail (the top-level board switch is on every route) with Issues selected, but mounts
+  // no Explorer dock and therefore no fold control ([[side-nav]])
+  const issues = await page.evaluate(() => ({
+    hash: location.hash,
+    rails: document.querySelectorAll('.side-rail').length,
+    selected: document.querySelector('.side-rail a[href="#/issues"]')?.getAttribute('aria-current') === 'page',
+    toggles: document.querySelectorAll('.rail-panel-toggle').length,
+    docks: document.querySelectorAll('.filetree').length,
+  }))
+  assert.deepEqual(issues, { hash: '#/issues', rails: 1, selected: true, toggles: 0, docks: 0 })
   assert.equal(errors.length, 0, `browser errors: ${errors.join(' | ')}`)
-  await page.screenshot({ path: join(out, 'issues-no-left-rail.png'), fullPage: true })
-  console.log(JSON.stringify({ ok: true, spec, file, issues, screenshots: [join(out, 'spec-rail-dock.png'), join(out, 'spec-file-selected.png'), join(out, 'issues-no-left-rail.png')] }))
+  await page.screenshot({ path: join(out, 'issues-rail-no-dock.png'), fullPage: true })
+  console.log(JSON.stringify({ ok: true, spec, file, issues, screenshots: [join(out, 'spec-rail-dock.png'), join(out, 'spec-file-selected.png'), join(out, 'issues-rail-no-dock.png')] }))
 } finally {
   await page.close()
   await browser.close()

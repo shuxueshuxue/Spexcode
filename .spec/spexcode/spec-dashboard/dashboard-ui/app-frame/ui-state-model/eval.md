@@ -13,12 +13,15 @@ scenarios:
       plus real addresses — and boot each state from a workspace address before entering a bare review
       board, since a FIRST load at #/evals or #/issues renders the cold review fast-path, a different and
       dockless shell. In each settled state, classify the chrome bands the DOM actually renders and
-      compare the count to B(state) = 1(rail) + dock + 1(tabstrip) + 1(statusbar) + context. Overlays,
+      compare the count to B(state) = rail + dock + 1(tabstrip) + 1(statusbar) + context, where the bare
+      Issues board has rail=0 and every other route has rail=1. Overlays,
       resize handles and anything inside a declared vertical scrollport are not bands; sibling rows inside
       one region each count.
     expected: >-
       Every visited state stacks exactly the bands its budget allows, and the enumerated state space holds
-      3 ≤ B ≤ 5 end to end. No region carries a row the model does not name: the dock is ONE band (no mode
+      2 ≤ B ≤ 5 end to end. The representative pressure set wraps real session tabs on document/session
+      routes; resident board routes intentionally retain one board tab and report their single-row state.
+      No region carries a row the model does not name: the dock is ONE band (no mode
       row above its header, no archive footer below its list), the tab row is ONE band including its
       wrapper, a session is its tab bar and nothing more, and a document view adds no picker or footer row
       of its own. Zero loss = the frame costs the same small, countable number of rows in every state a

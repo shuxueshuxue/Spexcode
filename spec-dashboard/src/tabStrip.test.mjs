@@ -55,12 +55,13 @@ test('resource tabs name the resource only, without leaking the owning session t
   assert.doesNotMatch(source, /return `\$\{title\} · \$\{resource\?\.label \|\| key\}`/)
 })
 
-test('resident review tabs share the workspace strip while Issues removes the activity rail', () => {
-  // Evals, Issues, and Settings are resident tabs. Issues is the focused full-width reading surface; its
-  // detail still has the shared strip, while the activity rail is intentionally omitted.
+test('resident review tabs share the workspace strip and every board keeps the activity rail', () => {
+  // Evals, Issues, and Settings are resident tabs. Issues is the focused reading surface with no workspace
+  // dock, but the rail — the top-level board switch — never disappears under any board.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{page === 'sessions'\} \/>/)
+  assert.match(shell, /<SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
+  assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
   assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
 })
 

@@ -540,6 +540,10 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // which is what makes it an override rather than a second setting. The effect is keyed on the document,
   // not the address, so switching a session's own face is not a focus change.
   const dockKind = dockFor(page, param)
+  // THE RAIL'S FOLD CONTROL EXISTS WHEREVER THERE IS A SIDEBAR TO FOLD ([[side-nav]]). The shell's dock is
+  // one such sidebar; the Sessions document's own forest is the other and follows the same open/closed
+  // state — so the bare review and settings boards, which have neither, are the only frames without it.
+  const foldable = dockKind !== 'none' || page === 'sessions'
   const documentKey = `${page}/${param ?? ''}`
   // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
   // slides out ([[dock-modes]]). One timer, cleared on reopen; the reader can never end up with a ghost
@@ -674,7 +678,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       <div className="app">
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
-        {page !== 'issues' && <SideBar page={page} needsYou={needsYou} hideDockToggle={page === 'sessions'} />}
+        <SideBar page={page} needsYou={needsYou} hideDockToggle={!foldable} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}

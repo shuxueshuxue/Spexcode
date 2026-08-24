@@ -574,6 +574,8 @@ terminal-input ownership; such shell changes do not create a second session-cons
 The Sessions document owns its frame chrome: the forest sidebar is the left sibling of a right-hand document
 column, and that column contains the shared workspace TabStrip above the console content. The shell omits its
 outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
-than allowing the strip to span above a list. A session tab's right-click enters the same session context menu
+than allowing the strip to span above a list. The forest folds from the rail's panel control ([[side-nav]])
+through the workspace's one dock open/closed state — the console keeps no fold state of its own — and while
+folded the document column takes the full width. A session tab's right-click enters the same session context menu
 as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
 `session-menu` document-action button is absent.

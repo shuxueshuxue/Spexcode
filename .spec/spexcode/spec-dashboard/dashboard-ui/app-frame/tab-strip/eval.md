@@ -9,7 +9,7 @@ scenarios:
       session tab is reused; ctrl-click a session row and confirm it creates a pinned tab; open Settings and
       confirm its tab label is Settings.
     expected: >
-      The strip contains both a session and one resident Spec tab after the cross-kind navigation. A second
+      The strip contains both a session and one dynamic Spec tab after the cross-kind navigation. A second
       spec keeps the same `#/spec` tab identity while its detail address changes. Three plain session clicks leave one session tab whose
       address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
       Settings, never the internal key tabs.settings.

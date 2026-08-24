@@ -57,9 +57,9 @@ const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
 const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
-// The resident Spec document is also the graph's home canvas. A bare `#/spec` is not an empty document:
+// The top-level Spec document is also the graph's home canvas. A bare `#/spec` is not an empty document:
 // it is the graph when no node/file is focused. Node and file addresses keep their own readers while the
-// resident tab remains in the working set.
+// same top-level tab identity remains in the working set.
 function SpecWorkspaceView({ param, query }) {
   if (param == null) return <GraphView page="spec" param={param} query={query} />
   return <SpecView param={param} query={query} />
@@ -87,9 +87,9 @@ function IssuesView({ param, query }) {
 function SettingsView() { return <Settings /> }
 
 // `surface` selects the host chrome; `document(page, param)` marks what the workspace working set may hold.
-// Spec, Evals, and Issues are resident workspace destinations: each top-level tab is one stable address,
-// while an object/detail selector is route state shown inside that tab. This keeps the whole working set
-// visible while a reading or finding is focused and prevents a detail from replacing an unrelated slot.
+// Spec, Evals, and Issues are top-level workspace destinations: each page kind has one stable tab identity,
+// while an object/detail selector is route state shown inside that tab. The `resident` flag names this
+// identity rule only; tabs.js decides whether the page has actually been opened and must be shown.
 // Graph remains an addressable legacy view, not a top-level tab.
 export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace

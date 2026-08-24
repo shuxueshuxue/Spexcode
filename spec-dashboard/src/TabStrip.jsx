@@ -43,7 +43,7 @@ function label(tab, { specs, sessions, names, t }) {
   // naming scheme for documents it does not own.
   if (tab.page === 'spec') return isResident(tab.page) ? t('tabs.spec') : (specs?.find((s) => s.id === tab.param)?.title || tab.param)
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
-  // Review details are route state inside one resident top-level tab. The tab keeps the stable board name;
+  // Review details are route state inside one dynamic top-level tab. The tab keeps the stable board name;
   // the URL still carries the selected scenario or issue for copy/back/refresh.
   if (tab.page === 'evals') return t('tabs.evals')
   if (tab.page === 'issues') return t('tabs.issues')

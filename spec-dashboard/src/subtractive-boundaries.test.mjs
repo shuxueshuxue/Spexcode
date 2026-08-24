@@ -57,7 +57,6 @@ test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosure
   const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
   const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
   assert.match(fileTree, /className="ft-graph-entry"/)
-  assert.match(fileTree, /focusLatestTab\(\(tab\) => tab\.page === 'spec'\)/)
   assert.match(fileTree, /navigate\('spec'\)/)
   assert.match(en, /fileTree:\s*\{[\s\S]*graph:\s*'Spec graph'/)
   assert.match(zh, /fileTree:\s*\{[\s\S]*graph:\s*'规格图谱'/)

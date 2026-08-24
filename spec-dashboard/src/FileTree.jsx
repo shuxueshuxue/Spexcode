@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
-import { focusLatestTab, pinTab } from './tabs.js'
+import { pinTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
@@ -138,7 +138,10 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     return next
   })
   const openSpecGraph = () => {
-    if (!focusLatestTab((tab) => tab.page === 'spec')) navigate('spec')
+    // The Spec tab is resident: navigating to its bare address both focuses the held tab and clears any
+    // node/file selector. `focusLatestTab` only restored the previous selector, so clicking this graph door
+    // appeared inert while a concrete Spec document was already open.
+    navigate('spec')
   }
   if (!specs?.length) return null
   return (

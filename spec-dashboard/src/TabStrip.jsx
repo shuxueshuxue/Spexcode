@@ -109,7 +109,7 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, trailing = null }) {
+export default function TabStrip({ specs, sessions, route, trailing = null, onSessionContextMenu = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
   const [wrapped, setWrapped] = useState(false)
@@ -245,7 +245,17 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
             onDoubleClick={(e) => {
               if (!tab.pinned && !e.target.closest('.tab-x')) pinTab(tab.page, tab.param, tab.query)
             }}
-            onContextMenu={(e) => { if (isClosing) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab, key }) }}
+            onContextMenu={(e) => {
+              if (isClosing) return
+              e.preventDefault()
+              const session = tab.page === 'sessions' && tab.param && tab.param !== 'new'
+                ? (sessions?.find((item) => item.id === tab.param || item.id?.startsWith(tab.param)) || pendingSessionFor(tab.param))
+                : null
+              if (session && onSessionContextMenu) {
+                setMenu(null)
+                onSessionContextMenu({ x: e.clientX, y: e.clientY, session })
+              } else setMenu({ x: e.clientX, y: e.clientY, tab, key })
+            }}
             onAuxClick={(e) => { if (!isClosing && e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}

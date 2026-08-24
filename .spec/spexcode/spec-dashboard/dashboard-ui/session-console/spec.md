@@ -570,3 +570,10 @@ exact state. Green for `working` also matches the avatar's liveness ring, so dot
 
 The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
 terminal-input ownership; such shell changes do not create a second session-console surface.
+
+The Sessions document owns its frame chrome: the forest sidebar is the left sibling of a right-hand document
+column, and that column contains the shared workspace TabStrip above the console content. The shell omits its
+outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
+than allowing the strip to span above a list. A session tab's right-click enters the same session context menu
+as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
+`session-menu` document-action button is absent.

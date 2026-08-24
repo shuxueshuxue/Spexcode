@@ -44,6 +44,8 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.doesNotMatch(source, /className="si-tabbar"/)
   assert.match(source, /function SessionResourcePanel\(/)
   assert.match(source, /<SessionForestPanel/)
+  assert.doesNotMatch(source, /id: 'session-menu'/)
+  assert.match(source, /onSessionContextMenu=\{\(next\) => \{ setResourceMenu\(false\); setCtxMenu\(next\) \}\}/)
 })
 
 test('posted resources use the document-actions picker and selected-file actions', () => {

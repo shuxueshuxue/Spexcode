@@ -121,3 +121,5 @@ terminal, **not** a prompt fallback. The transport split (socket vs send-keys) i
 API deliberately does not surface; an unknown `kind` is a loud 400, never a guessed channel. The raw face is
 the **last resort** everywhere it is taught (`spex session send <SEL> --keys`):
 unstable by nature and able to confirm dangerous dialogs, so callers try a plain text send first.
+Command Box acceptance may defer the native handoff, but its lifecycle re-entry is published only after that
+request's queued message is actually dequeued; an empty or raced drain never invents `working`.

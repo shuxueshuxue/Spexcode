@@ -13,14 +13,12 @@ import { routeHash } from './route.js'
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
-// Resident boards are part of the workspace working set from cold boot. Keeping this identity list beside
-// tab canonicalization means initialization, route placement, and storage migration cannot disagree about
-// which top-level tabs must remain addressable.
-export const RESIDENT_PAGES = Object.freeze(['spec', 'evals', 'issues', 'settings'])
-const RESIDENT_PAGE_SET = new Set(RESIDENT_PAGES)
+// Board details share one top-level identity, but that identity is still a normal workspace tab. The view
+// registry's `resident` flag describes URL canonicalization; it does not seed or pin the tab.
+const TOP_LEVEL_PAGES = new Set(['spec', 'evals', 'issues', 'settings'])
 export const tabRoute = (route) => route?.page === 'sessions' && route?.param && !isResourceRoute(route)
   ? { ...route, query: null }
-  : RESIDENT_PAGE_SET.has(route?.page)
+  : TOP_LEVEL_PAGES.has(route?.page)
     ? { ...route, param: null, query: null }
     : route
 export const tabKey = (t) => {
@@ -41,8 +39,9 @@ export function normalizeTabs(raw, isDocument = () => true) {
       page: original.page, param: original.param, query: original.query,
       // Published resources are deliberate holds: they must never compete for a replaceable file slot,
       // including when an older persisted record forgot to mark them pinned.
-      pinned: isResourceRoute(route) || RESIDENT_PAGE_SET.has(route.page)
-        ? true
+      // Old releases persisted every board as pinned. Demote those legacy faces at the migration boundary;
+      // a board is a dynamic page-kind slot, while only a resource or an explicit hold remains durable.
+      pinned: isResourceRoute(route) ? true : TOP_LEVEL_PAGES.has(route.page) ? false
         : (t.pinned != null ? t.pinned !== false : t.preview !== true),
     }
   })
@@ -60,19 +59,6 @@ export function normalizeTabs(raw, isDocument = () => true) {
   return unique.map((t, i) => (t.pinned || slots.get(tabKind(t)) === i ? t : { ...t, pinned: true }))
 }
 
-// The store's initial working set is structural state, not a consequence of whichever route happened to
-// mount first. Existing order and resident detail selectors are preserved; missing resident faces append in
-// the canonical registry order. This makes a cold Evals/Issues deep link and a return to Spec converge on
-// the same four top-level tabs without a view-specific navigation side effect.
-export function ensureResidentTabs(tabs) {
-  let next = tabs
-  for (const page of RESIDENT_PAGES) {
-    if (next.some((tab) => tab.page === page && tabKey(tab) === routeHash(page))) continue
-    next = [...next, { page, param: null, query: null, pinned: true }]
-  }
-  return next
-}
-
 // WHERE THE STRIP LANDS, given what it holds and what was asked for. Everything the strip decides is here:
 // an already-open address is activated (and pinned when that is what was asked); a new one takes its kind's
 // slot IN PLACE — keeping that slot's position, so the strip does not reshuffle under the reader — or is
@@ -80,13 +66,12 @@ export function ensureResidentTabs(tabs) {
 export function placeTab(tabs, route, mode = 'slot') {
   const original = { page: route.page, param: route.param ?? null, query: route.query ?? null }
   const normalized = tabRoute(original)
-  if (RESIDENT_PAGE_SET.has(normalized.page)) mode = 'pin'
   const key = tabKey(normalized)
   const open = tabs.find((t) => tabKey(t) === key)
   if (open) {
     const faceChanged = normalized.page === 'sessions' && !isResourceRoute(normalized)
       && JSON.stringify(open.query || null) !== JSON.stringify(normalized.query || null)
-    const residentChanged = RESIDENT_PAGE_SET.has(normalized.page)
+    const residentChanged = TOP_LEVEL_PAGES.has(normalized.page)
       && (open.param !== original.param || JSON.stringify(open.query || null) !== JSON.stringify(original.query || null))
     if (mode !== 'pin' && !faceChanged && !residentChanged) return tabs
     return tabs.map((t) => tabKey(t) === key

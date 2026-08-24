@@ -7,7 +7,6 @@ const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
 const { chromium } = await import(pathToFileURL(PW).href)
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true, args: ['--no-sandbox'] })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const residentKeys = ['#/spec', '#/evals', '#/issues', '#/settings']
 const state = () => page.evaluate(() => ({
   hash: location.hash,
   tabs: [...document.querySelectorAll('[role="tab"][data-tab-key]')].map((tab) => ({
@@ -16,18 +15,23 @@ const state = () => page.evaluate(() => ({
   })),
 }))
 try {
-  await page.addInitScript(() => localStorage.removeItem('spexcode.tabs'))
-  for (const route of ['#/sessions', '#/evals', '#/issues', '#/spec']) {
-    await page.goto(`${BASE}/${route}`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const opened = []
+  for (const route of ['#/sessions', '#/evals', '#/issues', '#/spec', '#/settings']) {
+    await page.evaluate((next) => { location.hash = next }, route)
+    await page.waitForURL(new RegExp(`${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
     await page.locator('.tabstrip').waitFor({ state: 'visible', timeout: 60000 })
-    await page.waitForFunction(() => document.querySelectorAll('[role="tab"][data-tab-key]').length >= 4)
+    await page.waitForFunction(() => document.querySelector('.tabstrip-tabs'))
     const current = await state()
-    assert.deepEqual(current.tabs.map((tab) => tab.key), residentKeys, `${route} keeps one resident set`)
+    if (route !== '#/sessions' && !opened.includes(route)) opened.push(route)
+    assert.deepEqual(current.tabs.map((tab) => tab.key), opened, `${route} only keeps visited dynamic tabs`)
     const expectedFocus = route === '#/sessions' ? [] : [route]
     assert.deepEqual(current.tabs.filter((tab) => tab.selected).map((tab) => tab.key), expectedFocus, `${route} focuses its resident tab`)
   }
 
-  // A board detail is route state in the same resident tab, not a second review surface or a rail memory.
+  // A board detail is route state in the same top-level tab, not a second review surface or a rail memory.
   await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
   await page.locator('[data-tab-key="#/evals"] .tab-face').click()
   await page.waitForFunction(() => location.hash === '#/evals')
@@ -37,9 +41,10 @@ try {
   await page.locator('.tabstrip').waitFor({ state: 'visible', timeout: 60000 })
   await page.locator('[data-tab-key="#/spec"] .tab-x').click()
   await page.waitForURL(/#\/graph$/)
+  await page.waitForTimeout(220)
   const afterClose = await state()
-  assert.deepEqual(afterClose.tabs.map((tab) => tab.key).sort(), [...residentKeys].sort(), 'closing a resident face never removes the workspace face')
-  console.log(JSON.stringify({ ok: true, coldRoutes: residentKeys, clicked, afterClose, tabs: residentKeys.length }))
+  assert.equal(afterClose.tabs.some((tab) => tab.key === '#/spec'), false, 'closing a dynamic page removes its tab')
+  console.log(JSON.stringify({ ok: true, opened, clicked, afterClose }))
 } finally {
   await page.close()
   await browser.close()

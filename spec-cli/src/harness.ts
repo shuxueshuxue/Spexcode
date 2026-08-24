@@ -2877,7 +2877,13 @@ function codexRuntimeDescriptor(endpoint: CodexGenerationEndpoint, runtimeDir: s
       return result.ok ? { healthy: true, referenceIds: result.referenceIds } : { healthy: false, referenceIds: [], error: result.error }
     },
     mutationGuard: (targetReferenceId, opts) => codexMutationGuard(targetReferenceId, runtimeDir, opts, endpoint),
-    probe: (referenceIds) => codexSharedRuntimeProbe(runtimeDir, endpoint, referenceIds),
+    probe: (referenceIds) => {
+      // A draining generation keeps serving its bound sessions but is no longer a control-plane candidate.
+      // Listing loaded ids preserves ownership evidence; reading native turn state on that old server only
+      // adds load and can time out while the current generation is healthy.
+      const generation = readCodexGenerationLedger(runtimeDir).generations[endpoint.id]
+      return codexSharedRuntimeProbe(runtimeDir, endpoint, generation?.state === 'draining' ? [] : referenceIds)
+    },
   }
 }
 

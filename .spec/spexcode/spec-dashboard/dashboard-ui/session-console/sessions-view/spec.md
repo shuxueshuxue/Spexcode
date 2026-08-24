@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/test/resource-terminal-lifecycle.e2e.mjs
 ---
 # sessions-view
 

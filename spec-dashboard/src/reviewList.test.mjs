@@ -563,7 +563,8 @@ test('one side-rail value primitive renders every detail metadata row on both pa
   assert.match(shell, /export function SideValue\(/)
   assert.match(css, /\.ds-val \{ display: flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0;/)
   assert.match(css, /\.ds-val-text \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/)
-  assert.match(css, /\.ds-val\.link:focus-visible \{ outline: 2px solid var\(--blue\);/)
+  // the link's keyboard focus is the one shared ring; the rule keeps only the radius the ring follows
+  assert.match(css, /\.ds-val\.link:focus-visible \{ border-radius: var\(--radius\); \}/)
   // the originator liveness chip is an identity SKIN over SideValue, not a parallel span/button pair
   const thread = read('Thread.jsx')
   assert.match(thread, /<SideValue text=\{originator\} tip=\{title\} label=\{title\} lead=\{dot\}/)

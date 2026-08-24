@@ -92,7 +92,7 @@ test('three weights, one radius token, one elevation — the geometry is spendab
   assert.match(css, /--shadow:\s*0 4px 16px/)
   const drops = [...css.matchAll(/box-shadow:\s*([^;}]+)/g)].map((m) => m[1].trim())
     .filter((v) => !v.startsWith('inset') && !v.startsWith('var(--shadow)') && !v.startsWith('none'))
-    .filter((v) => !/^0 0 0 /.test(v))    // rings (focus, avatar liveness) are borders drawn as shadows
+    .filter((v) => !/^0 0 0 /.test(v) && v !== 'var(--focus-ring)')    // rings (focus, avatar liveness) are borders drawn as shadows
   assert.deepEqual(drops.filter((v) => !/^0 1px 4px/.test(v)), [], 'one elevation token owns every real drop shadow')
 })
 
@@ -101,7 +101,7 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   // the ONE content plane is the brightest (--paper). The whole point is that a reader can see where the
   // document is without a border telling them; two tones five values apart could not do that.
   const themes = [...css.matchAll(/:root(?:\[data-theme=\w+\])?\s*\{([\s\S]*?)\n\}/g)].map((m) => m[1])
-  assert.equal(themes.length, 8, 'the default plus seven presets')
+  assert.equal(themes.length, 9, 'the default plus eight presets')
   for (const block of themes) {
     for (const token of ['--paper', '--panel', '--ground']) {
       assert.match(block, new RegExp(`${token}:\\s*#[0-9a-f]{6};`), `${token} must be a resolved value in every theme`)
@@ -119,6 +119,23 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
   // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
   assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
+})
+
+test('how the board responds is spent through interaction tokens a preset can retune', () => {
+  // hover, press, and selection washes, one focus ring, and the field bed are declared on :root and derived
+  // from the palette, so every preset responds coherently without declaring them — and a preset that wants
+  // its own answer (Notion's flat washes and inset ring) sets the token, never a component rule.
+  const root = css.match(/:root\s*\{([\s\S]*?)\n\}/)[1]
+  for (const token of ['--wash-hover', '--wash-active', '--wash-selected', '--focus-ring', '--field-bg']) {
+    assert.match(root, new RegExp(`${token}:\\s*[^;]+;`), `${token} is declared on :root`)
+  }
+  assert.match(root, /color-scheme:\s*dark;/)
+  const notion = css.match(/:root\[data-theme=notion\]\s*\{([\s\S]*?)\n\}/)[1]
+  assert.match(notion, /color-scheme:\s*light;/)
+  assert.match(notion, /--ui-font:\s*var\(--ui-font-sans\);/, 'the Notion preset speaks the sans voice')
+  // the ring is ONE rule: no control hand-writes its own focus outline any more
+  assert.equal(css.match(/outline:\s*[12]px solid var\(--blue\)/g)?.length ?? 0, 0)
+  assert.match(css, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/s)
 })
 
 test('seams and group heads use one divider rule', () => {

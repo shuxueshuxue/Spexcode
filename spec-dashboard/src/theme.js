@@ -12,6 +12,7 @@ const THEME_KEY = 'spexcode.theme'   // localStorage key holding the explicit us
 // feed every label to t() uniformly.
 export const THEMES = [
   { code: 'minimal', label: 'Minimal' },
+  { code: 'notion', label: 'Notion' },
   { code: 'things', label: 'Things' },
   { code: 'tokyonight', label: 'Tokyo Night' },
   { code: 'catppuccin', label: 'Catppuccin' },

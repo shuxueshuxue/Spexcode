@@ -34,6 +34,19 @@ scenarios:
       rail, the URL, and the visible page never disagree while project management has one home.
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/styles.css]
     test: spec-dashboard/test/identity-chain.e2e.mjs
+  - name: spec-rail-resident-dock
+    description: >-
+      In a real Chromium dashboard, open `#/spec`, inspect the five top-level rail anchors and selected
+      state, then open a governed file route and finally the Issues board. Read the route hash, rail
+      `aria-current`, Explorer section heads, and whether the left rail/dock exists.
+    expected: >-
+      `#/spec` shows Sessions, Spec, Evals, Issues, and Settings as peer rail anchors, with only Spec
+      selected and the Explorer dock exposing exactly Specs and Files. `#/file/<path>` keeps Spec selected
+      and the same two Explorer sections. `#/issues` keeps the existing full-width contract: no activity
+      rail and no Explorer dock.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/Shell.jsx]
+    test: spec-dashboard/test/spec-rail.e2e.mjs
   - name: offline-switcher-is-inert
     tags: [frontend-e2e, desktop]
     description: >

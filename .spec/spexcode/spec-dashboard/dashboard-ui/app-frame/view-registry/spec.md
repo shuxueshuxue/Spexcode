@@ -67,11 +67,11 @@ workspace state. **`/sessions/new` was a document and is not one now**: it names
 session, so the predicate takes the selector's VALUE and not merely its presence — the launch page is a
 form, and the session it starts becomes a document the moment it has an id.
 
-**A rail destination is not the same thing as an addressable kind.** `spec` and `file` are addresses you
-arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. Spec is
-still a resident tab once opened, but it is not a rail destination. The rail therefore has its own list, and
-the first version of this without that split threw `unknown icon: spec` — the rail had faithfully tried to
-draw a destination that does not exist.
+**A rail destination is not the same thing as an addressable kind.** `file` is an address you arrive at by
+opening something; it projects onto the resident Spec rail/tab destination. `spec` is both a canonical board
+address and a rail destination. The rail keeps its own list of resident boards while the registry continues
+to own icon and document/residency metadata; file routes never create a second top-level rail entry or make
+the Spec selection disappear.
 
 **Each view is lazy and pays for its own libraries.** The graph carries xyflow and mounts its own
 ReactFlowProvider; hoisting that into the shell would drag the whole graph library into every face's entry

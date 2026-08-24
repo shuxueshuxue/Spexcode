@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -125,11 +125,25 @@ test('seams and group heads use one divider rule', () => {
   assert.match(css, /--divider-rule:\s*1px solid var\(--edge\);/)
   assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
   assert.match(css, /\.ft-section \+ \.ft-section\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
-  assert.match(css, /\.dock-session-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
-  assert.match(css, /\.si-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
-  assert.match(css, /\.m-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  // the three zone heads (dock, console, phone) trail ONE rule — one declaration, not three copies of it
+  assert.match(css, /\.dock-session-zone::after, \.si-zone::after, \.m-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.equal(css.match(/zone::after\s*\{/g)?.length ?? 0, 1)
   assert.match(css, /\.m-tabbar\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
   assert.doesNotMatch(css, /\.tabstrip\s*\{[^}]*border-bottom:/s)
+})
+
+test('every token the sheet consumes is declared somewhere the browser can resolve it', () => {
+  // an undeclared var() is not a fallback, it is a silently invalid declaration (the eval data frame once
+  // wore a purple nobody chose through `--acc`, and a transition named a `--dur-fast` that never existed).
+  // A token may be declared in the sheet or set from a component's inline style.
+  const inline = readdirSync(here).filter((name) => /\.(jsx|js)$/.test(name))
+    .map((name) => readFileSync(join(here, name), 'utf8')).join('\n')
+  const declared = new Set([...css.matchAll(/(--[a-z][\w-]*)\s*:/g)].map((m) => m[1]))
+  for (const [, name] of inline.matchAll(/['"`](--[a-z][\w-]*)['"`]/g)) declared.add(name)
+  for (const [, name] of inline.matchAll(/\[(--[a-z][\w-]*)\]/g)) declared.add(name)
+  const consumed = new Set([...css.matchAll(/var\((--[a-z][\w-]*)/g)].map((m) => m[1]))
+  const undeclared = [...consumed].filter((name) => !declared.has(name))
+  assert.deepEqual(undeclared, [])
 })
 
 test('the status bar owns a flex row and cannot cover the content viewport', () => {

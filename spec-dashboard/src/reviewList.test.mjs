@@ -382,7 +382,10 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*min-height:\s*49px;[^}]*flex-wrap:\s*wrap;/s)
   assert.doesNotMatch(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*[^-]height:\s*49px;/s)
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-section\s*\{\s*gap:\s*2px;\s*padding:\s*0;[^}]*min-height:\s*44px;\s*\}[\s\S]*\.rl-section \.review-state-label\s*\{\s*font-size:\s*var\(--type-meta\);\s*\}/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-facets\s*\{\s*flex:\s*1 1 auto;\s*justify-content:\s*flex-end;/s)
+  // the phone facets stay their natural width (the live declaration; a shadowed `flex: 1 1 auto` copy once
+  // sat earlier in the same block and the gate pinned the dead one)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-facets\s*\{\s*flex:\s*none;\s*\}/s)
+  assert.doesNotMatch(css, /@media \(max-width: 760px\)[\s\S]*\.rl-facets\s*\{\s*flex:\s*1 1 auto;/s)
   assert.match(css, /\.rl-facet-wrap:not\(\.mobile-stay\)\s*\{\s*display:\s*none;/)
   assert.match(shell, /const buttonLabel = selectedLabel \? `\$\{label\}: \$\{selectedLabel\}` : label/)
   assert.match(shell, /className="rl-facet-label-mobile" aria-hidden="true">\{selectedLabel \|\| label\}/)

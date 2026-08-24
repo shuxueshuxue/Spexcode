@@ -54,7 +54,8 @@ the common record-then-delivery order. A proven-unreachable adapter transport jo
 agent is the one pre-append refusal: that session is stranded and new text must name the cause, debt count, and
 raw-key bypass instead of creating more unclaimable debt. A transient/unproven probe, or a dead worker that a
 later resume can address, keeps the ordinary acceptance rule: the queue is what the accepted message is owed,
-not an immediate-poke receipt. The record is written first — a crash between the two
+not an immediate-poke receipt. Queue acceptance does not make the target `active`: lifecycle freshness changes
+only after the exact message is handed to the native runtime and removed from this queue. The record is written first — a crash between the two
 writes leaves a message that is visible but undelivered, never one delivered but unrecorded. For the keyed
 merge intent, the receipt carries the already-composed transport bytes, so the same request reconstructs that
 one missing debt rather than mistaking the durable receipt for completed delivery.

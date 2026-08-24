@@ -78,7 +78,9 @@ plugin node. This replaces the launch-time
   worktree-owned because its adapter discovers `.claude/settings.json` from the worktree itself. The shared
   Codex project shim always points at the main checkout's `dispatch.sh` and `spex.mjs`, even when materialize
   is invoked from a linked worktree; a worktree's CLI may only write its empty anchor and tree-local artifacts,
-  never replace the shared root hook owner;
+  never replace the shared root hook owner. In a throwaway or package-installed project where the main checkout
+  has no local `spec-cli` tree, the renderer falls back to the invoking package's executable rather than
+  emitting a path that cannot run;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

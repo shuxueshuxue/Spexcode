@@ -277,8 +277,13 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   // Codex's project shim is shared by every linked worktree. Its command paths therefore belong to the
   // main checkout, while tree-scoped shims may use this checkout's toolchain. Otherwise the last worktree
   // to materialize silently steals the root hook owner from every other session.
-  const projectDispatch = join(mainCheckout(proj), 'spec-cli', 'hooks', 'dispatch.sh')
-  const projectSpex = join(mainCheckout(proj), 'spec-cli', 'bin', 'spex.mjs')
+  const checkout = mainCheckout(proj)
+  const projectDispatch = existsSync(join(checkout, 'spec-cli', 'hooks', 'dispatch.sh'))
+    ? join(checkout, 'spec-cli', 'hooks', 'dispatch.sh')
+    : DISPATCH
+  const projectSpex = existsSync(join(checkout, 'spec-cli', 'bin', 'spex.mjs'))
+    ? join(checkout, 'spec-cli', 'bin', 'spex.mjs')
+    : SPEX
   const shimFor = (h: typeof HARNESSES[number]) => h.shimScope === 'project'
     ? h.shim(projectDispatch, projectSpex)
     : h.shim(DISPATCH, SPEX)

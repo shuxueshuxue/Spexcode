@@ -29,3 +29,9 @@ No new consumer should call `registerRuntimeSession` or `publishRuntimeSessionSt
 Once ZSwarm and Spex governed composition use the split contracts, this module is deleted from the public entry and
 from the source tree. Its revision-keyed recovery is preserved by the owning topology transaction and protocol
 idempotency; a permanent bridge or outbox is not an acceptable migration substitute.
+
+While this bridge remains, its lifecycle projection has one writable source: the append-only session timeline.
+Registration and publication scrub the legacy `status`, `proposal`, and `note` keys from `session.json`; replaying
+an older record migrates its last valid values into a status event before the file is rewritten. The JSON file keeps
+only operational and topology metadata, so a consumer cannot accidentally treat the compatibility projection as a
+second lifecycle authority.

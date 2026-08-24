@@ -15,7 +15,7 @@ import {
 } from '@spexcode/spec-core'
 import { enqueue, ensurePendingWhileLocked, withDeliveryLocks, type PendingMessage } from './delivery-queue.js'
 import { withSessionRecordLocks } from './record-lock.js'
-import { appendSent, recordStatus, sentDispatchReceipt, type SentDispatchReceipt } from './session-timeline.js'
+import { appendSent, recordStatus, sentDispatchReceipt, timelineEvents, type SentDispatchReceipt } from './session-timeline.js'
 
 export type RuntimeSessionRegistration = {
   sessionId: string
@@ -119,9 +119,12 @@ function readRaw(id: string): RawRecord | null {
 function runtimeRecord(raw: RawRecord): RuntimeSessionRecord {
   const runtimeOwner = raw.runtime_owner?.trim()
   if (!runtimeOwner) throw new RuntimeSessionConflict(`session ${raw.session_id} is not owned by an external runtime`)
-  if (!isSessionLifecycle(raw.status)) throw new RuntimeSessionConflict(`session ${raw.session_id} has invalid lifecycle ${JSON.stringify(raw.status)}`)
-  if (!(raw.proposal == null || raw.proposal === '' || isSessionProposal(raw.proposal)))
-    throw new RuntimeSessionConflict(`session ${raw.session_id} has invalid proposal ${JSON.stringify(raw.proposal)}`)
+  const statusEvents = timelineEvents(raw.session_id).filter((event): event is Extract<typeof event, { kind: 'status' }> => event.kind === 'status')
+  const latest = statusEvents.at(-1)
+  if (!latest) throw new RuntimeSessionConflict(`session ${raw.session_id} has no lifecycle timeline; replay registration to migrate its legacy record`)
+  const lifecycle = latest.status
+  const proposal = latest.proposal
+  const note = latest.note
   return {
     sessionId: raw.session_id,
     runtimeOwner,
@@ -133,19 +136,22 @@ function runtimeRecord(raw: RawRecord): RuntimeSessionRecord {
     title: raw.title || null,
     node: raw.node || null,
     runtimeMetadata: metadata(raw.runtime_metadata),
-    lifecycle: raw.status,
-    proposal: isSessionProposal(raw.proposal) ? raw.proposal : null,
-    note: raw.note || null,
+    lifecycle,
+    proposal,
+    note,
     createdAt: Number(raw.createdAt) || 0,
   }
 }
 
 function writeRaw(raw: RawRecord): void {
+  // External runtime lifecycle is already in the append-only timeline. Keeping status/proposal/note here
+  // would create a second writable fact that a later consumer could mistake for authority.
+  const { status: _status, proposal: _proposal, note: _note, ...operational } = raw
   const dir = sessionStoreDir(raw.session_id)
   mkdirSync(dir, { recursive: true })
   const path = sessionRecordPath(raw.session_id)
   const tmp = join(dir, `.session.json.${process.pid}.${randomUUID()}.tmp`)
-  writeFileSync(tmp, JSON.stringify(raw, null, 2) + '\n')
+  writeFileSync(tmp, JSON.stringify(operational, null, 2) + '\n')
   renameSync(tmp, path)
 }
 
@@ -234,9 +240,17 @@ export async function registerRuntimeSession(input: RuntimeSessionRegistration):
     const existing = readRaw(id)
     if (existing) {
       if (!sameRegistration(existing, input)) throw new RuntimeSessionConflict(`session ${id} is already registered with different runtime coordinates`)
+      // Scrub records created by the old bridge on replay, while preserving their last authored state.
+      writeRaw(existing)
+      if (!timelineEvents(id).some((event) => event.kind === 'status')) {
+        if (!isSessionLifecycle(existing.status)) throw new RuntimeSessionConflict(`session ${id} has no valid lifecycle to migrate`)
+        recordStatus(id, existing.status, isSessionProposal(existing.proposal) ? existing.proposal : null, existing.note?.trim() || null)
+      }
       return { replayed: true }
     }
-    writeRaw(registrationRaw(input))
+    const registered = registrationRaw(input)
+    writeRaw(registered)
+    recordStatus(id, registered.status as SessionLifecycle, null, null)
     if (parent) writeWatches(id, [{
       watcher: parent,
       createdAt: new Date().toISOString(),
@@ -312,18 +326,19 @@ export async function publishRuntimeSessionState(input: RuntimeSessionState): Pr
     if (raw.runtime_owner !== owner) throw new RuntimeSessionConflict(`runtime session ${id} belongs to ${raw.runtime_owner || 'no external runtime'}, not ${owner}`)
     const proposal = input.proposal ?? null
     const note = input.note ?? null
+    const current = runtimeRecord(raw)
     const sameRevision = raw.runtime_revision === revision
-    const sameState = raw.runtime_state === runtimeState && raw.status === input.lifecycle
-      && (raw.proposal || null) === proposal && (raw.note || null) === note
+    const sameState = raw.runtime_state === runtimeState && current.lifecycle === input.lifecycle
+      && current.proposal === proposal && current.note === note
     if (sameRevision && !sameState) throw new RuntimeSessionConflict(`runtime revision ${revision} for session ${id} is already bound to another state`)
-    const candidate = runtimeRecord({
-      ...raw,
-      status: input.lifecycle,
-      proposal: proposal ?? '',
-      note: note ?? '',
-      runtime_state: runtimeState,
-      runtime_revision: revision,
-    })
+    const candidate: RuntimeSessionRecord = {
+      ...current,
+      runtimeState,
+      revision,
+      lifecycle: input.lifecycle,
+      proposal,
+      note,
+    }
     const message = stateMessage(candidate)
     const attributes = notificationAttributes(candidate)
     const historical = watchers.map((watcher) => {

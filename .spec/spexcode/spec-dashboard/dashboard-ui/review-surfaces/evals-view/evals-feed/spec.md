@@ -83,7 +83,7 @@ or source-session presence value excludes it
 because an unmeasured scenario owns none of those result facts. Blind rows never leak into a filtered
 result population and never gain an href just to satisfy list structure. A deferred-freshness row has a
 filed reading and therefore keeps its filed-time position, but its freshness probes have not settled; it
-is shown as an explicit deferred non-result row and never counted as fresh or stale. Filed results and
+is shown as an explicit deferred non-result row without a detail href, and never counted as fresh or stale. Filed results and
 non-result rows form one tagged set through the shared result-kind field; the canonical list and embedded
 node pane consume that same discriminator, with no legacy-name compatibility branch.
 

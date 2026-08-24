@@ -103,7 +103,6 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
     if (item.filterKind === EVAL_FILTER_KIND.DEFERRED) return [{
       key: `deferred:${item.node}·${item.scenario}`,
       label: item.scenario,
-      href: hrefFor(item),
       content: <ReviewListRow
         state={<ReviewState kind="eval" state="empty" title={t('reviewList.verdict.deferred')} />}
         title={item.scenario}

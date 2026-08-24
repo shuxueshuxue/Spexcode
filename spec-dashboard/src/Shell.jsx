@@ -486,7 +486,7 @@ function ContextToggle({ visible, onToggle }) {
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
   return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
     aria-label={label} data-tip={label}>
-    <Icon name="panel-right" size={14} />
+    <Icon name="list-checks" size={14} />
   </button>
 }
 

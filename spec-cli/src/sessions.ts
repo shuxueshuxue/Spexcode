@@ -3354,8 +3354,10 @@ export function markHumanPromptActive(sessionId: string): boolean {
   try {
     const rec = readRecord(sessionId)
     const canonical = sessionHookState(sessionId)
-    if (!rec || !canonical || rec.archived || retirementReason(rec) ||
-      (canonical.status !== 'asking' && canonical.status !== 'idle')) return false
+    // The canonical lifecycle decides whether this record is writable. Any real human re-entry can
+    // resume a waiting declaration, including an `awaiting` close/merge proposal; the old envelope
+    // status is only migration metadata and must never veto the re-entry.
+    if (!rec || !canonical || rec.archived || retirementReason(rec)) return false
     return markState('active', { sessionId })
   } catch (error) {
     // The message/PTY write is already accepted; a raced close or unreadable record must not turn it into a false send failure.

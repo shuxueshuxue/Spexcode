@@ -264,8 +264,8 @@ test('terminal font preference reuses the ordinary fit and geometry request', ()
 })
 
 test('browser page visibility reuses the terminal viewer lifecycle', () => {
-  assert.match(terminal, /if \(!active\) return undefined/)
-  assert.match(terminal, /\}, \[sessionId, active\]\)/)
+  assert.match(terminal, /const term = new Terminal\([\s\S]*?\n  \}, \[sessionId\]\)/)
+  assert.match(terminal, /term\.options\.disableStdin\s*=\s*!writable/)
   assert.match(terminal, /viewerIsVisible\s*=\s*\(\)\s*=>\s*activeRef\.current\s*&&\s*document\.visibilityState\s*!==\s*'hidden'/)
   assert.match(terminal, /document\.addEventListener\('visibilitychange', onDocumentVisibility\)/)
   assert.match(terminal, /if \(!viewerIsVisible\(\)\)\s*\{\s*hideRef\.current\?\.\(\)/)

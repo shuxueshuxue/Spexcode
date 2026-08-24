@@ -7,14 +7,6 @@ export const pageScrollAddress = () => (
   typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}${window.location.hash}`
 )
 
-export function clearPageScrollPositions() {
-  if (typeof sessionStorage === 'undefined') return
-  for (let index = sessionStorage.length - 1; index >= 0; index--) {
-    const key = sessionStorage.key(index)
-    if (key?.startsWith(STORAGE_PREFIX)) sessionStorage.removeItem(key)
-  }
-}
-
 const readPosition = (key) => {
   try { return Number(sessionStorage.getItem(`${STORAGE_PREFIX}${key}`)) || 0 } catch { return 0 }
 }

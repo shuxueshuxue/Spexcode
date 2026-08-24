@@ -20,13 +20,11 @@ test('the workspace frame is the only desktop host and receives the route from i
 test('the mobile view consumes the host route instead of opening a second global route reader', () => {
   const mobile = read('MobileApp.jsx')
   const app = read('App.jsx')
-  const review = read('ReviewSurface.jsx')
 
   assert.doesNotMatch(mobile, /\buseRoute\s*\(/)
   assert.match(mobile, /route = \{\}/)
   assert.match(mobile, /const \{ page = 'graph', param = null \} = route/)
   assert.match(app, /<MobileApp[\s\S]*route=\{route\}/)
-  assert.match(review, /<MobileApp[\s\S]*route=\{\{ page, param, query \}\}/)
 })
 
 test('hosted review views route only through their ViewScope', () => {

@@ -156,7 +156,6 @@ export function PaneProvider({ value, children }) {
     </Pane.Provider>
   )
 }
-export const usePane = () => useContext(Pane)
 // the two questions with their no-provider answers, so callers do not each invent a default.
 export const usePaneActive = () => useContext(Pane)?.active !== false
 export const usePaneAddress = () => useContext(Pane)?.address ?? null

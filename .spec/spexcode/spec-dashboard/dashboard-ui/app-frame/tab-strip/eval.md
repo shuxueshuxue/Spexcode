@@ -64,7 +64,7 @@ scenarios:
       mint a workspace tab merely to carry an icon. Board-local filter tabs, when present, remain view-local
       controls and do not become route tabs.
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/ReviewSurface.jsx, spec-dashboard/src/SettingsSurface.jsx, spec-dashboard/src/TabStrip.jsx]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/src/tabStrip.test.mjs
   - name: live-pointer-reorder-and-tail-drop
     description: >-

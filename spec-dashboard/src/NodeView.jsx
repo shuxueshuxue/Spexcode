@@ -12,6 +12,7 @@ import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { holdAnchor } from './tabs.js'
 import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
+import { GLYPH } from './specMeta.js'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
 import { stripProseTitle } from './proseTokens.js'
@@ -58,9 +59,6 @@ const pageFilterModel = (data, t) => {
     facets: Object.fromEntries(Object.entries(data?.facets || {}).map(([key, facet]) => [key, localize(facet)])),
   }
 }
-
-// op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
-const OP_GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
 // Compatibility shell: all body callers now cross the shared markdown-it token boundary. The legacy
 // implementation above remains named (and removable in the later surface migrations), but is no longer
@@ -438,7 +436,7 @@ function EditOverlay({ node, ov }) {
   return (
     <figure className="edit-rev">
       <figcaption className="edit-by">
-        <span className={`ov-mark ov-${ov.op}`}>{OP_GLYPH[ov.op] || '•'}</span>
+        <span className={`ov-mark ov-${ov.op}`}>{GLYPH[ov.op] || '•'}</span>
         <span className="edit-by-label">{ov.label}</span>
         <span className="edit-state">{ov.committed ? t('nodeView.editCommitted') : t('nodeView.editDirty')}</span>
       </figcaption>

@@ -9,8 +9,6 @@ code:
   - spec-dashboard/src/IssuesPage.jsx#IssueDetailPage
   - spec-dashboard/src/IssuesPage.jsx#NewIssuePage
 related:
-  - spec-dashboard/src/ReviewSurface.jsx#ReviewSurface
-  - spec-dashboard/src/reviewSurface.test.mjs
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx

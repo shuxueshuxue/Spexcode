@@ -23,13 +23,14 @@ related:
 ---
 # node-graph
 
-**Current camera rule.** The camera uses a reading-pair anchor: the midpoint between the focus column and its
-nearest child column sits at the `43%` canvas token; a leaf uses the midpoint between its parent and focus,
-and a root with no pair uses itself. During keyboard, click, and programmatic focus navigation the focused
-tile's centre is the vertical canvas centre, clamped only when the visible frontier cannot physically reach
-that row; the current zoom is preserved, so changing focus never changes camera height. The initial frame
-and pane resize may still perform fit-left treatment with one grid-column gutter, and fit may lower zoom but
-never raise a deliberate user zoom. A click absorbs the instantaneous 0px screen jump and the existing
+**Current camera rule.** A root focus keeps the reading-pair anchor: the midpoint between the root and its
+nearest child column sits at the `43%` canvas token (a root with no child uses itself). Once focus enters a
+non-root node, the focused node's own x coordinate is the horizontal anchor; the camera never substitutes a
+parent/child midpoint for that node's column. During keyboard, click, and programmatic focus navigation the
+focused tile's centre is the vertical canvas centre, clamped only when the visible frontier cannot physically
+reach that row; the current zoom is preserved, so changing focus never changes camera height. The initial
+frame and pane resize may still perform fit-left treatment with one grid-column gutter, and fit may lower zoom
+but never raise a deliberate user zoom. A click absorbs the instantaneous 0px screen jump and the existing
 smooth camera transition supplies the reading motion. Only the camera moves; layout coordinates never change.
 
 A **drill-down** tidy-tree of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. The focused node's **ancestor spine is expanded**, and the frontier opens only the focused node; its same-layer siblings remain visible while their children stay collapsed to `▸N` count tiles. This is the original single-layer behaviour. The earlier two-layer frontier was explicitly revoked by human ruling because repeated nodes made the two-layer view too noisy and confusing. The tree **re-plots as focus moves** and the **camera follows focus** using the current camera rule while its neighbourhood expands and collapses around it. Layout is horizontal left→right: depth is the column (root at the left). Columns are independent: column `k` contains only the direct children of the spine node in column `k-1`, and those nodes are evenly spaced around that parent node's y. A later child column contributes no row budget to its parent column, so expanding a focused node never moves the node itself or any brother already visible to its left — in the human report: "当前 focus 的 node 会有好几个 child node,它们应该展现在右边这一列,并且不会把左边 (当前 focus 的 node 本身及其 brothers)往上下推。" Tile centres stay `Y_GAP` apart (a 4px clear gap for the fixed 50px tile), so no two visible node boxes overlap. Coordinates are a function of tree shape and the expansion frontier, never of focus identity: changing focus only adds or removes frontier nodes; every tile that remains visible keeps its x/y. Tiles never touch; edges read bold when they touch the focus, faint otherwise. A **collapsed node** (children hidden) carries a small **`▸N` tab on its right edge** naming its hidden direct-child count, so a leaf and a closed branch never look alike; it picks up the focus colour on the focused node. Keys follow the same relationships (see [[keyboard-nav]]): ←/→ drill out/in, ↑/↓ walk siblings in the focused column.

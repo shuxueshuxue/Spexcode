@@ -11,7 +11,7 @@ import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
-import { drainSession, markIdle, markState, sessionHookState } from './sessions.js'
+import { drainSession, linkZCodeChildSession, markIdle, markState, sessionHookState } from './sessions.js'
 import { stampRvSock } from './harness.js'
 
 const parent = 'managed-watch-realtime-parent'
@@ -97,7 +97,7 @@ test('canonical managed watch wakes the real parent transport once per state com
   }
 })
 
-test('canonical lifecycle repairs a stale JSON snapshot without writing a second lifecycle fact', { concurrency: false }, () => {
+test('canonical lifecycle repairs a stale JSON snapshot without writing a second lifecycle fact', { concurrency: false }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-canonical-lifecycle-authority-'))
   const previousHome = process.env.SPEXCODE_HOME
   process.env.SPEXCODE_HOME = home
@@ -119,7 +119,11 @@ test('canonical lifecycle repairs a stale JSON snapshot without writing a second
     assert.equal(application.readState(child)?.status, 'active')
     assert.equal(application.readState(child)?.note, null)
     assert.equal(application.events.read(child).length, before + 1, 'the real transition is one canonical event')
-    assert.match(readFileSync(sessionRecordPath(child), 'utf8'), /"status": "active"/, 'the envelope was not used as a writer')
+    // The next metadata write is the one-time scrub boundary: it must remove the old lifecycle copy instead
+    // of preserving a second, stale-looking source forever.
+    await linkZCodeChildSession(child, 'z-child-scrub-proof')
+    const scrubbed = JSON.parse(readFileSync(sessionRecordPath(child), 'utf8')) as Record<string, unknown>
+    for (const key of ['status', 'proposal', 'note', 'parent']) assert.equal(key in scrubbed, false, `${key} is not a governed envelope fact after cutover`)
 
     const stableEvents = application.events.read(child).length
     assert.equal(markState('active', { sessionId: child }), true)
@@ -127,8 +131,8 @@ test('canonical lifecycle repairs a stale JSON snapshot without writing a second
 
     assert.equal(markIdle(child), true)
     assert.equal(application.readState(child)?.status, 'idle')
-    assert.match(readFileSync(sessionRecordPath(child), 'utf8'), /"status": "active"/,
-      'inferred idle does not rewrite the stale envelope after cutover')
+    const afterIdle = JSON.parse(readFileSync(sessionRecordPath(child), 'utf8')) as Record<string, unknown>
+    assert.equal('status' in afterIdle, false, 'inferred idle does not recreate a lifecycle envelope after cutover')
   } finally {
     resetConfiguredSessionApplicationForTest()
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME

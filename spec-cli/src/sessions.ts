@@ -15,14 +15,15 @@ import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
-import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
-import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
+import { acceptMessage, drain, owesDelivery, pendingMessages, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, withDeliveryLocks, type MessageIdempotency } from './session-legacy-delivery.js'
+import { trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-legacy-delivery.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
+import { lastHumanSendVia, recordStatus } from './session-timeline.js'
 
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -299,7 +300,27 @@ export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner' | 'st
 // on-disk fields into the typed shape — so a codex hook resolving by its thread id reaches the real record.
 function readRecord(id: string): SessRec | null {
   const entry = readAliasedRecordEntry(id)
-  if (entry.kind === 'absent') return null
+  if (entry.kind === 'absent') {
+    // A migrated session may retain its canonical application row after an envelope was removed or never
+    // materialized. Lifecycle hooks must still reach that row; do not turn missing runtime metadata into a
+    // silent "not governed" result. The minimal projection deliberately carries no guessed resource identity.
+    const application = configuredSessionApplicationIfCutover()
+    const state = application?.readState(id)
+    if (!state) return null
+    return {
+      session: id,
+      governed: true,
+      worktreePath: '', branch: null, node: null, title: null, name: null, parent: state.parentSessionId,
+      status: state.status as SessionLifecycle,
+      proposal: isSessionProposal(state.proposal) ? state.proposal : null,
+      merges: 0, note: state.note, sortKey: null, createdAt: state.updatedAtMs,
+      harness: 'claude', harnessSessionId: null, runtimeStartToken: null,
+      stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null,
+      launcher: null, launchCmd: null, launchOwner: null, launchReadinessStartedAt: null,
+      createRequestId: null, createPayloadHash: null, zcodeChildSessionIds: [], base: null,
+      diffComments: [], launchReadinessPending: null,
+    }
+  }
   if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
   try {
     const record = fromRaw(entry.raw)
@@ -492,6 +513,15 @@ function writeRecord(rec: SessRec): void {
     : null
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
+  const metadataChanged = !previous || [
+    'governed', 'worktreePath', 'branch', 'node', 'title', 'name', 'merges', 'sortKey', 'createdAt',
+    'harness', 'harnessSessionId', 'runtimeStartToken', 'stopped', 'archived', 'closedAt', 'coldProof',
+    'adapterRecovery', 'launcher', 'launchCmd', 'launchOwner', 'launchReadinessStartedAt', 'createRequestId',
+    'createPayloadHash', 'zcodeChildSessionIds', 'base', 'diffComments', 'launchReadinessPending',
+  ].some((key) => JSON.stringify((previous as unknown as Record<string, unknown>)[key]) !== JSON.stringify((rec as unknown as Record<string, unknown>)[key]))
+  // Once a canonical row exists, a lifecycle-only write is already complete when the application transition
+  // commits. Rewriting session.json here would recreate a second, stale status/proposal/note authority.
+  if (canonicalMetadataOnly && previous && !metadataChanged) return
   const obj = {
     session_id: rec.session,
     governed: rec.governed,
@@ -569,7 +599,30 @@ type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[]; 
 export type SessionWatch = { target: string; createdAt: string }
 const watchPath = (target: string) => sessionArtifactPath(target, 'watchers.json')
 
+function canonicalWatchEntries(target: string): WatchEntry[] | null {
+  const application = configuredSessionApplicationIfCutover()
+  if (!application || !application.readState(target)) return null
+  const seen = new Map<string, WatchEntry>()
+  for (const edge of application.topology.parents(target)) {
+    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
+    const source: WatchSource = edge.relationType === 'parent' || edge.relationType === 'watch:parent' ? 'parent' : 'manual'
+    const current = seen.get(edge.fromSessionId)
+    if (current) {
+      if (!current.sources.includes(source)) current.sources.push(source)
+      continue
+    }
+    seen.set(edge.fromSessionId, {
+      watcher: edge.fromSessionId,
+      createdAt: new Date(edge.createdAtMs).toISOString(),
+      sources: [source],
+    })
+  }
+  return [...seen.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.watcher.localeCompare(b.watcher))
+}
+
 function readWatchEntries(target: string): WatchEntry[] {
+  const canonical = canonicalWatchEntries(target)
+  if (canonical) return canonical
   try {
     const raw = JSON.parse(readFileSync(watchPath(target), 'utf8')) as unknown
     if (!Array.isArray(raw)) return []
@@ -596,6 +649,9 @@ function readWatchEntries(target: string): WatchEntry[] {
 }
 
 function writeWatchEntries(target: string, entries: WatchEntry[]): void {
+  // Canonical topology is the only writer after cutover. The legacy JSON file is intentionally not
+  // regenerated from the projection: doing so would create a second watch policy and reintroduce drift.
+  if (canonicalWatchEntries(target)) return
   assertLegacyJsonWritesAllowed()
   const path = watchPath(target)
   if (!entries.length) { try { unlinkSync(path) } catch { /* already absent */ }; return }
@@ -927,6 +983,18 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
           for (const snapshot of snapshots) {
             if (snapshot.record.parent !== parent)
               application.transitionSession(snapshot.id, { parentSessionId: parent, reason: 'reparent' })
+            if (snapshot.record.parent && snapshot.record.parent !== parent) {
+              try { application.detachWatcher(snapshot.record.parent, snapshot.id, 'watch:parent') }
+              catch (error) {
+                if (!(error instanceof Error) || !/does not exist|unknown/i.test(error.message)) throw error
+              }
+            }
+            if (parent && snapshot.record.parent !== parent) {
+              try { application.attachWatcher(parent, snapshot.id, 'watch:parent') }
+              catch (error) {
+                if (!(error instanceof Error) || !/already exists|duplicate|active topology edge/i.test(error.message)) throw error
+              }
+            }
           }
         }
       } catch (error) {
@@ -1869,7 +1937,7 @@ export function canonicalWatchRecipients(
 
 export function sessionHasPendingDelivery(
   id: string,
-  application: Pick<ProductionSessionApplication, 'protocol'>
+  application: Pick<ProductionSessionApplication, 'readPendingMessages'>
     & Partial<Pick<ProductionSessionApplication, 'resolveRuntime'>>
     | null = configuredSessionApplicationIfCutover() ?? null,
 ): boolean {
@@ -1877,7 +1945,7 @@ export function sessionHasPendingDelivery(
   const runtime = application.resolveRuntime?.(id, 'spex-governed')
   if (runtime === null) return false
   try {
-    return application.protocol.listPending(id).length > 0
+    return application.readPendingMessages(id).length > 0
   } catch (error) {
     // A legacy record can outlive its migrated protocol address. It has no canonical queue to drain;
     // treating that address as owed makes the supervisor retry the same impossible lookup forever.
@@ -4872,7 +4940,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
       const idempotencyKey = opts.idempotency?.requestDigest ?? (opts.deliveryKey?.trim() || null)
       const existing = idempotencyKey
-        ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
+        ? application.readMessageHistory(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
       message = existing ?? application.enqueueConversationMessage(id, {
           kind: 'session.prompt.v1',
@@ -4893,7 +4961,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
         if (!(error instanceof ResourceConflict) || !/no bound spex-governed runtime/u.test(error.message)) throw error
       }
     }
-    const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+    const pending = application.readPendingMessages(id).some(candidate => candidate.messageId === message.messageId)
     // Queue acceptance is not runtime activity. A prompt remains owed while the adapter is unbound,
     // restarting, or refusing the insert; only the handoff that removes this exact message may re-enter
     // a waiting session as active. This keeps a queued command from painting a dead pane as working.
@@ -4970,7 +5038,7 @@ export async function drainSession(id: string): Promise<void> {
         const h = harnessById(rec.harness || defaultHarness.id)
         await withDeliveryLocks([id], async () => {
           for (;;) {
-            const pending = application.protocol.listPending(id)
+            const pending = application.readPendingMessages(id)
             const msg = pending[0]
             if (!msg) return
             const text = canonicalMessageText(msg, rec)
@@ -4981,7 +5049,7 @@ export async function drainSession(id: string): Promise<void> {
             }
             const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
             if (!delivered.ok) return
-            const removed = application.protocol.dequeue(id)
+            const removed = application.dequeuePendingMessage(id, msg.messageId)
             if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
           }
         })
@@ -4992,7 +5060,7 @@ export async function drainSession(id: string): Promise<void> {
     const h = harnessById(rec.harness || defaultHarness.id)
     await withDeliveryLocks([id], async () => {
       for (;;) {
-        const pending = application.protocol.listPending(id)
+        const pending = application.readPendingMessages(id)
         const msg = pending[0]
         if (!msg) return
         const text = canonicalMessageText(msg, rec)
@@ -5003,7 +5071,7 @@ export async function drainSession(id: string): Promise<void> {
         }
         const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
         if (!delivered.ok) return
-        const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration)
+        const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration, msg.messageId)
         if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
       }
     })

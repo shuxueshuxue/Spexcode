@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { sessionStoreDir } from '@spexcode/spec-core'
-import { advanceFollow, followCursor, unreadSince } from '@spexcode/session-core'
+import { advanceFollow as legacyAdvanceFollow, followCursor as legacyFollowCursor, unreadSince } from './session-legacy-timeline.js'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
 
@@ -80,8 +81,19 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const f of state.values()) if (f.path.length) return f.path
     return []
   }
-  const readCursor = (id: string): number | null => (self ? followCursor(self, id) : memo.get(id) ?? null)
-  const writeCursor = (id: string, to: number): void => { if (self) advanceFollow(self, id, to); else memo.set(id, to) }
+  const application = self ? configuredSessionApplicationIfCutover() : undefined
+  const canonicalSelf = self && application?.readState(self) ? self : null
+  const readCursor = (id: string): number | null => {
+    if (!self) return memo.get(id) ?? null
+    return canonicalSelf
+      ? application!.readFollowCursor(canonicalSelf, id)
+      : legacyFollowCursor(self, id)
+  }
+  const writeCursor = (id: string, to: number): void => {
+    if (!self) memo.set(id, to)
+    else if (canonicalSelf) application!.advanceFollowCursor(canonicalSelf, id, to)
+    else legacyAdvanceFollow(self, id, to)
+  }
   const line = (id: string, st: DisplayStatus, note: string | null, first: boolean): void => {
     const s = row?.(id, st, note)
     if (!s) return
@@ -163,7 +175,7 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     // so this position only decides what THIS process has already reported and can never make an agent miss
     // mail. Never advanced here in take mode — the waiter stops on the event and the next wait resumes on it.
     if (self && existsSync(sessionStoreDir(self))) {
-      const mine = unreadSince(timelineEvents(self), followCursor(self, self) ?? 0)
+      const mine = unreadSince(timelineEvents(self), readCursor(self) ?? 0)
       for (let k = 0; k < mine.events.length; k++) {
         const e = mine.events[k]
         if (e.kind !== 'sent') continue

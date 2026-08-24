@@ -936,7 +936,7 @@ app.post('/api/sessions/:id/input', async (c) => {
     // acceptance boundary; only a successful dequeue is allowed to publish human activity.
     void drainSession(id).then(() => {
       const application = configuredSessionApplicationIfCutover()
-      if (application ? !application.protocol.listPending(id).length : true) markHumanPromptActive(id)
+      if (application ? !application.readPendingMessages(id).length : true) markHumanPromptActive(id)
     }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })

@@ -126,9 +126,14 @@ export interface ProductionSessionApplication extends SessionApplication {
   listWatchers(watcherSessionId: string, channel?: string): TopologyEdge[]
   bindRuntime(sessionId: string, identity: NativeRuntimeIdentity, expectedGeneration?: number): RuntimeBinding
   resolveRuntime(sessionId: string, namespace: string): RuntimeBinding | null
-  dequeueForRuntime(sessionId: string, namespace: string, expectedGeneration?: number): Message | null
+  dequeueForRuntime(sessionId: string, namespace: string, expectedGeneration?: number, expectedMessageId?: string): Message | null
+  readPendingMessages(sessionId: string): readonly Message[]
+  readMessageHistory(sessionId: string): readonly Message[]
+  dequeuePendingMessage(sessionId: string, expectedMessageId: string): Message | null
   readState(sessionId: string): SessionState | null
   readEvents(sessionId: string, afterSequence?: number): readonly SessionEvent[]
+  readFollowCursor(watcherSessionId: string, subjectSessionId: string): number | null
+  advanceFollowCursor(watcherSessionId: string, subjectSessionId: string, eventSequence: number): void
   replayState(sessionId: string): SessionState | null
   close(): void
 }
@@ -494,13 +499,32 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       return runtimeBindings.resolve(namespace, sessionId)
     },
 
-    dequeueForRuntime(sessionId, namespace, expectedGeneration) {
+    dequeueForRuntime(sessionId, namespace, expectedGeneration, expectedMessageId) {
       requireId(sessionId, 'sessionId')
       const binding = runtimeBindings.resolve(namespace, sessionId)
       if (!binding || binding.status !== 'bound') throw new Error(`runtime binding is not active for ${sessionId}`)
       if (expectedGeneration !== undefined && binding.bindingGeneration !== expectedGeneration) {
         throw new Error(`runtime binding generation is stale for ${sessionId}`)
       }
+      if (expectedMessageId !== undefined && protocol.listPending(sessionId)[0]?.messageId !== expectedMessageId) return null
+      return protocol.dequeue(sessionId)
+    },
+
+    readPendingMessages(sessionId) {
+      requireId(sessionId, 'sessionId')
+      return protocol.listPending(sessionId)
+    },
+
+    readMessageHistory(sessionId) {
+      requireId(sessionId, 'sessionId')
+      return protocol.readMessages(sessionId)
+    },
+
+    dequeuePendingMessage(sessionId, expectedMessageId) {
+      requireId(sessionId, 'sessionId')
+      requireId(expectedMessageId, 'expectedMessageId')
+      const head = protocol.listPending(sessionId)[0]
+      if (!head || head.messageId !== expectedMessageId) return null
       return protocol.dequeue(sessionId)
     },
 
@@ -513,6 +537,40 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     readEvents(sessionId, afterSequence) {
       requireId(sessionId, 'sessionId')
       return events.read(sessionId, afterSequence === undefined ? undefined : { afterSequence })
+    },
+
+    readFollowCursor(watcherSessionId, subjectSessionId) {
+      requireId(watcherSessionId, 'watcherSessionId')
+      requireId(subjectSessionId, 'subjectSessionId')
+      const rows = protocol.withTransaction(tx => tx.query(
+        'SELECT event_seq FROM session_follow_cursors WHERE watcher_session_id=? AND subject_session_id=?',
+        watcherSessionId,
+        subjectSessionId,
+      ))
+      const value = rows[0]?.event_seq
+      return value === undefined ? null : Number(value)
+    },
+
+    advanceFollowCursor(watcherSessionId, subjectSessionId, eventSequence) {
+      requireId(watcherSessionId, 'watcherSessionId')
+      requireId(subjectSessionId, 'subjectSessionId')
+      if (!Number.isSafeInteger(eventSequence) || eventSequence < 0) throw new TypeError('eventSequence must be a non-negative safe integer')
+      protocol.withTransaction(tx => {
+        const prior = tx.query(
+          'SELECT event_seq FROM session_follow_cursors WHERE watcher_session_id=? AND subject_session_id=?',
+          watcherSessionId,
+          subjectSessionId,
+        )[0]?.event_seq
+        if (prior !== undefined && Number(prior) >= eventSequence) return
+        tx.exec(
+          `INSERT INTO session_follow_cursors (watcher_session_id, subject_session_id, event_seq)
+           VALUES (?, ?, ?)
+           ON CONFLICT(watcher_session_id, subject_session_id) DO UPDATE SET event_seq=excluded.event_seq`,
+          watcherSessionId,
+          subjectSessionId,
+          eventSequence,
+        )
+      })
     },
 
     replayState(sessionId) {

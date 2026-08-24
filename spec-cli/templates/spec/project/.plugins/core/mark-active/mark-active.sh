@@ -43,14 +43,9 @@ if [ "$(hp_field "$payload" hook_event_name)" = "UserPromptSubmit" ]; then
   esac
 fi
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
-sdir=$(hp_store_dir "$sid") || exit 0
-rec="$sdir/session.json"
-# board-lifecycle gate: only a GOVERNED (dashboard-launched) session has a board state to maintain.
-grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
-
-# The writer's own stdout is a human confirmation, not hook output — swallow it so a PreToolUse handler never
-# emits a decision-shaped line; its stderr (a refusal — a corrupt or retired record) still surfaces. We always
-# exit 0: this hook observes freshness, it is not a gate on the tool that triggered it.
+# The canonical writer owns governed/lifecycle validation. The hook must not inspect session.json: that file is
+# a runtime envelope, and using it as a gate is how old/missing envelopes silently disabled mark-active.
+# The writer's stdout is a human confirmation, not hook output; stderr remains visible for real refusals.
 if [ -n "$(hp_is_ask "$payload")" ]; then
   # first question's text → the note (best-effort). It is passed as ONE argv word to the writer, so quotes,
   # backslashes, newlines, and non-ASCII reach the record intact — no shell ever composes the JSON.

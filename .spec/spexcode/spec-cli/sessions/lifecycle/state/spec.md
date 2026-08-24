@@ -204,13 +204,15 @@ that through `harness_session_id` to the governed SpexCode record. That alias is
 path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, fires and persists the
 first prompt, then stages the returned thread id for the lifecycle owner to bind on the governed record. The global record path is project key from the git common dir →
 `<store>/projects/<enc>/sessions/<id>/session.json`.
-The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
-StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)
-record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), because a self-launched agent has no board
-to feed, so the Stop gate must NOT misfire its declare-demand. The board-lifecycle hooks pass the id explicitly
-to the canonical session application because there is no worktree `.session` to fall back on. mark-active has one
-path: it asks the package to compare against canonical state, and a semantic no-op emits no event. A writer that
-refuses (an unreadable record, a retired session — [[sessions-core]]) says so instead of silently repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
+The hooks split on the canonical application's session address, not on an envelope grep. The **board-lifecycle**
+hooks below (mark-active, the Stop gate, StopFailure→error, idle) ask the canonical writer whether the session is
+governed; a non-governed (user-self-launched) record — or none at all — no-ops (the Stop gate exits 0 SILENTLY),
+because a self-launched agent has no board to feed. The hook shell never reads `session.json` to make that decision:
+the runtime envelope is metadata, not a lifecycle gate, and an old/missing envelope must not disable mark-active.
+The board-lifecycle hooks pass the id explicitly to the canonical session application because there is no worktree
+`.session` to fall back on. mark-active has one path: it asks the package to compare against canonical state, and a
+semantic no-op emits no event. A writer that refuses (an unreadable record, a retired session — [[sessions-core]])
+says so instead of silently repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.

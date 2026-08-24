@@ -40,14 +40,14 @@ a file in that dir:
 
 | file | written by |
 |---|---|
-| `session.json` | `readRecord` / `writeRecord` — the structured lifecycle record ([[state]]): state, governed, worktree_path, node, branch, createdAt, harness_session_id, … |
+| `session.json` | `readRecord` / `writeRecord` — runtime/worktree metadata only: governed, worktree_path, node, branch, createdAt, harness_session_id, …; lifecycle status/proposal/note/parent live only in the SQLite session application after migration. |
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the authoritative resolved first-turn payload, retained through queue drain and failed launch until adapter proof consumes it ([[launch]]) |
 | `launch.proof` | the adapter's narrow staged receipt (native id, payload hash, runtime generation) after first-turn durability; the session lifecycle owner consumes it with `launch` under the record lock ([[harness-adapter]]) |
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash '<quoted abs path>'`) |
 | `rv.path` | the rendezvous socket THIS runtime handed the agent at launch ([[harness-adapter]]) — a launch-time fact like the pid, so every later reader reaches the agent by the path it actually bound rather than re-deriving one, and two worlds holding the same id never share a transport |
 | `spec-checked` / `spec-of-file-seen` | the [[inject-spec-first]] / [[inject-spec-of-file]] once-per-session sentinel + ledger |
-| `cursors.json` | how far this session has read each log it follows, plus its own inbox ([[session-follow]]) |
+| `cursors.json` | historical pre-application follow cursor; migrated cursors live in SQLite `session_follow_cursors` and canonical follow never writes this file |
 
 `layout.ts` owns the seam — the one place that knows where the store sits: `spexcodeHome()` (the `SPEXCODE_HOME`
 override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:

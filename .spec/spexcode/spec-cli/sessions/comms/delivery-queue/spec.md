@@ -14,6 +14,10 @@ related:
 
 # delivery-queue
 
+> Migration boundary: this file queue is a legacy adapter for records that have not crossed the SQLite
+> application fence. Canonical sessions use `session-application`'s protocol queue and never read or write
+> `pending.json`; the CLI keeps this module isolated in `session-legacy-delivery.ts` until the deletion gate.
+
 ## raw source
 
 A message has two entirely different lives, and giving one file both is what made this mechanism drift. Its

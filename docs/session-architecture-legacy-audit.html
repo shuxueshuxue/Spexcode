@@ -27,7 +27,7 @@
 
   <section>
     <h2>一页结论</h2>
-    <div class="callout warn"><strong>仍有生产 legacy。</strong> 全仓库 gate 统计到 107 个生产源码引用；<code>spex session ls --json</code> 运行时产生 55 次 <code>session.json</code> 路径读取。旧读取多数是身份/运行时 envelope，但旧 queue、watch、timeline、cursor fallback 仍是真实代码路径。</div>
+    <div class="callout warn"><strong>仍有生产 legacy。</strong> 全仓库 gate 统计到 107 个生产源码引用；<code>spex session ls --json</code> 运行时产生 55 次 <code>session.json</code> 路径读取。旧读取多数是身份/运行时 envelope，但旧 queue、watch、timeline、cursor fallback 仍是真实代码路径。当前分支已切断 canonical lifecycle-only envelope rewrites，并将 canonical watch/timeline/cursor 读写收回 application；删除门仍未通过。</div>
     <div class="callout good"><strong>生命周期事实已收口。</strong> 当前 137 个 envelope 中 <code>status</code>、<code>proposal</code>、<code>note</code> 均为 0 个；<code>sessions.sqlite</code> 与 JSON migration marker 存在。hook 权限旁路已修复，canonical writer 负责治理边界。</div>
     <div class="grid"><div class="card"><strong>107</strong><span>生产源码 legacy 引用</span></div><div class="card"><strong>55</strong><span>运行时 legacy-path reads</span></div><div class="card"><strong>137</strong><span>session.json envelopes / 0 lifecycle fields</span></div></div>
   </section>
@@ -64,6 +64,16 @@
     <h2>已修复的直接越权</h2>
     <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS。</p>
     <p>落地提交：<code>76ab63daf</code>、<code>102ffc43b</code>。Focused regression：<strong>77 pass / 0 fail</strong>。</p>
+  </section>
+
+  <section>
+    <h2>PreToolUse 计数核验</h2>
+    <div class="callout good"><strong>仓库注册数不是 6。</strong> 当前项目设置各只有一个 dispatcher 注册；live project manifest 只有两个 PreToolUse handler：<code>mark-active</code> 与 <code>spec-first</code>。它们由同一个 dispatcher 按顺序执行。</div>
+    <table><thead><tr><th>层</th><th>实测</th><th>结论</th></tr></thead><tbody>
+      <tr><td>项目 settings</td><td>每个 settings.json 1 条 PreToolUse dispatcher</td><td>没有 6 条重复注册</td></tr>
+      <tr><td>编译后的 manifest</td><td>2 个 handler：mark-active、spec-first</td><td>一次工具调用最多经过这两个项目 handler</td></tr>
+      <tr><td>宿主显示</td><td>用户看到 “Running 6 PreToolUse hooks”</td><td>当前仓库证据无法解释这个展示数；应继续查宿主聚合/旧缓存，不在 hook 内增加 SQL 或状态逻辑</td></tr>
+    </tbody></table>
   </section>
 
   <section>

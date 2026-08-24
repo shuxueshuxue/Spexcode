@@ -153,7 +153,9 @@ export async function issuesReview(query: string | undefined, requestedPage: unk
   }
 }
 
-const byNewest = (a: any, b: any): number => Number(b.filterKind === EVAL_FILTER_KIND.RESULT) - Number(a.filterKind === EVAL_FILTER_KIND.RESULT)
+const orderableEval = (item: any): boolean => item.filterKind === EVAL_FILTER_KIND.RESULT
+  || item.filterKind === EVAL_FILTER_KIND.DEFERRED
+const byNewest = (a: any, b: any): number => Number(orderableEval(b)) - Number(orderableEval(a))
   || String(b.ts ?? '').localeCompare(String(a.ts ?? ''))
   || String(a.node ?? '').localeCompare(String(b.node ?? ''))
   || String(a.scenario ?? '').localeCompare(String(b.scenario ?? ''))
@@ -180,10 +182,11 @@ export function trunkEvalReviewItems(nodes: any[]): ReviewItem[] {
         ...reading,
         expected: scenario.expected ?? reading.expected,
         tags: scenario.tags,
-        state: evalReviewState(reading),
+        ...(reading.freshnessDeferred
+          ? { state: 'deferred', filterKind: EVAL_FILTER_KIND.DEFERRED }
+          : { state: evalReviewState(reading), filterKind: EVAL_FILTER_KIND.RESULT }),
         node: node.id,
         hue: node.hue,
-        filterKind: EVAL_FILTER_KIND.RESULT,
       })
     }
   }
@@ -214,10 +217,11 @@ export function scopedEvalReviewItems(model: SessionEvals): ReviewItem[] {
         expected: scenario.expected ?? reading.expected,
         tags: scenario.tags,
         impact: scenario.impact,
-        state: evalReviewState(reading),
+        ...(reading.freshnessDeferred
+          ? { state: 'deferred', filterKind: EVAL_FILTER_KIND.DEFERRED }
+          : { state: evalReviewState(reading), filterKind: EVAL_FILTER_KIND.RESULT }),
         node: node.id,
         hue: node.hue,
-        filterKind: EVAL_FILTER_KIND.RESULT,
       }
       items.push(item)
     }
@@ -361,9 +365,10 @@ export function timelineEvalReviewItems(timeline: Awaited<ReturnType<typeof eval
     })),
     ...[...latest.values()].map((reading) => ({
       ...reading,
-      state: evalReviewState(reading),
+      ...(reading.freshnessDeferred
+        ? { state: 'deferred', filterKind: EVAL_FILTER_KIND.DEFERRED }
+        : { state: evalReviewState(reading), filterKind: EVAL_FILTER_KIND.RESULT }),
       node,
-      filterKind: EVAL_FILTER_KIND.RESULT,
       filterKey: `${EVAL_FILTER_KIND.RESULT}:${reading.scenario}`,
     })),
     ...(timeline.dangling ?? []).map((track) => ({

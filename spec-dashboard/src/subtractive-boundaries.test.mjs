@@ -39,14 +39,27 @@ test('live rail exposes every resident board, including Spec, but not retired gr
 
 test('sessions document owns the only forest and rail labels resolve through i18n', () => {
   const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
   const sideBar = readFileSync(join(srcDir, 'SideBar.jsx'), 'utf8')
   const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
   const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
   assert.match(dock, /if \(suppressRows\) return null/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
+  assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
+  assert.match(shell, /hideDockToggle=\{page === 'sessions'\}/)
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
   assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)
+})
+
+test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {
+  const fileTree = readFileSync(join(srcDir, 'FileTree.jsx'), 'utf8')
+  const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
+  const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
+  assert.match(fileTree, /className="ft-graph-entry"/)
+  assert.match(fileTree, /navigate\('spec'\)/)
+  assert.match(en, /fileTree:\s*\{[\s\S]*graph:\s*'Spec graph'/)
+  assert.match(zh, /fileTree:\s*\{[\s\S]*graph:\s*'规格图谱'/)
 })
 
 test('session row clicks focus an existing workspace tab before replacing the current slot', () => {

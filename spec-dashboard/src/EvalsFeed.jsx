@@ -83,6 +83,7 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
   const failCount = pageData?.counts?.fail || {}
   const passCount = pageData?.counts?.pass || {}
   const unmeasuredCount = pageData?.counts?.unmeasured || 0
+  const deferredCount = pageData?.counts?.deferred || 0
   // the debt is a NUMBER; the word beside it is its label. The phone drops the label, never the number.
   const staleSuffix = (n) => (n > 0 ? { text: `+${n} ${t('reviewList.freshness.stale')}`, compact: `+${n}` } : null)
   const verdict = readToken(text, 'verdict')
@@ -99,6 +100,15 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
     if (item.filterKind === EVAL_FILTER_KIND.RESULT) {
       return [{ key: entryKey(item), label: item.scenario, href: hrefFor(item), content: <EvalRow e={item} /> }]
     }
+    if (item.filterKind === EVAL_FILTER_KIND.DEFERRED) return [{
+      key: `deferred:${item.node}·${item.scenario}`,
+      label: item.scenario,
+      content: <ReviewListRow
+        state={<ReviewState kind="eval" state="empty" title={t('reviewList.verdict.deferred')} />}
+        title={item.scenario}
+        meta={<><a className="ef-node" href={addressHash(graphNodeAddress(item.node))} style={{ color: `hsl(${item.hue ?? 210} 60% 70%)` }} data-tip={item.node}>{item.node}</a><span>{t('evalsFeed.freshnessDeferred')}</span></>}
+      />,
+    }]
     return []
   })
 
@@ -150,6 +160,7 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
         { key: 'fail', label: <ReviewState kind="eval" state="fail" title={t('reviewList.verdict.fail')} showLabel />, count: failCount.fresh || 0, countSuffix: staleSuffix(failCount.stale || 0), active: verdict === 'fail', onSelect: () => surgery('verdict', verdict === 'fail' ? '' : 'fail') },
         { key: 'pass', label: <ReviewState kind="eval" state="pass" title={t('reviewList.verdict.pass')} showLabel />, count: passCount.fresh || 0, countSuffix: staleSuffix(passCount.stale || 0), active: verdict === 'pass', onSelect: () => surgery('verdict', verdict === 'pass' ? '' : 'pass') },
         { key: 'unmeasured', label: <ReviewState kind="eval" state="missing" title={t('reviewList.verdict.unmeasured')} showLabel />, count: unmeasuredCount, active: verdict === 'unmeasured', onSelect: () => surgery('verdict', verdict === 'unmeasured' ? '' : 'unmeasured') },
+        { key: 'deferred', label: <ReviewState kind="eval" state="empty" title={t('reviewList.verdict.deferred')} showLabel />, count: deferredCount, active: verdict === 'deferred', onSelect: () => surgery('verdict', verdict === 'deferred' ? '' : 'deferred') },
       ]}
       sectionMode="filters"
       facets={

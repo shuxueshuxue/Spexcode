@@ -3391,7 +3391,7 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     const raw = readRecord(id)
     if (raw?.archived) throw new ResourceConflict(`refusing lifecycle change for closed session ${id}: it is read-only; resume it before changing state`)
     const rec = readLiveRecord(id)
-    if (!rec) return false
+    if (!rec?.governed) return false
     const application = configuredSessionApplicationIfCutover()
     if (application) {
       const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
@@ -3437,7 +3437,7 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {
     const rec = readLiveRecord(sessionId)
-    if (!rec || rec.status !== 'active' || rec.stopped || rec.archived) return false
+    if (!rec?.governed || rec.status !== 'active' || rec.stopped || rec.archived) return false
     const application = configuredSessionApplicationIfCutover()
     if (application) {
       application.transitionSession(sessionId, {
@@ -3673,7 +3673,7 @@ export function markIdle(sessionId?: string): boolean {
   if (!id) return false
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
-    if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
+    if (!rec?.governed || rec.status !== 'active') return false  // managed active-only: never clobber a declaration
     publishCanonicalLifecycle(rec, 'idle', null, null)
     // After cutover the JSON file is only the runtime/worktree envelope. Do not mirror this inferred
     // lifecycle transition into it: doing so creates a second, stale-looking status surface for hooks.
@@ -3752,21 +3752,36 @@ export function commitUrlForRemote(remote: string, commit: string): string | nul
   return `https://${host}/${path}/${commitPath}/${commit}`
 }
 
-async function diffHeadPair(wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; mergedIntoBase: boolean; commitUrl: string | null }> {
-  if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`)
+// The branch diff is a proof over commits, not over a working directory: refs and objects are shared with
+// the main checkout, so a session whose worktree directory is gone (landed and cleaned, or reaped) keeps a
+// provable diff for as long as its branch ref survives. Anchor git at the live worktree when it exists and
+// at the main checkout otherwise; only a branch whose ref is gone everywhere is honestly unavailable, and
+// that refusal is a structured conflict (409 {error, code}) — never a raw git ENOENT turned into a 500.
+async function diffAnchorRoot(wt: { path: string; branch: string | null; rec: SessRec }): Promise<string> {
+  if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`, 'diff-unavailable')
+  if (wt.path && existsSync(wt.path)) return wt.path
+  const main = mainRoot()
+  const proven = await gitTry(['-C', main, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`])
+  if (proven.ok) return main
+  throw new ResourceConflict(`session ${wt.rec.session} has no worktree on disk and its branch ${wt.branch} no longer exists`, 'diff-unavailable')
+}
+
+async function diffHeadPair(root: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; mergedIntoBase: boolean; commitUrl: string | null }> {
+  if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`, 'diff-unavailable')
   const baseRef = wt.rec.base || mainBranch()
   const [headOut, baseOut] = await Promise.all([
-    gitA(['-C', wt.path, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`]),
-    gitA(['-C', wt.path, 'rev-parse', '--verify', `${baseRef}^{commit}`]),
+    gitTry(['-C', root, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`]),
+    gitTry(['-C', root, 'rev-parse', '--verify', `${baseRef}^{commit}`]),
   ])
-  const head = headOut.trim(), resolvedBase = baseOut.trim()
-  if (!isGitObjectId(wt.path, head) || !isGitObjectId(wt.path, resolvedBase))
-    throw new ResourceConflict(`session ${wt.rec.session} diff heads are unproven`)
-  const mergeBase = (await gitA(['-C', wt.path, 'merge-base', resolvedBase, head])).trim()
-  if (!isGitObjectId(wt.path, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`)
+  const head = headOut.ok ? headOut.stdout.trim() : '', resolvedBase = baseOut.ok ? baseOut.stdout.trim() : ''
+  if (!head || !resolvedBase || !isGitObjectId(root, head) || !isGitObjectId(root, resolvedBase))
+    throw new ResourceConflict(`session ${wt.rec.session} diff heads are unproven`, 'diff-unavailable')
+  const mergeBaseOut = await gitTry(['-C', root, 'merge-base', resolvedBase, head])
+  const mergeBase = mergeBaseOut.ok ? mergeBaseOut.stdout.trim() : ''
+  if (!mergeBase || !isGitObjectId(root, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`, 'diff-unavailable')
   const [ancestor, remote] = await Promise.all([
-    gitTry(['-C', wt.path, 'merge-base', '--is-ancestor', head, resolvedBase]),
-    gitTry(['-C', wt.path, 'remote', 'get-url', 'origin']),
+    gitTry(['-C', root, 'merge-base', '--is-ancestor', head, resolvedBase]),
+    gitTry(['-C', root, 'remote', 'get-url', 'origin']),
   ])
   return {
     branch: wt.branch, baseRef, base: resolvedBase, head, mergeBase,
@@ -3778,13 +3793,14 @@ async function diffHeadPair(wt: { path: string; branch: string | null; rec: Sess
 export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000): Promise<SessionDiffPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
-  const pair = await diffHeadPair(wt)
-  const files = await mergeBaseDiff(wt.path, pair.base, pair.head)
+  const root = await diffAnchorRoot(wt)
+  const pair = await diffHeadPair(root, wt)
+  const files = await mergeBaseDiff(root, pair.base, pair.head)
   const selected = filePath ? files.filter((file) => file.path === filePath || file.oldPath === filePath) : files
   const result = await Promise.all(selected.map(async (file) => {
     const identity = createHash('sha256').update(`${pair.mergeBase}\0${pair.head}\0${file.path}\0${file.oldPath || ''}`).digest('hex')
     if (!filePath) return { ...file, patch: '', diffIdentity: identity }
-    const patch = await gitA(['-C', wt.path, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
+    const patch = await gitA(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
     return { ...file, patch: patch.slice(offset, offset + limit), diffIdentity: identity }
   }))
   return { id, scope: 'branch', ...pair, files: result, comments: wt.rec.diffComments ?? [] }

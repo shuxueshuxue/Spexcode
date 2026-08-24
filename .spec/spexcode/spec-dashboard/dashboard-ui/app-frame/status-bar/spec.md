@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/statusOwnership.js
   - spec-dashboard/src/statusOwnership.test.mjs
+  - spec-dashboard/src/status-bar-contract.test.mjs
   - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/specMeta.js
@@ -96,8 +97,12 @@ meanings. At compact desktop widths the launcher list hides as one unit and a si
 KDA badge takes its place, so the slash tally can never be clipped between digits. Named launcher profiles
 that share a harness mark carry a small profile-initial badge (for example `R` and `C`) so icon-only mode
 still distinguishes them. When any session needs the human, the sessions ledger item also carries the
-existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the routed file's path when
-[[file-view]] is the document, the session console's unread-resource signal, the public-graph disclosure.
+existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the session
+console's unread-resource signal, the public-graph disclosure. A routed file's source path is NOT one of
+them — the owner withdrew it (2026-08-24): the workspace tab and the address already carry the document's
+identity, and an ambient path item read as noise. `status-bar-contract.test.mjs` keeps that withdrawal
+executable. The bar's vertical separators speak one voice: every seam on the line is the same full-height
+`--edge` hairline, whether drawn as a group's `border-left` (`--divider-rule`) or as the tally separator.
 
 **The tallies are the workspace's, and the shell registers them.** They are true of the window on every
 route, so they cannot belong to a view — hanging them off the graph is exactly what emptied this bar the
@@ -132,10 +137,11 @@ marker without replacing the numbers with invented zeroes.
 A count that is merely large stays quiet. Per-chip items would give the user finer hiding, and the registry
 already supports it; that is an unclaimed improvement, not a hidden limitation.
 
-**A document contributing a fact about itself is the registry working as designed.** A file document's path
-belongs to the bar for the same reason the project name does — it is persistently true of what the window
-is showing — and the alternative was a title strip of its own, which is a chrome band [[ui-state-model]]
-does not allot. The bar is where a persistent readout goes precisely so that no surface has to grow one.
+**A document contributing a fact about itself is the registry working as designed** — the session console's
+unread-resource signal and the public-graph disclosure are such facts, and the bar is where a persistent
+readout goes precisely so that no surface has to grow one. The boundary the file path's withdrawal drew:
+a fact earns the bar only when no existing chrome already states it. A path the tab and the address both
+carry was a third copy, so it left; a signal nothing else shows stays.
 
 Session lifecycle attention reuses the same transient-notice provider as every other acknowledged action. A transition
 into `asking` emits one clickable notice that opens that session document; no session-specific notification channel exists.

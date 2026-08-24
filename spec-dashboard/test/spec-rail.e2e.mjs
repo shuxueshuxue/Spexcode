@@ -84,6 +84,10 @@ try {
   assert.equal(file.hash, '#/file/src/app.js')
   assert.equal(file.selected, true)
   assert.deepEqual(file.sections, ['Specs', 'Files'])
+  await page.locator('.ft-graph-entry').click()
+  await page.waitForFunction(() => location.hash === '#/spec')
+  await page.locator('.viewhost.view-spec .graphview').waitFor({ state: 'visible' })
+  assert.equal(await page.evaluate(() => location.hash), '#/spec', 'fixed Spec graph door returns to the bare graph address')
   await page.screenshot({ path: join(out, 'spec-file-selected.png'), fullPage: true })
 
   await page.goto(`${base}/#/issues`, { waitUntil: 'domcontentloaded' })

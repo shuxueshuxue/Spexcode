@@ -421,8 +421,8 @@ const ownerTotals = (processes: ResourceOwner['processes']) => ({
 
 const terminal = (rec: RawRecord | undefined) => !!rec && rec.status === 'awaiting' && (rec.proposal === 'nothing' || rec.proposal === 'close')
 
-const probeRuntime = async (descriptor: SharedRuntimeDescriptor): Promise<SharedRuntimeProbe> => {
-  try { return await descriptor.probe() }
+const probeRuntime = async (descriptor: SharedRuntimeDescriptor, referenceIds?: readonly string[]): Promise<SharedRuntimeProbe> => {
+  try { return await descriptor.probe(referenceIds) }
   catch (error) { return { healthy: false, references: [], error: (error as Error).message } }
 }
 
@@ -510,7 +510,7 @@ const sessionStopBlocker = async (
 }
 
 const probeShared = async (shared: Map<string, SharedEntry>): Promise<Map<string, SharedRuntimeProbe>> => new Map(await Promise.all(
-  [...shared].map(async ([key, entry]) => [key, await probeRuntime(entry.descriptor)] as const),
+  [...shared].map(async ([key, entry]) => [key, await probeRuntime(entry.descriptor, entry.recs.map((rec) => rec.harness_session_id).filter((id): id is string => !!id))] as const),
 ))
 
 const sharedFindings = (references: ResourceReference[], probe: SharedRuntimeProbe): string[] => {

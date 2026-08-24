@@ -22,6 +22,49 @@ export function isTerminalPointerReport(data) {
   return data.startsWith('\x1b[<') || data.startsWith('\x1b[M') || /^\x1b\[[0-9;]+[Mm]$/.test(data)
 }
 
+// Wheel reports carry the high bit in the button code and remain native tmux navigation. Button/motion
+// reports are browser chrome: forwarding them can make a focus click look like an agent input event.
+export function isTerminalButtonReport(data) {
+  if (!isTerminalPointerReport(data)) return false
+  if (data.startsWith('\x1b[<')) {
+    const code = Number(data.slice(3).match(/^\d+/)?.[0])
+    return Number.isFinite(code) && (code & 64) === 0
+  }
+  if (data.startsWith('\x1b[M')) return (data.charCodeAt(3) & 64) === 0
+  const code = Number(data.match(/^\x1b\[([0-9]+)/)?.[1])
+  return Number.isFinite(code) && (code & 64) === 0
+}
+
+// xterm focus reporting (CSI I/O) is terminal control traffic emitted when browser focus moves. It is
+// never a user's command byte; forwarding it lets a session click look like activity to the native TUI.
+export function isTerminalFocusReport(data) {
+  return data === '\x1b[I' || data === '\x1b[O'
+}
+
+// xterm may coalesce a focus report with the first byte of a real key event.  Matching the whole
+// payload therefore lets browser focus traffic escape whenever the frame boundary changes.  Remove
+// only the control reports here; the remaining bytes still follow the ordinary visible-terminal path.
+export function stripTerminalFocusReports(data) {
+  return data.replace(/\x1b\[(?:I|O)/g, '')
+}
+
+// Mouse button reports are browser pointer traffic.  SGR/X10/URXVT are all variable-width and can be
+// embedded beside another report, so remove only non-wheel reports and keep wheel reports for tmux's
+// native copy-mode/navigation contract.
+export function stripTerminalButtonReports(data) {
+  return data
+    .replace(/\x1b\[<([0-9]+);[0-9]+;[0-9]+[Mm]/g, (whole, code) => (Number(code) & 64) ? whole : '')
+    .replace(/\x1b\[M([\x20-\x3f]{3})/g, (whole, payload) => (payload.charCodeAt(0) & 64) ? whole : '')
+    .replace(/\x1b\[([0-9]+);[0-9]+;[0-9]+[Mm]/g, (whole, code) => (Number(code) & 64) ? whole : '')
+}
+
+export function stripTerminalPointerReports(data) {
+  return data
+    .replace(/\x1b\[<([0-9]+);[0-9]+;[0-9]+[Mm]/g, '')
+    .replace(/\x1b\[M[\x20-\x3f]{3}/g, '')
+    .replace(/\x1b\[([0-9]+);[0-9]+;[0-9]+[Mm]/g, '')
+}
+
 function onlyMotionTrackingModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
 }
@@ -294,14 +337,19 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       if (!writableRef.current || !focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
       // A suspended TUI may put a token-consuming resume prompt under the cursor. The first real key is
       // the user's intent boundary; keep it out of tmux until the separate confirmation is answered.
-      const pointerReport = isTerminalPointerReport(data)
-      if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
-        setPendingInput(data)
+      // Mouse traffic is browser chrome, not a conversational turn. xterm emits button/wheel reports
+      // through the same onData callback as typed bytes; forwarding those reports lets a tab click or
+      // focus reactivation reach the native TUI and is exactly the wrong lifecycle boundary.
+      const filtered = stripTerminalButtonReports(stripTerminalFocusReports(data))
+      if (!filtered) return
+      const realInput = stripTerminalPointerReports(stripTerminalFocusReports(data))
+      if (resumeRequiredRef.current && !resumeConfirmedRef.current && realInput) {
+        setPendingInput(realInput)
         setInputConfirmOpen(true)
         term.blur()
         return
       }
-      sendInput(data)
+      sendInput(filtered)
     })
 
     // Wheel navigation is xterm-native: reports ride the ordinary onData→input path to this viewer's

@@ -14,6 +14,7 @@ export const EVAL_FILTER_KIND = Object.freeze({
   RESULT: 'result',
   BLIND: 'blind',
   UNMEASURED: 'unmeasured',
+  DEFERRED: 'deferred',
   DANGLING: 'dangling',
 })
 
@@ -161,6 +162,8 @@ export function issueFilterModel(items, raw = {}, context = {}) {
 const evalIsResult = (entry) => entry.filterKind === EVAL_FILTER_KIND.RESULT
 const verdictOf = (entry) => evalIsResult(entry)
   ? (entry.verdict?.status || 'unscored')
+  : entry.filterKind === EVAL_FILTER_KIND.DEFERRED
+    ? 'deferred'
   : entry.filterKind === EVAL_FILTER_KIND.BLIND || entry.filterKind === EVAL_FILTER_KIND.UNMEASURED
     ? 'unmeasured'
     : 'unscored'
@@ -208,6 +211,7 @@ const EVAL_CONFIG = {
       { value: 'fail', label: 'reviewList.verdict.fail', split: true },
       { value: 'pass', label: 'reviewList.verdict.pass', split: true },
       { value: 'unmeasured', label: 'reviewList.verdict.unmeasured' },
+      { value: 'deferred', label: 'reviewList.verdict.deferred' },
     ],
   },
   facets: [

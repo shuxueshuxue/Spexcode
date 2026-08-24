@@ -306,7 +306,7 @@ disabled merge remains visible with the exact localized availability reason as i
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
 Surface choice is address state (`?surface=…`) controlled by two compact icon buttons in the document-actions slot:
 one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
-`file-diff` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
+`git-compare` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
 base face and leaves the session tab alone. Both are omitted when the session has only one available face (headless,
 offline, or archived). The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
 to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
@@ -384,7 +384,9 @@ Command Box dispatches by **appending to the target's durable log** ([[dispatch]
 so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows only the
 in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry. Each draft carries
 one opaque delivery key while pending, so a retry addresses the existing durable queue entry instead of appending
-a duplicate. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
+a duplicate. The HTTP request has one named transport deadline; if the response is not confirmed by then, the
+draft and delivery key stay in place and the outcome says delivery is unconfirmed and retry is safe. This deadline
+does not write or infer lifecycle state. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
 the shared notice says retry is safe; only adapter handover clears the draft and closes the box. Once either result
 settles, it visibly acknowledges through the shared [[transient-notices]] stack — a short-lived delivery/failure
 result outside the Command Box's geometry — before a successful send clears the draft and closes the box. A `/` line
@@ -472,7 +474,7 @@ that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, w
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
 hover tooltips. The base surface is selected by its route address and the document-actions slot exposes one compact
-terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `file-diff` icon
+terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `git-compare` icon
 enters or leaves the diff URL with `aria-pressed`; it returns to the remembered base face and is visually distinct from
 the merge action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
@@ -568,3 +570,10 @@ exact state. Green for `working` also matches the avatar's liveness ring, so dot
 
 The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
 terminal-input ownership; such shell changes do not create a second session-console surface.
+
+The Sessions document owns its frame chrome: the forest sidebar is the left sibling of a right-hand document
+column, and that column contains the shared workspace TabStrip above the console content. The shell omits its
+outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
+than allowing the strip to span above a list. A session tab's right-click enters the same session context menu
+as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
+`session-menu` document-action button is absent.

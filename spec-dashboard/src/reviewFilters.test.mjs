@@ -57,7 +57,7 @@ test('eval adapter gives blind rows only the fields they honestly own', () => {
   // MEASURED verdict splits by freshness (fresh + stale = its whole population); unmeasured owns no
   // reading, so it stays one number.
   const model = evalFilterModel(rows, { verdict: 'fail' }, { sessions, t, defaultKind: 'all' })
-  assert.deepEqual(model.sections, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 1, stale: 0 }, unmeasured: 2 })
+  assert.deepEqual(model.sections, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 1, stale: 0 }, unmeasured: 2, deferred: 0 })
   // the compact menu face of the SAME sections keeps the whole count, so chip and popup cannot disagree.
   assert.deepEqual(model.section.options.map((option) => [option.value, option.count]), [['', undefined], ['fail', 1], ['pass', 1], ['unmeasured', 2]])
   assert.deepEqual(model.shown.map((item) => item.scenario), ['image fail'])
@@ -78,13 +78,24 @@ test('a measured verdict count splits by freshness and the halves re-add to its 
     { scenario: 'blind', node: 'n', filterKind: EVAL_FILTER_KIND.BLIND },
   ]
   const counts = (state) => evalFilterModel(rows, state, { sessions, t, defaultKind: 'all' }).sections
-  assert.deepEqual(counts({}), { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1 })
+  assert.deepEqual(counts({}), { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1, deferred: 0 })
   assert.equal(sectionTotal(counts({}).pass), 3)
   assert.equal(sectionTotal(counts({}).unmeasured), 1)
   // Freshness is part of the REST of the query, so freshness:fresh empties the stale half structurally —
   // a surface's stale suffix then disappears because the count IS zero, not by special-casing the token.
-  assert.deepEqual(counts({ freshness: 'fresh' }), { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0 })
-  assert.deepEqual(counts({ freshness: 'stale' }), { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
+  assert.deepEqual(counts({ freshness: 'fresh' }), { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 0 })
+  assert.deepEqual(counts({ freshness: 'stale' }), { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0, deferred: 0 })
+})
+
+test('deferred freshness rows have their own section and do not enter stale verdict counts', () => {
+  const rows = [
+    { scenario: 'pending', node: 'n', filterKind: EVAL_FILTER_KIND.DEFERRED, state: 'deferred', freshnessDeferred: true, verdict: { status: 'pass' } },
+    { scenario: 'pass', node: 'n', filterKind: EVAL_FILTER_KIND.RESULT, fresh: true, verdict: { status: 'pass' } },
+  ]
+  const model = evalFilterModel(rows, {}, { sessions, t, defaultKind: 'all' })
+  assert.deepEqual(model.sections, { fail: { fresh: 0, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 1 })
+  assert.equal(model.section.options.find((option) => option.value === 'deferred')?.count, 1)
+  assert.deepEqual(model.shown.map((item) => item.scenario), ['pending', 'pass'])
 })
 
 test('compact groups omit fake one-value facets and retain active off-switches', () => {

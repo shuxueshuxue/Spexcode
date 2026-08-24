@@ -78,6 +78,29 @@ test('append shares protocol rollback and prior events cannot be updated or dele
   }
 })
 
+test('message-event lookup is scoped and does not require replaying the session history', async () => {
+  const { protocol, events } = await fixture(['child', 'other'])
+  try {
+    protocol.withTransaction(tx => events.append(tx, {
+      eventId: id('a'), type: 'session.state.changed', schemaVersion: 1,
+      subjectSessionId: 'child', payload: encodeEventJson({ messageId: 'not-a-message' }), occurredAtMs: 100,
+    }))
+    protocol.withTransaction(tx => events.append(tx, {
+      eventId: id('b'), type: 'session.message.sent.v1', schemaVersion: 1,
+      subjectSessionId: 'child', payload: encodeEventJson({ messageId: 'message-1', text: 'hello' }), occurredAtMs: 110,
+    }))
+    protocol.withTransaction(tx => events.append(tx, {
+      eventId: id('c'), type: 'session.message.sent.v1', schemaVersion: 1,
+      subjectSessionId: 'other', payload: encodeEventJson({ messageId: 'message-1', text: 'other' }), occurredAtMs: 120,
+    }))
+    assert.equal(protocol.withTransaction(tx => events.hasMessageEvent(tx, 'child', 'message-1')), true)
+    assert.equal(protocol.withTransaction(tx => events.hasMessageEvent(tx, 'child', 'missing')), false)
+    assert.equal(protocol.withTransaction(tx => events.hasMessageEvent(tx, 'other', 'message-1')), true)
+  } finally {
+    protocol.close()
+  }
+})
+
 test('replay skips only unknown ignorable events and rejects unknown required events', async () => {
   const { protocol, events } = await fixture(['child'])
   try {

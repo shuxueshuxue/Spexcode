@@ -89,6 +89,22 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
   ], 'measured and blind rows carry the same canonical scenario impact')
 })
 
+test('deferred freshness rows remain explicit and orderable without claiming a verdict', () => {
+  const items = trunkEvalReviewItems([{
+    id: 'n',
+    scenarios: [{ name: 'deferred' }, { name: 'pass' }, { name: 'blind' }],
+    evals: [
+      { scenario: 'deferred', ts: '2026-08-04', freshnessDeferred: true, verdict: { status: 'pass' } },
+      { scenario: 'pass', ts: '2026-08-03', fresh: true, verdict: { status: 'pass' } },
+    ],
+  }])
+  assert.deepEqual(items.map((item: any) => [item.scenario, item.filterKind, item.state]), [
+    ['deferred', 'deferred', 'deferred'],
+    ['pass', 'result', 'pass'],
+    ['blind', 'blind', undefined],
+  ])
+})
+
 test('node timeline review projects one latest reading per declared scenario', () => {
   const items = timelineEvalReviewItems({
     scenarios: [{ name: 'measured' }, { name: 'blind' }],
@@ -105,6 +121,15 @@ test('node timeline review projects one latest reading per declared scenario', (
     ['measured', 'result', '2026-08-03T12:00:00.000Z'],
     ['retired', 'dangling', undefined],
   ])
+})
+
+test('node timeline keeps deferred freshness explicit instead of throwing', () => {
+  const [item] = timelineEvalReviewItems({
+    scenarios: [{ name: 'pending' }],
+    readings: [{ scenario: 'pending', ts: '2026-08-03T12:00:00.000Z', freshnessDeferred: true, verdict: { status: 'pass' } }],
+    dangling: [],
+  } as any, 'node')
+  assert.deepEqual([item.filterKind, item.state], ['deferred', 'deferred'])
 })
 
 test('one detail projection returns only selected history and at most five lightweight neighbors', () => {
@@ -191,7 +216,7 @@ test('eval verdict counts split freshness ONCE on the server, over the whole pop
   const all = page('is:eval')
   // the measured verdicts carry their remeasurement debt in the count itself; unmeasured owns no reading
   // and stays one number. Both halves are folded here, once — no surface re-derives them from `items`.
-  assert.deepEqual(all.counts, { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1 })
+  assert.deepEqual(all.counts, { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1, deferred: 0 })
   // population preserved: each split re-adds to what selecting that verdict actually returns.
   assert.equal(page('is:eval verdict:pass').total, 3)
   assert.equal(page('is:eval verdict:fail').total, 2)
@@ -201,9 +226,9 @@ test('eval verdict counts split freshness ONCE on the server, over the whole pop
 
   // freshness is part of the REST of the query, so freshness:fresh zeroes the stale halves structurally.
   const fresh = page('is:eval freshness:fresh')
-  assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0 })
+  assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 0 })
   assert.equal(fresh.total, 2)
-  assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
+  assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0, deferred: 0 })
 })
 
 // @@@ the focused detail's one real hazard, pinned - a detail open derives its index/total/neighbours from

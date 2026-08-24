@@ -16,9 +16,17 @@ test('live terminals are writable by default and only suspended input asks for c
   assert.doesNotMatch(session, /resumeRequired=\{session\.status === 'asking'\}/)
   assert.match(session, /asking.*not proof that the live[\s\S]*TUI is suspended/)
   assert.match(term, /setInputConfirmOpen\(true\)/)
-  assert.match(term, /setPendingInput\(data\)/)
+  assert.match(term, /setPendingInput\(realInput\)/)
   assert.match(term, /isTerminalPointerReport[\s\S]*startsWith\('\\x1b\[M'\)/)
   assert.match(term, /isTerminalPointerReport[\s\S]*\^\\x1b\\\[\[0-9;\]\+\[Mm\]\$/)
+  assert.match(term, /isTerminalFocusReport\(data\)[\s\S]*?return/)
+  assert.match(term, /data === '\\x1b\[I' \|\| data === '\\x1b\[O'/)
+  assert.match(term, /export function stripTerminalFocusReports[\s\S]*?data\.replace/)
+  assert.match(term, /stripTerminalButtonReports[\s\S]*?charCodeAt\(0\) & 64/)
+  assert.match(term, /export function stripTerminalPointerReports[\s\S]*?replace/)
+  assert.match(term, /const filtered = stripTerminalButtonReports\(stripTerminalFocusReports\(data\)\)/)
+  assert.match(term, /const realInput = stripTerminalPointerReports\(stripTerminalFocusReports\(data\)/)
+  assert.match(term, /sendInput\(filtered\)/)
   assert.match(term, /resumeInputConfirm/)
   assert.doesNotMatch(term, /resumeInputConfirm[^\n]*autoFocus/)
 })
@@ -46,6 +54,26 @@ test('an empty diff distinguishes merged work and prints complete git identities
   assert.doesNotMatch(diff, /head\.slice\(0, 8\)/)
 })
 
+test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {
+  const backend = source('../../spec-cli/src/sessions.ts')
+  const diff = source('./DiffDocument.jsx')
+  const en = source('./i18n/en.js')
+  const zh = source('./i18n/zh.js')
+
+  // the diff anchors at a git root that exists: the live worktree when present, the shared main checkout
+  // otherwise; the missing-everywhere case is a ResourceConflict (409 {error, code}), never a raw git ENOENT 500.
+  assert.match(backend, /function diffAnchorRoot/)
+  assert.match(backend, /existsSync\(wt\.path\)/)
+  assert.match(backend, /'diff-unavailable'/)
+  assert.match(backend, /diffHeadPair\(root, wt\)/)
+  // the browser renders the 409 as a calm localized product state, keeping red for real transport errors
+  assert.match(diff, /res\.status === 409/)
+  assert.match(diff, /phase: 'unavailable'/)
+  assert.match(diff, /session\.diffUnavailable/)
+  assert.match(en, /diffUnavailable:/)
+  assert.match(zh, /diffUnavailable:/)
+})
+
 test('a 502 publishes one global offline state and marks retained tallies stale', () => {
   const data = source('./data.js')
   const root = source('./Root.jsx')
@@ -61,4 +89,27 @@ test('a 502 publishes one global offline state and marks retained tallies stale'
   assert.match(shell, /sb-stale/)
   assert.match(dock, /useBackendHealth/)
   assert.match(dock, /dock-stale/)
+})
+
+test('Command Box turns a lost response into an explicit retryable outcome', () => {
+  const data = source('./data.js')
+  const session = source('./SessionInterface.jsx')
+
+  assert.match(data, /COMMAND_DELIVERY_TIMEOUT_MS = 15_000/)
+  assert.match(session, /new AbortController\(\)/)
+  assert.match(session, /setTimeout\(\(\) => controller\.abort\(\), COMMAND_DELIVERY_TIMEOUT_MS\)/)
+  assert.match(session, /signal: controller\.signal/)
+  assert.match(session, /controller\.signal\.aborted[\s\S]*outcomeUnconfirmed/)
+  assert.match(session, /clearTimeout\(timeout\)/)
+})
+
+test('session row focus is navigation-only', () => {
+  const view = source('./SessionsView.jsx')
+  const tabs = source('./tabs.js')
+
+  assert.match(view, /focusSessionTab\(id, \(route\) => scope\.open\(route\)\)/)
+  assert.doesNotMatch(view, /fetch\(|apiUrl\(|markHumanPromptActive|resumeSession/)
+  assert.match(tabs, /export function focusSessionTab\(id, open\)/)
+  assert.match(tabs, /open\?\.\(held \? \{ \.\.\.route \} : route\)/)
+  assert.doesNotMatch(tabs, /markHumanPromptActive|resume|\/api\/sessions/)
 })

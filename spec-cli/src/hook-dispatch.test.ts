@@ -66,6 +66,106 @@ test('stop-gate is silent for self-launched sessions and renders the catalog pro
   assert.equal(JSON.parse(governed.stdout).reason, expected)
 })
 
+test('stop-gate forced continuation writes asking through the internal lifecycle writer', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-forced-writer-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'stop-gate-forced-writer'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  writeFileSync(join(runtime, 'sessions', sid, 'session.json'), JSON.stringify({
+    session_id: sid, governed: true, status: 'active', proposal: '', note: '',
+  }, null, 2))
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
+  writeFileSync(join(dir, 'hooks', 'stop-gate.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(source)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'Stop\t10\ttrue\thooks/stop-gate.sh\n')
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\ncase "$*" in\n  "internal session-hook-state --session ${sid}") printf '1\\tactive\\t\\n' ;;\n  internal\\ session-state\\ asking\\ --session\\ ${sid}*) exit 0 ;;\nesac\n`)
+  chmodSync(fake, 0o755)
+  const result = spawnSync('bash', [dispatch, 'claude', 'Stop'], {
+    cwd: dir,
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, SPEX: fake, SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: true }),
+    encoding: 'utf8',
+    timeout: 2000,
+  })
+  assert.equal(result.status, 0, result.error?.message || result.stderr)
+  assert.equal(result.stdout, '')
+  const entries = readFileSync(calls, 'utf8').trim().split('\n')
+  assert.ok(entries.includes(`internal session-state asking --session ${sid} --note auto: stopped without declaring — choose merge, close, ask, or park; done --propose nothing records no state`))
+  assert.ok(!entries.some((entry) => entry.startsWith(`session ask --session ${sid}`)), 'the stop hook must not invoke porcelain delivery')
+})
+
+test('idle hook delegates governance to the canonical writer instead of reading session.json', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-idle-hook-canonical-'))
+  const sid = 'idle-hook-canonical'
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'idle', 'idle.sh')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fake, 0o755)
+  const result = spawnSync('bash', [source], {
+    cwd: dir,
+    env: { ...process.env, SPEX: fake, SPEXCODE_HARNESS: 'claude', SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh') },
+    input: JSON.stringify({ session_id: sid, notification_type: 'idle_prompt' }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-idle --session ${sid}`)
+})
+
+test('session-fail hook delegates governance to the canonical writer instead of reading session.json', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-fail-hook-canonical-'))
+  const sid = 'fail-hook-canonical'
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'session-fail', 'fail.sh')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fake, 0o755)
+  const result = spawnSync('bash', [source], {
+    cwd: dir,
+    env: { ...process.env, SPEX: fake, SPEXCODE_HARNESS: 'claude', SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh') },
+    input: JSON.stringify({ session_id: sid }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-fail --session ${sid}`)
+})
+
+test('dispatch migrates the historical stop-gate source before it can call porcelain delivery', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-legacy-migration-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'stop-gate-legacy-migration'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  const handler = join(dir, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
+  mkdirSync(join(dir, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate'), { recursive: true })
+  // Keep exercising the pre-fix source after the repair lands: the first parent is the old tracked hook.
+  writeFileSync(handler, execFileSync('git', ['show', 'HEAD^:.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh'], { cwd: repo }))
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  writeFileSync(join(runtime, 'sessions', sid, 'session.json'), JSON.stringify({ session_id: sid, governed: true, status: 'active' }, null, 2))
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'Stop\t10\ttrue\t.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh\n')
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\ncase "$*" in\n  "internal session-hook-state --session ${sid}") printf '1\\tactive\\t\\n' ;;\n  internal\\ session-state\\ asking\\ --session\\ ${sid}*) exit 0 ;;\nesac\n`)
+  chmodSync(fake, 0o755)
+  const result = spawnSync('bash', [dispatch, 'claude', 'Stop'], {
+    cwd: dir,
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, SPEX: fake, SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: true }),
+    encoding: 'utf8',
+    timeout: 2000,
+  })
+  assert.equal(result.status, 0, result.error?.message || result.stderr)
+  const entries = readFileSync(calls, 'utf8').trim().split('\n')
+  assert.ok(entries.some((entry) => entry.startsWith(`internal session-state asking --session ${sid}`)))
+  assert.ok(!entries.some((entry) => entry.startsWith(`session ask --session ${sid}`)))
+})
+
 test('the generated zcode Stop command reaches its manifest stop gate', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-zcode-stop-dispatch-'))
   const home = join(dir, 'home')

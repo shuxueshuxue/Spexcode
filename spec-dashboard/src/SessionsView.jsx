@@ -64,6 +64,7 @@ export default function SessionsView({ param, query }) {
       boardLive={boardLive}
       reload={reload}
       archiveRequested={query?.archive === '1'}
+      route={{ page: 'sessions', param, query }}
     />
   )
 }

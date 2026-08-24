@@ -77,7 +77,10 @@ export type SharedRuntimeDescriptor = {
   // Lifecycle mutation guard is deliberately narrower than the full resource projection: census every loaded
   // ID, but read only the exact governed target when it is loaded, plus both target descendant collections.
   mutationGuard?: (targetReferenceId: string, opts?: { coldReceipt?: unknown }) => Promise<SharedRuntimeMutationGuard>
-  probe(): Promise<SharedRuntimeProbe>
+  // Resource reporting supplies the exact governed references for this generation. The probe still lists
+  // every loaded id, but only reads native status for those references; unowned history stays visible as
+  // unknown without replaying it on every report.
+  probe(referenceIds?: readonly string[]): Promise<SharedRuntimeProbe>
 }
 export type SharedRuntimeMutationGuard = {
   healthy: boolean
@@ -1932,7 +1935,7 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
 // Resource ownership asks the adapter for what the shared server actually owns now. Records are joined later;
 // they are never treated as references by themselves. A loaded thread is a control-plane reference and its
 // fresh inProgress turn (the same predicate used by delivery) distinguishes active from addressable-idle.
-export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): Promise<SharedRuntimeProbe> {
+export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir), referenceIds?: readonly string[]): Promise<SharedRuntimeProbe> {
   const sock = endpoint.socketPath
   return (async () => {
     // File presence is not process identity. A dead PID plus a stale socket file is the normal crash residue;
@@ -2009,22 +2012,30 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCo
         }
         // Continue with the complete paginated set, not just the first manager page.
         if (!loadedIds.size) return done({ healthy: true, references: [] })
-        loadedIds.forEach((threadId) => {
+        const wanted = referenceIds === undefined ? [...loadedIds] : [...loadedIds].filter((threadId) => referenceIds.includes(threadId))
+        loadedIds.forEach((threadId) => references.set(threadId, { referenceId: threadId, turnPresence: 'unknown' }))
+        // A draining generation deliberately has no native turn reads. Complete the census after recording
+        // loaded ownership; leaving the request map empty would otherwise wait for the global timeout forever.
+        if (!wanted.length) return done({ healthy: true, references: [...references.values()] })
+        wanted.forEach((threadId) => {
           const id = 100 + requests.size
-          references.set(threadId, { referenceId: threadId, turnPresence: 'unknown' })
           requests.set(id, threadId)
-          send({ id, method: 'thread/read', params: { threadId, includeTurns: true } })
+          // Ownership sampling only needs the native status, never the persisted turn history. The old
+          // includeTurns:true request made a periodic resource report replay every loaded conversation and
+          // was the direct source of 5s probe timeouts on the draining generation.
+          send({ id, method: 'thread/read', params: { threadId, includeTurns: false } })
         })
         return
       }
       if (typeof m.id === 'number' && requests.has(m.id) && m.result) {
         const threadId = requests.get(m.id)!
         requests.delete(m.id)
-        const thread = (m.result as { thread?: { turns?: Array<{ id?: string; status?: string }> } }).thread
+        const thread = (m.result as { thread?: { status?: { type?: unknown } | string; turns?: Array<{ id?: string; status?: string }> } }).thread
         const turnId = activeTurnIdFromThread(m.result)
+        const nativeStatus = typeof thread?.status === 'string' ? thread.status : thread?.status?.type
         references.set(threadId, {
           referenceId: threadId,
-          turnPresence: !Array.isArray(thread?.turns) ? 'unknown' : turnId ? 'active' : 'idle',
+          turnPresence: turnId || nativeStatus === 'active' ? 'active' : nativeStatus === 'idle' ? 'idle' : 'unknown',
           ...(turnId ? { turnId } : {}),
         })
         if (!requests.size) done({ healthy: true, references: [...references.values()] })
@@ -2869,7 +2880,13 @@ function codexRuntimeDescriptor(endpoint: CodexGenerationEndpoint, runtimeDir: s
       return result.ok ? { healthy: true, referenceIds: result.referenceIds } : { healthy: false, referenceIds: [], error: result.error }
     },
     mutationGuard: (targetReferenceId, opts) => codexMutationGuard(targetReferenceId, runtimeDir, opts, endpoint),
-    probe: () => codexSharedRuntimeProbe(runtimeDir, endpoint),
+    probe: (referenceIds) => {
+      // A draining generation keeps serving its bound sessions but is no longer a control-plane candidate.
+      // Listing loaded ids preserves ownership evidence; reading native turn state on that old server only
+      // adds load and can time out while the current generation is healthy.
+      const generation = readCodexGenerationLedger(runtimeDir).generations[endpoint.id]
+      return codexSharedRuntimeProbe(runtimeDir, endpoint, generation?.state === 'draining' ? [] : referenceIds)
+    },
   }
 }
 

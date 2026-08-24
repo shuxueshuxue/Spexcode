@@ -11,7 +11,8 @@ const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
-  assert.match(source, /onContextMenu=\{\(e\) => \{[^}]*e\.preventDefault\(\); setMenu\(/)
+  assert.match(source, /onContextMenu=\{\(e\) => \{[\s\S]*?e\.preventDefault\(\)[\s\S]*?setMenu\(null\)/)
+  assert.match(source, /onSessionContextMenu\(\{ x: e\.clientX, y: e\.clientY, session \}\)/)
   assert.doesNotMatch(source, /onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); closeOthers\(tab\)/)
 })
 
@@ -59,7 +60,7 @@ test('resident review tabs share the workspace strip while Issues removes the ac
   // detail still has the shared strip, while the activity rail is intentionally omitted.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} \/>/)
+  assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{page === 'sessions'\} \/>/)
   assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
 })
 

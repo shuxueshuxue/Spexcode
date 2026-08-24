@@ -137,6 +137,12 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)) } catch { /* private mode */ }
     return next
   })
+  const openSpecGraph = () => {
+    // The Spec tab is resident: navigating to its bare address both focuses the held tab and clears any
+    // node/file selector. `focusLatestTab` only restored the previous selector, so clicking this graph door
+    // appeared inert while a concrete Spec document was already open.
+    navigate('spec')
+  }
   if (!specs?.length) return null
   return (
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
@@ -149,6 +155,11 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
           <DiskTree />
         </Section>
       </div>
+      <button type="button" className="ft-graph-entry" data-tip={t('fileTree.graph')} aria-label={t('fileTree.graph')}
+        onClick={openSpecGraph}>
+        <Icon name="graph" size={14} />
+        <span>{t('fileTree.graph')}</span>
+      </button>
       {!embedded && <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />}
     </div>
   )

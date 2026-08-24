@@ -52,6 +52,7 @@ export default {
     aria: '项目文件树',
     specs: '规格',
     files: '文件',
+    graph: '规格图谱',
   },
   diskTree: {
     loading: '正在加载…',
@@ -135,6 +136,7 @@ export default {
     spec: '规格',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',
+    spec: '规格',
     evals: 'Evals',
     issues: '议题',
     settings: '设置',
@@ -294,6 +296,7 @@ export default {
     filedBy: ({ by }) => `由 ${by} 提交`,
     filedAt: ({ at }) => `${at}前提交`,
     sessionTag: '会话',
+    freshnessDeferred: '新鲜度仍在计算；此行可排序但尚未评分',
   },
 
   reviewState: {
@@ -333,7 +336,7 @@ export default {
     sessionMissing: '已不在',
     openedBy: ({ by }) => `由 ${by} 发起`,
     openedAt: ({ at }) => `${at}前发起`,
-    verdict: { pass: '通过', fail: '未通过', unmeasured: '未测量', unscored: '未评分' },
+    verdict: { pass: '通过', fail: '未通过', unmeasured: '未测量', deferred: '等待新鲜度', unscored: '未评分' },
     freshness: { fresh: '最新', stale: '过期' },
     pagination: '分页',
     previous: '上一页',
@@ -761,6 +764,7 @@ export default {
     surfaceSwitcher: '会话视图',
     diffLoading: '正在加载差异……',
     diffEmpty: '没有分支改动',
+    diffUnavailable: '分支 diff 不可用——该会话已没有可对比的分支',
     diffMerged: '已合并到 {base}',
     diffCommit: '打开提交 {commit}',
     diffFailed: '差异不可用：{message}',
@@ -856,6 +860,7 @@ export default {
     outcomeSending: '正在发送...',
     outcomeDelivered: '已送达',
     outcomeQueued: '已接收，正在等待终端传输 — 可安全重试',
+    outcomeUnconfirmed: '尚未确认送达 — 可安全重试',
     deliveryFailed: ({ status }) => `未送达（HTTP ${status}）`,
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',

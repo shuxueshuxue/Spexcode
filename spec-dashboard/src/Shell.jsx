@@ -53,9 +53,10 @@ const dockFor = (page, param) => {
   // rail's explorer projection remains truthful beside it (C2/C4).
   if (page === 'issues' || (page === 'evals' && param == null)) return 'none'
   if (page === 'settings') return 'none'
-  // A bare sessions board is not a session document. Its initial projection stays explorer; clicking the
-  // sessions route may explicitly select sessions through SideBar, while a session object derives it.
-  if (page === 'sessions' && param != null) return 'sessions'
+  // Sessions is a complete document surface: SessionInterface owns its forest/list and console. Keeping a
+  // finding dock here (even with rows suppressed) leaves an empty dock header beside the same list.
+  // Explorer is reached through the Spec/File/Graph surfaces, where it has an actual document to describe.
+  if (page === 'sessions') return 'none'
   if (page === 'spec' || page === 'file') return 'explorer'
   return 'keep'
 }
@@ -302,7 +303,6 @@ function LauncherSessionTally({ launcher, sessions, onOpen, tooltip }) {
   const harnessId = launcher.harness?.replace(/-headless$/, '') || 'claude'
   const harness = HARNESS_BY_ID[launcher.harness] || HARNESS_BY_ID[harnessId] || HARNESS_BY_ID.claude
   const Glyph = harness.Glyph
-  const namedVariant = launcher.name !== harnessId
   const counts = sessions.reduce((result, session) => {
     const zone = sessionZone(session)
     if (zone === 'run') result.running += 1
@@ -315,7 +315,6 @@ function LauncherSessionTally({ launcher, sessions, onOpen, tooltip }) {
       data-tip={tooltip} aria-label={tooltip} onClick={onOpen}>
       <span className="sb-launcher-glyph" aria-hidden="true">
         <Glyph />
-        {namedVariant && <span className="sb-launcher-badge">{launcher.name.slice(0, 1).toUpperCase()}</span>}
       </span>
       <span className="sb-launcher-name">{launcher.name}</span>
       <span className="sb-launcher-counts" aria-hidden="true">
@@ -675,7 +674,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       <div className="app">
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
-        {page !== 'issues' && <SideBar page={page} needsYou={needsYou} />}
+        {page !== 'issues' && <SideBar page={page} needsYou={needsYou} hideDockToggle={page === 'sessions'} />}
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
@@ -689,8 +688,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
               {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
                   without an open document, which is one band wearing two names. The context toggle is a control
                   on the current document, so it rides the strip's own trailing cluster. */}
-              <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
-                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
+              {page !== 'sessions' && <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
+                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />}
               <Content page={page} param={param} query={query} inactive={inactive} />
             </div>
             <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />

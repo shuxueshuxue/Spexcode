@@ -77,7 +77,9 @@ remain editable even when one currently has zero rows. A node popup also initial
 record. Once a value is active, parsing and matching are identical. A node-local list naturally omits node
 and scope facets because they have no choice; this is absence of data, not a special-case branch.
 Eval consumers present one tagged set to the adapter: a filed measurement is a result, while blind,
-unmeasured, and dangling rows are distinct non-result kinds. That shared kind enum is the only discriminator;
+deferred-freshness, unmeasured, and dangling rows are distinct non-result kinds. A deferred-freshness row
+has a filed reading and a stable list position, but its freshness probes have not settled; it is exposed as
+`deferred` and never enters the fresh/stale verdict split. That shared kind enum is the only discriminator;
 the canonical list and embedded node pane do not carry a parallel legacy boolean or dual-name fallback.
 Blind non-result rows belong to the Unmeasured section, remain present in the no-verdict default, and may
 match Needs review; selecting a measured verdict excludes them honestly. Other non-result kinds do not

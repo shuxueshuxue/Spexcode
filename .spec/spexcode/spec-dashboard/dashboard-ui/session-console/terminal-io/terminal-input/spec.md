@@ -59,6 +59,15 @@ and an input message from a stale viewer is ignored. A transport loss remains vi
 loudly by withholding input until the socket is open; it never pretends a key landed. The helper bounds each
 input message before writing it, while preserving the byte string and event order xterm produced.
 
+The input boundary is insensitive to browser event framing. xterm may coalesce a focus report or a mouse
+button report with a real key byte, so filtering must remove those control reports from a mixed payload rather
+than recognizing only a payload that consists of one report. Non-wheel pointer reports and focus reports are
+discarded; wheel reports remain native tmux navigation, and every remaining byte keeps its original order.
+
+When a suspended pane receives a coalesced payload, the confirmation gate examines the payload after all
+pointer and focus reports are removed. Only remaining real bytes become pending input; a pointer report
+cannot bypass confirmation merely because it shared a frame with a key.
+
 Dashboard-global shortcuts are the narrow exception. The capture layer may consume its documented navigation
 chords and the reserved Command Box chord before xterm sees them. The terminal adapter also encodes
 Shift+Enter as `ESC CR`, the conventional modified-Enter sequence understood as a draft newline by both Codex

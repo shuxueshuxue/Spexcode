@@ -355,6 +355,12 @@ body.is-session-dragging .dock-archive-door:hover {
   color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
 }
 .ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: auto; }
+.ft-graph-entry {
+  flex: 0 0 30px; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 0 var(--space-3);
+  color: var(--blue); background: transparent; border: 0; border-top: var(--divider-rule); font: inherit; text-align: left; cursor: pointer;
+}
+.ft-graph-entry:hover { color: var(--ink2); background: color-mix(in srgb, var(--line) 35%, transparent); }
+.ft-graph-entry:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .ft-row {
   display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
   background: none; border: 0; cursor: pointer; text-align: left;
@@ -543,7 +549,8 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .tab {
   position: relative; flex: 0 1 auto; width: auto; height: 30px;
   display: flex; align-items: center; min-width: 80px; max-width: 240px;
-  border-right: 1px solid var(--edge); color: var(--muted); container-type: inline-size;
+  border-right: 1px solid var(--edge); border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--muted); container-type: inline-size;
   overflow: hidden; animation: tab-in var(--dur-tab) ease backwards;
   transition: background-color var(--dur-tab) ease, color var(--dur-tab) ease, border-color var(--dur-tab) ease;
 }
@@ -553,7 +560,8 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   min-width: 112px; background: var(--paper); color: var(--ink2);
   border-right-color: transparent; border-radius: var(--radius) var(--radius) 0 0;
 }
-.tab:not(.on):hover { background: var(--panel2); color: var(--ink2); }
+.tab:not(.on):hover { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
+.tab:not(.on):focus-within { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
 @keyframes tab-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tab-out { to { opacity: 0; transform: scaleX(.72); } }
 .tab.tab-closing {
@@ -576,7 +584,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .tab.slot { opacity: .72; font-style: italic; }
 .tab-face {
   flex: 1 1 auto; display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-5); height: 100%;
-  background: none; border: 0; color: inherit; cursor: pointer;
+  background: none; border: 0; border-radius: var(--radius) 0 0 0; color: inherit; cursor: pointer;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui);
 }
 .tab-label { width: max-content; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -586,13 +594,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 @keyframes tab-spin { to { transform: rotate(360deg); } }
 .tab-x {
   flex: 0 0 24px; width: 24px; display: inline-flex; align-items: center; overflow: hidden;
-  padding: 0 var(--space-4) 0 var(--space-1); height: 100%; background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
+  padding: 0 var(--space-4) 0 var(--space-1); height: 100%; background: none; border: 0; border-radius: 0 var(--radius) 0 0;
+  color: var(--muted); cursor: pointer; opacity: 0;
   transition: opacity var(--dur-tab) ease, color var(--dur-tab) ease, background-color var(--dur-tab) ease;
 }
 .tab.on .tab-x, .tab:hover .tab-x {
   opacity: 1;
 }
-.tab-x:hover { color: var(--ink2); background: var(--panel2); }
+.tab-x:hover { color: var(--ink2); background: var(--panel2); border-radius: 0 var(--radius) 0 0; }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 /* At the narrow end of the same flex scale, text gets the space first. The full label remains on the face's
    accessible name and tooltip, so the second half of a session label can disappear without losing it. Status
@@ -647,14 +656,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .sb-group { display: flex; align-items: center; min-width: 0; }
 /* the right group renders OUTWARD-IN: appended items land at the outer edge, so a higher priority sits
    nearer the centre without the contributor computing a position. */
-.sb-right { flex-direction: row-reverse; min-width: 0; flex: 0 1 auto; }
+.sb-right { flex-direction: row-reverse; min-width: 0; flex: 0 1 auto; padding-right: var(--space-3); }
 .sb-left { overflow: hidden; }
 .sb-item {
   display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; max-width: 100%;
   font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--line-status); color: inherit;
   background: none; border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sb-item:has(.sb-launcher-groups) { padding-inline: 0; }
+.sb-item:has(.sb-launcher-groups) { padding-inline: 0; border-left: var(--divider-rule); padding-left: var(--space-3); }
 button.sb-item { cursor: pointer; }
 button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transparent); }
 button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
@@ -688,7 +697,9 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-tally-button:hover { color: var(--ink2); }
 .sb-tally-button:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
 .sb-tally-button:disabled { opacity: .45; cursor: default; }
-.sb-tally-sep { width: 1px; height: 12px; margin: 0 1px; background: var(--line); }
+/* the bar's ONE vertical divider voice: the same full-height --edge hairline the launcher group's
+   border-left draws, so the two seams on the status line cannot read as two different rules. */
+.sb-tally-sep { width: 1px; align-self: stretch; margin: 0 1px; background: var(--edge); }
 .sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
 .sb-launcher-groups { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
 .sb-launcher-list { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
@@ -1528,6 +1539,12 @@ a.scenario-count:hover { background: var(--panel2); }
 
 /* ---- session interface (#/sessions): two panes, right content morphs ---- */
 .si-page { flex: 1; min-width: 0; min-height: 0; display: flex; }
+/* Sessions owns its complete document frame. The forest is a sibling of the document column, so its
+   width is paid before the document tabstrip is laid out instead of the shell strip being painted above
+   a list that starts underneath it. */
+.si-document { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.si-document > .tabstrip { flex: 0 0 auto; }
+.si-document > .si-panel { flex: 1 1 auto; min-width: 0; min-height: 0; }
 .si-panel {
   /* the console follows the app theme — it uses the same :root tokens (var(--paper/--panel/--ink/--line…))
      as the rest of the dashboard, so re-theming the app re-themes the console with it. The embedded terminal

@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -1770,6 +1770,34 @@ test('machine turn failures share one active-only error projection', serial, () 
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('lifecycle hook writers reject self-launched records in the canonical layer', serial, () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-unmanaged-hook-state-'))
+  process.env.SPEXCODE_HOME = home
+  const id = `unmanaged-hook-state-${process.pid}`
+  const worktree = join(home, 'unmanaged-hook-state')
+  const raw = {
+    session_id: id, governed: false, worktree_path: worktree, branch: null,
+    node: null, title: null, name: null, parent: null, status: 'active', proposal: null,
+    merges: 0, note: null, sortkey: null, createdAt: 1, harness: 'claude',
+    harness_session_id: null, launcher: null, launch_cmd: 'claude', launch_owner: null,
+  }
+  try {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(sessionRecordPath(id), JSON.stringify(raw, null, 2) + '\n')
+    assert.equal(markState('asking', { sessionId: id }), false)
+    assert.equal(markIdle(id), false)
+    assert.equal(markTurnFailure(id, 'unmanaged failure'), false)
+    const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'active', 'unmanaged records are not lifecycle write targets')
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
     rmSync(home, { recursive: true, force: true })
   }
 })

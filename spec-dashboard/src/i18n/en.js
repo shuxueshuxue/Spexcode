@@ -53,6 +53,7 @@ export default {
     aria: 'project file tree',
     specs: 'Specs',
     files: 'Files',
+    graph: 'Spec graph',
   },
   diskTree: {
     loading: 'loading…',
@@ -140,6 +141,7 @@ export default {
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
     sessions: 'Sessions',
+    spec: 'Spec',
     evals: 'Evals',
     issues: 'Issues',
     settings: 'Settings',
@@ -301,6 +303,7 @@ export default {
     filedBy: ({ by }) => `filed by ${by}`,
     filedAt: ({ at }) => `filed ${at} ago`,
     sessionTag: 'session',
+    freshnessDeferred: 'freshness is pending; this row is ordered but not scored',
   },
 
   reviewState: {
@@ -340,7 +343,7 @@ export default {
     sessionMissing: 'Missing',
     openedBy: ({ by }) => `opened by ${by}`,
     openedAt: ({ at }) => `opened ${at} ago`,
-    verdict: { pass: 'Pass', fail: 'Fail', unmeasured: 'Unmeasured', unscored: 'Unscored' },
+    verdict: { pass: 'Pass', fail: 'Fail', unmeasured: 'Unmeasured', deferred: 'Freshness pending', unscored: 'Unscored' },
     freshness: { fresh: 'Fresh', stale: 'Stale' },
     pagination: 'Pagination',
     previous: 'Previous',
@@ -772,6 +775,7 @@ export default {
     surfaceSwitcher: 'session surface',
     diffLoading: 'loading diff…',
     diffEmpty: 'no branch changes',
+    diffUnavailable: 'branch diff unavailable — this session no longer has a diffable branch',
     diffMerged: 'merged into {base}',
     diffCommit: 'open commit {commit}',
     diffFailed: 'diff unavailable: {message}',
@@ -867,6 +871,7 @@ export default {
     outcomeSending: 'sending...',
     outcomeDelivered: 'delivered',
     outcomeQueued: 'accepted, waiting for the terminal transport — retry is safe',
+    outcomeUnconfirmed: 'delivery not confirmed — retry is safe',
     deliveryFailed: ({ status }) => `not delivered (HTTP ${status})`,
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',

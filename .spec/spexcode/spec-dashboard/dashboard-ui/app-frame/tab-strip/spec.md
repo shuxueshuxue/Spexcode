@@ -113,6 +113,13 @@ why the old fence was buying safety that was never at risk.
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | close | that tab only; the slot is nothing special to close |
 
+**Closing hands the workspace over by ONE rule, not per-kind branches** (`closeDestination`): the nearest
+remaining tab of the same kind (`tabKind`) inherits — right beating left at equal distance — then the
+nearest remaining tab of any kind; a closed file can no longer conjure the graph while other tabs remain,
+and a closed session no longer skips surviving non-session tabs. Only an emptied strip leaves the
+workspace, each kind to its standing no-tab destination: spec/file documents to the graph, a published
+resource to the session launch page, everything else to the explicit `#/empty` workspace.
+
 **A row that is a real anchor gets the gesture, not a rewrite.** Finding surfaces increasingly render their
 rows as real `<a href>` — the review lists, the spec context panels, the file tree — because that is what
 makes an address copyable, middle-clickable and openable in a browser tab for free. Those rows still owe the
@@ -198,6 +205,11 @@ this regime, so the 140px padding and 100px status-mark thresholds remain live p
 The face keeps its full accessible label and tooltip while its visible title ellipsises. YATU evidence records
 rendered widths for 2, 5 and 12 tabs in both regimes and verifies that a short label's X right edge leaves only
 normal padding to the tab edge.
+
+Every tab owns the same top-corner radius, including the inactive tab while hovered or keyboard-focused. The
+tab face and close control clip their own hover/focus washes to the matching left/right top corner, so the
+highlight cannot turn into a square patch at either edge. The bottom edge stays square: it is the shared seam
+with the content plane, not a floating chip boundary.
 
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run

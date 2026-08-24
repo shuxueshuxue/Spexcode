@@ -48,6 +48,7 @@ export interface ReplayOptions<State> extends EventReadOptions {
 
 export interface SessionEventStore {
   append(tx: ProtocolTransaction, input: NewSessionEvent): SessionEvent
+  hasMessageEvent(tx: ProtocolTransaction, subjectSessionId: string, messageId: string): boolean
   read(subjectSessionId: string, options?: EventReadOptions, tx?: ProtocolTransaction): readonly SessionEvent[]
   replay<State>(subjectSessionId: string, options: ReplayOptions<State>, tx?: ProtocolTransaction): State
 }
@@ -290,6 +291,27 @@ export function openSessionEvents(protocol: SessionProtocol): SessionEventStore 
     return Object.freeze(events)
   }
 
+  const hasMessageEvent = (
+    txInput: ProtocolTransaction,
+    subjectSessionId: string,
+    messageId: string,
+  ): boolean => {
+    const tx = requireTransaction(txInput)
+    requireSubject(tx, subjectSessionId)
+    if (typeof messageId !== 'string' || messageId.length === 0) return false
+    // Message events are JSON envelopes. Keep the lookup in the event package so adopters do not scan and
+    // decode an entire session history merely to make a retry idempotent. json_valid makes malformed legacy
+    // payloads non-matching instead of turning a delivery check into a transaction failure.
+    return tx.query(
+      `SELECT 1 AS present FROM session_events
+       WHERE subject_session_id=? AND event_type='session.message.sent.v1'
+         AND json_valid(CAST(payload AS TEXT))
+         AND json_extract(CAST(payload AS TEXT), '$.messageId')=? LIMIT 1`,
+      subjectSessionId,
+      messageId,
+    ).length > 0
+  }
+
   const read = (
     subjectSessionId: string,
     options: EventReadOptions = {},
@@ -321,7 +343,7 @@ export function openSessionEvents(protocol: SessionProtocol): SessionEventStore 
     return state
   }
 
-  return Object.freeze({ append, read, replay })
+  return Object.freeze({ append, hasMessageEvent, read, replay })
 }
 
 export { SessionEventError } from './errors.js'

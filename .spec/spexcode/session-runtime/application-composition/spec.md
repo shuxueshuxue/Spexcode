@@ -20,3 +20,6 @@ interpreting relation names. Runtime identities and generation expectations are 
 model-facing message fact in `session-events` in the same transaction as the protocol queue write. Canonical event reads go through the application's `readEvents` boundary; consumers do not import the old file timeline reader. Durable follow cursors are also owned by the application and advance monotonically in the same SQLite store; a caller without a canonical session keeps a process-local cursor. Generic protocol
 messages remain opaque and do not become conversation history. The composition never reads JSON records or exposes
 an opt-in compatibility switch.
+Duplicate checks use the event store's scoped message lookup rather than replaying the session history. Generic protocol
+messages remain opaque and do not become conversation history. The composition never reads JSON records or exposes an
+opt-in compatibility switch.

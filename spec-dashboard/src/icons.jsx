@@ -50,6 +50,9 @@ const ICONS = {
   command: { node: <path d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z" /> },
   keyboard: { node: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" /></> },
   'git-merge': { node: <><circle cx="6" cy="6" r="3" /><circle cx="18" cy="18" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" /></> },
+  // the classic two-branch compare mark — the session document's Branch-diff toggle wears this,
+  // while `file-diff` stays the per-file/selection mark.
+  'git-compare': { node: <><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M13 6h3a2 2 0 0 1 2 2v7" /><path d="M11 18H8a2 2 0 0 1-2-2V9" /></> },
   // A file-shaped diff mark is intentionally distinct from the merge graph: this opens a document surface,
   // while git-merge acts on a review proposal.
   'file-diff': { node: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /><path d="M9 12h6M9 16h3" /></> },

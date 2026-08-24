@@ -1,6 +1,6 @@
 // Each visible browser viewer is one native tmux client. Hidden sockets own none; hiding lingers only that
-// viewer, while socket detach removes it immediately. tmux's largest policy, not bridge size voting, lets a
-// large client own the application grid without losing the small client's native viewport.
+// viewer, while socket detach removes it immediately. tmux's latest-active policy, not bridge size voting,
+// lets the most recently active client own the application grid without losing the peer's native viewport.
 //
 // Run: SPEXCODE_TMUX=visibility-<pid> npx tsx test/pty-bridge.visibility-lifecycle.ts
 import { execFile } from 'node:child_process'
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
     await waitFor(async () => largeChunks.length, (value) => value > 0, 'large initial repaint')
     const largePid = pidForSize(pairedClients, LARGE)
     if (!largePid || largePid === smallPid) throw new Error(`viewers shared one client (${pairedClients.join(', ')})`)
-    if (await windowPolicy() !== 'largest') throw new Error(`window did not use tmux largest policy (${await windowPolicy()})`)
+    if (await windowPolicy() !== 'latest') throw new Error(`window did not use tmux latest policy (${await windowPolicy()})`)
     await waitFor(windowSize, (value) => value === `${LARGE.cols}x${LARGE.rows}`, 'large client owning window')
     if (largeEvents[0] !== `commit:${LARGE.cols}x${LARGE.rows}` || !largeEvents[1]?.startsWith('frame:')) {
       throw new Error(`large viewer did not receive its own commit before repaint (${largeEvents.join(', ')})`)
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
 
     detachViewer(SESSION, smallViewer)
     await waitFor(clients, (value) => value.length === 0, 'final immediate socket detach')
-    console.log(`PASS: hidden sockets held 0 clients; visible viewers owned native clients ${smallPid}/${largePid}; largest selected ${LARGE.cols}x${LARGE.rows}; large detach immediately recomputed ${SMALL.cols}x${SMALL.rows}; small hide lingered only ${smallPid}, resumed continuously, expired, and reattached as ${restoredPid}`)
+    console.log(`PASS: hidden sockets held 0 clients; visible viewers owned native clients ${smallPid}/${largePid}; latest selected ${LARGE.cols}x${LARGE.rows}; large detach immediately recomputed ${SMALL.cols}x${SMALL.rows}; small hide lingered only ${smallPid}, resumed continuously, expired, and reattached as ${restoredPid}`)
   } finally {
     detachViewer(SESSION, smallViewer)
     detachViewer(SESSION, largeViewer)

@@ -32,6 +32,9 @@ touch-first face rather than a squeezed graph. The choice is viewport width alon
 query, reactive so a rotate or resize flips it with no reload); both faces read the one polled
 board, so nothing about the data or the backend forks. The phone face is its **own lazy chunk**
 ([[dashboard-shell]]): a phone downloads none of the desktop's graph/terminal/annotator libraries.
+The App host owns the global route subscription and passes the captured route into `MobileApp`; this face
+consumes that prop and never opens a second global route reader, keeping cold links and desktop/mobile
+breakpoint remounts on one address source.
 
 **Not a degraded desktop — a purpose-built terminal-free surface.** Pane-backed sessions keep their
 desktop TUI. A headless session has no pane at any liveness, so both a phone and the desktop console

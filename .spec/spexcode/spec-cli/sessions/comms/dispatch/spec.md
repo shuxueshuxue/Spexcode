@@ -39,13 +39,21 @@ self-heal, so the response names the transport cause, existing queued count, and
 adds neither history nor queue debt, and `/api/sessions/:id/input` is non-2xx. A merely unproven probe is not
 stranded and keeps the ordinary queue retry, while a dead worker may be made addressable by resume. An accepted
 message is drained immediately so a live agent sees it in its current turn; whatever that drain could not hand
-over stays queued and is retried by the serve that owns the project root. The channel is the ONLY way a message
+over stays queued and is retried by the serve that owns the project root. A caller may provide one opaque delivery
+key while retrying; canonical protocol idempotency binds that key to the original message and reports queued until
+the adapter acknowledges handover, never appending a second prompt. The channel is the ONLY way a message
 enters an agent, so it arrives in exactly the shape a human prompt does. There is no send-keys fallback, no PTY
 prompt typing, and no hook-injected copy — a turn-boundary hook reports freshness and never carries conversation.
 The one exception is an already-installed managed parent-watch notification: its authored child-state event must
 cross the append boundary even when the parent's registered process is alive but its native transport is absent.
 That notification still uses the ordinary parent queue and retry path; it is not reported as handed over until an
 adapter accepts it, and it never weakens the stranded refusal for a caller's new prompt.
+
+A prompt accepted from a human (the input route with no `from` session) is also the explicit re-entry for a waiting
+turn: `asking` and inferred `idle` become canonical `active` at that same acceptance boundary. Agent-to-agent
+messages and managed watch events keep the recipient's authored waiting state. Native terminal input follows the
+same rule after the PTY write; the raw-key face follows it after its ordered tmux batch. Mouse reports are
+navigation, not a prompt, and do not wake a session.
 
 Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,

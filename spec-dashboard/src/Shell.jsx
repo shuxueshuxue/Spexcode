@@ -10,7 +10,7 @@ import { useRoute, navigate, routeHash } from './route.js'
 import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { viewFor } from './views.jsx'
+import { preloadView, viewFor, viewRouteContract } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
@@ -18,9 +18,10 @@ import { PROJECT_ID, hubHref, projectHref } from './project.js'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
 import { ScoreBadge } from './score.jsx'
 import { nextGraphStatNode } from './GraphStats.jsx'
-import { sessionHandle, sessionZone } from './session.js'
+import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
+import { useEscLayer } from './escStack.js'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
@@ -28,6 +29,9 @@ import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useLaunchers } from './launch.js'
 import { HARNESS_BY_ID } from './harness.jsx'
+import Legend from './Legend.jsx'
+import { ViewScopeProvider } from './ViewScope.jsx'
+import { createViewScope } from './viewScope.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -47,7 +51,7 @@ import { HARNESS_BY_ID } from './harness.jsx'
 const dockFor = (page, param) => {
   // Bare review/settings boards are full-width. Their object detail is a document and keeps the dock, so the
   // rail's explorer projection remains truthful beside it (C2/C4).
-  if ((page === 'evals' || page === 'issues') && param == null) return 'none'
+  if (page === 'issues' || (page === 'evals' && param == null)) return 'none'
   if (page === 'settings') return 'none'
   // A bare sessions board is not a session document. Its initial projection stays explorer; clicking the
   // sessions route may explicitly select sessions through SideBar, while a session object derives it.
@@ -69,6 +73,31 @@ const POOL_LIMIT = 6
 // mirrors --dur-panel in the stylesheet: the shell has to outlive the CSS animation by the same amount it
 // lasts, and one of the two has to name the number.
 const DOCK_ANIMATION_MS = 170
+
+// Every mounted view gets one route scope. The shell is the only dispatcher: views can request an address,
+// explicitly hold one in the second pane, or update their own query, but they cannot receive the raw navigate
+// callback or write another host's route. Pooled panes keep the scope object and only update its route/active
+// snapshot as they move between visible and hidden states.
+function ViewScopeHost({ page, param, query, active, children }) {
+  const { splitTo } = useWorkspaceApi()
+  const dispatch = useCallback((intent) => {
+    const { page: targetPage, param: targetParam, query: targetQuery } = intent.address
+    if (intent.type === 'hold') {
+      splitTo(intent.address)
+      return { accepted: true, intent }
+    }
+    navigate(targetPage, targetParam, { query: targetQuery })
+    return { accepted: true, intent }
+  }, [splitTo])
+  const holder = useMemo(() => createViewScope({
+    route: { page, param, query }, dispatch, active, contract: viewRouteContract,
+    owner: { kind: 'view', page, param: param ?? null },
+  }), []) // the shell updates this holder below; the public scope identity remains stable for the view
+  useEffect(() => {
+    holder.update({ route: { page, param, query }, active })
+  }, [holder, page, param, query, active])
+  return <ViewScopeProvider scope={holder.scope}>{children}</ViewScopeProvider>
+}
 
 // [[workspace-shell]]'s MOUNTED-DOCUMENT POOL. Switching tabs used to remount the document from scratch —
 // every switch re-ran a view's whole boot, which is what "why does clicking a tab reload it" was naming.
@@ -120,9 +149,11 @@ const PoolPane = memo(function PoolPane({ entry, showing }) {
           document is the reader's own recovery, and it must not need a reload. */}
       <ViewErrorBoundary resetKey={entry.address}>
         <PaneProvider value={pane}>
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <View param={entry.param} query={entry.query} />
-          </Suspense>
+          <ViewScopeHost page={entry.page} param={entry.param} query={entry.query} active={showing}>
+            <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+              <View param={entry.param} query={entry.query} />
+            </Suspense>
+          </ViewScopeHost>
         </PaneProvider>
       </ViewErrorBoundary>
     </div>
@@ -140,9 +171,11 @@ function ViewHost({ page, param, query, inactive = false }) {
       style={inactive ? { display: 'none' } : undefined}>
       <ViewErrorBoundary resetKey={address}>
         <PaneProvider value={{ address, active: !inactive }}>
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <View key={poolKey(page, param)} param={param} query={query} />
-          </Suspense>
+          <ViewScopeHost page={page} param={param} query={query} active={!inactive}>
+            <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+              <View key={poolKey(page, param)} param={param} query={query} />
+            </Suspense>
+          </ViewScopeHost>
         </PaneProvider>
       </ViewErrorBoundary>
     </div>
@@ -156,6 +189,7 @@ function ShellStatus() {
   const t = useT()
   const { identity, catalog } = useBoard()
   const [open, setOpen] = useState(false)
+  useEscLayer(open, () => setOpen(false))
   const catalogOk = catalog?.state === 'ok'
   const denied = catalog?.state === 'denied'
   const projects = catalogOk ? catalog.projects : null
@@ -167,14 +201,9 @@ function ShellStatus() {
     const onDown = (event) => {
       if (!event.target.closest?.('[data-status-project], .status-project-menu')) setOpen(false)
     }
-    const onKey = (event) => {
-      if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) }
-    }
     document.addEventListener('mousedown', onDown, true)
-    window.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('mousedown', onDown, true)
-      window.removeEventListener('keydown', onKey, true)
     }
   }, [open])
 
@@ -370,7 +399,7 @@ function BoardStatus({ specs, sessions, page }) {
         <span className="sb-tally-sep" />
         <BoardStat name="drift" count={tally.driftIds.length}
           onClick={tally.driftIds.length ? () => walkGraph(tally.driftIds) : null}
-          title={t('stats.driftTitle', { n: tally.driftIds.length })}>⚠</BoardStat>
+          title={t('stats.driftTitle', { n: tally.driftIds.length })}><Icon name="triangle-alert" size={13} /></BoardStat>
         {stale}
       </span>
     ),
@@ -405,7 +434,7 @@ function BoardStatus({ specs, sessions, page }) {
       onClick={graphOrBoard(tally.issueIds, 'issues')}
       title={page === 'graph'
         ? t('stats.issueTitle', { n: tally.issueCount })
-        : t('statusBar.issues', { n: tally.issueCount })}>◆</BoardStat>{stale}</span>,
+        : t('statusBar.issues', { n: tally.issueCount })}><Icon name="issue-opened" size={13} /></BoardStat>{stale}</span>,
   })
   useStatusItem({
     id: 'board-sessions', side: 'right', priority: 44,
@@ -457,7 +486,7 @@ function ContextToggle({ visible, onToggle }) {
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
   return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
     aria-label={label} data-tip={label}>
-    <Icon name="panel-right" size={14} />
+    <Icon name="list-checks" size={14} />
   </button>
 }
 
@@ -466,6 +495,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const route = useRoute()
   const { page, param, query } = routeOverride || route
   const { specs, sessions, identity, graphOnly } = useBoard()
+  useEffect(() => {
+    if (page === 'graph' && !graphOnly) void preloadView('sessions')
+  }, [page, graphOnly])
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
   const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
@@ -475,15 +507,17 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     if (!previous) return
     for (const session of sessions || []) {
       if (session.status !== 'asking' || previous.get(session.id) === 'asking') continue
-      notify(`${sessionHandle(session)} · ${t('status.asking')}`, {
+      notify(`${sessionHeadline(session)} · ${t('status.asking')}`, {
         kind: 'info',
         onClick: () => navigate('sessions', session.id),
       })
     }
   }, [sessions, notify, t])
   const documentNames = useDocumentNames()
-  const { dock, dockMode, palette } = useWorkspace()
-  const { closePalette, openPalette, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  const { dock, dockMode, palette, helpOpen } = useWorkspace()
+  const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
+    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
   // explorer docked, opening it leaves the spec prose 383px — under a readable measure, and it takes the
   // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the
@@ -540,13 +574,23 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       if (event.key === 'Escape') { event.preventDefault(); closePalette(); return true }
       return false
     }
+    if (helpOpen) {
+      if (event.key === 'Escape' || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key))) {
+        event.preventDefault(); closeHelp(); return true
+      }
+      if (event.key === 'j' || event.key === 'k' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const body = document.querySelector('.legend-body')
+        if (body) body.scrollTop += (event.key === 'j' || event.key === 'ArrowDown' ? 120 : -120)
+        return true
+      }
+      return true
+    }
     if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
-    // [[keyboard-nav]]'s native-control restraint, kept across the hoist to the shell scope: while real
-    // DOM focus sits in a typing context — an input, a textarea (the session composer, xterm's helper),
-    // anything contenteditable — every UNMODIFIED key belongs to that control. A bare comma must type a
-    // comma, never navigate to settings. Modifier-carrying chords (the ⌥ page jumps) still pass.
-    if (!event.altKey && !event.ctrlKey && !event.metaKey
-      && event.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return false
+    // Help is shell chrome, not a graph-only action. Native typing contexts still own a literal '?'.
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key)) {
+      event.preventDefault(); closePalette(); toggleHelp(); return true
+    }
     if (event.altKey && !event.metaKey && !event.ctrlKey) {
       const pageOf = [
         ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],
@@ -596,7 +640,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       return true
     }
     return false
-  }, [closePalette, dockKind, dockMode, graphOnly, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, contextOpen])
+  }, [closeHelp, closePalette, dockKind, dockMode, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, toggleHelp, contextOpen])
   useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
   // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review
@@ -620,6 +664,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
           <TooltipLayer />
           <div className="app-main"><ViewHost page="graph" param={param} query={query} /></div>
         </div>
+        <StatusBar />
       </div>
     )
   }
@@ -628,7 +673,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} needsYou={needsYou} />
+        {helpOpen && <Legend onClose={closeHelp} />}
+        {page !== 'issues' && <SideBar page={page} needsYou={needsYou} />}
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}

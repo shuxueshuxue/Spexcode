@@ -81,6 +81,18 @@ scenarios:
       The deepest real-data frontier renders without any pairwise box intersection. The reading reports
       the sampled visible-node count and zero intersecting pairs, and carries both the panorama and local
       screenshots from the settled browser.
+  - name: marquee-selection-dispatches-node-references
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/graph-selection.e2e.mjs
+    description: >-
+      Open the dashboard graph, drag an empty canvas region across at least two visible tiles, and inspect
+      the compact selection action group. Choose Send to Session and inspect the routed New Session composer
+      and its prompt seed, then record the exact hash and selected node ids from the ordinary composer draft.
+    expected: >-
+      Partial-overlap marquee selection marks every touched tile; the action group is visible only for a
+      non-empty selection. Send to Session navigates to `#/sessions/new?seed=...`, where the encoded seed is
+      the ordinary composer draft with one `[[node-id]]` reference per selected tile, and the transient graph
+      selection clears after dispatch without changing graph focus or camera.
 ---
 # eval.md — node-graph
 

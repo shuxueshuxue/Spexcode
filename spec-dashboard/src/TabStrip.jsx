@@ -6,12 +6,13 @@ import { moveTab, pinTab, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
-import { STATUS_COLOR, sessionHandle } from './session.js'
+import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey, resourceTabKey } from './sessionSurface.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
+import { iconFor, isResident } from './views.jsx'
 
 const resourceLabel = (url) => {
   try {
@@ -36,39 +37,20 @@ export const evalDetailParts = (param) => {
   return i > 0 ? { node: param.slice(0, i), scenario: param.slice(i + 1) } : { node: param || '', scenario: '' }
 }
 
-// an issue id printed the way its own row prints it, for the tab that has not learned the title yet.
-const issueNumber = (id) => {
-  const parts = String(id || '').split('#')
-  const value = parts.length > 1 ? parts.at(-1) : parts[0]
-  return `#${value.length > 16 ? `${value.slice(0, 13)}…` : value}`
-}
-
 function label(tab, { specs, sessions, names, t }) {
   if (tab.page === 'graph') return t('tabs.graph')
   // a document names itself: a node by its own title, a file by its basename. The strip does not invent a
   // naming scheme for documents it does not own.
-  if (tab.page === 'spec') return specs?.find((s) => s.id === tab.param)?.title || tab.param
+  if (tab.page === 'spec') return isResident(tab.page) ? t('tabs.spec') : (specs?.find((s) => s.id === tab.param)?.title || tab.param)
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
-  // a DETAIL of a board is not the board: `#/evals` is the list and `#/evals/<node>/<scenario>` is one
-  // reading, and while both said "Evals" the strip could hold three tabs nothing distinguished. The
-  // scenario is the leaf and the node is the folder it sits in, so the tab reads container · leaf — the
-  // same grammar a session tab uses, and both halves come from the address plus the board's node title.
-  if (tab.page === 'evals' && tab.param) {
-    const { node, scenario } = evalDetailParts(tab.param)
-    const title = specs?.find((s) => s.id === node)?.title || node
-    return scenario ? `${title} · ${scenario}` : title
-  }
-  if (tab.page === 'issues' && tab.param) {
-    if (tab.param === 'new') return t('tabs.issueNew')
-    // an issue has no board projection to be named from ([[document-actions]]): the detail reports the
-    // concern it already loaded, and until it has, the id is shown rather than a blank chip. The 220px tab
-    // does the truncating, so the label stays the whole sentence and the ellipsis lands where it fits.
-    return names?.get(routeHash('issues', tab.param)) || issueNumber(tab.param)
-  }
+  // Review details are route state inside one resident top-level tab. The tab keeps the stable board name;
+  // the URL still carries the selected scenario or issue for copy/back/refresh.
+  if (tab.page === 'evals') return t('tabs.evals')
+  if (tab.page === 'issues') return t('tabs.issues')
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param)) || pendingSessionFor(tab.param)
-    const title = s ? sessionHandle(s) : tab.param.slice(0, 8)
+    const title = s ? sessionHeadline(s) : tab.param.slice(0, 8)
     const requestedSurface = tab.query?.surface
     if (isResourceSurface(requestedSurface)) {
       const key = resourceSurfaceKey(requestedSurface)
@@ -102,6 +84,14 @@ function TabDot({ tab, specs, sessions }) {
     return color ? <i className="tab-dot" style={{ background: color }} /> : null
   }
   return null
+}
+
+// Resident destinations keep one stable workspace identity while their URL selects a list or detail.
+// Their icon therefore comes from the same view definition as the activity rail, instead of a second
+// tab-only page map. Object documents keep their own status marker below.
+function TabKindIcon({ tab }) {
+  const icon = isResident(tab.page) ? iconFor(tab.page) : null
+  return icon ? <Icon name={icon} size={13} className="tab-kind-icon" /> : null
 }
 
 // WHERE AM I is the same question whether or not a document is open, so the strip answers it in both cases:
@@ -247,6 +237,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
             <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
               onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
+              <TabKindIcon tab={tab} />
               <TabDot tab={tab} specs={specs} sessions={sessions} />
               <span className="tab-label">{tabLabel}</span>
             </button>

@@ -30,7 +30,7 @@ function seedRecord(home: string, id: string, parentId = ''): void {
   void home
 }
 
-test('canonical managed watch wakes the real parent transport once per state commit', { timeout: 30_000 }, async () => {
+test('canonical managed watch wakes the real parent transport once per state commit', { timeout: 30_000, concurrency: false }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-managed-watch-realtime-'))
   const previousHome = process.env.SPEXCODE_HOME
   process.env.SPEXCODE_HOME = home
@@ -56,6 +56,7 @@ test('canonical managed watch wakes the real parent transport once per state com
           if (!line.trim()) continue
           const message = JSON.parse(line) as { type?: string; text?: string }
           if (message.type === 'reply') received.push(message.text ?? '')
+          if (message.type === 'repaint') socket.write('{"type":"repaint-done"}\n')
         }
       })
     })
@@ -90,6 +91,38 @@ test('canonical managed watch wakes the real parent transport once per state com
     assert.match(delivered[2], /asking/)
   } finally {
     if (server) await new Promise<void>(resolve => server!.close(() => resolve()))
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('canonical lifecycle repairs a stale JSON snapshot without writing a second lifecycle fact', { concurrency: false }, () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-canonical-lifecycle-authority-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  try {
+    seedRecord(home, parent)
+    seedRecord(home, child)
+    const recordsRoot = join(runtimeRoot(), 'sessions')
+    migrateJsonSessionRecords({ databasePath: resolveDatabasePath(), recordsRoot, locality: () => {} })
+    const application = configuredSessionApplication()
+
+    // This is the observed production failure: the legacy envelope still says active while the canonical
+    // lifecycle says asking. A raw-file short circuit would return here and leave the board asking forever.
+    application.transitionSession(child, { status: 'asking', note: 'canonical question' })
+    assert.match(readFileSync(sessionRecordPath(child), 'utf8'), /"status": "active"/, 'fixture keeps the stale JSON snapshot')
+    const before = application.events.read(child).length
+    assert.equal(markState('active', { sessionId: child }), true)
+    assert.equal(application.readState(child)?.status, 'active')
+    assert.equal(application.readState(child)?.note, null)
+    assert.equal(application.events.read(child).length, before + 1, 'the real transition is one canonical event')
+    assert.match(readFileSync(sessionRecordPath(child), 'utf8'), /"status": "active"/, 'the envelope was not used as a writer')
+
+    const stableEvents = application.events.read(child).length
+    assert.equal(markState('active', { sessionId: child }), true)
+    assert.equal(application.events.read(child).length, stableEvents, 'repeated hook events are semantic no-ops')
+  } finally {
     resetConfiguredSessionApplicationForTest()
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome

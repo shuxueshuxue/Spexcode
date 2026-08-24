@@ -36,8 +36,10 @@ import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
-import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
-import { useKeyboardScope } from './KeyboardService.jsx'
+import { decodePrompt, encodePrompt } from './codeSelection.js'
+import SelectionAttachment from './SelectionAttachment.jsx'
+import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
+import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
@@ -399,12 +401,7 @@ function SessionEvalStats({ summary }) {
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
-  useEffect(() => {
-    if (!pop) return
-    const onKey = (e) => { if (e.key === 'Escape') setPop(false) }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [pop])
+  useEscLayer(pop, () => setPop(false))
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
   const selected = launchers.find((l) => l.name === launcher)
@@ -488,6 +485,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [resourceMenu, setResourceMenu] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
+  // One opaque key per session draft lets a queued transport retry the same durable message. It is cleared
+  // only after accepted handover or when the human edits the draft, never when the box merely closes.
+  const commandDeliveryKeysRef = useRef({})
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const knownWebsRef = useRef(null)
@@ -796,8 +796,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
-      const valid = new Set(allSessions.map((s) => s.id))
-      const next = new Set([...prev].filter((id) => valid.has(id)))
+      // A terminal is a live-pane resource, not a historical session cache. When a pane goes offline or is
+      // archived, remove its id here so SessionTerm cleanup closes the browser socket and native client. The
+      // separate conversation set retains readable timeline history without retaining an xterm/WS pair.
+      const next = new Set([...prev].filter((id) => {
+        const session = allSessions.find((candidate) => candidate.id === id)
+        return session && !isHeadlessSession(session) && hasLivePane(session)
+      }))
       for (const s of allSessions) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
       if (active !== 'new') {
         const selected = sessions.find((s) => s.id === active)
@@ -1013,14 +1018,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // of the New Session launch composition — see [[command-box]]).
     const text = expandMentions(raw)
     if (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending') return
+    const deliveryId = commandDeliveryKeysRef.current[active] || crypto.randomUUID()
+    commandDeliveryKeysRef.current[active] = deliveryId
     setActionOutcome({ owner: 'command', phase: 'sending', message: t('session.outcomeSending') })
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'command', text }),
+        body: JSON.stringify({ kind: 'command', text, deliveryId }),
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
+        if (outcome?.deliveryPending) {
+          // Durable append succeeded, but the native handoff did not. Keep the draft and box open so the
+          // user can retry after the transport recovers; a queued record is not a delivered command.
+          setActionOutcome({ owner: 'command', phase: 'queued', message: t('session.outcomeQueued') })
+          return
+        }
         setActionOutcome({
           owner: 'command',
           phase: 'failed',
@@ -1028,7 +1041,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         return
       }
+      if (outcome?.delivery === 'queued') {
+        setActionOutcome({ owner: 'command', phase: 'failed', message: t('session.outcomeQueued') })
+        return
+      }
       setMsg((current) => current === raw ? '' : current)
+      delete commandDeliveryKeysRef.current[active]
       setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
@@ -1273,12 +1291,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return (
       <div className="si-code-selection-queue" aria-label={t('session.codeSelectionAttachments')}>
         {codeSelections.map((selection, index) => (
-          <div key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} className="si-code-selection-chip">
-            <Icon name="terminal" size={12} />
-            <span className="si-code-selection-label" title={selection.text}>{selectionLabel(selection)}</span>
-            <IconButton icon="x" size={12} className="si-code-selection-remove" label={t('session.removeCodeSelection')}
-              onClick={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
-          </div>
+          <SelectionAttachment key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} selection={selection}
+            onRemove={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
         ))}
       </div>
     )
@@ -1466,24 +1480,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // Option+Shift is the disclosure grammar for the selected session. Consume it even for a leaf or an
       // already-matching state: otherwise the ordinary Option+Arrow session move would run immediately after
       // a no-op and the key would appear to change selection. The Dock observes the same shared fold store.
-      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      const sessionShortcut = resolveSessionShortcut(sessionForestRows, active, e)
+      if (sessionShortcut) {
         e.preventDefault(); e.stopPropagation()
-        if (foldableSessionIds.has(active)) {
-          if (e.key === 'ArrowDown' && !expanded.has(active)) expandSessionFolds([active])
-          if (e.key === 'ArrowUp' && expanded.has(active)) toggleSessionFold(active)
-        }
-        return
-      }
-      // Option+Arrow is the unconditional session switch: it works while xterm, a composer, or inert chrome
-      // owns focus. Use the visible forest order so a folded child never becomes a hidden navigation target.
-      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        e.preventDefault(); e.stopPropagation()
-        let index = sessionOrder.indexOf(active)
-        if (index < 0) index = 0
-        const next = Math.max(0, Math.min(sessionOrder.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)))
-        if (sessionOrder[next] !== active) {
-          if (onPickSession) onPickSession(sessionOrder[next])
-          else setSel(sessionOrder[next])
+        if (sessionShortcut.type === 'move' && sessionShortcut.id !== active) {
+          if (onPickSession) onPickSession(sessionShortcut.id)
+          else setSel(sessionShortcut.id)
+        } else if (sessionShortcut.type === 'expand' && foldableSessionIds.has(active) && !expanded.has(active)) {
+          expandSessionFolds([active])
+        } else if (sessionShortcut.type === 'collapse' && foldableSessionIds.has(active) && expanded.has(active)) {
+          toggleSessionFold(active)
         }
         return
       }
@@ -1501,7 +1507,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // Plain arrows remain native in xterm and editable composers. Inert console chrome (including the
         // conversation reading surface) uses the same visible order as the modifier route.
-        if (e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'INPUT' || e.target?.isContentEditable) return
+        if (isTypingTarget(e.target)) return
         e.preventDefault(); e.stopPropagation()
         let index = sessionOrder.indexOf(active)
         if (index < 0) index = 0
@@ -1516,7 +1522,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
     onKey(event)
     return event.cancelBubble
-  }, 10)
+  }, 10, { allowTyping: true })
 
   // A surface may cancel the native menu only where it offers one of its own. The console once cancelled it
   // for the WHOLE panel, which was survivable while a session list occupied most of that panel and did own a
@@ -1630,9 +1636,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <SessionTerm sessionId={id} active={open && terminalShown}
                             focused={open && terminalShown && !commandOpen}
                             writable={open && terminalShown}
-                            // `asking` is the backend's explicit suspended/human-resume state; ordinary working
-                            // and idle panes stay direct-write so the terminal never grows an unlock ceremony.
-                            resumeRequired={session.status === 'asking'}
+                            // `asking` is lifecycle intent (a human reply is needed), not proof that the live
+                            // TUI is suspended. Keep the first-key resume gate opt-in for an explicit witness.
                             focusRequest={id === active ? terminalFocusRequest : 0} />
                         </div>
                       )}
@@ -1683,7 +1688,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
-                            onChange={(e) => { setMsg(e.target.value); syncMenu(e.target) }}
+                            onChange={(e) => { delete commandDeliveryKeysRef.current[active]; setMsg(e.target.value); syncMenu(e.target) }}
                             onSelect={(e) => syncMenu(e.target)}
                             onPaste={(e) => onPasteFiles(e, 'command')}
                             onBlur={() => setMenu(null)}

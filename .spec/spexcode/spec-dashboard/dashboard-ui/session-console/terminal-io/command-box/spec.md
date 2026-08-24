@@ -41,10 +41,11 @@ only that child's launcher. The appended prompt and any creation receipt are one
 creation failure is visible while the already-appended prompt remains delivered. The box owns the right-pane
 in-flight action state; settled success and failure messages publish through the shared transient-notice
 surface, so a child receipt remains inspectable after the box closes. A refused delivery retains the complete
-draft and returned HTTP/body error, and therefore stays ready for retry. It carries no delivery marker of its
-own: a send either put the bytes in the log or did not, so a retry is only ever a retry of something that never
-landed. A 2xx clears the draft and closes after publishing its success notice; disappearing is never the only
-success signal. A close, session switch, or the next send owns clearing the in-flight state; the session list
+draft and returned HTTP/body error, and therefore stays ready for retry. Each authored draft carries one opaque
+delivery key while it is pending; a retry with that key addresses the existing durable queue entry and cannot
+append a duplicate. A response that only confirms durable acceptance while the adapter is still queued keeps the
+draft and reports a retry-safe queued warning. Only adapter handover clears the draft and closes after publishing
+its success notice; disappearing is never the only success signal. A close, session switch, or the next send owns clearing the in-flight state; the session list
 never mirrors it. Enter sends only when it is not
 committing an IME composition; Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used
 by Issues and Evals.

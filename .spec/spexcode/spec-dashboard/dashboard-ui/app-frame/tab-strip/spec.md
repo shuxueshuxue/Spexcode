@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/tabModel.js
   - spec-dashboard/src/tabModel.test.mjs
+  - spec-dashboard/src/subtractive-boundaries.test.mjs
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
@@ -19,24 +20,36 @@ related:
 ---
 # tab-strip
 
-**The strip holds workspace OBJECTS only.** An OBJECT tab is an address with a selector: `#/spec/<id>`,
-`#/file/<path>`, or `#/sessions/<id>`. Evals and Issues are review-surface addresses, not workspace
-documents: `#/evals/<node>/<scenario>` and `#/issues/<id>` never enter the strip, even when opened from a
-spec panel or status chip. A session's
+## Anti-regression boundary
+
+Resident Evals and Issues details keep their detail address in the URL while their tab identity remains the
+single top-level board address. The empty workspace remains an explicit `#/empty` route backed by `EmptyView`;
+it is not replaced by the graph when the last document closes. The executable boundary test covers these
+subtractive and resident-tab invariants alongside the pure tab model.
+
+**The strip holds the workspace working set.** Object tabs include `#/file/<path>` and `#/sessions/<id>`.
+Spec, Evals, Issues, and Settings are resident top-level tabs (`#/spec`, `#/evals`, `#/issues`,
+`#/settings`); opening a spec node, scenario, or issue keeps its detail address in the URL while focusing
+that surface's top-level tab. A file or session detail never replaces another kind's resident/document tab.
+A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
-own identity, appended beside the unchanged session tab. Bare
-`#/evals`, `#/issues`, and `#/settings` are boards, not documents: they remain destinations wherever they
-are reached (rail, cold link, status/chip query) and never enter the strip. Their DETAIL addresses are
-also review destinations and never become workspace objects. The rail is therefore navigation only; it does
-not create, pin, or focus a board tab ([[side-nav]]).
+own identity, appended beside the unchanged session tab. The rail navigates into this same working set and
+does not own a second focus state. Graph remains the one addressable view that never becomes a top-level tab.
 
-What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — a legacy
-address, [[node-graph]]), bare `#/sessions`, **`#/sessions/new`**, and the bare evals/issues/settings boards —
+Resident Spec, Evals, Issues, and Settings tabs render the page icon declared by [[view-registry]], the same
+identity their activity-rail entries use. A detail URL keeps that resident tab identity while its node,
+scenario, or issue selection remains route state. A board's list tabs (for example Open/Closed) are view-local
+filters, not workspace addresses. SpecView still owns the `#/spec/<id>` detail address, and file chips still
+open independent `#/file/<path>` document tabs.
+
+What the strip does NOT hold is what has no object: `#/graph` (including `#/graph/<node>` focus — an
+addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, and **`#/sessions/new`** —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
 This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
-nothing.
+nothing. `#/empty` is the explicit state reached after the last workspace object is closed; it is not a
+fresh-boot alias and it never enters the strip.
 
 **The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
 has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
@@ -196,10 +209,9 @@ tabs additionally classify their fallback so a session can never hand focus to t
 
 **Closing hands focus back by document kind.** A spec or file tab closes to the graph backdrop, preserving the
 existing reading path. A session tab never falls to graph: the nearest remaining session tab on its right wins,
-then the nearest session on its left; when none remains, close lands on `#/sessions/new`, the explicit New Session
-page. This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
-graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule; the explicit `empty` state remains
-the fallback only for a working set with no classified heir. `empty` is an ADDRESS so the state can be landed on,
+then the nearest session on its left; when none remains, close lands on the explicit empty workspace `#/empty`.
+This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
+graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule. `empty` is an ADDRESS so the state can be landed on,
 reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
 contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
 is not the same event as putting your last document down.
@@ -207,9 +219,10 @@ The earlier human rule "退回到 spec node graph" described spec/file workspace
 report "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" narrows that rule: session tabs
 use the classified session fallback above, while spec/file tabs retain the graph return.
 
-`settings` is a destination, not a document, and therefore stays out of the strip. The same rule applies to
-the bare evals/issues boards even when a query-bearing chip or cold link reaches them; only their
-parameterized detail objects may be held.
+Spec, Settings, Evals, and Issues are resident documents even though their bare addresses are board destinations
+or detail entrypoints;
+their detail/query state does not mint another identity. The same resident tab remains selected for a bare
+board or any parameterized detail URL.
 
 **Labels come from the board's own projections** — a node's title, a session's headline — never from a
 second lookup table that could drift from them. A tab for a node carries the same four-state dot its tile
@@ -217,14 +230,15 @@ does, so the strip speaks the board's vocabulary rather than inventing a tab-spe
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
 
-**A board's DETAIL is not the board, and its tab says so.** While `#/evals`, `#/evals/<node>/<scenario>`
-and a second reading all printed "Evals", the strip could hold three tabs with nothing to tell them apart —
-which is a strip that has stopped being a working set. A scenario tab reads *node title · scenario*: the
-scenario is the leaf, the node is the folder it sits in, and that is the same container·leaf grammar a
-session tab already uses. It wears the NODE's status dot, because the reading's own verdict is not on the
-board — knowing it costs a detail request, and a tab must never mint a fetch to draw itself. An issue tab
-reads the concern, ellipsised by the tab's own width rather than cut short in the label, and `#/issues/new`
-names the compose page it actually is.
+**A board's DETAIL is route state inside its resident tab.** Evals and Issues keep the stable page label and
+page icon in the strip while the URL carries the selected scenario or issue; Evals may additionally wear the
+selected node's status dot, which costs no detail fetch. `#/issues/new` remains a compose route with no issue
+identity.
+
+Session conversation, terminal, and diff are not three workspace tabs. They are surfaces of one session tab:
+the toolbar exposes one icon-only conversation/terminal toggle and one independent diff action, both using
+URL replace so switching never creates, replaces, or reorders the session tab. This is the later single-button
+resolution of the earlier request that those faces share the top row.
 
 **A document with no projection names ITSELF.** An issue is the one document the board holds nothing about
 — the issues board is paged and the detail fetches its own — so the detail reports the concern it already

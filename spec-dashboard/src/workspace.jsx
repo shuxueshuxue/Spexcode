@@ -28,8 +28,8 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 
 // ---------------------------------------------------------------------------------------------------
 
-const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split, lockedSource }
-const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, setCompose, takeCompose, watchCompose, splitTo, closeSplit, lockGraphTo }
+const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split, lockedSource, helpOpen }
+const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, toggleHelp, closeHelp, setCompose, takeCompose, watchCompose, splitTo, closeSplit, lockGraphTo }
 
 const DOCK_KEY = 'spexcode.dock'
 const DOCK_MODE_KEY = 'spexcode.dockMode'
@@ -62,6 +62,8 @@ export function WorkspaceProvider({ children }) {
   // just to have somewhere to click, and that list is what this replaces. Not persisted: a lock is a way of
   // looking at the board right now, not a preference to inherit on the next boot.
   const [lockedSource, setLockedSource] = useState(null)
+  // Help is shell chrome, not graph-local state: the same registry-backed legend remains reachable after routing.
+  const [helpOpen, setHelpOpen] = useState(false)
   // A one-shot handoff between views: a board chord composes text that the sessions view should open with.
   // It lives here rather than in either view because neither should have to be mounted for the other to
   // hand it something. A ref, not state — writing it must not re-render the shell.
@@ -88,6 +90,8 @@ export function WorkspaceProvider({ children }) {
     }),
     openPalette: (mode) => setPalette(mode),
     closePalette: () => setPalette(null),
+    toggleHelp: () => setHelpOpen((open) => !open),
+    closeHelp: () => setHelpOpen(false),
     setCompose: (text) => {
       compose.current = text
       for (const watcher of [...composeWatchers.current]) watcher()
@@ -110,7 +114,7 @@ export function WorkspaceProvider({ children }) {
     lockGraphTo: (source, { toggle = true } = {}) => setLockedSource((prev) => (toggle && prev === source ? null : source || null)),
   }), [])
 
-  const state = useMemo(() => ({ dock, dockMode, palette, split, lockedSource }), [dock, dockMode, palette, split, lockedSource])
+  const state = useMemo(() => ({ dock, dockMode, palette, split, lockedSource, helpOpen }), [dock, dockMode, palette, split, lockedSource, helpOpen])
   return (
     <WorkspaceApi.Provider value={api}>
       <WorkspaceState.Provider value={state}>{children}</WorkspaceState.Provider>
@@ -156,9 +160,3 @@ export const usePane = () => useContext(Pane)
 // the two questions with their no-provider answers, so callers do not each invent a default.
 export const usePaneActive = () => useContext(Pane)?.active !== false
 export const usePaneAddress = () => useContext(Pane)?.address ?? null
-
-// A guard the shell asserts in development: a view must not read the global address. It receives its route
-// as props, because that is what lets the shell render two of them at once, and what stops a view from
-// silently coupling itself to whichever address happens to be current.
-export const VIEW_ROUTE_CONTRACT =
-  'a view receives { param, query } as props and must not call useRoute()'

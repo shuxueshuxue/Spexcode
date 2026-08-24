@@ -8,7 +8,7 @@ import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
-import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
@@ -128,6 +128,12 @@ export type Proposal = SessionProposal
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown' | 'corrupt' | 'retired'
 export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
+
+// Awaiting is the durable lifecycle row; its proposal selects the user-facing display status. Keep this
+// projection in the session package so backend reconciliation and offline client reads cannot drift apart.
+export function displayStatusForProposal(proposal: Proposal | null | undefined): DisplayStatus {
+  return PROPOSAL_STATUS[proposal ?? 'nothing']
+}
 
 export type Session = {
   id: string; node: string | null; branch: string | null; path: string
@@ -295,8 +301,25 @@ function readRecord(id: string): SessRec | null {
   const entry = readAliasedRecordEntry(id)
   if (entry.kind === 'absent') return null
   if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
-  try { return fromRaw(entry.raw) }
+  try {
+    const record = fromRaw(entry.raw)
+    // After cutover, session.json is only the runtime/worktree record. Lifecycle is owned by the
+    // session application. Overlaying here keeps every internal caller on the same fact instead of
+    // letting a stale JSON snapshot steer a launch, close, or hook decision.
+    const application = configuredSessionApplicationIfCutover()
+    if (!application || !record.governed) return record
+    const state = application.readState(record.session)
+    if (!state) throw new ResourceConflict(`session ${record.session} has no canonical application state after JSON cutover`)
+    return {
+      ...record,
+      status: state.status as SessionLifecycle,
+      proposal: isSessionProposal(state.proposal) ? state.proposal : null,
+      note: state.note,
+      parent: state.parentSessionId,
+    }
+  }
   catch (error) {
+    if (error instanceof ResourceConflict) throw error
     throw new SessionRecordUnusable('corrupt', id,
       `session record is unreadable: ${sessionRecordPath(id)} — ${error instanceof Error ? error.message : String(error)}. The file is kept as-is; nothing will rewrite it.`)
   }
@@ -454,6 +477,22 @@ function assertLegacyJsonWritesAllowed(): void {
 
 function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
+  const application = configuredSessionApplicationIfCutover()
+  // The JSON file remains the durable runtime/worktree envelope, but it is not a lifecycle writer after
+  // cutover; state transitions happen through application.transitionSession().
+  // Once the application row exists, preserve the old lifecycle bytes exactly as migration evidence. Do not
+  // copy canonical state back into them: that would create a second writer and make a stale JSON snapshot look
+  // current. New records still need the envelope fields until their canonical row is created.
+  const envelope = application && rec.governed ? readAliasedRecordEntry(rec.session) : null
+  const lifecycle = envelope?.kind === 'ok'
+    ? { status: envelope.raw.status, proposal: envelope.raw.proposal, note: envelope.raw.note, parent: envelope.raw.parent }
+    : { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
+  // The JSON envelope intentionally retains its queued lifecycle after canonical state advances to active,
+  // but that historical queue record still needs its lease to remain readable. A successful launch clears the
+  // typed record's owner; preserve the envelope owner until the envelope itself is rewritten as non-queued.
+  const envelopeLaunchOwner = envelope?.kind === 'ok'
+    ? (envelope.raw as RawRecord & { launch_owner?: string }).launch_owner?.trim() || null
+    : null
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const obj = {
@@ -464,11 +503,11 @@ function writeRecord(rec: SessRec): void {
     node: rec.node ?? '',
     title: rec.title ?? '',
     name: rec.name ?? '',
-    parent: rec.parent ?? '',
-    status: rawLifecycleStatus(rec),
-    proposal: rec.proposal ?? '',
+    parent: lifecycle.parent ?? '',
+    status: lifecycle.status,
+    proposal: lifecycle.proposal ?? '',
     merges: rec.merges,
-    note: rec.note ?? '',
+    note: lifecycle.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
@@ -482,7 +521,8 @@ function writeRecord(rec: SessRec): void {
     adapter_recovery: rec.adapterRecovery ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
-    launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    launch_owner: (lifecycle.status === 'queued' || lifecycle.status === OWNED_QUEUE_RAW_STATUS)
+      ? rec.launchOwner ?? envelopeLaunchOwner ?? '' : '',
     ...(rec.launchReadinessStartedAt ? { launch_readiness_started_at: rec.launchReadinessStartedAt } : {}),
     ...(rec.runtimeStartToken ? { runtime_start_token: rec.runtimeStartToken } : {}),
     create_request_id: rec.createRequestId ?? '',
@@ -518,7 +558,7 @@ function writeRecord(rec: SessRec): void {
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
   const previousPublic = previous ? publicRecord(previous) : null
   const nextPublic = publicRecord(rec)
-  if (!configuredSessionApplicationIfCutover() && rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
+  if (!application && rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
     || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
     recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
     scheduleWatchNotifications(rec)
@@ -604,7 +644,7 @@ function managedWatchRecord(id: string): SessRec {
 
 function watchMessage(target: SessRec): string {
   const status = target.status === 'awaiting'
-    ? PROPOSAL_STATUS[target.proposal ?? 'nothing']
+    ? displayStatusForProposal(target.proposal)
     : target.status === 'active' ? 'working' : target.status
   const note = target.note ? ` — ${target.note}` : ''
   return `[spex watch] ${target.session} is ${status}${note}`
@@ -1141,14 +1181,14 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   return 'offline'
 }
 
-function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
+function reconcile(rec: SessRec, snap: LiveSnap, residentLiveness?: Liveness): DisplayStatus {
   // record integrity outranks both axes: a session whose worktree is gone has no work to be in any state
   // about. It reads `retired` — a terminal, human-closable row, never a lifecycle a hook can write back over.
   if (rec.archived) return 'offline'
   if (retirementReason(rec)) return 'retired'
-  if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
+  if (rec.status === 'awaiting') return displayStatusForProposal(rec.proposal)
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
-  const lv = liveness(rec, snap)
+  const lv = residentLiveness ?? liveness(rec, snap)
   if (lv !== 'online') return lv  // 'offline' | 'starting' | 'unknown'
   return rec.status === 'idle' ? 'idle' : 'working'
 }
@@ -1327,9 +1367,11 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
       canonicalStates.set(id, state)
     }
   }
-  // Only archived adapter records need the resident-ID join. If there are none, this read path performs zero
-  // control-plane probes; resources still owns the full turn/read probe for its detailed report.
-  const censusRecords = [...snapshots.values()].flatMap(({ entry, rec }) => entry.kind === 'ok' && entry.liveness === null && rec && rec.governed && rec.archived && rec.harnessSessionId
+  // Adapter-owned records have no pane witness. Join one project-wide resident-ID census to every exact
+  // bound target, including live rows; otherwise a dead shared app-server could leave a stale headless record
+  // online indefinitely. The descriptor probe remains one-per-generation, not one RPC per session.
+  const censusRecords = [...snapshots.values()].flatMap(({ entry, rec }) => entry.kind === 'ok' && rec && rec.governed
+    && rec.harnessSessionId && harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter'
     ? [{ ...rec, harness: rec.harness || defaultHarness.id }]
     : [])
   const residentCensus = censusRecords.length ? await adapterLoadedReferenceState(censusRecords) : new Map()
@@ -1383,8 +1425,12 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // unloaded, so it remains visible until an explicit archive repair.
     const cleanCold = projectedRecord.archived && !changedDuringCensus.has(id) && hasValidColdProof(projectedRecord) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
     const projected = projectedRecord.archived && !cleanCold ? { ...projectedRecord, archived: false, stopped: false } : projectedRecord
-    const projectedLv = projected === projectedRecord ? liveness(projectedRecord, snap) : physical!
-    const s = boardRow(toSession(projected, reconcile(projected, snap), projectedLv, activity))
+    const projectedLv = projected === projectedRecord
+      ? sessionHarness.runtimeOwnership === 'adapter'
+        ? adapterResidentLiveness(projectedRecord, resident)
+        : liveness(projectedRecord, snap)
+      : physical!
+    const s = boardRow(toSession(projected, reconcile(projected, snap, projectedLv), projectedLv, activity))
     // Canonical projection deliberately creates a fresh object for every governed row. That identity change is not
     // an archive failure: a hazard belongs only to a record that was actually archived and then had its cold proof
     // rejected. Otherwise every live row would inherit the missing-cold-witness message after cutover.
@@ -1726,9 +1772,9 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, snap: LiveSnap): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
-  const rec = readRecord(s.id)
-  if (!rec) return false
-  return harnessById(rec.harness || defaultHarness.id).liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online'
+  // `listSessions` already joined the adapter resident census and projected the resulting liveness. Re-reading
+  // the harness here would resurrect the old record-backed codex-headless shortcut and disagree with the row.
+  return s.liveness === 'online'
 }
 // sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
 // `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
@@ -1761,7 +1807,9 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
   const note = `${label ?? (terminal ? 'queued launch readiness failed' : 'launch readiness warning')}: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
-  if (rec && !retirementReason(rec) && (rec.note !== note || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null)))) {
+  if (rec && !retirementReason(rec) && (rec.note !== note
+    || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null))
+    || (!terminal && live && (rec.status === 'error' || rec.stopped)))) {
     // Readiness failure is terminal for this launch attempt. Keep the exact reason on the record,
     // publish an offline/error transition, and clear every durable/in-memory ownership marker so close
     // and a later explicit resume have an honest starting point.
@@ -1772,9 +1820,10 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
       const status = live && (rec.status === 'error' || rec.stopped) ? 'active' : rec.status
       const stopped = live ? false : rec.stopped
       const restored = { ...rec, status, stopped, note, launchOwner: null, launchReadinessStartedAt: null }
-      // A live post-receipt timeout is a diagnostic, not a parent-watch lifecycle transition. The record/file
-      // projection still updates the local row; the canonical event stream remains quiet until a real state change.
-      if (!live) publishCanonicalLifecycle(restored, status, restored.proposal, note)
+      // A live post-receipt timeout is a diagnostic, not a new parent-watch transition. If an older failed
+      // attempt already published `error`, however, the canonical row must be repaired to the live status or
+      // the JSON write below would leave the sole lifecycle authority disagreeing with the runtime witness.
+      if (status !== rec.status) publishCanonicalLifecycle(restored, status, restored.proposal, note)
       writeRecord(restored)
     }
   }
@@ -1787,8 +1836,10 @@ export function canonicalWatchRecipients(
 ): string[] {
   const recipients = new Set<string>()
   for (const edge of application.topology.parents(sessionId)) {
-    if (!edge.relationType.startsWith('watch')) continue
-    if (status === 'active' && edge.relationType === 'watch:parent') continue
+    // The canonical topology stores the structural parent edge as the durable parent-watch source. Older
+    // migrated rows may also have an explicit watch:parent edge; both represent the same policy source.
+    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
+    if (status === 'active' && (edge.relationType === 'parent' || edge.relationType === 'watch:parent')) continue
     recipients.add(edge.fromSessionId)
   }
   return [...recipients]
@@ -1818,10 +1869,9 @@ export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'st
   rec: T,
   canonical: { status: string; proposal: string | null; note: string | null; parentSessionId: string | null } | null | undefined,
 ): T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null } {
-  // Canonical state may lag a legacy record during archive/stop or an authored waiting/error transition.
-  // Those durable states are terminal/needs-you facts and must never be resurrected as active by a stale
-  // application row. Active/idle/queued records remain canonical-led, as intended after cutover.
-  if (!canonical || rec.archived || rec.stopped || !['active', 'idle', 'queued'].includes(rec.status)) {
+  // The application row is the only lifecycle fact after cutover. A JSON status is historical envelope data,
+  // so it must not win merely because it says waiting/error/archived while the canonical row says otherwise.
+  if (!canonical) {
     return rec as T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null }
   }
   return {
@@ -1851,6 +1901,10 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
 }
 
 async function launchReadinessWitnessAlive(id: string, harness: Harness, current: SessRec): Promise<boolean> {
+  if (harness.runtimeOwnership === 'adapter') {
+    const state = await adapterRuntimeLiveness({ ...current, stopped: false, archived: false })
+    return state === 'online'
+  }
   if (agentAlive(id) === true) return true
   try {
     const snap = await liveSnapshot(id)
@@ -1858,6 +1912,23 @@ async function launchReadinessWitnessAlive(id: string, harness: Harness, current
   } catch {
     return false
   }
+}
+
+export function adapterResidentLiveness(rec: SessRec, resident: AdapterLoadedReferenceState | undefined): Liveness {
+  if (rec.stopped || rec.archived) return 'offline'
+  if (!rec.harnessSessionId) return 'offline'
+  if (!resident) return 'unknown'
+  if (!resident.healthy) return 'unknown'
+  return resident.loaded ? 'online' : 'offline'
+}
+
+async function adapterRuntimeLiveness(rec: SessRec): Promise<Liveness> {
+  if (rec.stopped || rec.archived) return 'offline'
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (harness.runtimeOwnership !== 'adapter') return liveness(rec, await liveSnapshot())
+  if (!rec.harnessSessionId) return 'offline'
+  const states = await adapterLoadedReferenceState([{ ...rec, harness: harness.id }], runtimeRoot())
+  return adapterResidentLiveness(rec, states.get(`${harness.id}:${rec.harnessSessionId}`))
 }
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): void {
@@ -2009,7 +2080,7 @@ async function drainQueueUnlocked(): Promise<void> {
         if (!rec || launching.has(session.id)) continue
         // Older timed-out rows predate the durable readiness timestamp. Reconcile their recorded failure
         // before any queue/watch work so a backend restart cannot resurrect the old active/limbo projection.
-        if (rec.status !== 'queued' && /^queued launch readiness failed:/.test(rec.note || '') && (rec.status !== 'error' || !rec.stopped)) {
+        if (rec.status !== 'queued' && /^queued launch readiness failed:/.test(rec.note || '')) {
           const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
           const harness = harnessById(rec.harness || defaultHarness.id)
           const live = await launchReadinessWitnessAlive(session.id, harness, rec)
@@ -2739,7 +2810,7 @@ async function cleanupSessionCandidate(root: string, id: string, path: string, b
 function existingCreateReceipt(rec: SessRec): Session {
   const h = harnessById(rec.harness || defaultHarness.id)
   if (rec.status === 'queued') return toSession(rec, 'queued', 'offline')
-  const status = rec.status === 'active' ? 'working' : rec.status === 'awaiting' ? PROPOSAL_STATUS[rec.proposal ?? 'nothing'] : rec.status
+  const status = rec.status === 'active' ? 'working' : rec.status === 'awaiting' ? displayStatusForProposal(rec.proposal) : rec.status
   return toSession(rec, status, rec.stopped ? 'offline' : h.headless ? 'online' : 'starting')
 }
 
@@ -3023,7 +3094,11 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
 }
 
 type ResumeOptions = { force?: boolean; guard?: boolean }
-const restingLifecycle = (status: Lifecycle): Lifecycle => status === 'active' || status === 'queued' ? 'idle' : status
+// An explicit successful resume is a new runtime attempt. A prior terminal launch/turn error must not
+// survive that handoff as current lifecycle truth; waiting declarations remain waiting declarations.
+const restingLifecycle = (status: Lifecycle): Lifecycle =>
+  status === 'active' || status === 'queued' || status === 'error' ? 'idle' : status
+const resumeNote = (status: Lifecycle, note: string | null): string | null => status === 'error' ? null : note
 
 const archiveRef = (id: string): string => `refs/spex-archive/${id}`
 
@@ -3113,10 +3188,10 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // it is a legacy/invariant-violating row. Ignore filing and stale stop metadata for this one safety probe so
   // resume can never kill a live leaf merely because the record was hidden.
   const probeRec = wt.rec.archived ? { ...wt.rec, archived: false, stopped: false } : wt.rec
-  const resumeSnap = await liveSnapshot()
+  const resumeSnap = h.runtimeOwnership === 'adapter' ? null : await liveSnapshot()
   const lv = h.runtimeOwnership === 'adapter'
-    ? (resumeSnap.windows.has(id) ? 'online' : 'offline')
-    : liveness(probeRec, resumeSnap)   // FRESH, honest liveness (listener-verified)
+    ? await adapterRuntimeLiveness(probeRec)
+    : liveness(probeRec, resumeSnap!)   // FRESH, honest liveness (listener-verified)
   if (guard && !force && lv === 'online')
     return { ok: false, refused: true, error: `session ${id} is ALIVE — refusing to relaunch, which would kill a live worker mid-work. To steer it, send it a message; use force only for a genuinely wedged (but alive) process.` }
   if (guard && !force && lv === 'unknown')
@@ -3146,7 +3221,15 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // Archived sessions have no runtime by invariant. Resume first leaves cold storage, then the normal
   // starting -> online launch path recreates the same conversation.
   const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, closedAt: null, stopped: true, coldProof: null }) : wt.rec
-  const resumed: SessRec = { ...current, archived: false, closedAt: null, coldProof: null, status: restingLifecycle(current.status), stopped: false }
+  const resumed: SessRec = {
+    ...current,
+    archived: false,
+    closedAt: null,
+    coldProof: null,
+    status: restingLifecycle(current.status),
+    note: resumeNote(current.status, current.note),
+    stopped: false,
+  }
   if (force || lv === 'offline') {
     let resumeTail: string
     try { resumeTail = h.resumeArg(wt.rec, readLaunchFile(id)).trim() }
@@ -3175,6 +3258,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
       closedAt: null,
       coldProof: null,
       status: restingLifecycle(latest.status),
+      note: resumeNote(latest.status, latest.note),
       stopped: false,
       launchReadinessPending: launchReadinessPending(preResume),
     }
@@ -3221,10 +3305,15 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     const application = configuredSessionApplicationIfCutover()
     if (application) {
       const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
+      const note = opts.note ?? null
+      const current = application.readState(id)
+      if (current && current.status === status && current.proposal === proposal && current.note === note) return true
+      const recipients = canonicalWatchRecipients(application, id, status)
       application.transitionSession(id, {
         status,
         proposal,
-        note: opts.note ?? null,
+        note,
+        recipientSessionIds: recipients,
       })
       return true
     }
@@ -3237,8 +3326,19 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     return true
   })
 }
+// A human prompt is the explicit re-entry from a waiting turn; runtime liveness is not.
+export function markHumanPromptActive(sessionId: string): boolean {
+  try {
+    const rec = readRecord(sessionId)
+    if (!rec || rec.archived || retirementReason(rec) || (rec.status !== 'asking' && rec.status !== 'idle')) return false
+    return markState('active', { sessionId })
+  } catch (error) {
+    // The message/PTY write is already accepted; a raced close or unreadable record must not turn it into a false send failure.
+    console.error(`spex: could not publish human-input activity for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
-export const markError = (sessionId?: string) => markState('error', { sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {
@@ -3246,7 +3346,10 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
     if (!rec || rec.status !== 'active' || rec.stopped || rec.archived) return false
     const application = configuredSessionApplicationIfCutover()
     if (application) {
-      application.transitionSession(sessionId, { status: 'error', proposal: null, note })
+      application.transitionSession(sessionId, {
+        status: 'error', proposal: null, note,
+        recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'error'),
+      })
       return true
     }
     writeRecord({ ...rec, status: 'error', proposal: null, note })
@@ -4699,10 +4802,17 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused'
-type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
+type AcceptedDispatch = DispatchResult & {
+  replayed?: boolean
+  code?: DispatchAcceptCode
+  delivery?: 'accepted' | 'queued'
+}
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency
+  // Dashboard callers keep this opaque key while a transport retry is pending. Canonical protocol
+  // idempotency makes the retry address the existing queue row instead of appending a duplicate prompt.
+  deliveryKey?: string
   acceptGuard?: (record: SessRec) => Promise<void>
   deferDrain?: boolean
   // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
@@ -4725,25 +4835,42 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const application = configuredSessionApplicationIfCutover()
   if (application) {
+    let message: ReturnType<ProductionSessionApplication['protocol']['enqueue']>
+    let replayed = false
     try {
       const rec = readRecord(id)
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
       await opts.acceptGuard?.(rec)
       const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-      const idempotencyKey = opts.idempotency?.requestDigest ?? null
+      const idempotencyKey = opts.idempotency?.requestDigest ?? (opts.deliveryKey?.trim() || null)
       const existing = idempotencyKey
         ? application.protocol.readMessages(id).find(message => message.idempotencyKey === idempotencyKey)
         : undefined
-      const message = existing ?? application.enqueueConversationMessage(id, {
+      message = existing ?? application.enqueueConversationMessage(id, {
           kind: 'session.prompt.v1',
           body: Buffer.from(prompt.text, 'utf8'),
           senderSessionId: from ?? null,
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
-      if (!opts.deferDrain) await drainSession(id)
-      return { ok: true, ...(opts.idempotency ? { replayed: !!existing } : {}) }
+      replayed = !!existing
+      if (!from) markHumanPromptActive(id)
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
+    }
+    // Acceptance and handover are separate boundaries. A committed SQLite message remains a successful
+    // command even when the runtime is currently unbound; binding/resume is the explicit event that makes
+    // the durable debt drainable. Reporting the post-commit refusal as an append failure made command-box
+    // callers show a false error despite the prompt already being safely queued.
+    if (!opts.deferDrain) {
+      try { await drainSession(id) } catch (error) {
+        if (!(error instanceof ResourceConflict) || !/no bound spex-governed runtime/u.test(error.message)) throw error
+      }
+    }
+    const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+    return {
+      ok: true,
+      delivery: pending ? 'queued' : 'accepted',
+      ...(opts.idempotency || opts.deliveryKey ? { replayed } : {}),
     }
   }
   let replayed = false
@@ -4785,6 +4912,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       ...(code ? { code } : {}),
     }
   }
+  if (!from) markHumanPromptActive(id)
   // Awaited, not fire-and-forget: an unawaited insert can lose its race with a short-lived caller's exit,
   // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
   // the text in a live agent's current turn instead of up to one tick later.
@@ -4943,7 +5071,7 @@ function rawKeyArgs(id: string, key: string): string[] | null {
 // (browser + server + send-keys all parallel) and scramble the sequence; a single serialised batch cannot.
 // An unknown token is skipped without dropping the rest; false only if the tmux session is gone or nothing sent.
 export async function rawKey(id: string, key: string | string[]): Promise<boolean> {
-  return withRecordLock(id, async () => {
+  const sent = await withRecordLock(id, async () => {
     const list = (Array.isArray(key) ? key : [key]).filter((k) => typeof k === 'string' && k.length > 0)
     if (list.length === 0 || !(await alive(id))) return false
     let sent = false
@@ -4954,4 +5082,6 @@ export async function rawKey(id: string, key: string | string[]): Promise<boolea
     }
     return sent
   })
+  if (sent) markHumanPromptActive(id)
+  return sent
 }

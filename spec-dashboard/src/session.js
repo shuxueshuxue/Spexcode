@@ -1,6 +1,6 @@
-import { sessionHandle, sessionHeadline, sessionPresent, sessionTitle } from '@spexcode/spec-core/review'
+import { sessionHandle, sessionHeadline, sessionPresent } from '@spexcode/spec-core/review'
 
-export { sessionHandle, sessionHeadline, sessionPresent, sessionTitle }
+export { sessionHandle, sessionHeadline, sessionPresent }
 
 // status→colour values are theme tokens (styles.css :root) so the palette stays single-sourced; var() resolves in inline styles.
 export const STATUS_COLOR = {
@@ -44,18 +44,12 @@ export const sessionDisplayState = (s) => {
   }
 }
 export const sessionZone = (s) => sessionDisplayState(s).zone
-export const ZONE_ORDER = ['need', 'run', 'offline', 'archive']
-
 export const isArchived = (s) => !!s?.archived
 export const sessionFooterState = (s) => {
   if (isArchived(s)) return 'archived'
   if (s?.status !== 'queued' && (s?.status === 'offline' || s?.liveness === 'offline')) return 'offline'
   return 'live'
 }
-export const splitArchived = (sessions = []) => ({
-  live: sessions.filter((s) => !isArchived(s)),
-  archived: sessions.filter(isArchived),
-})
 // the ONE liveness join: resolve an id against the board sessions and return the
 // session only while it is ALIVE (listed and not offline) — the same alive/offline judgment the originator
 // chip renders (Thread.jsx). A non-session id ('human', a github
@@ -92,10 +86,37 @@ export const zoneSort = (sessions) => {
 
 export function nestSessions(sessions) {
   const byId = new Map(sessions.map((s) => [s?.id, s]))
+  // Legacy/imported records can contain a malformed parent cycle even though the write path rejects one.
+  // Find those cycle members first, then promote just that cycle to roots; descendants still keep their
+  // direct edge to the promoted member instead of disappearing with the malformed family.
+  const state = new Map()
+  const cycleIds = new Set()
+  const scan = (id, trail, positions) => {
+    if (state.get(id) === 'done') return
+    if (state.get(id) === 'visiting') {
+      const start = positions.get(id)
+      if (start != null) for (const cycleId of trail.slice(start)) cycleIds.add(cycleId)
+      return
+    }
+    const session = byId.get(id)
+    if (!session) return
+    state.set(id, 'visiting')
+    const parent = session.parent && session.parent !== id ? session.parent : null
+    if (parent && byId.has(parent)) {
+      const nextTrail = [...trail, id]
+      const nextPositions = new Map(positions)
+      nextPositions.set(id, trail.length)
+      scan(parent, nextTrail, nextPositions)
+    }
+    state.set(id, 'done')
+  }
+  for (const s of sessions) if (s?.id) scan(s.id, [], new Map())
+
   const childrenOf = new Map()
   const roots = []
   for (const s of sessions) {
-    const parent = s?.parent && s.parent !== s.id ? byId.get(s.parent) : null
+    const parentId = cycleIds.has(s?.id) ? null : s?.parent && s.parent !== s.id ? s.parent : null
+    const parent = parentId ? byId.get(parentId) : null
     const p = parent ? parent.id : null
     if (p) { const arr = childrenOf.get(p) || []; arr.push(s); childrenOf.set(p, arr) }
     else roots.push(s)

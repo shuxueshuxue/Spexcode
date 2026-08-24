@@ -19,9 +19,10 @@ export const ACT = [
   { id: 'graph.cycleRev',  keys: ['O'],      rebind: true, desc: 'legend.graph.overlayCycle' },
   { id: 'graph.fresh',     keys: ['['],      rebind: true, desc: 'legend.graph.fresh' },
   { id: 'graph.evals',     keys: ['f'],      rebind: true, desc: 'legend.graph.evals' },
-  // node chords — structural (a two-key grammar, not a single binding)
-  { id: 'graph.newChild',  keys: ['n'],      rebind: false, desc: 'legend.graph.newChild' },
-  { id: 'graph.del',       keys: ['d'],      rebind: false, desc: 'legend.graph.del' },
+  // node chords — structural (a two-key grammar, not a single binding). `keys` is the leader that starts
+  // the state machine; `sequence` is the complete physical grammar used by dispatch and every reader.
+  { id: 'graph.newChild',  keys: ['n'], sequence: ['n', 'n'], rebind: false, desc: 'legend.graph.newChild' },
+  { id: 'graph.del',       keys: ['d'], sequence: ['d', 'd'], rebind: false, desc: 'legend.graph.del' },
   // modals
   { id: 'graph.settings',  keys: [','],      rebind: true, desc: 'legend.graph.settings' },
   { id: 'graph.help',      keys: ['?'],      rebind: true, desc: 'legend.graph.help' },
@@ -34,6 +35,10 @@ export const ACT = [
   { id: 'shell.newSession',  keys: ['Alt+KeyN'],   rebind: false, desc: 'legend.shell.newSession' },
   { id: 'shell.evals',       keys: ['Alt+KeyF'],   rebind: false, desc: 'legend.shell.evals' },
   { id: 'shell.search',      keys: ['Alt+Slash'],  rebind: false, desc: 'legend.shell.search' },
+  { id: 'shell.sessionPrevious', keys: ['Alt+ArrowUp'], rebind: false, desc: 'legend.shell.sessionPrevious' },
+  { id: 'shell.sessionNext',     keys: ['Alt+ArrowDown'], rebind: false, desc: 'legend.shell.sessionNext' },
+  { id: 'shell.sessionExpand',   keys: ['Alt+Shift+ArrowDown'], rebind: false, desc: 'legend.shell.sessionExpand' },
+  { id: 'shell.sessionCollapse', keys: ['Alt+Shift+ArrowUp'], rebind: false, desc: 'legend.shell.sessionCollapse' },
   // shell commands — fixed Alt+Shift chords keep Ctrl/Meta browser accelerators untouched.
   { id: 'shell.dockToggle',   keys: ['Alt+Shift+KeyE'],          rebind: false, desc: 'legend.shell.dockToggle' },
   { id: 'shell.dockMode',     keys: ['Alt+Shift+KeyM'],          rebind: false, desc: 'legend.shell.dockMode' },
@@ -72,3 +77,15 @@ export const keyCap = (k) => {
   const key = parts.pop()
   return parts.map((mod) => MOD_GLYPH[mod] || `${mod}+`).join('') + capOne(key)
 }
+
+const byId = Object.fromEntries(ACT.map((action) => [action.id, action]))
+
+// A structural chord has one leader for the state machine and a complete sequence for its readers. Keeping
+// this lookup beside ACT means dispatch cannot silently grow a second spelling of the same gesture.
+export const chordSequence = (id) => byId[id]?.sequence || []
+
+// Structural chords display their complete sequence. Rebindable actions display the live resolved keys,
+// otherwise a localStorage override silently disappears from both the legend and Settings.
+export const displayKeysOf = (action, resolved = null) => action?.rebind
+  ? (resolved || action.keys || [])
+  : (action?.sequence ? [action.sequence.join('')] : (action?.keys || []))

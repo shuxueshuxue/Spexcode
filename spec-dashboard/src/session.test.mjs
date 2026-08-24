@@ -1,6 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import * as sessionModule from './session.js'
 import { sessionAncestorIds, sessionDisplayState, sessionFooterState, sessionForest, sessionPresentationOrder, sessionZone, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+
+test('retired session projection exports stay removed', () => {
+  for (const name of ['ZONE_ORDER', 'splitArchived', 'sessionTitle']) {
+    assert.equal(name in sessionModule, false, `${name} is a dead compatibility export`)
+  }
+})
 
 test('display projection uses the package status for both zone and glyph', () => {
   const cases = [
@@ -73,6 +80,16 @@ test('session ancestor path stops at missing parents and malformed cycles', () =
   assert.deepEqual(sessionAncestorIds(sessions, 'orphan'), [])
   assert.deepEqual(sessionAncestorIds(sessions, 'a'), ['b'])
   assert.deepEqual(sessionAncestorIds(sessions, 'missing'), [])
+})
+
+test('forest promotes every member of a malformed parent cycle instead of losing the orphaned family', () => {
+  const items = sessionForest([
+    { id: 'cycle-a', parent: 'cycle-b', status: 'working', sortKey: 20 },
+    { id: 'cycle-b', parent: 'cycle-a', status: 'review', sortKey: 10 },
+  ], () => true)
+
+  assert.deepEqual(items.filter((item) => item.type === 'row').map((item) => item.s.id), ['cycle-b', 'cycle-a'])
+  assert.deepEqual(items.filter((item) => item.type === 'row').map((item) => item.depth), [0, 0])
 })
 
 test('presentation order keeps dashboard zones and recursive parent-before-child order', () => {

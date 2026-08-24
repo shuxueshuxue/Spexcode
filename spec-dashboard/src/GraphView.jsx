@@ -5,19 +5,19 @@ import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
-import Legend from './Legend.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { useRoute, navigate } from './route.js'
+import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import {
-  layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
+  graphTitles, layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
   GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_TILE_SIZE,
 } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
+import { chordSequence } from './keymap.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
@@ -25,7 +25,6 @@ import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { useStatusItem } from './StatusBar.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -47,12 +46,13 @@ const NODE_HANDLES = [
 ]
 const clamp = (z) => Math.max(GRAPH_MIN_ZOOM, Math.min(GRAPH_MAX_ZOOM, z))
 
-// nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
 // prompt-driven work, never a server op ([[mentions]]: the issue store is the only programmatic surface).
+const NEW_CHILD_CHORD = chordSequence('graph.newChild').join('')
+const DELETE_CHORD = chordSequence('graph.del').join('')
 const CHORDS = {
-  nn: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
-  dd: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
+  [NEW_CHILD_CHORD]: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
+  [DELETE_CHORD]: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
 }
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
@@ -75,7 +75,8 @@ function PagePane({ active, warm = false, className, children }) {
 function GraphView({ param, query }) {
   const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
   const { reload } = useBoardApi()
-  const { openPalette, setCompose, lockGraphTo } = useWorkspaceApi()
+  const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
+  const { helpOpen } = useWorkspace()
   // WHICH SESSION OWNS THE BOARD lives in the workspace ([[workspace-shell]]) because the surface that
   // claims it — a session row in the finding dock — is not this one. The graph only READS the claim and
   // paints it; it no longer needs a session list of its own to have somewhere to click.
@@ -100,17 +101,11 @@ function GraphView({ param, query }) {
   useEffect(() => { try { if (focusId) sessionStorage.setItem('spex.focus', focusId) } catch { /* */ } }, [focusId])
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
-  const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
-  const search = null   // the palette is the shell's ([[workspace-shell]]); the graph only asks for it
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
+  const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
-  // the `?` legend is the GRAPH's keymap, so the graph contributes it and it leaves the bar when the graph
-  // does. The project name is workspace identity and belongs to the shell — splitting them was the first
-  // thing the view boundary made obvious. `-Infinity` pins help to the far end.
-  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
-    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: () => setLegend((v) => !v) })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const viewportRef = useRef(null)
@@ -122,7 +117,6 @@ function GraphView({ param, query }) {
   const lastMouseRef = useRef({ x: -1, y: -1 })
   // two instances so the popup pane and the help body keep independent scroll targets (createMomentumScroll, scroll.js)
   const popupScroll = useMemo(() => createMomentumScroll(), [])
-  const legendScroll = useMemo(() => createMomentumScroll(), [])
 
   // resolve focus on the RAW tree first (resilient to a polled-away merged/closed node), then expand.
   const rawById = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
@@ -144,6 +138,7 @@ function GraphView({ param, query }) {
   // the x/y all geometry/render below works on. Hidden subtrees simply aren't in `specs2`.
   const placed = useMemo(() => layout(specs, expanded), [specs, expanded])
   const specs2 = useMemo(() => specs.filter((s) => placed[s.id]).map((s) => ({ ...s, ...placed[s.id] })), [specs, placed])
+  const graphTitle = useMemo(() => graphTitles(specs), [specs])
   const byId = useMemo(() => Object.fromEntries(specs2.map((s) => [s.id, s])), [specs2])
   const focus = byId[focusRaw.id]
   // direct-child count per node — drives the ▸N collapsed hint
@@ -173,7 +168,19 @@ function GraphView({ param, query }) {
   )
 
   const openSession = useCallback((id) => navigate('sessions', id), [])
-  const startNew = useCallback((text) => { setSeed(text); navigate('sessions', 'new') }, [setSeed])
+  // The route carries the launch draft across a cold code-split transition. The workspace handoff remains
+  // the live path for chords, but a graph action must not depend on the receiver having mounted before the
+  // hash switch: the query is the durable, replayable address of this one New Session draft.
+  const startNew = useCallback((text) => {
+    setSeed(text)
+    navigate('sessions', 'new', { query: { seed: text } })
+  }, [setSeed])
+  const selectedNodes = useMemo(() => selectedNodeIds.map((id) => rawById[id]).filter(Boolean), [rawById, selectedNodeIds])
+  const dispatchSelected = useCallback(() => {
+    if (!selectedNodes.length) return
+    startNew(`${selectedNodes.map((node) => `[[${node.id}]]`).join(' ')} `)
+    setSelectedNodeIds([])
+  }, [selectedNodes, startNew])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
@@ -264,13 +271,13 @@ function GraphView({ param, query }) {
     }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
-      data: { ...s, ...extra },
+      data: { ...s, graphTitle: graphTitle.get(s.id) || s.title, ...extra },
       initialWidth: NODE_SIZE.width, initialHeight: NODE_SIZE.height,
       handles: NODE_HANDLES,
-      draggable: false, selected: s.id === focusId, className,
+      draggable: false, selected: s.id === focusId || selectedNodeIds.includes(s.id), className,
     }
     })
-  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
+  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded, selectedNodeIds])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -415,7 +422,7 @@ function GraphView({ param, query }) {
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
   // Never <body>. Pages (the session board, evals, issues, settings) are surfaces with their own focus discipline,
   // not transient overlays, so they stay out of this set.
-  const anyOverlay = overlay || legend || !!search
+  const anyOverlay = overlay
   const hadOverlay = useRef(anyOverlay)
   useEffect(() => {
     if (hadOverlay.current && !anyOverlay) returnFocus()
@@ -434,13 +441,15 @@ function GraphView({ param, query }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
-      // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
-      // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
-      // sessionUI return so it holds when the palette is opened over the session board.
-      if (search) {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); openPalette(null) }
-        return e.key === 'Escape'
+      if (helpOpen) {
+        if (e.key === 'Escape' || firesKey('graph.help', e.key)) { e.preventDefault(); e.stopPropagation(); toggleHelp(); return true }
+        if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault(); e.stopPropagation()
+          const body = document.querySelector('.legend-body')
+          if (body) body.scrollTop += (e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
+          return true
+        }
+        return true
       }
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
@@ -497,18 +506,6 @@ function GraphView({ param, query }) {
         return true // anything else does NOT move the board behind the popup
       }
       // graph mode. The help modal owns its keys while open (only ?/Esc close it)
-      if (legend) {
-        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setLegend(false); return true }
-        // j/k and ↑/↓ scroll the (often taller-than-viewport) help body — same momentum glide as the
-        // popup pane, via the legend's own scroller instance. The `.legend` panel is the overflow box.
-        if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault(); e.stopPropagation()
-          legendScroll(document.querySelector('.legend'), e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
-          return true
-        }
-        return true
-      }
-      if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return true }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); lockGraphTo(null, { toggle: false }); return true }
       if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return true }
       if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return true }
@@ -574,6 +571,7 @@ function GraphView({ param, query }) {
   // Clicking a node focuses it and drills it open. The same reading-pair camera target used by keyboard
   // navigation is applied after the frontier re-plots; it does NOT open a session.
   const onNodeClick = useCallback((_e, n) => {
+    setSelectedNodeIds([])
     focusNode(n.id)
   }, [focusNode])
 
@@ -581,6 +579,7 @@ function GraphView({ param, query }) {
   // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
   // leaves it.
   const onNodeDoubleClick = useCallback((e, n) => {
+    setSelectedNodeIds([])
     focusNode(n.id)
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.
@@ -617,6 +616,10 @@ function GraphView({ param, query }) {
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
+          selectionOnDrag
+          selectionMode="partial"
+          panOnDrag={[1, 2]}
+          onSelectionChange={(selection) => setSelectedNodeIds(selection.nodes.map((node) => node.id))}
           onMoveEnd={(event, viewport) => {
             const previous = viewportRef.current
             const changed = !previous
@@ -643,6 +646,16 @@ function GraphView({ param, query }) {
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
 
+        {!graphOnly && selectedNodes.length > 0 && (
+          <div className="graph-selection-actions" role="toolbar" aria-label="Selected spec nodes">
+            <span className="graph-selection-count">{selectedNodes.length} selected</span>
+            <button type="button" className="graph-selection-send" onClick={dispatchSelected}>
+              Send to Session
+            </button>
+            <button type="button" className="graph-selection-clear" onClick={() => setSelectedNodeIds([])} aria-label="Clear selected spec nodes">×</button>
+          </div>
+        )}
+
         {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId}
           onPick={(session) => lockGraphTo(session.source)} onOpenSession={openSession}
           onNew={() => startNew(`[[${focus.id}]] `)} />}
@@ -653,8 +666,8 @@ function GraphView({ param, query }) {
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => navigate('spec', focusRef.current.id)}
           onFresh={(id) => startNew(`[[${id}]] `)}
-          onNewChild={(id) => startNew(CHORDS.nn(id))}
-          onDelete={(id) => startNew(CHORDS.dd(id))}
+          onNewChild={(id) => startNew(CHORDS[NEW_CHILD_CHORD](id))}
+          onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}
         />}
@@ -680,8 +693,6 @@ function GraphView({ param, query }) {
             </button>
           </div>
         )}
-
-        {legend && <Legend onClose={() => setLegend(false)} />}
 
         {/* the `i`/Enter lens ([[node-popup]]): follows the focus, remounts per node. The surgery that
             extracted this view once dropped this line entirely while keeping all its key handling — a

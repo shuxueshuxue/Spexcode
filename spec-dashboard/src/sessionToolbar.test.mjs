@@ -82,6 +82,7 @@ test('file previews use one selectable resource tab, keep Markdown restricted, e
 
 test('pane-backed and headless consoles share one warm TimelineChat Conversation surface', () => {
   assert.match(source, /const isHeadlessSession = \(session\) => session\?\.capabilities\?\.headless === true/)
+  assert.match(source, /const next = new Set\(\[\.\.\.prev\]\.filter\(\(id\) => \{[\s\S]*?return session && !isHeadlessSession\(session\) && hasLivePane\(session\)[\s\S]*?\}\)\)/)
   assert.match(source, /\(headless \|\| openedConversations\.has\(id\)\) && \(/)
   assert.match(source, /<TimelineChat s=\{session\} sessions=\{allSessions\} active=\{open && conversationShown\}/)
   assert.match(source, /setOpenedConversations\(\(prev\) => \(prev\.has\(id\) \? prev : new Set\(prev\)\.add\(id\)\)\)/)
@@ -173,14 +174,6 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.match(source, /setActionOutcome\(\{ owner, phase: 'failed'/)
   assert.match(source, /onError=\{\(message\) => \{[\s\S]{0,300}setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)/)
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>\s*<ActionOutcome/)
-})
-
-test('bulk close is retired with multi-select', () => {
-  assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|onBulkClosed/)
-})
-
-test('select mode is retired with multi-select', () => {
-  assert.doesNotMatch(source, /SessionSelectBar|const \[selecting|const \[picked|startSessionDrag|draggable/)
 })
 
 test('close remains the only right-click lifecycle removal and asks for confirmation', () => {

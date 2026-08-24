@@ -40,6 +40,7 @@ export function configuredSessionApplication(): ProductionSessionApplication {
       commitWake(result.recipients)
       if (commitObserver) setImmediate(() => commitObserver?.(result))
     },
+    onRuntimeBound: sessionId => commitWake([sessionId]),
   })
   return cached
 }

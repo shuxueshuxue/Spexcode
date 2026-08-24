@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { liveness, launcherCmd, type LiveSnap, type SessRec } from './sessions.js'
+import { displayStatusForProposal, liveness, launcherCmd, type LiveSnap, type SessRec } from './sessions.js'
 
 // Pins the session-stability contract the mass-restore incident violated:
 //  - a PROBE FAILURE (tmux timed out under load) → `unknown`, NEVER a false `offline` (board honesty, tooth 1, [[state]]).
@@ -15,6 +15,14 @@ const rec = (over: Partial<SessRec> = {}): SessRec => ({
   ...over,
 })
 const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), titles: new Map(), sockets: new Set(), unproven: new Set(), ...over })
+
+test('awaiting proposals use one canonical display projection', () => {
+  assert.equal(displayStatusForProposal('merge'), 'review')
+  assert.equal(displayStatusForProposal('nothing'), 'done')
+  assert.equal(displayStatusForProposal('close'), 'close-pending')
+  assert.equal(displayStatusForProposal(null), 'done')
+  assert.equal(displayStatusForProposal(undefined), 'done')
+})
 
 test('probe FAILURE reads unknown, never a false offline (board honesty under load)', () => {
   const r = rec()
@@ -42,10 +50,10 @@ test('opencode-headless liveness follows its exact session home', () => {
   assert.equal(liveness({ ...headless, stopped: true }, snap({ windows: withHome, probeFailed: true })), 'offline')
 })
 
-test('codex-headless liveness is the intact record, independent of the shared app-server process', () => {
+test('codex-headless liveness requires an exact shared-runtime generation proof', () => {
   const headless = rec({ harness: 'codex-headless' })
-  assert.equal(liveness(headless, snap()), 'online')
-  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+  assert.equal(liveness(headless, snap()), 'offline', 'a stale record without a detached-runtime proof is offline')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown', 'a failed tmux probe remains inconclusive even without runtime proof')
   assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
 })
 

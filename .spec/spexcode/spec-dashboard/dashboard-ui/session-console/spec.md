@@ -65,7 +65,7 @@ hidden session from outside the list — including the graph's node menu — aut
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
 Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
 terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless TimelineChat
-keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. Open resource tabs follow
+keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are disposed while the read-only Conversation remains available. Open resource tabs follow
 the same display-hidden lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
@@ -108,8 +108,8 @@ The console list is the mutable home of its session forest ([[session-nesting]])
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
 a top-level drop zone. The ghost is the same console tree-row presentation as its source, derived again from
 the current forest item rather than from a hand-copied appearance record: selection reveal, headline line boxes,
-right-side status marker, nesting lead, fold pod, and select checkbox therefore retain their exact internal
-layout. To keep a selected row's expanded headline readable without covering the receiving object, the pointer-owned ghost
+right-side status marker, nesting lead, and fold pod therefore retain their exact internal layout. To keep a
+selected row's expanded headline readable without covering the receiving object, the pointer-owned ghost
 is rendered at **75% of the source's visual size**, with its pointer anchor adjusted for that scale. Only the
 wrapper's semantics differ — the source is an interactive button while the pointer-owned ghost is inert.
 The gesture is deliberately ordinary pointer drag rather than a tiny dedicated handle: the row itself is what
@@ -124,8 +124,9 @@ The [[dock-modes]] sessions projection is the desktop's sole session list. This 
 renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
 the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
 while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
-dock remains list-owned: multi-select is explicitly retired with the duplicate list, while row movement belongs
-to the dock's sole session list ([[dock-modes]]). The keyboard fresh-session binding remains unchanged.
+dock remains list-owned and navigation-only: it has no batch-selection state, checkboxes, or bulk lifecycle
+endpoint, while row movement belongs to the dock's sole session list ([[dock-modes]]). Any future batch operation
+requires its own current contract and product proof. The keyboard fresh-session binding remains unchanged.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -370,11 +371,12 @@ never sends; plain Enter sends, while Shift+Enter adds a line.
 
 Command Box dispatches by **appending to the target's durable log** ([[dispatch]]), never typed into the pane,
 so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows only the
-in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry, and carries
-no delivery marker of its own: a send either put the bytes in the log or did not, so a retry can only ever
-repeat something that never landed. Once either result settles, it visibly acknowledges through the shared
-[[transient-notices]] stack — a short-lived delivery/failure result outside the Command Box's geometry —
-before a successful send clears the draft and closes the box. A `/` line
+in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry. Each draft carries
+one opaque delivery key while pending, so a retry addresses the existing durable queue entry instead of appending
+a duplicate. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
+the shared notice says retry is safe; only adapter handover clears the draft and closes the box. Once either result
+settles, it visibly acknowledges through the shared [[transient-notices]] stack — a short-lived delivery/failure
+result outside the Command Box's geometry — before a successful send clears the draft and closes the box. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every document-action twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
@@ -388,8 +390,8 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
 action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert. The retired multi-select contract is not a current bulk-close path; any future batch
-operation must be specified as an explicit selection mode owned by the dock session list.
+renders no action alert, batch-selection state, or bulk lifecycle action. Any future batch operation must be
+specified as an explicit selection mode owned by the dock session list.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
 stop, close, or merge would falsely claim the dashboard sent the agent a prompt.

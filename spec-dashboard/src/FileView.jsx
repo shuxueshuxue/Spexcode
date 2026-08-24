@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import SourceView from './SourceView.jsx'
 import ProseActions from './ProseActions.jsx'
 import { useT } from './i18n/index.jsx'
@@ -14,8 +14,9 @@ import { fetchNodeFileSlice } from './data.js'
 // not allow, saying what the tab and the address already say.
 export default function FileView({ param }) {
   const t = useT()
+  const sourceHostRef = useRef(null)
   const [selection, setSelection] = useState(null)
-  useStatusItem(param ? { id: 'file-path', side: 'left', priority: 500, text: param } : null)
+  useStatusItem(param ? { id: 'file-path', side: 'right', priority: 500, text: param } : null)
   const parts = param?.startsWith('.spec/') ? param.slice('.spec/'.length).split('/') : []
   const attachment = parts.length >= 2 ? { nodeId: parts[0], name: parts.slice(1).join('/') } : null
   const read = useMemo(() => attachment ? (offset) => fetchNodeFileSlice(attachment.nodeId, attachment.name, offset) : undefined,
@@ -25,9 +26,9 @@ export default function FileView({ param }) {
   // `.spec/**` is outside /api/source's governed-file policy, so route those reads through the node-owned
   // endpoint while keeping one FileView and one tab identity for both kinds of file document.
   return (
-    <div className="fileview">
+    <div className="fileview" ref={sourceHostRef}>
       <SourceView key={param} path={param} read={read} onSelection={setSelection} />
-      <ProseActions codeSelection={selection} onCodeSelectionClear={() => setSelection(null)} />
+      <ProseActions hostRef={sourceHostRef} codeSelection={selection} onCodeSelectionClear={() => setSelection(null)} />
     </div>
   )
 }

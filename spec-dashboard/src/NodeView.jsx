@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, TabCount, TagChips } from './score.jsx'
 import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/spec-core/review'
-import { EvidenceItem } from './Evidence.jsx'
+import { BlobMedia, EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
@@ -14,10 +14,13 @@ import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
+import { stripProseTitle } from './proseTokens.js'
+import Prose from './Prose.js'
 import { EVAL_QUERY_DEFAULT, setToken } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
 import ProseActions from './ProseActions.jsx'
 import { useSpecContent } from './specContent.js'
+import 'katex/dist/katex.min.css'
 
 export { useSpecContent } from './specContent.js'
 
@@ -59,119 +62,21 @@ const pageFilterModel = (data, t) => {
 // op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
 const OP_GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
-// minimal inline markdown the spec bodies use — `code`, **bold**, [[links]]; anything else is plain text (no markdown dep)
-function inline(text) {
-  const out = []
-  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]/g
-  let last = 0, m, k = 0
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index))
-    if (m[1] != null) out.push(<code key={k++}>{m[1]}</code>)
-    else if (m[2] != null) out.push(<strong key={k++}>{m[2]}</strong>)
-    else {
-      const href = routeHash('spec', m[3])
-      out.push(<a className="doc-link" key={k++} href={href} onClick={(event) => holdAnchor(event, href)}>{m[3]}</a>)
-    }
-    last = re.lastIndex
-  }
-  if (last < text.length) out.push(text.slice(last))
-  return out
-}
-
-// a GFM table delimiter row — `|---|:--:|--:|` — what separates the header from the body and marks a
-// pipe-line as a real TABLE (not prose that happens to contain a `|`). Must carry a pipe so a bare `---`
-// horizontal rule after a pipe-paragraph isn't misread as one.
-function isTableDelim(line) {
-  const s = line.trim()
-  return s.includes('|') && /^\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?\s*)?$/.test(s)
-}
-// split one table row into trimmed cells, dropping the outer pipes. Cell text keeps its inline markdown
-// (`code`, **bold**, [[links]]) — it runs back through inline() like any other prose.
-function tableCells(line) {
-  let s = line.trim()
-  if (s.startsWith('|')) s = s.slice(1)
-  if (s.endsWith('|')) s = s.slice(0, -1)
-  return s.split('|').map((c) => c.trim())
-}
-// per-column alignment from the delimiter cell: `:--:` center · `--:` right · else default (left).
-function colAlign(cell) {
-  const l = cell.startsWith(':'), r = cell.endsWith(':')
-  return l && r ? 'center' : r ? 'right' : null
-}
-
-// fence-aware tokenizer for the spec.md body — ``` code, # headings, - lists, | GFM tables |, paragraphs;
-// drops the leading `# title` line (the header already shows it). Exported: the issues page's detail pane
-// ([[issues-view]]) renders issue bodies/replies through this same renderer, so issue markdown and spec
-// markdown read as one dialect.
-//
-// LINE PROVENANCE ([[prose-selection]]): rendering is lossy — paragraphs re-flow, markers are eaten, blank
-// lines vanish — so a reader who selects prose can never be told which lines of the file they picked by
-// measuring the rendered text. The tokenizer already knows: it walks the source line by line. So each block
-// it emits is STAMPED with the body lines it came from, and the selection layer reads the stamps back.
-// `lineBase` is the 1-based body line of this text's first line; 0 means the caller cannot vouch for one
-// (an issue body is not a spec body) and then nothing is stamped at all — a wrong line number is worse
-// than no addressing.
+// Compatibility shell: all body callers now cross the shared markdown-it token boundary. The legacy
+// implementation above remains named (and removable in the later surface migrations), but is no longer
+// reachable from a dashboard surface.
 export function SpecBody({ body, lineBase = 0 }) {
   if (!body) return null
-  const stripped = body.replace(/^#\s+[^\n]*\n+/, '')
-  // the dropped title line(s) shift every stamp below them; count what the strip actually consumed rather
-  // than assuming one line, since the regex also eats the blank lines that followed it.
-  const base = lineBase > 0 ? lineBase + (body.split('\n').length - stripped.split('\n').length) : 0
-  const at = (a, b) => (base ? { 'data-l0': base + a, 'data-l1': base + b } : null)
-  const lines = stripped.split('\n')
-  const out = []
-  let i = 0, k = 0
-  while (i < lines.length) {
-    const t = lines[i].trim()
-    const from = i
-    if (/^```/.test(t)) {
-      const buf = []; i++
-      while (i < lines.length && !/^```/.test(lines[i].trim())) buf.push(lines[i++])
-      i++ // closing fence
-      out.push(<pre className="doc-pre" key={k++} {...at(from, Math.min(i, lines.length) - 1)}><code>{buf.join('\n')}</code></pre>)
-    } else if (/^#{1,6}\s+/.test(lines[i])) {
-      out.push(<h4 className="doc-h" key={k++} {...at(from, from)}>{inline(lines[i].replace(/^#+\s+/, ''))}</h4>); i++
-    } else if (t.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) {
-      const head = tableCells(lines[i])
-      const aligns = tableCells(lines[i + 1]).map(colAlign)
-      i += 2
-      const rows = []
-      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '' && !/^```/.test(lines[i].trim())) {
-        rows.push(tableCells(lines[i])); i++
-      }
-      out.push(
-        <table className="doc-table" key={k++} {...at(from, i - 1)}>
-          <thead><tr>{head.map((c, j) => <th key={j} style={aligns[j] ? { textAlign: aligns[j] } : undefined}>{inline(c)}</th>)}</tr></thead>
-          <tbody>{rows.map((r, ri) => (
-            <tr key={ri}>{head.map((_, ci) => <td key={ci} style={aligns[ci] ? { textAlign: aligns[ci] } : undefined}>{inline(r[ci] ?? '')}</td>)}</tr>
-          ))}</tbody>
-        </table>
-      )
-    } else if (/^-\s+/.test(t)) {
-      // each item is stamped on its own: a list is one block to the tokenizer but a reader selects one
-      // bullet, and the smallest addressable region should be the smallest thing the renderer can name.
-      const items = []
-      while (i < lines.length && /^-\s+/.test(lines[i].trim())) { items.push({ text: lines[i].trim().replace(/^-\s+/, ''), line: i }); i++ }
-      out.push(
-        <ul key={k++} {...at(from, i - 1)}>
-          {items.map((it, j) => <li key={j} {...at(it.line, it.line)}>{inline(it.text)}</li>)}
-        </ul>
-      )
-    } else if (t === '') {
-      i++
-    } else {
-      const buf = []
-      while (i < lines.length) {
-        const l = lines[i]
-        if (l.trim() === '' || /^```/.test(l.trim()) || /^#{1,6}\s+/.test(l) || /^-\s+/.test(l.trim())) break
-        // a table starting on the next line ends this paragraph even without a blank separator.
-        if (l.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) break
-        buf.push(l); i++
-      }
-      out.push(<p key={k++} {...at(from, i - 1)}>{inline(buf.join(' '))}</p>)
-    }
-  }
-  return <div className="doc-body">{out}</div>
+  const { source, removedLines } = stripProseTitle(body)
+  const base = lineBase > 0 ? lineBase + removedLines : 0
+  return <Prose className="doc-body" lineBase={base}
+    renderSpecRef={(id, token, provenance) => {
+      const href = routeHash('spec', id)
+      return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+    }}
+    renderEvidence={(meta, token, provenance) => <span className="rich-evidence" data-evidence-hash={meta.hash} {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt} /></span>}>
+    {source}
+  </Prose>
 }
 
 // the two labelled parts (node.parts): raw source (human) · expanded spec (agent).

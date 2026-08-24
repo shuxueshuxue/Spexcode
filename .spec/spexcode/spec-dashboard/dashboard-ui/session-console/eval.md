@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: live-pane-disposes-on-offline-transition
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/resource-terminal-lifecycle.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/SessionTerm.jsx, spec-dashboard/src/TimelineChat.jsx]
+    description: >-
+      Open a pane-backed session in Chromium with a live board projection, then deliver an authoritative board
+      frame marking that same session offline and archived. Observe the real mounted terminal and the replacement
+      Conversation surface after the projection settles.
+    expected: >-
+      The live frame mounts exactly one xterm layer. The offline/archived frame disposes that layer and its socket
+      while retaining one readable Conversation layer; no hidden terminal remains to charge the retired session.
   - name: terminal-input-default-and-suspended-confirm
     tags: [frontend-e2e, desktop, backend-api]
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionTerm.jsx]
@@ -380,14 +392,12 @@ scenarios:
       - spec-dashboard/src/Modal.jsx#Modal
       - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
     description: >-
-      Keep the console on its New Session tab, enter multi-select mode, then open the bulk archive and close
-      confirms in a real browser. For each dialog, verify its destructive button has focus and press Enter
-      through the page-level keyboard; then repeat with a row's ordinary archive confirm.
+      Keep the console on its New Session document, open a real row's context menu, and choose Close. Verify the
+      destructive button has focus, then press Enter through the page-level keyboard.
     expected: >-
-      A focused lifecycle confirm owns Enter even while the underlying console's selected tab is New: each
-      press dismisses only the visible dialog and sends the matching lifecycle request exactly once. The New
-      Session router never launches a session behind an overlay, and opening any confirm causes no request
-      until its own commit gesture.
+      A focused lifecycle confirm owns Enter even while the underlying console document is New: the press
+      dismisses only the visible dialog and sends the close request exactly once. The New Session router never
+      launches a session behind an overlay, and opening the confirm causes no request until its own commit gesture.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

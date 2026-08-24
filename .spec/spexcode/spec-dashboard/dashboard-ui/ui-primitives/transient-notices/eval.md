@@ -6,8 +6,9 @@ scenarios:
       desktop stack, then resize the same rendered notices to phone width.
     expected: >
       Results are themed, dismissible status/error notices outside the action layout. Their derived
-      lifetimes stay within 5–14 seconds, the later equal-width notice occupies the bottom edge
-      without overlapping the earlier one, and the phone stack remains above the fixed tab bar.
+      lifetimes stay within 5–14 seconds, the first equal-width notice occupies the top-right edge,
+      later notices grow downward without overlapping the earlier one, and the phone stack remains in
+      the top half of the viewport.
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/command-box-new.e2e.mjs
     code: [spec-dashboard/src/TransientNotice.jsx, spec-dashboard/src/noticeTiming.js, spec-dashboard/src/styles.css]

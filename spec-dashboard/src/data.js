@@ -17,6 +17,58 @@ export const CAMERA_ANCHOR_RATIO = 0.43
 // measured desktop pane while still reading as a single left gutter.
 export const CAMERA_GUTTER = GRAPH_TILE_SIZE.width + 44
 
+// The graph is the one display projection for node identity. Backend ids remain canonical, while a
+// repeated human title gets the shortest ancestor suffix that makes visible labels unique.
+export function graphTitles(nodes) {
+  const byId = Object.fromEntries(nodes.map((node) => [node.id, node]))
+  const leaf = (node) => {
+    const path = typeof node.path === 'string' ? node.path.split(/[\\/]/).filter(Boolean) : []
+    return path.at(-2) || node.id
+  }
+  const base = (node) => String(node.title || leaf(node))
+  const counts = new Map()
+  for (const node of nodes) counts.set(base(node), (counts.get(base(node)) || 0) + 1)
+  const conflicted = nodes.filter((node) => counts.get(base(node)) > 1)
+  const result = new Map(nodes.map((node) => [node.id, base(node)]))
+  if (!conflicted.length) return result
+
+  const rawLabels = new Set(nodes.map(base))
+  const chains = new Map()
+  for (const node of conflicted) {
+    const labels = []
+    for (let current = node; current; current = current.parent ? byId[current.parent] : null) {
+      labels.unshift(base(current))
+    }
+    chains.set(node.id, labels)
+  }
+  const unresolved = new Set(conflicted.map((node) => node.id))
+  const chosen = new Set()
+  const maxDepth = Math.max(...[...chains.values()].map((labels) => labels.length))
+  for (let depth = 2; depth <= maxDepth && unresolved.size; depth++) {
+    const groups = new Map()
+    for (const id of unresolved) {
+      const labels = chains.get(id)
+      const candidate = labels.slice(-Math.min(depth, labels.length)).join('/')
+      if (!groups.has(candidate)) groups.set(candidate, [])
+      groups.get(candidate).push(id)
+    }
+    for (const [candidate, ids] of groups) {
+      if (ids.length !== 1 || rawLabels.has(candidate) || chosen.has(candidate)) continue
+      result.set(ids[0], candidate)
+      chosen.add(candidate)
+      unresolved.delete(ids[0])
+    }
+  }
+  // Identically titled siblings can share every human ancestor. Their canonical id is the final
+  // deterministic qualifier in that otherwise impossible-to-name pair.
+  for (const id of unresolved) {
+    const labels = chains.get(id)
+    const prefix = labels.slice(-Math.min(2, labels.length)).join('/')
+    result.set(id, `${prefix}/${id}`)
+  }
+  return result
+}
+
 /**
  * Return the viewport that frames a focus using the reading-pair anchor.
  * `visible` contains graph-space node centres; node dimensions are supplied separately because React Flow

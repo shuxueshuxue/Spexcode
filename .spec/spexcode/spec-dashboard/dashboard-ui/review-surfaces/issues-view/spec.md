@@ -9,6 +9,8 @@ code:
   - spec-dashboard/src/IssuesPage.jsx#IssueDetailPage
   - spec-dashboard/src/IssuesPage.jsx#NewIssuePage
 related:
+  - spec-dashboard/src/ReviewSurface.jsx#ReviewSurface
+  - spec-dashboard/src/reviewSurface.test.mjs
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
@@ -60,6 +62,11 @@ verbs the CLI uses.
   issue population to filter or slice in React. A detail address
   naming no issue renders the shell's honest not-found with a link to the list. Esc routes nothing
   ([[side-nav]]).
+- **The Issues face owns the frame.** Desktop `#/issues`, `#/issues/<id>`, and `#/issues/new` do not render
+  the workspace activity rail (`SideBar`): the list/detail/compose surface is the full reading frame. This
+  is separate from the detail page's metadata rail, which remains inside `DetailShell` beside the issue
+  body and reflows above it on a phone. Evals retain their activity rail because their route is a board
+  destination, while the Issues surface is the focused issue workspace.
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The source is [[issues]]'s
   `mergedIssues` — which excludes eval-remark threads ([[eval-issue-split]]: a scenario-scoped concern is
   a remark and lives on the Evals pages). The rows are the backend's resident snapshot, requested one

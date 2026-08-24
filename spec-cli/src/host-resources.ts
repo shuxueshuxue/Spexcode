@@ -4,11 +4,12 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { defaultHarness, HARNESSES, harnessById, harnessByIdOrNull, sessionIdentityEnvVars, type HarnessLivenessRecord, type SharedRuntimeDescriptor, type SharedRuntimeProbe } from './harness.js'
-import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, readRawRecord, runtimeRoot, type PublicRecordEntry, type RawRecord } from '@spexcode/spec-core'
+import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, runtimeRoot, type PublicRecordEntry, type RawRecord } from '@spexcode/spec-core'
 import { repoRoot } from '@spexcode/spec-core'
 import { endpointRecordPath } from './host.js'
 import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from '@spexcode/spec-core'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
 
 type Proc = ProcessIdentity & {
   ppid: number
@@ -202,18 +203,36 @@ type PublicRecordInventory = {
 }
 const publicRecordInventory = (): PublicRecordInventory => {
   const entries = listSessionIds().map(readPublicRecordEntry)
+  const application = configuredSessionApplicationIfCutover()
   const byId = new Map<string, PublicRecordEntry>()
-  for (const entry of entries) {
+  const projected = entries.map((entry): PublicRecordEntry => {
+    if (entry.kind !== 'ok' || !application || !entry.raw.governed) return entry
+    const state = application.readState(entry.raw.session_id)
+    if (!state) throw new ResourceConflict(`session ${entry.raw.session_id} has no canonical application state after JSON cutover`)
+    return {
+      ...entry,
+      raw: {
+        ...entry.raw,
+        status: state.status,
+        proposal: state.proposal,
+        note: state.note,
+        parent: state.parentSessionId,
+      },
+    }
+  })
+  for (const entry of projected) {
     if (entry.kind === 'ok') byId.set(entry.raw.session_id, entry)
     else if (entry.kind === 'corrupt') byId.set(entry.sessionId, entry)
   }
   return {
-    entries,
-    records: entries.flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : []),
+    entries: projected,
+    records: projected.flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : []),
     byId,
   }
 }
-const rawRecords = (): RawRecord[] => listSessionIds().map(readRawRecord).filter((r): r is RawRecord => !!r)
+// Resource ownership must use the same lifecycle projection as the board. The raw reader remains for
+// ungoverned/runtime identity discovery, but governed rows come from the canonical inventory above.
+const rawRecords = (): RawRecord[] => publicRecordInventory().records
 const runtimePid = (file: string): number | null => {
   try { const pid = Number(readFileSync(file, 'utf8').trim()); return Number.isFinite(pid) && pid > 0 ? pid : null }
   catch { return null }

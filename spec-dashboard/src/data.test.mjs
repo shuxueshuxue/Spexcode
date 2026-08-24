@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { layout, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
+import { graphTitles, layout, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
 
 const tree = [
   { id: 'root', parent: null },
@@ -70,6 +70,37 @@ test('every focus stop has no overlapping source-of-truth tile boxes', () => {
     }
   }
   assert.ok(X_GAP >= width && Y_GAP >= height)
+})
+
+test('duplicate titles get the shortest ancestor qualifier only when needed', () => {
+  const nodes = [
+    { id: 'alpha', parent: null, title: 'Alpha' },
+    { id: 'one', parent: 'alpha', title: 'Leaf' },
+    { id: 'beta', parent: null, title: 'Beta' },
+    { id: 'two', parent: 'beta', title: 'Leaf' },
+    { id: 'solo', parent: null, title: 'Solo' },
+  ]
+  const titles = graphTitles(nodes)
+  assert.equal(titles.get('one'), 'Alpha/Leaf')
+  assert.equal(titles.get('two'), 'Beta/Leaf')
+  assert.equal(titles.get('solo'), 'Solo')
+})
+
+test('duplicate titles escalate around a raw-label collision and identical siblings use ids', () => {
+  const nodes = [
+    { id: 'root', parent: null, title: 'Root' },
+    { id: 'parent', parent: 'root', title: 'Parent' },
+    { id: 'first', parent: 'parent', title: 'Leaf' },
+    { id: 'second', parent: 'parent', title: 'Leaf' },
+    { id: 'collision', parent: null, title: 'Parent/Leaf' },
+    { id: 'other', parent: null, title: 'Other' },
+    { id: 'other-leaf', parent: 'other', title: 'Leaf' },
+  ]
+  const titles = graphTitles(nodes)
+  assert.equal(titles.get('first'), 'Parent/Leaf/first')
+  assert.equal(titles.get('second'), 'Parent/Leaf/second')
+  assert.equal(titles.get('other-leaf'), 'Other/Leaf')
+  assert.equal(new Set(titles.values()).size, nodes.length)
 })
 
 test('camera anchors a focus-child reading pair to the left-of-centre token', () => {

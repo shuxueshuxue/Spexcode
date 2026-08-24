@@ -10,62 +10,68 @@ related:
 related:
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/test/keep-alive.e2e.mjs
+  - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/documentActions.jsx
+  - spec-dashboard/src/ViewScope.jsx
+  - spec-dashboard/src/viewScope.js
+  - spec-dashboard/src/statusOwnership.js
+  - spec-dashboard/src/viewScope.test.mjs
 ---
 # workspace-shell
 
 The frame, and only the frame. It does not know what a spec is, what a session is, or what any view needs.
 It knows there is an address, that an address names a view, and where on the screen that view goes.
 
-## Ownership: contributions are licensed by the parent
+## Route ownership boundary
 
-Every UI element has exactly one **parent**. A child may contribute only through the channel its parent exposes;
-there is no ambient right to reach across the tree and write into another surface. Shared chrome — status-bar
-items, document actions, keyboard authority, the search palette, and transient notifications — accepts
-contributions only through the active `ViewHost`'s typed `ViewScope` channel. When a view is not the active route,
-its contributions are automatically suspended; when its host unmounts, the scope is revoked and every contribution
-is disposed. A component that is not the parent therefore cannot construct a contribution into someone else's
-surface. The double-status-bar incident is the reason this is a mechanism contract: *不可能允许非 parent 的组件随意塞东西*.
+Each shell-owned `ViewHost` provides its view with one read-only `ViewScope`. The scope exposes the mounted
+address and active state, plus exactly three runtime-checked intents: `open(address)` replaces the current
+route, `hold(address)` asks the workspace to place a document in the second pane, and `ownQuery(query)` updates
+the current view's query while preserving its page and selector. The scope dispatches one frozen intent object
+to the shell; views never receive the raw `navigate` or `splitTo` callbacks.
 
-Navigation has one authority. Only the route/tabs layer may mutate the address. A view requests a typed intent —
-`open`, `hold`, or `own-query` — and the route/tabs owner decides how that intent changes the current slot, held
-documents, or query state. A view cannot write another view's address, replace another view's content, or smuggle
-a cross-view navigation through a shared callback; those operations are structurally unavailable outside the
-navigation owner.
-
-A view renders only inside its own `ViewHost` subtree. It may not mount content into a sibling host, the shell's
-chrome, or another view's document region. Overlays are the shell's authorized layer: a view asks the shell for an
-overlay through its parent scope, and the shell owns placement, stacking, dismissal, and focus return. This keeps
-overlay escape hatches explicit while preserving the same one-parent rule for transient surfaces.
+The mounted-document pool keeps one scope identity per host and updates its address/active snapshot when a
+pooled entry changes. Hidden panes are inactive and their intents are rejected without dispatch; unmounting a
+host drops its provider with the host. Address and query shapes are validated at the boundary (lowercase
+kebab-case page, string-or-null selector, URL-safe primitive query values), so malformed cross-view writes fail
+before the route layer. Navigation policy and tab identity remain shell-owned; this scope is an intent channel,
+not a second router. The host obtains its route contract from the view registry itself: an intent targeting an
+unregistered address is rejected before dispatch, and document/resident predicates remain owned by that same
+registry rather than a second shell allow-list. `viewScope.test.mjs` and `viewRegistry.test.mjs` prove the
+registry rather than a second shell allow-list. The mobile face follows the same rule: its host passes the
+captured route as props, so it cannot create a second global route reader while the desktop shell owns its
+`useRoute()` subscription. `viewScope.test.mjs`, `viewRegistry.test.mjs`, and `ownershipBoundary.test.mjs` prove
+the validation, atomic intent shape, hidden-pane suspension, unowned-route rejection, and host-only route
+ownership.
 
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-- **Where is everything? — FINDING, on the left.** The rail is an **activity bar** of route anchors
-  (`graph`, `sessions`, `evals`, `issues`, `settings`) whose one light means the current route. A separate
+  - **Where is everything? — FINDING, on the left.** The rail is an **activity bar** of route anchors
+  (`sessions`, `evals`, `issues`, `settings`) whose one light means the current route. Graph remains an
+  addressable legacy view but is not a top-level rail destination. A separate
   mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer. Review and settings routes are
-  separate surfaces: they bring their own board/page layout and no workspace sidebar, taking the full width
-  instead of inheriting the tree the last tab was showing. Review details are not workspace documents. A bare
+  brings the session list, a node or a governed file brings the explorer. Evals, Issues, and Settings use the
+  shared workspace/tab strip; Issues omits the activity rail while retaining the strip. A bare
   sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
   route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything held is an object document with an address — a node, a file, or a session. Evals/issues
-  boards and their details are review destinations, not workspace documents or tabs; Settings is its own surface.
+  active tab; everything held is an address — a node, a file, a session, or a resident Evals/Issues/Settings board.
+  Board detail routes focus their corresponding resident tab.
   **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
-  ([[tab-strip]]). With no document focus the center lands on the graph bottom sheet (`#/graph`) and names
-  the ways back in through the explorer/palette; the graph is the hidden tab the human explicitly retained,
-  not a document substitute.
+  ([[tab-strip]]). With no document focus after closing the last session, the center lands on the explicit
+  empty workspace (`#/empty`) and names the ways back in through the explorer/palette. The graph remains an
+  addressable legacy view, never a substitute for the reader's close gesture.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
   [[context-dock]]: a spec node's scenarios and open issues. Context is about the current document, which is
   why it is not a finding surface and not a tab. **The frame owns its resting state, and that state is
@@ -220,8 +226,10 @@ white screen, which is the failure this exists to prevent. The other half of the
 stale dist: a lazy chunk that 404s after a redeploy retries twice, then reloads the page once (guarded, so
 it can only happen once per tab) before surfacing here ([[view-registry]]).
 
-**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view. A door
-that is not built is shut more firmly than a door that closes itself, which is why that face no longer
+**The sealed public face gets the frame's smallest form**: no dock, no tabs, no palette, one view, but it
+still mounts the frame's bottom ambient status bar. The public About disclosure is registered there, so the
+static graph's release facts have a real visible owner instead of a provider entry that can never paint. A
+door that is not built is shut more firmly than a door that closes itself, which is why that face no longer
 redirects away from live addresses — it never renders one.
 
 **Two views at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second view

@@ -9,8 +9,12 @@ import { viewFor } from './views.jsx'
 
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 
-// Review is a complete surface, not a workspace document. Its chrome has only the rail and the global
-// status row; Explorer, tab strip, dock, and the workspace document pool are structurally outside this tree.
+// Review is a complete surface, not a workspace document. Explorer, tab strip, dock, and the workspace
+// document pool are structurally outside this tree. Issues is intentionally a focused reading surface:
+// its activity rail is omitted so the issue list/detail owns the whole frame (DetailShell's metadata rail
+// remains part of the issue itself).
+export const reviewShowsActivityRail = (page) => page !== 'issues'
+
 export default function ReviewSurface({ page, param, query }) {
   const isMobile = useIsMobile()
   const t = useT()
@@ -24,18 +28,19 @@ export default function ReviewSurface({ page, param, query }) {
     return (
       <div className="review-surface review-surface-mobile">
         <Suspense fallback={loading}>
-          <MobileApp specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} />
+          <MobileApp specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} route={{ page, param, query }} />
         </Suspense>
         <StatusBar />
       </div>
     )
   }
 
+  const showActivityRail = reviewShowsActivityRail(page)
   return (
-    <div className="review-surface app-shell">
+    <div className={`review-surface app-shell${showActivityRail ? '' : ' review-surface-no-activity-rail'}`}>
       <div className="app">
         <TooltipLayer />
-        <SideBar page={page} hideDockToggle />
+        {showActivityRail && <SideBar page={page} hideDockToggle />}
         <div className="app-content-column">
           <div className="app-content-row">
             <div className="app-main">

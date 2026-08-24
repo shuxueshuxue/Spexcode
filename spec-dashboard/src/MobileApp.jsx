@@ -6,7 +6,7 @@ import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWin
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './session.js'
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
-import { navigate, useRoute } from './route.js'
+import { navigate } from './route.js'
 import { addressHash, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
@@ -217,7 +217,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   )
 }
 
-export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard }) {
+export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, route = {} }) {
   const t = useT()
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   const root = useMemo(() => specs.find((s) => !s.parent) || specs[0], [specs])
@@ -239,7 +239,8 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard })
   // #/issues address (list or detail, shared link or tab tap) renders the SAME routed pages the desktop
   // mounts, reflowed by [[review-chrome]]'s one-column CSS; Back is the browser's history. Specs/Sessions
   // stay the phone-local planes.
-  const { page, param } = useRoute()
+  // The host owns the address. Mobile is a view of the same routed surface, not a second router.
+  const { page = 'graph', param = null } = route
   const plane = page === 'evals' || page === 'issues' || page === 'settings' ? page : tab
   // a `#/sessions/<id>` address opens that session's conversation here too — the phone twin of the
   // desktop console's deep link, and what makes the scoped eval pages' terminal door ([[evals-view]])

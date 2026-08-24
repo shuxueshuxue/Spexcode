@@ -274,6 +274,14 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const targets = resolveHarnessTargets(cfg.harnesses)
   retiredAxisNotice(cfg)                                                  // [[residence]] — the vote axis is retired
   const { selected, plugins } = partitionHarnesses(targets)
+  // Codex's project shim is shared by every linked worktree. Its command paths therefore belong to the
+  // main checkout, while tree-scoped shims may use this checkout's toolchain. Otherwise the last worktree
+  // to materialize silently steals the root hook owner from every other session.
+  const projectDispatch = join(mainCheckout(proj), 'spec-cli', 'hooks', 'dispatch.sh')
+  const projectSpex = join(mainCheckout(proj), 'spec-cli', 'bin', 'spex.mjs')
+  const shimFor = (h: typeof HARNESSES[number]) => h.shimScope === 'project'
+    ? h.shim(projectDispatch, projectSpex)
+    : h.shim(DISPATCH, SPEX)
   const skillNodes = loadSkillConfig()
   const agentNodes = loadAgentConfig()
   const commandNodes = loadConfig()
@@ -315,7 +323,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   }
   for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) addTarget(contractTargets, f, contract)
-    const shim = h.shim(DISPATCH, SPEX)
+    const shim = shimFor(h)
     // Codex discovers the root-checkout shim through this worktree anchor, but also parses the anchor as a
     // project config layer. A second copy of our dispatcher therefore runs the same PreToolUse event twice.
     // Keep the anchor present for layer discovery while leaving its hook set empty; the root checkout remains
@@ -372,7 +380,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     console.warn(`spexcode: ${visibleShims.map((f) => relative(proj, f)).join(', ')} carries your own configuration, so it stays visible to git — and it now also holds SpexCode's hook entries, whose commands are absolute paths to THIS machine's toolchain. Committing them would break the file for everyone else. Keep them out of your commits (each clone re-materializes its own), or adopt with "harnesses": [] and wire the hooks yourself.`)
   const selectedByDispatch = new Map(selected.map((h) => [h.dispatchId, h]))
   for (const h of selectedByDispatch.values()) {
-    const shim = h.shim(DISPATCH, SPEX)
+    const shim = shimFor(h)
     if (h.shimScope === 'project') {
       const file = h.shimFile(proj)
       mkdirSync(dirname(file), { recursive: true })

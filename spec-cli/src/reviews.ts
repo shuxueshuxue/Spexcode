@@ -423,7 +423,9 @@ async function computeEvalFreshness(): Promise<Map<string, EvalFreshRow>> {
     loadSpecs(), driftIndex(root), historyIndex(root), evalNodesAsync(root),
   ])
   const ctx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
-  const timelines = await evalTimelines(ynodes.map((node) => node.id), ctx, { latestOnly: true })
+  // The freshness engine batches all readings in one pass; the review map keeps the last reading for each
+  // scenario, which is the canonical latest row. Do not reintroduce the retired per-reading latestOnly mode.
+  const timelines = await evalTimelines(ynodes.map((node) => node.id), ctx)
   const rows = new Map<string, EvalFreshRow>()
   for (const timeline of timelines)
     for (const reading of timeline.readings ?? [])

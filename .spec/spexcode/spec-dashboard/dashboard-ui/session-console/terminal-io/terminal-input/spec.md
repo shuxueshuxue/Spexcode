@@ -26,6 +26,10 @@ terminal pane and remain read-only Conversation surfaces. If a live TUI is in a 
 resume, the first actual key opens a separate confirmation; the key is held until confirmation, never pre-focuses
 the confirm control or places it at the cursor landing, and cancel drops it. Returning from [[command-box]]
 restores terminal focus without another unlock step.
+The launch handoff is durable across the queue-to-live boundary: canonical lifecycle state may publish `active`
+before the legacy JSON envelope is rewritten, but the envelope's queued lease remains readable until that
+historical projection is retired. A live session must never be left offline merely because that lease was cleared
+while the envelope still says `queued`.
 Pointer activation must not blur xterm's hidden textarea before the activation lands: an in-progress browser
 IME composition remains attached to the same input element instead of being ended by dashboard chrome.
 Beyond activation, **console chrome is pointer-inert for focus**: clicking and operating the sidebar list,

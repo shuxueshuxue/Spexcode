@@ -28,8 +28,9 @@ test('public graph and workspace status mounts are mutually exclusive and comple
 })
 
 test('band and keep-alive budgets are executable contracts, not prose-only numbers', () => {
-  assert.match(bandBudget, /const B = \(state\) => 1 \/\* rail \*\/ \+ dockBand\(state\) \+ 1 \/\* tabstrip \*\/ \+ 1 \/\* statusbar \*\/ \+ contextBand\(state\)/)
-  assert.match(bandBudget, /Math\.min\(\.\.\.all\.map\(B\)\).*3/)
+  assert.match(bandBudget, /const railBand = \(state\) => state\.R === 'issues' \? 0 : 1/)
+  assert.match(bandBudget, /const B = \(state\) => railBand\(state\) \+ dockBand\(state\) \+ 1 \/\* tabstrip \*\/ \+ 1 \/\* statusbar \*\/ \+ contextBand\(state\)/)
+  assert.match(bandBudget, /Math\.min\(\.\.\.all\.map\(B\)\).*2/)
   assert.match(bandBudget, /Math\.max\(\.\.\.all\.map\(B\)\).*5/)
   assert.match(keepAlive, /const SCRIPT_BUDGET = 0\.05/)
   assert.match(keepAlive, /pool\.seconds <= SCRIPT_BUDGET/)

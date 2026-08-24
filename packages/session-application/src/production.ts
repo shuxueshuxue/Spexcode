@@ -128,6 +128,7 @@ export interface ProductionSessionApplication extends SessionApplication {
   resolveRuntime(sessionId: string, namespace: string): RuntimeBinding | null
   dequeueForRuntime(sessionId: string, namespace: string, expectedGeneration?: number): Message | null
   readState(sessionId: string): SessionState | null
+  readEvents(sessionId: string, afterSequence?: number): readonly SessionEvent[]
   replayState(sessionId: string): SessionState | null
   close(): void
 }
@@ -507,6 +508,11 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       requireId(sessionId, 'sessionId')
       const state = protocol.withTransaction(tx => readStateInTransaction(tx, sessionId))
       return state
+    },
+
+    readEvents(sessionId, afterSequence) {
+      requireId(sessionId, 'sessionId')
+      return events.read(sessionId, afterSequence === undefined ? undefined : { afterSequence })
     },
 
     replayState(sessionId) {

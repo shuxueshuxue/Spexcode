@@ -34,6 +34,8 @@ test('production composition runs the parent/child state, event, replay, publish
   const childEvents = first.events.read('child')
   assert.equal(childEvents.length, 2)
   assert.equal(childEvents[1]?.type, 'session.state.changed.v1')
+  assert.equal(first.readEvents('child').length, childEvents.length)
+  assert.deepEqual(first.readEvents('child', childEvents[0]?.eventSeq).map(event => event.eventSeq), [childEvents[1]?.eventSeq])
   assert.equal(first.protocol.listPending('parent').length, 3)
   assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
   assert.equal(first.protocol.dequeue('parent')?.kind, 'fixture.direct.v1')

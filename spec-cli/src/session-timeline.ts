@@ -1,8 +1,18 @@
 import { readAliasedRawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
-import { timelineTail, type TimelineEvent } from '@spexcode/session-core'
+import { timelineTail } from './session-legacy-timeline.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
 
-export * from '@spexcode/session-core'
+export {
+  currentHumanTurn,
+  lastHumanSendVia,
+  recordStatus,
+  timelineEvents,
+  timelineStamp,
+} from './session-legacy-timeline.js'
+
+export type TimelineEvent =
+  | { ts: string; kind: 'status'; status: SessionLifecycle; proposal: SessionProposal | null; note: string | null; display?: string }
+  | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
 
 const PROPOSAL_DISPLAY: Record<string, DisplayWord> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 type DisplayWord = 'working' | 'idle' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
@@ -19,7 +29,7 @@ export function readTimeline(id: string, limit = 500): { events: TimelineEvent[]
   const application = configuredSessionApplicationIfCutover()
   const sessionId = raw?.session_id ?? id
   if (application && application.readState(sessionId)) {
-    const events = application.events.read(sessionId).flatMap((event): TimelineEvent[] => {
+    const events = application.readEvents(sessionId).flatMap((event): TimelineEvent[] => {
       const payload = JSON.parse(new TextDecoder().decode(event.payload)) as Record<string, unknown>
       if (event.type === 'session.state.changed.v1') {
         return [{

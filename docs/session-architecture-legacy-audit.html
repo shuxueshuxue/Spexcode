@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Session 架构与 Legacy 审计</title>
+  <style>
+    :root{color-scheme:light;--ink:#18212b;--muted:#596775;--line:#d7dee5;--blue:#145da0;--blue-soft:#eaf3fb;--amber:#8a4b08;--amber-soft:#fff5e6;--red:#9c2b2b;--red-soft:#fff0f0;--green:#166534;--green-soft:#ecfdf3}
+    *{box-sizing:border-box} body{margin:0;background:#f5f7f9;color:var(--ink);font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{max-width:1100px;margin:0 auto;padding:42px 28px 72px} header{border-bottom:1px solid var(--line);padding-bottom:26px;margin-bottom:30px}
+    h1{font-size:34px;line-height:1.2;margin:0 0 10px;letter-spacing:0} h2{font-size:22px;margin:34px 0 12px;line-height:1.3} h3{font-size:17px;margin:22px 0 6px}
+    p{max-width:86ch;margin:8px 0} .meta{color:var(--muted);font-size:13px}.lede{font-size:18px;max-width:78ch}
+    .callout{border:1px solid var(--line);border-left:4px solid var(--blue);background:#fff;padding:16px 18px;margin:18px 0}.callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}.callout.good{border-left-color:var(--green);background:var(--green-soft)}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.card{background:#fff;border:1px solid var(--line);padding:15px 16px}.card strong{display:block;font-size:24px;line-height:1.2}.card span{color:var(--muted);font-size:13px}
+    table{width:100%;border-collapse:collapse;background:#fff;margin:12px 0 20px}th,td{text-align:left;vertical-align:top;border:1px solid var(--line);padding:10px 12px}th{background:#eef2f5;font-weight:650}code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef2f5;padding:1px 4px;border-radius:3px}pre{background:#18212b;color:#f3f6f8;padding:16px;overflow:auto;border-radius:5px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+    .status{display:inline-block;border-radius:3px;padding:1px 7px;font-size:12px;font-weight:650}.status.red{background:var(--red-soft);color:var(--red)}.status.amber{background:var(--amber-soft);color:var(--amber)}.status.green{background:var(--green-soft);color:var(--green)}
+    footer{border-top:1px solid var(--line);margin-top:42px;padding-top:16px;color:var(--muted);font-size:13px}@media(max-width:760px){main{padding:28px 16px 52px}.grid{grid-template-columns:1fr}h1{font-size:28px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · main <code>102ffc43b</code></div>
+    <h1>Session 架构与 Legacy 审计</h1>
+    <p class="lede">结论：SQLite canonical application 已经是生命周期事实源，但旧的 <code>session-core</code> 文件协议仍被生产 CLI 调用。当前不是“legacy 已清零”，而是迁移已跨过状态切换，却还没有跨过通信与读取链路的删除门。</p>
+  </header>
+
+  <section>
+    <h2>一页结论</h2>
+    <div class="callout warn"><strong>仍有生产 legacy。</strong> 全仓库 gate 统计到 107 个生产源码引用；<code>spex session ls --json</code> 运行时产生 55 次 <code>session.json</code> 路径读取。旧读取多数是身份/运行时 envelope，但旧 queue、watch、timeline、cursor fallback 仍是真实代码路径。</div>
+    <div class="callout good"><strong>生命周期事实已收口。</strong> 当前 137 个 envelope 中 <code>status</code>、<code>proposal</code>、<code>note</code> 均为 0 个；<code>sessions.sqlite</code> 与 JSON migration marker 存在。hook 权限旁路已修复，canonical writer 负责治理边界。</div>
+    <div class="grid"><div class="card"><strong>107</strong><span>生产源码 legacy 引用</span></div><div class="card"><strong>55</strong><span>运行时 legacy-path reads</span></div><div class="card"><strong>137</strong><span>session.json envelopes / 0 lifecycle fields</span></div></div>
+  </section>
+
+  <section>
+    <h2>替代栈：一组分层包，不是五个产品</h2>
+    <pre>SpexCode
+  └─ @spexcode/session-application   ← 唯一生产消费边界
+       ├─ session-protocol           ← SQLite 事务、消息队列
+       ├─ session-topology           ← parent/child/watch 关系
+       ├─ session-runtime            ← native identity / generation binding
+       └─ session-events             ← append-only event schema</pre>
+    <table><thead><tr><th>包</th><th>当前责任</th><th>终态判断</th></tr></thead><tbody>
+      <tr><td><code>session-application</code></td><td>组合 protocol、topology、events、runtime；给 CLI 提供 state/transition/enqueue/watch/bind/dequeue。</td><td><span class="status green">保留为门面</span></td></tr>
+      <tr><td><code>session-protocol</code></td><td>SQLite 事务与 durable message protocol。</td><td><span class="status green">内核边界</span></td></tr>
+      <tr><td><code>session-topology</code></td><td>parent/child 和 watcher relation。</td><td><span class="status amber">只有多 adopter 时才需独立公开</span></td></tr>
+      <tr><td><code>session-runtime</code></td><td>native thread、generation、binding。</td><td><span class="status amber">更像 application 内部适配层</span></td></tr>
+      <tr><td><code>session-events</code></td><td>事件 schema 与 replay 输入。</td><td><span class="status amber">没有外部 replay consumer 就不必单独公开</span></td></tr>
+    </tbody></table>
+    <p>当前新包均标为 <code>private: true</code>，而旧 <code>@spexcode/session-core</code> 仍是可发布依赖。这说明替代栈在 workspace 内成立，但公开契约尚未完成迁移。</p>
+  </section>
+
+  <section>
+    <h2>仍活跃的旧路径</h2>
+    <table><thead><tr><th>设施</th><th>生产位置</th><th>问题</th></tr></thead><tbody>
+      <tr><td>delivery queue</td><td><code>packages/session-core/src/delivery-queue.ts</code><br><code>pending.json</code> / <code>.delivery-locks</code></td><td>canonical path 已使用 SQLite，但非 cutover 分支仍可回到文件队列。</td></tr>
+      <tr><td>watch relation</td><td><code>spec-cli/src/sessions.ts</code><br><code>writeWatchEntries()</code></td><td>watcher JSON writer 仍存在；新 topology API 已有能力但 CLI 尚未彻底切换。</td></tr>
+      <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event read 与 <code>timeline.ndjson</code> fallback 并存；cursor 仍写 <code>cursors.json</code>。</td></tr>
+      <tr><td>runtime envelope</td><td><code>spec-cli/hooks/harness.sh</code><br><code>codex-runtime-generations.ts</code></td><td>仍用于 alias、worktree、harness/native identity；不是 lifecycle authority，但仍是旧格式依赖。</td></tr>
+    </tbody></table>
+  </section>
+
+  <section>
+    <h2>已修复的直接越权</h2>
+    <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS。</p>
+    <p>落地提交：<code>76ab63daf</code>、<code>102ffc43b</code>。Focused regression：<strong>77 pass / 0 fail</strong>。</p>
+  </section>
+
+  <section>
+    <h2>大重构路线</h2>
+    <ol>
+      <li><strong>事件读取边界：</strong>让 <code>session-application</code> 提供稳定的 timeline/event projection，CLI 不再直接 import <code>session-core</code> timeline。</li>
+      <li><strong>cursor 边界：</strong>把 follow cursor 放入 SQLite application component；删除 <code>cursors.json</code> 读写。</li>
+      <li><strong>queue/watch 收口：</strong>让 queue debt 和 watcher source 只通过 application API 读写；删除 <code>pending.json</code>、<code>watchers.json</code> fallback。</li>
+      <li><strong>外部 adopter 确认：</strong>若没有独立 adopter，收回 topology/runtime/events 为 application 内部模块；若有，明确公共契约并统一版本。</li>
+      <li><strong>M8 deletion gate：</strong>clean dist、npm tarball、materialized executable、runtime trace 五项均为 measured zero 后，删除 <code>@spexcode/session-core</code>。</li>
+    </ol>
+    <div class="callout">禁止的终态：dual-read、dual-write、永久 translation adapter、按当前 session 特判的 fallback。</div>
+  </section>
+
+  <section>
+    <h2>当前限制</h2>
+    <p>legacy gate 的 dist、tarball、materialized 三层本轮没有明确测量根目录，因此是 <code>NOT-MEASURED</code>，不能把 source-only 结果当成删除完成。当前主线还存在与本次重构无关的 spec anchor drift，未擅自修改。</p>
+  </section>
+
+  <footer>Source of truth: current main code/specs, <code>spikes/legacy-sabotage/gate.sh</code>, focused tests, and runtime read-only census. This report records architecture and migration state; it is not a claim that legacy deletion is complete.</footer>
+</main>
+</body>
+</html>

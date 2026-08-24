@@ -1,6 +1,7 @@
 // YATU proof: switching between resident session documents hides a terminal without rebuilding its
 // browser identity. The isolated fixture records the real browser WebSocket protocol and keeps the
-// xterm DOM mounted while the native bridge's bounded linger is allowed to expire.
+// xterm DOM mounted through the native bridge's bounded linger budget. The isolated browser fixture proves
+// DOM/WS identity; pty-bridge owns native helper expiry and its 5s linger contract is covered separately.
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import net from 'node:net'
@@ -95,7 +96,8 @@ try {
   await page.goto(`${base}/#/sessions/${idB}?surface=terminal`, { waitUntil: 'domcontentloaded' })
   await terminal(1).waitFor({ state: 'visible', timeout: 30_000 })
   const identityB = await terminal(1).evaluate((node) => { node.dataset.auditId ||= crypto.randomUUID(); return node.dataset.auditId })
-  await new Promise((done) => setTimeout(done, 1_300))
+  const hiddenWaitMs = 5_500
+  await new Promise((done) => setTimeout(done, hiddenWaitMs))
   assert.equal(await terminals().count(), 2, 'hidden session keeps xterm mounted beyond linger')
   await page.goto(`${base}/#/sessions/${idA}?surface=terminal`, { waitUntil: 'domcontentloaded' })
   await terminal(0).waitFor({ state: 'visible', timeout: 30_000 })
@@ -109,7 +111,7 @@ try {
   assert.ok(byId(idA)[0].sent.some((message) => message.includes('"t":"resize"')), 'session A sends resize when reactivated')
   assert.deepEqual(pageErrors, [], 'browser has no page errors')
   await page.screenshot({ path: `${OUT}/warm-switch.png`, fullPage: true })
-  console.log(JSON.stringify({ status: 'pass', identities: { [idA]: identityA, [idB]: identityB }, sockets: protocol.length, out: OUT }))
+  console.log(JSON.stringify({ status: 'pass', hiddenWaitMs, identities: { [idA]: identityA, [idB]: identityB }, sockets: protocol.length, out: OUT }))
 } finally {
   await context.close(); await browser.close(); await ui.close()
 }

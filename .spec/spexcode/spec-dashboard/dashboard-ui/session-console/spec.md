@@ -131,14 +131,11 @@ Dropping a working row on the visible archive zone heading instead performs the 
 the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
 close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 
-The [[dock-modes]] sessions projection is the desktop's sole session list. This document therefore never
-renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
-the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
-while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
-dock remains list-owned and navigation-only: it has no batch-selection state, checkboxes, or bulk lifecycle
-endpoint, while row movement belongs to the dock's sole session list ([[dock-modes]]). Any future batch operation
-requires its own current contract and product proof. The keyboard fresh-session binding remains unchanged.
-
+The [[dock-modes]] sessions projection remains the desktop's at-a-glance finding list. The routed Sessions
+document also mounts the same `SessionConsoleTreeRow` forest as its complete mutable list; the terminal or
+timeline occupies the remaining content width. The document owns explicit row multi-select and the bulk close
+bar, while row movement uses the full-row tree gesture. Graph marquee selection is never a substitute for
+session selection.
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
 `fitTextarea` measurement path grows through each content line without a scrollbar until the host's

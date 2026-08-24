@@ -10,6 +10,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
 import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
+import SessionForestPanel from './SessionForestPanel.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { routeAddress, sessionEvalAddress } from './address.js'
@@ -466,6 +467,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
+  const [selectRequest, setSelectRequest] = useState(null)
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
@@ -1552,6 +1554,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
+        <SessionForestPanel
+          sessions={sessions}
+          activeId={active}
+          onSelect={(id) => id === 'new' ? setSel('new') : selectSession(id)}
+          onSearch={onOpenSearch}
+          reload={reload}
+          onContextMenu={setCtxMenu}
+          selectRequest={selectRequest}
+          onSelectRequestConsumed={() => setSelectRequest(null)}
+          onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
+        />
         <section className={`si-content${active === 'new' ? ' is-new' : ' is-session'}`}>
           {active === 'new' && (
             <div className="si-new-center">
@@ -1753,6 +1766,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // session rows make. It used to be handed to a callback that expected a session id and got a session,
       // which is how a menu item can look wired and do nothing.
       onLock={(s) => { lockGraphTo(s.source, { toggle: false }); onClose() }}
+      onMultiSelect={(session) => setSelectRequest(session)}
+      onDetach={(session) => {
+        void apiFetch('/api/sessions/reparent', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ children: [session.id], parent: null }),
+        }).then(() => reload?.())
+      }}
     />
     </>
   )

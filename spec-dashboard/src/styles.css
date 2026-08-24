@@ -1536,6 +1536,22 @@ a.scenario-count:hover { background: var(--panel2); }
   background: var(--paper); border: none; border-radius: 0;
   overflow: clip; display: flex;   /* clip, not hidden: never a caret-reveal scroll target (see .st-host) */
 }
+.si-list {
+  flex: 0 0 204px; max-width: calc(100% - 280px); min-height: 0; display: flex; flex-direction: column;
+  overflow: hidden; border-right: 1px solid var(--line); background: var(--panel);
+}
+.si-board-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.si-selcount { flex: 1; color: var(--ink2); font-size: var(--type-meta); }
+.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
+.si-check { flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: var(--radius); box-sizing: border-box; }
+.si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
+.si-check.on::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px; border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
+.si-root-drop { height: 30px; margin: 5px 10px 2px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: var(--radius); color: var(--muted); }
+.si-root-drop.on { position: relative; z-index: 51; background: color-mix(in srgb, var(--green) 12%, var(--panel2)); border-color: var(--green); color: var(--green); }
+.si-session-drag-ghost { position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0; box-shadow: var(--shadow); opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left; }
+body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);

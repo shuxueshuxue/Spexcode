@@ -537,6 +537,13 @@ export default {
     attachCopied: '已复制',
   },
 
+  sessionSelect: {
+    selected: ({ n }) => `已选择 ${n} 个`,
+    close: '关闭所选会话',
+    closeTitle: ({ n }) => `关闭所选的 ${n} 个会话？`,
+    closeConfirm: '这将关闭所选会话并删除其工作树。任何未提交的更改都会丢失。',
+  },
+
   lockHint: {
     cycleBefore: '按 ',
     cycleNext: ' 下一个',

@@ -10,15 +10,6 @@ const srcDir = dirname(fileURLToPath(import.meta.url))
 const dashboardDir = dirname(srcDir)
 const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
 
-// These paths are deliberate: a retired surface must fail loudly if a future change restores its entry point.
-const retiredPaths = [
-  join(srcDir, 'SessionSelectBar.jsx'),
-  join(dashboardDir, 'test', 'session-multi-select.e2e.mjs'),
-  ...['spec.md', 'eval.md', 'evals.ndjson'].map((file) => join(
-    dashboardDir, '..', '.spec', 'spexcode', 'spec-dashboard', 'dashboard-ui', 'session-console', 'session-multi-select', file,
-  )),
-]
-
 const governedSessionFiles = [
   'SessionInterface.jsx',
   'SessionContextMenu.jsx',
@@ -26,20 +17,18 @@ const governedSessionFiles = [
   'Dock.jsx',
 ]
 
-test('withdrawn session multi-select mechanism and its retired governance stay absent', () => {
-  for (const path of retiredPaths) {
-    assert.equal(existsSync(path), false, `retired multi-select artifact returned: ${path}`)
-  }
-
-  const forbidden = /SessionSelectBar|onBulkClosed|startSelect|const \[selecting|const \[picked|bulk-close/
-  for (const name of governedSessionFiles) {
-    const source = readFileSync(join(srcDir, name), 'utf8')
-    assert.doesNotMatch(source, forbidden, `${name} revived the withdrawn multi-select mechanism`)
-  }
-
+test('Sessions keeps multi-select and tree movement on the real row surface', () => {
+  const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
+  const context = readFileSync(join(srcDir, 'SessionContextMenu.jsx'), 'utf8')
+  assert.match(panel, /SessionSelectBar/)
+  assert.match(panel, /startDrag/)
+  assert.match(panel, /data-session-root-drop/)
+  assert.match(panel, /sessionAncestorIds/)
+  assert.match(context, /startSelect/)
+  assert.match(context, /onDetach/)
   for (const locale of ['en.js', 'zh.js']) {
     const source = readFileSync(join(srcDir, 'i18n', locale), 'utf8')
-    assert.doesNotMatch(source, /\bsessionSelect\s*:/, `${locale} revived dead multi-select copy`)
+    assert.match(source, /sessionSelect\s*:/)
   }
 })
 

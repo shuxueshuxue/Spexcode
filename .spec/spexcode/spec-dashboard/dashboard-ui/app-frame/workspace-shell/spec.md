@@ -47,11 +47,14 @@ captured route as props, so it cannot create a second global route reader while 
 the validation, atomic intent shape, hidden-pane suspension, unowned-route rejection, and host-only route
 ownership.
 
-The hosted review surfaces (Evals and Issues) use this channel for every route write: query edits dispatch
-`ownQuery`, session-originator doors dispatch `open`, and automatic issue creation may mark that same
-`open` intent as a replacement. They do not import the global navigator. `ownershipBoundary.test.mjs` is the
-static guard for that boundary, so a review view cannot quietly grow a second route authority while the
-shell remains the only dispatcher.
+Every hosted view uses this channel for route writes. Graph and Sessions, including the SessionInterface
+mounted beneath the Sessions view, dispatch `open` for page changes, object/resource surfaces, and replace
+semantics; address projections are converted to `{ page, param, query }` before dispatch and never call the
+global writer. Evals and Issues use `ownQuery` for list state and `open` for doors/details and replacement.
+Shell-owned chrome (`Shell`, `Dock`, `SideBar`, `TabStrip`) is the deliberate route-writing boundary for
+rail, dock, and tab actions; it is not a hosted view and therefore does not receive a ViewScope. The static
+`ownershipBoundary.test.mjs` allow-list makes that distinction executable: view descendants cannot import the
+global navigator, while shell chrome remains the one owner allowed to do so.
 
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:

@@ -49,6 +49,13 @@ export function addressHash(address) {
   return routeHash('graph')
 }
 
+// Views hand this pure projection to their ViewScope. Keeping address conversion separate from the
+// route writer lets hosted views preserve the shared address vocabulary without importing navigation.
+export function routeAddress(address) {
+  const { page, param, query } = parseRoute(addressHash(address))
+  return { page, param, query }
+}
+
 export const addressUrl = (address, base = window.location.href) => new URL(addressHash(address), base).href
 
 function copyFallback(text) {

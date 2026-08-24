@@ -7,9 +7,8 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
-import { navigateAddress } from './address.js'
+import { routeAddress } from './address.js'
 import {
   graphTitles, layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
   GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_TILE_SIZE,
@@ -25,6 +24,7 @@ import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useViewScope } from './ViewScope.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -77,6 +77,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
   const { reload } = useBoardApi()
   const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
   const { helpOpen } = useWorkspace()
+  const scope = useViewScope()
   // WHICH SESSION OWNS THE BOARD lives in the workspace ([[workspace-shell]]) because the surface that
   // claims it — a session row in the finding dock — is not this one. The graph only READS the claim and
   // paints it; it no longer needs a session list of its own to have somewhere to click.
@@ -167,17 +168,18 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     [sessions],
   )
 
-  const openSession = useCallback((id) => navigate('sessions', id), [])
+  const openSession = useCallback((id) => scope.open({ page: 'sessions', param: id, query: null }), [scope])
   // The route carries the launch draft across a cold code-split transition. The workspace handoff remains
   // the live path for chords, but a graph action must not depend on the receiver having mounted before the
   // hash switch: the query is the durable, replayable address of this one New Session draft.
   const startNew = useCallback((text) => {
     setSeed(text)
-    navigate('sessions', 'new', { query: { seed: text } })
-  }, [setSeed])
+    scope.open({ page: 'sessions', param: 'new', query: { seed: text } })
+  }, [scope, setSeed])
   const onNavigateAddress = useCallback((address) => {
-    navigateAddress(address, { onOpenSession: openSession })
-  }, [openSession])
+    if (address?.kind === 'session') return openSession(address.sessionId)
+    return scope.open(routeAddress(address))
+  }, [openSession, scope])
 
   // sessions overlaying the right-clicked node — its live worktrees (overlay.source === session.source).
   // The node-menu appends one item per session below its verbs, the one mouse path into an existing
@@ -463,7 +465,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
       if (page === 'evals' || page === 'issues') return false
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
-        if (firesKey('graph.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph'); return true }
+        if (firesKey('graph.settings', e.key)) { e.preventDefault(); e.stopPropagation(); scope.open({ page: 'graph', param: null, query: null }); return true }
         return false
       }
       if (overlay) {
@@ -504,7 +506,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
       }
       // graph mode. The help modal owns its keys while open (only ?/Esc close it)
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); lockGraphTo(null, { toggle: false }); return true }
-      if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return true }
+      if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); scope.open({ page: 'settings', param: null, query: null }); return true }
       if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); openPalette('nodes'); return true }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!graphOnly && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
@@ -547,7 +549,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
       // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (!graphOnly && firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `); return true }
       // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
-      else if (!graphOnly && firesKey('graph.evals', e.key)) { e.preventDefault(); navigate('evals'); return true }
+      else if (!graphOnly && firesKey('graph.evals', e.key)) { e.preventDefault(); scope.open({ page: 'evals', param: null, query: null }); return true }
       return false
     }
     return onKey(event)
@@ -646,7 +648,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
 
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
-          onInfo={() => navigate('spec', focusRef.current.id)}
+          onInfo={() => scope.open({ page: 'spec', param: focusRef.current.id, query: null })}
           onFresh={(id) => startNew(`[[${id}]] `)}
           onNewChild={(id) => startNew(CHORDS[NEW_CHILD_CHORD](id))}
           onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}

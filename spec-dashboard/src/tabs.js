@@ -27,7 +27,12 @@ const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
     if (!Array.isArray(raw)) return []
-    const valid = raw.filter((t) => t && typeof t.page === 'string')
+    // Spec is the workspace's document canvas. Keep one recoverable resident slot even when the
+    // previous browser session was on a board and never visited a node; a board route must not make the
+    // document disappear from the working set. Closing it is still a normal tab action, so this seed only
+    // applies at the storage boundary (the current window can close it and land on EmptyView/another tab).
+    const valid = [...raw, { page: 'spec', param: null, query: null, pinned: true }]
+      .filter((t) => t && typeof t.page === 'string')
     const normalized = normalizeTabs(valid, isDocument)
     // Persist the migration at the same boundary that reads it: old review entries disappear once and do
     // not keep resurfacing in another tab or after the next reload.

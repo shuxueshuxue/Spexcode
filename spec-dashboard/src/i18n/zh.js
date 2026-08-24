@@ -136,6 +136,7 @@ export default {
     spec: '规格',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',
+    spec: '规格',
     evals: 'Evals',
     issues: '议题',
     settings: '设置',
@@ -295,6 +296,7 @@ export default {
     filedBy: ({ by }) => `由 ${by} 提交`,
     filedAt: ({ at }) => `${at}前提交`,
     sessionTag: '会话',
+    freshnessDeferred: '新鲜度仍在计算；此行可排序但尚未评分',
   },
 
   reviewState: {
@@ -334,7 +336,7 @@ export default {
     sessionMissing: '已不在',
     openedBy: ({ by }) => `由 ${by} 发起`,
     openedAt: ({ at }) => `${at}前发起`,
-    verdict: { pass: '通过', fail: '未通过', unmeasured: '未测量', unscored: '未评分' },
+    verdict: { pass: '通过', fail: '未通过', unmeasured: '未测量', deferred: '等待新鲜度', unscored: '未评分' },
     freshness: { fresh: '最新', stale: '过期' },
     pagination: '分页',
     previous: '上一页',

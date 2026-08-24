@@ -89,6 +89,22 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
   ], 'measured and blind rows carry the same canonical scenario impact')
 })
 
+test('deferred freshness rows remain explicit and orderable without claiming a verdict', () => {
+  const items = trunkEvalReviewItems([{
+    id: 'n',
+    scenarios: [{ name: 'deferred' }, { name: 'pass' }, { name: 'blind' }],
+    evals: [
+      { scenario: 'deferred', ts: '2026-08-04', freshnessDeferred: true, verdict: { status: 'pass' } },
+      { scenario: 'pass', ts: '2026-08-03', fresh: true, verdict: { status: 'pass' } },
+    ],
+  }])
+  assert.deepEqual(items.map((item: any) => [item.scenario, item.filterKind, item.state]), [
+    ['deferred', 'deferred', 'deferred'],
+    ['pass', 'result', 'pass'],
+    ['blind', 'blind', undefined],
+  ])
+})
+
 test('node timeline review projects one latest reading per declared scenario', () => {
   const items = timelineEvalReviewItems({
     scenarios: [{ name: 'measured' }, { name: 'blind' }],

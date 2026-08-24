@@ -81,9 +81,11 @@ An inert blind-spot row participates in that SAME conjunctive contract: it can m
 `verdict:unmeasured`, and query text, but a selected Fail/Pass quick filter, evidence kind, freshness, filer,
 or source-session presence value excludes it
 because an unmeasured scenario owns none of those result facts. Blind rows never leak into a filtered
-result population and never gain an href just to satisfy list structure. Filed results and non-result
-rows form one tagged set through the shared result-kind field; the canonical list and embedded node pane
-consume that same discriminator, with no legacy-name compatibility branch.
+result population and never gain an href just to satisfy list structure. A deferred-freshness row has a
+filed reading and therefore keeps its filed-time position, but its freshness probes have not settled; it
+is shown as an explicit deferred non-result row and never counted as fresh or stale. Filed results and
+non-result rows form one tagged set through the shared result-kind field; the canonical list and embedded
+node pane consume that same discriminator, with no legacy-name compatibility branch.
 
 **Kinds are honest — and a result carries a SET of them.** Evidence is a LIST: a result's kinds are
 every entry it holds (`video`/`image`/`transcript`; a legacy scalar blob with no kind is an image), plus

@@ -1,9 +1,9 @@
 import { lazy } from 'react'
 import SessionsView from './SessionsView.jsx'
 import { useBoard, useBoardApi } from './workspace.jsx'
-import { navigate } from './route.js'
 import { createViewRegistry } from './viewRegistry.js'
 import { createSettingsViewPlugin } from './builtInViewPlugins.js'
+import { useViewScope } from './ViewScope.jsx'
 
 // [[view-registry]]: the map from an address kind to the thing that renders it.
 //
@@ -65,8 +65,6 @@ function SpecWorkspaceView({ param, query }) {
   return <SpecView param={param} query={query} />
 }
 
-const openSession = (id) => navigate('sessions', id)
-
 // The three review-side pages already take everything they need as props and hold their own state; they
 // become views by reading the board from context instead of from whoever rendered them. No rewrite, and no
 // second copy of their data path. The ROUTE comes down the same way — the two boards used to call
@@ -76,11 +74,15 @@ const openSession = (id) => navigate('sessions', id)
 function EvalsView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
   const { reload } = useBoardApi()
-  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
+  const scope = useViewScope()
+  const onOpenSession = (id) => scope.open({ page: 'sessions', param: id, query: null })
+  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={onOpenSession} />
 }
 function IssuesView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
-  return <IssuesPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
+  const scope = useViewScope()
+  const onOpenSession = (id) => scope.open({ page: 'sessions', param: id, query: null })
+  return <IssuesPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={onOpenSession} />
 }
 function SettingsView() { return <Settings /> }
 

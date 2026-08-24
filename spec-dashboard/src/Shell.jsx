@@ -86,7 +86,7 @@ function ViewScopeHost({ page, param, query, active, children }) {
       splitTo(intent.address)
       return { accepted: true, intent }
     }
-    navigate(targetPage, targetParam, { query: targetQuery })
+    navigate(targetPage, targetParam, { query: targetQuery, replace: intent.replace === true })
     return { accepted: true, intent }
   }, [splitTo])
   const holder = useMemo(() => createViewScope({

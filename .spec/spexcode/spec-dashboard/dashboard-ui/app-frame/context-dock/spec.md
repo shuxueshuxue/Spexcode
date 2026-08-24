@@ -74,7 +74,9 @@ context once gets the reader everything rather than a second round of clicks. A 
 The open/close control lives in the document-area top bar beside the tabs: the workspace-shell rule says a
 control belongs to the region whose question it answers, and context is neither the left finding rail nor
 ambient status, so a document-level context control is the least surprising owner while still remaining
-reachable when the dock is closed.
+reachable when the dock is closed. It uses the shared `list-checks` context mark, while the rail's
+`panel-left`/`panel-right` pair remains reserved for the left dock's layout state; the two controls therefore
+keep distinct owners and meanings even when both docks are closed.
 
 The component receives `{page, param}` from `Shell`; it never reads the global address. Its API context and
 state context remain separate by using the existing board/workspace hooks rather than introducing a mixed

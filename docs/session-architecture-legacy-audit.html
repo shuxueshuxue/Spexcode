@@ -20,14 +20,14 @@
 <body>
 <main>
   <header>
-    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · refactor tip <code>bca317896</code> (main ancestor)</div>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · refactor tip <code>4e6aec515</code> (main ancestor)</div>
     <h1>Session 架构与 Legacy 审计</h1>
     <p class="lede">结论：SQLite canonical application 已经是生命周期事实源，但旧的 <code>session-core</code> 文件协议仍被生产 CLI 调用。当前不是“legacy 已清零”，而是迁移已跨过状态切换，却还没有跨过通信与读取链路的删除门。</p>
   </header>
 
   <section>
     <h2>一页结论</h2>
-    <div class="callout warn"><strong>仍有生产 legacy。</strong> 全仓库 gate 统计到 107 个生产源码引用；<code>spex session ls --json</code> 运行时产生 55 次 <code>session.json</code> 路径读取。旧读取多数是身份/运行时 envelope，但旧 queue、watch、timeline、cursor fallback 仍是真实代码路径。当前分支已切断 canonical lifecycle-only envelope rewrites，并将 canonical watch/timeline/cursor 读写收回 application；删除门仍未通过。</div>
+    <div class="callout warn"><strong>仍有生产 legacy。</strong> 全仓库 gate 统计到 107 个生产源码引用；<code>spex session ls --json</code> 运行时产生 55 次 <code>session.json</code> 路径读取。旧读取多数是身份/运行时 envelope，但旧 queue、watch、timeline、cursor fallback 仍是真实代码路径。当前分支已切断 canonical lifecycle-only envelope rewrites，并将 canonical watch/timeline/cursor 读写收回 application；一次性迁移现在会先导入旧 timeline/pending，再删除旧通信文件，删除门仍未通过。</div>
     <div class="callout good"><strong>生命周期事实已收口。</strong> 当前 137 个 envelope 中 <code>status</code>、<code>proposal</code>、<code>note</code> 均为 0 个；<code>sessions.sqlite</code> 与 JSON migration marker 存在。hook 权限旁路已修复，canonical writer 负责治理边界。</div>
     <div class="grid"><div class="card"><strong>107</strong><span>生产源码 legacy 引用</span></div><div class="card"><strong>55</strong><span>运行时 legacy-path reads</span></div><div class="card"><strong>137</strong><span>session.json envelopes / 0 lifecycle fields</span></div></div>
   </section>
@@ -55,7 +55,7 @@
     <table><thead><tr><th>设施</th><th>生产位置</th><th>问题</th></tr></thead><tbody>
       <tr><td>delivery queue</td><td><code>packages/session-core/src/delivery-queue.ts</code><br><code>pending.json</code> / <code>.delivery-locks</code></td><td>canonical path 已使用 SQLite，但非 cutover 分支仍可回到文件队列。</td></tr>
       <tr><td>watch relation</td><td><code>spec-cli/src/sessions.ts</code><br><code>writeWatchEntries()</code></td><td>watcher JSON writer 仍存在；新 topology API 已有能力但 CLI 尚未彻底切换。</td></tr>
-      <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event/cursor reads and writes use the application; <code>timeline.ndjson</code>/<code>cursors.json</code> remain only for pre-cutover records.</td></tr>
+      <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event/cursor reads and writes use the application; migration replays old timeline entries before retiring <code>timeline.ndjson</code>/<code>cursors.json</code>.</td></tr>
       <tr><td>runtime envelope</td><td><code>spec-cli/hooks/harness.sh</code><br><code>codex-runtime-generations.ts</code></td><td>仍用于 alias、worktree、harness/native identity；不是 lifecycle authority，但仍是旧格式依赖。</td></tr>
     </tbody></table>
   </section>
@@ -64,6 +64,12 @@
     <h2>已修复的直接越权</h2>
     <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS。</p>
     <p>落地提交：<code>76ab63daf</code>、<code>102ffc43b</code>。Focused regression：<strong>77 pass / 0 fail</strong>。</p>
+  </section>
+
+  <section>
+    <h2>迁移删除门的新证据</h2>
+    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。迁移测试覆盖清理后的事件历史、pending 读取和 marker 重放，<strong>4/4 pass</strong>，包测试 <strong>13/13 pass</strong>。</p>
+    <div class="callout warn"><strong>这还不是全仓库删除完成。</strong> 未通过 dist/tarball/materialized executable/runtime trace 五项 gate 前，不删除 <code>session-core</code> 包，也不把迁移兼容层伪装成终态。</div>
   </section>
 
   <section>

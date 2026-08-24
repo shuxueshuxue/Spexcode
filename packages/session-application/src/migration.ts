@@ -6,6 +6,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmdirSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -13,6 +14,7 @@ import {
 import { dirname, isAbsolute, join } from 'node:path'
 
 import { openProjectSessionApplication, type LocalityPrecondition } from './production.js'
+import { encodeEventJson } from '@spexcode/session-events'
 
 const SESSION_ID = /^(?!-)[0-9A-Za-z_-]{1,256}$/
 const STATUS = /^[0-9A-Za-z._:-]{1,64}$/
@@ -31,6 +33,23 @@ interface WatchEntry {
   createdAt: string
   sources: ('manual' | 'parent')[]
   snapshotPending?: string
+}
+
+type LegacyTimelineEvent =
+  | { kind: 'status'; ts?: string; status?: string; proposal?: string | null; note?: string | null }
+  | { kind: 'sent'; ts?: string; mid?: string; text?: string; from?: string | null; replyVia?: 'note' }
+
+interface LegacyPendingMessage {
+  mid: string
+  text: string
+  from: string | null
+  attributes?: Record<string, string>
+  dispatch?: { operation: string; requestDigest: string }
+}
+
+interface LegacyArtifacts {
+  timeline: LegacyTimelineEvent[]
+  pending: LegacyPendingMessage[]
 }
 
 export interface JsonSessionMigrationOptions {
@@ -74,13 +93,14 @@ function parseJson(path: string): unknown {
   catch (error) { fail(`cannot read JSON migration input ${path}: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
-function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watches: Map<string, WatchEntry[]>; files: string[]; orphanParents: string[] } {
+function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watches: Map<string, WatchEntry[]>; artifacts: Map<string, LegacyArtifacts>; files: string[]; orphanParents: string[] } {
   if (!isAbsolute(recordsRoot)) fail('recordsRoot must be an absolute directory')
-  if (!existsSync(recordsRoot)) return { records: [], watches: new Map(), files: [], orphanParents: [] }
+  if (!existsSync(recordsRoot)) return { records: [], watches: new Map(), artifacts: new Map(), files: [], orphanParents: [] }
   if (!statSync(recordsRoot).isDirectory()) fail(`recordsRoot is not a directory: ${recordsRoot}`)
   const dirs = readdirSync(recordsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
   const records: JsonMigrationRecord[] = []
   const watches = new Map<string, WatchEntry[]>()
+  const artifacts = new Map<string, LegacyArtifacts>()
   const files: string[] = []
   const ids = new Set<string>()
   for (const id of dirs) {
@@ -129,6 +149,42 @@ function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watc
       watches.set(id, entries)
       files.push(watchPath)
     }
+    const artifactFiles = [
+      join(dir, 'timeline.ndjson'),
+      ...(() => {
+        const timelineDir = join(dir, 'timeline')
+        if (!existsSync(timelineDir) || !statSync(timelineDir).isDirectory()) return []
+        return readdirSync(timelineDir).filter(name => /^\d+\.ndjson$/.test(name)).sort().map(name => join(timelineDir, name))
+      })(),
+      join(dir, 'pending.json'),
+      join(dir, 'cursors.json'),
+    ].filter(existsSync)
+    const timeline: LegacyTimelineEvent[] = []
+    for (const file of artifactFiles.filter(file => file.endsWith('.ndjson'))) {
+      for (const line of readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
+        let parsed: unknown
+        try { parsed = JSON.parse(line) } catch (error) { fail(`invalid legacy timeline line in ${file}: ${error instanceof Error ? error.message : String(error)}`) }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) fail(`invalid legacy timeline event in ${file}`)
+        const event = parsed as Record<string, unknown>
+        if (event.kind === 'dispatch-settled') continue
+        if (event.kind !== 'status' && event.kind !== 'sent') fail(`unknown legacy timeline event kind in ${file}`)
+        timeline.push(event as LegacyTimelineEvent)
+      }
+    }
+    let pending: LegacyPendingMessage[] = []
+    const pendingPath = join(dir, 'pending.json')
+    if (existsSync(pendingPath)) {
+      const parsed = parseJson(pendingPath)
+      if (!Array.isArray(parsed)) fail(`legacy pending file is not an array: ${pendingPath}`)
+      pending = (parsed as unknown[]).map((value, index) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`invalid legacy pending row ${index} in ${pendingPath}`)
+        const row = value as Partial<LegacyPendingMessage>
+        if (typeof row.mid !== 'string' || typeof row.text !== 'string' || (row.from !== null && typeof row.from !== 'string')) fail(`invalid legacy pending row ${index} in ${pendingPath}`)
+        return row as LegacyPendingMessage
+      })
+    }
+    if (timeline.length || pending.length) artifacts.set(id, { timeline, pending })
+    files.push(...artifactFiles)
   }
   const byId = new Set(records.map(record => record.session_id))
   const orphanParents = [...new Set(records.flatMap(record => record.parent && !byId.has(record.parent) ? [record.parent] : []))].sort()
@@ -145,7 +201,7 @@ function readInputs(recordsRoot: string): { records: JsonMigrationRecord[]; watc
       current = records.find(candidate => candidate.session_id === current)?.parent
     }
   }
-  return { records: records.sort((a, b) => a.session_id.localeCompare(b.session_id)), watches, files: files.sort(), orphanParents }
+  return { records: records.sort((a, b) => a.session_id.localeCompare(b.session_id)), watches, artifacts, files: files.sort(), orphanParents }
 }
 
 function digestInputs(recordsRoot: string, files: string[]): string {
@@ -187,23 +243,54 @@ function assertInputsUnchanged(recordsRoot: string, expectedFiles: string[], exp
   }
 }
 
+// Once the SQLite fence is installed, the JSON tree is no longer a protocol. Keep only
+// runtime/worktree metadata in each envelope and remove the old communication artifacts.
+// The importer has already copied every source byte to backupRoot, so this is a reversible
+// one-time cutover rather than an in-place compatibility mode.
+function retireLegacyArtifacts(recordsRoot: string): void {
+  if (!existsSync(recordsRoot)) return
+  for (const entry of readdirSync(recordsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = join(recordsRoot, entry.name)
+    const recordPath = join(dir, 'session.json')
+    if (existsSync(recordPath)) {
+      const raw = parseJson(recordPath)
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail(`cannot retire non-object envelope: ${recordPath}`)
+      const envelope = { ...(raw as Record<string, unknown>) }
+      for (const field of ['status', 'proposal', 'note', 'parent']) delete envelope[field]
+      writeFileSync(recordPath, JSON.stringify(envelope, null, 2) + '\n')
+    }
+    for (const name of ['watchers.json', 'pending.json', 'timeline.ndjson', 'cursors.json']) {
+      try { unlinkSync(join(dir, name)) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    }
+    const timelineDir = join(dir, 'timeline')
+    try {
+      for (const segment of readdirSync(timelineDir)) unlinkSync(join(timelineDir, segment))
+      // The directory itself is protocol state; remove it only after every segment is gone.
+      rmdirSync(timelineDir)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw error
+    }
+  }
+}
+
 export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions): JsonSessionMigrationReport {
   if (!isAbsolute(options.databasePath)) fail('databasePath must be absolute')
   if (isAbsolute(options.recordsRoot)) mkdirSync(options.recordsRoot, { recursive: true })
-  const input = readInputs(options.recordsRoot)
-  const sourceDigest = digestInputs(options.recordsRoot, input.files)
   const backupRoot = options.backupRoot ?? `${options.databasePath}.json-migration-backup`
   const markerPath = `${options.databasePath}.json-migration.json`
   const fencePath = jsonMigrationFencePath(options.recordsRoot)
   if (existsSync(markerPath)) {
     const marker = parseJson(markerPath) as Partial<JsonSessionMigrationReport>
-    if (marker.version !== VERSION || marker.sourceDigest !== sourceDigest) fail(`migration marker ${markerPath} does not match current JSON source`)
+    if (marker.version !== VERSION || typeof marker.sourceDigest !== 'string') fail(`migration marker ${markerPath} is invalid`)
     if (!existsSync(options.databasePath)) fail(`migration marker exists but database is missing: ${options.databasePath}`)
-    if (existsSync(fencePath)) replaceFence(fencePath, 'retired', sourceDigest)
-    else writeFence(fencePath, 'retired', sourceDigest)
+    retireLegacyArtifacts(options.recordsRoot)
+    const markerDigest = String(marker.sourceDigest)
+    if (existsSync(fencePath)) replaceFence(fencePath, 'retired', markerDigest)
+    else writeFence(fencePath, 'retired', markerDigest)
     return {
       version: VERSION,
-      sourceDigest,
+      sourceDigest: markerDigest,
       records: Number(marker.records) || 0,
       parentEdges: Number(marker.parentEdges) || 0,
       watchEdges: Number(marker.watchEdges) || 0,
@@ -214,6 +301,8 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       replayed: true,
     }
   }
+  const input = readInputs(options.recordsRoot)
+  const sourceDigest = digestInputs(options.recordsRoot, input.files)
   if (existsSync(options.databasePath)) {
     fail(`database exists without a migration marker: ${options.databasePath}; refusing to import into an ambiguous live database`)
   }
@@ -277,6 +366,80 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       }
       if (parent) parentEdges++
     }
+    // Replay the old append-only conversation before retiring its files. State rows above establish
+    // the protocol addresses; these events preserve the history and pending debt that the JSON tree held.
+    for (const record of input.records) {
+      const legacy = input.artifacts.get(record.session_id)
+      if (!legacy) continue
+      const timeline = legacy.timeline
+      for (const [index, event] of timeline.entries()) {
+        const occurredAtMs = typeof event.ts === 'string' && Number.isFinite(Date.parse(event.ts))
+          ? Date.parse(event.ts)
+          : (record.createdAt ?? 0)
+        const eventId = createHash('sha256').update(`migration\0${sourceDigest}\0${record.session_id}\0timeline\0${index}`).digest('hex').slice(0, 32)
+        if (event.kind === 'status') {
+          app.protocol.withTransaction(tx => app.events.append(tx, {
+            eventId,
+            type: 'session.state.changed.v1',
+            schemaVersion: 1,
+            subjectSessionId: record.session_id,
+            payload: encodeEventJson({
+              eventId,
+              sessionId: record.session_id,
+              status: event.status ?? record.status,
+              proposal: event.proposal ?? null,
+              note: event.note ?? null,
+              previousProposal: null,
+              previousNote: null,
+              parentSessionId: record.parent ?? null,
+              previousStatus: null,
+              previousParentSessionId: null,
+              reason: 'json-migration-history',
+            }),
+            occurredAtMs,
+          }))
+          events++
+        } else if (typeof event.text === 'string' && typeof event.mid === 'string') {
+          app.protocol.withTransaction(tx => app.events.append(tx, {
+            eventId,
+            type: 'session.message.sent.v1',
+            schemaVersion: 1,
+            subjectSessionId: record.session_id,
+            payload: encodeEventJson({
+              messageId: event.mid,
+              text: event.text,
+              from: event.from ?? null,
+              ...(event.replyVia === 'note' ? { replyVia: 'note' } : {}),
+            }),
+            occurredAtMs,
+          }))
+          events++
+        }
+      }
+      for (const pending of legacy.pending) {
+        const message = app.enqueueMessage(record.session_id, {
+          kind: 'session.prompt.v1',
+          body: Buffer.from(pending.text, 'utf8'),
+          senderSessionId: pending.from,
+          headers: pending.attributes,
+          idempotencyKey: `legacy:${pending.mid}`,
+        })
+        // A malformed/partial legacy tree can contain debt without a sent line. Keep that debt visible
+        // in the canonical history instead of silently turning it into an unaccounted queue row.
+        if (!timeline.some(event => event.kind === 'sent' && event.mid === pending.mid)) {
+          const eventId = createHash('sha256').update(`migration\0${sourceDigest}\0${record.session_id}\0pending\0${pending.mid}`).digest('hex').slice(0, 32)
+          app.protocol.withTransaction(tx => app.events.append(tx, {
+            eventId,
+            type: 'session.message.sent.v1',
+            schemaVersion: 1,
+            subjectSessionId: record.session_id,
+            payload: encodeEventJson({ messageId: message.messageId, text: pending.text, from: pending.from }),
+            occurredAtMs: message.enqueuedAtMs,
+          }))
+          events++
+        }
+      }
+    }
     for (const record of input.records) {
       const parent = record.parent ?? null
       if (parent && !app.topology.parents(record.session_id, 'parent').some(edge => edge.fromSessionId === parent)) {
@@ -317,6 +480,7 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
   }
     mkdirSync(dirname(markerPath), { recursive: true })
     writeFileSync(markerPath, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' })
+    retireLegacyArtifacts(options.recordsRoot)
     replaceFence(fencePath, 'retired', sourceDigest)
     return report
   } catch (error) {

@@ -238,7 +238,7 @@ function DockHead({ mode, specs, sessions }) {
             </button>
             <button type="button" className="dock-head-act dock-head-act-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
               onClick={() => navigate('sessions', 'new')}>
-              <Icon name="plus" size={15} />
+              <Icon name="plus" size={14} strokeWidth={2} />
             </button>
           </>
         )}

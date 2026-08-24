@@ -33,7 +33,11 @@ export async function sessionStateKit(sessionId?: string) {
   // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
   // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
   // harness env var (ownSessionId — the agent's own `spex session …` carries the harness session id).
-  const sess = sessionId
+  // Hook payloads from Codex carry the native thread id, while the canonical
+  // application is keyed by the Spex session id. Resolve that alias once at
+  // the state-writer boundary; shell hooks stay transport-only and every
+  // lifecycle producer writes the same canonical record.
+  const sess = sessionId ? (l.readAliasedRawRecord(sessionId)?.session_id ?? sessionId) : undefined
   // @@@ no-record diagnosis ([[state]]) - the session store resolves from the CURRENT directory (runtimeRoot
   // ← the cwd's git common dir), so the classic declaration failure is a cd OUTSIDE the session's project —
   // and a bare "no session record" told the author none of that (field-reported). Name the actual cause and

@@ -123,6 +123,15 @@ test('node timeline review projects one latest reading per declared scenario', (
   ])
 })
 
+test('node timeline keeps deferred freshness explicit instead of throwing', () => {
+  const [item] = timelineEvalReviewItems({
+    scenarios: [{ name: 'pending' }],
+    readings: [{ scenario: 'pending', ts: '2026-08-03T12:00:00.000Z', freshnessDeferred: true, verdict: { status: 'pass' } }],
+    dangling: [],
+  } as any, 'node')
+  assert.deepEqual([item.filterKind, item.state], ['deferred', 'deferred'])
+})
+
 test('one detail projection returns only selected history and at most five lightweight neighbors', () => {
   const items = Array.from({ length: 9 }, (_, index) => ({
     node: 'n', scenario: `s${index}`, state: index % 2 ? 'fail' : 'pass', filterKind: 'result', secret: `row-${index}`,

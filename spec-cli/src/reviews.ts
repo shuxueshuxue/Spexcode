@@ -365,9 +365,10 @@ export function timelineEvalReviewItems(timeline: Awaited<ReturnType<typeof eval
     })),
     ...[...latest.values()].map((reading) => ({
       ...reading,
-      state: evalReviewState(reading),
+      ...(reading.freshnessDeferred
+        ? { state: 'deferred', filterKind: EVAL_FILTER_KIND.DEFERRED }
+        : { state: evalReviewState(reading), filterKind: EVAL_FILTER_KIND.RESULT }),
       node,
-      filterKind: EVAL_FILTER_KIND.RESULT,
       filterKey: `${EVAL_FILTER_KIND.RESULT}:${reading.scenario}`,
     })),
     ...(timeline.dangling ?? []).map((track) => ({

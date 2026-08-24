@@ -41,6 +41,23 @@ export function isTerminalFocusReport(data) {
   return data === '\x1b[I' || data === '\x1b[O'
 }
 
+// xterm may coalesce a focus report with the first byte of a real key event.  Matching the whole
+// payload therefore lets browser focus traffic escape whenever the frame boundary changes.  Remove
+// only the control reports here; the remaining bytes still follow the ordinary visible-terminal path.
+export function stripTerminalFocusReports(data) {
+  return data.replace(/\x1b\[(?:I|O)/g, '')
+}
+
+// Mouse button reports are browser pointer traffic.  SGR/X10/URXVT are all variable-width and can be
+// embedded beside another report, so remove only non-wheel reports and keep wheel reports for tmux's
+// native copy-mode/navigation contract.
+export function stripTerminalButtonReports(data) {
+  return data
+    .replace(/\x1b\[<([0-9]+);[0-9]+;[0-9]+[Mm]/g, (whole, code) => (Number(code) & 64) ? whole : '')
+    .replace(/\x1b\[M([\x20-\x3f]{3})/g, (whole, payload) => (payload.charCodeAt(0) & 64) ? whole : '')
+    .replace(/\x1b\[([0-9]+);[0-9]+;[0-9]+[Mm]/g, (whole, code) => (Number(code) & 64) ? whole : '')
+}
+
 function onlyMotionTrackingModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
 }
@@ -317,14 +334,15 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       // Mouse traffic is browser chrome, not a conversational turn. xterm emits button/wheel reports
       // through the same onData callback as typed bytes; forwarding those reports lets a tab click or
       // focus reactivation reach the native TUI and is exactly the wrong lifecycle boundary.
-      if (isTerminalButtonReport(data) || isTerminalFocusReport(data)) return
+      const filtered = stripTerminalButtonReports(stripTerminalFocusReports(data))
+      if (!filtered) return
       if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
-        setPendingInput(data)
+        setPendingInput(filtered)
         setInputConfirmOpen(true)
         term.blur()
         return
       }
-      sendInput(data)
+      sendInput(filtered)
     })
 
     // Wheel navigation is xterm-native: reports ride the ordinary onData→input path to this viewer's

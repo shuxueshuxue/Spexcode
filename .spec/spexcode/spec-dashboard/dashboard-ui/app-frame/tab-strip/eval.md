@@ -63,6 +63,18 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/ReviewSurface.jsx, spec-dashboard/src/SettingsSurface.jsx, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/src/tabStrip.test.mjs
+  - name: live-pointer-reorder-and-tail-drop
+    description: >-
+      In a real Chromium dashboard with three held document tabs, press and drag one tab across another and
+      inspect the tab order before releasing; then drag a tab into the tab-list host's unoccupied right side
+      and inspect the order before release and after a reload. Exercise a tab close click after the drags.
+    expected: >-
+      The order changes while the pointer is still held, not only on pointerup. The right-side blank host area
+      appends the dragged tab without requiring a hit on the last tab. Release persists the same order through
+      reload, the active route is unchanged, and the close click removes only its tab.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TabStrip.jsx, spec-dashboard/src/tabs.js, spec-dashboard/src/tabModel.js]
+    test: spec-dashboard/test/tab-strip-drag.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

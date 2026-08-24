@@ -50,7 +50,13 @@ try {
   await page.waitForURL(/#\/file\/src%2Fapp\.js|#\/file\/src\/app\.js/)
   await page.locator('.viewhost.view-file .cm-editor').waitFor({ state: 'visible' })
   const tabs = await page.locator('[role="tab"]:visible').evaluateAll((items) => items.map((tab) => ({ label: tab.querySelector('.tab-label')?.textContent?.trim(), active: tab.getAttribute('aria-selected') === 'true' })))
-  assert.deepEqual(tabs, [{ label: 'Spec', active: false }, { label: 'app.js', active: true }])
+  assert.deepEqual(tabs, [
+    { label: 'Spec', active: false },
+    { label: 'Evals', active: false },
+    { label: 'Issues', active: false },
+    { label: 'Settings', active: false },
+    { label: 'app.js', active: true },
+  ])
   assert.equal(errors.length, 0, `browser errors: ${errors.join(' | ')}`)
   await page.screenshot({ path: resolve(OUT, 'spec-resident-file-focus.png'), fullPage: true })
   console.log(JSON.stringify({ ok: true, tabs, sections: ['Specs', 'Files'], screenshot: resolve(OUT, 'spec-resident-file-focus.png') }))

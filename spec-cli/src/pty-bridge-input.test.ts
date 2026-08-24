@@ -11,3 +11,8 @@ test('PTY pointer reports never count as lifecycle activity', () => {
   assert.equal(isMouseReport('\x1b[A'), false, 'arrow key')
   assert.equal(isMouseReport('\r'), false, 'enter')
 })
+
+test('coalesced pointer reports never count as lifecycle activity', () => {
+  assert.equal(isMouseReport('\x1b[<0;10;4M\x1b[<0;10;4m'), true)
+  assert.equal(isMouseReport('\x1b[<0;10;4M\r'), false)
+})

@@ -362,7 +362,9 @@ const MAX_INPUT_BYTES = 64 * 1024
 // never a human turn entry; keeping the complete discriminator here prevents a click from
 // reopening an asking/review session through the PTY activity path.
 export function isMouseReport(data: string): boolean {
-  return /^(?:\x1b\[<[-0-9;]+[mM]|\x1b\[M[\s\S]{3}|\x1b\[[0-9;]+[mM])/u.test(data)
+  // xterm may coalesce several pointer reports into one onData payload. Treat the
+  // whole payload as navigation only when every frame is a known mouse encoding.
+  return /^(?:(?:\x1b\[<[-0-9;]+[mM])|(?:\x1b\[M[\s\S]{3})|(?:\x1b\[[0-9;]+[mM]))+$/u.test(data)
 }
 
 export function forwardInput(id: string, viewer: Viewer, data: string): boolean {

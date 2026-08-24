@@ -4878,7 +4878,6 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       replayed = !!existing
-      if (!from) markHumanPromptActive(id)
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
     }
@@ -4892,6 +4891,10 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       }
     }
     const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+    // Queue acceptance is not runtime activity. A prompt remains owed while the adapter is unbound,
+    // restarting, or refusing the insert; only the handoff that removes this exact message may re-enter
+    // a waiting session as active. This keeps a queued command from painting a dead pane as working.
+    if (!from && !pending) markHumanPromptActive(id)
     return {
       ok: true,
       delivery: pending ? 'queued' : 'accepted',
@@ -4899,6 +4902,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     }
   }
   let replayed = false
+  let acceptedMid = ''
   try {
     // Taking a declared sender's record lock makes close a real outgoing fence even across backend processes:
     // a send either appends before close obtains the fence (and close's revocation voids its debt), or sees
@@ -4926,6 +4930,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       },
     })
     replayed = accepted.replayed
+    acceptedMid = accepted.mid
   } catch (error) {
     const code = (error as { code?: DispatchAcceptCode })?.code
     const detail = error instanceof StrandedDeliveryError
@@ -4937,11 +4942,11 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       ...(code ? { code } : {}),
     }
   }
-  if (!from) markHumanPromptActive(id)
   // Awaited, not fire-and-forget: an unawaited insert can lose its race with a short-lived caller's exit,
   // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
   // the text in a live agent's current turn instead of up to one tick later.
   if (!opts.deferDrain) await drainSession(id)
+  if (!from && !pendingMessages(id).some(message => message.mid === acceptedMid)) markHumanPromptActive(id)
   return { ok: true, ...(opts.idempotency ? { replayed } : {}) }
 }
 

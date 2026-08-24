@@ -86,7 +86,7 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   }
 })
 
-test('a human prompt re-enters asking without treating agent delivery as human activity', async () => {
+test('an unbound human prompt stays waiting without treating queue acceptance as activity', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-human-prompt-reentry-'))
   const previousHome = process.env.SPEXCODE_HOME
   process.env.SPEXCODE_HOME = home
@@ -106,7 +106,7 @@ test('a human prompt re-enters asking without treating agent delivery as human a
   try {
     const human = await sendText(id, 'continue with the next step')
     assert.equal(human.ok, true)
-    assert.equal(app.readState(id)?.status, 'active', 'a human prompt must make the waiting session working')
+    assert.equal(app.readState(id)?.status, 'asking', 'an unbound prompt must not claim the waiting session is working')
 
     app.transitionSession(id, { status: 'asking', proposal: null, note: 'needs a reply' })
     const agent = await sendText(id, 'handoff context', 'another-session')
@@ -141,17 +141,18 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
     session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
-    title: 'queued', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
+    title: 'queued', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'waiting for input',
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
   }, null, 2) + '\n')
   const app = openProjectSessionApplication({ databasePath, locality: () => {} })
-  app.createSession({ sessionId: id, status: 'active' })
+  app.createSession({ sessionId: id, status: 'asking', note: 'waiting for input' })
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     const first = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(first, { ok: true, delivery: 'queued', replayed: false })
+    assert.equal(app.readState(id)?.status, 'asking', 'a queued prompt must not claim the session is working before handoff')
     assert.equal(app.protocol.listPending(id).length, 1, 'the accepted message remains owed after transport refusal')
 
     const replay = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
@@ -162,6 +163,7 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
     rejectTransport = false
     const accepted = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(accepted, { ok: true, delivery: 'accepted', replayed: true })
+    assert.equal(app.readState(id)?.status, 'active', 'a delivered prompt re-enters the waiting session as working')
     assert.equal(app.protocol.listPending(id).length, 0)
     assert.match(received, /queued prompt/)
   } finally {

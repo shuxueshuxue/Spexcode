@@ -16,7 +16,7 @@ export default function FileView({ param }) {
   const t = useT()
   const sourceHostRef = useRef(null)
   const [selection, setSelection] = useState(null)
-  useStatusItem(param ? { id: 'file-path', side: 'left', priority: 500, text: param } : null)
+  useStatusItem(param ? { id: 'file-path', side: 'right', priority: 500, text: param } : null)
   const parts = param?.startsWith('.spec/') ? param.slice('.spec/'.length).split('/') : []
   const attachment = parts.length >= 2 ? { nodeId: parts[0], name: parts.slice(1).join('/') } : null
   const read = useMemo(() => attachment ? (offset) => fetchNodeFileSlice(attachment.nodeId, attachment.name, offset) : undefined,

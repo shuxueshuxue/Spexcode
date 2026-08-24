@@ -7,7 +7,7 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { useRoute, navigate } from './route.js'
+import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import {
@@ -25,7 +25,6 @@ import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { useStatusItem } from './StatusBar.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -107,9 +106,6 @@ function GraphView({ param, query }) {
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
-  // The shell owns the registry-backed help legend, so the graph button uses the same global state.
-  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
-    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const viewportRef = useRef(null)
@@ -172,8 +168,9 @@ function GraphView({ param, query }) {
   )
 
   const openSession = useCallback((id) => navigate('sessions', id), [])
-  // The route carries the launch draft across the graph-to-session transition. The workspace handoff remains
-  // the live path for chords, while the query is the durable, replayable address of this one New Session draft.
+  // The route carries the launch draft across a cold code-split transition. The workspace handoff remains
+  // the live path for chords, but a graph action must not depend on the receiver having mounted before the
+  // hash switch: the query is the durable, replayable address of this one New Session draft.
   const startNew = useCallback((text) => {
     setSeed(text)
     navigate('sessions', 'new', { query: { seed: text } })

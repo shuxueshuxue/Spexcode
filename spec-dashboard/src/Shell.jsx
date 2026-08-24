@@ -91,6 +91,7 @@ function ViewScopeHost({ page, param, query, active, children }) {
   }, [splitTo])
   const holder = useMemo(() => createViewScope({
     route: { page, param, query }, dispatch, active, contract: viewRouteContract,
+    owner: { kind: 'view', page, param: param ?? null },
   }), []) // the shell updates this holder below; the public scope identity remains stable for the view
   useEffect(() => {
     holder.update({ route: { page, param, query }, active })
@@ -515,6 +516,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const documentNames = useDocumentNames()
   const { dock, dockMode, palette, helpOpen } = useWorkspace()
   const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
+    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
   // explorer docked, opening it leaves the spec prose 383px — under a readable measure, and it takes the
   // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the

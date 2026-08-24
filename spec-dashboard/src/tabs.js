@@ -143,7 +143,7 @@ export function useTabs({ onCloseStart } = {}) {
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 
-  // Resident board routes keep their detail address in the URL but focus the one top-level board tab.
+  // Resident view routes keep their detail address in the URL but focus the one top-level view tab.
   const activeKey = tabKey(route)
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])

@@ -60,3 +60,10 @@ test('registry-backed route contract rejects an unowned view before dispatch', (
   assert.equal(scope.open({ page: 'evals', param: null, query: null }).accepted, true)
   assert.equal(received.length, 1)
 })
+
+test('view ownership is immutable and cannot be omitted from a hosted scope', () => {
+  const { scope } = createViewScope({ route, owner: { kind: 'view', page: 'evals', param: route.param }, dispatch() {} })
+  assert.deepEqual(scope.owner, { kind: 'view', page: 'evals', param: route.param })
+  assert.equal(Object.isFrozen(scope.owner), true)
+  assert.throws(() => createViewScope({ route, owner: { kind: 'shell' }, dispatch() {} }), /owner must identify a view/)
+})

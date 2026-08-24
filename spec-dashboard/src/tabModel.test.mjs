@@ -108,6 +108,15 @@ test('resident routes normalize to one top-level Spec, Evals, or Issues tab', ()
   assert.ok(tabs.every((tab) => tab.pinned))
 })
 
+test('opening a spec keeps its detail address while focusing the resident Spec tab', () => {
+  let tabs = placeTab([], residentSpec('first'))
+  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
+  assert.deepEqual(tabs[0], { page: 'spec', param: 'first', query: null, pinned: true })
+  tabs = placeTab(tabs, residentSpec('second'))
+  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
+  assert.equal(tabs[0].param, 'second')
+})
+
 test('opening a scenario or issue focuses its resident top-level tab without replacing documents', () => {
   let tabs = placeTab(placeTab([], residentSpec('node'), 'pin'), session('s1'), 'pin')
   tabs = placeTab(tabs, { page: 'evals', param: 'node/scenario', query: null })

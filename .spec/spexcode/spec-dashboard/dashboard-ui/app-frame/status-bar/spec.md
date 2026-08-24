@@ -6,6 +6,8 @@ desc: The window's bottom row and a registry behind it — items are declared da
 code:
   - spec-dashboard/src/StatusBar.jsx
 related:
+  - spec-dashboard/src/statusOwnership.js
+  - spec-dashboard/src/statusOwnership.test.mjs
   - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/specMeta.js

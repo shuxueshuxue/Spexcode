@@ -68,9 +68,10 @@ session, so the predicate takes the selector's VALUE and not merely its presence
 form, and the session it starts becomes a document the moment it has an id.
 
 **A rail destination is not the same thing as an addressable kind.** `spec` and `file` are addresses you
-arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. The rail
-therefore has its own list, and the first version of this without that split threw `unknown icon: spec` —
-the rail had faithfully tried to draw a destination that does not exist.
+arrive at by opening something; there is no "go to the spec page" the way there is a sessions page. Spec is
+still a resident tab once opened, but it is not a rail destination. The rail therefore has its own list, and
+the first version of this without that split threw `unknown icon: spec` — the rail had faithfully tried to
+draw a destination that does not exist.
 
 **Each view is lazy and pays for its own libraries.** The graph carries xyflow and mounts its own
 ReactFlowProvider; hoisting that into the shell would drag the whole graph library into every face's entry

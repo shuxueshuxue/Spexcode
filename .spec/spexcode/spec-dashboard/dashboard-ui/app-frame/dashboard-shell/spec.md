@@ -47,7 +47,8 @@ workspace tabs: cold links, list navigation, and detail navigation all render th
 TabStrip, so the Spec/Session/File working set remains visible while a finding is focused. Issues omits the
 activity rail by its page-owned dock policy but retains the shared tab strip. There is no second review chrome
 tree or cold-only route path that can hide the working set; mobile reflows the same route family through its
-responsive face.
+responsive face. App owns the one global route subscription and passes the captured address into that mobile
+view; the mobile face never creates a second global route reader.
 
 **Backend reachability is one shell fact.** Every dashboard API read reports through the shared data transport.
 A network refusal or gateway 502/503/504 marks the whole live dashboard offline, even when a page still holds a

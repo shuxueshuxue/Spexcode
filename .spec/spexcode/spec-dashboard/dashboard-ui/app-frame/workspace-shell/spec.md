@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/documentActions.jsx
   - spec-dashboard/src/ViewScope.jsx
   - spec-dashboard/src/viewScope.js
+  - spec-dashboard/src/statusOwnership.js
   - spec-dashboard/src/viewScope.test.mjs
 ---
 # workspace-shell
@@ -40,7 +41,11 @@ before the route layer. Navigation policy and tab identity remain shell-owned; t
 not a second router. The host obtains its route contract from the view registry itself: an intent targeting an
 unregistered address is rejected before dispatch, and document/resident predicates remain owned by that same
 registry rather than a second shell allow-list. `viewScope.test.mjs` and `viewRegistry.test.mjs` prove the
-validation, atomic intent shape, hidden-pane suspension, and unowned-route rejection.
+registry rather than a second shell allow-list. The mobile face follows the same rule: its host passes the
+captured route as props, so it cannot create a second global route reader while the desktop shell owns its
+`useRoute()` subscription. `viewScope.test.mjs`, `viewRegistry.test.mjs`, and `ownershipBoundary.test.mjs` prove
+the validation, atomic intent shape, hidden-pane suspension, unowned-route rejection, and host-only route
+ownership.
 
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:

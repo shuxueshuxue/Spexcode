@@ -12,7 +12,7 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 // the QUERY carries view state (a list's filters, the evals session scope) — so a filtered list is a
 // copyable, Back-restorable address and every consumer re-derives its whole state from the URL.
 
-// `spec` and `file` are DOCUMENT addresses — a node read as a document, a governed file read on its own.
+// `spec` and `file` are DOCUMENT addresses — a node detail read as a resident document, a governed file read on its own.
 // They are why the address list grew: the board used to have pages and no documents, so a document had
 // nowhere to be addressed from and reading one meant opening a popup over whatever page was showing.
 // `empty` is the workspace holding NOTHING — an address because the state must be landable, reloadable and

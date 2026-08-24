@@ -38,7 +38,7 @@ test('trunk and scoped list/detail rows use bounded demand endpoints instead of 
 })
 
 test('session model failures are distinct from genuine not-found states', () => {
-  assert.match(page, /r\.status === 404 \? false : Promise\.reject\(new Error\(`HTTP \$\{r\.status\}`\)\)/)
+  assert.match(page, /r\.status === 404 \? false : r\.json\(\)\.catch\(\(\) => null\)\.then\(\(body\) => \{[\s\S]*body\?\.error \|\| `HTTP \$\{r\.status\}`/)
   assert.match(page, /<EvalsGroup[\s\S]*error=\{error \? t\('sessionEval\.loadFailed'/)
   assert.match(page, /<DetailShell failure=\{t\('sessionEval\.loadFailed'/)
   assert.match(shell, /className="ds-page ds-missing ds-failed" role="alert"/)

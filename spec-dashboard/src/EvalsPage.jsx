@@ -55,7 +55,9 @@ function fetchEvalDetail(node, scenario, sessionId) {
   const query = new URLSearchParams({ node, scenario })
   if (sessionId) query.set('scope', sessionId)
   const request = apiFetch(apiUrl(`/api/evals/detail?${query}`), { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .then((r) => (r.ok ? r.json() : r.status === 404 ? false : r.json().catch(() => null).then((body) => {
+      throw new Error(body?.error || `HTTP ${r.status}`)
+    })))
     .finally(() => detailInflight.delete(key))
   detailInflight.set(key, request)
   return request

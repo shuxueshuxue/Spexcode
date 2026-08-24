@@ -6,6 +6,7 @@ desc: What a session is still OWED — a small ordered queue of messages not yet
 code:
   - packages/session-core/src/delivery-queue.ts
 related:
+  - spec-cli/src/session-legacy-delivery.ts
   - spec-cli/src/sessions.ts
   - packages/session-core/src/session-timeline.ts
   - spec-cli/src/index.ts

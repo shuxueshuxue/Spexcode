@@ -183,7 +183,7 @@ function peerProjectsForSession(sessionId: string): PeerProject[] {
   const hits: PeerProject[] = []
   for (const id of ids) {
     const root = join(projects, id)
-    const record = join(root, 'sessions', sessionId, 'session.json')
+    const record = join(root, 'sessions', sessionId, 'runtime.json')
     if (!existsSync(record)) continue
     const direct = readEndpointRecord(join(root, 'backend.json'))
     if (direct) { hits.push({ id, url: direct.url }); continue }

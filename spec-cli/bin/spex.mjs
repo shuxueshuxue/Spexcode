@@ -16,7 +16,7 @@ const workspace = join(pkg, '..')
 // carry unresolved conflict markers, so hooks keep the retryable exit-75 contract during a merge.
 const sourceRoot = join(pkg, 'src')
 if (existsSync(sourceRoot)) {
-  const srcRoots = [sourceRoot, join(pkg, '..', 'packages', 'spec-core', 'src'), join(pkg, '..', 'packages', 'session-core', 'src'), join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
+  const srcRoots = [sourceRoot, join(pkg, '..', 'packages', 'spec-core', 'src'), join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
   const conflicted = srcRoots.flatMap((root) => {
     if (!existsSync(root)) return []
     return readdirSync(root, { recursive: true })
@@ -39,7 +39,6 @@ if (existsSync(sourceRoot)) {
   const runtimeEntries = [
     cli,
     join(workspace, 'packages', 'spec-core', 'dist', 'index.js'),
-    join(workspace, 'packages', 'session-core', 'dist', 'index.js'),
     join(workspace, 'spec-eval', 'dist', 'index.js'),
     join(workspace, 'spec-forge', 'dist', 'index.js'),
   ]

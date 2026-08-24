@@ -196,7 +196,7 @@ function activeProjectSessions(root: string): number {
   let active = 0
   for (const id of entries) {
     try {
-      const record = JSON.parse(readFileSync(join(dir, id, 'session.json'), 'utf8'))
+      const record = JSON.parse(readFileSync(join(dir, id, 'runtime.json'), 'utf8'))
       if (record?.archived !== true && record?.stopped !== true && record?.closedAt == null) active++
     } catch {
       // An unreadable record is not safe to classify as inactive. It stays a loud blocker for removal.

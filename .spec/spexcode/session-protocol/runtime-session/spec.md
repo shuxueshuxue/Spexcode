@@ -4,10 +4,9 @@ status: active
 hue: 280
 desc: The temporary mixed bridge being dismantled as external-runtime records, topology, projection, and message publication return to their owning layers.
 code:
-  - packages/session-core/src/runtime-session.ts
+  - packages/session-runtime/src/index.ts
 related:
-  - packages/session-core/src/index.ts
-  - packages/session-core/src/session-protocol.test.ts
+  - packages/session-runtime/src/index.test.ts
   - packages/spec-core/src/layout.ts
 ---
 # runtime-session

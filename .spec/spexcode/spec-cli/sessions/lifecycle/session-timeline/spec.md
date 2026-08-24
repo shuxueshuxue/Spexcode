@@ -5,7 +5,7 @@ session: 29e0d645-6173-4e13-bbaf-f008e25af769
 hue: 280
 desc: The session's append-only log — every authored transition and every message — is the DELIVERY itself, and the one thing about a session any process may observe without owning anything.
 code:
-  - packages/session-core/src/session-timeline.ts
+  - packages/session-events/src/schema.ts
 related:
   - spec-cli/src/session-timeline.ts
   - spec-cli/src/sessions.ts

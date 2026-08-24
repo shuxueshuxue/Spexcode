@@ -4,20 +4,9 @@ status: active
 hue: 280
 desc: The published, adapter-neutral SQLite protocol for durable session messages, FIFO delivery, history, and cross-process transactions.
 code:
-  - packages/session-core/src/index.ts
+  - packages/session-protocol/src/index.ts
 related:
   - docs/session-architecture-concept-map.md
-  - packages/session-core/src/runtime-session.ts
-  - packages/session-core/src/internal.ts
-  - packages/session-core/src/message.ts
-  - packages/session-core/src/record-lock.ts
-  - packages/session-core/src/session-timeline.ts
-  - packages/session-core/src/session-cursors.ts
-  - packages/session-core/src/delivery-queue.ts
-  - packages/session-core/src/session-protocol.test.ts
-  - packages/session-core/scripts/public-boundary.test.mjs
-  - packages/session-core/package.json
-  - packages/session-core/tsconfig.build.json
   - packages/session-protocol/src/errors.ts
   - packages/session-protocol/src/canonical.ts
   - packages/session-protocol/src/schema.ts

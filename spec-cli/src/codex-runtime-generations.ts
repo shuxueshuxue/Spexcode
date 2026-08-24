@@ -321,7 +321,7 @@ function bootstrapBindings(root: string, generationId: string): Record<string, C
   try { ids = readdirSync(sessions) } catch { return result }
   for (const sessionId of ids) {
     try {
-      const record = JSON.parse(readFileSync(join(sessions, sessionId, 'session.json'), 'utf8')) as Record<string, unknown>
+      const record = JSON.parse(readFileSync(join(sessions, sessionId, 'runtime.json'), 'utf8')) as Record<string, unknown>
       const harness = record.harness
       const threadId = record.harness_session_id
       if (record.governed === true && (harness === 'codex' || harness === 'codex-headless') && typeof threadId === 'string' && threadId) {
@@ -335,7 +335,7 @@ function bootstrapBindings(root: string, generationId: string): Record<string, C
 function readBindingRecord(root: string, sessionId: string): Record<string, unknown> | null {
   if (!sessionId || sessionId.includes('/') || sessionId.includes('\\')) return null
   try {
-    return JSON.parse(readFileSync(join(root, 'sessions', sessionId, 'session.json'), 'utf8')) as Record<string, unknown>
+    return JSON.parse(readFileSync(join(root, 'sessions', sessionId, 'runtime.json'), 'utf8')) as Record<string, unknown>
   } catch { return null }
 }
 
@@ -626,7 +626,7 @@ export function bindCodexGeneration(root: string, sessionId: string, threadId: s
   })
 }
 
-// Native thread creation and session.json persistence are separate writes. A pending registration can be
+// Native thread creation and runtime envelope persistence are separate writes. A pending registration can be
 // recovered only when the durable record names the same exact thread; otherwise it cannot pin a root forever.
 export function prepareCodexGenerationRegistration(root: string, sessionId: string, threadId: string, generationId: string): void {
   withLedgerLockSync(root, () => {

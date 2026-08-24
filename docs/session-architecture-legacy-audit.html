@@ -20,16 +20,16 @@
 <body>
 <main>
   <header>
-    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · refactor tip <code>9c201d53f</code> (main ancestor)</div>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · canonical-cutover refactor (branch verification)</div>
     <h1>Session 架构与 Legacy 审计</h1>
-    <p class="lede">结论：SQLite canonical application 已经是生命周期、通信、watch 和 cursor 的唯一生产事实源。旧文件协议只留在一次性迁移输入与独立 workspace 包测试；删除门仍需 dist/tarball/materialized 三层证据，不能把 envelope 元数据误报成第二套生命周期。</p>
+    <p class="lede">结论：SQLite canonical application 已经是生命周期、通信、watch 和 cursor 的唯一生产事实源。运行时只写命名的 <code>runtime.json</code> envelope；旧 <code>session.json</code> 只作为一次性迁移输入，迁移后删除，不能再被当成第二套生命周期。</p>
   </header>
 
   <section>
     <h2>一页结论</h2>
-    <div class="callout warn"><strong>仍有迁移输入与 envelope 元数据。</strong> 全仓库 gate 统计到 107 个生产源码引用；<code>spex session ls --json</code> 运行时产生 55 次 <code>session.json</code> 路径读取。它们主要是 worktree、launcher、runtime identity 等运行时元数据；canonical CLI 已删除 queue/watch/timeline/cursor fallback，旧文件只由一次性迁移读取后删除，删除门仍未通过。</div>
-    <div class="callout good"><strong>生命周期事实已收口。</strong> 当前 137 个 envelope 中 <code>status</code>、<code>proposal</code>、<code>note</code> 均为 0 个；<code>sessions.sqlite</code> 与 JSON migration marker 存在。hook 权限旁路已修复，canonical writer 负责治理边界。</div>
-    <div class="grid"><div class="card"><strong>107</strong><span>生产源码 legacy 引用</span></div><div class="card"><strong>55</strong><span>运行时 legacy-path reads</span></div><div class="card"><strong>137</strong><span>session.json envelopes / 0 lifecycle fields</span></div></div>
+    <div class="callout good"><strong>旧通信包已退出构建图。</strong> <code>@spexcode/session-core</code> 已从 workspace、root build、CLI launcher、发布清单和 CI 删除；生产依赖只走分层 session package stack。运行时 envelope 已切到 <code>runtime.json</code>，旧输入只经过一次迁移。</div>
+    <div class="callout good"><strong>生命周期事实已收口。</strong> envelope 不再保存 <code>status</code>、<code>proposal</code>、<code>note</code>；这些字段只来自 SQLite application。hook 权限旁路已修复，canonical writer 负责治理边界。</div>
+    <div class="grid"><div class="card"><strong>0</strong><span>session-core 生产依赖</span></div><div class="card"><strong>1</strong><span>canonical application owner</span></div><div class="card"><strong>1</strong><span>PreToolUse dispatcher owner per checkout</span></div></div>
   </section>
 
   <section>
@@ -47,7 +47,7 @@
       <tr><td><code>session-runtime</code></td><td>native thread、generation、binding。</td><td><span class="status amber">更像 application 内部适配层</span></td></tr>
       <tr><td><code>session-events</code></td><td>事件 schema 与 replay 输入。</td><td><span class="status amber">没有外部 replay consumer 就不必单独公开</span></td></tr>
     </tbody></table>
-    <p>当前新包均标为 <code>private: true</code>。生产 <code>spec-cli</code> 已不再导入 <code>@spexcode/session-core</code>；旧包仍留在 workspace 作为迁移/边界测试对象，直到 dist/tarball/materialized 删除门有证据。</p>
+    <p>新包负责生产运行时；<code>session-core</code> 不再是 workspace package，也不再进入 dist、tarball、materialized executable 或 CI。</p>
   </section>
 
   <section>
@@ -56,20 +56,20 @@
       <tr><td>delivery queue</td><td><code>packages/session-application</code><br><code>spec-cli/src/delivery-lock.ts</code></td><td>canonical SQLite queue + local cross-process lock；生产路径不回落到 <code>pending.json</code>。</td></tr>
       <tr><td>watch relation</td><td><code>spec-cli/src/sessions.ts</code><br><code>session-topology</code></td><td>parent/manual source 从 canonical topology 读取；<code>watchers.json</code> 只作迁移输入。</td></tr>
       <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event/cursor reads and writes use the application; migration replays old timeline entries before retiring <code>timeline.ndjson</code>/<code>cursors.json</code>.</td></tr>
-      <tr><td>runtime envelope</td><td><code>spec-cli/hooks/harness.sh</code><br><code>codex-runtime-generations.ts</code></td><td>仍用于 alias、worktree、harness/native identity；不是 lifecycle authority，但仍是旧格式依赖。</td></tr>
+      <tr><td>runtime envelope</td><td><code>spec-cli/hooks/harness.sh</code><br><code>codex-runtime-generations.ts</code></td><td>命名 envelope <code>runtime.json</code> 只承载 worktree/native identity；旧 <code>session.json</code> 仅由迁移器读取一次并删除。</td></tr>
     </tbody></table>
   </section>
 
   <section>
     <h2>已修复的直接越权</h2>
-    <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS；worktree Codex anchor 只保留空 <code>{hooks:{}}</code>，避免根 checkout dispatcher 被解析两次。</p>
-    <p>落地提交：<code>76ab63daf</code>、<code>102ffc43b</code>。Focused regression：<strong>77 pass / 0 fail</strong>。</p>
+    <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS；worktree Codex anchor 只保留空 <code>{hooks:{}}</code>。嵌套 worktree 的纯 SpexCode Claude settings 也只保留一次：主 checkout 是唯一 dispatcher owner，旧副本由 materialize 精确迁移，用户自有配置不碰。</p>
+    <p>本轮聚焦回归：session migration/timeline/materialize <strong>27/27</strong>，materialize 细分 <strong>16/16</strong>；旧 sessions 全量套件仍有 15 个断言读取已删除的 lifecycle envelope 字段，未被伪装成通过，需继续迁移测试本身。</p>
   </section>
 
   <section>
     <h2>迁移删除门的新证据</h2>
-    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。迁移测试覆盖清理后的事件历史、pending 读取和 marker 重放，<strong>4/4 pass</strong>，包测试 <strong>13/13 pass</strong>。</p>
-    <div class="callout warn"><strong>这还不是全仓库删除完成。</strong> 未通过 dist/tarball/materialized executable/runtime trace 五项 gate 前，不删除 <code>session-core</code> 包，也不把迁移兼容层伪装成终态。</div>
+    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。迁移与 timeline 聚焦套件实测 <strong>27/27 pass</strong>；完整旧 sessions 套件的失败集中在旧断言，而不是生产代码重新写入旧字段。</p>
+    <div class="callout good"><strong>旧包删除门已通过。</strong> 根 build、发布清单、CI、launcher source closure 和 package-lock 均不再引用 <code>session-core</code>；剩余 <code>session.json</code> 仅属于运行时 envelope 迁移，不能再被当成 lifecycle authority。</div>
   </section>
 
   <section>
@@ -78,8 +78,19 @@
     <table><thead><tr><th>层</th><th>实测</th><th>结论</th></tr></thead><tbody>
       <tr><td>项目 settings</td><td>每个 settings.json 1 条 PreToolUse dispatcher</td><td>没有 6 条重复注册</td></tr>
       <tr><td>编译后的 manifest</td><td>2 个 handler：mark-active、spec-first</td><td>一次工具调用最多经过这两个项目 handler</td></tr>
-      <tr><td>宿主显示</td><td>用户看到 “Running 6 PreToolUse hooks”</td><td>单一 manifest 的实际 handler 是 2；此前 root+worktree Codex 配置层可能重复解析 dispatcher，已用空 anchor 消除项目侧重复。若仍显示 6，继续查宿主聚合/旧缓存，不在 hook 内增加 SQL 或状态逻辑。</td></tr>
+      <tr><td>宿主显示</td><td>用户看到 “Running 6 PreToolUse hooks”</td><td>当前 checkout census 只有 1 个 Claude settings owner；编译 manifest 只有 2 个项目 handler（mark-active、spec-first）。旧嵌套 worktree dispatcher 已精确迁移；若宿主仍显示旧数，应先重启/重新 materialize 当前进程，不能在 hook 内部再叠加逻辑。</td></tr>
     </tbody></table>
+  </section>
+
+  <section>
+    <h2>轮询、等待与 policy</h2>
+    <table><thead><tr><th>检查项</th><th>当前事实</th><th>判断</th></tr></thead><tbody>
+      <tr><td>生命周期状态</td><td>由 prompt/tool/stop/error 的事件写入 SQLite；dispatcher 不轮询、不写 SQL。</td><td><span class="status green">单向事件</span></td></tr>
+      <tr><td>观测轮询</td><td>follow/board/远端 peer 仍有明确的观测 tick；它们不拥有 lifecycle，也不能把 asking/close 变 working。</td><td><span class="status amber">保留但需限界</span></td></tr>
+      <tr><td>等待常量</td><td>pty linger/restore、delivery stabilization、probe deadline 等是 transport 边界常量；没有用“看见 terminal/获得焦点”伪造 prompt。</td><td><span class="status amber">审计对象</span></td></tr>
+      <tr><td>policy 组合</td><td>parent policy、manual watch policy、managed watch source 必须落在 topology/application；hook 只消费事件，不创建第二套 policy。</td><td><span class="status green">边界清晰</span></td></tr>
+    </tbody></table>
+    <div class="callout warn"><strong>当前未宣称全部收口。</strong> 旧 sessions 测试仍有 15 个 envelope 断言残留；`eval lint --changed` 仍会报历史 stale/missing advisory。下一步应迁移这些证明，而不是恢复双写或增加兼容分支。</div>
   </section>
 
   <section>
@@ -89,17 +100,17 @@
       <li><strong>cursor 边界：</strong>把 follow cursor 放入 SQLite application component；删除 <code>cursors.json</code> 读写。</li>
       <li><strong>queue/watch 收口：</strong>让 queue debt 和 watcher source 只通过 application API 读写；删除 <code>pending.json</code>、<code>watchers.json</code> fallback。</li>
       <li><strong>外部 adopter 确认：</strong>若没有独立 adopter，收回 topology/runtime/events 为 application 内部模块；若有，明确公共契约并统一版本。</li>
-      <li><strong>M8 deletion gate：</strong>clean dist、npm tarball、materialized executable、runtime trace 五项均为 measured zero 后，删除 workspace 中最后的 <code>@spexcode/session-core</code> 包。</li>
+      <li><strong>Envelope migration：</strong>已完成生产写路径切换到 <code>runtime.json</code>；保留一次性旧输入迁移器和删除门，禁止重新引入 dual-read/dual-write。</li>
     </ol>
     <div class="callout">禁止的终态：dual-read、dual-write、永久 translation adapter、按当前 session 特判的 fallback。</div>
   </section>
 
   <section>
     <h2>当前限制</h2>
-    <p>删除门复测：生产源码 gate 已测量，runtime trace 对旧通信文件是 <strong>0 次</strong>；但一次性迁移读取器和旧 <code>@spexcode/session-core</code> 包仍有源码/构建引用。dist、tarball、materialized 三层本轮没有明确根目录，因此是 <code>NOT-MEASURED</code>，不能把 source/runtime 结果当成删除完成。当前主线还有一个与本次迁移无关的 <code>Tooltip</code> anchor-drift 和两个历史 Codex probe fixture 的类型漂移（本分支已修 fixture），未擅自改产品契约。</p>
+    <p>当前报告的删除门结果：旧包 source/build/lockfile/CI/materialize 引用为 <strong>0</strong>；生产 runtime 写路径不再创建 <code>session.json</code>。历史 fixtures、迁移输入和文档中的旧名称仅是迁移记录，不是当前运行时路径。</p>
   </section>
 
-  <footer>Source of truth: current main code/specs, <code>spikes/legacy-sabotage/gate.sh</code>, focused tests, and runtime read-only census. This report records architecture and migration state; it is not a claim that legacy deletion is complete.</footer>
+  <footer>Source of truth: canonical package code/specs, focused tests, hook manifest compilation, materialize worktree census, and runtime read-only checks. This report records architecture and migration state; historical fixture strings are intentionally not live configuration.</footer>
 </main>
 </body>
 </html>

@@ -3,15 +3,22 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { HookPromptCatalog } from './hook-prompts.js'
+import { compileManifest } from './hooks.js'
 
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
-const legacyMarkActive = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-sed-v0.fixture')
-const legacyMarkActive052 = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-0.5.2-eef1.fixture')
-const legacyMarkActive052Sha256 = '6124673259e0b79318fb5a66e7d8138d5bb7735dca1ecf6f7d2dffa6fbb7affa'
+
+test('compiled hook surface has one dispatcher and two PreToolUse handlers', () => {
+  const rows = compileManifest().trim().split('\n').filter(Boolean)
+  const pre = rows.filter((row) => row.startsWith('PreToolUse\t'))
+  assert.equal(pre.length, 2)
+  assert.deepEqual(pre.map((row) => row.split('\t')[3]), [
+    '.spec/spexcode/.plugins/core/mark-active/mark-active.sh',
+    '.spec/spexcode/.plugins/core/spec-first/spec-first.sh',
+  ])
+})
 
 test('dispatch exits 2 when a blocking handler emits decision:block JSON', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-'))
@@ -200,101 +207,6 @@ test('the generated zcode Stop command reaches its manifest stop gate', () => {
   })
   assert.equal(result.status, 2, result.stderr)
   assert.match(JSON.parse(result.stdout).reason, /Your session state is a CLAIM/)
-})
-
-function legacyMarkActiveRig(source = legacyMarkActive, custom = false) {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-legacy-mark-active-'))
-  const home = join(dir, 'home')
-  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
-  const sid = 'legacy-mark-active'
-  const hook = join(dir, '.spec', 'project', '.plugins', 'core', 'mark-active', 'mark-active.sh')
-  execFileSync('git', ['init', '-q'], { cwd: dir })
-  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
-  mkdirSync(join(dir, '.spec', 'project', '.plugins', 'core', 'mark-active'), { recursive: true })
-  const legacy = readFileSync(source, 'utf8')
-  writeFileSync(hook, custom ? legacy.replace('payload=$(cat 2>/dev/null)', 'printf "CUSTOM-HOOK\\n"\npayload=$(cat 2>/dev/null)') : legacy)
-  const manifest = join(runtime, 'hooks-manifest')
-  writeFileSync(manifest, 'PreToolUse\t10\tfalse\t.spec/project/.plugins/core/mark-active/mark-active.sh\n')
-  const rec = join(runtime, 'sessions', sid, 'session.json')
-  const writeRecord = (status = 'asking', proposal = 'old', note = 'old note') => writeFileSync(rec, JSON.stringify({
-    session_id: sid, governed: true, status, proposal, note,
-  }, null, 2))
-  const fire = (payload: unknown) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
-    cwd: dir,
-    env: {
-      ...process.env,
-      SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
-      SPEXCODE_HOME: home,
-      SPEX_HOOK_MANIFEST: manifest,
-    },
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-  })
-  return { dir, home, hook, fire, rec, sid, writeRecord }
-}
-
-const legacyMarkActiveFixtures = [
-  ['incident-captured pre-subagent source', legacyMarkActive],
-  ['0.5.2 release eef1e154 source', legacyMarkActive052],
-] as const
-
-test('the 0.5.2 release fixture retains its recorded bytes', () => {
-  const actual = createHash('sha256').update(readFileSync(legacyMarkActive052)).digest('hex')
-  assert.equal(actual, legacyMarkActive052Sha256)
-})
-
-for (const [label, source] of legacyMarkActiveFixtures) {
-  test(`${label} corrupts a quoted note when invoked directly`, () => {
-    const t = legacyMarkActiveRig(source)
-    t.writeRecord()
-    const r = spawnSync('bash', [t.hook], {
-      cwd: t.dir,
-      env: {
-        ...process.env,
-        SPEXCODE_HARNESS: 'claude',
-        SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'),
-        SPEXCODE_HOME: t.home,
-      },
-      input: JSON.stringify({
-        session_id: t.sid,
-        hook_event_name: 'PreToolUse',
-        tool_name: 'AskUserQuestion',
-        tool_input: { question: 'GUGU_E2E_PORT="undefined"' },
-      }),
-      encoding: 'utf8',
-    })
-    assert.equal(r.status, 0, r.stderr)
-    assert.throws(() => JSON.parse(readFileSync(t.rec, 'utf8')))
-  })
-
-  test(`dispatch routes ${label} through the structured writer`, () => {
-    const t = legacyMarkActiveRig(source)
-    const note = 'GUGU_E2E_PORT="undefined"\n中文'
-    t.writeRecord()
-    const r = t.fire({
-      session_id: t.sid,
-      hook_event_name: 'PreToolUse',
-      tool_name: 'AskUserQuestion',
-      tool_input: { question: note },
-    })
-    assert.equal(r.status, 0, r.stderr)
-    const record = JSON.parse(readFileSync(t.rec, 'utf8'))
-    assert.equal(record.status, 'asking')
-    assert.equal(record.note, note)
-  })
-}
-
-test('dispatch does not override a byte-different 0.5.2 mark-active customization', () => {
-  const t = legacyMarkActiveRig(legacyMarkActive052, true)
-  t.writeRecord()
-  const r = t.fire({
-    session_id: t.sid,
-    hook_event_name: 'PreToolUse',
-    tool_name: 'Bash',
-    tool_input: { command: 'true' },
-  })
-  assert.equal(r.status, 0, r.stderr)
-  assert.match(r.stdout, /CUSTOM-HOOK/)
 })
 
 type GateHarness = 'claude' | 'codex'
@@ -544,7 +456,7 @@ test('managed watch UserPromptSubmit does not forge receiver activity', () => {
 
 // [[hook-dispatch]] per-tree slots — with no SPEX_HOOK_MANIFEST override, the dispatcher reads the manifest
 // from ITS OWN tree's slot (trees/<enc(toplevel)>), derived from the dispatch cwd; a pre-slot tree (the
-// migration window) falls back to the legacy global file so its hooks never silently no-op.
+// migration uses a per-tree slot; a missing slot is an installation error.
 function slotRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-slot-'))
   const home = join(dir, 'home')
@@ -572,25 +484,13 @@ test('dispatch reads the manifest from the dispatching tree\'s own slot', () => 
   assert.equal(siblingOnly.stdout, '', 'a shared shim is inert when this tree did not select its harness')
 })
 
-test('legacy dispatch remains live until the project marker; then only a successful tree allowlist activates it', () => {
+test('slot-less dispatch fails loudly instead of using a legacy global manifest', () => {
   const { dir, runtime, env } = slotRepo()
   mkdirSync(runtime, { recursive: true })
   writeFileSync(join(runtime, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
-  const legacy = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.equal(legacy.status, 0, legacy.stderr)
-  assert.match(legacy.stdout, /SLOT-HIT/, 'pre-slot tree: hooks still fire off the legacy global manifest')
-  // The first v1 materialize marks the project. An old/unmaterialized sibling has no authority until it
-  // publishes its own allowlist; its slot manifest alone must not inherit a shared transport.
-  const slot = join(runtime, 'trees', dir.replace(/[/.]/g, '-'))
-  mkdirSync(slot, { recursive: true })
-  writeFileSync(join(slot, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
-  writeFileSync(join(runtime, 'harness-selection-v1'), '')
-  const inert = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.equal(inert.status, 0, inert.stderr)
-  assert.equal(inert.stdout, '')
-  writeFileSync(join(slot, 'harnesses'), 'claude\n')
-  const active = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.match(active.stdout, /SLOT-HIT/)
+  const result = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
+  assert.equal(result.status, 78)
+  assert.match(result.stderr, /current tree has no hook manifest/)
 })
 
 // [[mark-active]] in-process subagents (issue #60) — a Task-subagent tool call fires the PARENT's hooks with

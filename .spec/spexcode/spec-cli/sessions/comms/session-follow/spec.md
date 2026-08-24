@@ -7,8 +7,8 @@ code:
   - spec-cli/src/session-follow.ts
 related:
   - spec-cli/src/sessions.ts
-  - packages/session-core/src/session-cursors.ts
-  - packages/session-core/src/session-timeline.ts
+  - spec-cli/src/session-follow.ts
+  - packages/session-events/src/schema.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/session-follow.test.ts
   - spec-cli/src/follow-cli.api.test.ts

@@ -295,7 +295,7 @@ export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner' | 'st
 }
 
 // typed read of a session's record from the global store (null if it has none — a self-launched session that
-// only ever wrote spec-discipline sentinels has a store dir but no session.json). Goes through layout's
+// only ever wrote spec-discipline sentinels has a store dir but no runtime.json). Goes through layout's
 // readAliasedRawRecord (the seam that owns the path + the codex-thread-id alias), then validates the loose
 // on-disk fields into the typed shape — so a codex hook resolving by its thread id reaches the real record.
 function readRecord(id: string): SessRec | null {
@@ -324,7 +324,7 @@ function readRecord(id: string): SessRec | null {
   if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
   try {
     const record = fromRaw(entry.raw)
-    // After cutover, session.json is only the runtime/worktree record. Lifecycle is owned by the
+    // After cutover, runtime.json is only the runtime/worktree envelope. Lifecycle is owned by the
     // session application. Overlaying here keeps every internal caller on the same fact instead of
     // letting a stale JSON snapshot steer a launch, close, or hook decision.
     const application = configuredSessionApplicationIfCutover()
@@ -520,7 +520,7 @@ function writeRecord(rec: SessRec): void {
     'createPayloadHash', 'zcodeChildSessionIds', 'base', 'diffComments', 'launchReadinessPending',
   ].some((key) => JSON.stringify((previous as unknown as Record<string, unknown>)[key]) !== JSON.stringify((rec as unknown as Record<string, unknown>)[key]))
   // Once a canonical row exists, a lifecycle-only write is already complete when the application transition
-  // commits. Rewriting session.json here would recreate a second, stale status/proposal/note authority.
+  // commits. Rewriting runtime.json here would recreate a second, stale status/proposal/note authority.
   if (canonicalMetadataOnly && previous && !metadataChanged) return
   const obj = {
     session_id: rec.session,
@@ -582,7 +582,7 @@ function writeRecord(rec: SessRec): void {
   const dir = sessionStoreDir(rec.session)
   mkdirSync(dir, { recursive: true })
   const path = sessionRecordPath(rec.session)
-  const tmp = join(dir, `.session.json.${process.pid}.tmp`)
+  const tmp = join(dir, `.runtime.json.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n')
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
   const previousPublic = previous ? publicRecord(previous) : null
@@ -1298,7 +1298,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     lastKnownSession.set(id, s)
     return s
   }, () => {
-    // DEGRADED: the record dir still exists but reading session.json failed transiently. NEVER drop a live
+    // DEGRADED: the record dir still exists but reading runtime.json failed transiently. NEVER drop a live
     // session — serve its last-known row. (No last-known means a first sighting raced a failure; nothing to
     // show yet, and it reappears on the next build.)
     return lastKnownSession.get(id) ?? null
@@ -4237,7 +4237,7 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
     const runtime = sessionStoreDir(id)
     const evidence = quarantined
       ? `Original bytes were copied to ${quarantined}`
-      : `Original bytes remain at ${join(runtime, 'session.json')}; no quarantine copy could be made`
+      : `Original bytes remain at ${join(runtime, 'runtime.json')}; no quarantine copy could be made`
     let guard = 'no readable session record proves the adapter or leaf owner'
     try { await stopAgentProcess(id, null) }
     catch (error) { guard = error instanceof Error ? error.message : String(error) }
@@ -4393,7 +4393,7 @@ export async function quarantineCorruptRecord(id: string, rawWitness: unknown): 
     const git = await proveQuarantineGitAbsent(id, witness)
     const adapter = await proveQuarantineAdapter(id, witness)
     const bundle = join(quarantineRoot(id), `${observedAt.replace(/[:.]/g, '-')}-${randomUUID()}`)
-    const stored = join(bundle, 'session.json')
+    const stored = join(bundle, 'runtime.json')
     const provenance = join(bundle, 'provenance.json')
     const audit = {
       version: 1,
@@ -4436,9 +4436,9 @@ export async function restoreQuarantinedRecord(id: string): Promise<CorruptRecor
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new ResourceConflict(`refusing to restore ${id}: no quarantine bundle exists`)
       throw new ResourceConflict(`refusing to restore ${id}: quarantine bundle inventory is unreadable`)
     }
-    const bundle = bundles.map((name) => join(quarantineRoot(id), name)).find((path) => existsSync(join(path, 'session.json')) && existsSync(join(path, 'provenance.json')))
+    const bundle = bundles.map((name) => join(quarantineRoot(id), name)).find((path) => existsSync(join(path, 'runtime.json')) && existsSync(join(path, 'provenance.json')))
     if (!bundle) throw new ResourceConflict(`refusing to restore ${id}: no complete quarantine bundle exists`)
-    const stored = join(bundle, 'session.json')
+    const stored = join(bundle, 'runtime.json')
     let provenance: { sessionId?: unknown; record?: { sha256?: unknown } }
     try { provenance = JSON.parse(readFileSync(join(bundle, 'provenance.json'), 'utf8')) }
     catch { throw new ResourceConflict(`refusing to restore ${id}: quarantine provenance is unreadable`) }

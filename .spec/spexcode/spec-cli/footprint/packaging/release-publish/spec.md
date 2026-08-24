@@ -8,7 +8,6 @@ code:
 related:
   - package.json
   - packages/spec-core/package.json
-  - packages/session-core/package.json
   - spec-eval/package.json
   - spec-forge/package.json
   - spec-cli/package.json

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync as fsWriteFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
@@ -16,6 +16,28 @@ import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
+
+// Test fixtures write the runtime envelope directly to exercise harness edges. The production contract has
+// no JSON fallback after cutover, so seed the canonical application row only the first time a fixture envelope
+// is written. Later envelope edits intentionally do NOT update SQLite: those tests prove canonical lifecycle
+// wins over stale runtime metadata.
+function writeFileSync(path: string, data: string, options?: any): void {
+  fsWriteFileSync(path, data, options)
+  if (!path.endsWith('/runtime.json')) return
+  const id = basename(dirname(path))
+  const raw = JSON.parse(data) as Record<string, unknown>
+  const application = configuredSessionApplicationIfCutover()
+  if (!application) throw new Error('fixture write requires the canonical session application')
+  if (application.readState(id)) return
+  application.createSession({
+    sessionId: id,
+    status: typeof raw.status === 'string' && raw.status ? raw.status : 'idle',
+    proposal: typeof raw.proposal === 'string' && raw.proposal ? raw.proposal : null,
+    note: typeof raw.note === 'string' && raw.note ? raw.note : null,
+    parentSessionId: typeof raw.parent === 'string' && raw.parent ? raw.parent : null,
+  })
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // This file mutates process-global harness and runtime state, so its fixtures must not overlap.

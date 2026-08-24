@@ -9,7 +9,7 @@ related:
   - spec-cli/src/session-record-lock.ts
   - spec-cli/src/delivery-lock.ts
   - spec-cli/src/session-lock.test.ts
-  - packages/session-core/src/message.ts
+  - packages/session-protocol/src/engine.ts
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/sessions-hot.test.ts

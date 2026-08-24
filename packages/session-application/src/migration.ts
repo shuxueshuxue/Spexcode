@@ -252,13 +252,15 @@ function retireLegacyArtifacts(recordsRoot: string): void {
   for (const entry of readdirSync(recordsRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     const dir = join(recordsRoot, entry.name)
-    const recordPath = join(dir, 'session.json')
-    if (existsSync(recordPath)) {
-      const raw = parseJson(recordPath)
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail(`cannot retire non-object envelope: ${recordPath}`)
+    const legacyPath = join(dir, 'session.json')
+    const recordPath = join(dir, 'runtime.json')
+    if (existsSync(legacyPath)) {
+      const raw = parseJson(legacyPath)
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail(`cannot retire non-object envelope: ${legacyPath}`)
       const envelope = { ...(raw as Record<string, unknown>) }
       for (const field of ['status', 'proposal', 'note', 'parent']) delete envelope[field]
       writeFileSync(recordPath, JSON.stringify(envelope, null, 2) + '\n')
+      unlinkSync(legacyPath)
     }
     for (const name of ['watchers.json', 'pending.json', 'timeline.ndjson', 'cursors.json']) {
       try { unlinkSync(join(dir, name)) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }

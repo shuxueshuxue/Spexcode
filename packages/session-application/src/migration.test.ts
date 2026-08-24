@@ -36,7 +36,8 @@ test('JSON migration imports state, parent/watch topology, deterministic event, 
   assert.equal(first.watchEdges, 2)
   assert.equal(existsSync(jsonMigrationFencePath(recordsRoot)), true)
   assert.equal(JSON.parse(readFileSync(jsonMigrationFencePath(recordsRoot), 'utf8')).state, 'retired')
-  const retiredEnvelope = JSON.parse(readFileSync(join(recordsRoot, 'child', 'session.json'), 'utf8')) as Record<string, unknown>
+  const retiredEnvelope = JSON.parse(readFileSync(join(recordsRoot, 'child', 'runtime.json'), 'utf8')) as Record<string, unknown>
+  assert.equal(existsSync(join(recordsRoot, 'child', 'session.json')), false)
   assert.equal('status' in retiredEnvelope, false)
   assert.equal('proposal' in retiredEnvelope, false)
   assert.equal('note' in retiredEnvelope, false)

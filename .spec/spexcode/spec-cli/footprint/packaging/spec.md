@@ -12,7 +12,6 @@ related:
   - spec-eval/package.json
   - spec-forge/package.json
   - packages/spec-core/package.json
-  - packages/session-core/package.json
   - spec-cli/src/cli.ts
   - spec-cli/bin/spex.mjs
   - spec-cli/src/node-pty-package.test.ts

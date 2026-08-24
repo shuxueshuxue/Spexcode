@@ -68,6 +68,9 @@ The console and its `SessionInterface` descendant never write the global route d
 transition. Resource and base-surface changes keep their exact `surface` query, while diff/base exits retain
 replacement semantics; moving the write behind the scope does not flatten those address axes. Plain hrefs may
 still use the shared `routeHash` projection, but imperative writes dispatch one checked `open` intent to the shell.
+Selecting a session row first resolves its canonical session document through the shared workspace tab identity:
+when that session is already held, the view focuses that existing tab; otherwise the current session slot receives
+the new address. A row click never rewrites the active session A slot to session B while B is already held elsewhere.
 Leaving the page keeps the console document, its selection, and every visited pane-backed terminal mounted;
 switching tabs changes visibility rather than rebuilding xterm or its browser WebSocket, so the cached screen and
 focus return without a cold start. The active transition claims `visible:false` on the bridge; the bounded native

@@ -65,8 +65,8 @@ try {
   }))
   assert.equal(spec.hash, '#/spec')
   assert.deepEqual(spec.rail, [
-    { href: '#/sessions', selected: false },
     { href: '#/spec', selected: true },
+    { href: '#/sessions', selected: false },
     { href: '#/evals', selected: false },
     { href: '#/issues', selected: false },
     { href: '#/settings', selected: false },

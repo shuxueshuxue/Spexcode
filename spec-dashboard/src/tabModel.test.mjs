@@ -117,6 +117,16 @@ test('cold workspace has no board tabs until a route is opened', () => {
   assert.deepEqual(normalizeTabs([]), [])
 })
 
+test('an explicit board hold survives reload while legacy pinned faces are demoted', () => {
+  const [held, legacy] = normalizeTabs([
+    { page: 'issues', param: null, pinned: true, held: true },
+    { page: 'evals', param: null, pinned: true },
+  ])
+  assert.equal(held.pinned, true)
+  assert.equal(held.held, true)
+  assert.equal(legacy.pinned, false)
+})
+
 test('opening a spec keeps its detail address while focusing the dynamic Spec tab', () => {
   let tabs = placeTab([], specDocument('first'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])

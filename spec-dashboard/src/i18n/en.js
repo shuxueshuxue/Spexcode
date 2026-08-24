@@ -53,6 +53,7 @@ export default {
     aria: 'project file tree',
     specs: 'Specs',
     files: 'Files',
+    graph: 'Spec graph',
   },
   diskTree: {
     loading: 'loading…',

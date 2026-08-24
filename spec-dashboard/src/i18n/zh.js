@@ -52,6 +52,7 @@ export default {
     aria: '项目文件树',
     specs: '规格',
     files: '文件',
+    graph: '规格图谱',
   },
   diskTree: {
     loading: '正在加载…',

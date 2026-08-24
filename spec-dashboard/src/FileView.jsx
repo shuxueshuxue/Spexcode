@@ -4,6 +4,7 @@ import ProseActions from './ProseActions.jsx'
 import { useT } from './i18n/index.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { fetchNodeFileSlice } from './data.js'
+import { isGovernancePath } from './fileStatusPath.js'
 
 // [[file-view]]: a governed source file addressed on its own, for when the reader arrived at the file
 // rather than at the node that claims it. It adds nothing to [[source-view]] but an address — which is the
@@ -16,7 +17,7 @@ export default function FileView({ param }) {
   const t = useT()
   const sourceHostRef = useRef(null)
   const [selection, setSelection] = useState(null)
-  useStatusItem(param ? { id: 'file-path', side: 'right', priority: 500, text: param } : null)
+  useStatusItem(param && !isGovernancePath(param) ? { id: 'file-path', side: 'right', priority: 500, text: param } : null)
   const parts = param?.startsWith('.spec/') ? param.slice('.spec/'.length).split('/') : []
   const attachment = parts.length >= 2 ? { nodeId: parts[0], name: parts.slice(1).join('/') } : null
   const read = useMemo(() => attachment ? (offset) => fetchNodeFileSlice(attachment.nodeId, attachment.name, offset) : undefined,

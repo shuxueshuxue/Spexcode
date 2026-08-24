@@ -54,6 +54,6 @@ there are no branch changes. The UI derives this distinction from the backend's 
 guesses from `files.length` or shortens the only identities a reader is given.
 
 The diff face is a surface of the session object tab, uses the existing i18n and icon vocabulary, and never creates
-a second navigation or transport mechanism. The document-actions slot owns a compact `file-diff` icon toggle with
+a second navigation or transport mechanism. The document-actions slot owns a compact `git-compare` icon toggle with
 `aria-pressed`; entering or leaving it replaces the URL while the tab remains `#/sessions/<id>`, and leaving returns to
 the remembered Terminal or Conversation base face. Terminal and conversation remain the other two session faces.

@@ -22,7 +22,7 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /id: 'surface-switcher'/)
   assert.match(source, /id: 'diff-switcher'/)
   assert.match(source, /icon: baseSurface === SESSION_SURFACE_TERMINAL \? 'message-square' : 'terminal'/)
-  assert.match(source, /icon: 'file-diff'/)
+  assert.match(source, /icon: 'git-compare'/)
   assert.doesNotMatch(source, /session-surface-switcher|role="tablist" aria-label=\{label\}/)
   assert.match(source, /surfaceChoices\.length > 1/)
   assert.match(source, /setSessionBaseSurface\(active, next\)/)

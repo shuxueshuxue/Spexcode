@@ -26,4 +26,16 @@ ALTER TABLE session_application_state ADD COLUMN proposal TEXT;
 ALTER TABLE session_application_state ADD COLUMN note TEXT;
 `,
   },
+  {
+    version: 3,
+    sql: `
+CREATE TABLE session_follow_cursors (
+  watcher_session_id TEXT NOT NULL REFERENCES protocol_sessions(session_id),
+  subject_session_id TEXT NOT NULL REFERENCES protocol_sessions(session_id),
+  event_seq         INTEGER NOT NULL,
+  PRIMARY KEY (watcher_session_id, subject_session_id),
+  CHECK (event_seq >= 0)
+) STRICT;
+`,
+  },
 ]

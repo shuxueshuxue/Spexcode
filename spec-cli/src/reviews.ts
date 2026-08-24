@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto'
 import { listSessions } from './sessions.js'
 import { getBoard, getBoardForForgeRevision } from './graphCache.js'
 import { type SessionEvalOrderRow, buildSessionEvals, type SessionEvals } from '@spexcode/spec-eval/sessioneval'
-import { evalTimeline } from '@spexcode/spec-eval/evaltab'
+import { evalContext, evalTimeline, evalTimelines } from '@spexcode/spec-eval/evaltab'
+import { evalNodesAsync } from '@spexcode/spec-eval/scenarios'
+import { driftIndex, historyIndex, loadSpecs, repoRoot } from '@spexcode/spec-core'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
 import { hasReviewSnapshot, readReviewSnapshot } from '@spexcode/spec-core'
@@ -328,7 +330,8 @@ async function trunkEvalDetailReview(node: string, scenario: string, metadata: E
   await getBoard()
   const snapshot = readReviewSnapshot()
   const sourceNode = snapshot.evalNodes.find((candidate) => candidate.id === node)
-  return projectEvalDetail(trunkEvalReviewItems(snapshot.evalNodes), sourceNode?.readings ?? [], node, scenario, metadata)
+  const items = applyEvalFreshness(trunkEvalReviewItems(snapshot.evalNodes), evalFreshnessFor(snapshot))
+  return projectEvalDetail(items, sourceNode?.readings ?? [], node, scenario, metadata)
 }
 
 export async function evalDetailReview(node: string, scenario: string, scope?: string | null): Promise<EvalDetailReview> {
@@ -399,6 +402,63 @@ async function timelineEvalReview(text: string, requestedPage: unknown) {
   }
 }
 
+// @@@ freshness warm pass - the cold graph build publishes eval rows with freshness DEFERRED on purpose: a
+// 1KB overview must not pay the whole board's Git object work (measured here: 13.0s for 265 nodes, against
+// 30ms for the same rows without the pass). But the Evals review surface is the one place where the verdict
+// IS the content, so serving the overview's placeholder there reports every scenario as unmeasured forever.
+// The review endpoints therefore own exactly ONE warm pass per published snapshot. Rows keep saying
+// `deferred` until it lands - never a guessed verdict - and every later read of that same snapshot is free.
+// Keying on the snapshot OBJECT is the whole invalidation rule: a republished board is a new object, so a
+// moved HEAD or an edited eval file drops the pass without a second fingerprint to keep in sync.
+type EvalFreshRow = { fresh: boolean; staleAxes: string[] }
+let evalFreshSnapshot: object | null = null
+let evalFreshRows: Map<string, EvalFreshRow> | null = null
+let evalFreshPending: object | null = null
+
+const evalFreshKey = (node: string, scenario: string): string => `${node}\u0000${scenario}`
+
+async function computeEvalFreshness(): Promise<Map<string, EvalFreshRow>> {
+  const root = repoRoot()
+  const [specs, idx, hidx, ynodes] = await Promise.all([
+    loadSpecs(), driftIndex(root), historyIndex(root), evalNodesAsync(root),
+  ])
+  const ctx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
+  const timelines = await evalTimelines(ynodes.map((node) => node.id), ctx, { latestOnly: true })
+  const rows = new Map<string, EvalFreshRow>()
+  for (const timeline of timelines)
+    for (const reading of timeline.readings ?? [])
+      rows.set(evalFreshKey(timeline.node, reading.scenario), {
+        fresh: reading.fresh === true,
+        staleAxes: reading.staleAxes ?? [],
+      })
+  return rows
+}
+
+function evalFreshnessFor(snapshot: object): Map<string, EvalFreshRow> | null {
+  if (evalFreshSnapshot === snapshot) return evalFreshRows
+  if (evalFreshPending === snapshot) return null
+  evalFreshPending = snapshot
+  void computeEvalFreshness()
+    .then((rows) => { evalFreshSnapshot = snapshot; evalFreshRows = rows })
+    .catch(() => {})
+    .finally(() => { if (evalFreshPending === snapshot) evalFreshPending = null })
+  return null
+}
+
+// A measured verdict replaces the deferred placeholder wholesale: `freshnessDeferred` must be GONE before
+// evalReviewState sees the row, because that function refuses a deferred row by design.
+function applyEvalFreshness(items: ReviewItem[], rows: Map<string, EvalFreshRow> | null): ReviewItem[] {
+  if (!rows) return items
+  return items.map((item: any) => {
+    if (!item.freshnessDeferred) return item
+    const verdict = rows.get(evalFreshKey(item.node, item.scenario))
+    if (!verdict) return item
+    const { freshnessDeferred: _deferred, ...rest } = item
+    const measured = { ...rest, fresh: verdict.fresh, staleAxes: verdict.staleAxes }
+    return { ...measured, state: evalReviewState(measured), filterKind: EVAL_FILTER_KIND.RESULT }
+  })
+}
+
 export async function evalsReview(query: string | undefined, requestedPage: unknown, options: { view?: string } = {}) {
   const text = String(query ?? '').trim() || EVAL_QUERY_DEFAULT
   if (options.view === 'timeline') return timelineEvalReview(text, requestedPage)
@@ -423,7 +483,8 @@ export async function evalsReview(query: string | undefined, requestedPage: unkn
   }
   if (!hasReviewSnapshot()) await getBoard()
   const sessions = await listSessions()
-  const items = trunkEvalReviewItems(readReviewSnapshot().evalNodes)
+  const snapshot = readReviewSnapshot()
+  const items = applyEvalFreshness(trunkEvalReviewItems(snapshot.evalNodes), evalFreshnessFor(snapshot))
   const filtered = evalFilterModel(items, tokenFilterState(text, 'eval'), { sessions, defaultKind: 'all', defaultSection: '' })
   return {
     scope: null,

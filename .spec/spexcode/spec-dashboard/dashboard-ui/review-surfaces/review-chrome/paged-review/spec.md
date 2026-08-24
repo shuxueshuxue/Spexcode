@@ -27,6 +27,16 @@ presence is joined before matching. A filed row whose freshness computation is e
 orderable by its filed time, but is tagged `deferred` and cannot enter the measured fresh/stale verdict
 split; source failures remain loud rather than turning such a row into an empty response.
 
+Deferral is a transient state of this surface, never its resting state. The graph build publishes the
+population freshness-free on purpose, because a cold overview must not pay the whole board's Git object cost;
+the review operation therefore owns exactly ONE freshness pass per published snapshot. The first request over
+a new snapshot starts that pass and answers honestly from the deferred rows; every later request over the
+same snapshot answers measured, and the fresh/stale split it folds is the real one. Only a republished
+snapshot — a moved HEAD, an edited eval file — begins another pass, so the published snapshot is the entire
+invalidation rule and there is no second fingerprint to keep in step. Detail and list read that one pass, so
+they cannot disagree about a row. A row thus never states a verdict it has not computed, and a population
+never rests deferred while its snapshot stands.
+
 The server imports [[review-filters]] and [[review-query]] directly. There is no server copy of tokenization,
 qualifier mapping, or field predicates. It applies source selection, matching, section counts, and facet
 derivation over the complete population, then slices exactly once. The response is the shared

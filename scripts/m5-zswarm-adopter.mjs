@@ -22,10 +22,10 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 
-import { countFileSyscallHits } from '../spikes/zswarm-sabotage/trace-gate.mjs'
+import { countFileSyscallHits } from './zswarm-sabotage/trace-gate.mjs'
 
 const repository = realpathSync(join(dirname(fileURLToPath(import.meta.url)), '..'))
-const sourceConsumer = join(repository, 'spikes', 'zswarm-sabotage', 'consumer.mjs')
+const sourceConsumer = join(repository, 'scripts', 'zswarm-sabotage', 'consumer.mjs')
 const nodeDirectory = dirname(process.execPath)
 const npm = join(nodeDirectory, 'npm')
 const strace = '/usr/bin/strace'

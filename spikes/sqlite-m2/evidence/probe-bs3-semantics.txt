@@ -1,7 +1,0 @@
-same-process: better-sqlite3 ACQUIRED the write lock in 0ms while node:sqlite held it
-             -> POSIX advisory locks are per-process, so two SQLite builds in one
-                process cannot see each other. Mixing builds breaks single-writer.
-two-process: holder confirmed holding = true
-two-process: better-sqlite3 correctly refused after 52ms: SQLITE_BUSY (database is locked)
-             -> across processes the two builds interoperate exactly as SQLite promises.
-visibility: node:sqlite reads rows written by better-sqlite3 = ["from-better-sqlite3"]

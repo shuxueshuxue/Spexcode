@@ -13,7 +13,6 @@ scenarios:
       leaves nothing visible while a kill after commit never requeues, and a short write stays past 500 writes in
       ten seconds with a bounded tail under the journal mode shipped rather than a faster one measured earlier.
     code: docs/session-protocol-sqlite-engine.md
-    related: spikes/sqlite-m2/test/concurrency.test.mjs
   - name: the-contract-runs-on-the-interpreter-the-fleet-pins
     tags: [cli]
     description: >
@@ -23,7 +22,6 @@ scenarios:
       Every vector passes there too, and the engine's version gate admits that bundled version. A floor derived
       from the features the schema uses is only honest if the deployed interpreter clears it in practice.
     code: docs/session-protocol-sqlite-engine.md
-    related: spikes/sqlite-m2/engine.mjs
   - name: frozen-decisions-each-have-a-firing-counterexample
     tags: [cli]
     description: >
@@ -34,7 +32,6 @@ scenarios:
       naming the violated claim. A stub that fails to load is reported as a harness failure and never counted as a
       counter-example, so a decision that was not actually measured cannot appear as one that was.
     code: docs/session-protocol-sqlite-engine.md
-    related: spikes/sqlite-m2/stubs/build.mjs
   - name: contract-is-driver-independent
     tags: [cli]
     description: >
@@ -46,14 +43,15 @@ scenarios:
       bindings in one process do not observe each other's write lock, so a binding is a process-global commitment;
       across processes they serialise correctly.
     code: docs/session-protocol-sqlite-engine.md
-    related: spikes/sqlite-m2/drivers/better-sqlite3.mjs
 ---
 # sqlite-engine loss
 
 The loss signal for a contract is whether its claims still measure true, so these scenarios run the contract's
-executable form rather than reading the document. The measured surface is the M2 spike, which is what exists at this
-milestone by design: there is deliberately no product wiring, no adopter, and no published package yet, so a reading
-here proves the contract holds, not that any product ships it.
+executable form rather than reading the document. These readings were taken against the M2 spike, which was the only
+executable surface at that milestone by design: there was deliberately no product wiring, no adopter, and no
+published package, so a reading proves the contract held, not that any product shipped it. That spike has since been
+removed from this tree; each reading's `codeSha` still names the commit that carried it, so re-measurement means
+checking that commit out, not reading a path that exists today.
 
 A reading is bound to the design it was taken under. When a ruling replaced write-ahead logging with a rollback
 journal, every concurrency, throughput, and crash figure measured under the old mode stopped representing this
@@ -64,5 +62,5 @@ Two properties matter more than the pass count. Every frozen decision must have 
 fires, because a vector suite that passes against a wrong implementation pins nothing. And a measurement that did not
 run must never be reportable as a measurement that found nothing.
 
-When the protocol implementation replaces the spike, these scenarios move to it unchanged; the schema, the canonical
-encoding, the error codes, and the version gate are the portable assets and do not change with the surface.
+When a protocol implementation lands, these scenarios move to it unchanged; the schema, the canonical encoding, the
+error codes, and the version gate are the portable assets and do not change with the surface.

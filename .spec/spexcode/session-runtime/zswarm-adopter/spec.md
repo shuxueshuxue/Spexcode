@@ -6,10 +6,8 @@ desc: A repository-external clean consumer proves the published protocol stack c
 code:
   - scripts/m5-zswarm-adopter.mjs
 related:
-  - spikes/zswarm-sabotage/consumer.mjs
-  - spikes/zswarm-sabotage/trace-gate.mjs
-  - spikes/zswarm-sabotage/evidence/fail-first/sha256.txt
-  - spikes/zswarm-sabotage/evidence/pass/sha256.txt
+  - scripts/zswarm-sabotage/consumer.mjs
+  - scripts/zswarm-sabotage/trace-gate.mjs
   - .spec/spexcode/session-runtime/zswarm-cutover/spec.md
   - .spec/spexcode/session-runtime/spec.md
   - packages/session-protocol/package.json

@@ -3353,7 +3353,9 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
 export function markHumanPromptActive(sessionId: string): boolean {
   try {
     const rec = readRecord(sessionId)
-    if (!rec || rec.archived || retirementReason(rec) || (rec.status !== 'asking' && rec.status !== 'idle')) return false
+    const canonical = sessionHookState(sessionId)
+    if (!rec || !canonical || rec.archived || retirementReason(rec) ||
+      (canonical.status !== 'asking' && canonical.status !== 'idle')) return false
     return markState('active', { sessionId })
   } catch (error) {
     // The message/PTY write is already accepted; a raced close or unreadable record must not turn it into a false send failure.

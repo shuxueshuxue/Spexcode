@@ -1218,6 +1218,29 @@ export function reviewIdentity(id: string): ReviewIdentity | null {
   }
 }
 
+// Hook plumbing needs the canonical lifecycle claim without paying for the full public projection
+// (which probes liveness, activity, files, and web artifacts). The runtime envelope contributes only
+// governed identity; after cutover the application row owns status, proposal, and note.
+export type SessionHookState = {
+  governed: boolean
+  status: Lifecycle
+  proposal: Proposal | null
+  note: string | null
+}
+
+export function sessionHookState(id: string): SessionHookState | null {
+  const rec = readRecord(id)
+  if (!rec) return null
+  const application = configuredSessionApplicationIfCutover()
+  const state = application?.readState(id)
+  return {
+    governed: rec.governed,
+    status: (state?.status ?? rec.status) as Lifecycle,
+    proposal: (state?.proposal || rec.proposal || null) as Proposal | null,
+    note: state?.note ?? (rec.note || null),
+  }
+}
+
 function corruptSession(id: string, entry: { path: string; error: string }): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
@@ -3581,7 +3604,9 @@ export function markIdle(sessionId?: string): boolean {
     const rec = readLiveRecord(id)
     if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
     publishCanonicalLifecycle(rec, 'idle', null, null)
-    writeRecord({ ...rec, status: 'idle' })
+    // After cutover the JSON file is only the runtime/worktree envelope. Do not mirror this inferred
+    // lifecycle transition into it: doing so creates a second, stale-looking status surface for hooks.
+    if (!configuredSessionApplicationIfCutover()) writeRecord({ ...rec, status: 'idle' })
     return true
   })
 }

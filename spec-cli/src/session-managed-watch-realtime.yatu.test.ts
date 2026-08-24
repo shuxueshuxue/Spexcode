@@ -11,7 +11,7 @@ import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
-import { drainSession, markState } from './sessions.js'
+import { drainSession, markIdle, markState, sessionHookState } from './sessions.js'
 import { stampRvSock } from './harness.js'
 
 const parent = 'managed-watch-realtime-parent'
@@ -112,6 +112,8 @@ test('canonical lifecycle repairs a stale JSON snapshot without writing a second
     // lifecycle says asking. A raw-file short circuit would return here and leave the board asking forever.
     application.transitionSession(child, { status: 'asking', note: 'canonical question' })
     assert.match(readFileSync(sessionRecordPath(child), 'utf8'), /"status": "active"/, 'fixture keeps the stale JSON snapshot')
+    assert.deepEqual(sessionHookState(child), { governed: true, status: 'asking', proposal: null, note: 'canonical question' },
+      'hook reads lifecycle from the canonical application, not the envelope')
     const before = application.events.read(child).length
     assert.equal(markState('active', { sessionId: child }), true)
     assert.equal(application.readState(child)?.status, 'active')
@@ -122,6 +124,11 @@ test('canonical lifecycle repairs a stale JSON snapshot without writing a second
     const stableEvents = application.events.read(child).length
     assert.equal(markState('active', { sessionId: child }), true)
     assert.equal(application.events.read(child).length, stableEvents, 'repeated hook events are semantic no-ops')
+
+    assert.equal(markIdle(child), true)
+    assert.equal(application.readState(child)?.status, 'idle')
+    assert.match(readFileSync(sessionRecordPath(child), 'utf8'), /"status": "active"/,
+      'inferred idle does not rewrite the stale envelope after cutover')
   } finally {
     resetConfiguredSessionApplicationForTest()
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME

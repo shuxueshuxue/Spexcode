@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
+import { useEscLayer } from './escStack.js'
 
 // The ONE evidence renderer ([[event-detail]], U1): a content-addressed blob → the right media element,
 // identical in EVERY home evidence appears — the node eval tab's gallery ([[eval-tab]]), the eval
@@ -17,11 +18,7 @@ const blobUrl = (hash) => apiUrl(`/api/evidence/${hash}`)
 // click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
 // click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.
 export function ImageLightbox({ src, alt, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() } }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
+  useEscLayer(true, onClose)
   return (
     <div className="lightbox" onClick={onClose}>
       <img src={src} alt={alt} />

@@ -11,6 +11,7 @@ import CredentialGate from './CredentialGate.jsx'
 import { IdentityIcon, IdentityPicker } from './IdentityIcon.jsx'
 import Modal from './Modal.jsx'
 import { PageScroll } from './PageScroll.jsx'
+import { useEscLayer } from './escStack.js'
 
 // The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
 // ([[gateway-hub]] + [[host-gateway]]): one row per KNOWN project — the host's reconciled view of the
@@ -72,6 +73,8 @@ function AddProjectModal({ onAdded, onClose, t }) {
   const [initSpex, setInitSpex] = useState(false)
   const [harnesses, setHarnesses] = useState([])
 
+  useEscLayer(!busy, onClose)
+
   const browse = useCallback(async (target) => {
     if (busy) return
     setLoading(true); setError(null); setOutput('')
@@ -83,11 +86,6 @@ function AddProjectModal({ onAdded, onClose, t }) {
   }, [busy, t])
 
   useEffect(() => { browse('') }, []) // initial host home; browse is intentionally one boot call
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [busy, onClose])
 
   const selected = !!listing?.exists && path === listing.path
   const newProject = !!listing && !listing.exists && path === listing.path

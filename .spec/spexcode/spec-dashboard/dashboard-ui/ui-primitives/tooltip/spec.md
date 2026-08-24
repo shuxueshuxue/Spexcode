@@ -27,7 +27,8 @@ Behaviour, the modern contract:
 
 - **Hover and keyboard focus both trigger.** Hover arms a ~400ms intent delay (with a short warm window,
   so sweeping across a row of controls swaps tips quickly); keyboard `:focus-visible` shows immediately —
-  a mouse click's focus stays quiet. Esc, scroll, resize, or any press dismisses.
+  a mouse click's focus stays quiet. Esc, scroll, resize, or any press dismisses. Escape dismissal is
+  registered through the shared `escStack`/`KeyboardService` path so the tooltip cannot race another overlay.
 - **Above by default, flips when clipped.** The bubble centres over the anchor with a small arrow; when
   the viewport would clip it above, it flips below, and it clamps horizontally with the arrow still
   pointing at the anchor. Fade/slide transition in and out.

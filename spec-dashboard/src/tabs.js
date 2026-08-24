@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
-import { isDocument, isResident } from './views.jsx'
-import { closeDestination, ensureResidentTabs, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
+import { isDocument } from './views.jsx'
+import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
 
 export { closeDestination, moveTab, placeTab, tabKey }
 
@@ -26,17 +26,15 @@ const KEY = 'spexcode.tabs'
 const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    if (!Array.isArray(raw)) return ensureResidentTabs([])
-    // Resident boards are workspace faces, not route-local side effects. Seed all of them at the storage
-    // boundary so a cold Evals/Issues URL still shows the same working set as a return to Spec.
+    if (!Array.isArray(raw)) return []
     const valid = raw
       .filter((t) => t && typeof t.page === 'string')
-    const normalized = ensureResidentTabs(normalizeTabs(valid, isDocument))
+    const normalized = normalizeTabs(valid, isDocument)
     // Persist the migration at the same boundary that reads it: old review entries disappear once and do
     // not keep resurfacing in another tab or after the next reload.
     if (JSON.stringify(normalized) !== JSON.stringify(valid)) localStorage.setItem(KEY, JSON.stringify(normalized))
     return normalized
-  } catch { return ensureResidentTabs([]) }
+  } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
 
@@ -53,7 +51,7 @@ let store = null
 const listeners = new Set()
 const getTabs = () => (store ??= read())
 const putTabs = (next) => {
-  const stable = ensureResidentTabs(next)
+  const stable = next
   if (stable === getTabs()) return stable
   store = stable
   write(stable)
@@ -143,7 +141,7 @@ export function useTabs({ onCloseStart } = {}) {
     const key = tabKey(route)
     if (pinKey && pinKey !== key) pinKey = null
     if (!isDocument(route.page, route.param)) return
-    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
+    const mode = pinKey === key ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 

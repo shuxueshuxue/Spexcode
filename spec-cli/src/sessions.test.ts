@@ -31,14 +31,14 @@ const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) 
 }
 
 test('canonical delivery retry reads the SQLite queue instead of legacy pending.json', () => {
-  const pending = { protocol: { listPending: () => [{ messageId: 'sqlite-message' }] } } as any
-  const empty = { protocol: { listPending: () => [] } } as any
+  const pending = { readPendingMessages: () => [{ messageId: 'sqlite-message' }] } as any
+  const empty = { readPendingMessages: () => [] } as any
   assert.equal(sessionHasPendingDelivery('canonical-pending', pending), true)
   assert.equal(sessionHasPendingDelivery('canonical-empty', empty), false)
 })
 
 test('canonical delivery retry drops a record whose protocol address was retired', () => {
-  const missing = { protocol: { listPending: () => { const error = new Error('unknown protocol address: legacy-id'); (error as any).code = 'PROTOCOL_SESSION_UNKNOWN'; throw error } } } as any
+  const missing = { readPendingMessages: () => { const error = new Error('unknown protocol address: legacy-id'); (error as any).code = 'PROTOCOL_SESSION_UNKNOWN'; throw error } } as any
   assert.equal(sessionHasPendingDelivery('legacy-id', missing), false)
 })
 
@@ -46,11 +46,11 @@ test('canonical delivery retry waits for a runtime binding instead of polling an
   let reads = 0
   const unbound = {
     resolveRuntime: () => null,
-    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+    readPendingMessages: () => { reads += 1; return [{ messageId: 'queued-message' }] },
   } as any
   const bound = {
     resolveRuntime: () => ({ status: 'bound' }),
-    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+    readPendingMessages: () => { reads += 1; return [{ messageId: 'queued-message' }] },
   } as any
   assert.equal(sessionHasPendingDelivery('unbound', unbound), false)
   assert.equal(sessionHasPendingDelivery('bound', bound), true)

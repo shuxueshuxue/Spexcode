@@ -40,9 +40,10 @@ control merely because a target was temporarily unavailable.
 
 ## expanded spec
 
-`pending.json`, in the session's global store dir, is an ordered list of the messages that have been recorded
-but not yet handed to the agent. Each entry is self-contained — the message id, the sender, and the text
-exactly as it will be handed over, mechanism inserts already composed in ([[session-timeline]] owns that seam;
+The canonical application queue, in the session database, is an ordered list of messages that have been recorded
+but not yet handed to the agent. `pending.json` is migration input only, never a live queue. Each canonical entry is
+self-contained — the message id, the sender, and the text exactly as it will be handed over, mechanism inserts
+already composed in ([[session-timeline]] owns that seam;
 the log keeps the raw conversational text, the queue keeps the transport form). A caller-keyed entry also
 carries the operation plus request digest that its private timeline receipt names, never the raw key. A protocol
 producer may add immutable string attributes; keyed drain compares them with the same frozen receipt bytes before

@@ -56,23 +56,13 @@ reader fallback for callers with no governed delivery address. A watcher identit
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
 id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
-reparenting directly dispatch the current state, except that creation installs its parent source with one durable
-initial-snapshot debt. The launch queue resolves that debt exactly once: a real capacity decision publishes the
-still-queued snapshot, while an admitted launch publishes only after its adapter readiness fence has established
-that the existing active/resource publication is observably working. A launch attempt that fails readiness keeps
-that resource contract and its loud failure note, but retires the debt without fabricating working. A synchronous
-launch/preflight failure likewise retires the debt rather than misreporting its queued record as capacity backlog;
-only the queue's proven full-capacity branch may publish queued. Only a later state write consults the source
+reparenting enqueue one current-state notification through the canonical application queue. Creation uses the same
+queue handoff: there is no snapshot token, deferred-snapshot debt, or second launch-delivery protocol. A launch may
+publish a resource/readiness warning, but it never fabricates `working`; only a later state write consults the source
 policy. In the canonical application path, this caller-owned policy passes the resolved recipient set into the
-neutral application transition; the package never interprets parent/manual names. A retryable launch error retains
-the same debt for the next queue attempt, and a restarted supervisor may
-reclaim readiness observation for an already-active launch without launching or replaying its prompt. Each accepted
-snapshot is keyed by the debt token and authored state; before clearing the token, delivery compares the latest state
-under the record lock and accepts any raced actionable state with its own key. A crash before that compare therefore
-replays neither an accepted initial snapshot nor an accepted catch-up, while still delivering an authored asking,
-review, or error that raced acceptance. Parent-only `active`/working is the suppressed terminal of that comparison;
-manual includes it. Thus creation ordering does not weaken routine-working suppression, and manual+parent yields the
-complete later-state feed without a duplicate or a second mechanism.
+neutral application transition; the package never interprets parent/manual names. Parent-only `active`/working is the
+suppressed terminal of that comparison; manual includes it. Thus creation ordering does not weaken routine-working
+suppression, and manual+parent yields the complete later-state feed without a duplicate or a second mechanism.
 The ordinary stranded-transport refusal applies to a caller's new prompt, not to an already-installed managed
 watch. A parent watch transition is accepted into the parent's normal timeline and delivery queue even when its
 registered process is alive but its native transport is temporarily absent; the queue debt is the wake/resume
@@ -100,7 +90,8 @@ The merge dispatch itself is intentionally a plain prompt: the server does not a
 epochs, or idempotency headers and never mutates `main`; the worker re-syncs and re-runs proof in its own worktree
 before the one no-ff landing.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
-child's parent pointer and watcher list, then delegates the current-state snapshot to the existing dispatch path.
+child's parent pointer and watcher list, then enqueues the current-state notification through the existing dispatch
+path. There is no deferred snapshot debt to reconcile.
 The core never asks a former watcher to participate in its own removal. A null replacement parent is the
 same transaction's top-level detach: it removes the former relation and its pending delivery without creating
 a root record, new watcher, or notification.

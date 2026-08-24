@@ -20,7 +20,7 @@
 <body>
 <main>
   <header>
-    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · refactor tip <code>4e6aec515</code> (main ancestor)</div>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · refactor tip <code>9c201d53f</code> (main ancestor)</div>
     <h1>Session 架构与 Legacy 审计</h1>
     <p class="lede">结论：SQLite canonical application 已经是生命周期事实源，但旧的 <code>session-core</code> 文件协议仍被生产 CLI 调用。当前不是“legacy 已清零”，而是迁移已跨过状态切换，却还没有跨过通信与读取链路的删除门。</p>
   </header>

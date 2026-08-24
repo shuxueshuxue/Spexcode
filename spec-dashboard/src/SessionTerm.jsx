@@ -72,8 +72,9 @@ export default function SessionTerm({ sessionId, active = true, focused = active
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
   // The latest geometry request, exposed so activation can re-measure without recreating the terminal.
   const measureRef = useRef(null)
-  // The browser terminal and socket stay warm, while visibility alone owns the native helper lifecycle.
-  // Refs expose prop changes to the long-lived socket effect without recreating either browser resource.
+  // The visible session owns the browser terminal and socket. A pooled document can remain mounted while
+  // inactive, but it must release the xterm/WS/observer trio so hidden sessions do not keep parsing output.
+  // Refs expose focus/visibility changes without recreating an active browser resource.
   const activeRef = useRef(active)
   const focusedRef = useRef(focused)
   const writableRef = useRef(writable)
@@ -94,6 +95,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
   const [conn, setConn] = useState('connecting')
   useEffect(() => {
+    if (!active) return undefined
     const term = new Terminal({
       ...terminalTypography(),
       cursorBlink: true, disableStdin: !writable, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input on a live pane
@@ -370,7 +372,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       measureRef.current = null
       hideRef.current = null
     }
-  }, [sessionId])
+  }, [sessionId, active])
 
   useEffect(() => {
     const confirmed = !resumeRequired

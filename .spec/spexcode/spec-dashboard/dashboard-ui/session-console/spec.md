@@ -63,10 +63,14 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
-Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
-terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless TimelineChat
-keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are disposed while the read-only Conversation remains available. Open resource tabs follow
-the same display-hidden lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself
+Leaving the page keeps the console document and its selection mounted, but releases every pane-backed browser
+terminal, socket, and observer while the pooled document is inactive; returning remounts the selected terminal
+from the current board state. While the Sessions page is visible, only the selected terminal owns those live
+browser resources; a headless TimelineChat keeps its rendered timeline cursor, polls only while selected, and
+resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the
+canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are
+disposed while the read-only Conversation remains available. Open resource tabs follow the same display-hidden
+lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as

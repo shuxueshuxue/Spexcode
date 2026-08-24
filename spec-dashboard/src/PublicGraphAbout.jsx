@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useStatusItem } from './StatusBar.jsx'
 import { loadPublicGraphMetadata } from './data.js'
 import { Icon, IconButton } from './icons.jsx'
+import { useEscLayer } from './escStack.js'
 
 const shortRevision = (revision) => revision?.slice(0, 12) || ''
 
@@ -22,12 +23,7 @@ export default function PublicGraphAbout() {
     return () => { active = false }
   }, [open, metadata, failure])
 
-  useEffect(() => {
-    if (!open) return undefined
-    const onKeyDown = (event) => { if (event.key === 'Escape') setOpen(false) }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open])
+  useEscLayer(open, () => setOpen(false))
 
   const about = metadata?.about
   const publication = metadata?.publication

@@ -64,9 +64,9 @@ await page.route('**/api/graph*', (route) => route.fulfill({ status: 200, conten
 try {
   await page.goto(`${BASE}/#/sessions/${id}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-term-layer .xterm').waitFor({ state: 'visible', timeout: 30_000 })
-  assert.equal(await page.locator('.si-term-layer .xterm').count(), 1, 'live pane mounts one terminal')
-  await page.locator('.si-term-layer .xterm').evaluate((node) => { node.dataset.lifecycleIdentity = 'first' })
-  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 1, 'first session owns one socket')
+  assert.equal(await page.locator('.si-term-layer .xterm').count(), 2, 'both live panes mount one resident terminal each')
+  await page.locator('.si-term-layer[style*="visibility: visible"] .xterm').evaluate((node) => { node.dataset.lifecycleIdentity = 'first' })
+  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 2, 'each live session owns one socket')
 
   // Changing the session address is an inactive-pane transition, not a document teardown. The first xterm
   // must remain mounted and hidden while the second session warms exactly one independent terminal/socket.
@@ -75,7 +75,7 @@ try {
   assert.equal(await page.locator('.si-term-layer .xterm').count(), 2, 'switch keeps the first terminal mounted')
   assert.equal(await page.locator('.si-term-layer .xterm[data-lifecycle-identity="first"]').count(), 1, 'first terminal identity survives inactive switch')
   assert.equal(await page.locator('.si-term-layer .xterm[data-lifecycle-identity="first"]').evaluate((node) => getComputedStyle(node.parentElement).visibility), 'hidden', 'first terminal is hidden, not detached')
-  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 2, 'second session adds one socket without duplicates')
+  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 2, 'switch does not create duplicate sockets')
 
   // Returning to the first session restores the same DOM/xterm and socket instead of cold-loading it again.
   await page.goto(`${BASE}/#/sessions/${id}`, { waitUntil: 'domcontentloaded' })

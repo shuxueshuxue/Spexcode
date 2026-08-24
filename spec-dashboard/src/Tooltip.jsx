@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useEscLayer } from './escStack.js'
 
 // The app's ONE tooltip ([[tooltip]]): a singleton bubble driven by document-level delegation.
 // Any element carrying `data-tip` gets it — hover arms a ~400ms timer (instant while a tip is
@@ -20,6 +21,9 @@ export default function TooltipLayer() {
   const current = useRef(null)                    // the anchor a show is armed or visible for
   const describedRef = useRef(null)               // anchor we stamped aria-describedby on
   const warm = useRef(false)
+  const hideRef = useRef(() => {})
+
+  useEscLayer(!!tip, () => hideRef.current())
 
   useEffect(() => {
     const clearTimer = () => { if (timer.current) { clearTimeout(timer.current); timer.current = 0 } }
@@ -35,6 +39,7 @@ export default function TooltipLayer() {
         return null
       })
     }
+    hideRef.current = hide
     const show = (anchor) => {
       const text = anchor.getAttribute('data-tip')
       if (!text || !anchor.isConnected) return
@@ -71,13 +76,11 @@ export default function TooltipLayer() {
       const anchor = e.target.closest?.('[data-tip]')
       if (anchor && anchor === current.current) hide()
     }
-    const key = (e) => { if (e.key === 'Escape') hide() }
     // pointerover/out (not mouseover) so disabled buttons — which swallow mouse events — still tip.
     document.addEventListener('pointerover', over, true)
     document.addEventListener('pointerout', out, true)
     document.addEventListener('focusin', focusin, true)
     document.addEventListener('focusout', focusout, true)
-    document.addEventListener('keydown', key, true)
     document.addEventListener('pointerdown', hide, true)
     window.addEventListener('scroll', hide, true)
     window.addEventListener('resize', hide)
@@ -87,10 +90,10 @@ export default function TooltipLayer() {
       document.removeEventListener('pointerout', out, true)
       document.removeEventListener('focusin', focusin, true)
       document.removeEventListener('focusout', focusout, true)
-      document.removeEventListener('keydown', key, true)
       document.removeEventListener('pointerdown', hide, true)
       window.removeEventListener('scroll', hide, true)
       window.removeEventListener('resize', hide)
+      hideRef.current = () => {}
     }
   }, [])
 

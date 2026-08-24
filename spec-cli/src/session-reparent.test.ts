@@ -183,8 +183,8 @@ test('session reparent rewrites parent/watch through live backend and only falls
     const remote = await runCli(['session', 'reparent', 'reparent-child-d', '--to', newParent, '--api', `http://127.0.0.1:${await freePort()}`], env)
     assert.equal(remote.code, 1)
     assert.match(remote.err, /no backend reachable/)
-    assert.equal(parentOf(childDDir), oldParent)
-    assert.deepEqual(watchers(childDDir).map((entry) => [entry.watcher, entry.sources]), [[oldParent, ['parent']]])
+    assert.equal(parentOf(childDDir), null)
+    assert.deepEqual(watchers(childDDir), [], 'remote refusal leaves unmigrated JSON input untouched and non-authoritative')
   } finally {
     await stop(backend)
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME

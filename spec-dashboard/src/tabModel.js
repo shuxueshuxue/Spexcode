@@ -117,18 +117,26 @@ export function moveTab(tabs, key, before = null) {
   return [...rest.slice(0, to), tabs[from], ...rest.slice(to)]
 }
 
-const isSessionTab = (tab) => tab?.page === 'sessions' && tab.param != null && tab.param !== 'new' && !isResourceRoute(tab)
+// WHERE CLOSING LANDS — one selector, no per-kind branches while tabs remain. From the closed position
+// (remaining[index] is the old right neighbor), the nearest remaining tab of the SAME kind (`tabKind`)
+// inherits, right beating left at equal distance; with no same-kind survivor the nearest remaining tab of
+// any kind inherits by the same walk. Only an emptied strip returns an explicit no-tab destination, and
+// that fallback keeps each kind's standing contract: spec/file documents return to the graph, a published
+// resource returns to the session launch page, everything else lands on the explicit #/empty workspace.
 export function closeDestination(tab, remaining, index) {
-  if (isResourceRoute(tab)) {
-    const session = remaining.slice(index).find(isSessionTab) || [...remaining.slice(0, index)].reverse().find(isSessionTab)
-    return session || { page: 'sessions', param: 'new', query: null }
+  const kind = tabKind(tabRoute(tab))
+  const nearest = (match) => {
+    for (let step = 0; step < remaining.length; step += 1) {
+      const right = remaining[index + step]
+      if (right && match(right)) return right
+      const left = remaining[index - 1 - step]
+      if (left && match(left)) return left
+    }
+    return null
   }
-  if (isSessionTab(tab)) {
-    const right = remaining.slice(index).find(isSessionTab)
-    const left = [...remaining.slice(0, index)].reverse().find(isSessionTab)
-    return right || left || { page: 'empty', param: null, query: null }
-  }
+  const heir = nearest((t) => tabKind(t) === kind) || nearest(() => true)
+  if (heir) return heir
+  if (isResourceRoute(tab)) return { page: 'sessions', param: 'new', query: null }
   if (tab?.page === 'spec' || tab?.page === 'file') return { page: 'graph', param: null, query: null }
-  const heir = remaining[index] || remaining[index - 1]
-  return heir || { page: 'empty', param: null, query: null }
+  return { page: 'empty', param: null, query: null }
 }

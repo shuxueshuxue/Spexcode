@@ -29,6 +29,9 @@ internal services; the hub owns the outside.
   the shell is code, not data (the fallback's own posture), and every data call it makes re-enters the
   gated JSON route. All API fetches (`application/json`, `*/*`) keep the catalog envelope and its auth
   semantics, as does the bare hub with no fallback.
+- `DELETE /projects/:projectId` — an admin-scoped registration-removal route mounted by the host extension;
+  the hub never treats it as filesystem deletion. The extension owns its exact confirmation and lifecycle
+  guards, while this gateway supplies the single admin authorization boundary.
 - `/p/:projectId/*` — the project surface: `login`/`logout` are the hub's own (the designed login page,
   parameterized), everything else is reverse-proxied to that project's backend with the `/p/:projectId`
   prefix stripped, WebSocket upgrades included. Admin or matching-project scope, or open when ungated.

@@ -21,6 +21,7 @@ related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
+  - spec-dashboard/src/keyboardService.test.mjs
 ---
 # keyboard-service
 
@@ -93,6 +94,12 @@ The `?` help legend is shell-owned chrome, not a graph-only modal. The status-ba
 help modal or keyboard owner behind. Escape and a second `?` peel the legend through the shared overlay contract,
 and `j`/`k` (or arrow equivalents) scroll its body.
 
+Structural node commands are two-key chords. `keymap.js` declares the leader in `keys` and the complete physical
+sequence in `sequence` (`nn` for `graph.newChild`, `dd` for `graph.del`). `chordSequence()` and `displayKeysOf()`
+are the only readers of that declaration: Graph dispatch, Legend, and Settings must not carry a second literal
+`nn`/`dd` grammar. Rebinding remains unavailable for structural chords, while their complete sequence stays visible
+to the reader.
+
 The Escape stack is an input owner of that same service, above routed scopes. `escStack.js` exposes the stack
 consumer but does not attach a second window listener; one Escape closes only the top registered layer. Review
 lists and video detail register their own j/k or player controls through `useKeyboardScope`, so their handlers
@@ -106,9 +113,11 @@ Ctrl/Meta accelerators. The service calls the existing `useTabs` and workspace A
 still lands on the explicit empty address and split remains window state as required by [[tab-strip]] and
 [[workspace-shell]]. All labels and shortcut descriptions are present in both English and Chinese.
 
-**The typing restraint survives the hoist.** The shell scope inherits [[keyboard-nav]]'s native-control
-clause: while DOM focus sits in a typing context (input, textarea, contenteditable — the session composer
-and xterm's helper textarea above all), every unmodified key belongs to that control and the shell scope
-returns unconsumed before matching any plain-key verb. The first build without this line sent a bare comma
-typed into the composer to the settings page. `isTypingTarget` is the shared predicate used by graph,
-session, review-list, and review-player scopes, including contenteditable descendants.
+**The typing restraint is enforced by registration, not handler memory.** `useKeyboardScope` withholds every
+unmodified key while DOM focus sits in a typing context (input, textarea, select, contenteditable — the session
+composer and xterm's helper textarea above all). Shift does not escape that ownership: a capital letter or
+Shift+Arrow is still native editing input. Declared Alt/Ctrl/Meta commands may continue through the service.
+A scope that implements the focused field's own completion or submission grammar must opt in explicitly with
+`allowTyping`; this is currently the session console. The first build without this boundary sent a bare comma
+typed into the composer to the settings page. `KeyboardService.jsx` is the one predicate and routing decision;
+graph, shell, review-list, and review-player handlers do not carry local copies.

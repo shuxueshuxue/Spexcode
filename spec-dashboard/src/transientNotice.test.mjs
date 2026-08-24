@@ -6,7 +6,7 @@ import { MAX_NOTICE_DURATION, MIN_NOTICE_DURATION, readingNoticeDuration, resolv
 const read = (name) => readFileSync(new URL(name, import.meta.url), 'utf8')
 const notice = read('./TransientNotice.jsx')
 const root = read('./Root.jsx')
-const reviewSurface = read('./ReviewSurface.jsx')
+const app = read('./App.jsx')
 const evals = read('./EvalsPage.jsx')
 const issues = read('./IssuesPage.jsx')
 const sessions = read('./SessionInterface.jsx')
@@ -30,11 +30,12 @@ test('transient notices expire by readable length, honor overrides, and remain d
   assert.match(notice, /data-paused=\{notice\.paused \? 'true' : undefined\}/)
 })
 
-test('one root provider serves full and lightweight dashboard routes', () => {
-  assert.match(root, /surfaceFor\(page\)/)
-  assert.match(root, /<ReviewSurface page=\{page\} param=\{param\} query=\{query\} \/>/)
-  assert.match(root, /<App surface=\{surface\} \/>/)
-  assert.match(reviewSurface, /<StatusBar \/>/)
+test('one root provider serves every route through the resident workspace shell', () => {
+  assert.doesNotMatch(root, /surfaceFor\(page\)/)
+  assert.doesNotMatch(root, /ReviewSurface/)
+  assert.match(root, /<App \/>/)
+  assert.doesNotMatch(app, /surface === 'review'/)
+  assert.match(app, /const routed = workspace/)
 })
 
 test('review surfaces and the session console publish through the shared mechanism', () => {

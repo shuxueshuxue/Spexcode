@@ -1,8 +1,9 @@
 ---
 title: prose-renderer
-status: pending
+status: active
 hue: 272
-desc: ONE dashboard prose renderer — markdown-it as the only parser, its tokens mapped to React, SpexCode's own marks (node refs, evidence, time anchors) as semantic token plugins, KaTeX the single audited HTML insertion. PENDING.
+desc: ONE dashboard prose renderer — markdown-it as the only parser, its tokens mapped to React, SpexCode's own marks (node refs, evidence, time anchors) as semantic token plugins, KaTeX the single audited HTML insertion. ACTIVE.
+code: spec-dashboard/src/Prose.js
 related:
   - .spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/prose-renderer/migration-payload.md
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
@@ -10,7 +11,15 @@ related:
 
 # prose-renderer
 
-**Status: pending** — this node is the contract; the module does not exist yet. When it lands, `code:`
+**Status: active** — the shared token-to-React migration now owns spec bodies, issue/review replies, and the
+session timeline. The `proseTokens` markdown-it adapter preserves source maps and promotes `[[id]]`, evidence
+links, and time anchors to semantic tokens. `SpecBody`, `RichText`, and `Thread` are compatibility names over
+that same boundary; no surface pre-strips marks or injects ordinary prose HTML. A current committed-tree
+Chromium probe (`spec-dashboard/test/spec-markdown.e2e.mjs`) passes at 1280x800 and 900x844, including the
+three semantic payloads and source-map stamps; the TimelineChat selection/copy gate remains separate because
+its parked-fixture run still needs a healthy backend.
+The current compatibility renderer now covers standard links, remote images, blockquotes, heading levels,
+inline/display KaTeX, emphasis, strikethrough, and ordered/unordered lists; `code:`
 names the one renderer module and `related:` names every surface that consumes it (the node-body view,
 the Issues detail + compose preview, the thread, the session timeline) plus its parser/math dependencies.
 
@@ -21,8 +30,9 @@ every thread reply (issue threads and eval remarks alike), the Issues compose pr
 timeline's messages. It is ONE kind of content, and it is currently produced by THREE different
 mechanisms:
 
-- a hand-written tokenizer (`SpecBody`) that knows fenced code, headings, GFM tables, lists, paragraphs
-  and exactly three inline forms — `` `code` ``, `**bold**`, `[[id]]`;
+- a hand-written tokenizer (`SpecBody`) that knows fenced code, headings, GFM tables, lists, paragraphs,
+  links, images, blockquotes, math, emphasis, and strikethrough, while the full semantic-token migration
+  remains outstanding;
 - the thread's own pre-processing, which strips the `▶m:ss` time anchor and the `/api/evidence/<hash>`
   media links out of the prose with regexes BEFORE handing the remainder to that tokenizer, then renders
   the anchor button and the media beside it as siblings;

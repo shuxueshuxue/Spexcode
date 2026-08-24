@@ -5,14 +5,15 @@ import { routeHash } from './route.js'
 // checked without a browser. It is here rather than in `tabs.js` for exactly that reason: the hook needs
 // the view registry, the registry is JSX, and a rule nobody can test in isolation is a rule that drifts.
 
-// A tab's identity is the object address. Base session faces are selectors on that object, not different
-// documents: changing `?surface=conversation|terminal|diff` must update the URL without replacing or
-// multiplying the session tab. Published resources are the exception: they are file-class workspace objects,
+// A tab's identity is the object address unless the view is resident. Base session faces are selectors on
+// that object, not different documents: changing `?surface=conversation|terminal|diff` must update the URL
+// without replacing or multiplying the session tab. Resident Spec/Evals/Issues/Settings details canonicalize
+// to their top-level address. Published resources are the exception: they are file-class workspace objects,
 // so their resource selector remains in the identity and opens beside the session.
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
-const RESIDENT_PAGES = new Set(['evals', 'issues', 'settings'])
+const RESIDENT_PAGES = new Set(['spec', 'evals', 'issues', 'settings'])
 export const tabRoute = (route) => route?.page === 'sessions' && route?.param && !isResourceRoute(route)
   ? { ...route, query: null }
   : RESIDENT_PAGES.has(route?.page)
@@ -33,10 +34,12 @@ export function normalizeTabs(raw, isDocument = () => true) {
     const original = { page: t.page, param: t.param ?? null, query: t.query ?? null }
     const route = tabRoute(original)
     return {
-      page: route.page, param: route.param ?? null, query: route.page === 'sessions' ? original.query : route.query ?? null,
+      page: original.page, param: original.param, query: original.query,
       // Published resources are deliberate holds: they must never compete for a replaceable file slot,
       // including when an older persisted record forgot to mark them pinned.
-      pinned: isResourceRoute(route) ? true : (t.pinned != null ? t.pinned !== false : t.preview !== true),
+      pinned: isResourceRoute(route) || RESIDENT_PAGES.has(route.page)
+        ? true
+        : (t.pinned != null ? t.pinned !== false : t.preview !== true),
     }
   })
   const unique = []
@@ -60,22 +63,23 @@ export function normalizeTabs(raw, isDocument = () => true) {
 export function placeTab(tabs, route, mode = 'slot') {
   const original = { page: route.page, param: route.param ?? null, query: route.query ?? null }
   const normalized = tabRoute(original)
-  if (normalized.page === 'sessions') normalized.query = original.query
   if (RESIDENT_PAGES.has(normalized.page)) mode = 'pin'
   const key = tabKey(normalized)
   const open = tabs.find((t) => tabKey(t) === key)
   if (open) {
     const faceChanged = normalized.page === 'sessions' && !isResourceRoute(normalized)
       && JSON.stringify(open.query || null) !== JSON.stringify(normalized.query || null)
-    if (mode !== 'pin' && !faceChanged) return tabs
+    const residentChanged = RESIDENT_PAGES.has(normalized.page)
+      && (open.param !== original.param || JSON.stringify(open.query || null) !== JSON.stringify(original.query || null))
+    if (mode !== 'pin' && !faceChanged && !residentChanged) return tabs
     return tabs.map((t) => tabKey(t) === key
-      ? { ...t, ...(faceChanged ? { query: normalized.query } : {}), ...(mode === 'pin' ? { pinned: true } : {}) }
+      ? { ...t, ...(faceChanged || residentChanged ? { param: original.param, query: original.query } : {}), ...(mode === 'pin' ? { pinned: true } : {}) }
       : t)
   }
   const entry = {
-    page: normalized.page,
-    param: normalized.param ?? null,
-    query: normalized.query ?? null,
+    page: original.page,
+    param: original.param ?? null,
+    query: original.query ?? null,
     // A resource opened from a session is a held file-class object. It is intentionally durable until
     // explicitly closed, so ordinary file navigation can never evict it.
     pinned: isResourceRoute(normalized) || mode === 'pin',

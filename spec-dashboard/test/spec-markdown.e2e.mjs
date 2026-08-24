@@ -16,7 +16,9 @@ if (!node) throw new Error('a fixture spec node is required')
 const body = [
   '# Fixture title',
   '',
-  '## Section heading',
+  '▶0:07 · inspect',
+  '',
+  '## Section heading [[prose-renderer]]',
   '',
   '### Nested heading',
   '',
@@ -25,7 +27,14 @@ const body = [
   '',
   '[Guide](https://example.com) and $E = mc^2$ plus \\(a+b\\).',
   '',
+  '*emphasis* and ~~retired~~.',
+  '',
+  '3. third item',
+  '4. fourth item',
+  '',
   '![Diagram](https://example.test/diagram.svg "fixture image")',
+  '',
+  '![Frame](/api/evidence/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)',
   '',
   '$$\\int_0^1 x^2 dx$$',
 ].join('\n')
@@ -68,9 +77,15 @@ try {
       return {
         headings: [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el) => el.tagName),
         quote: root.querySelector('.doc-quote')?.innerText || '',
+        timeAnchor: root.querySelector('.fv-anchor[data-time-ms]')?.textContent || null,
+        specRef: root.querySelector('.doc-link[href*="prose-renderer"]')?.textContent || null,
+        evidence: root.querySelector('[data-evidence-hash]')?.getAttribute('data-evidence-hash') || null,
         link: root.querySelector('.doc-external')?.getAttribute('href') || null,
         image: { src: root.querySelector('.doc-image')?.getAttribute('src') || null, loaded: root.querySelector('.doc-image')?.complete && root.querySelector('.doc-image')?.naturalWidth > 0 },
         math: root.querySelectorAll('.doc-math, .doc-math-block').length,
+        emphasis: root.querySelector('.doc-body em')?.textContent || null,
+        strike: root.querySelector('.doc-body del')?.textContent || null,
+        ordered: { tag: root.querySelector('.doc-body ol')?.tagName || null, start: root.querySelector('.doc-body ol')?.getAttribute('start') || null, items: [...root.querySelectorAll('.doc-body ol li')].map((el) => el.textContent) },
         stamps: [...root.querySelectorAll('[data-l0]')].map((el) => [el.tagName, el.dataset.l0, el.dataset.l1]),
         viewport: { width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
         boxes: { quote: rect('.doc-quote'), image: rect('.doc-image') },
@@ -78,9 +93,15 @@ try {
     })
     assert.deepEqual(probe.headings, ['H2', 'H3'], `${name}: heading levels survive`)
     assert.equal(probe.quote, 'Quoted line\nsecond line', `${name}: blockquote survives`)
+    assert.equal(probe.timeAnchor, '▶0:07 · inspect', `${name}: time anchor remains a semantic token`)
+    assert.equal(probe.specRef, 'prose-renderer', `${name}: spec reference remains a held anchor`)
+    assert.equal(probe.evidence, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', `${name}: evidence remains a semantic token`)
     assert.equal(probe.link, 'https://example.com', `${name}: link is live`)
     assert.equal(probe.image.loaded, true, `${name}: image decodes`)
     assert.equal(probe.math, 3, `${name}: dollar, bracket, and display math render`)
+    assert.equal(probe.emphasis, 'emphasis', `${name}: emphasis renders as an element`)
+    assert.equal(probe.strike, 'retired', `${name}: strikethrough renders as an element`)
+    assert.deepEqual(probe.ordered, { tag: 'OL', start: '3', items: ['third item', 'fourth item'] }, `${name}: ordered list preserves authored numbering`)
     assert.ok(probe.stamps.some((stamp) => stamp[0] === 'H2'), `${name}: heading carries provenance`)
     assert.ok(probe.stamps.some((stamp) => stamp[0] === 'BLOCKQUOTE'), `${name}: quote carries provenance`)
     assert.equal(probe.viewport.scrollWidth, probe.viewport.width, `${name}: prose does not widen viewport`)

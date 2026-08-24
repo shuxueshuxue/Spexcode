@@ -42,13 +42,13 @@ boundary**: every page gets the same pane and the same loading fallback, and war
 session board — declare warmth to stay mounted and display-toggle across switches), `data.js` (the shared polled board
 data every view reads), and `styles.css` (the global stylesheet).
 
-The root route resolves the view registry's `surfaceFor(page)` before choosing a host. Workspace routes mount
-the workspace surface; review routes mount the same standalone review surface for cold and hot navigation;
-settings mounts its own surface. When review is visible after a workspace visit, the workspace host remains
-mounted but inactive at its last workspace route, preserving graph camera, tabs, and warm session state without
-mounting a review view inside the workspace document pool. The inactive host exposes only that content pool
-and ledger registrations; its rail, dock, tab strip, and other workspace chrome are not rendered into the
-review surface tree.
+The route registry resolves every product page into the shared workspace host. Evals and Issues are resident
+workspace tabs: cold links, list navigation, and detail navigation all render through the same Shell and
+TabStrip, so the Spec/Session/File working set remains visible while a finding is focused. Issues omits the
+activity rail by its page-owned dock policy but retains the shared tab strip. There is no second review chrome
+tree or cold-only route path that can hide the working set; mobile reflows the same route family through its
+responsive face. App owns the one global route subscription and passes the captured address into that mobile
+view; the mobile face never creates a second global route reader.
 
 **Backend reachability is one shell fact.** Every dashboard API read reports through the shared data transport.
 A network refusal or gateway 502/503/504 marks the whole live dashboard offline, even when a page still holds a
@@ -73,7 +73,10 @@ the previously-selected tab during the page switch. Likewise, feature-level shar
 global style vocabulary here when the rule is genuinely reused across shell surfaces. **Each face is its own lazy chunk**, and
 the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with
 the annotator) the same way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
-libraries, and the first graph paint doesn't wait on them either; the split moves bytes only, never
+libraries, and the first graph paint doesn't wait on them either; once the viewport is known to be desktop,
+the workspace face is prefetched in parallel with the first board request so a cold review URL does not
+turn the board's legitimate build time into a second serial full-frame spinner. Mobile and the sealed public
+face never prefetch that desktop chunk; the split moves bytes only, never
 behaviour. The split's one failure mode is owned here too: after a dist rebuild a still-open page asks for
 OLD hashed chunks the server no longer has (the gateway answers 404, never HTML — [[public-mode]]), so the
 shell catches the failed chunk load (`vite:preloadError`) and **reloads once** onto the fresh index.html —

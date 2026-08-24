@@ -10,7 +10,7 @@ import { useRoute, navigate, routeHash } from './route.js'
 import { navigateAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { viewFor } from './views.jsx'
+import { preloadView, viewFor, viewRouteContract } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
@@ -21,6 +21,7 @@ import { nextGraphStatNode } from './GraphStats.jsx'
 import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
+import { useEscLayer } from './escStack.js'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
 import { runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
@@ -29,6 +30,8 @@ import { useTransientNotice } from './TransientNotice.jsx'
 import { useLaunchers } from './launch.js'
 import { HARNESS_BY_ID } from './harness.jsx'
 import Legend from './Legend.jsx'
+import { ViewScopeProvider } from './ViewScope.jsx'
+import { createViewScope } from './viewScope.js'
 
 // [[workspace-shell]]: the frame. Rail, dock, tab strip, content area, status bar — and nothing else.
 //
@@ -70,6 +73,31 @@ const POOL_LIMIT = 6
 // mirrors --dur-panel in the stylesheet: the shell has to outlive the CSS animation by the same amount it
 // lasts, and one of the two has to name the number.
 const DOCK_ANIMATION_MS = 170
+
+// Every mounted view gets one route scope. The shell is the only dispatcher: views can request an address,
+// explicitly hold one in the second pane, or update their own query, but they cannot receive the raw navigate
+// callback or write another host's route. Pooled panes keep the scope object and only update its route/active
+// snapshot as they move between visible and hidden states.
+function ViewScopeHost({ page, param, query, active, children }) {
+  const { splitTo } = useWorkspaceApi()
+  const dispatch = useCallback((intent) => {
+    const { page: targetPage, param: targetParam, query: targetQuery } = intent.address
+    if (intent.type === 'hold') {
+      splitTo(intent.address)
+      return { accepted: true, intent }
+    }
+    navigate(targetPage, targetParam, { query: targetQuery })
+    return { accepted: true, intent }
+  }, [splitTo])
+  const holder = useMemo(() => createViewScope({
+    route: { page, param, query }, dispatch, active, contract: viewRouteContract,
+    owner: { kind: 'view', page, param: param ?? null },
+  }), []) // the shell updates this holder below; the public scope identity remains stable for the view
+  useEffect(() => {
+    holder.update({ route: { page, param, query }, active })
+  }, [holder, page, param, query, active])
+  return <ViewScopeProvider scope={holder.scope}>{children}</ViewScopeProvider>
+}
 
 // [[workspace-shell]]'s MOUNTED-DOCUMENT POOL. Switching tabs used to remount the document from scratch —
 // every switch re-ran a view's whole boot, which is what "why does clicking a tab reload it" was naming.
@@ -121,9 +149,11 @@ const PoolPane = memo(function PoolPane({ entry, showing }) {
           document is the reader's own recovery, and it must not need a reload. */}
       <ViewErrorBoundary resetKey={entry.address}>
         <PaneProvider value={pane}>
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <View param={entry.param} query={entry.query} />
-          </Suspense>
+          <ViewScopeHost page={entry.page} param={entry.param} query={entry.query} active={showing}>
+            <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+              <View param={entry.param} query={entry.query} />
+            </Suspense>
+          </ViewScopeHost>
         </PaneProvider>
       </ViewErrorBoundary>
     </div>
@@ -141,9 +171,11 @@ function ViewHost({ page, param, query, inactive = false }) {
       style={inactive ? { display: 'none' } : undefined}>
       <ViewErrorBoundary resetKey={address}>
         <PaneProvider value={{ address, active: !inactive }}>
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <View key={poolKey(page, param)} param={param} query={query} />
-          </Suspense>
+          <ViewScopeHost page={page} param={param} query={query} active={!inactive}>
+            <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+              <View key={poolKey(page, param)} param={param} query={query} />
+            </Suspense>
+          </ViewScopeHost>
         </PaneProvider>
       </ViewErrorBoundary>
     </div>
@@ -157,6 +189,7 @@ function ShellStatus() {
   const t = useT()
   const { identity, catalog } = useBoard()
   const [open, setOpen] = useState(false)
+  useEscLayer(open, () => setOpen(false))
   const catalogOk = catalog?.state === 'ok'
   const denied = catalog?.state === 'denied'
   const projects = catalogOk ? catalog.projects : null
@@ -168,14 +201,9 @@ function ShellStatus() {
     const onDown = (event) => {
       if (!event.target.closest?.('[data-status-project], .status-project-menu')) setOpen(false)
     }
-    const onKey = (event) => {
-      if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) }
-    }
     document.addEventListener('mousedown', onDown, true)
-    window.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('mousedown', onDown, true)
-      window.removeEventListener('keydown', onKey, true)
     }
   }, [open])
 
@@ -458,7 +486,7 @@ function ContextToggle({ visible, onToggle }) {
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
   return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
     aria-label={label} data-tip={label}>
-    <Icon name="panel-right" size={14} />
+    <Icon name="list-checks" size={14} />
   </button>
 }
 
@@ -467,6 +495,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const route = useRoute()
   const { page, param, query } = routeOverride || route
   const { specs, sessions, identity, graphOnly } = useBoard()
+  useEffect(() => {
+    if (page === 'graph' && !graphOnly) void preloadView('sessions')
+  }, [page, graphOnly])
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
   const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
@@ -485,6 +516,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const documentNames = useDocumentNames()
   const { dock, dockMode, palette, helpOpen } = useWorkspace()
   const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode, splitTo } = useWorkspaceApi()
+  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
+    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
   // explorer docked, opening it leaves the spec prose 383px — under a readable measure, and it takes the
   // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the
@@ -554,12 +587,6 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       return true
     }
     if ((event.key === 'Enter' || event.key === ' ') && event.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
-    // [[keyboard-nav]]'s native-control restraint, kept across the hoist to the shell scope: while real
-    // DOM focus sits in a typing context — an input, a textarea (the session composer, xterm's helper),
-    // anything contenteditable — every UNMODIFIED key belongs to that control. A bare comma must type a
-    // comma, never navigate to settings. Modifier-carrying chords (the ⌥ page jumps) still pass.
-    if (!event.altKey && !event.ctrlKey && !event.metaKey
-      && event.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return false
     // Help is shell chrome, not a graph-only action. Native typing contexts still own a literal '?'.
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.help', event.key)) {
       event.preventDefault(); closePalette(); toggleHelp(); return true

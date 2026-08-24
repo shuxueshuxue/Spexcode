@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { locatePart, proseSelection, regionText, stampedRange } from './proseSelection.js'
+import { parseProseTokens } from './proseTokens.js'
 
 const BODY = [
   '## raw source',                      // 1
@@ -86,4 +87,11 @@ test('a prose selection carries the node id beside the four fields a source sele
   assert.equal(proseSelection(node, BODY, { startLine: 2, endLine: 2 }), null)
   assert.equal(proseSelection(null, BODY, { startLine: 3, endLine: 4 }), null)
   assert.equal(proseSelection(node, BODY, null), null)
+})
+
+test('prose selection provenance is sourced from semantic parser maps, not rendered text', () => {
+  const tokens = parseProseTokens('First line\nsecond line')
+  const paragraph = tokens.find((token) => token.type === 'paragraph_open')
+  assert.deepEqual(paragraph?.map, [0, 2])
+  assert.equal(tokens.find((token) => token.type === 'inline')?.content, 'First line\nsecond line')
 })

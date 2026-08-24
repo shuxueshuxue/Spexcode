@@ -36,7 +36,8 @@ import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
-import { decodePrompt, encodePrompt, selectionLabel } from './codeSelection.js'
+import { decodePrompt, encodePrompt } from './codeSelection.js'
+import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
@@ -400,12 +401,7 @@ function SessionEvalStats({ summary }) {
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
-  useEffect(() => {
-    if (!pop) return
-    const onKey = (e) => { if (e.key === 'Escape') setPop(false) }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [pop])
+  useEscLayer(pop, () => setPop(false))
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
   const selected = launchers.find((l) => l.name === launcher)
@@ -800,8 +796,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
-      const valid = new Set(allSessions.map((s) => s.id))
-      const next = new Set([...prev].filter((id) => valid.has(id)))
+      // A terminal is a live-pane resource, not a historical session cache. When a pane goes offline or is
+      // archived, remove its id here so SessionTerm cleanup closes the browser socket and native client. The
+      // separate conversation set retains readable timeline history without retaining an xterm/WS pair.
+      const next = new Set([...prev].filter((id) => {
+        const session = allSessions.find((candidate) => candidate.id === id)
+        return session && !isHeadlessSession(session) && hasLivePane(session)
+      }))
       for (const s of allSessions) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
       if (active !== 'new') {
         const selected = sessions.find((s) => s.id === active)
@@ -1290,12 +1291,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return (
       <div className="si-code-selection-queue" aria-label={t('session.codeSelectionAttachments')}>
         {codeSelections.map((selection, index) => (
-          <div key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} className="si-code-selection-chip">
-            <Icon name="terminal" size={12} />
-            <span className="si-code-selection-label" title={selection.text}>{selectionLabel(selection)}</span>
-            <IconButton icon="x" size={12} className="si-code-selection-remove" label={t('session.removeCodeSelection')}
-              onClick={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
-          </div>
+          <SelectionAttachment key={`${selection.path}:${selection.startLine}:${selection.endLine}:${index}`} selection={selection}
+            onRemove={() => setCodeSelections((current) => current.filter((_item, itemIndex) => itemIndex !== index))} />
         ))}
       </div>
     )
@@ -1525,7 +1522,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
     onKey(event)
     return event.cancelBubble
-  }, 10)
+  }, 10, { allowTyping: true })
 
   // A surface may cancel the native menu only where it offers one of its own. The console once cancelled it
   // for the WHOLE panel, which was survivable while a session list occupied most of that panel and did own a

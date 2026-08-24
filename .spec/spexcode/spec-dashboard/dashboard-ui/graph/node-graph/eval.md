@@ -84,17 +84,18 @@ scenarios:
 ---
 # eval.md — node-graph
 
-Current camera measurements supersede older centre-framing readings: assert the focus→child midpoint at the
-`43%` horizontal token (or parent↔focus for a leaf), with the focus row vertically. When the visible bbox fits,
-assert fit-left with one grid-column gutter instead.
+Current camera measurements supersede older centre-framing readings: on every keyboard/click/programmatic
+focus move assert the focus→child midpoint at the `43%` horizontal token (or parent↔focus for a leaf), with
+the focus tile centre at the vertical canvas centre and the pre-move zoom unchanged. Only the first frame or
+an explicit pane resize may use fit-left with one grid-column gutter; fit may lower zoom but never raise a
+deliberate user zoom.
 
 This view is product surface — it is measured by **looking** (YATU), not by a unit test: the agent opens
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,
 the marks and any live editors' avatars on Row 2 — with the focus→child reading pair at the graph pane's
-43% horizontal token (or the parent↔focus midpoint for a leaf) and the focus row vertically. If the visible
-bbox fits at the current user zoom, the frame uses fit-left treatment with one gutter; fit may lower zoom to
-fit but never raise a deliberate user zoom, and later anchored moves preserve that zoom. The recording and
-screenshot ride together with the verdict. Structural readings sample browser frames around the interaction
+43% horizontal token (or the parent↔focus midpoint for a leaf), the focus tile centre vertically, and zoom
+unchanged across the focus move. The recording and screenshot ride together with the verdict. Structural readings
+sample browser frames around the interaction
 and distinguish graph-space geometry from the moving viewport: a still cannot prove that the tree stayed
 connected while the camera supplied direction.

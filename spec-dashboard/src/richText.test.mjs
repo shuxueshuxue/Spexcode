@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { renderRichText } from './RichText.js'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import RichText from './RichText.js'
+
+const renderRichText = (value) => renderToStaticMarkup(createElement(RichText, null, value))
 
 test('renders compact agent Markdown and both inline and display math', () => {
   const html = renderRichText([
@@ -21,14 +25,25 @@ test('renders compact agent Markdown and both inline and display math', () => {
     '```',
   ].join('\n'))
 
-  assert.match(html, /<h1>Result<\/h1>/)
+  assert.match(html, /<h1 class="doc-h doc-h-level doc-h1">Result<\/h1>/)
   assert.match(html, /<strong>bold<\/strong>/)
-  assert.match(html, /<s>old<\/s>/)
-  assert.match(html, /<table>/)
+  assert.match(html, /<del>old<\/del>/)
+  assert.match(html, /<table class="doc-table">/)
   assert.match(html, /class="katex"/)
   assert.match(html, /data-math-source="E = mc\^2"/)
-  assert.match(html, /class="katex-block"/)
-  assert.match(html, /<pre><code class="language-js">const price = '\$5'/)
+  assert.match(html, /class="doc-math-block"/)
+  assert.match(html, /<pre class="doc-pre"><code class="language-js">const price = &#x27;\$5&#x27;/)
+})
+
+test('maps Markdown table alignment to a React style object', () => {
+  const html = renderRichText([
+    '| left | centre | right |',
+    '| :--- | :----: | ---: |',
+    '| a | b | c |',
+  ].join('\n'))
+  assert.match(html, /<th style="text-align:left">left<\/th>/)
+  assert.match(html, /<th style="text-align:center">centre<\/th>/)
+  assert.match(html, /<th style="text-align:right">right<\/th>/)
 })
 
 test('renders Markdown images while keeping unsafe markup and invalid math readable', () => {
@@ -47,7 +62,7 @@ test('renders Markdown images while keeping unsafe markup and invalid math reada
   assert.doesNotMatch(html, /href="javascript:/i)
   assert.doesNotMatch(html, /src="javascript:/i)
   assert.match(html, /&lt;img src=x onerror=&quot;globalThis\.pwned=1&quot;&gt;/)
-  assert.match(html, /<img src="https:\/\/example\.test\/render\.svg" alt="remote" title="preview">/)
+  assert.match(html, /<img class="doc-image" src="https:\/\/example\.test\/render\.svg" alt="remote" title="preview"\/>/)
   assert.match(html, /katex-error/)
   assert.match(html, /definitelyNotACommand/)
 })
@@ -64,9 +79,9 @@ test('preserves soft line breaks and does not parse math inside code', () => {
     '```',
   ].join('\n'))
 
-  assert.match(html, /first<br>\nsecond/)
+  assert.match(html, /first<br\/>second/)
   assert.match(html, /<code>\$x\^2\$<\/code>/)
-  assert.match(html, /<pre><code class="language-math">/)
+  assert.match(html, /<pre class="doc-pre"><code class="language-math">/)
   assert.equal((html.match(/class="katex"/g) || []).length, 0)
 })
 
@@ -89,7 +104,7 @@ test('does not let unmatched math cross code spans, line breaks, or display deli
   ].join('\n'))
 
   assert.match(html, /unmatched \$price before <code>\$HOME<\/code>/)
-  assert.match(html, /\$x<br>\nand neither does this\$\./)
+  assert.match(html, /\$x<br\/>and neither does this\$\./)
   assert.match(html, /Inline \$\$x\^2\$\$ remains literal/)
   assert.equal((html.match(/class="katex"/g) || []).length, 0)
 })
@@ -108,9 +123,9 @@ test('requires display math to close and leaves malformed blocks readable', () =
     'never closed',
   ].join('\n'))
 
-  assert.equal((html.match(/class="katex-block"/g) || []).length, 2)
+  assert.equal((html.match(/class="doc-math-block"/g) || []).length, 2)
   assert.match(html, /data-math-source="\\sum_\{i=1\}\^n i"/)
-  assert.match(html, /\$\$<br>\nnever closed/)
+  assert.match(html, /\$\$<br\/>never closed/)
 })
 
 test('renders math through Markdown nesting without treating code as a formula', () => {
@@ -123,7 +138,7 @@ test('renders math through Markdown nesting without treating code as a formula',
     '- `$not_math$`',
   ].join('\n'))
 
-  assert.match(html, /<blockquote>/)
+  assert.match(html, /<blockquote class="doc-quote">/)
   assert.match(html, /<ul>/)
   assert.equal((html.match(/class="katex"/g) || []).length, 3)
   assert.match(html, /<code>\$not_math\$<\/code>/)

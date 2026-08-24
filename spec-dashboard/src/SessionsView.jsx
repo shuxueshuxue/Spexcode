@@ -26,6 +26,9 @@ export default function SessionsView({ param, query }) {
   const [seed, setSeed] = useState(null)
   const showing = usePaneActive()
   useEffect(() => {
+    if (typeof query?.seed === 'string' && query.seed.length) setSeed(query.seed)
+  }, [query?.seed])
+  useEffect(() => {
     if (!showing) return undefined
     const collect = () => { const t = takeCompose(); if (t != null) setSeed(t) }
     collect()

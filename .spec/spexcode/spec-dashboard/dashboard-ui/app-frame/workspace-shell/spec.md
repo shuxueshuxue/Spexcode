@@ -10,15 +10,42 @@ related:
 related:
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/test/keep-alive.e2e.mjs
+  - spec-dashboard/src/budgetContracts.test.mjs
   - spec-dashboard/src/ViewErrorBoundary.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/documentActions.jsx
+  - spec-dashboard/src/ViewScope.jsx
+  - spec-dashboard/src/viewScope.js
+  - spec-dashboard/src/statusOwnership.js
+  - spec-dashboard/src/viewScope.test.mjs
 ---
 # workspace-shell
 
 The frame, and only the frame. It does not know what a spec is, what a session is, or what any view needs.
 It knows there is an address, that an address names a view, and where on the screen that view goes.
+
+## Route ownership boundary
+
+Each shell-owned `ViewHost` provides its view with one read-only `ViewScope`. The scope exposes the mounted
+address and active state, plus exactly three runtime-checked intents: `open(address)` replaces the current
+route, `hold(address)` asks the workspace to place a document in the second pane, and `ownQuery(query)` updates
+the current view's query while preserving its page and selector. The scope dispatches one frozen intent object
+to the shell; views never receive the raw `navigate` or `splitTo` callbacks.
+
+The mounted-document pool keeps one scope identity per host and updates its address/active snapshot when a
+pooled entry changes. Hidden panes are inactive and their intents are rejected without dispatch; unmounting a
+host drops its provider with the host. Address and query shapes are validated at the boundary (lowercase
+kebab-case page, string-or-null selector, URL-safe primitive query values), so malformed cross-view writes fail
+before the route layer. Navigation policy and tab identity remain shell-owned; this scope is an intent channel,
+not a second router. The host obtains its route contract from the view registry itself: an intent targeting an
+unregistered address is rejected before dispatch, and document/resident predicates remain owned by that same
+registry rather than a second shell allow-list. `viewScope.test.mjs` and `viewRegistry.test.mjs` prove the
+registry rather than a second shell allow-list. The mobile face follows the same rule: its host passes the
+captured route as props, so it cannot create a second global route reader while the desktop shell owns its
+`useRoute()` subscription. `viewScope.test.mjs`, `viewRegistry.test.mjs`, and `ownershipBoundary.test.mjs` prove
+the validation, atomic intent shape, hidden-pane suspension, unowned-route rejection, and host-only route
+ownership.
 
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:

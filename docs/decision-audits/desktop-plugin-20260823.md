@@ -1,23 +1,30 @@
 # Desktop and Dashboard Plugin Decision
 
-Status: deferred, explicitly not a current product commitment.
+Status: bounded dashboard seam landed; external plugin ecosystem and packaged desktop remain deferred.
 
 This checkpoint records the decision for inherited items 1.5, 2.2, and 2.3. It is a boundary
 record, not an implementation claim.
 
 ## Dashboard plugin extensibility (1.5)
 
-- **Decision:** deferred/non-goal for this release.
+- **Decision:** the in-product view-extension seam is implemented and governed; external discovery,
+  loading, isolation, and lifecycle remain deferred/non-goals for this release.
 - **What exists:** `.spec/spexcode/plugin-system/` defines SpexCode's reflexive agent/dev-flow
   plugin surfaces (`system`, `command`, `hook`, `skill`, `agent`, and `review`). The shipped
   instances are discovered through the plugin roots and `/api/plugins`.
-- **What does not exist:** a dashboard view/plugin registry. `spec-dashboard/src/views.jsx`
-  still owns a compile-time `VIEWS` object; there is no public `registerView` or equivalent
-  runtime extension contract.
-- **Reason:** adding a registry would widen the dashboard routing and packaging contract. No
-  consumer, lifecycle, isolation, or compatibility policy has been approved for that scope.
-- **Re-entry condition:** define the registry owner, discovery and ordering rules, lifecycle and
-  failure behavior, and a real browser proof before changing this decision.
+- **What exists in the dashboard:** `spec-dashboard/src/viewRegistry.js` owns the runtime
+  extension boundary. `registerView`/`registerPlugin` validate lowercase names and component
+  definitions before mutation, reject collisions, track owners, and unregister only views owned
+  by the plugin. `spec-dashboard/src/builtInViewPlugins.js` registers Settings through that same
+  seam; its route, resident-tab, rail, icon, and surface metadata remain shell-owned. Focused
+  registry coverage is `23/23` on the current main line, including lazy component acceptance,
+  atomic failure, collision, ownership, unregister, and route-contract checks.
+- **What does not exist by design:** a dashboard-side external discovery/loader protocol,
+  sandbox/isolation promise, version negotiation, or plugin lifecycle beyond explicit in-process
+  registration and unregister. The view registry is an extension seam, not a second router.
+- **Re-entry condition:** a future product decision must name the external source, ordering,
+  lifecycle/failure semantics, isolation, and compatibility policy before adding any loader or
+  browser-facing registration door.
 
 ## Desktop product and web coexistence (2.2/2.3)
 

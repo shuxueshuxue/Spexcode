@@ -7,24 +7,24 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { useRoute, navigate } from './route.js'
+import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { navigateAddress } from './address.js'
 import {
-  layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
+  graphTitles, layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
   GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_TILE_SIZE,
 } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey, keysOf, withShortcut } from './bindings.js'
-import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
+import { chordSequence } from './keymap.js'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { useStatusItem } from './StatusBar.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -46,12 +46,13 @@ const NODE_HANDLES = [
 ]
 const clamp = (z) => Math.max(GRAPH_MIN_ZOOM, Math.min(GRAPH_MAX_ZOOM, z))
 
-// nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
 // prompt-driven work, never a server op ([[mentions]]: the issue store is the only programmatic surface).
+const NEW_CHILD_CHORD = chordSequence('graph.newChild').join('')
+const DELETE_CHORD = chordSequence('graph.del').join('')
 const CHORDS = {
-  nn: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
-  dd: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
+  [NEW_CHILD_CHORD]: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
+  [DELETE_CHORD]: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
 }
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
@@ -71,7 +72,7 @@ function PagePane({ active, warm = false, className, children }) {
   )
 }
 
-function GraphView({ param, query }) {
+function GraphView({ param, query, page: routePage = 'graph' }) {
   const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
   const { reload } = useBoardApi()
   const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
@@ -84,7 +85,8 @@ function GraphView({ param, query }) {
   // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
-  const page = 'graph'
+  const page = routePage
+  const graphSurface = page === 'graph' || page === 'spec'
   useEffect(() => {
   }, [graphOnly, page])
   // SessionInterface owns live terminals, so it stays mounted after the first visit. Do not eagerly mount
@@ -104,9 +106,6 @@ function GraphView({ param, query }) {
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
-  // The shell owns the registry-backed help legend, so the graph button uses the same global state.
-  useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
-    tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const viewportRef = useRef(null)
@@ -125,10 +124,10 @@ function GraphView({ param, query }) {
   // already-applied parameter must not reassert itself after an ordinary mouse or keyboard focus move.
   const graphParamRef = useRef(null)
   useLayoutEffect(() => {
-    if (page !== 'graph' || graphParamRef.current === param) return
+    if (!graphSurface || graphParamRef.current === param) return
     graphParamRef.current = param
     if (param && rawById[param]) setFocusId(param)
-  }, [page, param, rawById])
+  }, [graphSurface, page, param, rawById])
   const focusNode = useCallback((id) => {
     if (!id) return
     setFocusId(id)
@@ -139,6 +138,7 @@ function GraphView({ param, query }) {
   // the x/y all geometry/render below works on. Hidden subtrees simply aren't in `specs2`.
   const placed = useMemo(() => layout(specs, expanded), [specs, expanded])
   const specs2 = useMemo(() => specs.filter((s) => placed[s.id]).map((s) => ({ ...s, ...placed[s.id] })), [specs, placed])
+  const graphTitle = useMemo(() => graphTitles(specs), [specs])
   const byId = useMemo(() => Object.fromEntries(specs2.map((s) => [s.id, s])), [specs2])
   const focus = byId[focusRaw.id]
   // direct-child count per node — drives the ▸N collapsed hint
@@ -168,7 +168,13 @@ function GraphView({ param, query }) {
   )
 
   const openSession = useCallback((id) => navigate('sessions', id), [])
-  const startNew = useCallback((text) => { setSeed(text); navigate('sessions', 'new') }, [setSeed])
+  // The route carries the launch draft across a cold code-split transition. The workspace handoff remains
+  // the live path for chords, but a graph action must not depend on the receiver having mounted before the
+  // hash switch: the query is the durable, replayable address of this one New Session draft.
+  const startNew = useCallback((text) => {
+    setSeed(text)
+    navigate('sessions', 'new', { query: { seed: text } })
+  }, [setSeed])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
@@ -259,13 +265,13 @@ function GraphView({ param, query }) {
     }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
-      data: { ...s, ...extra },
+      data: { ...s, graphTitle: graphTitle.get(s.id) || s.title, ...extra },
       initialWidth: NODE_SIZE.width, initialHeight: NODE_SIZE.height,
       handles: NODE_HANDLES,
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
+  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -318,8 +324,10 @@ function GraphView({ param, query }) {
   }, [getViewport, writeViewport])
 
   // Frame a focus for reading: anchor the focus→child pair at 43% (or focus→parent for a leaf), while a
-  // complete visible neighbourhood gets fit-to-pane treatment with one left gutter.
-  const centerOn = useCallback((node, zoom, dur = 300) => {
+  // complete visible neighbourhood gets fit-to-pane treatment with one left gutter. The explicit fit
+  // flag is reserved for first paint and pane resize; focus navigation keeps the current zoom and centers
+  // the focused row vertically.
+  const centerOn = useCallback((node, zoom, dur = 300, fit = zoom == null) => {
     const el = graphRef.current
     if (!el) return
     const currentZoom = getViewport().zoom
@@ -332,9 +340,9 @@ function GraphView({ param, query }) {
     const parentNode = node.parent ? byId[node.parent] : null
     const target = viewportForFocus({
       focus: node, parent: parentNode, child, visible: specs2,
-      width: el.clientWidth, height: el.clientHeight, zoom: z, fit: zoom == null,
+      width: el.clientWidth, height: el.clientHeight, zoom: z, fit,
     })
-    if (zoom == null) {
+    if (fit && zoom == null) {
       if (Math.abs(target.zoom - z) > 0.001) {
         fitZoomRef.current = target.zoom
         userZoomRef.current = z
@@ -342,7 +350,7 @@ function GraphView({ param, query }) {
         fitZoomRef.current = null
         userZoomRef.current = target.zoom
       }
-    } else {
+    } else if (zoom != null) {
       fitZoomRef.current = null
       userZoomRef.current = target.zoom
     }
@@ -355,7 +363,7 @@ function GraphView({ param, query }) {
   // Frame once after the graph page's first visible paint. ResizeObserver below owns later chrome/pane changes.
   const framedRef = useRef(false)
   useEffect(() => {
-    if (framedRef.current || page !== 'graph') return
+    if (framedRef.current || !graphSurface) return
     let id = 0
     const frameWhenSized = () => {
       const el = graphRef.current
@@ -368,10 +376,10 @@ function GraphView({ param, query }) {
     }
     id = requestAnimationFrame(frameWhenSized)
     return () => cancelAnimationFrame(id)
-  }, [centerOn, focus, page])
+  }, [centerOn, focus, graphSurface, page])
 
   useEffect(() => {
-    if (page !== 'graph' || !graphRef.current || typeof ResizeObserver === 'undefined') return
+    if (!graphSurface || !graphRef.current || typeof ResizeObserver === 'undefined') return
     const el = graphRef.current
     let last = { width: 0, height: 0 }
     let frame = 0
@@ -387,10 +395,11 @@ function GraphView({ param, query }) {
     })
     observer.observe(el)
     return () => { cancelAnimationFrame(frame); observer.disconnect() }
-  }, [page])
+  }, [graphSurface, page])
 
-  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the same reading
-  // pair anchor. The graph coordinates remain layout-owned; only this viewport changes.
+  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the reading-pair
+  // x anchor and the focused node's y center at the current zoom. The graph coordinates remain layout-owned;
+  // only this viewport changes.
   // Fires on focusId alone (not the poll); reads latest focus/centerOn via refs; skips the first paint.
   const followedRef = useRef(false)
   // lastCenteredRef makes the follow route-safe: a focus set while ANOTHER page is up (an issues-page node chip, a
@@ -398,13 +407,13 @@ function GraphView({ param, query }) {
   // and an unchanged focus doesn't re-pan on every page return.
   const lastCenteredRef = useRef(null)
   useEffect(() => {
-    if (page !== 'graph') return
+    if (!graphSurface) return
     if (!followedRef.current) { followedRef.current = true; lastCenteredRef.current = focusId; return }
     if (lastCenteredRef.current === focusId) return
     lastCenteredRef.current = focusId
-    const id = window.setTimeout(() => centerRef.current(focusRef.current), 50)
+    const id = window.setTimeout(() => centerRef.current(focusRef.current, undefined, 300, false), 50)
     return () => clearTimeout(id)
-  }, [focusId, page])
+  }, [focusId, graphSurface, page])
 
   // focus-return boundary ([[focus-return]]): a transient overlay (search / help / node popup) takes focus
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
@@ -442,9 +451,6 @@ function GraphView({ param, query }) {
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return false
-      // The graph document may stay mounted while another route is showing. A focused composer/search field
-      // still owns every unmodified key, including the comma that toggles Settings on the board.
-      if (isTypingTarget(e.target)) return false
       // A focused native control owns its activation keys: Enter/Space on a button, link, or form field is
       // that control's click — tabbing to the HUD `?` and pressing Enter must equal clicking it — so the
       // board vocabulary (board.info's Enter alias included) steps aside and lets the default action fire.
@@ -605,6 +611,7 @@ function GraphView({ param, query }) {
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
+          panOnDrag={[1, 2]}
           onMoveEnd={(event, viewport) => {
             const previous = viewportRef.current
             const changed = !previous
@@ -641,8 +648,8 @@ function GraphView({ param, query }) {
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => navigate('spec', focusRef.current.id)}
           onFresh={(id) => startNew(`[[${id}]] `)}
-          onNewChild={(id) => startNew(CHORDS.nn(id))}
-          onDelete={(id) => startNew(CHORDS.dd(id))}
+          onNewChild={(id) => startNew(CHORDS[NEW_CHILD_CHORD](id))}
+          onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}
         />}

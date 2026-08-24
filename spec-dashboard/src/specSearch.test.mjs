@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./SpecSearch.jsx', import.meta.url), 'utf8')
 const nodeView = readFileSync(new URL('./NodeView.jsx', import.meta.url), 'utf8')
+const proseTokens = readFileSync(new URL('./proseTokens.js', import.meta.url), 'utf8')
+const prose = readFileSync(new URL('./Prose.js', import.meta.url), 'utf8')
 
 test('palette entries carry executable spec and session addresses', () => {
   assert.match(source, /import \{ sessionAddress, specAddress \} from '\.\/address\.js'/)
@@ -12,14 +14,21 @@ test('palette entries carry executable spec and session addresses', () => {
 })
 
 test('spec prose references are real held anchors', () => {
-  assert.match(nodeView, /const href = routeHash\('spec', m\[9\]\)/)
+  assert.match(nodeView, /const href = routeHash\('spec', id\)/)
   assert.match(nodeView, /<a className="doc-link"[^>]+href=\{href\}[^>]+onClick=\{\(event\) => holdAnchor\(event, href\)\}/)
 })
 
 test('spec prose keeps standard Markdown blocks and links', () => {
-  assert.match(nodeView, /const Heading = `h\$\{level\}`/)
-  assert.match(nodeView, /className=\{`doc-h doc-h-level doc-h\$\{level\}`\}/)
-  assert.match(nodeView, /<blockquote className="doc-quote"/)
-  assert.match(nodeView, /<a className="doc-link doc-external"/)
-  assert.match(nodeView, /<img className="doc-image"/)
+  assert.match(proseTokens, /case 'heading_open': return h\(token\.tag/)
+  assert.match(proseTokens, /case 'blockquote_open': return h\('blockquote'/)
+  assert.match(proseTokens, /className: 'doc-link doc-external'/)
+  assert.match(proseTokens, /className: 'doc-image'/)
+  assert.match(prose, /renderProseTokens\(tokens/)
+})
+
+test('spec prose preserves the remaining standard inline and ordered-list semantics', () => {
+  assert.match(proseTokens, /if \(token\.type === 's_open'\)/)
+  assert.match(proseTokens, /case 'ordered_list_open': return h\('ol'/)
+  assert.match(proseTokens, /case 'list_item_open': return h\('li'/)
+  assert.match(proseTokens, /markdown = new MarkdownIt\(\{ breaks: true, linkify: true, html: false \}\)/)
 })

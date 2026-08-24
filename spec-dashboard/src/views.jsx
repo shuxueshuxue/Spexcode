@@ -1,6 +1,9 @@
 import { lazy } from 'react'
+import SessionsView from './SessionsView.jsx'
 import { useBoard, useBoardApi } from './workspace.jsx'
 import { navigate } from './route.js'
+import { createViewRegistry } from './viewRegistry.js'
+import { createSettingsViewPlugin } from './builtInViewPlugins.js'
 
 // [[view-registry]]: the map from an address kind to the thing that renders it.
 //
@@ -49,11 +52,18 @@ function lazyRetry(importer) {
 const GraphView = lazyRetry(() => import('./GraphView.jsx'))
 const SpecView = lazyRetry(() => import('./SpecView.jsx'))
 const FileView = lazyRetry(() => import('./FileView.jsx'))
-const SessionsView = lazyRetry(() => import('./SessionsView.jsx'))
 const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
 const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
+
+// The resident Spec document is also the graph's home canvas. A bare `#/spec` is not an empty document:
+// it is the graph when no node/file is focused. Node and file addresses keep their own readers while the
+// resident tab remains in the working set.
+function SpecWorkspaceView({ param, query }) {
+  if (param == null) return <GraphView page="spec" param={param} query={query} />
+  return <SpecView param={param} query={query} />
+}
 
 const openSession = (id) => navigate('sessions', id)
 
@@ -75,30 +85,46 @@ function IssuesView({ param, query }) {
 function SettingsView() { return <Settings /> }
 
 // `surface` selects the host chrome; `document(page, param)` marks what the workspace working set may hold.
-// Evals and Issues are resident workspace destinations: their top-level tab is one stable address, while
-// a scenario or issue detail is route state shown inside that tab. This keeps the Spec/Session/File working
-// set visible while a finding is focused and prevents a detail from replacing an unrelated document slot.
+// Spec, Evals, and Issues are resident workspace destinations: each top-level tab is one stable address,
+// while an object/detail selector is route state shown inside that tab. This keeps the whole working set
+// visible while a reading or finding is focused and prevents a detail from replacing an unrelated slot.
 // Graph remains an addressable legacy view, not a top-level tab.
-export const VIEWS = {
+export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
   // sends anyone through the rail or a tab close.
-  graph:    { component: GraphView,    surface: 'workspace', document: false, className: 'view-graph' },
-  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-spec' },
-  file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, className: 'view-file' },
+  graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
+  // Spec detail links remain canonical `#/spec/<id>` addresses; residency gives them one stable Spec tab
+  // identity without changing the SpecView/FileView document boundary.
+  spec:     { component: SpecWorkspaceView, surface: 'workspace', document: true, resident: true, icon: 'graph', className: 'view-spec' },
+  file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.
-  sessions: { component: SessionsView, surface: 'workspace', document: (_page, param) => param != null && param !== 'new', className: 'view-sessions' },
+  sessions: { component: SessionsView, surface: 'workspace', document: (_page, param) => param != null && param !== 'new', icon: 'sessions', className: 'view-sessions' },
   // Findings share the workspace shell. `resident` makes the bare top-level address the one tab identity;
   // `tabModel.tabRoute` collapses detail selectors onto it without losing the detail route in the URL.
-  evals:    { component: EvalsView,    surface: 'workspace', document: true, resident: true, className: 'view-evals' },
-  issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, className: 'view-issues' },
-  settings: { component: SettingsView, surface: 'workspace', document: true, resident: true, className: 'view-settings' },
+  evals:    { component: EvalsView,    surface: 'workspace', document: true, resident: true, icon: 'evals', className: 'view-evals' },
+  issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, icon: 'issues', className: 'view-issues' },
   empty:    { component: EmptyView,    surface: 'workspace', document: false, className: 'view-empty' },
-}
+})
 
-export const viewFor = (page) => VIEWS[page] || VIEWS.sessions
+// Product-owned views are seeded once; extensions register through this boundary so
+// collisions and ownership are visible instead of silently replacing shell routes.
+export const viewRegistry = createViewRegistry(VIEWS)
+// One registry owns both rendering metadata and the route contract consumed by ViewScopeHost.
+// Consumers must not maintain a parallel page allow-list.
+export const viewRouteContract = viewRegistry.routeContract
+export const registerView = (...args) => viewRegistry.registerView(...args)
+export const registerPlugin = (plugin) => viewRegistry.registerPlugin(plugin)
+export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
+
+registerPlugin(createSettingsViewPlugin(SettingsView))
+
+export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
+export const preloadView = () => Promise.resolve()
 export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
-export const isDocument = (page, param = null) => typeof VIEWS[page]?.document === 'function'
-  ? VIEWS[page].document(page, param)
-  : !!VIEWS[page]?.document
-export const isResident = (page, param = null) => !!VIEWS[page]?.resident && param == null
+export const iconFor = (page) => viewRegistry.get(page)?.icon || null
+export const isDocument = (page, param = null) => {
+  const view = viewRegistry.get(page)
+  return typeof view?.document === 'function' ? view.document(page, param) : !!view?.document
+}
+export const isResident = (page, param = null) => !!viewRegistry.get(page)?.resident && param == null

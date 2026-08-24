@@ -42,7 +42,9 @@ manual watch cannot dissolve parent supervision, and moving parentage cannot era
 DIRECT parent; the tree is rebuilt on every board read. A child nests under its parent ONLY IF that parent is
 still present in the enumerated list — so closing a parent leaves its children with a dangling pointer that, on
 the next read, auto-promotes them to top-level. No migration, no child rewrite. It is recursive to arbitrary
-depth, the whole forest reassembled each render.
+depth, the whole forest reassembled each render. If imported or legacy records contain a parent cycle, the
+cycle members are promoted to roots for that read (their descendants remain attached to them), so a malformed
+family is visible rather than silently disappearing; this is a read-time projection guard, not a child rewrite.
 
 **The CLI exposes the same provenance without pretending to be the dashboard tree.** `spex session ls` stays a
 flat project board, but every row prints its direct parent id and `--children` scopes the board to the caller's
@@ -77,6 +79,10 @@ compact root drop zone above the list, whose release detaches it to top level. T
 parent, and any descendant are never targets, so a drag cannot create a cycle or spend a write on a no-op.
 Releasing away from a target changes nothing. The map-side glance and mobile list remain read-only tree
 presentations rather than acquiring a second drag model.
+
+The modifier router resolves these arrow chords from the physical `ArrowUp`/`ArrowDown` key code, not only
+the layout-dependent `key` value, so macOS Option dead-key reporting and non-US keyboard layouts cannot turn
+a declared session action into a no-op.
 
 The desktop console layers one chord over the existing session-tab navigation: **⌥+Shift+↓ expands the
 currently selected parent session and ⌥+Shift+↑ collapses it**. These chords are consumed before the ordinary

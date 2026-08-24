@@ -99,6 +99,7 @@ export default {
     aria: '已打开的文档',
     close: '关闭标签',
     graph: '图',
+    spec: '规格',
     sessions: '会话',
     evals: '评测',
     issues: '议题',
@@ -208,6 +209,17 @@ export default {
     opOk: '{op}：exit 0 — 成功',
     opFail: '{op}：exit {code} — 失败',
     actionFailed: 'gateway 拒绝了该请求',
+    removeRegistration: '移除项目登记',
+    removeRegistrationHint: '只移除 SpexCode 目录，不删除本地源码',
+    removeTitle: '移除项目登记？',
+    removeWarning: '这是一个需要停下来确认的操作。项目会从 SpexCode 项目目录中移除。',
+    removeKeepsFiles: '本地项目目录、Git 历史和源码不会被删除。磁盘删除不属于这个操作。',
+    removeStopsFirst: '在线 backend 或活动会话会阻止移除；项目密码会在成功后清除。',
+    removeUnderstand: '我确认这里只移除登记，不删除本地目录。',
+    removeTypePrompt: '请输入下面的确认短语：',
+    removeTypeLabel: '移除确认短语',
+    removeConfirm: '确认移除登记',
+    removeBusy: '移除中…',
     passwordTitle: '项目密码',
     passwordPlaceholder: '新的项目密码',
     passwordSet: '设置',
@@ -523,15 +535,6 @@ export default {
     attachTmux: 'tmux',
     attachCopy: '复制',
     attachCopied: '已复制',
-  },
-
-  // 多选栏中的受控生命周期动作（[[session-multi-select]]）。
-  sessionSelect: {
-    selected: ({ n }) => `已选 ${n} 个`,
-    drag: '拖到另一个会话以设为其子会话',
-    close: '关闭',
-    closeTitle: ({ n }) => `关闭 ${n} 个会话？`,
-    closeConfirm: '这将关闭每个选中的会话并删除其工作树。任何未提交的更改都会丢失。',
   },
 
   lockHint: {

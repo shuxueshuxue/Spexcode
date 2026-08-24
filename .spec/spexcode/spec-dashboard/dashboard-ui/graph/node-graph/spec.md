@@ -11,6 +11,7 @@ code:
 related:
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
+  - spec-dashboard/src/graphSelection.test.mjs
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/specMeta.js
@@ -24,20 +25,18 @@ related:
 
 **Current camera rule.** The camera uses a reading-pair anchor: the midpoint between the focus column and its
 nearest child column sits at the `43%` canvas token; a leaf uses the midpoint between its parent and focus,
-and a root with no pair uses itself. The anchor's vertical coordinate is the focused tile's row, clamped so
-the visible parent/focus columns and child frontier remain reachable. When the visible node bbox fits the pane
-at the current user zoom, the camera instead fits that content and leaves one grid-column gutter at the left
-edge. Fit uses the minimum of the computed fit zoom and the user's current zoom: it may lower zoom to make
-content fit, never raise a deliberate user zoom. Later anchored moves preserve that user zoom, lowering it only
-when the anchored frontier cannot fit. Keyboard, click, and programmatic focus changes all use this same
-target; a click absorbs the instantaneous 0px screen jump and the existing smooth camera transition supplies
-the reading motion. Only the camera moves; layout coordinates never change.
+and a root with no pair uses itself. During keyboard, click, and programmatic focus navigation the focused
+tile's centre is the vertical canvas centre, clamped only when the visible frontier cannot physically reach
+that row; the current zoom is preserved, so changing focus never changes camera height. The initial frame
+and pane resize may still perform fit-left treatment with one grid-column gutter, and fit may lower zoom but
+never raise a deliberate user zoom. A click absorbs the instantaneous 0px screen jump and the existing
+smooth camera transition supplies the reading motion. Only the camera moves; layout coordinates never change.
 
 A **drill-down** tidy-tree of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. The focused node's **ancestor spine is expanded**, and the frontier opens only the focused node; its same-layer siblings remain visible while their children stay collapsed to `▸N` count tiles. This is the original single-layer behaviour. The earlier two-layer frontier was explicitly revoked by human ruling because repeated nodes made the two-layer view too noisy and confusing. The tree **re-plots as focus moves** and the **camera follows focus** using the current camera rule while its neighbourhood expands and collapses around it. Layout is horizontal left→right: depth is the column (root at the left). Columns are independent: column `k` contains only the direct children of the spine node in column `k-1`, and those nodes are evenly spaced around that parent node's y. A later child column contributes no row budget to its parent column, so expanding a focused node never moves the node itself or any brother already visible to its left — in the human report: "当前 focus 的 node 会有好几个 child node,它们应该展现在右边这一列,并且不会把左边 (当前 focus 的 node 本身及其 brothers)往上下推。" Tile centres stay `Y_GAP` apart (a 4px clear gap for the fixed 50px tile), so no two visible node boxes overlap. Coordinates are a function of tree shape and the expansion frontier, never of focus identity: changing focus only adds or removes frontier nodes; every tile that remains visible keeps its x/y. Tiles never touch; edges read bold when they touch the focus, faint otherwise. A **collapsed node** (children hidden) carries a small **`▸N` tab on its right edge** naming its hidden direct-child count, so a leaf and a closed branch never look alike; it picks up the focus colour on the focused node. Keys follow the same relationships (see [[keyboard-nav]]): ←/→ drill out/in, ↑/↓ walk siblings in the focused column.
 
-Node identity is rendered from the backend title (or its existing leaf fallback) without path-derived prefixes; backend ids and routes remain unchanged. The fixed title slot uses a middle ellipsis in the renderer, preserving the beginning and end of long names so labels that share a prefix remain distinguishable. Full text remains available through the native title tooltip.
+Node identity is rendered from the backend title (or its existing leaf fallback); backend ids and routes remain unchanged. When two or more nodes share that human title, the graph qualifies each duplicate with the shortest ancestor-title suffix that makes the visible labels unique (`Parent/Leaf`, then `Root/Parent/Leaf` only when needed). A pair with identical human ancestry ends with its canonical id as the deterministic tie-breaker. Unique titles stay unchanged. The fixed title slot uses a middle ellipsis in the renderer, preserving the beginning and end of the qualified label, and the full qualified text remains available through the native title tooltip.
 
-Every spec node, including the reserved `.plugins` branch, renders its backend identity unchanged. The ordinary drill-down rule applies uniformly: a collapsed node shows its raw title, version, and direct-child `▸N` tab; focusing it reveals its immediate children. The graph does not invent visual node classes, subtree totals, or presentation-only partitions from a path name.
+Every spec node, including the reserved `.plugins` branch, uses the same duplicate-title rule. The ordinary drill-down rule applies uniformly: a collapsed node shows its qualified title, version, and direct-child `▸N` tab; focusing it reveals its immediate children. The graph does not invent visual node classes, subtree totals, or presentation-only partitions from a path name.
 
 A re-plot separates **structure** from **navigation feedback**. In graph coordinates the structure updates atomically: newly revealed tiles and their solid tree edges appear together at final geometry, persisting tiles never interpolate between slots, and removed branches leave together. Above that stable topology, a keyboard or programmatic focus move gives direction in screen coordinates: the camera eases onto the current target and focus-neighbour opacity settles gently; a pending reparent's dashed overlay arrow flows in its author's colour. None of those cues changes a tile's graph position or a solid edge endpoint, so the tree stays connected throughout the camera move. Mouse focus also re-plots the frontier, but the clicked/focused tile remains at its pre-click screen position while the camera absorbs the layout delta; the world does not jump under the pointer.
 

@@ -102,6 +102,7 @@ export default {
     aria: 'open documents',
     close: 'close tab',
     graph: 'Graph',
+    spec: 'Spec',
     sessions: 'Sessions',
     evals: 'Evals',
     issues: 'Issues',
@@ -213,6 +214,17 @@ export default {
     opOk: '{op}: exit 0 — succeeded',
     opFail: '{op}: exit {code} — failed',
     actionFailed: 'the gateway rejected the request',
+    removeRegistration: 'remove project registration',
+    removeRegistrationHint: 'removes the SpexCode entry, never the local source',
+    removeTitle: 'Remove project registration?',
+    removeWarning: 'This is deliberately a stop-and-confirm action. The project will leave the SpexCode catalog.',
+    removeKeepsFiles: 'The local directory, Git history, and source files stay exactly where they are. Disk deletion is not part of this action.',
+    removeStopsFirst: 'An online backend or active session blocks removal; the project password is cleared after success.',
+    removeUnderstand: 'I understand this removes only the catalog registration, not the local directory.',
+    removeTypePrompt: 'Type this exact confirmation phrase:',
+    removeTypeLabel: 'removal confirmation phrase',
+    removeConfirm: 'confirm registration removal',
+    removeBusy: 'removing…',
     passwordTitle: 'project password',
     passwordPlaceholder: 'new project password',
     passwordSet: 'set',
@@ -531,15 +543,6 @@ export default {
     attachTmux: 'tmux',
     attachCopy: 'copy',
     attachCopied: 'copied',
-  },
-
-  // the multi-select bar's sourced lifecycle controls ([[session-multi-select]]).
-  sessionSelect: {
-    selected: ({ n }) => `${n} selected`,
-    drag: 'drag onto a session to make it the parent',
-    close: 'close',
-    closeTitle: ({ n }) => (n === 1 ? 'close 1 session?' : `close ${n} sessions?`),
-    closeConfirm: 'This closes every selected session and removes its worktree. Any uncommitted changes are lost.',
   },
 
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells

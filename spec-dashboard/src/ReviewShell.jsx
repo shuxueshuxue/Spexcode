@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
-import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
+import { useKeyboardScope } from './KeyboardService.jsx'
 import { scanQuery, suggestAt } from '@spexcode/spec-core/review'
 import { PageScroll } from './PageScroll.jsx'
 import { paginationTokens } from './reviewPage.js'
@@ -86,7 +86,6 @@ export const rovingIndex = (index, length, key) => {
 }
 
 export const listOwnsKey = (target, key) => {
-  if (isTypingTarget(target)) return false
   const tag = target?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false
   if (tag === 'BUTTON' && (key === 'Enter' || key === ' ')) return false

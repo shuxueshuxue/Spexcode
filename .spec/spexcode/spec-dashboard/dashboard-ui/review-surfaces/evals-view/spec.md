@@ -126,8 +126,8 @@ pooled Evals document cannot route another pane or follow the window address out
   metadata ABOVE the workspace (GitHub's 390px order), never a shrunken two-column.
 - **Un-merged session/worktree evals are the SAME pages behind the `scope:` token.** `scope:<id>` in the
   query text — hand-typed, completed from the input's autocomplete (candidates: sessions on the current
-  board only), or minted by the session doors as the scoped default view (the console tab bar's and the
-  phone session header's eval doors are REAL ANCHORS whose href IS that canonical address, projected by
+  board only), or minted by the session doors as the scoped default view (the console's document-action door
+  and the phone session header's eval door are REAL ANCHORS whose href IS that canonical address, projected by
   [[address-routing]] — one ordinary hash push straight to the final address, never a JS-only button,
   never the legacy `?session` param) — sources the list from one session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — blind spots as non-navigable

@@ -31,6 +31,16 @@ band around it must not clip, or the picker paints correctly into a 30px box and
 the failure looks exactly like a dead button, because the only visible evidence is the button's own pressed
 state. The strip therefore separates the band from the tab scroller ([[workspace-shell]]).
 
+**An action the frame cannot draw, draws itself — and then has to say when it changed.** Most actions are an
+icon and a label, and the slot renders them. Some carry content only the document can compute: the session's
+Eval door is a real anchor wearing a live measurement glance ([[session-console]]), which is a destination and
+a reading, not a callback. Such an action supplies its own element, and the slot renders that element in place
+of the button it would otherwise draw. The cost is that registration can no longer tell whether the action
+changed: an element is opaque to a value comparison, so a registry that compared only the drawable fields
+would keep the FIRST element it was handed while the data behind it moved on — a door still showing last
+week's counts. So a self-drawn action names its own render state (`nodeKey`), which is the same device
+`menuKey` already is for a popup: the ONE thing the frame needs to know about content it cannot inspect.
+
 **An action that owns a menu declares it.** `haspopup` marks the button as a menu opener, which is both its
 a11y contract and the one thing an outside-press dismissal needs to know: a press on a declared opener is
 that opener's own, so pressing it again toggles the menu instead of the dismissal closing it and the click

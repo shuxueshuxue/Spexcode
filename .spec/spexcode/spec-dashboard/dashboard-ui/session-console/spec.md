@@ -266,13 +266,18 @@ selection is never persisted or written to the session/backend, and a bare sessi
 persisted base rather than whatever overlay was last on screen. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
-height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval tab is a REAL anchor whose href is
+height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval door is a REAL anchor whose href is
 the canonical session-scoped Evals list address (the scoped default query, minted by [[address-routing]];
 copy-link/middle-click work for free), so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the console width is stable and a warm pane is never reflowed;
-see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
+see [[live-view]]). **It lives in the FRAME's document-action band** ([[document-actions]]), registered by the
+session document like every other action there, and not in a console-local tab rail — the console has no tab
+rail to hold it, and a door drawn inside the pane would be a second toolbar competing with the one the frame
+already owns. It keeps that band's button geometry and widens only for the glance it carries; because the
+glance is content the frame cannot compute, the door draws itself and states its own render state, exactly as
+an action owning a popup states its menu's. The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
 already bounded by [[session-eval]] to scenarios this worktree affected or measured. Its four mutually exclusive
 scenario tallies are the complete visible accounting: reliable current pass/fail counts use [[review-chrome]]'s
 `ReviewState` vocabulary, measured stale or legacy/unscored scenarios carry a visible clock tally as work still

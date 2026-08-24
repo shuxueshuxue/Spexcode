@@ -11,7 +11,8 @@ const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
-  assert.match(source, /onContextMenu=\{\(e\) => \{[^}]*e\.preventDefault\(\); setMenu\(/)
+  assert.match(source, /onContextMenu=\{\(e\) => \{[\s\S]*?e\.preventDefault\(\)[\s\S]*?setMenu\(null\)/)
+  assert.match(source, /onSessionContextMenu\(\{ x: e\.clientX, y: e\.clientY, session \}\)/)
   assert.doesNotMatch(source, /onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); closeOthers\(tab\)/)
 })
 

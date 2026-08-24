@@ -42,6 +42,7 @@ import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
+import TabStrip from './TabStrip.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
@@ -458,7 +459,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null, route = null }) {
   const t = useT()
   const scope = useViewScope()
   const { notify } = useTransientNotice()
@@ -1394,19 +1395,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
       menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
     },
-    // The session's own lifecycle menu, at the document that IS that session. It is the only place on this
-    // surface that reaches rename, tmux attach and the graph lock; the toolbar tools next to it act on the
-    // running work, not on the record. Its twin is the right-click on the finding dock's row — one menu,
-    // two ways in.
-    {
-      id: 'session-menu', icon: 'ellipsis', label: t('session.menuLabel'), priority: 90,
-      pressed: !!ctxMenu, haspopup: true,
-      onClick: (event) => {
-        const box = event.currentTarget.getBoundingClientRect()
-        setResourceMenu(false)
-        setCtxMenu((current) => (current ? null : { x: box.left, y: box.bottom, session: selSession }))
-      },
-    },
     ...(!activeResource && surfaceChoices.length > 1 ? [
       {
         id: 'surface-switcher', icon: baseSurface === SESSION_SURFACE_TERMINAL ? 'message-square' : 'terminal',
@@ -1549,6 +1537,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
+      <SessionForestPanel
+        sessions={sessions}
+        activeId={active}
+        // The Sessions document owns both its forest and its document chrome. Keeping these siblings
+        // makes the forest push the tabstrip/content column right instead of starting underneath a
+        // shell-level tabstrip.
+        onSelect={(id) => onPickSession ? onPickSession(id) : (id === 'new' ? setSel('new') : selectSession(id))}
+        onSearch={onOpenSearch}
+        reload={reload}
+        onContextMenu={setCtxMenu}
+        selectRequest={selectRequest}
+        onSelectRequestConsumed={() => setSelectRequest(null)}
+        onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
+      />
+      <div className="si-document">
+        {route && <TabStrip specs={specs} sessions={sessions} route={route}
+          onSessionContextMenu={(next) => { setResourceMenu(false); setCtxMenu(next) }} />}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through
@@ -1562,19 +1567,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           multiple
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
-        />
-        <SessionForestPanel
-          sessions={sessions}
-          activeId={active}
-          // Row selection goes through the workspace identity resolver. The routed view owns the fallback
-          // write, while an already-held session focuses its existing tab instead of rewriting this slot.
-          onSelect={(id) => onPickSession ? onPickSession(id) : (id === 'new' ? setSel('new') : selectSession(id))}
-          onSearch={onOpenSearch}
-          reload={reload}
-          onContextMenu={setCtxMenu}
-          selectRequest={selectRequest}
-          onSelectRequestConsumed={() => setSelectRequest(null)}
-          onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
         />
         <section className={`si-content${active === 'new' ? ' is-new' : ' is-session'}`}>
           {active === 'new' && (
@@ -1757,6 +1749,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
           </div>
         </section>
+      </div>
       </div>
     </div>
     {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) scope.open({ page: 'sessions', param: active === 'new' ? null : active, query: null }) }} />}

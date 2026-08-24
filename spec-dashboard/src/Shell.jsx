@@ -688,8 +688,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
               {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
                   without an open document, which is one band wearing two names. The context toggle is a control
                   on the current document, so it rides the strip's own trailing cluster. */}
-              <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
-                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />
+              {page !== 'sessions' && <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
+                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />}
               <Content page={page} param={param} query={query} inactive={inactive} />
             </div>
             <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />

@@ -32,6 +32,11 @@ test('closing tabs retain their original visual slot while the live list updates
   assert.match(source, /renderedTabs\.splice\(Math\.max\(0, Math\.min\(entry\.index, renderedTabs\.length\)\)/)
 })
 
+test('tab dragging reorders during motion and treats the strip tail as an end landing', () => {
+  assert.match(source, /const track = \(point\) => \{[\s\S]{0,260}if \(before !== undefined\) move\(key, before\)[\s\S]{0,180}setDrag/)
+  assert.match(source, /tabsHostRef\.current[\s\S]{0,500}getBoundingClientRect\(\)/)
+})
+
 test('session tabs use the shared visible title, not the stable search handle', () => {
   assert.match(source, /import \{ STATUS_COLOR, sessionHeadline \} from '\.\/session\.js'/)
   assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)

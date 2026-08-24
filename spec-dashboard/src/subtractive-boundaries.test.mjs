@@ -32,8 +32,8 @@ test('Sessions keeps multi-select and tree movement on the real row surface', ()
   }
 })
 
-test('live rail does not regrow the retired graph destination', () => {
-  assert.deepEqual(RAIL_PAGES, ['sessions', 'evals', 'issues', 'settings'])
+test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {
+  assert.deepEqual(RAIL_PAGES, ['sessions', 'spec', 'evals', 'issues', 'settings'])
   assert.equal(RAIL_PAGES.includes('graph'), false)
 })
 

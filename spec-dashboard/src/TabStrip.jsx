@@ -164,24 +164,36 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   useEscLayer(!!menu, () => setMenu(null))
 
   // The insertion point under a pointer: the tab it is over, and which HALF of that tab. Past the midpoint
-  // means after — which on the last tab is the end of the strip, the one landing place no tab can name. A
-  // landing that would not move anything is reported as none, so the marker only ever appears where a
-  // release genuinely changes the order.
+  // means after — which on the last tab is the end of the strip, the one landing place no tab can name. The
+  // host's unoccupied right edge is that same end landing, so the reader never has to hit the last tab.
+  // A landing that would not move anything is reported as none, so the marker only ever appears where a
+  // move genuinely changes the order.
   const landingAt = (point, movingKey) => {
+    const currentTabs = tabsRef.current
     const el = elementAt(point.x, point.y, '.tab')
-    if (!el) return undefined
-    const index = tabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
-    if (index < 0) return undefined
-    const box = el.getBoundingClientRect()
-    const after = point.x > box.left + box.width / 2
-    const before = after ? (tabs[index + 1] ? tabKey(tabs[index + 1]) : null) : el.dataset.tabKey
-    return moveTab(tabs, movingKey, before) === tabs ? undefined : before
+    if (el) {
+      const index = currentTabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
+      if (index < 0) return undefined
+      const box = el.getBoundingClientRect()
+      const after = point.x > box.left + box.width / 2
+      const before = after ? (currentTabs[index + 1] ? tabKey(currentTabs[index + 1]) : null) : el.dataset.tabKey
+      return moveTab(currentTabs, movingKey, before) === currentTabs ? undefined : before
+    }
+
+    const host = tabsHostRef.current
+    if (!host || !currentTabs.length) return undefined
+    const hostBox = host.getBoundingClientRect()
+    if (point.x < hostBox.left || point.x > hostBox.right || point.y < hostBox.top || point.y > hostBox.bottom) return undefined
+    const rightEdge = Math.max(...[...host.querySelectorAll('.tab')].map((tab) => tab.getBoundingClientRect().right))
+    if (point.x < rightEdge) return undefined
+    return moveTab(currentTabs, movingKey, null) === currentTabs ? undefined : null
   }
 
   const startTabDrag = (event, tab) => {
     const key = tabKey(tab)
     const track = (point) => {
       const before = landingAt(point, key)
+      if (before !== undefined) move(key, before)
       setDrag((prev) => (prev && prev.key === key && prev.before === before ? prev : { key, before }))
     }
     abandon.current = startDrag(event, {

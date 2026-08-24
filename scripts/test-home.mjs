@@ -21,6 +21,10 @@ if (!configuredHome || (testWorker && inheritedDefault)) {
   const testHome = mkdtempSync(join(tmpdir(), 'spexcode-test-home-'))
   process.env.SPEXCODE_HOME = testHome
   process.env.SPEXCODE_TEST_HOME = testHome
+  // A test worker inherits the shell's environment. Pin every session-runtime lookup to the
+  // worker's isolated store so a fixture backend can never open the operator's canonical SQLite.
+  process.env.SPEX_SESSION_DATABASE_PATH = join(testHome, 'sessions.sqlite')
+  delete process.env.SPEX_SESSION_CONFIG
   assertNotUserHome(testHome)
 
   process.once('exit', () => {

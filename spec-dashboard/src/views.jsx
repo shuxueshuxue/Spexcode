@@ -57,6 +57,14 @@ const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
 const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
+// The resident Spec document is also the graph's home canvas. A bare `#/spec` is not an empty document:
+// it is the graph when no node/file is focused. Node and file addresses keep their own readers while the
+// resident tab remains in the working set.
+function SpecWorkspaceView({ param, query }) {
+  if (param == null) return <GraphView page="spec" param={param} query={query} />
+  return <SpecView param={param} query={query} />
+}
+
 const openSession = (id) => navigate('sessions', id)
 
 // The three review-side pages already take everything they need as props and hold their own state; they
@@ -87,7 +95,7 @@ export const VIEWS = Object.freeze({
   graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
   // Spec detail links remain canonical `#/spec/<id>` addresses; residency gives them one stable Spec tab
   // identity without changing the SpecView/FileView document boundary.
-  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, resident: true, icon: 'graph', className: 'view-spec' },
+  spec:     { component: SpecWorkspaceView, surface: 'workspace', document: true, resident: true, icon: 'graph', className: 'view-spec' },
   file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.

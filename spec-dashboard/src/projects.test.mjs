@@ -4,7 +4,7 @@ import {
   normalizeProject, normalizeProjects, loadProjects, probeProjectHealth,
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
-  saveGatewayIcon, saveProjectIcon,
+  saveGatewayIcon, saveProjectIcon, removeProject,
   selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult, paginateProjects,
 } from './projects.js'
 
@@ -238,6 +238,19 @@ test('addProject carries the explicit new-directory transaction', async () => {
   const r = await withFetch(impl, () => addProject('/home/me/r', { createDir: true, initGit: true }))
   assert.deepEqual(calls[0], { url: '/projects', method: 'POST', body: '{"root":"/home/me/r","createDir":true,"initGit":true}' })
   assert.equal(r.ok, true)
+})
+
+test('removeProject sends the exact confirmation phrase and preserves server refusal details', async () => {
+  const calls = []
+  const impl = async (url, init) => {
+    calls.push({ url, method: init?.method, body: JSON.parse(init.body) })
+    return jsonRes(200, { ok: true, projectId: 'r', runtimeRecordRemoved: true })
+  }
+  const removed = await withFetch(impl, () => removeProject('a b', 'REMOVE Atlas'))
+  assert.deepEqual(calls[0], { url: '/projects/a%20b', method: 'DELETE', body: { confirmation: 'REMOVE Atlas' } })
+  assert.equal(removed.ok, true)
+  const blocked = await withFetch(async () => jsonRes(409, { error: 'project backend is online; stop it first' }), () => removeProject('r', 'REMOVE Repo'))
+  assert.deepEqual(blocked, { ok: false, status: 409, error: 'project backend is online; stop it first' })
 })
 
 test('addProject surfaces the host refusal verbatim (400 not-a-repo), tolerates non-JSON and death', async () => {

@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -9,19 +7,39 @@ const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/
 const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
 const BASE = process.env.BASE || 'http://127.0.0.1:5177'
 const OUT = resolve(process.env.OUT || '/tmp/terminal-input-e2e')
-const TMUX_SOCKET = process.env.SPEXCODE_TMUX || 'spexcode'
-const scratch = `spex-ime-${process.pid}-${Date.now()}`
-const scratchDir = mkdtempSync(join(tmpdir(), 'spex-ime-'))
-const capturePath = join(scratchDir, 'input.txt')
+const LAUNCHER = process.env.LAUNCHER || 'fake'
+const capturePath = process.env.CAPTURE_PATH || ''
 mkdirSync(OUT, { recursive: true })
-
-const tmux = (...args) => spawnSync('tmux', ['-L', TMUX_SOCKET, ...args], { encoding: 'utf8' })
-const created = tmux('new-session', '-d', '-s', scratch, `printf 'IME_READY\\n'; exec tee ${capturePath}`)
-if (created.status !== 0) throw new Error(created.stderr || `could not create tmux session ${scratch}`)
 
 let browser
 let context
+let scratch = ''
 try {
+  assert.ok(capturePath, 'CAPTURE_PATH must point at the backend fixture input ledger')
+  const createdResponse = await fetch(`${BASE}/api/sessions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt: 'Chinese IME input proof', launcher: LAUNCHER }),
+  })
+  const createdText = await createdResponse.text()
+  let created
+  try { created = JSON.parse(createdText) } catch { created = null }
+  assert.equal(createdResponse.status, 201, `POST /api/sessions failed: ${createdText}`)
+  scratch = created?.id || ''
+  assert.ok(scratch, 'fixture session has a durable id')
+  const waitForOnline = async () => {
+    const deadline = Date.now() + 60_000
+    while (Date.now() < deadline) {
+      const response = await fetch(`${BASE}/api/sessions/${scratch}`)
+      if (response.ok) {
+        const session = await response.json()
+        if (session?.liveness === 'online' && session?.lifecycle === 'active') return session
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    throw new Error(`fixture session ${scratch} did not become online`)
+  }
+  await waitForOnline()
   const { chromium } = await import(pathToFileURL(PW).href)
   const graph = await fetch(`${BASE}/api/graph`).then((response) => response.json())
   const seed = graph.sessions.find((session) => session.liveness === 'online') || graph.sessions[0]
@@ -73,7 +91,7 @@ try {
   await page.waitForFunction((selector) => !!document.querySelector(`${selector} .xterm`), visibleTerminal)
   await page.waitForFunction((selector) => (document.querySelector(`${selector} .xterm-rows`)?.textContent || '').trim().length > 20, visibleTerminal)
   await page.waitForFunction((selector) => document.activeElement?.closest?.(selector)?.querySelector('.xterm-helper-textarea'), visibleTerminal)
-  await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('IME_READY'))
+  await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('FAKE-HARNESS READY'))
   frames.length = 0
   step('native xterm focused without a mode')
 
@@ -126,10 +144,13 @@ try {
   step('selected-row activation preserves current composition')
 
   await beginComposition('putao')
-  await page.locator('#si-terminal-tab').click()
+  // The surface switcher is a document action in the current shell, not a second tab inside the
+  // terminal. Clicking the already-visible terminal surface itself is the equivalent activation and must
+  // leave the native composition sink untouched.
+  await page.locator('.si-term-layer[style*="visibility: visible"]').click({ position: { x: 12, y: 12 } })
   assert.deepEqual(await helperState(), { active: true, value: 'putao' })
   await commitComposition(phrases[2])
-  step('Terminal-tab activation preserves current composition')
+  step('terminal surface activation preserves current composition')
 
   await typeImePunctuation({ key: ',', code: 'Comma', keyCode: 188, text: '，' })
   await typeImePunctuation({ key: '.', code: 'Period', keyCode: 190, text: '。' })
@@ -168,5 +189,7 @@ try {
 } finally {
   await context?.close().catch(() => {})
   await browser?.close().catch(() => {})
-  tmux('kill-session', '-t', scratch)
+  if (scratch) {
+    await fetch(`${BASE}/api/sessions/${scratch}/close`, { method: 'POST' }).catch(() => {})
+  }
 }

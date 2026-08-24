@@ -338,6 +338,7 @@ body {
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
+.dock-head-act:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .dock-head-act-new { color: var(--paper); background: var(--blue); box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 70%, var(--line)); }
 .dock-head-act-new:hover { color: var(--paper); background: var(--ink2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 28%, transparent); }
 /* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
@@ -771,10 +772,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* ---- graph pane ---- */
 .graph { position: relative; width: 100%; height: 100%; background: var(--paper); }
-.graph-selection-actions { position: absolute; top: var(--space-5); left: 50%; transform: translateX(-50%); z-index: 12; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5); border: 1px solid var(--line); border-left: 3px solid var(--blue); background: var(--panel); box-shadow: var(--shadow); }
-.graph-selection-count { color: var(--muted); font-size: var(--type-meta); white-space: nowrap; }
-.graph-selection-send { border: 1px solid var(--blue); background: var(--blue); color: var(--bg); padding: var(--space-2) var(--space-4); font-size: var(--type-meta); }
-.graph-selection-clear { border: 0; background: transparent; color: var(--muted); font-size: var(--type-icon-sm); line-height: var(--leading-none); padding: var(--space-1) var(--space-2); }
 .react-flow__attribution { display: none; }
 .react-flow__edge-path { stroke-dasharray: 0; }
 /* reparent preview: a faint dashed arrow node→proposed-parent in the author session's colour, shown
@@ -3222,6 +3219,26 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* the row's one-at-a-time drawer (portable config / doctor report / password / init) */
 .proj-drawer { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--line); margin-top: 7px; padding-top: 8px; }
+
+/* Removal is a quiet secondary disclosure, never a peer of Open/Start. The modal carries the red
+   treatment only after the user has deliberately opened the warning and reached the final confirmation. */
+.proj-remove-disclosure { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+.proj-remove-link { border: 0; padding: 0; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: var(--type-meta); text-decoration: underline; text-underline-offset: 2px; }
+.proj-remove-link:hover { color: var(--red); }
+.proj-remove-disclosure > span { color: var(--muted); font-size: var(--type-caption); }
+.proj-remove-modal { width: min(520px, 94vw); }
+.proj-remove-copy { display: grid; gap: 10px; padding: 2px; color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed); }
+.proj-remove-copy p { margin: 0; }
+.proj-remove-warning { color: var(--red); font-weight: var(--weight-semibold); }
+.proj-remove-check { display: flex; align-items: flex-start; gap: 8px; color: var(--ink2); font-size: var(--type-meta); }
+.proj-remove-check input { margin-top: 3px; accent-color: var(--red); }
+.proj-remove-confirm { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-meta); }
+.proj-remove-confirm code { color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); overflow-wrap: anywhere; }
+.proj-remove-confirm input { min-width: 0; box-sizing: border-box; width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: var(--type-control); }
+.proj-remove-confirm input:focus { outline: none; border-color: var(--red); }
+.proj-remove-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
+.proj-act.danger { color: var(--red); border-color: var(--red); background: color-mix(in srgb, var(--red) 9%, transparent); font-weight: var(--weight-semibold); }
+.proj-act.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--red) 18%, transparent); }
 
 .proj-pw .proj-add-path { flex: 1 1 160px; }
 

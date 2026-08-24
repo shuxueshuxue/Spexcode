@@ -72,7 +72,7 @@ function PagePane({ active, warm = false, className, children }) {
   )
 }
 
-function GraphView({ param, query }) {
+function GraphView({ param, query, page: routePage = 'graph' }) {
   const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
   const { reload } = useBoardApi()
   const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
@@ -85,7 +85,8 @@ function GraphView({ param, query }) {
   // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
-  const page = 'graph'
+  const page = routePage
+  const graphSurface = page === 'graph' || page === 'spec'
   useEffect(() => {
   }, [graphOnly, page])
   // SessionInterface owns live terminals, so it stays mounted after the first visit. Do not eagerly mount
@@ -103,7 +104,6 @@ function GraphView({ param, query }) {
   const [pane, setPane] = useState('spec')
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
-  const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
   const graphRef = useRef(null)
@@ -124,10 +124,10 @@ function GraphView({ param, query }) {
   // already-applied parameter must not reassert itself after an ordinary mouse or keyboard focus move.
   const graphParamRef = useRef(null)
   useLayoutEffect(() => {
-    if (page !== 'graph' || graphParamRef.current === param) return
+    if (!graphSurface || graphParamRef.current === param) return
     graphParamRef.current = param
     if (param && rawById[param]) setFocusId(param)
-  }, [page, param, rawById])
+  }, [graphSurface, page, param, rawById])
   const focusNode = useCallback((id) => {
     if (!id) return
     setFocusId(id)
@@ -175,12 +175,6 @@ function GraphView({ param, query }) {
     setSeed(text)
     navigate('sessions', 'new', { query: { seed: text } })
   }, [setSeed])
-  const selectedNodes = useMemo(() => selectedNodeIds.map((id) => rawById[id]).filter(Boolean), [rawById, selectedNodeIds])
-  const dispatchSelected = useCallback(() => {
-    if (!selectedNodes.length) return
-    startNew(`${selectedNodes.map((node) => `[[${node.id}]]`).join(' ')} `)
-    setSelectedNodeIds([])
-  }, [selectedNodes, startNew])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
@@ -274,10 +268,10 @@ function GraphView({ param, query }) {
       data: { ...s, graphTitle: graphTitle.get(s.id) || s.title, ...extra },
       initialWidth: NODE_SIZE.width, initialHeight: NODE_SIZE.height,
       handles: NODE_HANDLES,
-      draggable: false, selected: s.id === focusId || selectedNodeIds.includes(s.id), className,
+      draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded, selectedNodeIds])
+  }, [focusId, focus.parent, graphTitle, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -330,8 +324,10 @@ function GraphView({ param, query }) {
   }, [getViewport, writeViewport])
 
   // Frame a focus for reading: anchor the focus→child pair at 43% (or focus→parent for a leaf), while a
-  // complete visible neighbourhood gets fit-to-pane treatment with one left gutter.
-  const centerOn = useCallback((node, zoom, dur = 300) => {
+  // complete visible neighbourhood gets fit-to-pane treatment with one left gutter. The explicit fit
+  // flag is reserved for first paint and pane resize; focus navigation keeps the current zoom and centers
+  // the focused row vertically.
+  const centerOn = useCallback((node, zoom, dur = 300, fit = zoom == null) => {
     const el = graphRef.current
     if (!el) return
     const currentZoom = getViewport().zoom
@@ -344,9 +340,9 @@ function GraphView({ param, query }) {
     const parentNode = node.parent ? byId[node.parent] : null
     const target = viewportForFocus({
       focus: node, parent: parentNode, child, visible: specs2,
-      width: el.clientWidth, height: el.clientHeight, zoom: z, fit: zoom == null,
+      width: el.clientWidth, height: el.clientHeight, zoom: z, fit,
     })
-    if (zoom == null) {
+    if (fit && zoom == null) {
       if (Math.abs(target.zoom - z) > 0.001) {
         fitZoomRef.current = target.zoom
         userZoomRef.current = z
@@ -354,7 +350,7 @@ function GraphView({ param, query }) {
         fitZoomRef.current = null
         userZoomRef.current = target.zoom
       }
-    } else {
+    } else if (zoom != null) {
       fitZoomRef.current = null
       userZoomRef.current = target.zoom
     }
@@ -367,7 +363,7 @@ function GraphView({ param, query }) {
   // Frame once after the graph page's first visible paint. ResizeObserver below owns later chrome/pane changes.
   const framedRef = useRef(false)
   useEffect(() => {
-    if (framedRef.current || page !== 'graph') return
+    if (framedRef.current || !graphSurface) return
     let id = 0
     const frameWhenSized = () => {
       const el = graphRef.current
@@ -380,10 +376,10 @@ function GraphView({ param, query }) {
     }
     id = requestAnimationFrame(frameWhenSized)
     return () => cancelAnimationFrame(id)
-  }, [centerOn, focus, page])
+  }, [centerOn, focus, graphSurface, page])
 
   useEffect(() => {
-    if (page !== 'graph' || !graphRef.current || typeof ResizeObserver === 'undefined') return
+    if (!graphSurface || !graphRef.current || typeof ResizeObserver === 'undefined') return
     const el = graphRef.current
     let last = { width: 0, height: 0 }
     let frame = 0
@@ -399,10 +395,11 @@ function GraphView({ param, query }) {
     })
     observer.observe(el)
     return () => { cancelAnimationFrame(frame); observer.disconnect() }
-  }, [page])
+  }, [graphSurface, page])
 
-  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the same reading
-  // pair anchor. The graph coordinates remain layout-owned; only this viewport changes.
+  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the reading-pair
+  // x anchor and the focused node's y center at the current zoom. The graph coordinates remain layout-owned;
+  // only this viewport changes.
   // Fires on focusId alone (not the poll); reads latest focus/centerOn via refs; skips the first paint.
   const followedRef = useRef(false)
   // lastCenteredRef makes the follow route-safe: a focus set while ANOTHER page is up (an issues-page node chip, a
@@ -410,13 +407,13 @@ function GraphView({ param, query }) {
   // and an unchanged focus doesn't re-pan on every page return.
   const lastCenteredRef = useRef(null)
   useEffect(() => {
-    if (page !== 'graph') return
+    if (!graphSurface) return
     if (!followedRef.current) { followedRef.current = true; lastCenteredRef.current = focusId; return }
     if (lastCenteredRef.current === focusId) return
     lastCenteredRef.current = focusId
-    const id = window.setTimeout(() => centerRef.current(focusRef.current), 50)
+    const id = window.setTimeout(() => centerRef.current(focusRef.current, undefined, 300, false), 50)
     return () => clearTimeout(id)
-  }, [focusId, page])
+  }, [focusId, graphSurface, page])
 
   // focus-return boundary ([[focus-return]]): a transient overlay (search / help / node popup) takes focus
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
@@ -571,7 +568,6 @@ function GraphView({ param, query }) {
   // Clicking a node focuses it and drills it open. The same reading-pair camera target used by keyboard
   // navigation is applied after the frontier re-plots; it does NOT open a session.
   const onNodeClick = useCallback((_e, n) => {
-    setSelectedNodeIds([])
     focusNode(n.id)
   }, [focusNode])
 
@@ -579,7 +575,6 @@ function GraphView({ param, query }) {
   // focuses, so the board stays a board — the gesture that means "I want to read this" is the one that
   // leaves it.
   const onNodeDoubleClick = useCallback((e, n) => {
-    setSelectedNodeIds([])
     focusNode(n.id)
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.
@@ -616,10 +611,7 @@ function GraphView({ param, query }) {
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
-          selectionOnDrag
-          selectionMode="partial"
           panOnDrag={[1, 2]}
-          onSelectionChange={(selection) => setSelectedNodeIds(selection.nodes.map((node) => node.id))}
           onMoveEnd={(event, viewport) => {
             const previous = viewportRef.current
             const changed = !previous
@@ -645,16 +637,6 @@ function GraphView({ param, query }) {
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
-
-        {!graphOnly && selectedNodes.length > 0 && (
-          <div className="graph-selection-actions" role="toolbar" aria-label="Selected spec nodes">
-            <span className="graph-selection-count">{selectedNodes.length} selected</span>
-            <button type="button" className="graph-selection-send" onClick={dispatchSelected}>
-              Send to Session
-            </button>
-            <button type="button" className="graph-selection-clear" onClick={() => setSelectedNodeIds([])} aria-label="Clear selected spec nodes">×</button>
-          </div>
-        )}
 
         {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId}
           onPick={(session) => lockGraphTo(session.source)} onOpenSession={openSession}

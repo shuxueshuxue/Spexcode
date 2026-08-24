@@ -11,28 +11,20 @@
 #                                          without inventing a completion state.
 # $SPEX is the PATH-independent CLI invocation (abs tsx + cli) injected by settingsArg, so the gate's own
 # auto-default AND the command it shows the agent both work even when `spex` is absent from PATH.
-# @@@ global store + governed gate - state lives in the per-session GLOBAL record session.json (keyed by the
-# harness session_id from the payload, grouped per-project — mirrors spec-cli/src/layout.ts). The gate acts
-# ONLY on a GOVERNED (dashboard-launched) session: a user-self-launched agent has no board to feed, so an
-# undeclared stop is none of our business — we exit 0 SILENTLY (the bug this fixes: the declare-demand
-# misfiring on a self-launched codex/claude). cwd = the session worktree (resolves the project key + the
-# commit-gate's git); state writes go through `$SPEX session … --session <id>` (TS owns the JSON).
+# @@@ governed gate - the session id comes from the payload. The gate acts ONLY on a GOVERNED
+# (dashboard-launched) session: a user-self-launched agent has no board to feed, so an undeclared stop is
+# none of our business. Lifecycle status/proposal come from the canonical session application through one
+# CLI read; this shell never treats session.json as a second lifecycle database.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 S="${SPEX:-spex}"
 input=$(cat 2>/dev/null || true)
 sid=$(hp_session_id "$input"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
-rec="$sdir/session.json"
-# non-governed (or no record) → silently let the stop through. THIS is the self-launch fix.
-grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
-
-# read a CLOSED-VOCABULARY field (status / proposal) off its OWN line. The record is one-field-per-line from
-# the single writer ([[sessions-core]]), so anchoring to the line start is what keeps a neighbouring note's
-# escaped quote from being read as this field's value — the read half of the same rule that stops shell from
-# ever composing the record.
-jget() { sed -n "s/^[[:space:]]*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\",\?$/\1/p" "$rec" 2>/dev/null | head -1; }
-status=$(jget status)
-proposal=$(jget proposal)
+# non-governed (or no record) → silently let the stop through. THIS is the self-launch fix. The CLI response
+# is governed<TAB>status<TAB>proposal; status/proposal are canonical, while governed is identity metadata.
+hook_state=$($S internal session-hook-state --session "$sid" 2>/dev/null) || exit 0
+IFS=$'\t' read -r governed status proposal <<< "$hook_state"
+[ "$governed" = 1 ] || exit 0
 
 # the value of the payload's structured `stop_hook_active` field (true on the hook-forced continuation),
 # read by field name rather than substring-sniffing the JSON blob. ([a-z]* captures true/false portably —

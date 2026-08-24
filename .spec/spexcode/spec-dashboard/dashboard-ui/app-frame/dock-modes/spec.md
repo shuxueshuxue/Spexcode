@@ -36,7 +36,9 @@ may select explorer or sessions, but the rail light remains route-only. The dedi
 control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
 a plain click navigates to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it
-as its own tab.
+as its own tab. The row is chrome around the session document, so its pointer press suppresses the native
+button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
+composition from the session currently being read.
 
 **The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries

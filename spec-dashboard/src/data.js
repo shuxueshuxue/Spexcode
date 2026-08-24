@@ -106,7 +106,9 @@ export function viewportForFocus({
 
   const pair = child || parent
   const anchorX = pair ? (focus.x + pair.x) / 2 : focus.x
-  const anchorZoom = !currentFits && fitZoom >= minZoom ? fitZoom : zoom
+  // A keyboard/programmatic focus move (`fit: false`) must never change camera height. Only an
+  // explicit fit pass may lower the zoom to make an oversized frontier reachable.
+  const anchorZoom = fit && !currentFits && fitZoom >= minZoom ? fitZoom : zoom
   const desiredY = height / 2 - focus.y * anchorZoom
   const minPanY = -minY * anchorZoom
   const maxPanY = height - maxY * anchorZoom

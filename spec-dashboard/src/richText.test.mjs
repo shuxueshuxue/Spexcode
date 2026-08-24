@@ -35,6 +35,17 @@ test('renders compact agent Markdown and both inline and display math', () => {
   assert.match(html, /<pre class="doc-pre"><code class="language-js">const price = &#x27;\$5&#x27;/)
 })
 
+test('maps Markdown table alignment to a React style object', () => {
+  const html = renderRichText([
+    '| left | centre | right |',
+    '| :--- | :----: | ---: |',
+    '| a | b | c |',
+  ].join('\n'))
+  assert.match(html, /<th style="text-align:left">left<\/th>/)
+  assert.match(html, /<th style="text-align:center">centre<\/th>/)
+  assert.match(html, /<th style="text-align:right">right<\/th>/)
+})
+
 test('renders Markdown images while keeping unsafe markup and invalid math readable', () => {
   const html = renderRichText([
     '<img src=x onerror="globalThis.pwned=1">',

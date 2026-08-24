@@ -81,12 +81,12 @@ hold covers its grid change and complete parse, and only that frame's inner 2026
 outer hold closes. Ordinary streamed frames are not wrapped or filtered and retain tmux's native synchronized
 semantics. No renderer clone, screen capture, DOM latch, or reconstructed terminal state participates.
 
-Each live session keeps one stable browser terminal and terminal socket across visibility changes. Hidden pane
-layers remain laid out at the terminal panel's real geometry under `visibility:hidden`, so xterm can fit
-locally without becoming visible or interactive. A pane that has already been viewed retains its last painted
-buffer; switching back exposes those cached pixels on the first browser paint while the native stream resumes
-behind them. Activation never disposes the renderer, exposes an empty replacement canvas, or waits for a new
-WebSocket.
+The selected live session keeps one stable browser terminal and terminal socket while its Sessions document is
+visible. Hidden pane layers may remain mounted for route identity, but they own no xterm, WebSocket, or
+ResizeObserver; this prevents an inactive pooled document from parsing output or retaining browser-side live
+resources. Returning to Sessions recreates the selected viewer from the current native stream. Activation never
+exposes an empty replacement canvas after the viewer has settled, and it does not share a hidden session's
+browser resources with the visible one.
 
 ## isolated helper
 

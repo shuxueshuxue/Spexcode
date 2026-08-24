@@ -7,18 +7,18 @@ import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, basename } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   publishEndpoint, dropOwnEndpoint, endpointRecordPath, readCatalog, addKnownProject,
-  browseProjectDirectories, addKnownProjectWithSetup,
+  browseProjectDirectories, addKnownProjectWithSetup, removeKnownProject,
   reconcileProjects, reconcileNow, startHostDashboard, type EndpointRecord,
 } from './host.js'
 import { encodeProject } from '@spexcode/spec-core'
 import { tsxBin } from './tsx-bin.js'
-import { setAdminPassword } from './gateway-auth.js'
+import { setAdminPassword, setProjectPassword, loadAuthStore } from './gateway-auth.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -139,6 +139,65 @@ test('addKnownProject normalizes to the main checkout and requires a git repo', 
   assert.equal(readCatalog().length, 1)
   const notRepo = mkdtempSync(join(tmpdir(), 'spex-host-norepo-'))
   assert.throws(() => addKnownProject(notRepo), /not a git repository/)
+})
+
+test('removeKnownProject is catalog-only, exact-confirmed, and refuses live sessions/backend', async () => {
+  const home = freshHome('remove')
+  const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-repo-'))
+  execFileSync('git', ['init', '-q'], { cwd: repo })
+  writeFileSync(join(repo, 'README.md'), 'keep me\n')
+  addKnownProject(repo)
+  setProjectPassword(encodeProject(repo), 'secret')
+  await reconcileNow()
+
+  assert.throws(() => removeKnownProject(repo, 'REMOVE wrong'), /confirmation must exactly equal/)
+  assert.equal(readCatalog().length, 1)
+  const removed = removeKnownProject(repo, `REMOVE ${basename(repo)}`)
+  assert.deepEqual(removed, { root: repo, projectId: encodeProject(repo), sessions: 0, runtimeRecordRemoved: false })
+  assert.equal(readCatalog().length, 0)
+  assert.equal(loadAuthStore().projects[encodeProject(repo)], undefined, 'project credential is cleared with the registration')
+  assert.equal(existsSync(join(repo, 'README.md')), true, 'source directory is untouched')
+  assert.equal((await reconcileNow()).some((entry) => entry.root === repo), false)
+
+  // An active record is a blocker even when the user typed the right phrase. The catalog remains intact.
+  addKnownProject(repo)
+  const sessionDir = join(home, 'projects', encodeProject(repo), 'sessions', 'active')
+  mkdirSync(sessionDir, { recursive: true })
+  writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({ archived: false, stopped: false, closedAt: null }))
+  await reconcileNow()
+  assert.throws(() => removeKnownProject(repo, `REMOVE ${basename(repo)}`), /active session record/)
+  assert.equal(readCatalog().length, 1)
+})
+
+test('host DELETE /projects/:id is an admin-gated, catalog-only lifecycle route', async () => {
+  const home = freshHome('remove-http')
+  const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-'))
+  execFileSync('git', ['init', '-q'], { cwd: repo })
+  writeFileSync(join(repo, 'README.md'), 'must survive\n')
+  addKnownProject(repo)
+  const dist = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-dist-'))
+  writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
+  const port = await new Promise<number>((resolvePort) => {
+    const server = net.createServer()
+    server.listen(0, '127.0.0.1', () => { const p = (server.address() as net.AddressInfo).port; server.close(() => resolvePort(p)) })
+  })
+  const dashboard = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
+  await new Promise<void>((resolveReady) => dashboard.server.once('listening', () => resolveReady()))
+  const id = encodeProject(repo)
+  try {
+    const refused = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: 'REMOVE wrong' }),
+    })
+    assert.equal(refused.status, 400)
+    const removed = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: `REMOVE ${basename(repo)}` }),
+    })
+    assert.equal(removed.status, 200)
+    assert.equal((await removed.json()).ok, true)
+    assert.equal(existsSync(join(repo, 'README.md')), true)
+    const repeated = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    assert.equal(repeated.status, 404)
+  } finally { await dashboard.close() }
 })
 
 test('directory browse reports folder state; explicit setup initializes Git then the real SpexCode CLI before cataloging', async () => {

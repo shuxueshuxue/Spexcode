@@ -170,7 +170,9 @@ function SessionDock({ sessions, activeId }) {
               'data-locked': locked ? '' : undefined,
               'data-tip': t('dockSessions.rowTip'),
               'aria-grabbed': drag?.id === item.s.id || undefined,
-              onMouseDown: (event) => startRowDrag(event, item.s),
+              // A session row is chrome around the active TUI. Keep the browser button from stealing the
+              // xterm helper textarea on a plain click; the same press still arms the shared drag gesture.
+              onMouseDown: (event) => { event.preventDefault(); startRowDrag(event, item.s) },
               onClick: (event) => {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
                 ;(event.ctrlKey || event.metaKey ? pinTab : navigate)('sessions', item.s.id)
@@ -236,7 +238,7 @@ function DockHead({ mode, specs, sessions }) {
             </button>
             <button type="button" className="dock-head-act dock-head-act-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
               onClick={() => navigate('sessions', 'new')}>
-              <Icon name="plus" size={14} />
+              <Icon name="plus" size={15} />
             </button>
           </>
         )}

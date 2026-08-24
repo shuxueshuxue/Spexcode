@@ -37,6 +37,11 @@ test('session tabs use the shared visible title, not the stable search handle', 
   assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)
 })
 
+test('resource tabs name the resource only, without leaking the owning session title', () => {
+  assert.match(source, /return resource\?\.label \|\| key/)
+  assert.doesNotMatch(source, /return `\$\{title\} · \$\{resource\?\.label \|\| key\}`/)
+})
+
 test('resident review tabs share the workspace strip while Issues removes the activity rail', () => {
   // Evals, Issues, and Settings are resident tabs. Issues is the focused full-width reading surface; its
   // detail still has the shared strip, while the activity rail is intentionally omitted.
@@ -67,4 +72,10 @@ test('left dock and right context controls use distinct semantic glyphs', () => 
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
   assert.match(contextToggle[0], /<Icon name="list-checks" size=\{14\} \/>/)
   assert.doesNotMatch(contextToggle[0], /panel-right/)
+})
+
+test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {
+  const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
+  assert.match(dock, /className="dock-head-act dock-head-act-new"[\s\S]*<Icon name="plus" size=\{15\}/)
+  assert.match(css, /\.dock-head-act:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--blue\)/)
 })

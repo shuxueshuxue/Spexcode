@@ -58,7 +58,7 @@ function label(tab, { specs, sessions, names, t }) {
         ...(s?.files || []).map((path) => ({ id: resourceTabKey(s.id, 'file', path), label: path.split('/').filter(Boolean).pop() || path })),
         ...(s?.web || []).map((web) => ({ id: resourceTabKey(s.id, 'web', web.key), label: resourceLabel(web.url) })),
       ].find((item) => item.id === key)
-      return `${title} · ${resource?.label || key}`
+      return resource?.label || key
     }
     return title
   }

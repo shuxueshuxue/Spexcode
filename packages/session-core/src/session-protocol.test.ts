@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
 import { acceptMessage, drain, publishRuntimeSessionState, readRuntimeSession, registerRuntimeSession, runtimeSessionChildren, runtimeSessionNotification, timelineTail } from './index.js'
 import { pendingMessages } from './delivery-queue.js'
-import { sessionArtifactPath, sessionRecordPath } from '@spexcode/spec-core'
+import { sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 import { settleSentDispatch } from './session-timeline.js'
 
 async function withHome<T>(fn: () => Promise<T>): Promise<T> {
@@ -149,6 +149,32 @@ test('runtime registration replay binds opaque metadata without depending on key
       }),
       /different runtime coordinates/,
     )
+  })
+})
+
+test('replaying a legacy runtime record migrates lifecycle fields into the timeline before scrubbing JSON', async () => {
+  await withHome(async () => {
+    const id = 'legacy-runtime'
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    const recordPath = sessionRecordPath(id)
+    writeFileSync(recordPath, JSON.stringify({
+      session_id: id, runtime_owner: 'zcode', worktree_path: process.cwd(), branch: 'legacy',
+      parent: '', status: 'awaiting', proposal: 'close', note: 'legacy handoff', runtime_state: 'waiting',
+      runtime_revision: 'legacy:1', runtime_metadata: {}, createdAt: 1,
+    }))
+
+    assert.deepEqual(await registerRuntimeSession({
+      sessionId: id, runtimeOwner: 'zcode', worktreePath: process.cwd(), branch: 'legacy',
+    }), { replayed: true })
+    assert.deepEqual(readRuntimeSession(id), {
+      sessionId: id, runtimeOwner: 'zcode', runtimeState: 'waiting', revision: 'legacy:1',
+      worktreePath: process.cwd(), branch: 'legacy', parentSessionId: null, title: null, node: null,
+      runtimeMetadata: {}, lifecycle: 'awaiting', proposal: 'close', note: 'legacy handoff', createdAt: 1,
+    })
+    const scrubbed = JSON.parse(readFileSync(recordPath, 'utf8'))
+    assert.equal('status' in scrubbed, false)
+    assert.equal('proposal' in scrubbed, false)
+    assert.equal('note' in scrubbed, false)
   })
 })
 

@@ -537,7 +537,8 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .tab {
   position: relative; flex: 0 1 auto; width: auto; height: 30px;
   display: flex; align-items: center; min-width: 80px; max-width: 240px;
-  border-right: 1px solid var(--edge); color: var(--muted); container-type: inline-size;
+  border-right: 1px solid var(--edge); border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--muted); container-type: inline-size;
   overflow: hidden; animation: tab-in var(--dur-tab) ease backwards;
   transition: background-color var(--dur-tab) ease, color var(--dur-tab) ease, border-color var(--dur-tab) ease;
 }
@@ -547,7 +548,8 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   min-width: 112px; background: var(--paper); color: var(--ink2);
   border-right-color: transparent; border-radius: var(--radius) var(--radius) 0 0;
 }
-.tab:not(.on):hover { background: var(--panel2); color: var(--ink2); }
+.tab:not(.on):hover { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
+.tab:not(.on):focus-within { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
 @keyframes tab-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tab-out { to { opacity: 0; transform: scaleX(.72); } }
 .tab.tab-closing {
@@ -570,7 +572,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .tab.slot { opacity: .72; font-style: italic; }
 .tab-face {
   flex: 1 1 auto; display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-5); height: 100%;
-  background: none; border: 0; color: inherit; cursor: pointer;
+  background: none; border: 0; border-radius: var(--radius) 0 0 0; color: inherit; cursor: pointer;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui);
 }
 .tab-label { width: max-content; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -580,13 +582,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 @keyframes tab-spin { to { transform: rotate(360deg); } }
 .tab-x {
   flex: 0 0 24px; width: 24px; display: inline-flex; align-items: center; overflow: hidden;
-  padding: 0 var(--space-4) 0 var(--space-1); height: 100%; background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0;
+  padding: 0 var(--space-4) 0 var(--space-1); height: 100%; background: none; border: 0; border-radius: 0 var(--radius) 0 0;
+  color: var(--muted); cursor: pointer; opacity: 0;
   transition: opacity var(--dur-tab) ease, color var(--dur-tab) ease, background-color var(--dur-tab) ease;
 }
 .tab.on .tab-x, .tab:hover .tab-x {
   opacity: 1;
 }
-.tab-x:hover { color: var(--ink2); background: var(--panel2); }
+.tab-x:hover { color: var(--ink2); background: var(--panel2); border-radius: 0 var(--radius) 0 0; }
 .tab-face:focus-visible, .tab-x:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 /* At the narrow end of the same flex scale, text gets the space first. The full label remains on the face's
    accessible name and tooltip, so the second half of a session label can disappear without losing it. Status

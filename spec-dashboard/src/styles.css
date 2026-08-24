@@ -2355,7 +2355,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   border-radius: var(--radius); background: var(--panel2); color: var(--muted); font-size: var(--type-meta);
   line-height: var(--leading-relaxed); overflow-wrap: anywhere;
 }
-.si-action-outcome.pending, .si-action-outcome.sending { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
+.si-action-outcome.pending, .si-action-outcome.sending, .si-action-outcome.queued { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .si-action-outcome.delivered { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
 .si-action-outcome.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
 .si-command-tools .si-action-outcome { margin-left: auto; }

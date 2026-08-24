@@ -5115,6 +5115,7 @@ export async function rawKey(id: string, key: string | string[]): Promise<boolea
     }
     return sent
   })
-  if (sent) markHumanPromptActive(id)
+  // Raw-key remote control is transport fallback, not a lifecycle event. Freshness belongs to the
+  // harness turn hooks or a successfully handed-over durable prompt; navigation keys cannot forge working.
   return sent
 }

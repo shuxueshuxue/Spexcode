@@ -161,6 +161,13 @@ test('focus navigation preserves camera height while centering the focused row',
   assert.equal(viewport.y, 300 - focus.y * viewport.zoom)
 })
 
+test('keyboard focus stays on the pane centre even when the visible frontier is vertically oversized', () => {
+  const focus = { x: X_GAP, y: 216 }
+  const children = Array.from({ length: 17 }, (_, index) => ({ x: X_GAP, y: (index - 8) * Y_GAP }))
+  const viewport = viewportForFocus({ focus, child: children[8], visible: [focus, ...children], width: 900, height: 300, zoom: 0.85, fit: false })
+  assert.equal(viewport.y + focus.y * viewport.zoom, 150)
+})
+
 test('camera clamps an oversized vertical frontier to a reachable top edge', () => {
   const focus = { x: 0, y: 0 }
   const children = Array.from({ length: 17 }, (_, index) => ({ x: X_GAP, y: (index - 8) * Y_GAP }))

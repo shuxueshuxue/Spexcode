@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
 import { acceptMessage, drain, publishRuntimeSessionState, readRuntimeSession, registerRuntimeSession, runtimeSessionChildren, runtimeSessionNotification, timelineTail } from './index.js'
 import { pendingMessages } from './delivery-queue.js'
-import { sessionArtifactPath } from '@spexcode/spec-core'
+import { sessionArtifactPath, sessionRecordPath } from '@spexcode/spec-core'
 import { settleSentDispatch } from './session-timeline.js'
 
 async function withHome<T>(fn: () => Promise<T>): Promise<T> {
@@ -107,6 +107,10 @@ test('an external runtime registers a root and child, then publishes through the
       agentId: 'agent-1', childToolCallId: 'tool-1',
     })
     assert.equal(readRuntimeSession('z-child')?.lifecycle, 'active')
+    const registeredJson = JSON.parse(readFileSync(sessionRecordPath('z-child'), 'utf8'))
+    assert.equal('status' in registeredJson, false)
+    assert.equal('proposal' in registeredJson, false)
+    assert.equal('note' in registeredJson, false)
 
     assert.deepEqual(await publishRuntimeSessionState({
       sessionId: 'z-child', runtimeOwner: 'zcode', revision: 'worker-ready:1', runtimeState: 'running', lifecycle: 'active',
@@ -118,7 +122,11 @@ test('an external runtime registers a root and child, then publishes through the
       remaining: 0,
     })
     assert.deepEqual(handed, ['[spex watch] z-child is running'])
-    assert.deepEqual(timelineTail('z-child').map((event) => event.kind), ['status'])
+    assert.deepEqual(timelineTail('z-child').map((event) => event.kind), ['status', 'status'])
+    const publishedJson = JSON.parse(readFileSync(sessionRecordPath('z-child'), 'utf8'))
+    assert.equal('status' in publishedJson, false)
+    assert.equal('proposal' in publishedJson, false)
+    assert.equal('note' in publishedJson, false)
   })
 })
 

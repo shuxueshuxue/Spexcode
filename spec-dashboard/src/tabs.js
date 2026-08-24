@@ -123,6 +123,18 @@ export function focusLatestTab(match) {
   return true
 }
 
+// Session rows are allowed to replace the current session slot only when their document is not already
+// held. Resolve that identity in the one workspace store first, then let the caller's surface own the
+// actual route write (Dock uses shell navigation; Sessions uses its ViewScope). This prevents a click on B
+// from rewriting A's address while the reader is looking at A.
+export function focusSessionTab(id, open) {
+  if (!id) return false
+  const held = getTabs().find((tab) => tab.page === 'sessions' && tab.param === id)
+  const route = { page: 'sessions', param: id, query: null }
+  open?.(held ? { ...route } : route)
+  return !!held
+}
+
 export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)

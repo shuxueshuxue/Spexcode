@@ -22,7 +22,7 @@ export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 's
 // The rail is the workspace's top-level board bar. Spec is a resident board destination; a node or file
 // route projects back onto it instead of making the selected top-level board disappear. Graph remains
 // directly addressable for legacy links but is no longer a workspace destination or rail entry.
-export const RAIL_PAGES = ['sessions', 'spec', 'evals', 'issues', 'settings']
+export const RAIL_PAGES = ['spec', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons

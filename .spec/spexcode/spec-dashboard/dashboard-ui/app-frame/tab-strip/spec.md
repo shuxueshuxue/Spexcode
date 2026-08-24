@@ -236,6 +236,11 @@ does, so the strip speaks the board's vocabulary rather than inventing a tab-spe
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
 
+The resident Spec tab is one slot and keeps the Spec page icon even when its route names a node. Its face,
+tooltip, accessible label, and visible title use that node's own title; the bare `#/spec` face says `Spec`.
+Opening a governed file keeps the independent file document slot and names the file from its path. Neither
+route creates a second Spec tab.
+
 **A board's DETAIL is route state inside its top-level tab.** Evals and Issues keep the stable page label and
 page icon in the strip while the URL carries the selected scenario or issue; Evals may additionally wear the
 selected node's status dot, which costs no detail fetch. `#/issues/new` remains a compose route with no issue

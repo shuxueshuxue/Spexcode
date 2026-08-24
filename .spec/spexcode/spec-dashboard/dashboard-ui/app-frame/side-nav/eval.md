@@ -19,14 +19,14 @@ scenarios:
       Open a scoped dashboard through the real hub gateway with catalog access. The rail shows FIVE
       project page entries and its dock toggle, with no project chip or Projects button. Confirm the
       compact project identity button is instead in the status row, then click each route in turn
-      (graph → sessions → evals → issues → settings) and read location.hash after each click; press the
+      (spec → sessions → evals → issues → settings) and read location.hash after each click; press the
       browser Back button; deep-load #/settings directly; then navigate to the legacy
       /p/<id>/#/projects address.
     expected: >
-      The scoped rail carries five page entries (graph, sessions, evals, issues, settings — evals above
-      issues), never a project chip or Projects page entry. The status row alone carries the current
+      The scoped rail carries five page entries (spec, sessions, evals, issues, settings — Spec first and
+      evals above issues), never a project chip or Projects page entry. The status row alone carries the current
       project mark/name button. Each route click swaps the main area
-      to that page and the hash reads #/graph, #/sessions/…, #/evals, #/issues, #/settings respectively,
+      to that page and the hash reads #/spec, #/sessions/…, #/evals, #/issues, #/settings respectively,
       with the clicked rail entry accented; Back returns to the previous page; a direct load at #/settings
       opens on the settings page (no flash through the graph). The desktop rail is 40px wide and its
       centered route targets stay 32px square. The legacy scoped projects hash performs one
@@ -40,13 +40,26 @@ scenarios:
       state, then open a governed file route and finally the Issues board. Read the route hash, rail
       `aria-current`, Explorer section heads, and whether the left rail/dock exists.
     expected: >-
-      `#/spec` shows Sessions, Spec, Evals, Issues, and Settings as peer rail anchors, with only Spec
+      `#/spec` shows Spec, Sessions, Evals, Issues, and Settings as peer rail anchors, with only Spec
       selected and the Explorer dock exposing exactly Specs and Files. `#/file/<path>` keeps Spec selected
       and the same two Explorer sections. `#/issues` keeps the existing full-width contract: no activity
       rail and no Explorer dock.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/Shell.jsx]
     test: spec-dashboard/test/spec-rail.e2e.mjs
+  - name: ownership-audit-session-focus-and-document-names
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In real Chromium, hold Sessions A and B, focus A, then click B in the routed Sessions forest. Also
+      inspect the rail labels and visit a Spec node and governed file route.
+    expected: >-
+      Clicking held B focuses B's existing workspace tab without rewriting A; active hash, tab, title, and
+      content all name B while A remains held. The routed Sessions document has no duplicate dock body.
+      The rail order is Spec, Sessions, Evals, Issues, Settings and Spec's label/tip are localized. The
+      Spec detail keeps one Spec-icon tab while its face, tooltip, aria-label, and title use the node title;
+      file focus uses its file title and creates no second Spec tab.
+    code: [spec-dashboard/src/tabs.js, spec-dashboard/src/Dock.jsx, spec-dashboard/src/SessionsView.jsx, spec-dashboard/src/TabStrip.jsx]
+    test: spec-dashboard/test/ownership-audit.e2e.mjs
   - name: offline-switcher-is-inert
     tags: [frontend-e2e, desktop]
     description: >

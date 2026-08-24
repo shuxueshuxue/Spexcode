@@ -9,9 +9,10 @@ scenarios:
       session tab is reused; ctrl-click a session row and confirm it creates a pinned tab; open Settings and
       confirm its tab label is Settings.
     expected: >
-      The strip contains both a session and one dynamic Spec tab after the cross-kind navigation. A second
-      spec keeps the same `#/spec` tab identity while its detail address changes. Three plain session clicks leave one session tab whose
-      address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
+      The strip contains both a session and one resident Spec tab after the cross-kind navigation. A second
+      spec keeps the same `#/spec` tab identity while its detail address changes, and that tab face, tooltip,
+      accessible label, and visible title use the selected node title. Three plain session clicks leave one
+      session tab whose address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
       Settings, never the internal key tabs.settings.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
@@ -20,8 +21,10 @@ scenarios:
       In a real Chromium dashboard, open two canonical `#/spec/<id>` detail URLs and inspect the workspace
       strip after each route settles; then open a `#/file/<path>` detail.
     expected: >-
-      Both Spec details keep one active top-level Spec tab labelled Spec. The URL retains each selected
-      `#/spec/<id>` detail address, and the file route opens an independent File tab beside the Spec tab.
+      Both Spec details keep one active top-level Spec tab with the Spec icon. The URL retains each selected
+      `#/spec/<id>` detail address, while its face, tooltip, accessible label, and visible title use that
+      node's title. The file route keeps the resident Spec slot and opens an independent File tab named by
+      its basename; it never mints a second Spec tab.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/views.jsx, spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/test/spec-resident-tab.e2e.mjs

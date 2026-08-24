@@ -42,6 +42,13 @@ test('session tabs use the shared visible title, not the stable search handle', 
   assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)
 })
 
+test('Spec detail tabs keep the resident icon and slot while naming the focused document', () => {
+  assert.match(source, /if \(tab\.page === 'spec'\) return tab\.param \?\s*[\s\S]*?tab\.param/)
+  assert.match(source, /specs\?\.find\(\(s\) => s\.id === tab\.param\)\?\.title \|\| tab\.param/)
+  assert.match(source, /const icon = isResident\(tab\.page\) \? iconFor\(tab\.page\) : null/)
+  assert.match(source, /<button type="button" className="tab-face" data-tip=\{tabLabel\} aria-label=\{tabLabel\}/)
+})
+
 test('resource tabs name the resource only, without leaking the owning session title', () => {
   assert.match(source, /return resource\?\.label \|\| key/)
   assert.doesNotMatch(source, /return `\$\{title\} · \$\{resource\?\.label \|\| key\}`/)

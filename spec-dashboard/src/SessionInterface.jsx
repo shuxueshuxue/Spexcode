@@ -1557,7 +1557,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         <SessionForestPanel
           sessions={sessions}
           activeId={active}
-          onSelect={(id) => id === 'new' ? setSel('new') : selectSession(id)}
+          // Row selection goes through the workspace identity resolver. The routed view owns the fallback
+          // write, while an already-held session focuses its existing tab instead of rewriting this slot.
+          onSelect={(id) => onPickSession ? onPickSession(id) : (id === 'new' ? setSel('new') : selectSession(id))}
           onSearch={onOpenSearch}
           reload={reload}
           onContextMenu={setCtxMenu}

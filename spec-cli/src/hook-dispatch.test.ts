@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -371,6 +371,41 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
   assert.match(b, /"status": "active"/)
   assert.match(b, /"proposal": ""/)
   assert.match(b, /"note": ""/)
+})
+
+test('mark-active never trusts the runtime envelope to skip the canonical writer', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-canonical-writer-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'canonical-writer'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
+  const record = join(runtime, 'sessions', sid, 'session.json')
+  // This is deliberately the stale envelope shape that caused the production drift: it says active while
+  // the canonical application may still be asking/close-pending. The hook must still call the one writer.
+  writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status: 'active', proposal: '', note: '' }, null, 2))
+  const called = join(dir, 'writer-args')
+  const fakeSpex = join(dir, 'fake-spex')
+  writeFileSync(fakeSpex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" > ${JSON.stringify(called)}\n`)
+  chmodSync(fakeSpex, 0o755)
+  const result = spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      SPEX: fakeSpex,
+      SPEXCODE_HOME: home,
+      SPEX_HOOK_MANIFEST: manifest,
+    },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'true' } }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(called, 'utf8').trim(), `internal session-state active --session ${sid}`)
 })
 
 // [[hook-dispatch]] per-tree slots — with no SPEX_HOOK_MANIFEST override, the dispatcher reads the manifest

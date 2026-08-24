@@ -928,7 +928,9 @@ app.post('/api/sessions/:id/input', async (c) => {
     const id = c.req.param('id')
     const text = typeof body?.text === 'string' ? body.text : ''
     const deliveryKey = typeof body?.deliveryId === 'string' && body.deliveryId.trim() ? body.deliveryId.trim() : undefined
-    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey } : {})
+    // Command Box acceptance is the durable append. Do not hold the HTTP request on a
+    // slow native handoff: the delivery supervisor already owns the queued retry path.
+    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey, deferDrain: true } : { deferDrain: true })
     if (!r.ok) return c.json(r, 502)
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })

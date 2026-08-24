@@ -202,17 +202,20 @@ that through `harness_session_id` to the governed SpexCode record. That alias is
 path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, fires and persists the
 first prompt, then stages the returned thread id for the lifecycle owner to bind on the governed record. The runtime
 envelope path is project key from the git common dir → `<store>/projects/<enc>/sessions/<id>/session.json`; lifecycle
-state is read and written through the canonical application.
-The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
+state is read and written through the canonical application. Hook shells pass native event identity directly to the
+canonical writer; they do not read `session.json` as a second governed/lifecycle authority.
+The hooks split on the governed boundary. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)
 record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), because a self-launched agent has no board
-to feed, so the Stop gate must NOT misfire its declare-demand. Lifecycle hooks — mark-active, Stop, StopFailure, and
-idle — write through the thin `spex internal session-state … --session <id>`/internal lifecycle entry points, so the
-TS layer owns the canonical application; they pass the id explicitly because there is no worktree `.session` to
-fall back on. Agent-facing declarations remain porcelain, but a hook never calls a delivery-capable porcelain
-command to repair its own state. mark-active does not inspect the JSON envelope as a cache: the canonical
-writer performs the semantic no-op check, so there cannot be a second lifecycle fact. A writer that
-refuses (an unreadable record, a retired session — [[sessions-core]]) says so instead of silently repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
+to feed, so the Stop gate must NOT misfire its declare-demand. The canonical lifecycle writer owns this boundary
+and returns a no-op for a non-governed or missing record, so a governed event is not silently lost just because
+an old envelope copy is missing. Lifecycle hooks — mark-active, Stop, StopFailure, and idle — write through the
+thin `spex internal session-state … --session <id>`/internal lifecycle entry points, so the TS layer owns the
+canonical application; they pass the id explicitly because there is no worktree `.session` to fall back on.
+Agent-facing declarations remain porcelain, but a hook never calls a delivery-capable porcelain command to repair
+its own state. The canonical writer performs the semantic no-op check, so there cannot be a second lifecycle fact.
+A writer that refuses (an unreadable record, a retired session — [[sessions-core]]) says so instead of silently
+repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.

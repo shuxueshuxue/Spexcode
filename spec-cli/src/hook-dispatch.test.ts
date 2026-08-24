@@ -99,6 +99,42 @@ test('stop-gate forced continuation writes asking through the internal lifecycle
   assert.ok(!entries.some((entry) => entry.startsWith(`session ask --session ${sid}`)), 'the stop hook must not invoke porcelain delivery')
 })
 
+test('idle hook delegates governance to the canonical writer instead of reading session.json', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-idle-hook-canonical-'))
+  const sid = 'idle-hook-canonical'
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'idle', 'idle.sh')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fake, 0o755)
+  const result = spawnSync('bash', [source], {
+    cwd: dir,
+    env: { ...process.env, SPEX: fake, SPEXCODE_HARNESS: 'claude', SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh') },
+    input: JSON.stringify({ session_id: sid, notification_type: 'idle_prompt' }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-idle --session ${sid}`)
+})
+
+test('session-fail hook delegates governance to the canonical writer instead of reading session.json', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-fail-hook-canonical-'))
+  const sid = 'fail-hook-canonical'
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'session-fail', 'fail.sh')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fake, 0o755)
+  const result = spawnSync('bash', [source], {
+    cwd: dir,
+    env: { ...process.env, SPEX: fake, SPEXCODE_HARNESS: 'claude', SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh') },
+    input: JSON.stringify({ session_id: sid }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-fail --session ${sid}`)
+})
+
 test('dispatch migrates the historical stop-gate source before it can call porcelain delivery', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-legacy-migration-'))
   const home = join(dir, 'home')

@@ -265,7 +265,15 @@ export default function SessionTerm({ sessionId, active = true, focused = active
           return
         }
         if (!(e.data instanceof ArrayBuffer)) return
-        if (!viewerIsVisible()) hiddenStreamFlowing = true
+        if (!viewerIsVisible()) {
+          // Resident panes keep their browser identity, but hidden native output must not spend CPU parsing
+          // and painting into an invisible xterm. The next visible geometry request asks the bridge for a
+          // fresh repaint, so there is no hidden backlog to fast-forward.
+          hiddenStreamFlowing = true
+          committedSize = null
+          frameQueue.length = 0
+          return
+        }
         const frame = new Uint8Array(e.data)
         const size = committedSize
         committedSize = null

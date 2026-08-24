@@ -3323,7 +3323,7 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     const raw = readRecord(id)
     if (raw?.archived) throw new ResourceConflict(`refusing lifecycle change for closed session ${id}: it is read-only; resume it before changing state`)
     const rec = readLiveRecord(id)
-    if (!rec) return false
+    if (!rec?.governed) return false
     const application = configuredSessionApplicationIfCutover()
     if (application) {
       const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
@@ -3369,7 +3369,7 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {
     const rec = readLiveRecord(sessionId)
-    if (!rec || rec.status !== 'active' || rec.stopped || rec.archived) return false
+    if (!rec?.governed || rec.status !== 'active' || rec.stopped || rec.archived) return false
     const application = configuredSessionApplicationIfCutover()
     if (application) {
       application.transitionSession(sessionId, {
@@ -3605,7 +3605,7 @@ export function markIdle(sessionId?: string): boolean {
   if (!id) return false
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
-    if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
+    if (!rec?.governed || rec.status !== 'active') return false  // managed active-only: never clobber a declaration
     publishCanonicalLifecycle(rec, 'idle', null, null)
     // After cutover the JSON file is only the runtime/worktree envelope. Do not mirror this inferred
     // lifecycle transition into it: doing so creates a second, stale-looking status surface for hooks.

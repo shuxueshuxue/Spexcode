@@ -2,7 +2,7 @@
 title: commit-surgery
 status: active
 hue: 200
-desc: The git-native anchors of the footprint — pre-commit runs an UNCONDITIONAL materialize + staged-index repair (strip leaked blocks in place, evict HEAD-untracked artifacts; never reject), post-checkout/post-merge re-materialize; no harness event ever triggers a materialize.
+desc: The git-native anchors of the footprint — pre-commit runs an UNCONDITIONAL materialize + staged-index repair (strip leaked blocks in place, evict HEAD-untracked artifacts; never reject), post-checkout/post-merge re-materialize; no harness event ever triggers a materialize. A git hook invoked from a linked worktree resolves the CLI from that checkout first, so an older main-checkout materializer cannot rewrite newer worktree artifacts.
 code:
   - spec-cli/src/commit-surgery.ts#commitSurgery
 related:

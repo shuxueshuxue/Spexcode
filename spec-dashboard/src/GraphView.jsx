@@ -325,7 +325,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     animRef.current = requestAnimationFrame(step)
   }, [getViewport, writeViewport])
 
-  // Frame a focus for reading: anchor the focus→child pair at 43% (or focus→parent for a leaf), while a
+  // Frame a focus for reading: roots anchor the focus→child pair at 43%; non-roots anchor their own x, while a
   // complete visible neighbourhood gets fit-to-pane treatment with one left gutter. The explicit fit
   // flag is reserved for first paint and pane resize; focus navigation keeps the current zoom and centers
   // the focused row vertically.
@@ -399,8 +399,8 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     return () => { cancelAnimationFrame(frame); observer.disconnect() }
   }, [graphSurface, page])
 
-  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the reading-pair
-  // x anchor and the focused node's y center at the current zoom. The graph coordinates remain layout-owned;
+  // The camera follows every focus move, from keyboard, click, or programmatic jump, using the root reading-pair
+  // or non-root node x anchor and the focused node's y center at the current zoom. The graph coordinates remain layout-owned;
   // only this viewport changes.
   // Fires on focusId alone (not the poll); reads latest focus/centerOn via refs; skips the first paint.
   const followedRef = useRef(false)
@@ -567,7 +567,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     return () => window.removeEventListener('mousemove', onMove, true)
   }, [])
 
-  // Clicking a node focuses it and drills it open. The same reading-pair camera target used by keyboard
+  // Clicking a node focuses it and drills it open. The same camera target used by keyboard
   // navigation is applied after the frontier re-plots; it does NOT open a session.
   const onNodeClick = useCallback((_e, n) => {
     focusNode(n.id)

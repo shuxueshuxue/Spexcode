@@ -1,7 +1,0 @@
-
-### historyIndex=true analyze=false   (200 sessions x 500 messages)
-    plan head   : SEARCH protocol_messages USING INDEX protocol_messages_pending_fifo (target_session_id=?)
-    plan history: SEARCH protocol_messages USING INDEX protocol_messages_history (target_session_id=? AND enqueue_seq>?)
-    dequeue head lookup: 0.0064 ms/op
-    readMessages(sess-7, 0): 0.8733 ms/op
-    page_count=6243

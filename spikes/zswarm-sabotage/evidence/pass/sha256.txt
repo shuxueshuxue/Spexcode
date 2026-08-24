@@ -1,2 +1,0 @@
-1b2b6fc32361b1fb3b0cefdc49454dc0ace3d7434c010bd3f01764c3cc10ff3e  spikes/zswarm-sabotage/evidence/pass/result.json
-0bd082eb3dbb5d2e357975a0c58c47470a2c4105c88b8bcbc81785e1317f38ea  spikes/zswarm-sabotage/evidence/pass/stderr.txt

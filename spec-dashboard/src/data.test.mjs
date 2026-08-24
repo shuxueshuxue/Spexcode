@@ -112,11 +112,11 @@ test('camera anchors a focus-child reading pair to the left-of-centre token', ()
   assert.equal(viewport.y, 300)
 })
 
-test('camera uses the parent-focus midpoint for a leaf', () => {
+test('camera anchors a non-root focus on its own x-axis', () => {
   const focus = { x: X_GAP, y: 54 }
   const parent = { x: 0, y: 0 }
   const viewport = viewportForFocus({ focus, parent, visible: [parent, focus], width: 900, height: 600, zoom: 1, fit: false })
-  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (X_GAP / 2))
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - focus.x)
   assert.equal(viewport.y, 300 - focus.y)
 })
 
@@ -148,16 +148,17 @@ test('camera lowers zoom only when the anchored neighbourhood cannot fit', () =>
   const nodes = Array.from({ length: 5 }, (_, index) => ({ x: index * X_GAP, y: 0 }))
   const viewport = viewportForFocus({ focus: nodes[4], parent: nodes[3], visible: nodes, width: 900, height: 600, zoom: 0.85 })
   assert.equal(viewport.zoom, (900 - CAMERA_GUTTER) / (4 * X_GAP + 176))
-  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (nodes[3].x + nodes[4].x) / 2 * viewport.zoom)
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - nodes[4].x * viewport.zoom)
 })
 
 test('focus navigation preserves camera height while centering the focused row', () => {
   const nodes = Array.from({ length: 5 }, (_, index) => ({ x: index * X_GAP, y: index === 2 ? 108 : 0 }))
   const focus = nodes[2]
   const child = nodes[3]
-  const viewport = viewportForFocus({ focus, child, visible: nodes, width: 900, height: 600, zoom: 0.85, fit: false })
+  const parent = nodes[1]
+  const viewport = viewportForFocus({ focus, parent, child, visible: nodes, width: 900, height: 600, zoom: 0.85, fit: false })
   assert.equal(viewport.zoom, 0.85)
-  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (focus.x + child.x) / 2 * viewport.zoom)
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - focus.x * viewport.zoom)
   assert.equal(viewport.y, 300 - focus.y * viewport.zoom)
 })
 

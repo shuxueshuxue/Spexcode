@@ -1,9 +1,0 @@
-before crash          : []
-after SIGKILL         : ["protocol.sqlite-journal (21032 bytes)"]
-read-only open, rows  : 1
-after read-only open  : ["protocol.sqlite-journal (21032 bytes)"]
-writable open, rows   : 1 (1 = the committed seed only)
-after a READ          : ["protocol.sqlite-journal (21032 bytes)"]
-after a WRITE         : []
-rows now              : 2
-after close           : []

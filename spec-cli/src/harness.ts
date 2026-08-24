@@ -2014,6 +2014,9 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCo
         if (!loadedIds.size) return done({ healthy: true, references: [] })
         const wanted = referenceIds === undefined ? [...loadedIds] : [...loadedIds].filter((threadId) => referenceIds.includes(threadId))
         loadedIds.forEach((threadId) => references.set(threadId, { referenceId: threadId, turnPresence: 'unknown' }))
+        // A draining generation deliberately has no native turn reads. Complete the census after recording
+        // loaded ownership; leaving the request map empty would otherwise wait for the global timeout forever.
+        if (!wanted.length) return done({ healthy: true, references: [...references.values()] })
         wanted.forEach((threadId) => {
           const id = 100 + requests.size
           requests.set(id, threadId)

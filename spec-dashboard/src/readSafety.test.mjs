@@ -54,6 +54,26 @@ test('an empty diff distinguishes merged work and prints complete git identities
   assert.doesNotMatch(diff, /head\.slice\(0, 8\)/)
 })
 
+test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {
+  const backend = source('../../spec-cli/src/sessions.ts')
+  const diff = source('./DiffDocument.jsx')
+  const en = source('./i18n/en.js')
+  const zh = source('./i18n/zh.js')
+
+  // the diff anchors at a git root that exists: the live worktree when present, the shared main checkout
+  // otherwise; the missing-everywhere case is a ResourceConflict (409 {error, code}), never a raw git ENOENT 500.
+  assert.match(backend, /function diffAnchorRoot/)
+  assert.match(backend, /existsSync\(wt\.path\)/)
+  assert.match(backend, /'diff-unavailable'/)
+  assert.match(backend, /diffHeadPair\(root, wt\)/)
+  // the browser renders the 409 as a calm localized product state, keeping red for real transport errors
+  assert.match(diff, /res\.status === 409/)
+  assert.match(diff, /phase: 'unavailable'/)
+  assert.match(diff, /session\.diffUnavailable/)
+  assert.match(en, /diffUnavailable:/)
+  assert.match(zh, /diffUnavailable:/)
+})
+
 test('a 502 publishes one global offline state and marks retained tallies stale', () => {
   const data = source('./data.js')
   const root = source('./Root.jsx')

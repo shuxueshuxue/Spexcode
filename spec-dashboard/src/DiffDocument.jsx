@@ -144,7 +144,9 @@ export default function DiffDocument({ sessionId }) {
   const [state, setState] = useState({ phase: 'loading', data: null, error: null }); const [draft, setDraft] = useState(null); const [body, setBody] = useState('')
   const [mode, setMode] = useState('split'); const [wrap, setWrap] = useState(false); const [selectedPath, setSelectedPath] = useState('')
   const registerView = useCallback((path, view) => { if (view) views.current.set(path, view); else views.current.delete(path) }, [])
-  const load = () => { setState((current) => ({ ...current, phase: 'loading' })); apiFetch(sessionUrl(sessionId, 'diff'), { cache: 'no-store' }).then(async (res) => { const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`); setState({ phase: 'ready', data, error: null }); setSelectedPath(data.files?.[0]?.path || '') }).catch((error) => setState({ phase: 'error', data: null, error })) }
+  // A 409 is the endpoint's structured "this diff is honestly unavailable" state (no branch, or worktree AND
+  // branch ref both gone) — a calm product fact, not the red transport-error face.
+  const load = () => { setState((current) => ({ ...current, phase: 'loading' })); apiFetch(sessionUrl(sessionId, 'diff'), { cache: 'no-store' }).then(async (res) => { const data = await res.json().catch(() => ({})); if (res.status === 409) { setState({ phase: 'unavailable', data: null, error: null, detail: data?.error || '' }); return } if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`); setState({ phase: 'ready', data, error: null }); setSelectedPath(data.files?.[0]?.path || '') }).catch((error) => setState({ phase: 'error', data: null, error })) }
   useEffect(() => { load(); return () => { views.current.clear() } }, [sessionId])
   const files = state.data?.files || []; const comments = state.data?.comments || []; const unsent = comments.filter((comment) => !comment.sentAt).length
   const selectedIndex = Math.max(0, files.findIndex((file) => file.path === selectedPath))
@@ -159,6 +161,7 @@ export default function DiffDocument({ sessionId }) {
   const save = async () => { if (!draft || !body.trim()) return; const file = files.find((candidate) => candidate.path === draft.filePath) || files[0]; if (!file) return; const res = await apiFetch(sessionUrl(sessionId, 'diff-comments'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, filePath: draft.filePath || file.path, body, diffIdentity: file.diffIdentity }) }); if (res.ok) { setDraft(null); setBody(''); load() } }
   const send = async () => { const res = await apiFetch(sessionUrl(sessionId, 'diff-comments', 'send'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (res.ok) load() }
   if (state.phase === 'loading') return <div className="diff-state">{t('session.diffLoading')}</div>
+  if (state.phase === 'unavailable') return <div className="diff-state diff-unavailable">{t('session.diffUnavailable')}{state.detail ? <code className="diff-oids">{state.detail}</code> : null}</div>
   if (state.phase === 'error') return <div className="diff-state error">{t('session.diffFailed', { message: state.error?.message || String(state.error) })}</div>
   return <div className="diff-document" data-diff-document lang={lang}>
     <header className="diff-toolbar"><span className="diff-refs"><Icon name="git-merge" size={14} /><strong>{state.data.branch}</strong><span>→</span><strong>{state.data.baseRef}</strong></span><code className="diff-oids">{state.data.head} → {state.data.base}</code>

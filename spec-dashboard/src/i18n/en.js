@@ -775,6 +775,7 @@ export default {
     surfaceSwitcher: 'session surface',
     diffLoading: 'loading diff…',
     diffEmpty: 'no branch changes',
+    diffUnavailable: 'branch diff unavailable — this session no longer has a diffable branch',
     diffMerged: 'merged into {base}',
     diffCommit: 'open commit {commit}',
     diffFailed: 'diff unavailable: {message}',

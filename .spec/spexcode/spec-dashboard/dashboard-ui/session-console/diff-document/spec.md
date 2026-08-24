@@ -9,6 +9,7 @@ related:
   - spec-dashboard/src/readSafety.test.mjs
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
+  - spec-cli/src/session-diff.api.test.ts
   - spec-dashboard/src/sessionSurface.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/route.js
@@ -33,6 +34,17 @@ lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment al
 un-sent comments formats them as one review message and uses the existing session input/send path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
 Sent comments remain inline in the diff with their delivery marker.
+
+The diff is a proof over commits, not over a working directory, so the endpoint anchors its git reads at a
+root that exists: the session worktree while it is on disk, and the shared main checkout — which holds the
+same refs and objects — once the worktree has been removed (landed and cleaned, or reaped). A session whose
+worktree is gone therefore still renders its real changes or its merged state. Only when the branch ref is
+gone everywhere (or the session never had a branch, or its heads cannot be proven) does the endpoint refuse,
+and that refusal is a structured `409 {error, code: 'diff-unavailable'}` — never an unhandled git failure
+surfacing as a 500. The browser renders the 409 as a calm localized "diff unavailable" state carrying the
+server's sentence, keeping the red error face for real transport failures. The API contract is executable in
+`spec-cli/src/session-diff.api.test.ts` (live worktree, removed-worktree-landed, vanished-branch), and the
+browser/backend seam in `readSafety.test.mjs`.
 
 An empty file list is not itself a claim that the branch authored nothing. The header spells the full branch
 and base ref names and full object ids. When the branch head is already an ancestor of the base head, the empty

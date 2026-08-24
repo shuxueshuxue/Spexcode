@@ -216,7 +216,25 @@ test('closing a session stays in the session identity domain', () => {
   assert.deepEqual(closeDestination({ page: 'spec', param: 'node' }, [], 0), { page: 'graph', param: null, query: null })
 })
 
-test('closing lands on the nearest same-kind tab, then the nearest of any kind, and leaves only from an empty strip', () => {
+test('closing returns to the last-focused same-kind tab, then the last-focused of any kind, before falling back to position', () => {
+  const sess = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
+  const file = (id) => ({ page: 'file', param: id, query: null, pinned: true })
+  const board = (page) => ({ page, param: null, query: null, pinned: true })
+  const recent = (...tabs) => tabs.map(tabKey)
+
+  // SAME KIND, LAST FOCUSED: the file the reader came from wins over a nearer file they have not looked at
+  assert.deepEqual(closeDestination(file('x'), [file('L'), sess('s'), file('RR')], 1, recent(file('x'), file('RR'), file('L'))), file('RR'))
+  // SAME KIND BY POSITION beats a more recently focused tab of another kind: kind first, recency second
+  assert.deepEqual(closeDestination(file('x'), [file('L'), sess('s')], 1, recent(file('x'), sess('s'))), file('L'))
+  // NO SAME-KIND SURVIVOR: the last-focused tab of any kind, not the positional neighbor
+  assert.deepEqual(closeDestination(file('x'), [sess('a'), board('evals'), sess('b')], 1, recent(file('x'), sess('b'), sess('a'))), sess('b'))
+  // history naming tabs that already left the strip is skipped, never trusted
+  assert.deepEqual(closeDestination(file('x'), [file('L'), file('R')], 1, recent(file('x'), file('gone'), file('L'))), file('L'))
+  // a closed non-focused key in the history does not resurrect it: only survivors inherit
+  assert.deepEqual(closeDestination(sess('x'), [board('issues')], 0, recent(sess('x'), sess('closed-earlier'))), board('issues'))
+})
+
+test('closing with no focus history lands on the nearest same-kind tab, then the nearest of any kind, and leaves only from an empty strip', () => {
   const sess = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
   const file = (id) => ({ page: 'file', param: id, query: null, pinned: true })
   const board = (page) => ({ page, param: null, query: null, pinned: true })

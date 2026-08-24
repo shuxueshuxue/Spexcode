@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { createServer } from 'node:net'
-import { unlinkSync } from 'node:fs'
+import { appendFileSync, unlinkSync } from 'node:fs'
 
 const socketPath = (process.env.CLAUDE_BG_RENDEZVOUS_SOCK || '').trim()
 const sessionId = (process.env.SPEXCODE_SESSION_ID || '').trim() || 'unknown'
 const intervalMs = Math.max(20, Number.parseInt(process.env.FAKE_HARNESS_INTERVAL_MS || '120', 10) || 120)
+const capturePath = (process.env.FAKE_HARNESS_CAPTURE || '').trim()
 
 if (!socketPath) {
   console.error('fake-harness: CLAUDE_BG_RENDEZVOUS_SOCK is required')
@@ -19,6 +20,13 @@ let timer
 let closed = false
 const write = (line) => process.stdout.write(`${line}\n`)
 const compact = (value) => value.replace(/\s+/g, ' ').trim().slice(0, 240)
+
+// The terminal-input browser fixture opts into this ledger so it can assert bytes that crossed the real
+// tmux/pty bridge. Production launchers never set the variable; ordinary fake-harness behavior is unchanged.
+process.stdin.on('data', (chunk) => {
+  if (!capturePath) return
+  appendFileSync(capturePath, chunk)
+})
 
 const server = createServer((connection) => {
   let buffer = ''

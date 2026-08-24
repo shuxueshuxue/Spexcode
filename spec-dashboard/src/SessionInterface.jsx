@@ -17,7 +17,7 @@ import { routeAddress, sessionEvalAddress } from './address.js'
 import { routeHash } from './route.js'
 import { useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
-import { apiFetch } from './data.js'
+import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
@@ -1025,10 +1025,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const deliveryId = commandDeliveryKeysRef.current[active] || crypto.randomUUID()
     commandDeliveryKeysRef.current[active] = deliveryId
     setActionOutcome({ owner: 'command', phase: 'sending', message: t('session.outcomeSending') })
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), COMMAND_DELIVERY_TIMEOUT_MS)
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: 'command', text, deliveryId }),
+        signal: controller.signal,
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
@@ -1054,11 +1057,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
+      if (controller.signal.aborted) {
+        setActionOutcome({ owner: 'command', phase: 'failed', message: t('session.outcomeUnconfirmed') })
+        return
+      }
       setActionOutcome({
         owner: 'command',
         phase: 'failed',
         message: error instanceof Error ? error.message : String(error),
       })
+    } finally {
+      window.clearTimeout(timeout)
     }
   }
 

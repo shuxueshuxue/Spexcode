@@ -384,7 +384,9 @@ Command Box dispatches by **appending to the target's durable log** ([[dispatch]
 so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows only the
 in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry. Each draft carries
 one opaque delivery key while pending, so a retry addresses the existing durable queue entry instead of appending
-a duplicate. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
+a duplicate. The HTTP request has one named transport deadline; if the response is not confirmed by then, the
+draft and delivery key stay in place and the outcome says delivery is unconfirmed and retry is safe. This deadline
+does not write or infer lifecycle state. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
 the shared notice says retry is safe; only adapter handover clears the draft and closes the box. Once either result
 settles, it visibly acknowledges through the shared [[transient-notices]] stack — a short-lived delivery/failure
 result outside the Command Box's geometry — before a successful send clears the draft and closes the box. A `/` line

@@ -13,7 +13,8 @@ related:
 
 This node owns the current-state adopter cut-in plan. It records the smallest protocol, topology transaction, runtime
 adapter, configuration, journal, and wake-hint composition that each reference adopter needs without adding product
-semantics to the protocol. The plan is evidence-led: self-launch and Spex governed have executable in-spike proofs;
+semantics to the protocol. The plan is evidence-led: self-launch and Spex governed were proven by spike fixtures
+recorded in git history;
 ZSwarm has no production importer in this repository and therefore has no executable adopter proof at this base.
 
 The plan freezes the following adopter-facing consequences: protocol `session_id` is globally unique within one
@@ -26,7 +27,7 @@ transaction, so an adapter that keeps one may not present it as protocol-level a
 crash and retry proof. Sender revocation, cursor restart semantics, native identity, lifecycle, and adapter
 results remain adopter-owned decisions; they are not protocol operations.
 
-The spike fixtures under `spikes/adopter-api/` are temporary absolute-database experiments. Their fail-first logs are
-retained alongside passing outputs. They do not import production adopters or authorize changes to the legacy files;
-the production cutovers still require sabotage, YATU, one-way migration, and physical deletion at the milestones named
-by the architecture ledger.
+Those fixtures were temporary absolute-database experiments and no longer ship in this tree; their fail-first and
+passing outputs are reachable through git history at the commits their readings name. They never imported production
+adopters or authorized changes to the legacy files; the production cutovers still require sabotage, YATU, one-way
+migration, and physical deletion at the milestones named by the architecture ledger.

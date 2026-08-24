@@ -77,3 +77,14 @@ test('Command Box turns a lost response into an explicit retryable outcome', () 
   assert.match(session, /controller\.signal\.aborted[\s\S]*outcomeUnconfirmed/)
   assert.match(session, /clearTimeout\(timeout\)/)
 })
+
+test('session row focus is navigation-only', () => {
+  const view = source('./SessionsView.jsx')
+  const tabs = source('./tabs.js')
+
+  assert.match(view, /focusSessionTab\(id, \(route\) => scope\.open\(route\)\)/)
+  assert.doesNotMatch(view, /fetch\(|apiUrl\(|markHumanPromptActive|resumeSession/)
+  assert.match(tabs, /export function focusSessionTab\(id, open\)/)
+  assert.match(tabs, /open\?\.\(held \? \{ \.\.\.route \} : route\)/)
+  assert.doesNotMatch(tabs, /markHumanPromptActive|resume|\/api\/sessions/)
+})

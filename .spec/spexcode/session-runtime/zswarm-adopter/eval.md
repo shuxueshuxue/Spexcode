@@ -17,8 +17,8 @@ scenarios:
     test: scripts/m5-zswarm-adopter.mjs
     code: scripts/m5-zswarm-adopter.mjs
     related:
-      - spikes/zswarm-sabotage/consumer.mjs
-      - spikes/zswarm-sabotage/trace-gate.mjs
+      - scripts/zswarm-sabotage/consumer.mjs
+      - scripts/zswarm-sabotage/trace-gate.mjs
 ---
 
 # ZSwarm adopter loss

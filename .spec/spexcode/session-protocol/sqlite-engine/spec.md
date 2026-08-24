@@ -8,17 +8,13 @@ code:
 related:
   - .spec/spexcode/session-protocol/spec.md
   - docs/session-architecture-concept-map.md
-  - spikes/sqlite-m2/engine.mjs
-  - spikes/sqlite-m2/test/engine.test.mjs
-  - spikes/sqlite-m2/test/concurrency.test.mjs
-  - spikes/sqlite-m2/stubs/build.mjs
-  - spikes/sqlite-m2/README.md
 ---
 # sqlite-engine
 
 [[session-protocol]] fixes the adapter-neutral language and transaction semantics. This node owns the layer
 directly beneath it: the exact SQLite engine details an implementation must reproduce byte for byte. It
-governs one document, which is the contract itself; the spike is executable evidence, not the product.
+governs one document, which is the contract itself. The M2 spike that produced its figures was executable
+evidence, never the product, and no longer ships in this tree; it is reachable only through git history.
 
 The engine contract closes implementation items the architecture review deliberately left open. It never
 widens the protocol vocabulary, adds an operation, or reopens a decision frozen above it. Adding an outbox,

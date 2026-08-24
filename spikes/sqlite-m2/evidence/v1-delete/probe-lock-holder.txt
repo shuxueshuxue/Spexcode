@@ -1,4 +1,0 @@
-setting busy_timeout while EXCLUSIVE is held: yes
-probe with busy_timeout=0: refused after 0ms: ERR_SQLITE_ERROR database is locked
-probe with busy_timeout=300 (hold outlasts it): refused after 301ms: ERR_SQLITE_ERROR
-probe with busy_timeout=5000 (hold 700ms): succeeded after 709ms (sqlite 3.51.3) -- waited for the holder: true

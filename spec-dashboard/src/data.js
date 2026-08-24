@@ -70,7 +70,7 @@ export function graphTitles(nodes) {
 }
 
 /**
- * Return the viewport that frames a focus using the reading-pair anchor.
+ * Return the viewport that frames a focus using the root reading-pair or non-root node anchor.
  * `visible` contains graph-space node centres; node dimensions are supplied separately because React Flow
  * measures them after mount while the layout is already stable.
  */
@@ -104,8 +104,10 @@ export function viewportForFocus({
     }
   }
 
-  const pair = child || parent
-  const anchorX = pair ? (focus.x + pair.x) / 2 : focus.x
+  // Roots keep the reading-pair framing that gives the first child column context. Once focus has
+  // entered the tree, the node itself owns the horizontal anchor; a parent/child midpoint pulls the
+  // focused node away from its actual column and makes keyboard navigation feel like it lands between rows.
+  const anchorX = parent ? focus.x : (child ? (focus.x + child.x) / 2 : focus.x)
   // A keyboard/programmatic focus move (`fit: false`) must never change camera height. Only an
   // explicit fit pass may lower the zoom to make an oversized frontier reachable.
   const anchorZoom = fit && !currentFits && fitZoom >= minZoom ? fitZoom : zoom

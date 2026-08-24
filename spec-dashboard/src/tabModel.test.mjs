@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { closeDestination, ensureResidentTabs, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 // [[tab-strip]]'s law, checked without a browser: **a new tab is a gesture, never a side effect.**
 // The regression this exists to catch is the one that shipped: browsing minted a tab per click, so a
@@ -106,6 +106,16 @@ test('resident routes normalize to one top-level Spec, Evals, or Issues tab', ()
   const tabs = normalizeTabs(raw, isDocument)
   assert.deepEqual(tabs.map(tabKey), ['#/evals', '#/issues', '#/settings', '#/spec'])
   assert.ok(tabs.every((tab) => tab.pinned))
+})
+
+test('cold workspace always carries the resident board tabs in one store order', () => {
+  const seeded = ensureResidentTabs([])
+  assert.deepEqual(seeded.map(tabKey), ['#/spec', '#/evals', '#/issues', '#/settings'])
+  assert.ok(seeded.every((tab) => tab.pinned))
+  const existing = [{ page: 'sessions', param: 's1', query: null, pinned: true }, { page: 'issues', param: '42', query: { q: 'scope:x' }, pinned: true }]
+  const merged = ensureResidentTabs(existing)
+  assert.deepEqual(merged.map(tabKey), ['#/sessions/s1', '#/issues', '#/spec', '#/evals', '#/settings'])
+  assert.deepEqual(merged[1], existing[1], 'resident detail selector remains the same workspace tab')
 })
 
 test('opening a spec keeps its detail address while focusing the resident Spec tab', () => {

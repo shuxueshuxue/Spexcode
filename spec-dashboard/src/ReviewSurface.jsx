@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import SideBar, { rememberReviewAddress } from './SideBar.jsx'
+import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar from './StatusBar.jsx'
 import { useIsMobile } from './useIsMobile.js'
@@ -22,8 +22,6 @@ export default function ReviewSurface({ page, param, query }) {
   const { reload } = useBoardApi()
   const loading = <div className="loading">{t('hud.loading')}</div>
   const { component: View } = viewFor(page)
-  rememberReviewAddress({ page, param, query })
-
   if (isMobile) {
     return (
       <div className="review-surface review-surface-mobile">

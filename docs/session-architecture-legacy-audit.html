@@ -20,7 +20,7 @@
 <body>
 <main>
   <header>
-    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · main <code>102ffc43b</code></div>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · refactor tip <code>bca317896</code> (main ancestor)</div>
     <h1>Session 架构与 Legacy 审计</h1>
     <p class="lede">结论：SQLite canonical application 已经是生命周期事实源，但旧的 <code>session-core</code> 文件协议仍被生产 CLI 调用。当前不是“legacy 已清零”，而是迁移已跨过状态切换，却还没有跨过通信与读取链路的删除门。</p>
   </header>
@@ -55,7 +55,7 @@
     <table><thead><tr><th>设施</th><th>生产位置</th><th>问题</th></tr></thead><tbody>
       <tr><td>delivery queue</td><td><code>packages/session-core/src/delivery-queue.ts</code><br><code>pending.json</code> / <code>.delivery-locks</code></td><td>canonical path 已使用 SQLite，但非 cutover 分支仍可回到文件队列。</td></tr>
       <tr><td>watch relation</td><td><code>spec-cli/src/sessions.ts</code><br><code>writeWatchEntries()</code></td><td>watcher JSON writer 仍存在；新 topology API 已有能力但 CLI 尚未彻底切换。</td></tr>
-      <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event read 与 <code>timeline.ndjson</code> fallback 并存；cursor 仍写 <code>cursors.json</code>。</td></tr>
+      <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event/cursor reads and writes use the application; <code>timeline.ndjson</code>/<code>cursors.json</code> remain only for pre-cutover records.</td></tr>
       <tr><td>runtime envelope</td><td><code>spec-cli/hooks/harness.sh</code><br><code>codex-runtime-generations.ts</code></td><td>仍用于 alias、worktree、harness/native identity；不是 lifecycle authority，但仍是旧格式依赖。</td></tr>
     </tbody></table>
   </section>

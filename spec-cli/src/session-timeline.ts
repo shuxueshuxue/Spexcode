@@ -1,6 +1,5 @@
-import { readAliasedRawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
+import { type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { decodeEventJson } from '@spexcode/session-events'
-import * as legacyTimeline from './session-legacy-timeline.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
 
 export type TimelineEvent =
@@ -33,8 +32,7 @@ const canonicalTimelineEvents = (id: string): TimelineEvent[] | null => {
   })
 }
 
-export const timelineEvents = (id: string): TimelineEvent[] =>
-  canonicalTimelineEvents(id) ?? legacyTimeline.timelineEvents(id)
+export const timelineEvents = (id: string): TimelineEvent[] => canonicalTimelineEvents(id) ?? []
 
 export const timelineStamp = (id: string): string | null => {
   const application = configuredSessionApplicationIfCutover()
@@ -42,7 +40,7 @@ export const timelineStamp = (id: string): string | null => {
     const events = application.readEvents(id)
     return events.length === 0 ? null : String(events.at(-1)!.eventSeq)
   }
-  return legacyTimeline.timelineStamp(id)
+  return null
 }
 
 export const timelineTail = (id: string, limit = 500): TimelineEvent[] =>
@@ -61,11 +59,8 @@ export const currentHumanTurn = (id: string): { token: string; acceptedAt: strin
 
 export const recordStatus = (id: string, status: SessionLifecycle, proposal: SessionProposal | null, note: string | null): void => {
   const application = configuredSessionApplicationIfCutover()
-  if (application?.readState(id)) {
-    application.transitionSession(id, { status, proposal, note, reason: 'legacy-cli-status-adapter' })
-    return
-  }
-  legacyTimeline.recordStatus(id, status, proposal, note)
+  if (!application?.readState(id)) throw new Error(`cannot record status for unknown canonical session ${id}`)
+  application.transitionSession(id, { status, proposal, note, reason: 'cli-status' })
 }
 
 const PROPOSAL_DISPLAY: Record<string, DisplayWord> = { merge: 'review', nothing: 'done', close: 'close-pending' }
@@ -78,15 +73,10 @@ export const timelineDisplay = (event: { status: SessionLifecycle; proposal: Ses
 // The HTTP projection remains a SpexCode concern: it resolves aliases, hides unmanaged records, and adds the
 // board's display vocabulary. The package beneath it only reads the durable file protocol.
 export function readTimeline(id: string, limit = 500): { events: TimelineEvent[] } | null {
-  let raw: ReturnType<typeof readAliasedRawRecord> = null
-  try { raw = readAliasedRawRecord(id) } catch { /* cutover sessions may have no legacy record */ }
   const application = configuredSessionApplicationIfCutover()
-  const sessionId = raw?.session_id ?? id
-  if (application && application.readState(sessionId)) {
-    return { events: canonicalTimelineEvents(sessionId)!.slice(-Math.max(1, limit)).map((event) =>
+  if (application && application.readState(id)) {
+    return { events: canonicalTimelineEvents(id)!.slice(-Math.max(1, limit)).map((event) =>
       event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event) }
   }
-  if (!raw || !raw.governed) return null
-  return { events: timelineTail(raw.session_id, limit).map((event) =>
-    event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event) }
+  return null
 }

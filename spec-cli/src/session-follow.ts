@@ -1,6 +1,3 @@
-import { existsSync } from 'node:fs'
-import { sessionStoreDir } from '@spexcode/spec-core'
-import { advanceFollow as legacyAdvanceFollow, followCursor as legacyFollowCursor, unreadSince } from './session-legacy-timeline.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
@@ -81,18 +78,15 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const f of state.values()) if (f.path.length) return f.path
     return []
   }
-  const application = self ? configuredSessionApplicationIfCutover() : undefined
+  const application = configuredSessionApplicationIfCutover()
   const canonicalSelf = self && application?.readState(self) ? self : null
   const readCursor = (id: string): number | null => {
     if (!self) return memo.get(id) ?? null
-    return canonicalSelf
-      ? application!.readFollowCursor(canonicalSelf, id)
-      : legacyFollowCursor(self, id)
+    return canonicalSelf ? application!.readFollowCursor(canonicalSelf, id) : null
   }
   const writeCursor = (id: string, to: number): void => {
     if (!self) memo.set(id, to)
     else if (canonicalSelf) application!.advanceFollowCursor(canonicalSelf, id, to)
-    else legacyAdvanceFollow(self, id, to)
   }
   const line = (id: string, st: DisplayStatus, note: string | null, first: boolean): void => {
     const s = row?.(id, st, note)
@@ -109,7 +103,7 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const id of ids) {
       if (id === self) continue   // the follower's own log is its INBOX, followed below on its own cursor rule
       seen.add(id)
-      if (!existsSync(sessionStoreDir(id))) {
+      if (!application?.readState(id)) {
         if (state.delete(id)) emit(`${tag}[spex] closed · removed  [id ${id}]`)
         if (take) return { gone: id }
         continue
@@ -137,7 +131,12 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       if (stamp !== null && stamp === f.stamp) continue   // THE cheap tick: nothing appended, nothing parsed
       f.stamp = stamp
       const evs = timelineEvents(id)
-      const slice = unreadSince(evs, f.pos)
+      const unread = evs.slice(f.pos)
+      const slice = {
+        events: unread,
+        at: unread.map((_, index) => f.pos + index),
+        next: evs.length,
+      }
       let hit: FollowOutcome | null = null
       for (let k = 0; k < slice.events.length && !hit; k++) {
         const e = slice.events[k]
@@ -170,12 +169,18 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       state.delete(id)
       emit(`${tag}[spex] closed · removed  [id ${id}]`)
     }
-    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own entry in `cursors.json`. It is
+    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own canonical cursor row. It is
     // a WATCH, not a delivery: a message reaches the agent as a prompt through the adapter ([[delivery-queue]]),
     // so this position only decides what THIS process has already reported and can never make an agent miss
     // mail. Never advanced here in take mode — the waiter stops on the event and the next wait resumes on it.
-    if (self && existsSync(sessionStoreDir(self))) {
-      const mine = unreadSince(timelineEvents(self), readCursor(self) ?? 0)
+    if (self && application?.readState(self)) {
+      const ownEvents = timelineEvents(self)
+      const ownStart = readCursor(self) ?? 0
+      const ownUnread = ownEvents.slice(ownStart)
+      const mine = {
+        events: ownUnread,
+        at: ownUnread.map((_, index) => ownStart + index),
+      }
       for (let k = 0; k < mine.events.length; k++) {
         const e = mine.events[k]
         if (e.kind !== 'sent') continue

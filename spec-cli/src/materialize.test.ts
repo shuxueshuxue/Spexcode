@@ -320,6 +320,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   spex(wt, 'materialize')                                  // per-worktree materialize (as sessions.ts does at launch)
 
   assert.ok(existsSync(join(wt, '.codex', 'hooks.json')), 'worktree has a .codex/hooks.json anchor')
+  assert.deepEqual(JSON.parse(readFileSync(join(wt, '.codex', 'hooks.json'), 'utf8')), { hooks: {} }, 'anchor is empty so the root checkout is the sole hook owner')
   assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'main checkout still has the codex shim')
   const cfg = readFileSync(join(codex, 'config.toml'), 'utf8')
   assert.ok(cfg.includes(`[projects."${proj}"]`) && cfg.includes('trust_level = "trusted"'), 'main-checkout project trusted')

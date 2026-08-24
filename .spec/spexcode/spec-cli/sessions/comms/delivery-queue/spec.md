@@ -6,7 +6,7 @@ desc: What a session is still OWED — a small ordered queue of messages not yet
 code:
   - packages/session-core/src/delivery-queue.ts
 related:
-  - spec-cli/src/session-legacy-delivery.ts
+  - spec-cli/src/delivery-lock.ts
   - spec-cli/src/sessions.ts
   - packages/session-core/src/session-timeline.ts
   - spec-cli/src/index.ts
@@ -17,7 +17,7 @@ related:
 
 > Migration boundary: this file queue is a legacy adapter for records that have not crossed the SQLite
 > application fence. Canonical sessions use `session-application`'s protocol queue and never read or write
-> `pending.json`; the CLI keeps this module isolated in `session-legacy-delivery.ts` until the deletion gate.
+> `pending.json`; the canonical CLI queue is application-owned and the legacy file is migration input only.
 
 ## raw source
 

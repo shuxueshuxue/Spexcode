@@ -6,7 +6,9 @@ desc: The shared session module every session feature builds on — the global p
 code:
   - spec-cli/src/sessions.ts
 related:
-  - packages/session-core/src/record-lock.ts
+  - spec-cli/src/session-record-lock.ts
+  - spec-cli/src/delivery-lock.ts
+  - spec-cli/src/session-lock.test.ts
   - packages/session-core/src/message.ts
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
@@ -43,9 +45,9 @@ the same post-success canonical projection as the HTTP bridge rather than creati
 During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
 before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, those files may remain as
 operational metadata, but the canonical application service is the only state/event/topology authority.
-[[session-follow]]'s durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
-is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
-and uses the existing send queue to notify each watcher only after releasing the target's lock; the canonical
+[[session-follow]]'s durable watch relation is stored once in the session application's topology tables. After a
+canonical state record commits, the application projects its watcher edges and uses the existing send queue to
+notify each watcher; the canonical
 application commit invokes the same post-commit wake callback so each recipient's existing durable queue is
 drained immediately in the originating runtime. The callback is a transport wake, not a second queue or source
 of truth: a missing runtime, crash, or failed handover leaves the committed row pending for the normal retry
@@ -89,9 +91,8 @@ binding is durable, so a queue accepted before native readiness drains without a
 dashboard poll. Canonical acceptance is still successful in this state: the caller is told
 `delivery: queued` after the SQLite message commit, rather than receiving a false append failure because the
 post-commit drain correctly refused an unbound runtime.
-Creation and
-[[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
-source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
+Creation and [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy watcher
+files are migration input only and are deleted after their topology edges and pending messages are imported.
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is settled, its worktree is
 no longer needed, and no human decision or follow-up remains; otherwise the agent declares the state that is true.
@@ -229,13 +230,13 @@ a pinned run from an unpinned one. It also joins the idempotency payload hash �
 a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
 receipt hash, so nothing that never pinned gains a field.
 
-**Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation is
-shared from `@spexcode/session-core`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
+**Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation lives at
+`spec-cli/src/session-record-lock.ts`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
 of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
 layer be a brick an external system can drive rather than a service it must be granted access to.
 
-A text send delegates its record-locked append-plus-queue acceptance to `@spexcode/session-core`; an
+A text send delegates its record-locked append-plus-queue acceptance to the canonical application and the local record lock; an
 agent-attributed send also fences its named sender in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
 transport witness. Its proven-unreachable answer becomes a stranded refusal only when this layer's independent
 registered-pid witness still proves the worker alive; an unproven transport remains queue-retryable and does not

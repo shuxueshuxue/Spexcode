@@ -71,7 +71,11 @@ plugin node. This replaces the launch-time
   SHARES with the user takes only our identity-stamped hook entries, merged in beside whatever they already
   had ([[harness-adapter]]'s `shimOwnership`). This pipeline never learns which harness that is — it reads the
   ownership off the adapter and picks the writer. The post-erase empty-dir sweep covers each artifact dir AND its parent
-  (never a checkout root), since a harness may nest its shim a level below its home;
+  (never a checkout root), since a harness may nest its shim a level below its home. For a linked Codex
+  worktree, the root checkout owns the executable `.codex/hooks.json` dispatcher. The worktree's
+  `.codex/hooks.json` is an empty `{ "hooks": {} }` anchor only: Codex needs the project layer anchor, but
+  parsing a second dispatcher there would execute every PreToolUse handler twice. Claude remains
+  worktree-owned because its adapter discovers `.claude/settings.json` from the worktree itself;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

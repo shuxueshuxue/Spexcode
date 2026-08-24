@@ -316,6 +316,10 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) addTarget(contractTargets, f, contract)
     const shim = h.shim(DISPATCH, SPEX)
+    // Codex discovers the root-checkout shim through this worktree anchor, but also parses the anchor as a
+    // project config layer. A second copy of our dispatcher therefore runs the same PreToolUse event twice.
+    // Keep the anchor present for layer discovery while leaving its hook set empty; the root checkout remains
+    // the sole executable hook owner.
     const target: ShimTarget = { ownership: h.shimOwnership, content: shim.content, hooks: shim.hooks }
     if (h.shimScope === 'tree') {
       addShimTarget(treeShimTargets, h.shimFile(proj), target)
@@ -323,7 +327,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) addShimTarget(anchorTargets, anchor, target)
+    if (anchor) addShimTarget(anchorTargets, anchor, { ownership: 'exclusive', content: '{\n  "hooks": {}\n}\n' })
   }
   for (const sk of skillNodes) for (const h of selected) {
     const dir = h.skillDir(proj); if (!dir) continue

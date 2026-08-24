@@ -58,6 +58,13 @@ export function stripTerminalButtonReports(data) {
     .replace(/\x1b\[([0-9]+);[0-9]+;[0-9]+[Mm]/g, (whole, code) => (Number(code) & 64) ? whole : '')
 }
 
+export function stripTerminalPointerReports(data) {
+  return data
+    .replace(/\x1b\[<([0-9]+);[0-9]+;[0-9]+[Mm]/g, '')
+    .replace(/\x1b\[M[\x20-\x3f]{3}/g, '')
+    .replace(/\x1b\[([0-9]+);[0-9]+;[0-9]+[Mm]/g, '')
+}
+
 function onlyMotionTrackingModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
 }
@@ -330,14 +337,14 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       if (!writableRef.current || !focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
       // A suspended TUI may put a token-consuming resume prompt under the cursor. The first real key is
       // the user's intent boundary; keep it out of tmux until the separate confirmation is answered.
-      const pointerReport = isTerminalPointerReport(data)
       // Mouse traffic is browser chrome, not a conversational turn. xterm emits button/wheel reports
       // through the same onData callback as typed bytes; forwarding those reports lets a tab click or
       // focus reactivation reach the native TUI and is exactly the wrong lifecycle boundary.
       const filtered = stripTerminalButtonReports(stripTerminalFocusReports(data))
       if (!filtered) return
-      if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
-        setPendingInput(filtered)
+      const realInput = stripTerminalPointerReports(stripTerminalFocusReports(data))
+      if (resumeRequiredRef.current && !resumeConfirmedRef.current && realInput) {
+        setPendingInput(realInput)
         setInputConfirmOpen(true)
         term.blur()
         return

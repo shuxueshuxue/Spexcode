@@ -11,6 +11,10 @@ const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 
 const escStack = readFileSync(new URL('./escStack.js', import.meta.url), 'utf8')
 const service = readFileSync(new URL('./KeyboardService.jsx', import.meta.url), 'utf8')
 const keymap = readFileSync(new URL('./keymap.js', import.meta.url), 'utf8')
+const publicAbout = readFileSync(new URL('./PublicGraphAbout.jsx', import.meta.url), 'utf8')
+const evidence = readFileSync(new URL('./Evidence.jsx', import.meta.url), 'utf8')
+const projects = readFileSync(new URL('./ProjectsPage.jsx', import.meta.url), 'utf8')
+const tooltip = readFileSync(new URL('./Tooltip.jsx', import.meta.url), 'utf8')
 
 test('help is a shell-owned overlay and remains global across routed views', () => {
   assert.match(workspace, /helpOpen/)
@@ -30,6 +34,13 @@ test('all routed key owners use the one capture service', () => {
   assert.match(escStack, /export function consumeEscape/)
   assert.doesNotMatch(escStack, /addEventListener\(['"]keydown/)
   assert.match(service, /consumeEscape\(event\)/)
+})
+
+test('global dismissal surfaces register with the shared Escape stack', () => {
+  for (const source of [publicAbout, evidence, projects, tooltip]) {
+    assert.match(source, /useEscLayer\(/)
+    assert.doesNotMatch(source, /addEventListener\(['"]keydown/)
+  }
 })
 
 test('typing guard reaches graph and shared list/player owners', () => {

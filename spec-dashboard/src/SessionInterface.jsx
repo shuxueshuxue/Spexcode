@@ -1046,7 +1046,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       if (outcome?.delivery === 'queued') {
-        setActionOutcome({ owner: 'command', phase: 'failed', message: t('session.outcomeQueued') })
+        setActionOutcome({ owner: 'command', phase: 'queued', message: t('session.outcomeQueued') })
         return
       }
       setMsg((current) => current === raw ? '' : current)

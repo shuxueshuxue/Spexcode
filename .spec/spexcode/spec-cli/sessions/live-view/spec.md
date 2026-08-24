@@ -171,6 +171,9 @@ it would under iTerm. One known upstream defect is accepted and documented rathe
 claude's TUI stalls its pinned status-line repaint after receiving mouse input (measured at pane
 truth: 48s frozen elapsed-timer while the transcript kept repainting), until a keystroke or content
 change clears it. The motion filter removes the hover trigger — only actual wheeling can arm it —
+and every xterm pointer encoding (SGR, X10, or URXVT) stays navigation-only: the PTY bridge must never
+count a pointer report as a human turn entry or reopen a waiting lifecycle. Only non-pointer terminal
+bytes are eligible for the terminal-input re-entry path.
 and the residual stall is claude's bug to fix, not this bridge's to disguise. The tempting
 alternative — denying the alternate screen and scrolling real tmux history — was measured and
 rejected: claude repaints in place, so nothing ever scrolls off the top and the "history" a viewer

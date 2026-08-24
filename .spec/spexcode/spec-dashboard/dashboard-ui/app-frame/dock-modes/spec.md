@@ -112,8 +112,9 @@ being a menu's anchor is not mutation state living in the dock: the row still on
 action the menu offers is performed by the menu.
 
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
-document tools. Multi-select stayed retired with the list that owned it. The existing keyboard fresh-session
-binding remains active.
+document tools. On the routed Sessions document, the document owns the complete forest's explicit row
+multi-select and bulk close bar; graph marquee selection remains a graph-only gesture. The existing keyboard
+fresh-session binding remains active.
 
 ## a row can be MOVED, and that is not navigation
 
@@ -154,8 +155,10 @@ double-click-to-hold, alt-click-to-lock and the context menu are all untouched, 
 emits after a real drag is eaten so a drop never also navigates. The move itself is the backend's existing
 reparent for both directions — the top level is the parent `null`, which is what it already was in the
 record, so there is no second notion of "detach" anywhere.
-When the dock is in sessions mode, `SessionInterface` renders no `si-list`, board scrollport, list resizer, or
-48px stub: the terminal or timeline owns the entire document content region. This is the [[workspace-shell]]
+When the dock is in sessions mode for a non-document finding surface, `SessionInterface` renders no `si-list`,
+board scrollport, list resizer, or 48px stub: the terminal or timeline owns the entire document content region.
+When a routed Sessions document is focused, the shell suppresses the dock's duplicate row projection and the
+document mounts the complete `si-list` forest described by [[session-console]]. This is the [[workspace-shell]]
 four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on the right, AMBIENT at
 the bottom — so one window cannot expose two competing navigation lists.
 

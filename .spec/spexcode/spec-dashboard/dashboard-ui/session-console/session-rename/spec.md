@@ -50,6 +50,10 @@ keeps a finding projection free of mutation state while still being where a huma
 the second door is not a simplification: when the console's own list was withdrawn and the menu did not travel
 with the rows, rename and attach had no pointer route left anywhere in the window.
 
+The menu may also expose the Sessions document's explicit selection entry and, for a nested row, the existing
+detach/reparent command. Those entries hand off to the Sessions forest owner; they do not change this menu's
+rename/close lifecycle contract or create a second close endpoint.
+
 **The opener may be a press of either button, so dismissal must survive both.** An outside press closes the
 menu — the PRESS, not the click, and only when its target is outside the menu and outside a control that
 declares it owns a menu. Closing on any click at all works exactly as long as every opener is a right-click,

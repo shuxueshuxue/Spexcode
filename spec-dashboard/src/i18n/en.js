@@ -545,6 +545,13 @@ export default {
     attachCopied: 'copied',
   },
 
+  sessionSelect: {
+    selected: ({ n }) => `${n} selected`,
+    close: 'close selected',
+    closeTitle: ({ n }) => `close ${n} selected session${n === 1 ? '' : 's'}?`,
+    closeConfirm: 'This closes the selected sessions and removes their worktrees. Any uncommitted changes are lost.',
+  },
+
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells
   // the user the key to walk that session's changed nodes — or that the session has none to show.
   lockHint: {

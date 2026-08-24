@@ -679,7 +679,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
-              focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null} />
+              focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null}
+              suppressSessionRows={page === 'sessions'} />
           </ViewErrorBoundary>
         )}
         <div className="app-content-column">

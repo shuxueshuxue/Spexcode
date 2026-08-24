@@ -25,7 +25,8 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 // live in the single header row below, so switching projection changes what the dock LISTS and never how
 // thick the dock is. Explorer's count row, the sessions "+" and the archive door were three separate strips
 // stacked around one list; that is three answers to a question the shell already answers once.
-function SessionDock({ sessions, activeId }) {
+function SessionDock({ sessions, activeId, suppressRows = false }) {
+  if (suppressRows) return <div className="dock-session-body" data-session-list-projection="document" />
   const t = useT()
   const { offline } = useBackendHealth()
   const { expanded, offlineOpen } = useSessionListState()
@@ -246,7 +247,7 @@ function DockHead({ mode, specs, sessions }) {
   )
 }
 
-export default function Dock({ mode, specs, sessions, focusId, activeSessionId, closing = false }) {
+export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false }) {
   // 200px is the resting width: wide enough for a session headline or a file name to read before it
   // ellipses, narrow enough that the finding dock stays a margin beside the document rather than a second
   // column competing with it. A reader who wants more drags it, and that choice is what persists — the
@@ -256,7 +257,7 @@ export default function Dock({ mode, specs, sessions, focusId, activeSessionId, 
     <aside className={closing ? 'dock dock-closing' : 'dock'} style={{ width }} aria-hidden={closing ? 'true' : undefined}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />
       {mode === 'sessions'
-        ? <SessionDock sessions={sessions} activeId={activeSessionId} />
+        ? <SessionDock sessions={sessions} activeId={activeSessionId} suppressRows={suppressSessionRows} />
         : <FileTree specs={specs} focusId={focusId} embedded />}
       <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
     </aside>

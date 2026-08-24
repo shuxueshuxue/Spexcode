@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { alive, markHumanPromptActive, withSessionInputLock } from './sessions.js'
+import { alive, withSessionInputLock } from './sessions.js'
 
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -374,7 +374,6 @@ export function forwardInput(id: string, viewer: Viewer, data: string): boolean 
     sendControl(subscription.bridge!, { t: 'input', data })
     return true
   }) ?? false
-  if (accepted && !isMouseReport(data)) markHumanPromptActive(id)
   return accepted
 }
 

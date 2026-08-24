@@ -18,17 +18,9 @@ import { iconFor } from './views.jsx'
 
 const ENTRIES = RAIL_PAGES
 
-// Review routes have no workspace tab to remember them. Keep the last addressed review location as the
-// rail's own navigation memory, so leaving a detail and pressing Evals/Issues returns to that detail instead
-// of manufacturing a second tab or throwing the reader back to an unrelated board state.
-const lastReviewAddress = new Map()
-export const rememberReviewAddress = ({ page, param = null, query = null } = {}) => {
-  if (page === 'evals' || page === 'issues') lastReviewAddress.set(page, { page, param, query })
-}
-const railHref = (page) => {
-  const remembered = lastReviewAddress.get(page)
-  return routeHash(page, remembered?.param ?? null, remembered?.query ?? null)
-}
+// Resident review tabs own their detail/query address. The rail is only a destination link; keeping a
+// second last-address map here allowed Evals/Issues to drift from the workspace tab that was actually open.
+const railHref = (page) => routeHash(page)
 
 // Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
 // so an entry names the binding by id and the hint is resolved at render — never typed into the label.

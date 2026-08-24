@@ -29,8 +29,11 @@ subtractive and resident-tab invariants alongside the pure tab model.
 
 **The strip holds the workspace working set.** Object tabs include `#/file/<path>` and `#/sessions/<id>`.
 Spec, Evals, Issues, and Settings are resident top-level tabs (`#/spec`, `#/evals`, `#/issues`,
-`#/settings`); opening a spec node, scenario, or issue keeps its detail address in the URL while focusing
-that surface's top-level tab. A file or session detail never replaces another kind's resident/document tab.
+`#/settings`); the workspace store keeps one of each resident tab from cold boot onward, opening a spec
+node, scenario, or issue keeps its detail address in the URL while focusing that surface's top-level tab.
+A file or session detail never replaces another kind's resident/document tab. Closing a resident face may
+leave it unfocused, but the store immediately restores its address so the four workspace faces remain
+available and cannot drift with route-only review state.
 A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
@@ -47,12 +50,12 @@ What the strip does NOT hold is what has no object: `#/graph` (including `#/grap
 addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, and **`#/sessions/new`** —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
-This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
-nothing. `#/empty` is the explicit state reached after the last workspace object is closed; it is not a
-fresh-boot alias and it never enters the strip.
+This is why the strip contains only the resident working set on a fresh `#/sessions` load and why typing the
+graph's address mints nothing. `#/empty` is the explicit state reached after the last workspace object is
+closed; it is not a fresh-boot alias and it never enters the strip.
 
 **The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
-has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
+has no activity rail ([[dock-modes]]) — the resident working set stays visible and one click returns to it: *"应该被保留的是
 各个 tab，各个 tab 才相当于是工作区，而不是左侧边栏。"* The left rail is a way to change destination and the
 dock only describes the current tab; the strip is what you are working on, and none of the three is
 interchangeable with another.

@@ -358,7 +358,12 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
 }
 
 const MAX_INPUT_BYTES = 64 * 1024
-const MOUSE_REPORT = /^(?:\x1b\[<|\x1b\[M)/u
+// xterm can encode the same pointer gesture as SGR, X10, or URXVT. All are navigation,
+// never a human turn entry; keeping the complete discriminator here prevents a click from
+// reopening an asking/review session through the PTY activity path.
+export function isMouseReport(data: string): boolean {
+  return /^(?:\x1b\[<[-0-9;]+[mM]|\x1b\[M[\s\S]{3}|\x1b\[[0-9;]+[mM])/u.test(data)
+}
 
 export function forwardInput(id: string, viewer: Viewer, data: string): boolean {
   const subscription = currentSubscription(id, viewer)
@@ -367,7 +372,7 @@ export function forwardInput(id: string, viewer: Viewer, data: string): boolean 
     sendControl(subscription.bridge!, { t: 'input', data })
     return true
   }) ?? false
-  if (accepted && !MOUSE_REPORT.test(data)) markHumanPromptActive(id)
+  if (accepted && !isMouseReport(data)) markHumanPromptActive(id)
   return accepted
 }
 

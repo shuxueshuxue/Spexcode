@@ -87,6 +87,17 @@ test('a measured verdict count splits by freshness and the halves re-add to its 
   assert.deepEqual(counts({ freshness: 'stale' }), { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
 })
 
+test('deferred freshness rows have their own section and do not enter stale verdict counts', () => {
+  const rows = [
+    { scenario: 'pending', node: 'n', filterKind: EVAL_FILTER_KIND.DEFERRED, state: 'deferred', freshnessDeferred: true, verdict: { status: 'pass' } },
+    { scenario: 'pass', node: 'n', filterKind: EVAL_FILTER_KIND.RESULT, fresh: true, verdict: { status: 'pass' } },
+  ]
+  const model = evalFilterModel(rows, {}, { sessions, t, defaultKind: 'all' })
+  assert.deepEqual(model.sections, { fail: { fresh: 0, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 1 })
+  assert.equal(model.section.options.find((option) => option.value === 'deferred')?.count, 1)
+  assert.deepEqual(model.shown.map((item) => item.scenario), ['pending', 'pass'])
+})
+
 test('compact groups omit fake one-value facets and retain active off-switches', () => {
   const one = issueFilterModel([{ id: '1', concern: 'only', status: 'open', store: 'local', by: 'same', nodes: ['alpha'] }], {}, { t })
   assert.deepEqual(filterMenuGroups(one, () => {}, ['section', 'author', 'store', 'node', 'session']), [])

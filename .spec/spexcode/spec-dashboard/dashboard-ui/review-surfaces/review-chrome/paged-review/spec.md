@@ -23,7 +23,9 @@ ordered population under one stable revision: merged local/forge Issues are newe
 tie-break; trunk and scoped Evals are current declared scenarios' latest readings ordered by filed time
 newest-first regardless of source ownership, followed by blind scenarios that have no filed time with a
 deterministic identity tie-break. An unmeasured row is never promoted ahead of a filed reading. Session
-presence is joined before matching.
+presence is joined before matching. A filed row whose freshness computation is explicitly deferred remains
+orderable by its filed time, but is tagged `deferred` and cannot enter the measured fresh/stale verdict
+split; source failures remain loud rather than turning such a row into an empty response.
 
 The server imports [[review-filters]] and [[review-query]] directly. There is no server copy of tokenization,
 qualifier mapping, or field predicates. It applies source selection, matching, section counts, and facet

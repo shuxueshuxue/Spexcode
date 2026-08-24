@@ -216,7 +216,7 @@ test('eval verdict counts split freshness ONCE on the server, over the whole pop
   const all = page('is:eval')
   // the measured verdicts carry their remeasurement debt in the count itself; unmeasured owns no reading
   // and stays one number. Both halves are folded here, once — no surface re-derives them from `items`.
-  assert.deepEqual(all.counts, { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1 })
+  assert.deepEqual(all.counts, { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1, deferred: 0 })
   // population preserved: each split re-adds to what selecting that verdict actually returns.
   assert.equal(page('is:eval verdict:pass').total, 3)
   assert.equal(page('is:eval verdict:fail').total, 2)
@@ -226,9 +226,9 @@ test('eval verdict counts split freshness ONCE on the server, over the whole pop
 
   // freshness is part of the REST of the query, so freshness:fresh zeroes the stale halves structurally.
   const fresh = page('is:eval freshness:fresh')
-  assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0 })
+  assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 0 })
   assert.equal(fresh.total, 2)
-  assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
+  assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0, deferred: 0 })
 })
 
 // @@@ the focused detail's one real hazard, pinned - a detail open derives its index/total/neighbours from

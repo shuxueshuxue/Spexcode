@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
-import { isDocument, isResident } from './views.jsx'
+import { isDocument } from './views.jsx'
 import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
 
 export { closeDestination, moveTab, placeTab, tabKey }
@@ -27,7 +27,8 @@ const read = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
     if (!Array.isArray(raw)) return []
-    const valid = raw.filter((t) => t && typeof t.page === 'string')
+    const valid = raw
+      .filter((t) => t && typeof t.page === 'string')
     const normalized = normalizeTabs(valid, isDocument)
     // Persist the migration at the same boundary that reads it: old review entries disappear once and do
     // not keep resurfacing in another tab or after the next reload.
@@ -50,11 +51,12 @@ let store = null
 const listeners = new Set()
 const getTabs = () => (store ??= read())
 const putTabs = (next) => {
-  if (next === getTabs()) return next
-  store = next
-  write(next)
-  for (const listener of [...listeners]) listener(next)
-  return next
+  const stable = next
+  if (stable === getTabs()) return stable
+  store = stable
+  write(stable)
+  for (const listener of [...listeners]) listener(stable)
+  return stable
 }
 
 // A finding surface cannot reach the strip's state directly: an explicit hold MARKS the next navigation and
@@ -121,6 +123,18 @@ export function focusLatestTab(match) {
   return true
 }
 
+// Session rows are allowed to replace the current session slot only when their document is not already
+// held. Resolve that identity in the one workspace store first, then let the caller's surface own the
+// actual route write (Dock uses shell navigation; Sessions uses its ViewScope). This prevents a click on B
+// from rewriting A's address while the reader is looking at A.
+export function focusSessionTab(id, open) {
+  if (!id) return false
+  const held = getTabs().find((tab) => tab.page === 'sessions' && tab.param === id)
+  const route = { page: 'sessions', param: id, query: null }
+  open?.(held ? { ...route } : route)
+  return !!held
+}
+
 export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)
@@ -139,7 +153,7 @@ export function useTabs({ onCloseStart } = {}) {
     const key = tabKey(route)
     if (pinKey && pinKey !== key) pinKey = null
     if (!isDocument(route.page, route.param)) return
-    const mode = pinKey === key || isResident(route.page, route.param) ? 'pin' : 'slot'
+    const mode = pinKey === key ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
   }, [route.page, route.param, route.query])
 

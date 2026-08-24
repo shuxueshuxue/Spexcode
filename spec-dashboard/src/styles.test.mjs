@@ -12,6 +12,7 @@ const shell = readFileSync(join(here, 'Shell.jsx'), 'utf8')
 const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
 const terminalFont = readFileSync(join(here, 'terminalFont.js'), 'utf8')
 const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
+const sessionsView = readFileSync(join(here, 'SessionsView.jsx'), 'utf8')
 const composer = readFileSync(join(here, 'Composer.jsx'), 'utf8')
 const timelineChat = readFileSync(join(here, 'TimelineChat.jsx'), 'utf8')
 const mobileApp = readFileSync(join(here, 'MobileApp.jsx'), 'utf8')
@@ -157,12 +158,12 @@ test('launcher session tallies keep the status line geometry and semantic slash 
   assert.match(shell, /sb-launcher-needs.*counts\.needsYou/s)
   assert.match(shell, /sb-launcher-other.*counts\.other/s)
   assert.match(shell, /sb-launcher-summary/)
-  assert.match(shell, /sb-launcher-badge/)
+  assert.doesNotMatch(shell, /sb-launcher-badge/)
   assert.match(shell, /kind: needsYou > 0 \? 'warning'/)
   const rightRule = css.match(/\.sb-right\s*\{([^}]*)\}/)?.[1] || ''
   assert.doesNotMatch(rightRule, /max-width|overflow:\s*hidden/)
   assert.match(css, /\.sb-launcher-group\s*\{[^}]*flex:\s*0\s*0\s*auto;[^}]*min-width:\s*max-content;/s)
-  assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*padding-inline:\s*0;/)
+  assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*padding-inline:\s*0;[^}]*border-left:\s*var\(--divider-rule\)/)
   assert.match(css, /\.sb-launcher-glyph\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s)
   assert.match(css, /\.sb-launcher-glyph \.si-agent-glyph\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s)
   assert.match(css, /\.sb-launcher-running\s*\{\s*color:\s*var\(--green\)/)
@@ -268,6 +269,8 @@ test('terminal font preference reuses the ordinary fit and geometry request', ()
 })
 
 test('browser page visibility reuses the terminal viewer lifecycle', () => {
+  assert.match(terminal, /const term = new Terminal\([\s\S]*?\n  \}, \[sessionId\]\)/)
+  assert.match(terminal, /term\.options\.disableStdin\s*=\s*!writable/)
   assert.match(terminal, /viewerIsVisible\s*=\s*\(\)\s*=>\s*activeRef\.current\s*&&\s*document\.visibilityState\s*!==\s*'hidden'/)
   assert.match(terminal, /document\.addEventListener\('visibilitychange', onDocumentVisibility\)/)
   assert.match(terminal, /if \(!viewerIsVisible\(\)\)\s*\{\s*hideRef\.current\?\.\(\)/)
@@ -277,6 +280,7 @@ test('browser page visibility reuses the terminal viewer lifecycle', () => {
   assert.match(sessionInterface, /const baseShown = id === active && !activeResource/)
   assert.match(sessionInterface, /const terminalShown = baseShown && activeBaseSurface === 'terminal'/)
   assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && terminalShown\}/)
+  assert.match(sessionsView, /open=\{showing\}/)
   // and it must be hidden AND pointer-inert while Conversation or a resource owns the surface.
   assert.match(sessionInterface, /visibility: terminalShown \? 'visible' : 'hidden',\s*\n\s*pointerEvents: terminalShown \? 'auto' : 'none',/)
 })
@@ -363,16 +367,16 @@ test('selected nested session keeps its lead separated from the revealed headlin
   )
 })
 
-test('sessions document has no duplicate sidebar or scrollport', () => {
+test('sessions document mounts its complete forest sidebar and scrollport', () => {
   assert.match(css, /\.si-page\s*\{[^}]*min-height:\s*0;/s)
-  assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
   assert.match(css, /\.dock-session-list\s*\{[^}]*overflow:\s*auto;/s)
   // the archive door moved into the dock's ONE header row rather than keeping a strip under the list
   assert.match(css, /\.dock-head-acts\s*\{[^}]*margin-left:\s*auto;/s)
 })
 
 test('sessions dock keeps the tree list geometry', () => {
-  assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
   assert.match(css, /\.dock-session-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s)
   assert.match(sessionInterface, /archiveRequested = false/)
   assert.match(resizable, /localStorage\.removeItem\(key\)/)

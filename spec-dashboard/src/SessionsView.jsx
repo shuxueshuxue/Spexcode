@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import SessionInterface from './SessionInterface.jsx'
-import { navigate } from './route.js'
 import { useBoard, useBoardApi, usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useViewScope } from './ViewScope.jsx'
+import { focusSessionTab } from './tabs.js'
 
 // [[sessions-view]]: the live console as a view. It kept every behaviour it had; what changed is where its
 // state lives. `sel` used to be held by the component that also held the graph's camera and every other
@@ -11,6 +12,11 @@ export default function SessionsView({ param, query }) {
   const { reload } = useBoardApi()
   const { palette } = useWorkspace()
   const { openPalette, takeCompose, watchCompose } = useWorkspaceApi()
+  const scope = useViewScope()
+  const pickSession = (id) => {
+    if (id === 'new') return scope.open({ page: 'sessions', param: id, query: null })
+    focusSessionTab(id, (route) => scope.open(route))
+  }
   const [sel, setSel] = useState(() => param || 'new')
   // a board chord may have composed text for this view before it existed; collect it on arrival — in an
   // EFFECT, never a state initializer. The take is a one-shot, and StrictMode double-invokes initializers
@@ -45,19 +51,20 @@ export default function SessionsView({ param, query }) {
       sessions={sessions}
       specs={specs}
       focusNode={null}
-      open
+      open={showing}
       searchOpen={!!palette}
       sel={sel}
       surface={query?.surface}
       setSel={setSel}
       seed={seed}
       onSeedConsumed={() => setSeed(null)}
-      onClose={() => navigate('graph')}
-      onPickSession={(id) => navigate('sessions', id)}
+      onClose={() => scope.open({ page: 'graph', param: null, query: null })}
+      onPickSession={pickSession}
       onOpenSearch={() => openPalette('sessions')}
       boardLive={boardLive}
       reload={reload}
       archiveRequested={query?.archive === '1'}
+      route={{ page: 'sessions', param, query }}
     />
   )
 }

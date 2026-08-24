@@ -6,6 +6,7 @@ import test from 'node:test'
 const root = join(import.meta.dirname, '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const dashboardSpec = readFileSync(join(root, '..', '.spec', 'spexcode', 'spec-dashboard', 'spec.md'), 'utf8')
+const specCliSpec = readFileSync(join(root, '..', '.spec', 'spexcode', 'spec-cli', 'spec.md'), 'utf8')
 const source = [
   ...readdirSync(join(root, 'src')).filter((name) => /\.(js|jsx|mjs)$/.test(name)).map((name) => join('src', name)),
   'vite.config.js', 'vite.config.iso.mjs', 'cvid.vite.config.mjs',
@@ -33,6 +34,22 @@ test('new renderer dependencies carry an explicit no-predecessor exemption', () 
   for (const name of noPredecessorPackages) {
     assert.ok(dashboardSpec.includes(`\`${name}\``), `spec omission for ${name}`)
   }
+})
+
+test('cross-package arrivals carry an immutable predecessor ledger', () => {
+  assert.match(specCliSpec, /## Dependency arrival and subtraction ledger/)
+  for (const commit of [
+    '2a5560b11', 'f19ce3af2', '59f51a6b0', 'bbd00164a', '0962fb0e0',
+    '7e90b791d', '023e91b4c', 'dff2d31c7', '2f8d5fb71', '3d0e60e6b',
+    '377c832f4', 'b1c36fb04',
+  ]) assert.match(specCliSpec, new RegExp('`' + commit + '`'), `arrival ledger omitted ${commit}`)
+  for (const edge of [
+    '@hono/node-ws', 'node-pty', '@spexcode/spec-core', '@spexcode/spec-eval',
+    '@spexcode/spec-forge', '@spexcode/session-core', '@spexcode/session-application',
+    '@spexcode/session-selflaunch', '@vscode/tree-sitter-wasm',
+  ]) assert.ok(specCliSpec.includes(`\`${edge}\``), `arrival ledger omitted ${edge}`)
+  assert.match(specCliSpec, /No package predecessor/)
+  assert.match(specCliSpec, /Same-change subtraction/)
 })
 
 test('optional desktop runtime is outside root workspaces', () => {

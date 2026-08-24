@@ -106,8 +106,20 @@ export function viewportForFocus({
 
   const pair = child || parent
   const anchorX = pair ? (focus.x + pair.x) / 2 : focus.x
-  const anchorZoom = !currentFits && fitZoom >= minZoom ? fitZoom : zoom
+  // A keyboard/programmatic focus move (`fit: false`) must never change camera height. Only an
+  // explicit fit pass may lower the zoom to make an oversized frontier reachable.
+  const anchorZoom = fit && !currentFits && fitZoom >= minZoom ? fitZoom : zoom
   const desiredY = height / 2 - focus.y * anchorZoom
+  // Focus navigation owns the vertical target: an Arrow move must put the focused tile centre on the
+  // pane centre even when the visible frontier is taller than the viewport. Reachability clamping belongs
+  // only to an explicit fit pass, where the whole frontier is being framed rather than a focus being followed.
+  if (!fit) {
+    return {
+      x: width * anchorRatio - anchorX * anchorZoom,
+      y: desiredY,
+      zoom: anchorZoom,
+    }
+  }
   const minPanY = -minY * anchorZoom
   const maxPanY = height - maxY * anchorZoom
   const y = minPanY <= maxPanY
@@ -162,6 +174,10 @@ export function singleLayerFrontier(nodes, focusId) {
 // plain '/api/...' whether the page is the root dashboard or a /p/<id>/ scoped one.
 const BACKOFF = [150, 350, 600, 900]   // waits between 5 attempts (~2.0s total)
 const UNREACHABLE_STATUS = new Set([502, 503, 504])
+// A Command Box request has one transport deadline. It bounds a lost HTTP response; it is not a
+// lifecycle timer and never changes the target session's status. The delivery key makes retrying
+// the same draft idempotent after an indeterminate response.
+export const COMMAND_DELIVERY_TIMEOUT_MS = 15_000
 const backendHealthListeners = new Set()
 let backendHealth = { offline: false, retryKey: 0 }
 

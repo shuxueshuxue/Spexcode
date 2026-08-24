@@ -10,8 +10,9 @@ scenarios:
       confirm its tab label is Settings.
     expected: >
       The strip contains both a session and one resident Spec tab after the cross-kind navigation. A second
-      spec keeps the same `#/spec` tab identity while its detail address changes. Three plain session clicks leave one session tab whose
-      address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
+      spec keeps the same `#/spec` tab identity while its detail address changes, and that tab face, tooltip,
+      accessible label, and visible title use the selected node title. Three plain session clicks leave one
+      session tab whose address is the last session. Ctrl-click adds a second non-slot session tab. The Settings tab reads
       Settings, never the internal key tabs.settings.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
@@ -20,8 +21,10 @@ scenarios:
       In a real Chromium dashboard, open two canonical `#/spec/<id>` detail URLs and inspect the workspace
       strip after each route settles; then open a `#/file/<path>` detail.
     expected: >-
-      Both Spec details keep one active top-level Spec tab labelled Spec. The URL retains each selected
-      `#/spec/<id>` detail address, and the file route opens an independent File tab beside the Spec tab.
+      Both Spec details keep one active top-level Spec tab with the Spec icon. The URL retains each selected
+      `#/spec/<id>` detail address, while its face, tooltip, accessible label, and visible title use that
+      node's title. The file route keeps the resident Spec slot and opens an independent File tab named by
+      its basename; it never mints a second Spec tab.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/views.jsx, spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/test/spec-resident-tab.e2e.mjs
@@ -63,6 +66,18 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/ReviewSurface.jsx, spec-dashboard/src/SettingsSurface.jsx, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/src/tabStrip.test.mjs
+  - name: live-pointer-reorder-and-tail-drop
+    description: >-
+      In a real Chromium dashboard with three held document tabs, press and drag one tab across another and
+      inspect the tab order before releasing; then drag a tab into the tab-list host's unoccupied right side
+      and inspect the order before release and after a reload. Exercise a tab close click after the drags.
+    expected: >-
+      The order changes while the pointer is still held, not only on pointerup. The right-side blank host area
+      appends the dragged tab without requiring a hit on the last tab. Release persists the same order through
+      reload, the active route is unchanged, and the close click removes only its tab.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TabStrip.jsx, spec-dashboard/src/tabs.js, spec-dashboard/src/tabModel.js]
+    test: spec-dashboard/test/tab-strip-drag.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

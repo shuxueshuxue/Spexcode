@@ -10,9 +10,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..', '..')
 const dashboardRoot = join(root, 'spec-dashboard')
-const sharedRoot = resolve(root, '..', '..')
-const modules = join(root, 'node_modules')
-const tsxCli = join(sharedRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+// The test runs both from a repository checkout and from a nested worktree. Keep the
+// dependency root tied to the checkout that owns this test instead of assuming /home/node_modules.
+const gitCommonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim()
+const checkoutRoot = resolve(dirname(gitCommonDir))
+const dependencyRoot = existsSync(join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs')) ? root : checkoutRoot
+const modules = join(dependencyRoot, 'node_modules')
+const tsxCli = join(dependencyRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 const fakeLauncher = join(root, 'spec-cli', 'test', 'fixtures', 'fake-claude')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'

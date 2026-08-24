@@ -26,6 +26,10 @@ terminal pane and remain read-only Conversation surfaces. If a live TUI is in a 
 resume, the first actual key opens a separate confirmation; the key is held until confirmation, never pre-focuses
 the confirm control or places it at the cursor landing, and cancel drops it. Returning from [[command-box]]
 restores terminal focus without another unlock step.
+The launch handoff is durable across the queue-to-live boundary: canonical lifecycle state may publish `active`
+before the legacy JSON envelope is rewritten, but the envelope's queued lease remains readable until that
+historical projection is retired. A live session must never be left offline merely because that lease was cleared
+while the envelope still says `queued`.
 Pointer activation must not blur xterm's hidden textarea before the activation lands: an in-progress browser
 IME composition remains attached to the same input element instead of being ended by dashboard chrome.
 Beyond activation, **console chrome is pointer-inert for focus**: clicking and operating the sidebar list,
@@ -54,6 +58,15 @@ Only the visible, live viewer may write. Hidden or disconnected browsers never q
 and an input message from a stale viewer is ignored. A transport loss remains visibly reconnecting and fails
 loudly by withholding input until the socket is open; it never pretends a key landed. The helper bounds each
 input message before writing it, while preserving the byte string and event order xterm produced.
+
+The input boundary is insensitive to browser event framing. xterm may coalesce a focus report or a mouse
+button report with a real key byte, so filtering must remove those control reports from a mixed payload rather
+than recognizing only a payload that consists of one report. Non-wheel pointer reports and focus reports are
+discarded; wheel reports remain native tmux navigation, and every remaining byte keeps its original order.
+
+When a suspended pane receives a coalesced payload, the confirmation gate examines the payload after all
+pointer and focus reports are removed. Only remaining real bytes become pending input; a pointer report
+cannot bypass confirmation merely because it shared a frame with a key.
 
 Dashboard-global shortcuts are the narrow exception. The capture layer may consume its documented navigation
 chords and the reserved Command Box chord before xterm sees them. The terminal adapter also encodes

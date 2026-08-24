@@ -18,9 +18,10 @@ related:
 
 ## Anti-regression boundary
 
-The live activity rail is governed by `RAIL_PAGES` and must stay limited to `sessions`, `evals`, `issues`,
-and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs` checks this
-contract directly so a later lane cannot silently restore the graph as a live rail destination.
+The live top-level rail is governed by `RAIL_PAGES` and contains every resident board in this order: `spec`,
+`sessions`, `evals`, `issues`, and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs`
+checks this contract directly so a later lane cannot silently restore the graph as a live rail destination or
+drop a resident board from top-level navigation.
 
 ## raw source
 
@@ -32,12 +33,13 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
 
 ## expanded spec
 
-- **One light, one route.** The compact 40px rail contains anchors for `sessions`, `evals`, `issues`,
+- **One light, one route.** The compact 40px rail contains anchors for `spec`, `sessions`, `evals`, `issues`,
   and `settings`. A route anchor carries its canonical hash and uses `aria-current="page"` for the current
-  route; at most one anchor is lit. Graph and graph-node addresses remain directly addressable but do not
-  light a rail entry. `spec` and `file` are
-  documents opened from explorer and deliberately light nothing; `empty` also has no light. Detail routes
-  (`evals/<node>/<scenario>`, `issues/<id>`) light their page anchor. The rail never lights for dock mode.
+  route; at most one anchor is lit. Graph addresses remain directly addressable but do not light a rail
+  entry. Spec node and governed-file addresses project their light onto the resident Spec anchor, so the
+  top-level destination remains selected while the reader is inside the Spec workspace. `empty` also has no
+  light. Detail routes (`evals/<node>/<scenario>`, `issues/<id>`) light their page anchor. The rail never
+  lights for dock mode.
 - **Click is navigation plus projection selection.** A plain click remains an ordinary same-document route
   navigation (modified clicks keep browser behavior). The sessions anchor also opens the dock on the sessions
   projection and focuses the most recently held session document when one exists; with no held session it
@@ -62,11 +64,11 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   activation remain available. The rail never scrolls or overlays page content. It and the optional dock
   fill the app row and stop at the full-width status row; their one-pixel `--line` right seam meets that row
   as a clean T rather than continuing through its bottom edge.
-- **Route controls only.** The permanently mounted controls are the dock toggle and the four route entries.
+- **Route controls only.** The permanently mounted controls are the dock toggle and the five route entries.
   The former top project chip is absent: its mark, visible name, catalog menu, offline rules, guest login
   door, and `/projects` management entry moved together to the status row, so project switching has one
   persistent owner rather than two entrances with different geometry.
-- **Route peers.** The URL is hash state (`#/sessions`, `#/evals`, `#/issues`, `#/settings`, plus
+- **Route peers.** The URL is hash state (`#/sessions`, `#/spec`, `#/evals`, `#/issues`, `#/settings`, plus
   document/detail tails). Page switches push history; list-to-detail and filter changes push; automatic route
   echoes replace. Bare evals/issues/settings boards are navigation destinations, not documents, so ordinary
   anchor navigation never creates or focuses a strip tab. Their resident workspace tabs are the exception:

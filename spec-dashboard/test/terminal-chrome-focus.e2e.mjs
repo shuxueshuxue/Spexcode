@@ -48,6 +48,7 @@ try {
   }, ...fixture.sessions.filter((session) => session.id !== scratch)]
 
   const events = []
+  const inputFrames = []
   const failures = []
   const started = Date.now()
   const check = (name, ok) => {
@@ -64,6 +65,13 @@ try {
     window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
   })
   const page = await context.newPage()
+  page.on('websocket', (socket) => socket.on('framesent', (event) => {
+    if (typeof event.payload !== 'string') return
+    try {
+      const message = JSON.parse(event.payload)
+      if (message?.t === 'input') inputFrames.push(message.data)
+    } catch { /* control and binary frames are outside this assertion */ }
+  }))
   await page.route('**/api/graph*', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -120,6 +128,7 @@ try {
   await page.locator(`[data-sid="${scratch}"]`).click()
   await settle()
   check('active-row click keeps TUI focus', await helperFocused())
+  check('chrome clicks emit no PTY input', inputFrames.length === 0)
 
   // the retained focus is a REAL input path: type through it and read the tmux-side capture.
   await page.keyboard.type('FOCUSPROOF')

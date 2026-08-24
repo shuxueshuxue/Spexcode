@@ -62,6 +62,21 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     assert.equal(existsSync(join(project, '.git')), true)
     const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
     assert.equal(catalog.projects.some((entry) => entry.root === project), true)
+
+    // Removal is intentionally several decisions away from the row's primary action: open details,
+    // read the warning, acknowledge the scope, then type the exact title phrase. The checkout remains.
+    const row = page.locator('.proj-row', { hasText: 'new-project' })
+    await row.getByRole('button', { name: 'edit spexcode.json' }).click()
+    await row.getByRole('button', { name: 'remove project registration' }).click()
+    const remove = page.locator('.proj-remove-modal')
+    await remove.getByText('The local directory, Git history, and source files stay exactly where they are.', { exact: false }).waitFor()
+    await remove.getByRole('checkbox').check()
+    await remove.getByLabel('removal confirmation phrase').fill('REMOVE new-project')
+    await remove.getByRole('button', { name: 'confirm registration removal' }).click()
+    await remove.waitFor({ state: 'detached' })
+    assert.equal(existsSync(project), true)
+    const afterRemove = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
+    assert.equal(afterRemove.projects.some((entry) => entry.root === project), false)
   } finally {
     await browser?.close()
     await close(gateway.server)

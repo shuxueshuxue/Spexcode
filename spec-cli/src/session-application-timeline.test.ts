@@ -10,8 +10,9 @@ import { openProjectSessionApplication } from '@spexcode/session-application'
 
 import { readTimeline } from './session-timeline.js'
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { sessionStateKit } from './session-declarations.js'
 import { rvSock, stampRvSock } from './harness.js'
-import { sendText } from './sessions.js'
+import { markHumanPromptActive, sendText } from './sessions.js'
 import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 test('cutover timeline projection reads conversation events from the application database', () => {
@@ -42,6 +43,71 @@ test('cutover timeline projection reads conversation events from the application
       replyVia: 'note',
     })
     assert.equal(existsSync(join(home, 'sessions', 'conversation', 'timeline.ndjson')), false)
+  } finally {
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('human re-entry trusts canonical lifecycle when the legacy envelope is stale', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-human-reentry-canonical-state-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const databasePath = join(home, 'sessions.sqlite')
+  const id = 'stale-envelope-reentry-session'
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/stale-envelope', node: null,
+    title: 'stale envelope', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
+    sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: 'thread-stale-envelope', stopped: false,
+    archived: false, cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'asking', note: 'waiting for a human prompt' })
+  try {
+    assert.equal(markHumanPromptActive(id), true)
+    assert.equal(app.readState(id)?.status, 'active')
+    app.transitionSession(id, { status: 'awaiting', proposal: 'close', note: 'review the finished work' })
+    assert.equal(markHumanPromptActive(id), true, 'a human prompt must reopen close-pending work')
+    const reopened = app.readState(id)
+    assert.equal(reopened?.status, 'active')
+    assert.equal(reopened?.proposal, null)
+    assert.equal(reopened?.note, null)
+  } finally {
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('canonical lifecycle writers resolve a Codex thread alias before transition', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-thread-writer-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const databasePath = join(home, 'sessions.sqlite')
+  const id = 'codex-thread-writer-session'
+  const thread = 'codex-thread-writer-native-id'
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/codex-thread-writer', node: null,
+    title: 'codex thread writer', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'waiting',
+    sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: thread, stopped: false, archived: false,
+    cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'asking', note: 'waiting' })
+  try {
+    const { s, sess } = await sessionStateKit(thread)
+    assert.equal(sess, id)
+    assert.equal(s.markState('active', { sessionId: sess }), true)
+    assert.equal(app.readState(id)?.status, 'active')
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()
@@ -86,7 +152,7 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   }
 })
 
-test('a human prompt re-enters asking without treating agent delivery as human activity', async () => {
+test('an unbound human prompt stays waiting without treating queue acceptance as activity', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-human-prompt-reentry-'))
   const previousHome = process.env.SPEXCODE_HOME
   process.env.SPEXCODE_HOME = home
@@ -106,7 +172,7 @@ test('a human prompt re-enters asking without treating agent delivery as human a
   try {
     const human = await sendText(id, 'continue with the next step')
     assert.equal(human.ok, true)
-    assert.equal(app.readState(id)?.status, 'active', 'a human prompt must make the waiting session working')
+    assert.equal(app.readState(id)?.status, 'asking', 'an unbound prompt must not claim the waiting session is working')
 
     app.transitionSession(id, { status: 'asking', proposal: null, note: 'needs a reply' })
     const agent = await sendText(id, 'handoff context', 'another-session')
@@ -141,17 +207,18 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
     session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
-    title: 'queued', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
+    title: 'queued', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'waiting for input',
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
   }, null, 2) + '\n')
   const app = openProjectSessionApplication({ databasePath, locality: () => {} })
-  app.createSession({ sessionId: id, status: 'active' })
+  app.createSession({ sessionId: id, status: 'asking', note: 'waiting for input' })
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     const first = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(first, { ok: true, delivery: 'queued', replayed: false })
+    assert.equal(app.readState(id)?.status, 'asking', 'a queued prompt must not claim the session is working before handoff')
     assert.equal(app.protocol.listPending(id).length, 1, 'the accepted message remains owed after transport refusal')
 
     const replay = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
@@ -162,6 +229,7 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
     rejectTransport = false
     const accepted = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(accepted, { ok: true, delivery: 'accepted', replayed: true })
+    assert.equal(app.readState(id)?.status, 'active', 'a delivered prompt re-enters the waiting session as working')
     assert.equal(app.protocol.listPending(id).length, 0)
     assert.match(received, /queued prompt/)
   } finally {

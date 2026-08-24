@@ -11,6 +11,7 @@ const sideBar = text('SideBar.jsx')
 const nodeView = text('NodeView.jsx')
 const publicMode = text('public-mode.js')
 const about = text('PublicGraphAbout.jsx')
+const route = text('route.js')
 
 test('public graph mode has one static input and closes every live dashboard door', () => {
   assert.match(data, /fetch\(PUBLIC_GRAPH_SOURCE, \{ cache: 'no-cache' \}\)/)
@@ -36,4 +37,7 @@ test('public graph mode has one static input and closes every live dashboard doo
   assert.match(dashboard, /graphOnly && <PublicGraphAbout \/>/)
   assert.match(about, /loadPublicGraphMetadata\(\)/)
   assert.doesNotMatch(about, /apiUrl|\/api\//)
+  assert.match(route, /PUBLIC_GRAPH_ONLY/)
+  assert.match(route, /PUBLIC_GRAPH_ONLY && window\.location\.hash !== '#\/graph'/)
+  assert.match(dashboard, /<SideBar page="graph" graphOnly \/>/)
 })

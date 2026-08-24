@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import * as sessionSurface from './sessionSurface.js'
 import {
   SESSION_SURFACE_CONVERSATION,
   SESSION_SURFACE_TERMINAL,
@@ -18,6 +19,11 @@ import {
 } from './sessionSurface.js'
 
 const settings = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8')
+
+test('base-surface compatibility alias stays retired', () => {
+  assert.equal(typeof sessionSurface.isSessionSurface, 'function')
+  assert.equal('isBaseSessionSurface' in sessionSurface, false)
+})
 
 function storage() {
   const values = new Map()

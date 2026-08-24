@@ -53,6 +53,7 @@ export default {
     aria: 'project file tree',
     specs: 'Specs',
     files: 'Files',
+    graph: 'Spec graph',
   },
   diskTree: {
     loading: 'loading…',
@@ -136,6 +137,7 @@ export default {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph',
     explorer: 'Explorer',
+    spec: 'Spec',
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
     sessions: 'Sessions',
@@ -215,6 +217,17 @@ export default {
     opOk: '{op}: exit 0 — succeeded',
     opFail: '{op}: exit {code} — failed',
     actionFailed: 'the gateway rejected the request',
+    removeRegistration: 'remove project registration',
+    removeRegistrationHint: 'removes the SpexCode entry, never the local source',
+    removeTitle: 'Remove project registration?',
+    removeWarning: 'This is deliberately a stop-and-confirm action. The project will leave the SpexCode catalog.',
+    removeKeepsFiles: 'The local directory, Git history, and source files stay exactly where they are. Disk deletion is not part of this action.',
+    removeStopsFirst: 'An online backend or active session blocks removal; the project password is cleared after success.',
+    removeUnderstand: 'I understand this removes only the catalog registration, not the local directory.',
+    removeTypePrompt: 'Type this exact confirmation phrase:',
+    removeTypeLabel: 'removal confirmation phrase',
+    removeConfirm: 'confirm registration removal',
+    removeBusy: 'removing…',
     passwordTitle: 'project password',
     passwordPlaceholder: 'new project password',
     passwordSet: 'set',
@@ -536,6 +549,13 @@ export default {
     attachCopied: 'copied',
   },
 
+  sessionSelect: {
+    selected: ({ n }) => `${n} selected`,
+    close: 'close selected',
+    closeTitle: ({ n }) => `close ${n} selected session${n === 1 ? '' : 's'}?`,
+    closeConfirm: 'This closes the selected sessions and removes their worktrees. Any uncommitted changes are lost.',
+  },
+
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells
   // the user the key to walk that session's changed nodes — or that the session has none to show.
   lockHint: {
@@ -850,6 +870,7 @@ export default {
     outcomeSending: 'sending...',
     outcomeDelivered: 'delivered',
     outcomeQueued: 'accepted, waiting for the terminal transport — retry is safe',
+    outcomeUnconfirmed: 'delivery not confirmed — retry is safe',
     deliveryFailed: ({ status }) => `not delivered (HTTP ${status})`,
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',

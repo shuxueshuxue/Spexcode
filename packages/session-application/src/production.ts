@@ -435,13 +435,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       initialize(sessionId)
       return protocol.withTransaction(tx => {
         const queued = tx.enqueue(sessionId, message)
-        const recorded = events.read(sessionId, undefined, tx).some(event => {
-          if (event.type !== MESSAGE_EVENT) return false
-          try {
-            const payload = JSON.parse(new TextDecoder().decode(event.payload)) as { messageId?: unknown }
-            return payload.messageId === queued.messageId
-          } catch { return false }
-        })
+        const recorded = events.hasMessageEvent(tx, sessionId, queued.messageId)
         if (!recorded) {
           events.append(tx, {
             eventId: eventId(),

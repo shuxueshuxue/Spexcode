@@ -10,15 +10,6 @@ const srcDir = dirname(fileURLToPath(import.meta.url))
 const dashboardDir = dirname(srcDir)
 const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
 
-// These paths are deliberate: a retired surface must fail loudly if a future change restores its entry point.
-const retiredPaths = [
-  join(srcDir, 'SessionSelectBar.jsx'),
-  join(dashboardDir, 'test', 'session-multi-select.e2e.mjs'),
-  ...['spec.md', 'eval.md', 'evals.ndjson'].map((file) => join(
-    dashboardDir, '..', '.spec', 'spexcode', 'spec-dashboard', 'dashboard-ui', 'session-console', 'session-multi-select', file,
-  )),
-]
-
 const governedSessionFiles = [
   'SessionInterface.jsx',
   'SessionContextMenu.jsx',
@@ -26,26 +17,59 @@ const governedSessionFiles = [
   'Dock.jsx',
 ]
 
-test('withdrawn session multi-select mechanism and its retired governance stay absent', () => {
-  for (const path of retiredPaths) {
-    assert.equal(existsSync(path), false, `retired multi-select artifact returned: ${path}`)
-  }
-
-  const forbidden = /SessionSelectBar|onBulkClosed|startSelect|const \[selecting|const \[picked|bulk-close/
-  for (const name of governedSessionFiles) {
-    const source = readFileSync(join(srcDir, name), 'utf8')
-    assert.doesNotMatch(source, forbidden, `${name} revived the withdrawn multi-select mechanism`)
-  }
-
+test('Sessions keeps multi-select and tree movement on the real row surface', () => {
+  const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
+  const context = readFileSync(join(srcDir, 'SessionContextMenu.jsx'), 'utf8')
+  assert.match(panel, /SessionSelectBar/)
+  assert.match(panel, /startDrag/)
+  assert.match(panel, /data-session-root-drop/)
+  assert.match(panel, /sessionAncestorIds/)
+  assert.match(context, /startSelect/)
+  assert.match(context, /onDetach/)
   for (const locale of ['en.js', 'zh.js']) {
     const source = readFileSync(join(srcDir, 'i18n', locale), 'utf8')
-    assert.doesNotMatch(source, /\bsessionSelect\s*:/, `${locale} revived dead multi-select copy`)
+    assert.match(source, /sessionSelect\s*:/)
   }
 })
 
-test('live rail does not regrow the retired graph destination', () => {
-  assert.deepEqual(RAIL_PAGES, ['sessions', 'evals', 'issues', 'settings'])
+test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {
+  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'evals', 'issues', 'settings'])
   assert.equal(RAIL_PAGES.includes('graph'), false)
+})
+
+test('sessions document owns the only forest and rail labels resolve through i18n', () => {
+  const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
+  const sideBar = readFileSync(join(srcDir, 'SideBar.jsx'), 'utf8')
+  const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
+  const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
+  assert.match(dock, /if \(suppressRows\) return null/)
+  assert.doesNotMatch(dock, /data-session-list-projection="document"/)
+  assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
+  assert.match(shell, /hideDockToggle=\{page === 'sessions'\}/)
+  assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
+  assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
+  assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)
+})
+
+test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {
+  const fileTree = readFileSync(join(srcDir, 'FileTree.jsx'), 'utf8')
+  const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
+  const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
+  assert.match(fileTree, /className="ft-graph-entry"/)
+  assert.match(fileTree, /navigate\('spec'\)/)
+  assert.match(en, /fileTree:\s*\{[\s\S]*graph:\s*'Spec graph'/)
+  assert.match(zh, /fileTree:\s*\{[\s\S]*graph:\s*'规格图谱'/)
+})
+
+test('session row clicks focus an existing workspace tab before replacing the current slot', () => {
+  const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
+  const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
+  assert.match(dock, /focusSessionTab\(item\.s\.id,/)
+  assert.match(sessionsView, /focusSessionTab\(id,/)
+  assert.match(sessionsView, /scope\.open\(\{ page: 'sessions', param: id, query: null \}\)/)
+  assert.match(sessionInterface, /onSelect=\{\(id\) => onPickSession \? onPickSession\(id\)/)
 })
 
 test('retired generic pane-resizer CSS stays absent', () => {
@@ -64,7 +88,7 @@ test('empty workspace remains a real route and view entry', () => {
   assert.match(views, /\bempty:\s*\{[^\n]*component:\s*EmptyView\b/)
 })
 
-test('resident details focus one top-level tab without evicting documents', () => {
+test('board details focus one dynamic top-level tab without evicting documents', () => {
   const spec = { page: 'spec', param: 'node', query: null }
   const session = { page: 'sessions', param: 's1', query: null }
   let tabs = placeTab(placeTab([], spec, 'pin'), session, 'pin')
@@ -76,8 +100,8 @@ test('resident details focus one top-level tab without evicting documents', () =
   assert.equal(tabKey(issueDetail), '#/issues')
   assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
   assert.deepEqual(tabs.slice(2).map(({ page, param, pinned }) => ({ page, param, pinned })), [
-    { page: 'evals', param: 'node/scenario', pinned: true },
-    { page: 'issues', param: '42', pinned: true },
+    { page: 'evals', param: 'node/scenario', pinned: false },
+    { page: 'issues', param: '42', pinned: false },
   ])
   assert.deepEqual(tabRoute(evalDetail), { page: 'evals', param: null, query: null })
   assert.deepEqual(tabRoute(issueDetail), { page: 'issues', param: null, query: null })

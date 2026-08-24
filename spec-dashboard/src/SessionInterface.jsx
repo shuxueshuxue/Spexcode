@@ -10,13 +10,14 @@ import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
 import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
+import SessionForestPanel from './SessionForestPanel.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
-import { navigateAddress, sessionEvalAddress } from './address.js'
-import { navigate, routeHash } from './route.js'
+import { routeAddress, sessionEvalAddress } from './address.js'
+import { routeHash } from './route.js'
 import { useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
-import { apiFetch } from './data.js'
+import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
@@ -41,8 +42,10 @@ import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
+import TabStrip from './TabStrip.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
+import { useViewScope } from './ViewScope.jsx'
 import { expandSessionFolds, toggleSessionFold, useSessionListState } from './sessionListState.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
@@ -456,14 +459,16 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null, route = null }) {
   const t = useT()
+  const scope = useViewScope()
   const { notify } = useTransientNotice()
   const { lockGraphTo } = useWorkspaceApi()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
+  const [selectRequest, setSelectRequest] = useState(null)
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
@@ -636,7 +641,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setResourceMenu(false)
     // A resource is a file-class workspace tab: navigation appends its address and leaves the session tab's
     // selected base face unchanged. The preview stays warm because the resource address is its own tab.
-    navigate('sessions', tab.sessionId, { query: { surface: resourceSurface(tab.id) } })
+    scope.open({ page: 'sessions', param: tab.sessionId, query: { surface: resourceSurface(tab.id) } })
   }
   const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
     current.id === tab.id ? { ...current, revision: current.revision + 1 } : current,
@@ -739,7 +744,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [resourceMenu])
   // Esc leaves the diff overlay for the session's own base address, the same exit a resource surface has.
   // Diff is never a base surface, so the address it returns to is the bare one.
-  useEscLayer(diffSurface, () => navigate('sessions', active, { replace: true }))
+  useEscLayer(diffSurface, () => scope.open({ page: 'sessions', param: active, query: null }, { replace: true }))
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (value) => setDrafts((draft) => ({
@@ -762,7 +767,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     } else {
       setTerminalFocusRequest((request) => request + 1)
     }
-    if (remember || id === active) navigate('sessions', id, { replace: true, query: { surface } })
+    if (remember || id === active) scope.open({ page: 'sessions', param: id, query: { surface } }, { replace: true })
   }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
@@ -890,7 +895,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         // The create response is the publication fence: move the reader into the new document immediately,
         // while its queued/starting row and live execution trace catch up through the board stream.
-        navigate('sessions', result.id)
+        scope.open({ page: 'sessions', param: result.id, query: null })
         reload?.()
       } else if (!result.ok) {
         notify(result.error || t('session.launchFailed'), { kind: 'error' })
@@ -1021,10 +1026,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const deliveryId = commandDeliveryKeysRef.current[active] || crypto.randomUUID()
     commandDeliveryKeysRef.current[active] = deliveryId
     setActionOutcome({ owner: 'command', phase: 'sending', message: t('session.outcomeSending') })
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), COMMAND_DELIVERY_TIMEOUT_MS)
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: 'command', text, deliveryId }),
+        signal: controller.signal,
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
@@ -1042,7 +1050,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       if (outcome?.delivery === 'queued') {
-        setActionOutcome({ owner: 'command', phase: 'failed', message: t('session.outcomeQueued') })
+        setActionOutcome({ owner: 'command', phase: 'queued', message: t('session.outcomeQueued') })
         return
       }
       setMsg((current) => current === raw ? '' : current)
@@ -1050,11 +1058,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
+      if (controller.signal.aborted) {
+        setActionOutcome({ owner: 'command', phase: 'failed', message: t('session.outcomeUnconfirmed') })
+        return
+      }
       setActionOutcome({
         owner: 'command',
         phase: 'failed',
         message: error instanceof Error ? error.message : String(error),
       })
+    } finally {
+      window.clearTimeout(timeout)
     }
   }
 
@@ -1356,7 +1370,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // the typed /eval navigates to the session-scoped list through the ONE [[address-routing]] projection
     // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
     // address as a REAL anchor.
-    eval: () => { if (sessionActive) navigateAddress(sessionEvalAddress(active)) },
+    eval: () => { if (sessionActive) scope.open(routeAddress(sessionEvalAddress(active))) },
     merge: mergeSession,
     relaunch: resumeAndReturnToWorking,
     stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → read-only Conversation
@@ -1380,19 +1394,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       onClick: () => setResourceMenu((open) => { if (!open) setCtxMenu(null); return !open }),
       menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
       menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
-    },
-    // The session's own lifecycle menu, at the document that IS that session. It is the only place on this
-    // surface that reaches rename, tmux attach and the graph lock; the toolbar tools next to it act on the
-    // running work, not on the record. Its twin is the right-click on the finding dock's row — one menu,
-    // two ways in.
-    {
-      id: 'session-menu', icon: 'ellipsis', label: t('session.menuLabel'), priority: 90,
-      pressed: !!ctxMenu, haspopup: true,
-      onClick: (event) => {
-        const box = event.currentTarget.getBoundingClientRect()
-        setResourceMenu(false)
-        setCtxMenu((current) => (current ? null : { x: box.left, y: box.bottom, session: selSession }))
-      },
     },
     ...(!activeResource && surfaceChoices.length > 1 ? [
       {
@@ -1536,6 +1537,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
+      <SessionForestPanel
+        sessions={sessions}
+        activeId={active}
+        // The Sessions document owns both its forest and its document chrome. Keeping these siblings
+        // makes the forest push the tabstrip/content column right instead of starting underneath a
+        // shell-level tabstrip.
+        onSelect={(id) => onPickSession ? onPickSession(id) : (id === 'new' ? setSel('new') : selectSession(id))}
+        onSearch={onOpenSearch}
+        reload={reload}
+        onContextMenu={setCtxMenu}
+        selectRequest={selectRequest}
+        onSelectRequestConsumed={() => setSelectRequest(null)}
+        onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
+      />
+      <div className="si-document">
+        {route && <TabStrip specs={specs} sessions={sessions} route={route}
+          onSessionContextMenu={(next) => { setResourceMenu(false); setCtxMenu(next) }} />}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through
@@ -1732,8 +1750,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           </div>
         </section>
       </div>
+      </div>
     </div>
-    {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) navigate('sessions', active === 'new' ? null : active) }} />}
+    {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) scope.open({ page: 'sessions', param: active === 'new' ? null : active, query: null }) }} />}
     <SessionContextMenu
       menu={ctxMenu}
       onClose={() => setCtxMenu(null)}
@@ -1751,6 +1770,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // session rows make. It used to be handed to a callback that expected a session id and got a session,
       // which is how a menu item can look wired and do nothing.
       onLock={(s) => { lockGraphTo(s.source, { toggle: false }); onClose() }}
+      onMultiSelect={(session) => setSelectRequest(session)}
+      onDetach={(session) => {
+        void apiFetch('/api/sessions/reparent', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ children: [session.id], parent: null }),
+        }).then(() => reload?.())
+      }}
     />
     </>
   )

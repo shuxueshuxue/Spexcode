@@ -22,23 +22,25 @@ related:
 
 ## Anti-regression boundary
 
-Resident Evals and Issues details keep their detail address in the URL while their tab identity remains the
+Evals and Issues details keep their detail address in the URL while their tab identity remains the
 single top-level board address. The empty workspace remains an explicit `#/empty` route backed by `EmptyView`;
 it is not replaced by the graph when the last document closes. The executable boundary test covers these
 subtractive and resident-tab invariants alongside the pure tab model.
 
 **The strip holds the workspace working set.** Object tabs include `#/file/<path>` and `#/sessions/<id>`.
-Spec, Evals, Issues, and Settings are resident top-level tabs (`#/spec`, `#/evals`, `#/issues`,
-`#/settings`); opening a spec node, scenario, or issue keeps its detail address in the URL while focusing
-that surface's top-level tab. A file or session detail never replaces another kind's resident/document tab.
+Spec, Evals, Issues, and Settings are dynamic top-level tabs (`#/spec`, `#/evals`, `#/issues`,
+`#/settings`); the workspace store does not seed or pin all four pages on cold boot. Opening a route creates
+or focuses that page-kind slot, while its detail address remains in the URL. A file or session detail never
+replaces another kind's tab. Closing a page tab removes it; the next visit recreates exactly that one tab, so
+route and strip cannot drift while the working set stays honest about what the reader actually opened.
 A session's
 `?surface=conversation|terminal|diff` is internal view state on that one session object, never part of tab
 identity or deduplication. A `resource:…` face is the exception: it is a file-class workspace tab with its
 own identity, appended beside the unchanged session tab. The rail navigates into this same working set and
 does not own a second focus state. Graph remains the one addressable view that never becomes a top-level tab.
 
-Resident Spec, Evals, Issues, and Settings tabs render the page icon declared by [[view-registry]], the same
-identity their activity-rail entries use. A detail URL keeps that resident tab identity while its node,
+Spec, Evals, Issues, and Settings tabs render the page icon declared by [[view-registry]], the same
+identity their activity-rail entries use. A detail URL keeps that top-level tab identity while its node,
 scenario, or issue selection remains route state. A board's list tabs (for example Open/Closed) are view-local
 filters, not workspace addresses. SpecView still owns the `#/spec/<id>` detail address, and file chips still
 open independent `#/file/<path>` document tabs.
@@ -47,12 +49,12 @@ What the strip does NOT hold is what has no object: `#/graph` (including `#/grap
 addressable legacy view, [[node-graph]]), `#/empty`, bare `#/sessions`, and **`#/sessions/new`** —
 the launch page names no session, it is where one is STARTED, and a tab for it is a tab for a form. The
 session it launches becomes a tab the moment it has an id, which is the moment there is an object to hold.
-This is why the strip is empty on a fresh `#/sessions` load and why typing the graph's address mints
-nothing. `#/empty` is the explicit state reached after the last workspace object is closed; it is not a
-fresh-boot alias and it never enters the strip.
+This is why the strip contains only the previously opened working set on a fresh `#/sessions` load and why typing the
+graph's address mints nothing. `#/empty` is the explicit state reached after the last workspace object is
+closed; it is not a fresh-boot alias and it never enters the strip.
 
 **The strip is the workspace itself, so it is on every route.** Even where the sidebar is gone — a bare board
-has no document tab ([[dock-modes]]) — the working set stays visible and one click returns to it: *"应该被保留的是
+has no activity rail ([[dock-modes]]) — the previously opened working set stays visible and one click returns to it: *"应该被保留的是
 各个 tab，各个 tab 才相当于是工作区，而不是左侧边栏。"* The left rail is a way to change destination and the
 dock only describes the current tab; the strip is what you are working on, and none of the three is
 interchangeable with another.
@@ -159,6 +161,11 @@ at all. **A slot is not exempt.** It is an ordinary entry that happens to be unp
 that flag rather than by position, so it may be dragged anywhere and ordinary navigation still lands in it
 exactly where the reader put it.
 
+While the pointer is held and crosses a new insertion point, the array reorders immediately; the reader sees
+the working set move under the pointer before release, and the same stored order is already the truth if the
+gesture ends there. The unoccupied right side of the tab-list host is also the end insertion point, so dropping
+in that blank area appends the tab without requiring a hit on the last tab face.
+
 The gesture is the workspace's shared pointer drag ([[drag-gesture]]) and it is deliberately not native
 HTML5 drag-and-drop: a tab face is a button, which swallows `dragstart`, and the browser's drop protocol
 and ghost image are machinery neither this strip nor the session dock wants. Six pixels of slack keep a
@@ -224,10 +231,9 @@ The earlier human rule "退回到 spec node graph" described spec/file workspace
 report "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" narrows that rule: session tabs
 use the classified session fallback above, while spec/file tabs retain the graph return.
 
-Spec, Settings, Evals, and Issues are resident documents even though their bare addresses are board destinations
-or detail entrypoints;
-their detail/query state does not mint another identity. The same resident tab remains selected for a bare
-board or any parameterized detail URL.
+Spec, Settings, Evals, and Issues are top-level documents even though their bare addresses are board destinations
+or detail entrypoints; their detail/query state does not mint another identity. The same dynamic tab remains
+selected for a bare board or any parameterized detail URL once that page has been opened.
 
 **Labels come from the board's own projections** — a node's title, a session's headline — never from a
 second lookup table that could drift from them. A tab for a node carries the same four-state dot its tile
@@ -235,7 +241,12 @@ does, so the strip speaks the board's vocabulary rather than inventing a tab-spe
 resolves to nothing (a node deleted, a session closed elsewhere) the raw selector shows: an address that
 names nothing is still the address the reader typed, and blanking it would hide that.
 
-**A board's DETAIL is route state inside its resident tab.** Evals and Issues keep the stable page label and
+The resident Spec tab is one slot and keeps the Spec page icon even when its route names a node. Its face,
+tooltip, accessible label, and visible title use that node's own title; the bare `#/spec` face says `Spec`.
+Opening a governed file keeps the independent file document slot and names the file from its path. Neither
+route creates a second Spec tab.
+
+**A board's DETAIL is route state inside its top-level tab.** Evals and Issues keep the stable page label and
 page icon in the strip while the URL carries the selected scenario or issue; Evals may additionally wear the
 selected node's status dot, which costs no detail fetch. `#/issues/new` remains a compose route with no issue
 identity.

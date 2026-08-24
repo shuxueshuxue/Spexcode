@@ -7,10 +7,10 @@ import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
-import { pinTab } from './tabs.js'
+import { focusSessionTab, pinTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
-import { Icon } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -25,7 +25,7 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 // live in the single header row below, so switching projection changes what the dock LISTS and never how
 // thick the dock is. Explorer's count row, the sessions "+" and the archive door were three separate strips
 // stacked around one list; that is three answers to a question the shell already answers once.
-function SessionDock({ sessions, activeId }) {
+function SessionDock({ sessions, activeId, suppressRows = false }) {
   const t = useT()
   const { offline } = useBackendHealth()
   const { expanded, offlineOpen } = useSessionListState()
@@ -60,10 +60,11 @@ function SessionDock({ sessions, activeId }) {
   // Session navigation lives on the dock now that the old full-width SessionInterface list is retired.
   // Option arrows remain intentional even while a terminal, Command Box, or composer owns native focus.
   useKeyboardScope((event) => {
+    if (suppressRows) return false
     const action = resolveSessionShortcut(rows, activeId, event)
     if (!action) return false
     event.preventDefault()
-    if (action.type === 'move') navigate('sessions', action.id)
+    if (action.type === 'move') focusSessionTab(action.id, (route) => navigate(route.page, route.param, { query: route.query }))
     else if (action.type === 'expand') {
       const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
       if (item && !item.expanded) toggleSessionFold(action.id)
@@ -143,6 +144,10 @@ function SessionDock({ sessions, activeId }) {
   // rather than an element of its own — an affordance that costs no layout can be shown without moving
   // anything the reader is aiming at.
   const rootArmed = !!drag?.parent
+  // The routed Sessions document owns the complete forest. Do not leave a structural empty body in the
+  // finding dock: the document list is the only session navigation surface for this focused route. This
+  // guard comes after every hook so switching ownership keeps hook order stable.
+  if (suppressRows) return null
   return (
     <div className="dock-session-body">
       <div className={`dock-session-list${rootArmed ? ' root-armed' : ''}${drag?.target === null ? ' root-on' : ''}`}
@@ -170,10 +175,13 @@ function SessionDock({ sessions, activeId }) {
               'data-locked': locked ? '' : undefined,
               'data-tip': t('dockSessions.rowTip'),
               'aria-grabbed': drag?.id === item.s.id || undefined,
-              onMouseDown: (event) => startRowDrag(event, item.s),
+              // A session row is chrome around the active TUI. Keep the browser button from stealing the
+              // xterm helper textarea on a plain click; the same press still arms the shared drag gesture.
+              onMouseDown: (event) => { event.preventDefault(); startRowDrag(event, item.s) },
               onClick: (event) => {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
-                ;(event.ctrlKey || event.metaKey ? pinTab : navigate)('sessions', item.s.id)
+                if (event.ctrlKey || event.metaKey) pinTab('sessions', item.s.id)
+                else focusSessionTab(item.s.id, (route) => navigate(route.page, route.param, { query: route.query }))
               },
               onDoubleClick: () => pinTab('sessions', item.s.id),
               onContextMenu: (event) => {
@@ -234,10 +242,9 @@ function DockHead({ mode, specs, sessions }) {
               onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
               <Icon name="archive" size={13} />
             </button>
-            <button type="button" className="dock-head-act dock-head-act-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
-              onClick={() => navigate('sessions', 'new')}>
-              <Icon name="plus" size={14} />
-            </button>
+            <IconButton icon="plus" size={15}
+              className="dock-head-act dock-head-act-new" label={t('dockSessions.new')}
+              onClick={() => navigate('sessions', 'new')} />
           </>
         )}
       </span>
@@ -245,7 +252,7 @@ function DockHead({ mode, specs, sessions }) {
   )
 }
 
-export default function Dock({ mode, specs, sessions, focusId, activeSessionId, closing = false }) {
+export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false }) {
   // 200px is the resting width: wide enough for a session headline or a file name to read before it
   // ellipses, narrow enough that the finding dock stays a margin beside the document rather than a second
   // column competing with it. A reader who wants more drags it, and that choice is what persists — the
@@ -255,7 +262,7 @@ export default function Dock({ mode, specs, sessions, focusId, activeSessionId, 
     <aside className={closing ? 'dock dock-closing' : 'dock'} style={{ width }} aria-hidden={closing ? 'true' : undefined}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />
       {mode === 'sessions'
-        ? <SessionDock sessions={sessions} activeId={activeSessionId} />
+        ? <SessionDock sessions={sessions} activeId={activeSessionId} suppressRows={suppressSessionRows} />
         : <FileTree specs={specs} focusId={focusId} embedded />}
       <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
     </aside>

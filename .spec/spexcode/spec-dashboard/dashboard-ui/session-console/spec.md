@@ -63,10 +63,24 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
-Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
-terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless TimelineChat
-keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are disposed while the read-only Conversation remains available. Open resource tabs follow
-the same display-hidden lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself
+The console and its `SessionInterface` descendant never write the global route directly. Their host-provided
+`ViewScope` owns every session selection, launch result, eval door, archive return, and resource/base-surface
+transition. Resource and base-surface changes keep their exact `surface` query, while diff/base exits retain
+replacement semantics; moving the write behind the scope does not flatten those address axes. Plain hrefs may
+still use the shared `routeHash` projection, but imperative writes dispatch one checked `open` intent to the shell.
+Selecting a session row first resolves its canonical session document through the shared workspace tab identity:
+when that session is already held, the view focuses that existing tab; otherwise the current session slot receives
+the new address. A row click never rewrites the active session A slot to session B while B is already held elsewhere.
+Leaving the page keeps the console document, its selection, and every visited pane-backed terminal mounted;
+switching tabs changes visibility rather than rebuilding xterm or its browser WebSocket, so the cached screen and
+focus return without a cold start. The active transition claims `visible:false` on the bridge; the bounded native
+linger may release the raw PTY/tmux client while the browser terminal/socket remain resident, and reactivation's
+resize claim restores that native bridge. While the Sessions page is visible, only the selected terminal owns the
+visible geometry claim; a headless TimelineChat keeps its rendered timeline cursor, polls only while selected, and
+resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the
+canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are
+disposed while the read-only Conversation remains available. Open resource tabs follow the same display-hidden
+lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
@@ -120,14 +134,11 @@ Dropping a working row on the visible archive zone heading instead performs the 
 the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
 close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 
-The [[dock-modes]] sessions projection is the desktop's sole session list. This document therefore never
-renders an internal `si-list`, `si-board-scroll`, list resizer, or collapsed stub, regardless of dock mode;
-the terminal or timeline occupies the full content width. The dock owns New Session and the archive index door,
-while the document keeps archive/close/resume actions and exposes rename from its selected-session tools. The
-dock remains list-owned and navigation-only: it has no batch-selection state, checkboxes, or bulk lifecycle
-endpoint, while row movement belongs to the dock's sole session list ([[dock-modes]]). Any future batch operation
-requires its own current contract and product proof. The keyboard fresh-session binding remains unchanged.
-
+The [[dock-modes]] sessions projection remains the desktop's at-a-glance finding list. The routed Sessions
+document also mounts the same `SessionConsoleTreeRow` forest as its complete mutable list; the terminal or
+timeline occupies the remaining content width. The document owns explicit row multi-select and the bulk close
+bar, while row movement uses the full-row tree gesture. Graph marquee selection is never a substitute for
+session selection.
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
 `fitTextarea` measurement path grows through each content line without a scrollbar until the host's
@@ -373,7 +384,9 @@ Command Box dispatches by **appending to the target's durable log** ([[dispatch]
 so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows only the
 in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry. Each draft carries
 one opaque delivery key while pending, so a retry addresses the existing durable queue entry instead of appending
-a duplicate. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
+a duplicate. The HTTP request has one named transport deadline; if the response is not confirmed by then, the
+draft and delivery key stay in place and the outcome says delivery is unconfirmed and retry is safe. This deadline
+does not write or infer lifecycle state. If durable acceptance succeeds while adapter handover is still queued, the draft stays visible and
 the shared notice says retry is safe; only adapter handover clears the draft and closes the box. Once either result
 settles, it visibly acknowledges through the shared [[transient-notices]] stack — a short-lived delivery/failure
 result outside the Command Box's geometry — before a successful send clears the draft and closes the box. A `/` line
@@ -557,3 +570,10 @@ exact state. Green for `working` also matches the avatar's liveness ring, so dot
 
 The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
 terminal-input ownership; such shell changes do not create a second session-console surface.
+
+The Sessions document owns its frame chrome: the forest sidebar is the left sibling of a right-hand document
+column, and that column contains the shared workspace TabStrip above the console content. The shell omits its
+outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
+than allowing the strip to span above a list. A session tab's right-click enters the same session context menu
+as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
+`session-menu` document-action button is absent.

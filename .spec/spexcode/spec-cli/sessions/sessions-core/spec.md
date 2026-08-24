@@ -78,8 +78,10 @@ contract, and the next transport sweep drains it. This durable watch path never 
 or either `awaiting` proposal (`review`/`close-pending`) as terminal or requires a dashboard poll, and it does not
 change the lifecycle or cutover rules of either session.
 When legacy record metadata carries a waiting, error, stopped, or archived lifecycle, it is only migration evidence;
-the canonical application row is the lifecycle fact and always wins the public projection. Lifecycle transitions do
-not update the envelope bytes. A retired protocol address is likewise not delivery debt: the retry sweep
+the canonical application row is the lifecycle fact and always wins the public projection. After cutover, governed
+metadata writes omit the legacy `status`, `proposal`, `note`, and `parent` keys entirely; they are not a second
+runtime state surface. Non-governed external runtime records retain their separate contract, and migration input
+may still require the legacy keys. A retired protocol address is likewise not delivery debt: the retry sweep
 must drop that impossible lookup rather than polling and logging it forever.
 An existing queue with no bound governed runtime is also retained but not polled; binding/resume is the event
 that makes it drainable again. The application emits the ordinary post-commit delivery wake after a runtime

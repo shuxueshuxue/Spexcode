@@ -36,7 +36,9 @@ may select explorer or sessions, but the rail light remains route-only. The dedi
 control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
 a plain click navigates to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it
-as its own tab.
+as its own tab. The row is chrome around the session document, so its pointer press suppresses the native
+button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
+composition from the session currently being read.
 
 **The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
@@ -78,7 +80,10 @@ the family's root status.** Each zone header counts every member of that zone (r
 the family changes visibility, never the count. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
-else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
+else: plain click replaces the current tab and ctrl/command-click holds a new one. The `+` door is a quiet
+24px rounded-square primary action: a blue hairline and centered shared plus mark at rest, a blue fill only on
+hover, and a two-pixel keyboard ring. It remains icon-only and keyboard-focusable while keeping the search and
+archive doors visually secondary. Moving a row is a
 separate gesture with its own section below, and it changes no address.
 
 Every zone heading uses the shared `--divider-rule` hairline for its trailing separator. The zone hue remains
@@ -107,8 +112,9 @@ being a menu's anchor is not mutation state living in the dock: the row still on
 action the menu offers is performed by the menu.
 
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
-document tools. Multi-select stayed retired with the list that owned it. The existing keyboard fresh-session
-binding remains active.
+document tools. On the routed Sessions document, the document owns the complete forest's explicit row
+multi-select and bulk close bar; graph marquee selection remains a graph-only gesture. The existing keyboard
+fresh-session binding remains active.
 
 ## a row can be MOVED, and that is not navigation
 
@@ -149,8 +155,10 @@ double-click-to-hold, alt-click-to-lock and the context menu are all untouched, 
 emits after a real drag is eaten so a drop never also navigates. The move itself is the backend's existing
 reparent for both directions — the top level is the parent `null`, which is what it already was in the
 record, so there is no second notion of "detach" anywhere.
-When the dock is in sessions mode, `SessionInterface` renders no `si-list`, board scrollport, list resizer, or
-48px stub: the terminal or timeline owns the entire document content region. This is the [[workspace-shell]]
+When the dock is in sessions mode for a non-document finding surface, `SessionInterface` renders no `si-list`,
+board scrollport, list resizer, or 48px stub: the terminal or timeline owns the entire document content region.
+When a routed Sessions document is focused, the shell suppresses the dock's duplicate row projection and the
+document mounts the complete `si-list` forest described by [[session-console]]. This is the [[workspace-shell]]
 four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on the right, AMBIENT at
 the bottom — so one window cannot expose two competing navigation lists.
 

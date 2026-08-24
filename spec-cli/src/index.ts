@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
+import { listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -928,8 +928,21 @@ app.post('/api/sessions/:id/input', async (c) => {
     const id = c.req.param('id')
     const text = typeof body?.text === 'string' ? body.text : ''
     const deliveryKey = typeof body?.deliveryId === 'string' && body.deliveryId.trim() ? body.deliveryId.trim() : undefined
-    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey } : {})
+    // Command Box acceptance is the durable append. Do not hold the HTTP request on a
+    // slow native handoff: the delivery supervisor already owns the queued retry path.
+    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey, deferDrain: true } : { deferDrain: true })
     if (!r.ok) return c.json(r, 502)
+    // Start the first handoff without holding the HTTP response on native readiness. The queue remains the
+    // acceptance boundary; only a successful dequeue is allowed to publish human activity.
+    // A deferred drain is an asynchronous handoff, not proof that a prompt was delivered. Only the
+    // accepted queue state for this request may reopen a waiting lifecycle; an empty/raced drain must
+    // never turn a focus-only or retry-only path into `working`.
+    const handoffWasQueued = r.delivery === 'queued'
+    void drainSession(id).then(() => {
+      if (!handoffWasQueued) return
+      const application = configuredSessionApplicationIfCutover()
+      if (application ? !application.protocol.listPending(id).length : true) markHumanPromptActive(id)
+    }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })
   }

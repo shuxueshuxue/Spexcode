@@ -39,4 +39,9 @@ END;
 
 export const SESSION_EVENTS_MIGRATIONS: readonly ComponentMigration[] = [
   { version: 1, sql: SESSION_EVENTS_MIGRATION_SQL },
+  { version: 2, sql: `
+CREATE INDEX session_events_message_lookup
+  ON session_events (subject_session_id, event_type)
+  WHERE event_type = 'session.message.sent.v1';
+` },
 ]

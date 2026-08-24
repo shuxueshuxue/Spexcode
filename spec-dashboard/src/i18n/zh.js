@@ -52,6 +52,7 @@ export default {
     aria: '项目文件树',
     specs: '规格',
     files: '文件',
+    graph: '规格图谱',
   },
   diskTree: {
     loading: '正在加载…',
@@ -132,6 +133,7 @@ export default {
     railLabel: '主导航',
     graph: '规格节点图',
     explorer: '资源管理器',
+    spec: '规格',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',
     spec: '规格',
@@ -210,6 +212,17 @@ export default {
     opOk: '{op}：exit 0 — 成功',
     opFail: '{op}：exit {code} — 失败',
     actionFailed: 'gateway 拒绝了该请求',
+    removeRegistration: '移除项目登记',
+    removeRegistrationHint: '只移除 SpexCode 目录，不删除本地源码',
+    removeTitle: '移除项目登记？',
+    removeWarning: '这是一个需要停下来确认的操作。项目会从 SpexCode 项目目录中移除。',
+    removeKeepsFiles: '本地项目目录、Git 历史和源码不会被删除。磁盘删除不属于这个操作。',
+    removeStopsFirst: '在线 backend 或活动会话会阻止移除；项目密码会在成功后清除。',
+    removeUnderstand: '我确认这里只移除登记，不删除本地目录。',
+    removeTypePrompt: '请输入下面的确认短语：',
+    removeTypeLabel: '移除确认短语',
+    removeConfirm: '确认移除登记',
+    removeBusy: '移除中…',
     passwordTitle: '项目密码',
     passwordPlaceholder: '新的项目密码',
     passwordSet: '设置',
@@ -528,6 +541,13 @@ export default {
     attachCopied: '已复制',
   },
 
+  sessionSelect: {
+    selected: ({ n }) => `已选择 ${n} 个`,
+    close: '关闭所选会话',
+    closeTitle: ({ n }) => `关闭所选的 ${n} 个会话？`,
+    closeConfirm: '这将关闭所选会话并删除其工作树。任何未提交的更改都会丢失。',
+  },
+
   lockHint: {
     cycleBefore: '按 ',
     cycleNext: ' 下一个',
@@ -839,6 +859,7 @@ export default {
     outcomeSending: '正在发送...',
     outcomeDelivered: '已送达',
     outcomeQueued: '已接收，正在等待终端传输 — 可安全重试',
+    outcomeUnconfirmed: '尚未确认送达 — 可安全重试',
     deliveryFailed: ({ status }) => `未送达（HTTP ${status}）`,
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',

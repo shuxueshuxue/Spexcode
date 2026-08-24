@@ -174,6 +174,27 @@ const attrs = (token, lineBase) => {
 
 const attr = (token, name) => token?.attrGet?.(name) ?? null
 
+// markdown-it table alignment is emitted as a CSS declaration string (`text-align:center`). React's
+// `style` prop is deliberately stricter: passing that string works in development with a warning but throws
+// minified error #62 in production. Keep the parser boundary responsible for translating the tiny inline
+// style vocabulary instead of leaking a DOM/CSS representation into every prose consumer.
+const reactStyle = (value) => {
+  if (!value) return undefined
+  const result = {}
+  for (const declaration of String(value).split(';')) {
+    const i = declaration.indexOf(':')
+    if (i < 0) continue
+    const rawName = declaration.slice(0, i).trim()
+    const rawValue = declaration.slice(i + 1).trim()
+    if (!rawName || !rawValue) continue
+    const name = rawName.startsWith('--')
+      ? rawName
+      : rawName.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+    result[name] = rawValue
+  }
+  return Object.keys(result).length ? result : undefined
+}
+
 const mathElement = (h, token, display, lineAttrs = {}) => {
   try {
     const html = katex.renderToString(token.content, { ...MATH_OPTIONS, displayMode: display })
@@ -246,8 +267,8 @@ const blockElement = (h, token, children, options) => {
     case 'thead_open': return h('thead', lineAttrs, children)
     case 'tbody_open': return h('tbody', lineAttrs, children)
     case 'tr_open': return h('tr', lineAttrs, children)
-    case 'th_open': return h('th', { ...lineAttrs, style: attr(token, 'style') || undefined }, children)
-    case 'td_open': return h('td', { ...lineAttrs, style: attr(token, 'style') || undefined }, children)
+    case 'th_open': return h('th', { ...lineAttrs, style: reactStyle(attr(token, 'style')) }, children)
+    case 'td_open': return h('td', { ...lineAttrs, style: reactStyle(attr(token, 'style')) }, children)
     default: return children
   }
 }

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -371,6 +371,75 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
   assert.match(b, /"status": "active"/)
   assert.match(b, /"proposal": ""/)
   assert.match(b, /"note": ""/)
+})
+
+test('mark-active never trusts the runtime envelope to skip the canonical writer', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-canonical-writer-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'canonical-writer'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
+  const record = join(runtime, 'sessions', sid, 'session.json')
+  // This is deliberately the stale envelope shape that caused the production drift: it says active while
+  // the canonical application may still be asking/close-pending. The hook must still call the one writer.
+  writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status: 'active', proposal: '', note: '' }, null, 2))
+  const called = join(dir, 'writer-args')
+  const fakeSpex = join(dir, 'fake-spex')
+  writeFileSync(fakeSpex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" > ${JSON.stringify(called)}\n`)
+  chmodSync(fakeSpex, 0o755)
+  const result = spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      SPEX: fakeSpex,
+      SPEXCODE_HOME: home,
+      SPEX_HOOK_MANIFEST: manifest,
+    },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'true' } }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(called, 'utf8').trim(), `internal session-state active --session ${sid}`)
+})
+
+test('managed watch UserPromptSubmit does not forge receiver activity', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-watch-freshness-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'watch-receiver'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'UserPromptSubmit\t10\tfalse\thooks/mark-active.sh\n')
+  const record = join(runtime, 'sessions', sid, 'session.json')
+  const fakeSpex = join(dir, 'fake-spex')
+  const calls = join(dir, 'calls')
+  writeFileSync(fakeSpex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fakeSpex, 0o755)
+  const fire = (status: string, prompt: string) => {
+    writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status, proposal: '', note: 'waiting' }, null, 2))
+    return spawnSync('bash', [dispatch, 'claude', 'UserPromptSubmit'], {
+      cwd: dir,
+      env: { ...process.env, SPEX: fakeSpex, SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+      input: JSON.stringify({ session_id: sid, hook_event_name: 'UserPromptSubmit', prompt }),
+      encoding: 'utf8',
+    })
+  }
+  const watch = fire('asking', '[spex watch] child is asking')
+  assert.equal(watch.status, 0, watch.stderr)
+  assert.equal(existsSync(calls), false, 'a protocol watch notice must not call the active writer')
+  const ordinary = fire('asking', 'continue with the requested audit')
+  assert.equal(ordinary.status, 0, ordinary.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-state active --session ${sid}`)
 })
 
 // [[hook-dispatch]] per-tree slots — with no SPEX_HOOK_MANIFEST override, the dispatcher reads the manifest

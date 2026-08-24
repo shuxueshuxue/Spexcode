@@ -21,6 +21,9 @@ try {
   await page.goto(`${BASE}/#/spec/${encodeURIComponent(nodes[1].id)}`, { waitUntil: 'domcontentloaded' }); await page.locator('.specview').first().waitFor({ state: 'attached' })
   const switched = await state(); assert.deepEqual(switched.tabs, [{ key: '#/spec', label: 'Spec', active: true }])
   await page.goto(`${BASE}/#/file/spec-dashboard/src/views.jsx`, { waitUntil: 'domcontentloaded' }); await page.locator('.srcview-cm .cm-editor').waitFor(); await page.locator('.srcview-progress').waitFor({ state: 'detached' })
-  const file = await state(); assert.deepEqual(file.tabs.map(({ key, label, active }) => ({ key, label, active })), [{ key: '#/spec', label: 'Spec', active: false }, { key: '#/file/spec-dashboard/src/views.jsx', label: 'views.jsx', active: true }])
+  const file = await state(); assert.deepEqual(file.tabs.map(({ key, label, active }) => ({ key, label, active })), [
+    { key: '#/spec', label: 'Spec', active: false },
+    { key: '#/file/spec-dashboard/src/views.jsx', label: 'views.jsx', active: true },
+  ])
   await page.screenshot({ path: resolve(OUT, 'spec-resident-file-focus.png'), fullPage: true }); console.log(JSON.stringify({ ok: true, initial, switched, file, screenshot: resolve(OUT, 'spec-resident-file-focus.png') }))
 } finally { await page.close(); await browser.close() }

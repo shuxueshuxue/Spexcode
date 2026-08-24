@@ -41,9 +41,11 @@ function label(tab, { specs, sessions, names, t }) {
   if (tab.page === 'graph') return t('tabs.graph')
   // a document names itself: a node by its own title, a file by its basename. The strip does not invent a
   // naming scheme for documents it does not own.
-  if (tab.page === 'spec') return isResident(tab.page) ? t('tabs.spec') : (specs?.find((s) => s.id === tab.param)?.title || tab.param)
+  // Spec is one resident slot and keeps the Spec icon, but a selected node is the document being read.
+  // The slot identity is canonicalized by tabModel; only its face changes to the board-owned title.
+  if (tab.page === 'spec') return tab.param ? (specs?.find((s) => s.id === tab.param)?.title || tab.param) : t('tabs.spec')
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
-  // Review details are route state inside one resident top-level tab. The tab keeps the stable board name;
+  // Review details are route state inside one dynamic top-level tab. The tab keeps the stable board name;
   // the URL still carries the selected scenario or issue for copy/back/refresh.
   if (tab.page === 'evals') return t('tabs.evals')
   if (tab.page === 'issues') return t('tabs.issues')
@@ -58,7 +60,7 @@ function label(tab, { specs, sessions, names, t }) {
         ...(s?.files || []).map((path) => ({ id: resourceTabKey(s.id, 'file', path), label: path.split('/').filter(Boolean).pop() || path })),
         ...(s?.web || []).map((web) => ({ id: resourceTabKey(s.id, 'web', web.key), label: resourceLabel(web.url) })),
       ].find((item) => item.id === key)
-      return `${title} · ${resource?.label || key}`
+      return resource?.label || key
     }
     return title
   }
@@ -107,7 +109,7 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, trailing = null }) {
+export default function TabStrip({ specs, sessions, route, trailing = null, onSessionContextMenu = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
   const [wrapped, setWrapped] = useState(false)
@@ -164,24 +166,36 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
   useEscLayer(!!menu, () => setMenu(null))
 
   // The insertion point under a pointer: the tab it is over, and which HALF of that tab. Past the midpoint
-  // means after — which on the last tab is the end of the strip, the one landing place no tab can name. A
-  // landing that would not move anything is reported as none, so the marker only ever appears where a
-  // release genuinely changes the order.
+  // means after — which on the last tab is the end of the strip, the one landing place no tab can name. The
+  // host's unoccupied right edge is that same end landing, so the reader never has to hit the last tab.
+  // A landing that would not move anything is reported as none, so the marker only ever appears where a
+  // move genuinely changes the order.
   const landingAt = (point, movingKey) => {
+    const currentTabs = tabsRef.current
     const el = elementAt(point.x, point.y, '.tab')
-    if (!el) return undefined
-    const index = tabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
-    if (index < 0) return undefined
-    const box = el.getBoundingClientRect()
-    const after = point.x > box.left + box.width / 2
-    const before = after ? (tabs[index + 1] ? tabKey(tabs[index + 1]) : null) : el.dataset.tabKey
-    return moveTab(tabs, movingKey, before) === tabs ? undefined : before
+    if (el) {
+      const index = currentTabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
+      if (index < 0) return undefined
+      const box = el.getBoundingClientRect()
+      const after = point.x > box.left + box.width / 2
+      const before = after ? (currentTabs[index + 1] ? tabKey(currentTabs[index + 1]) : null) : el.dataset.tabKey
+      return moveTab(currentTabs, movingKey, before) === currentTabs ? undefined : before
+    }
+
+    const host = tabsHostRef.current
+    if (!host || !currentTabs.length) return undefined
+    const hostBox = host.getBoundingClientRect()
+    if (point.x < hostBox.left || point.x > hostBox.right || point.y < hostBox.top || point.y > hostBox.bottom) return undefined
+    const rightEdge = Math.max(...[...host.querySelectorAll('.tab')].map((tab) => tab.getBoundingClientRect().right))
+    if (point.x < rightEdge) return undefined
+    return moveTab(currentTabs, movingKey, null) === currentTabs ? undefined : null
   }
 
   const startTabDrag = (event, tab) => {
     const key = tabKey(tab)
     const track = (point) => {
       const before = landingAt(point, key)
+      if (before !== undefined) move(key, before)
       setDrag((prev) => (prev && prev.key === key && prev.before === before ? prev : { key, before }))
     }
     abandon.current = startDrag(event, {
@@ -231,7 +245,17 @@ export default function TabStrip({ specs, sessions, route, trailing = null }) {
             onDoubleClick={(e) => {
               if (!tab.pinned && !e.target.closest('.tab-x')) pinTab(tab.page, tab.param, tab.query)
             }}
-            onContextMenu={(e) => { if (isClosing) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, tab, key }) }}
+            onContextMenu={(e) => {
+              if (isClosing) return
+              e.preventDefault()
+              const session = tab.page === 'sessions' && tab.param && tab.param !== 'new'
+                ? (sessions?.find((item) => item.id === tab.param || item.id?.startsWith(tab.param)) || pendingSessionFor(tab.param))
+                : null
+              if (session && onSessionContextMenu) {
+                setMenu(null)
+                onSessionContextMenu({ x: e.clientX, y: e.clientY, session })
+              } else setMenu({ x: e.clientX, y: e.clientY, tab, key })
+            }}
             onAuxClick={(e) => { if (!isClosing && e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}

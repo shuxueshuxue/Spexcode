@@ -4,7 +4,7 @@ import { Icon, IconButton } from './icons.jsx'
 import {
   CATALOG_POLL_MS, loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
   setAdminPassword, clearAdminPassword, browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig,
-  initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon, paginateProjects,
+  initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon, paginateProjects, removeProject,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -371,12 +371,59 @@ function SetupDrawer({ p, busyOp, run, result, t }) {
   )
 }
 
+function RemoveProjectModal({ project, busy, error, onClose, onRemove, t }) {
+  const [confirmation, setConfirmation] = useState('')
+  const [understood, setUnderstood] = useState(false)
+  const phrase = `REMOVE ${project.identity.title}`
+  const ready = understood && confirmation === phrase && !busy
+  return (
+    <Modal
+      title={t('projects.removeTitle')}
+      closeLabel={t('common.close')}
+      onClose={() => { if (!busy) onClose() }}
+      className="proj-remove-modal"
+    >
+      <div className="proj-remove-copy">
+        <p className="proj-remove-warning">{t('projects.removeWarning')}</p>
+        <p>{t('projects.removeKeepsFiles')}</p>
+        <p>{t('projects.removeStopsFirst')}</p>
+        <label className="proj-remove-check">
+          <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} disabled={busy} />
+          <span>{t('projects.removeUnderstand')}</span>
+        </label>
+        <label className="proj-remove-confirm">
+          <span>{t('projects.removeTypePrompt')}</span>
+          <code>{phrase}</code>
+          <input
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            aria-label={t('projects.removeTypeLabel')}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={busy}
+          />
+        </label>
+        {error && <div className="proj-err">{error}</div>}
+        <div className="proj-remove-actions">
+          <button className="proj-act" type="button" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
+          <button className="proj-act danger" type="button" disabled={!ready} onClick={() => onRemove(confirmation)}>
+            {busy ? t('projects.removeBusy') : t('projects.removeConfirm')}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function ProjectRow({ p, health, onRefresh, t }) {
   const [panel, setPanel] = useState(null)   // 'config' | 'setup' | 'pw' | null
   const [busy, setBusy] = useState(false)    // password writes
   const [busyOp, setBusyOp] = useState(null) // 'init' | 'doctor' | 'serve' | null
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null) // { op, ok, code, output } from init/doctor
+  const [removing, setRemoving] = useState(false)
+  const [removeBusy, setRemoveBusy] = useState(false)
+  const [removeError, setRemoveError] = useState(null)
   const current = p.id === PROJECT_ID
   const offline = p.online === false
   // the dot: an offline row is calmly 'stopped' (the host already validated there is no live backend —
@@ -398,6 +445,15 @@ function ProjectRow({ p, health, onRefresh, t }) {
     setBusyOp(null)
     if (op !== 'serve') setResult({ op, ok: r.ok, code: r.code, output: r.output || (r.ok ? '' : r.error || '') })
     else if (!r.ok) setError(r.error || t('projects.actionFailed'))
+    onRefresh()
+  }
+
+  const remove = async (confirmation) => {
+    setRemoveBusy(true); setRemoveError(null)
+    const r = await removeProject(p.id, confirmation)
+    setRemoveBusy(false)
+    if (!r.ok) { setRemoveError(r.error || t('projects.actionFailed')); return }
+    setRemoving(false)
     onRefresh()
   }
 
@@ -455,7 +511,16 @@ function ProjectRow({ p, health, onRefresh, t }) {
         />
       )}
       {panel === 'config' && <ConfigDrawer p={p} onRefresh={onRefresh} t={t} />}
+      {panel === 'config' && (
+        <div className="proj-remove-disclosure">
+          <button className="proj-remove-link" type="button" onClick={() => { setRemoveError(null); setRemoving(true) }}>
+            {t('projects.removeRegistration')}
+          </button>
+          <span>{t('projects.removeRegistrationHint')}</span>
+        </div>
+      )}
       {panel === 'setup' && <SetupDrawer p={p} busyOp={busyOp} run={runOp} result={result} t={t} />}
+      {removing && <RemoveProjectModal project={p} busy={removeBusy} error={removeError} onClose={() => setRemoving(false)} onRemove={remove} t={t} />}
     </li>
   )
 }

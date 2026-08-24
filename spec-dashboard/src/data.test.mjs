@@ -151,6 +151,23 @@ test('camera lowers zoom only when the anchored neighbourhood cannot fit', () =>
   assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (nodes[3].x + nodes[4].x) / 2 * viewport.zoom)
 })
 
+test('focus navigation preserves camera height while centering the focused row', () => {
+  const nodes = Array.from({ length: 5 }, (_, index) => ({ x: index * X_GAP, y: index === 2 ? 108 : 0 }))
+  const focus = nodes[2]
+  const child = nodes[3]
+  const viewport = viewportForFocus({ focus, child, visible: nodes, width: 900, height: 600, zoom: 0.85, fit: false })
+  assert.equal(viewport.zoom, 0.85)
+  assert.equal(viewport.x, 900 * CAMERA_ANCHOR_RATIO - (focus.x + child.x) / 2 * viewport.zoom)
+  assert.equal(viewport.y, 300 - focus.y * viewport.zoom)
+})
+
+test('keyboard focus stays on the pane centre even when the visible frontier is vertically oversized', () => {
+  const focus = { x: X_GAP, y: 216 }
+  const children = Array.from({ length: 17 }, (_, index) => ({ x: X_GAP, y: (index - 8) * Y_GAP }))
+  const viewport = viewportForFocus({ focus, child: children[8], visible: [focus, ...children], width: 900, height: 300, zoom: 0.85, fit: false })
+  assert.equal(viewport.y + focus.y * viewport.zoom, 150)
+})
+
 test('camera clamps an oversized vertical frontier to a reachable top edge', () => {
   const focus = { x: 0, y: 0 }
   const children = Array.from({ length: 17 }, (_, index) => ({ x: X_GAP, y: (index - 8) * Y_GAP }))

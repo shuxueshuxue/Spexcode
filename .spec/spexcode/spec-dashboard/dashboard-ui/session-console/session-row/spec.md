@@ -50,11 +50,11 @@ The governing human ruling is: “我们的显示模式一直都只看 parent se
 It replaces cross-zone root splitting and the `○`-out-of-zone partition rule. The stored parent relationship is
 the only nesting input, and the root alone chooses the family's zone.
 
-**The console projection.** The desktop dock's tree wrapper, item, shared row face, and fold pod are one
-presentational tree. Multi-select checkboxes and the former inert drag ghost are retired; the live row is the
-only rendered session face. Dragging keeps the source row marked and highlights a valid target in the same
-tree, while the backend owns the reparent operation. No second appearance shape or hidden selection state is
-minted for the gesture.
+**The console projection.** The Sessions page's tree wrapper, item, shared row face, fold pod, selection check,
+and inert drag projection are one presentational tree. Multi-select is explicit row state entered from the row
+context menu; it is not graph marquee selection. Dragging keeps the source row marked, follows it with the same
+tree-row presentation at a reduced scale, and highlights a valid target in the same tree, while the backend
+owns the reparent operation.
 
 **The rails.** `RowLead` draws the tree connectors to the left of a row. A guide array describes the
 ancestry: each entry says whether that column continues below, so the last entry becomes a tee or an

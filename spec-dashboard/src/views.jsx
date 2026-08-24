@@ -1,9 +1,9 @@
 import { lazy } from 'react'
 import SessionsView from './SessionsView.jsx'
 import { useBoard, useBoardApi } from './workspace.jsx'
-import { navigate } from './route.js'
 import { createViewRegistry } from './viewRegistry.js'
 import { createSettingsViewPlugin } from './builtInViewPlugins.js'
+import { useViewScope } from './ViewScope.jsx'
 
 // [[view-registry]]: the map from an address kind to the thing that renders it.
 //
@@ -57,7 +57,13 @@ const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
 const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
-const openSession = (id) => navigate('sessions', id)
+// The top-level Spec document is also the graph's home canvas. A bare `#/spec` is not an empty document:
+// it is the graph when no node/file is focused. Node and file addresses keep their own readers while the
+// same top-level tab identity remains in the working set.
+function SpecWorkspaceView({ param, query }) {
+  if (param == null) return <GraphView page="spec" param={param} query={query} />
+  return <SpecView param={param} query={query} />
+}
 
 // The three review-side pages already take everything they need as props and hold their own state; they
 // become views by reading the board from context instead of from whoever rendered them. No rewrite, and no
@@ -68,18 +74,22 @@ const openSession = (id) => navigate('sessions', id)
 function EvalsView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
   const { reload } = useBoardApi()
-  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
+  const scope = useViewScope()
+  const onOpenSession = (id) => scope.open({ page: 'sessions', param: id, query: null })
+  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={onOpenSession} />
 }
 function IssuesView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
-  return <IssuesPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
+  const scope = useViewScope()
+  const onOpenSession = (id) => scope.open({ page: 'sessions', param: id, query: null })
+  return <IssuesPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={onOpenSession} />
 }
 function SettingsView() { return <Settings /> }
 
 // `surface` selects the host chrome; `document(page, param)` marks what the workspace working set may hold.
-// Spec, Evals, and Issues are resident workspace destinations: each top-level tab is one stable address,
-// while an object/detail selector is route state shown inside that tab. This keeps the whole working set
-// visible while a reading or finding is focused and prevents a detail from replacing an unrelated slot.
+// Spec, Evals, and Issues are top-level workspace destinations: each page kind has one stable tab identity,
+// while an object/detail selector is route state shown inside that tab. The `resident` flag names this
+// identity rule only; tabs.js decides whether the page has actually been opened and must be shown.
 // Graph remains an addressable legacy view, not a top-level tab.
 export const VIEWS = Object.freeze({
   // `graph` remains registered and renders direct graph addresses; it is no longer a route the workspace
@@ -87,7 +97,7 @@ export const VIEWS = Object.freeze({
   graph:    { component: GraphView,    surface: 'workspace', document: false, icon: 'graph', className: 'view-graph' },
   // Spec detail links remain canonical `#/spec/<id>` addresses; residency gives them one stable Spec tab
   // identity without changing the SpecView/FileView document boundary.
-  spec:     { component: SpecView,     surface: 'workspace', document: (_page, param) => param != null, resident: true, icon: 'graph', className: 'view-spec' },
+  spec:     { component: SpecWorkspaceView, surface: 'workspace', document: true, resident: true, icon: 'graph', className: 'view-spec' },
   file:     { component: FileView,     surface: 'workspace', document: (_page, param) => param != null, icon: 'files', className: 'view-file' },
   // `#/sessions/new` is the LAUNCH page, not a document: it names no session, it is where a session is
   // started, and a tab for it would be a tab for a form. Bare `#/sessions` is the same face.

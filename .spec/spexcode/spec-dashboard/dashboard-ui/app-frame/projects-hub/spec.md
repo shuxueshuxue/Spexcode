@@ -67,7 +67,12 @@ visible conflict instead of silent loss; `spexcode.local.json` is deliberately o
 surface because it holds host-specific paths and may hold secrets. The raw JSON editor is the drawer's
 work area: about half the viewport tall on desktop, with sensible bounds, and a large viewport-constrained
 mobile height that leaves its controls reachable without overlap. Inside that same project details drawer,
-identity editing is a quiet secondary disclosure: its compact current mark and edit button reveal the shared
+the final, low-emphasis action is **Remove project registration**. It opens a warning rather than
+acting immediately, explains that the checkout and source files remain, requires an acknowledgement checkbox
+and exact `REMOVE <project title>` text, and then calls `DELETE /projects/:id`. The page does not expose a
+local-directory delete command. Online backends and active sessions are shown as server-side blockers with
+their repair reason, so the user is never nudged into deleting around live work. Identity editing remains a
+quiet secondary disclosure: its compact current mark and edit button reveal the shared
 searchable, source-filtered icon browser only on request. The global gateway equivalent sits in the page's low-priority
 settings/details area, never as a prominent picker block. A project pick changes only its existing
 `dashboard.icon`, while the global pick changes only the one host `gateway.icon`; both use the shared

@@ -25,6 +25,7 @@ import {
   resolveProjectIdentity, writeGatewayIcon, type ResolvedIdentity,
 } from '@spexcode/spec-core'
 import { cliEntrypointArgs } from './tsx-bin.js'
+import { clearProjectPassword } from './gateway-auth.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -178,6 +179,65 @@ function catalogAdd(root: string): void {
   const entries = readCatalog()
   if (entries.some((e) => e.root === root)) return
   writeCatalog([...entries, { root, addedAt: new Date().toISOString() }])
+}
+
+// Removal is deliberately narrower than deletion: it forgets the host registration and its gateway
+// credential, while never touching the checkout. The caller supplies a UI confirmation phrase, but the
+// host repeats every safety check so a direct HTTP client cannot turn this into an easy destructive verb.
+export type RemoveProjectResult = {
+  root: string; projectId: string; sessions: number; runtimeRecordRemoved: boolean
+}
+
+function activeProjectSessions(root: string): number {
+  const dir = join(spexcodeHome(), 'projects', encodeProject(root), 'sessions')
+  let entries: string[]
+  try { entries = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) }
+  catch { return 0 }
+  let active = 0
+  for (const id of entries) {
+    try {
+      const record = JSON.parse(readFileSync(join(dir, id, 'session.json'), 'utf8'))
+      if (record?.archived !== true && record?.stopped !== true && record?.closedAt == null) active++
+    } catch {
+      // An unreadable record is not safe to classify as inactive. It stays a loud blocker for removal.
+      active++
+    }
+  }
+  return active
+}
+
+export function removeKnownProject(root: string, confirmation: string): RemoveProjectResult {
+  const entries = readCatalog()
+  const entry = entries.find((e) => e.root === root)
+  const projectId = encodeProject(root)
+  if (!entry) throw Object.assign(new Error(`project '${projectId}' is not in the catalog`), { status: 404 })
+
+  const sessions = activeProjectSessions(root)
+  if (sessions) throw Object.assign(new Error(`project has ${sessions} active session record(s); stop or close them before removing the registration`), { status: 409 })
+
+  const snapshotEntry = snapshot.find((p) => p.root === root)
+  if (snapshotEntry?.online) throw Object.assign(new Error('project backend is online; stop it before removing the registration'), { status: 409 })
+
+  const expected = `REMOVE ${snapshotEntry?.identity.title || basename(root)}`
+  if (confirmation !== expected) throw Object.assign(new Error(`confirmation must exactly equal '${expected}'`), { status: 400 })
+
+  let runtimeRecordRemoved = false
+  const recordFile = endpointRecordPath(root)
+  const record = readEndpointRecord(recordFile)
+  if (record) {
+    let alive = false
+    try { process.kill(record.pid, 0); alive = true } catch { /* no process at that pid */ }
+    if (alive) {
+      throw Object.assign(new Error('backend runtime could not be proven stopped; registration was preserved'), { status: 409 })
+    }
+  }
+  writeCatalog(entries.filter((e) => e.root !== root))
+  clearProjectPassword(projectId)
+  if (record) {
+    try { rmSync(recordFile); runtimeRecordRemoved = true } catch { /* already gone */ }
+  }
+  snapshot = snapshot.filter((p) => p.root !== root)
+  return { root, projectId, sessions, runtimeRecordRemoved }
 }
 
 // ── the reconciler ───────────────────────────────────────────────────────────────────────────────────
@@ -438,7 +498,8 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 // gateway or a second auth check beside it. What the host adds rides the hub's extension seam:
 //   listProjects — GET /projects rows come from the instance-validated reconciler + the durable catalog
 //                  (online/offline/root), each carrying the hub's gating state.
-//   adminRoute   — /projects/stream (SSE), GET /projects/browse + POST /projects (select/setup/register), raw spexcode.json
+//   adminRoute   — /projects/stream (SSE), GET /projects/browse + POST /projects (select/setup/register), DELETE /projects/:id
+//                  (high-friction catalog removal), raw spexcode.json
 //                  GET|PUT /projects/:id/config, and POST /projects/:id/(init|doctor|serve) — all
 //                  behind the hub's admin scope
 //                  ([[gateway-auth]]: implicit from loopback until an admin password exists).
@@ -525,6 +586,26 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
             online: false, url: null,
           }), setup })
         } catch (e) { json(res, 400, { error: (e as Error).message }) }
+        return true
+      }
+      const remove = path.match(/^\/projects\/([^/]+)$/)
+      if (remove && req.method === 'DELETE') {
+        const projectId = decodeURIComponent(remove[1])
+        if (!projectId) {
+          json(res, 404, { error: 'unknown project' }); return true
+        }
+        let body: any = {}
+        try { body = JSON.parse(await readBody(req) || '{}') } catch { /* validation below is the answer */ }
+        try {
+          const list = await reconcileNow()
+          const entry = list.find((p) => p.projectId === projectId)
+          if (!entry) { json(res, 404, { error: `unknown project '${projectId}'` }); return true }
+          const removed = removeKnownProject(entry.root, typeof body?.confirmation === 'string' ? body.confirmation : '')
+          json(res, 200, { ok: true, ...removed })
+        } catch (e) {
+          const error = e as Error & { status?: number }
+          json(res, error.status ?? 400, { error: error.message })
+        }
         return true
       }
       if (path === '/projects/icon' && req.method === 'PUT') {

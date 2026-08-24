@@ -7,7 +7,7 @@ import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, closeRequest = null, onCloseRequestDone, onClose, onChanged, onLock, onError }) {
+export default function SessionContextMenu({ menu, closeRequest = null, onCloseRequestDone, onClose, onChanged, onLock, onError, onMultiSelect, onDetach }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -65,6 +65,18 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
     e.stopPropagation()
     setValue((menu.session.raw?.name ?? menu.session.name) || '')   // prefill the current OVERRIDE (blank if none) — the one legit raw consumer ([[session-label]]); never the derived label
     setRenaming(menu.session)
+    onClose()
+  }
+
+  const startSelect = (e) => {
+    e.stopPropagation()
+    onMultiSelect?.(menu.session)
+    onClose()
+  }
+
+  const detach = (e) => {
+    e.stopPropagation()
+    onDetach?.(menu.session)
     onClose()
   }
 
@@ -178,6 +190,8 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
           <ContextMenuGroup>
             <ContextMenuItem icon="lock" onClick={lockOnGraph}>{t('sessionWindow.lock')}</ContextMenuItem>
             <ContextMenuItem icon="pencil" onClick={startRename}>{t('sessionWindow.rename')}</ContextMenuItem>
+            <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
+            {menu.session.parent && <ContextMenuItem icon="corner-up-left" onClick={detach}>{t('sessionWindow.detach')}</ContextMenuItem>}
             {/* attach only when a live tmux window exists to join — offline/queued rows have none. */}
             {menu.session.liveness !== 'offline' && menu.session.status !== 'queued' && (
               <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>

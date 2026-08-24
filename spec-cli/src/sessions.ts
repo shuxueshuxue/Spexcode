@@ -478,15 +478,18 @@ function assertLegacyJsonWritesAllowed(): void {
 function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
   const application = configuredSessionApplicationIfCutover()
-  // The JSON file remains the durable runtime/worktree envelope, but it is not a lifecycle writer after
-  // cutover; state transitions happen through application.transitionSession().
-  // Once the application row exists, preserve the old lifecycle bytes exactly as migration evidence. Do not
-  // copy canonical state back into them: that would create a second writer and make a stale JSON snapshot look
-  // current. New records still need the envelope fields until their canonical row is created.
+  // The JSON file is runtime/worktree metadata after cutover, not a lifecycle store. Once the canonical row
+  // exists, omit the four old lifecycle keys entirely; retaining them would leave a second apparent fact for
+  // readers and tempt a future path to trust the wrong writer. New records still need the legacy shape until
+  // their canonical row is created, and non-governed external runtime records keep their own contract.
   const envelope = application && rec.governed ? readAliasedRecordEntry(rec.session) : null
-  const lifecycle = envelope?.kind === 'ok'
-    ? { status: envelope.raw.status, proposal: envelope.raw.proposal, note: envelope.raw.note, parent: envelope.raw.parent }
-    : { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
+  const canonicalMetadataOnly = envelope?.kind === 'ok' && rec.governed && !!application
+  const lifecycle = { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
+  // A queued legacy envelope may still carry its lease until this metadata rewrite. The lease is an
+  // operational launch claim, not a lifecycle fact, so preserve only that field while the typed record clears it.
+  const envelopeLaunchOwner = envelope?.kind === 'ok'
+    ? (envelope.raw as RawRecord & { launch_owner?: string }).launch_owner?.trim() || null
+    : null
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const obj = {
@@ -497,11 +500,7 @@ function writeRecord(rec: SessRec): void {
     node: rec.node ?? '',
     title: rec.title ?? '',
     name: rec.name ?? '',
-    parent: lifecycle.parent ?? '',
-    status: lifecycle.status,
-    proposal: lifecycle.proposal ?? '',
     merges: rec.merges,
-    note: lifecycle.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
@@ -515,7 +514,8 @@ function writeRecord(rec: SessRec): void {
     adapter_recovery: rec.adapterRecovery ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
-    launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    launch_owner: (lifecycle.status === 'queued' || lifecycle.status === OWNED_QUEUE_RAW_STATUS)
+      ? rec.launchOwner ?? envelopeLaunchOwner ?? '' : '',
     ...(rec.launchReadinessStartedAt ? { launch_readiness_started_at: rec.launchReadinessStartedAt } : {}),
     ...(rec.runtimeStartToken ? { runtime_start_token: rec.runtimeStartToken } : {}),
     create_request_id: rec.createRequestId ?? '',
@@ -542,6 +542,12 @@ function writeRecord(rec: SessRec): void {
         adapter_recovery: rec.launchReadinessPending.original.adapterRecovery ?? '',
       },
     } : '',
+    ...(canonicalMetadataOnly ? {} : {
+      parent: lifecycle.parent ?? '',
+      status: lifecycle.status,
+      proposal: lifecycle.proposal ?? '',
+      note: lifecycle.note ?? '',
+    }),
   }
   const dir = sessionStoreDir(rec.session)
   mkdirSync(dir, { recursive: true })
@@ -1208,6 +1214,29 @@ export function reviewIdentity(id: string): ReviewIdentity | null {
     node: rec.node,
     branch: rec.branch,
     label: deriveLabel({ id, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch }),
+  }
+}
+
+// Hook plumbing needs the canonical lifecycle claim without paying for the full public projection
+// (which probes liveness, activity, files, and web artifacts). The runtime envelope contributes only
+// governed identity; after cutover the application row owns status, proposal, and note.
+export type SessionHookState = {
+  governed: boolean
+  status: Lifecycle
+  proposal: Proposal | null
+  note: string | null
+}
+
+export function sessionHookState(id: string): SessionHookState | null {
+  const rec = readRecord(id)
+  if (!rec) return null
+  const application = configuredSessionApplicationIfCutover()
+  const state = application?.readState(id)
+  return {
+    governed: rec.governed,
+    status: (state?.status ?? rec.status) as Lifecycle,
+    proposal: (state?.proposal || rec.proposal || null) as Proposal | null,
+    note: state?.note ?? (rec.note || null),
   }
 }
 
@@ -3323,7 +3352,11 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
 export function markHumanPromptActive(sessionId: string): boolean {
   try {
     const rec = readRecord(sessionId)
-    if (!rec || rec.archived || retirementReason(rec) || (rec.status !== 'asking' && rec.status !== 'idle')) return false
+    const canonical = sessionHookState(sessionId)
+    // The canonical lifecycle decides whether this record is writable. Any real human re-entry can
+    // resume a waiting declaration, including an `awaiting` close/merge proposal; the old envelope
+    // status is only migration metadata and must never veto the re-entry.
+    if (!rec || !canonical || rec.archived || retirementReason(rec)) return false
     return markState('active', { sessionId })
   } catch (error) {
     // The message/PTY write is already accepted; a raced close or unreadable record must not turn it into a false send failure.
@@ -3574,7 +3607,9 @@ export function markIdle(sessionId?: string): boolean {
     const rec = readLiveRecord(id)
     if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
     publishCanonicalLifecycle(rec, 'idle', null, null)
-    writeRecord({ ...rec, status: 'idle' })
+    // After cutover the JSON file is only the runtime/worktree envelope. Do not mirror this inferred
+    // lifecycle transition into it: doing so creates a second, stale-looking status surface for hooks.
+    if (!configuredSessionApplicationIfCutover()) writeRecord({ ...rec, status: 'idle' })
     return true
   })
 }
@@ -4846,7 +4881,6 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           idempotencyKey,
         }, { text, from: from ?? null, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) })
       replayed = !!existing
-      if (!from) markHumanPromptActive(id)
     } catch (error) {
       return { ok: false, error: `could not append the message to session ${id}'s application queue: ${error instanceof Error ? error.message : String(error)}` }
     }
@@ -4860,6 +4894,10 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       }
     }
     const pending = application.protocol.listPending(id).some(candidate => candidate.messageId === message.messageId)
+    // Queue acceptance is not runtime activity. A prompt remains owed while the adapter is unbound,
+    // restarting, or refusing the insert; only the handoff that removes this exact message may re-enter
+    // a waiting session as active. This keeps a queued command from painting a dead pane as working.
+    if (!from && !pending) markHumanPromptActive(id)
     return {
       ok: true,
       delivery: pending ? 'queued' : 'accepted',
@@ -4867,6 +4905,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     }
   }
   let replayed = false
+  let acceptedMid = ''
   try {
     // Taking a declared sender's record lock makes close a real outgoing fence even across backend processes:
     // a send either appends before close obtains the fence (and close's revocation voids its debt), or sees
@@ -4894,6 +4933,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       },
     })
     replayed = accepted.replayed
+    acceptedMid = accepted.mid
   } catch (error) {
     const code = (error as { code?: DispatchAcceptCode })?.code
     const detail = error instanceof StrandedDeliveryError
@@ -4905,11 +4945,11 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       ...(code ? { code } : {}),
     }
   }
-  if (!from) markHumanPromptActive(id)
   // Awaited, not fire-and-forget: an unawaited insert can lose its race with a short-lived caller's exit,
   // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
   // the text in a live agent's current turn instead of up to one tick later.
   if (!opts.deferDrain) await drainSession(id)
+  if (!from && !pendingMessages(id).some(message => message.mid === acceptedMid)) markHumanPromptActive(id)
   return { ok: true, ...(opts.idempotency ? { replayed } : {}) }
 }
 
@@ -5075,6 +5115,7 @@ export async function rawKey(id: string, key: string | string[]): Promise<boolea
     }
     return sent
   })
-  if (sent) markHumanPromptActive(id)
+  // Raw-key remote control is transport fallback, not a lifecycle event. Freshness belongs to the
+  // harness turn hooks or a successfully handed-over durable prompt; navigation keys cannot forge working.
   return sent
 }

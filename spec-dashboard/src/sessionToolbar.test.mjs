@@ -43,7 +43,9 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /id: 'resource-picker'/)
   assert.doesNotMatch(source, /className="si-tabbar"/)
   assert.match(source, /function SessionResourcePanel\(/)
-  assert.doesNotMatch(source, /<aside className=\{`si-list/)
+  assert.match(source, /<SessionForestPanel/)
+  assert.doesNotMatch(source, /id: 'session-menu'/)
+  assert.match(source, /onSessionContextMenu=\{\(next\) => \{ setResourceMenu\(false\); setCtxMenu\(next\) \}\}/)
 })
 
 test('posted resources use the document-actions picker and selected-file actions', () => {
@@ -104,46 +106,18 @@ test('live offline and archived conversations share one footer with cold input a
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
 })
 
-test('archive overlay remains document-side while the duplicate session list is gone', () => {
+test('archive overlay remains document-side while the Sessions forest is restored', () => {
   assert.match(source, /archiveRequested = false/)
   assert.match(source, /if \(archiveRequested\) setArchiveIndexOpen\(true\)/)
   assert.match(source, /<ArchivePage sessions=\{archivedSessions\}/)
-  assert.doesNotMatch(source, /si-list|si-board-scroll|archiveZoneOpen|SessionZone/)
+  assert.match(source, /<SessionForestPanel/)
 })
 
-test('session tree drag is explicitly retired with the withdrawn document list', () => {
-  assert.doesNotMatch(source, /sessionDrag|startSessionDrag|\/api\/sessions\/reparent|data-session-root-drop/)
-  assert.doesNotMatch(contextMenu, /onDetach|startSelect|list-checks|corner-up-left/)
-  return
-/*
-  assert.match(source, /const \[sessionDrag, setSessionDrag\] = useState\(null\)/)
-  assert.match(source, /apiFetch\('\/api\/sessions\/reparent', \{[\s\S]{0,220}children: \[childId\], parent/)
-  assert.match(source, /import \{ SessionConsoleTreeRow, SessionZone, useFold \} from '\.\/SessionWindow\.jsx'/)
-  assert.match(source, /data-session-root-drop/)
-  assert.match(source, /sessionAncestorIds\(allSessions, target\)\.includes\(drag\.id\)/)
-  assert.match(source, /const draggedItem = sessionDrag \? forest\.find\(\(item\) => item\.type === 'row' && item\.s\.id === sessionDrag\.id\) : null/)
-  assert.match(source, /<SessionConsoleTreeRow[\s\S]{0,360}item=\{it\}[\s\S]{0,500}onMouseDown: \(e\) => startSessionDrag\(e, s\)/)
-  assert.match(source, /\{sessionDrag && draggedItem && \([\s\S]{0,360}<SessionConsoleTreeRow[\s\S]{0,360}item=\{draggedItem\}[\s\S]{0,280}inert/)
-  assert.doesNotMatch(source, /sessionDrag\.appearance|sessionDrag\.session|startSessionDrag\(e, s, \{/)
-  assert.match(sessionWindow, /export function SessionConsoleTreeRow\(/)
-  assert.match(sessionWindow, /<FoldPod \{\.\.\.fold\} inert=\{inert\}/)
-  assert.match(source, /onDetach=\{\(s\) => \{ void changeSessionParent\(s\.id, null\) \}\}/)
-  assert.match(contextMenu, /menu\.session\.parent && <ContextMenuItem icon="corner-up-left" onClick=\{detach\}>/)
-  assert.match(icons, /'corner-up-left':/)
-  assert.match(en, /detach: 'remove from parent'/)
-  assert.match(en, /rootDrop: 'move to top level'/)
-  assert.match(zh, /detach: '解除父级关系'/)
-  assert.match(zh, /rootDrop: '移到顶层'/)
-  assert.match(css, /\.si-tree-row\.dragging > \.si-item \{ opacity: \.28; \}/)
-  assert.match(css, /\.si-tree-row\.drop-target > \.si-item \{/)
-  assert.match(css, /\.si-root-drop\.on \{/)
-  assert.match(source, /const SESSION_DRAG_GHOST_SCALE = 0\.75/)
-  assert.match(source, /'--si-session-drag-ghost-scale': SESSION_DRAG_GHOST_SCALE/)
-  assert.match(source, /left: sessionDrag\.x - sessionDrag\.offsetX \* SESSION_DRAG_GHOST_SCALE/)
-  assert.match(source, /top: sessionDrag\.y - sessionDrag\.offsetY \* SESSION_DRAG_GHOST_SCALE/)
-  assert.match(css, /\.si-session-drag-ghost \{[\s\S]{0,520}z-index: 52;[\s\S]{0,520}pointer-events: none; transform: translate\(10px, -8px\) rotate\(-1deg\) scale\(var\(--si-session-drag-ghost-scale\)\); transform-origin: top left;/)
-  assert.doesNotMatch(css, /\.si-session-drag-ghost > \.si-item/)
-*/
+test('Sessions owns explicit row selection and complete tree drag', () => {
+  assert.match(source, /<SessionForestPanel/)
+  assert.match(contextMenu, /onMultiSelect, onDetach/)
+  assert.match(contextMenu, /startSelect/)
+  assert.match(contextMenu, /corner-up-left/)
 })
 
 test('archive index is a transient overlay opened by the dock route door', () => {
@@ -287,7 +261,7 @@ test('document-actions slot is compact and owns no identity track', () => {
   assert.match(css, /\.document-action-menu\s*\{[^}]*position:\s*absolute;/s)
   assert.doesNotMatch(css, /\.si-identity|\.si-th-name|\.si-session-status|\.si-session-live/)
   assert.doesNotMatch(css, /\.si-tabbar\s*\{|\.si-tool\s*\{/)
-  assert.doesNotMatch(css, /\.si-list\s*\{|\.si-board-scroll\s*\{|\.si-resizer\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
 })
 
 assert.ok(here.endsWith('/src/'))

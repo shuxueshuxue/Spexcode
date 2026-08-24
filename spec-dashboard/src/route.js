@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
 // bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/sessions, #/graph, #/graph/<node>,
@@ -18,11 +19,10 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryTe
 // `empty` is the workspace holding NOTHING — an address because the state must be landable, reloadable and
 // leaveable. It is not a rail destination or document; only closing the last tab mints it ([[tab-strip]]).
 export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
-// The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
-// opening something (a node, a governed file); there is no "go to the spec page" the way there is a
-// sessions page, and a rail icon for one would name a place that does not exist. Graph remains directly
-// addressable for legacy links but is no longer a workspace destination or rail entry.
-export const RAIL_PAGES = ['sessions', 'evals', 'issues', 'settings']
+// The rail is the workspace's top-level board bar. Spec is a resident board destination; a node or file
+// route projects back onto it instead of making the selected top-level board disappear. Graph remains
+// directly addressable for legacy links but is no longer a workspace destination or rail entry.
+export const RAIL_PAGES = ['spec', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
@@ -140,6 +140,12 @@ export function navigate(page, param = null, { replace = false, query = null } =
 // review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
+  // The published graph has one addressable face. Normalize every incoming hash before the shell sees it,
+  // so a deep link cannot leave a graph-only artifact claiming an unavailable Issues/Evals surface.
+  if (PUBLIC_GRAPH_ONLY && window.location.hash !== '#/graph') {
+    window.history.replaceState(null, '', '#/graph')
+    return parseRoute('#/graph')
+  }
   const legacy = legacyEvalHash(window.location.hash) || sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)

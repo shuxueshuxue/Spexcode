@@ -59,10 +59,14 @@ export function createViewScope({ route, dispatch, active = true, contract = VIE
   let current = normalizeAddress(route, 'route')
   let enabled = active !== false
 
-  const emit = (type, address) => {
+  const emit = (type, address, options = null) => {
     if (!enabled) return { accepted: false, reason: 'inactive', type }
     const normalized = contract.assertAddress(address, `${type}.address`)
-    const intent = Object.freeze({ type, address: normalizeAddress(normalized, `${type}.address`) })
+    const intent = Object.freeze({
+      type,
+      address: normalizeAddress(normalized, `${type}.address`),
+      ...(type === 'open' && options?.replace === true ? { replace: true } : {}),
+    })
     return accepted(intent, dispatch(intent))
   }
   const scope = {}
@@ -71,7 +75,7 @@ export function createViewScope({ route, dispatch, active = true, contract = VIE
     active: { enumerable: true, get: () => enabled },
     owner: { enumerable: true, value: owner ? Object.freeze({ ...owner }) : null },
   })
-  scope.open = (address) => emit('open', address)
+  scope.open = (address, options = null) => emit('open', address, options)
   scope.hold = (address) => emit('hold', address)
   scope.ownQuery = (query) => {
     if (!enabled) return { accepted: false, reason: 'inactive', type: 'own-query' }

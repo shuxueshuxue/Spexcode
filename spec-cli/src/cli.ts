@@ -1487,6 +1487,17 @@ if (cmd === 'serve') {
     const { s, sess, mark } = await stateKit()
     const idled = mark(() => s.markIdle(sess))
     console.log(idled.ok ? 'idle' : idled.reason ?? 'noop (no session record, or not active)')
+  } else if (sub === 'session-hook-state') {
+    // Stop/idle/failure hooks are thin CLI shims. They may use the envelope for governed identity, but
+    // lifecycle claims must come from the canonical session application after the JSON cutover.
+    const id = flag('session')
+    if (!id) { console.error('usage: spex internal session-hook-state --session <id>'); process.exit(2) }
+    const { sessionHookState } = await import('./sessions.js')
+    const state = sessionHookState(id)
+    if (!state) process.exit(1)
+    // Tab-separated fields are deliberately closed vocabulary: governed, lifecycle, proposal. Notes are
+    // not needed by the hook and must not become shell-parsed input.
+    console.log([state.governed ? '1' : '0', state.status, state.proposal ?? ''].join('\t'))
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done, else print the reason and exit 1. Takes the PROPOSAL being judged — `merge`

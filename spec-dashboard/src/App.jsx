@@ -43,6 +43,15 @@ export default function App({ surface = 'workspace' }) {
   if (surface === 'workspace') lastWorkspaceRoute.current = route
   const backendHealth = useBackendHealth()
   const isMobile = useIsMobile()
+  // Start the desktop workspace transfer while the first board is building. The board is still the
+  // readiness gate for mounting the live shell; this only removes the otherwise-serial lazy-chunk wait
+  // that left a cold review URL as a full-frame spinner after the graph response had arrived. The mobile
+  // face keeps its split contract: it never asks for the desktop graph/terminal chunk.
+  useEffect(() => {
+    if (PUBLIC_GRAPH_ONLY || isMobile) return undefined
+    void import('./WorkspaceSurface.jsx')
+    return undefined
+  }, [isMobile])
   const [board, setBoard] = useState(null)
   const [boardLive, setBoardLive] = useState(false)
   const summarySeen = useRef(new Map())

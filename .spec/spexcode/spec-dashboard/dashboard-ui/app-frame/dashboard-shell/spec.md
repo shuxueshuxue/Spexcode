@@ -73,7 +73,10 @@ the previously-selected tab during the page switch. Likewise, feature-level shar
 global style vocabulary here when the rule is genuinely reused across shell surfaces. **Each face is its own lazy chunk**, and
 the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with
 the annotator) the same way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
-libraries, and the first graph paint doesn't wait on them either; the split moves bytes only, never
+libraries, and the first graph paint doesn't wait on them either; once the viewport is known to be desktop,
+the workspace face is prefetched in parallel with the first board request so a cold review URL does not
+turn the board's legitimate build time into a second serial full-frame spinner. Mobile and the sealed public
+face never prefetch that desktop chunk; the split moves bytes only, never
 behaviour. The split's one failure mode is owned here too: after a dist rebuild a still-open page asks for
 OLD hashed chunks the server no longer has (the gateway answers 404, never HTML — [[public-mode]]), so the
 shell catches the failed chunk load (`vite:preloadError`) and **reloads once** onto the fresh index.html —

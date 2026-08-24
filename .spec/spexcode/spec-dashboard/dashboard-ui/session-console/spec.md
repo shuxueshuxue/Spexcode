@@ -63,10 +63,12 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
-Leaving the page keeps the console document and its selection mounted, but releases every pane-backed browser
-terminal, socket, and observer while the pooled document is inactive; returning remounts the selected terminal
-from the current board state. While the Sessions page is visible, only the selected terminal owns those live
-browser resources; a headless TimelineChat keeps its rendered timeline cursor, polls only while selected, and
+Leaving the page keeps the console document, its selection, and every visited pane-backed terminal mounted;
+switching tabs changes visibility rather than rebuilding xterm or its browser WebSocket, so the cached screen and
+focus return without a cold start. The active transition claims `visible:false` on the bridge; the bounded native
+linger may release the raw PTY/tmux client while the browser terminal/socket remain resident, and reactivation's
+resize claim restores that native bridge. While the Sessions page is visible, only the selected terminal owns the
+visible geometry claim; a headless TimelineChat keeps its rendered timeline cursor, polls only while selected, and
 resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the
 canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are
 disposed while the read-only Conversation remains available. Open resource tabs follow the same display-hidden

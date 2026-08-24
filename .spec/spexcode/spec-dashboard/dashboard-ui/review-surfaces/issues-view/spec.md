@@ -40,6 +40,11 @@ writing surface instead of a form-shaped copy of it. The dashboard stays a **thi
 truth: it renders what `/api/issues` returns, computes nothing, and every write goes through the SAME
 verbs the CLI uses.
 
+As a hosted view, query and state-changing route writes use the shell-provided `ViewScope`: list/detail
+filters dispatch `ownQuery`, session-originator doors dispatch `open`, and successful compose creation uses
+the same `open` intent with replacement semantics. The page never imports the global navigator, keeping a
+pooled Issues document tied to its own mounted route.
+
 ## expanded spec
 
 - **Three pages, one route family — the shared [[review-chrome]].** `#/issues` is the list page (the

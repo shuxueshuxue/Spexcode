@@ -46,6 +46,14 @@ test('scope snapshots are immutable and dispatch receives one atomic intent', ()
   assert.throws(() => { received[0].address.page = 'sessions' }, TypeError)
 })
 
+test('automatic state naming can request replacement without adding another intent kind', () => {
+  const received = []
+  const { scope } = createViewScope({ route, dispatch: (intent) => { received.push(intent) } })
+  assert.equal(scope.open({ page: 'issues', param: 'new', query: null }, { replace: true }).accepted, true)
+  assert.deepEqual(received[0], { type: 'open', replace: true, address: { page: 'issues', param: 'new', query: null } })
+  assert.deepEqual(VIEW_INTENTS, ['open', 'hold', 'own-query'])
+})
+
 test('registry-backed route contract rejects an unowned view before dispatch', () => {
   const received = []
   const contract = {

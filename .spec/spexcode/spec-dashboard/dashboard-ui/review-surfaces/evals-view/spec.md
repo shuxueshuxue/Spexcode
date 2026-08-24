@@ -32,6 +32,10 @@ chosen — this is the full-page mode. And the second directive: un-merged workt
 `#/sessions/<id>/eval` — one route family, `#/evals`, carries merged and un-merged loss alike, a session
 filter (default off) picking the root.
 
+As a hosted view, every route write stays inside its shell-provided `ViewScope`: query edits use
+`ownQuery`, and live filer/originator doors use `open`. The view never imports the global navigator, so a
+pooled Evals document cannot route another pane or follow the window address out of its own host.
+
 ## expanded spec
 
 - **Two pages, one route family.** `#/evals` is the LIST page; `#/evals/<node>/<scenario>` is the DETAIL

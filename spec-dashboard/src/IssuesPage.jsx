@@ -10,13 +10,14 @@ import { ISSUE_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery, setToken 
 import { reviewActorName } from '@spexcode/spec-core/review'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { useTransientNotice } from './TransientNotice.jsx'
-import { navigate, routeHash } from './route.js'
+import { routeHash } from './route.js'
 import { addressHash, detailBackHash, graphNodeAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import IssueLabels from './IssueLabels.jsx'
 import { useLaunchers } from './launch.js'
 import { useReportDocumentName } from './documentActions.jsx'
 import { usePaneActive } from './workspace.jsx'
+import { useViewScope } from './ViewScope.jsx'
 
 const EMPTY_QUERY = {}
 
@@ -62,7 +63,7 @@ const facetOptions = (data, key, allLabel, labelValue = (value) => value) => (da
   label: option.value === '' ? allLabel : labelValue(option.value),
 }))
 
-export function IssuesListPage({ data, loading, error, query }) {
+export function IssuesListPage({ data, loading, error, query, onQueryText }) {
   const t = useT()
   if (data && !data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
@@ -70,7 +71,7 @@ export function IssuesListPage({ data, loading, error, query }) {
   const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
   // a human's edit/tab/menu action PUSHES the canonical address — bare for the default view, exactly
   // ?q=<raw text> otherwise (GitHub's semantics — Back walks filter history).
-  const push = (nextText) => navigate('issues', null, { query: queryParam(nextText, ISSUE_QUERY_DEFAULT) })
+  const push = (nextText) => onQueryText?.(nextText)
   const surgery = (key, value) => push(setToken(text, key, value))
 
   // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
@@ -175,7 +176,7 @@ export function IssuesListPage({ data, loading, error, query }) {
 // composer docked at its foot, and the store/originator/node/permalink metadata in the SIDE rail (reflowed
 // above the body at phone width). One thread surface for both stores; the only store-specific affordances
 // are metadata. Sign/accept/reject are not product verbs.
-export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onWrite }) {
+export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onWrite, onQueryText }) {
   const t = useT()
   const local = th.store === 'local'
   const isConcluded = concluded(th)
@@ -224,7 +225,7 @@ export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onW
           </SideSection>
           {labels.length > 0 && (
             <SideSection label={t('detail.sideLabels')}>
-              <IssueLabels labels={labels} onSelect={(name) => navigate('issues', null, { query: queryParam(setToken(ISSUE_QUERY_DEFAULT, 'label', name), ISSUE_QUERY_DEFAULT) })} />
+              <IssueLabels labels={labels} onSelect={(name) => onQueryText?.(setToken(ISSUE_QUERY_DEFAULT, 'label', name))} />
             </SideSection>
           )}
           {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
@@ -310,6 +311,7 @@ function useIssueDetail(id, freshness) {
 // not be the one showing, and a view that reads the global address follows the reader out of its own pane.
 export default function IssuesPage({ param = null, query = EMPTY_QUERY, onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
   const t = useT()
+  const scope = useViewScope()
   const showing = usePaneActive()
   const { notify } = useTransientNotice()
   const composing = param === NEW_PARAM
@@ -332,6 +334,7 @@ export default function IssuesPage({ param = null, query = EMPTY_QUERY, onOpenSe
   useReportDocumentName(param && !composing ? routeHash('issues', param) : null, detail.issue?.concern)
   const flash = (outcomes) => { if (outcomes) notify(outcomes) }
   const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }
+  const onQueryText = (nextText) => scope.ownQuery(queryParam(nextText, ISSUE_QUERY_DEFAULT))
 
   if (composing) {
     if (list.data && !list.data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
@@ -339,7 +342,7 @@ export default function IssuesPage({ param = null, query = EMPTY_QUERY, onOpenSe
     return <NewIssuePage specs={specs} sessions={sessions} stores={writeStores}
       // the created issue is where the writer belongs; the spent compose address REPLACES ([[side-nav]]:
       // automatic state-naming replaces, so Back returns to the list, not to an emptied form).
-      onCreated={(id, outcomes) => { flash(outcomes); navigate('issues', id, { replace: true }) }} />
+      onCreated={(id, outcomes) => { flash(outcomes); scope.open({ page: 'issues', param: id, query: null }, { replace: true }) }} />
   }
 
   if (param) {
@@ -349,9 +352,9 @@ export default function IssuesPage({ param = null, query = EMPTY_QUERY, onOpenSe
       // an address naming no issue renders the honest not-found with the list link ([[review-chrome]]).
       return <DetailShell missing={t('reviewShell.issueNotFound', { id: param })} listHref={routeHash('issues')} listLabel={t('reviewShell.backToIssues')} />
     }
-    return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={onWrite} />
+    return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={onWrite} onQueryText={onQueryText} />
   }
-  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} query={query} />
+  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} query={query} onQueryText={onQueryText} />
 }
 
 // canonical store display names — the permalink label derives from the issue's OWN `store` identity

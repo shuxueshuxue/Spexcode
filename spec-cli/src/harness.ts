@@ -2013,18 +2013,22 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCo
           const id = 100 + requests.size
           references.set(threadId, { referenceId: threadId, turnPresence: 'unknown' })
           requests.set(id, threadId)
-          send({ id, method: 'thread/read', params: { threadId, includeTurns: true } })
+          // Ownership sampling only needs the native status, never the persisted turn history. The old
+          // includeTurns:true request made a periodic resource report replay every loaded conversation and
+          // was the direct source of 5s probe timeouts on the draining generation.
+          send({ id, method: 'thread/read', params: { threadId, includeTurns: false } })
         })
         return
       }
       if (typeof m.id === 'number' && requests.has(m.id) && m.result) {
         const threadId = requests.get(m.id)!
         requests.delete(m.id)
-        const thread = (m.result as { thread?: { turns?: Array<{ id?: string; status?: string }> } }).thread
+        const thread = (m.result as { thread?: { status?: { type?: unknown } | string; turns?: Array<{ id?: string; status?: string }> } }).thread
         const turnId = activeTurnIdFromThread(m.result)
+        const nativeStatus = typeof thread?.status === 'string' ? thread.status : thread?.status?.type
         references.set(threadId, {
           referenceId: threadId,
-          turnPresence: !Array.isArray(thread?.turns) ? 'unknown' : turnId ? 'active' : 'idle',
+          turnPresence: turnId || nativeStatus === 'active' ? 'active' : nativeStatus === 'idle' ? 'idle' : 'unknown',
           ...(turnId ? { turnId } : {}),
         })
         if (!requests.size) done({ healthy: true, references: [...references.values()] })

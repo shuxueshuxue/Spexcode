@@ -35,6 +35,12 @@ export function isTerminalButtonReport(data) {
   return Number.isFinite(code) && (code & 64) === 0
 }
 
+// xterm focus reporting (CSI I/O) is terminal control traffic emitted when browser focus moves. It is
+// never a user's command byte; forwarding it lets a session click look like activity to the native TUI.
+export function isTerminalFocusReport(data) {
+  return data === '\x1b[I' || data === '\x1b[O'
+}
+
 function onlyMotionTrackingModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
 }
@@ -311,7 +317,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       // Mouse traffic is browser chrome, not a conversational turn. xterm emits button/wheel reports
       // through the same onData callback as typed bytes; forwarding those reports lets a tab click or
       // focus reactivation reach the native TUI and is exactly the wrong lifecycle boundary.
-      if (isTerminalButtonReport(data)) return
+      if (isTerminalButtonReport(data) || isTerminalFocusReport(data)) return
       if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
         setPendingInput(data)
         setInputConfirmOpen(true)

@@ -78,11 +78,12 @@ test('scoped gates are leading content inside the shared ListPage scrollport', (
 
 test('opening a filer or originator session uses no retired eval-view state', () => {
   const callback = dashboard.match(/const openSession = useCallback\([\s\S]*?\n\s*const startNew/)?.[0] || ''
-  // Opening a session is NAVIGATION and nothing else. There is no selection to set here any more: the
-  // console derives which session it shows from its own address, so the class of bug this test guards —
-  // a caller setting some view-local selection that then disagrees with the address — has no state left
-  // to occur in.
-  assert.match(callback, /navigate\('sessions', id\)/)
+  // Opening a session is a ViewScope-owned address transition and nothing else. There is no selection to
+  // set here any more: the console derives which session it shows from its own address, so the class of bug
+  // this test guards — a caller setting some view-local selection that then disagrees with the address —
+  // has no state left to occur in.
+  assert.match(callback, /scope\.open\(\{ page: 'sessions', param: id, query: null \}\)/)
+  assert.doesNotMatch(callback, /\bnavigate\s*\(/)
   assert.doesNotMatch(callback, /\b(?:setEvalView|evalView|setSessionSel)\b/)
 })
 

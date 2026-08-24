@@ -32,6 +32,13 @@ test('both mobile-authored composers use the shared auto-growing textarea', () =
   assert.match(styles, /\.m-new-input\s*\{[^}]*flex:\s*none;[^}]*min-height:\s*120px;/s)
 })
 
+test('mobile new-session action uses the shared plus icon, not a Unicode glyph', () => {
+  assert.match(mobileApp, /import \{ Icon \} from '\.\/icons\.jsx'/)
+  assert.match(mobileApp, /<button className="m-new-btn"[\s\S]*<Icon name="plus" size=\{16\}/)
+  assert.doesNotMatch(mobileApp, /m-new-btn-plus|＞|＋/)
+  assert.match(styles, /\.m-new-btn:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--blue\)/)
+})
+
 test('mobile composer transport requests a declaration-note reply', async () => {
   const originalFetch = globalThis.fetch
   let request

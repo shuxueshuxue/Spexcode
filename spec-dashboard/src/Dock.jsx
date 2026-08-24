@@ -10,7 +10,7 @@ import { navigate } from './route.js'
 import { pinTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
-import { Icon } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { useResizable } from './useResizable.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -236,10 +236,9 @@ function DockHead({ mode, specs, sessions }) {
               onClick={() => navigate('sessions', null, { query: { archive: '1' } })}>
               <Icon name="archive" size={13} />
             </button>
-            <button type="button" className="dock-head-act dock-head-act-new" data-tip={t('dockSessions.new')} aria-label={t('dockSessions.new')}
-              onClick={() => navigate('sessions', 'new')}>
-              <Icon name="plus" size={14} strokeWidth={2} />
-            </button>
+            <IconButton icon="plus" size={15}
+              className="dock-head-act dock-head-act-new" label={t('dockSessions.new')}
+              onClick={() => navigate('sessions', 'new')} />
           </>
         )}
       </span>

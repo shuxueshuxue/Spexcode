@@ -163,6 +163,8 @@ The two planes, made native to touch:
   This is a **launch** composer rather than a message composer: it shares the same auto-growth mechanism,
   but Enter remains native long-prompt editing and never launches; only the explicit button submits. This
   matches the desktop New tab and is an intentional boundary, not a missing keyboard handler.
+  The row's leading mark is the shared `Icon` plus glyph (never a Unicode plus), and its focus/pressed
+  states use the same restrained blue action treatment as the desktop dock door.
   Where the desktop box fires in the
   background and stays type-ready, the phone AWAITS the create with a busy button: the wait is
   honest (worktree+agent take seconds) and busy-gating doubles as the double-tap guard a touch

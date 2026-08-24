@@ -28,7 +28,7 @@ try {
     if (route !== '#/sessions' && !opened.includes(route)) opened.push(route)
     assert.deepEqual(current.tabs.map((tab) => tab.key), opened, `${route} only keeps visited dynamic tabs`)
     const expectedFocus = route === '#/sessions' ? [] : [route]
-    assert.deepEqual(current.tabs.filter((tab) => tab.selected).map((tab) => tab.key), expectedFocus, `${route} focuses its resident tab`)
+    assert.deepEqual(current.tabs.filter((tab) => tab.selected).map((tab) => tab.key), expectedFocus, `${route} focuses its dynamic top-level tab`)
   }
 
   // A board detail is route state in the same top-level tab, not a second review surface or a rail memory.

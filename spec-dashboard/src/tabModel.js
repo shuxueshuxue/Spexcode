@@ -35,13 +35,15 @@ export function normalizeTabs(raw, isDocument = () => true) {
   const tabs = raw.filter((t) => isDocument(t.page, t.param ?? null)).map((t) => {
     const original = { page: t.page, param: t.param ?? null, query: t.query ?? null }
     const route = tabRoute(original)
+    const explicitHold = t.held === true
     return {
       page: original.page, param: original.param, query: original.query,
       // Published resources are deliberate holds: they must never compete for a replaceable file slot,
       // including when an older persisted record forgot to mark them pinned.
       // Old releases persisted every board as pinned. Demote those legacy faces at the migration boundary;
       // a board is a dynamic page-kind slot, while only a resource or an explicit hold remains durable.
-      pinned: isResourceRoute(route) ? true : TOP_LEVEL_PAGES.has(route.page) ? false
+      ...(explicitHold ? { held: true } : {}),
+      pinned: isResourceRoute(route) ? true : TOP_LEVEL_PAGES.has(route.page) ? explicitHold
         : (t.pinned != null ? t.pinned !== false : t.preview !== true),
     }
   })
@@ -50,7 +52,7 @@ export function normalizeTabs(raw, isDocument = () => true) {
   for (const tab of tabs) {
     const key = tabKey(tab)
     const existing = byKey.get(key)
-    if (existing) { existing.pinned ||= tab.pinned; continue }
+    if (existing) { existing.pinned ||= tab.pinned; existing.held ||= tab.held; continue }
     byKey.set(key, tab)
     unique.push(tab)
   }
@@ -75,7 +77,7 @@ export function placeTab(tabs, route, mode = 'slot') {
       && (open.param !== original.param || JSON.stringify(open.query || null) !== JSON.stringify(original.query || null))
     if (mode !== 'pin' && !faceChanged && !residentChanged) return tabs
     return tabs.map((t) => tabKey(t) === key
-      ? { ...t, ...(faceChanged || residentChanged ? { param: original.param, query: original.query } : {}), ...(mode === 'pin' ? { pinned: true } : {}) }
+      ? { ...t, ...(faceChanged || residentChanged ? { param: original.param, query: original.query } : {}), ...(mode === 'pin' ? { pinned: true, held: true } : {}) }
       : t)
   }
   const entry = {
@@ -85,6 +87,7 @@ export function placeTab(tabs, route, mode = 'slot') {
     // A resource opened from a session is a held file-class object. It is intentionally durable until
     // explicitly closed, so ordinary file navigation can never evict it.
     pinned: isResourceRoute(normalized) || mode === 'pin',
+    ...(mode === 'pin' && !isResourceRoute(normalized) ? { held: true } : {}),
   }
   // A published resource is a file-class workspace tab. Opening one appends it, preserving the session tab
   // and its selected base face; a second click on the same resource was handled by the identity check above.

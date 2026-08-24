@@ -7,7 +7,7 @@ import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './ta
 // reader who clicked five things was holding five documents they never decided to keep.
 
 const spec = (id) => ({ page: 'file', param: id, query: null })
-const residentSpec = (id) => ({ page: 'spec', param: id, query: null })
+const specDocument = (id) => ({ page: 'spec', param: id, query: null })
 const session = (id) => ({ page: 'sessions', param: id, query: null })
 const keys = (tabs) => tabs.map((t) => `${t.pinned ? '*' : '~'}${tabKey(t)}`)
 
@@ -117,17 +117,27 @@ test('cold workspace has no board tabs until a route is opened', () => {
   assert.deepEqual(normalizeTabs([]), [])
 })
 
-test('opening a spec keeps its detail address while focusing the resident Spec tab', () => {
-  let tabs = placeTab([], residentSpec('first'))
+test('an explicit board hold survives reload while legacy pinned faces are demoted', () => {
+  const [held, legacy] = normalizeTabs([
+    { page: 'issues', param: null, pinned: true, held: true },
+    { page: 'evals', param: null, pinned: true },
+  ])
+  assert.equal(held.pinned, true)
+  assert.equal(held.held, true)
+  assert.equal(legacy.pinned, false)
+})
+
+test('opening a spec keeps its detail address while focusing the dynamic Spec tab', () => {
+  let tabs = placeTab([], specDocument('first'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])
   assert.deepEqual(tabs[0], { page: 'spec', param: 'first', query: null, pinned: false })
-  tabs = placeTab(tabs, residentSpec('second'))
+  tabs = placeTab(tabs, specDocument('second'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])
   assert.equal(tabs[0].param, 'second')
 })
 
 test('opening a scenario or issue creates focused dynamic top-level tabs without pinning them', () => {
-  let tabs = placeTab(placeTab([], residentSpec('node'), 'pin'), session('s1'), 'pin')
+  let tabs = placeTab(placeTab([], specDocument('node'), 'pin'), session('s1'), 'pin')
   tabs = placeTab(tabs, { page: 'evals', param: 'node/scenario', query: null })
   tabs = placeTab(tabs, { page: 'issues', param: '42', query: null })
   assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
@@ -138,11 +148,11 @@ test('opening a scenario or issue creates focused dynamic top-level tabs without
   assert.ok(tabs.slice(2).every((tab) => !tab.pinned))
 })
 
-test('opening a spec keeps its detail address while focusing one resident Spec tab', () => {
-  let tabs = placeTab([], residentSpec('first'))
+test('opening a spec keeps its detail address while focusing one dynamic Spec tab', () => {
+  let tabs = placeTab([], specDocument('first'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])
   assert.equal(tabs[0].param, 'first')
-  tabs = placeTab(tabs, residentSpec('second'))
+  tabs = placeTab(tabs, specDocument('second'))
   assert.deepEqual(tabs.map(tabKey), ['#/spec'])
   assert.equal(tabs[0].param, 'second')
 })
@@ -181,7 +191,7 @@ test('the slot survives a reorder as the slot, wherever it is dragged', () => {
 })
 
 test('legacy storage migrates to one slot per document kind', () => {
-  // old entries: an unmarked one is resident, a `preview` one is the slot
+  // old entries: an unmarked one is held, a `preview` one is the slot
   assert.deepEqual(normalizeTabs([{ page: 'file', param: 'a' }, { page: 'file', param: 'b', preview: true }]),
     [{ page: 'file', param: 'a', query: null, pinned: true }, { page: 'file', param: 'b', query: null, pinned: false }])
   // more than one unpinned can only come from a hand-edited store; the last one wins the slot

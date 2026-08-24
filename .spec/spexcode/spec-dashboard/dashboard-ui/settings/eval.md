@@ -50,6 +50,22 @@ scenarios:
       project-local and drives only sessions with no explicit base choice; the unchosen pane opens Conversation,
       while the explicitly switched session remains Terminal after both default changes and reload. Headless
       sessions remain Conversation and no backend session state is written.
+  - name: notion-preset-changes-voice-and-feel
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real desktop Chromium on the routed Settings page, press the Notion button in the theme picker
+      (never `applyTheme`). Read the computed `font-family` of `body`, the computed `border-radius` of a
+      rail entry, the root's `color-scheme`, the resolved `--wash-selected` and `--focus-ring` tokens, and
+      the lit rail entry's background; Tab to a control and read its focus `box-shadow`. Reload and read the
+      root's `data-theme`. Then press Minimal and read `body`'s `font-family` and `color-scheme` again.
+      Screenshot Settings and Issues under Notion, and Settings under Minimal.
+    expected: >-
+      Under Notion the board speaks the sans stack (`font-family` no longer names JetBrains Mono), corners
+      resolve to 4px, `color-scheme` is light, the lit rail entry wears the selection wash, and the focused
+      control wears the inset ring rather than an outline; the choice survives reload as
+      `data-theme="notion"`. Pressing Minimal returns the mono voice and the dark scheme live, with no
+      reload. Zero loss = one preset row changes voice, geometry, and feel across the whole board.
+    code: [spec-dashboard/src/theme.js, spec-dashboard/src/Settings.jsx, spec-dashboard/src/styles.css]
 ---
 
 # settings — yatsu

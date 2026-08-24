@@ -344,7 +344,8 @@ app.get('/api/evals/impact', etag(), async (c) => {
 // most five lightweight neighbors. A missing worktree scope resolves explicitly to trunk; it never
 // serializes another scenario's history or the scoped model.
 app.get('/api/evals/detail', etag(), async (c) => {
-  await ensureBoardFileWatchers(c.req.query('scope')?.trim() || undefined)
+  // Detail is a bounded, direct eval read. It builds only the addressed scope and must not
+  // synchronously reconcile the global worktree watcher registry before answering.
   const node = c.req.query('node')?.trim()
   const scenario = c.req.query('scenario')?.trim()
   if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)

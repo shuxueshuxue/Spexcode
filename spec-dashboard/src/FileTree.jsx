@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
-import { pinTab } from './tabs.js'
+import { focusLatestTab, pinTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
@@ -137,6 +137,9 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)) } catch { /* private mode */ }
     return next
   })
+  const openSpecGraph = () => {
+    if (!focusLatestTab((tab) => tab.page === 'spec')) navigate('spec')
+  }
   if (!specs?.length) return null
   return (
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
@@ -149,6 +152,11 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
           <DiskTree />
         </Section>
       </div>
+      <button type="button" className="ft-graph-entry" data-tip={t('fileTree.graph')} aria-label={t('fileTree.graph')}
+        onClick={openSpecGraph}>
+        <Icon name="graph" size={14} />
+        <span>{t('fileTree.graph')}</span>
+      </button>
       {!embedded && <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />}
     </div>
   )

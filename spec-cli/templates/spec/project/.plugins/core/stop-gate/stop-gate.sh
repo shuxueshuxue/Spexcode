@@ -83,7 +83,9 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
     exit 0   # work is committed and ahead of main -> the proposal is honest, let it stop.
   fi
   if [ "$cont" = true ]; then
-    $S session ask --session "$sid" --note "stopped with uncommitted work — commit your spec+code on the node branch, then re-declare done" >/dev/null 2>&1 || true
+    # Keep the hook thin: the porcelain declaration may enter delivery/build paths and leave this stop
+    # unresolved. The internal writer is the canonical lifecycle boundary and has no dispatch side effects.
+    $S internal session-state asking --session "$sid" --note "stopped with uncommitted work — commit your spec+code on the node branch, then re-declare done" >/dev/null 2>&1 || true
     exit 0
   fi
   reason=$($S internal hook-prompt stop-gate --variant commit --reason "$gatemsg" --cli "$S" --propose "$proposal") || exit 1
@@ -98,7 +100,7 @@ fi
 if [ "$cont" = true ]; then
   # The forced continuation also stopped without declaring. Escape into asking: no default may invent a
   # completed lane, and the stopped agent now needs a human prompt to choose merge, close, ask, or park.
-  $S session ask --session "$sid" --note "auto: stopped without declaring — choose merge, close, ask, or park; done --propose nothing records no state" >/dev/null 2>&1 || true
+  $S internal session-state asking --session "$sid" --note "auto: stopped without declaring — choose merge, close, ask, or park; done --propose nothing records no state" >/dev/null 2>&1 || true
   exit 0
 fi
 

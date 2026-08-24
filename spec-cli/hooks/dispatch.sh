@@ -78,13 +78,22 @@ rc=0
 while IFS=$'\t' read -r ev order block script; do
   [ "$ev" = "$event" ] || continue
   handler="$proj/$script"
-  # A seeded core hook is tracked project source, so package replacement cannot safely overwrite it. These
-  # byte-exact default revisions compose an ask note into JSON with sed; route only them to the package
-  # implementation. `cmp` makes a user-modified hook ineligible without a platform-specific hash utility.
+  # A seeded core hook is tracked project source. These exact legacy identities are migrated at the adapter
+  # boundary to the current package implementation; a user-modified hook remains owned by the project.
+  # `cmp` makes a user-modified hook ineligible without a platform-specific hash utility, and materialize
+  # replaces the legacy source on the next git-native anchor.
   if [ "$script" = '.spec/project/.plugins/core/mark-active/mark-active.sh' ] &&
     { cmp -s "$handler" "$hook_root/compat/mark-active-sed-v0.fixture" ||
       cmp -s "$handler" "$hook_root/compat/mark-active-0.5.2-eef1.fixture"; }; then
     handler="$tool_root/templates/spec/project/.plugins/core/mark-active/mark-active.sh"
+  fi
+  # The first SQLite cutover shipped a stop gate that called the porcelain `session ask` command on its
+  # forced continuation. That command can wait on delivery/build locks, leaving a stopped session active.
+  # Migrate only that exact historical source identity; customized hooks remain untouched, and the next
+  # materialize replaces this tracked file so this branch disappears rather than becoming a second protocol.
+  if [ "$script" = '.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh' ] && command -v sha256sum >/dev/null 2>&1 &&
+    [ "$(sha256sum "$handler" 2>/dev/null | awk '{print $1}')" = '880f218f2f076a818999202c10ca9204280cd33cfe8110b54562a33ffb8b9fa1' ]; then
+    handler="$tool_root/templates/spec/project/.plugins/core/stop-gate/stop-gate.sh"
   fi
   out="$(printf '%s' "$input" | bash "$handler" 2>"$err")"; code=$?
   [ -n "$out" ] && printf '%s' "$out"

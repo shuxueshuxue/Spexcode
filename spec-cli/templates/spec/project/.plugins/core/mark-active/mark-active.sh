@@ -13,12 +13,10 @@
 # request_user_input tool) — read via hp_is_ask, so this hook never names a harness tool.
 # Fires BEFORE the tool runs, so a `spex session done` declaration (itself a tool) lands AFTER this and wins;
 # the next real tool flips back to active, forcing a fresh Stop-gate declaration.
-# @@@ one writer - this hook is on the hot path (every tool call), but it must not inspect session.json to
-# decide whether a transition is needed. After the SQLite cutover that file is only a runtime/worktree
-# envelope; using its lifecycle snapshot as a cheap cache is exactly how JSON=active and SQLite=asking drifted.
-# The structured writer is idempotent for an unchanged state, so the canonical application remains the only
-# lifecycle authority and the hook cannot short-circuit on a second fact. It never edits session.json itself:
-# an asking note is arbitrary prose, and shell substitution is not a record writer ([[sessions-core]]).
+# @@@ one writer - this hook is on the hot path (every tool call), but lifecycle writes go through the
+# canonical session application. The old `.spec/project` materialization used to substitute status into its
+# runtime envelope; that was a second fact source and let legacy sessions drift. This source is the migration
+# target for that materialization: it never reads or writes lifecycle fields in the envelope.
 # @@@ global store - the lifecycle state lives in the canonical session application, keyed by the harness
 # session_id, grouped per-project (see hp_store_dir). The sibling session.json is only the runtime/worktree
 # envelope. GATED on `governed`: a user-self-launched
@@ -43,22 +41,11 @@ if [ "$(hp_field "$payload" hook_event_name)" = "UserPromptSubmit" ]; then
   esac
 fi
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
-sdir=$(hp_store_dir "$sid") || exit 0
-rec="$sdir/session.json"
-# board-lifecycle gate: only a GOVERNED (dashboard-launched) session has a board state to maintain.
-grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
-
-# The writer's own stdout is a human confirmation, not hook output — swallow it so a PreToolUse handler never
-# emits a decision-shaped line; its stderr (a refusal — a corrupt or retired record) still surfaces. We always
-# exit 0: this hook observes freshness, it is not a gate on the tool that triggered it.
+# A governed session is the only one with a board lifecycle. The identity check is deliberately delegated to
+# the writer; unlike the retired envelope grep it cannot select one record while writing another.
 if [ -n "$(hp_is_ask "$payload")" ]; then
-  # first question's text → the note (best-effort). It is passed as ONE argv word to the writer, so quotes,
-  # backslashes, newlines, and non-ASCII reach the record intact — no shell ever composes the JSON.
   ${SPEX:-spex} internal session-state asking --session "$sid" --note "$(hp_ask_note "$payload")" >/dev/null
-  exit 0
+else
+  ${SPEX:-spex} internal session-state active --session "$sid" >/dev/null
 fi
-
-# Always ask the canonical lifecycle writer. It performs the semantic no-op check against SQLite; no JSON
-# snapshot is allowed to decide whether this event changes state.
-${SPEX:-spex} internal session-state active --session "$sid" >/dev/null
 exit 0

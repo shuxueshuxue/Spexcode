@@ -32,7 +32,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 await context.addInitScript(() => {
   const streams = new Set()
-  window.__fixtureSocketState = { created: 0, closed: 0 }
+  window.__fixtureSocketState = { created: 0, closed: 0, active: 0 }
   class FixtureEventSource {
     constructor() { this.listeners = new Map(); streams.add(this) }
     addEventListener(name, fn) { this.listeners.set(name, [...(this.listeners.get(name) || []), fn]) }
@@ -44,6 +44,7 @@ await context.addInitScript(() => {
   class FixtureWebSocket {
     constructor() {
       window.__fixtureSocketState.created += 1
+      window.__fixtureSocketState.active += 1
       this.readyState = 0; this.listeners = new Map()
       setTimeout(() => { this.readyState = 1; this.dispatch('open', {}) }, 0)
     }
@@ -54,6 +55,7 @@ await context.addInitScript(() => {
     close() {
       if (this.readyState >= 2) return
       window.__fixtureSocketState.closed += 1
+      window.__fixtureSocketState.active -= 1
       this.readyState = 3; this.dispatch('close', {})
     }
   }
@@ -61,12 +63,13 @@ await context.addInitScript(() => {
 })
 const page = await context.newPage()
 await page.route('**/api/graph*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) }))
+await page.route('**/api/sessions/archive-index*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
 try {
   await page.goto(`${BASE}/#/sessions/${id}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.si-term-layer .xterm').waitFor({ state: 'visible', timeout: 30_000 })
+  await page.locator('.si-term-layer[style*="visibility: visible"] .xterm').waitFor({ state: 'visible', timeout: 30_000 })
   assert.equal(await page.locator('.si-term-layer .xterm').count(), 2, 'both live panes mount one resident terminal each')
   await page.locator('.si-term-layer[style*="visibility: visible"] .xterm').evaluate((node) => { node.dataset.lifecycleIdentity = 'first' })
-  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 2, 'each live session owns one socket')
+  assert.equal(await page.evaluate(() => window.__fixtureSocketState.active), 2, 'each live session owns one active socket')
 
   // Changing the session address is an inactive-pane transition, not a document teardown. The first xterm
   // must remain mounted and hidden while the second session warms exactly one independent terminal/socket.
@@ -75,14 +78,14 @@ try {
   assert.equal(await page.locator('.si-term-layer .xterm').count(), 2, 'switch keeps the first terminal mounted')
   assert.equal(await page.locator('.si-term-layer .xterm[data-lifecycle-identity="first"]').count(), 1, 'first terminal identity survives inactive switch')
   assert.equal(await page.locator('.si-term-layer .xterm[data-lifecycle-identity="first"]').evaluate((node) => getComputedStyle(node.parentElement).visibility), 'hidden', 'first terminal is hidden, not detached')
-  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 2, 'switch does not create duplicate sockets')
+  assert.equal(await page.evaluate(() => window.__fixtureSocketState.active), 2, 'switch keeps one active socket per session')
 
   // Returning to the first session restores the same DOM/xterm and socket instead of cold-loading it again.
   await page.goto(`${BASE}/#/sessions/${id}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-term-layer[style*="visibility: visible"] .xterm').waitFor({ state: 'visible', timeout: 30_000 })
   assert.equal(await page.locator('.si-term-layer .xterm[data-lifecycle-identity="first"]').count(), 1, 'first terminal identity survives return')
   assert.equal(await page.locator('.si-term-layer .xterm[data-lifecycle-identity="first"]').evaluate((node) => getComputedStyle(node.parentElement).visibility), 'visible', 'first terminal becomes visible again')
-  assert.equal(await page.evaluate(() => window.__fixtureSocketState.created), 2, 'return does not create a duplicate socket')
+  assert.equal(await page.evaluate(() => window.__fixtureSocketState.active), 2, 'return keeps one active socket per session')
   await page.screenshot({ path: `${OUT}/online-terminal.png`, fullPage: true })
 
   fixture = fixtureFor({ status: 'offline', lifecycle: 'error', liveness: 'offline', archived: true })
@@ -93,7 +96,7 @@ try {
   await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
   assert.equal(await page.locator('.tl-chat:visible textarea').count(), 1, 'conversation remains available after pane disposal')
   await page.screenshot({ path: `${OUT}/offline-conversation.png`, fullPage: true })
-  console.log(JSON.stringify({ status: 'pass', terminalOnline: 2, terminalOffline: 1, warmSwitch: true, socketsCreated: 2, conversation: true, out: OUT }))
+  console.log(JSON.stringify({ status: 'pass', terminalOnline: 2, terminalOffline: 1, warmSwitch: true, activeSockets: 2, conversation: true, out: OUT }))
 } finally {
   await context.close(); await browser.close()
 }

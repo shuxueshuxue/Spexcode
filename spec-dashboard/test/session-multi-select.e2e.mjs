@@ -11,7 +11,16 @@ rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(PW).href)
-const graph = await fetch(`${BASE}/api/graph`).then((response) => response.json())
+let graph
+for (let attempt = 0; attempt < 4 && !graph; attempt += 1) {
+  const response = await fetch(`${BASE}/api/graph`)
+  if (response.ok) {
+    const candidate = await response.json()
+    if (candidate.sessions?.length) graph = candidate
+  }
+  if (!graph) await new Promise((resolve) => setTimeout(resolve, 100))
+}
+assert.ok(graph, 'graph fixture is available')
 const sessions = graph.sessions || []
 const childrenOf = new Map()
 for (const session of sessions) if (session.parent) childrenOf.set(session.parent, [...(childrenOf.get(session.parent) || []), session])

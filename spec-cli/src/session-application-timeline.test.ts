@@ -70,6 +70,12 @@ test('human re-entry trusts canonical lifecycle when the legacy envelope is stal
   try {
     assert.equal(markHumanPromptActive(id), true)
     assert.equal(app.readState(id)?.status, 'active')
+    app.transitionSession(id, { status: 'awaiting', proposal: 'close', note: 'review the finished work' })
+    assert.equal(markHumanPromptActive(id), true, 'a human prompt must reopen close-pending work')
+    const reopened = app.readState(id)
+    assert.equal(reopened?.status, 'active')
+    assert.equal(reopened?.proposal, null)
+    assert.equal(reopened?.note, null)
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()

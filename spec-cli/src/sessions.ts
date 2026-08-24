@@ -487,6 +487,12 @@ function writeRecord(rec: SessRec): void {
   const lifecycle = envelope?.kind === 'ok'
     ? { status: envelope.raw.status, proposal: envelope.raw.proposal, note: envelope.raw.note, parent: envelope.raw.parent }
     : { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
+  // The JSON envelope intentionally retains its queued lifecycle after canonical state advances to active,
+  // but that historical queue record still needs its lease to remain readable. A successful launch clears the
+  // typed record's owner; preserve the envelope owner until the envelope itself is rewritten as non-queued.
+  const envelopeLaunchOwner = envelope?.kind === 'ok'
+    ? (envelope.raw as RawRecord & { launch_owner?: string }).launch_owner?.trim() || null
+    : null
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const obj = {
@@ -515,7 +521,8 @@ function writeRecord(rec: SessRec): void {
     adapter_recovery: rec.adapterRecovery ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
-    launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    launch_owner: (lifecycle.status === 'queued' || lifecycle.status === OWNED_QUEUE_RAW_STATUS)
+      ? rec.launchOwner ?? envelopeLaunchOwner ?? '' : '',
     ...(rec.launchReadinessStartedAt ? { launch_readiness_started_at: rec.launchReadinessStartedAt } : {}),
     ...(rec.runtimeStartToken ? { runtime_start_token: rec.runtimeStartToken } : {}),
     create_request_id: rec.createRequestId ?? '',

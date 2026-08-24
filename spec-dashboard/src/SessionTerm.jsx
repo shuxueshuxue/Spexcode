@@ -22,6 +22,19 @@ export function isTerminalPointerReport(data) {
   return data.startsWith('\x1b[<') || data.startsWith('\x1b[M') || /^\x1b\[[0-9;]+[Mm]$/.test(data)
 }
 
+// Wheel reports carry the high bit in the button code and remain native tmux navigation. Button/motion
+// reports are browser chrome: forwarding them can make a focus click look like an agent input event.
+export function isTerminalButtonReport(data) {
+  if (!isTerminalPointerReport(data)) return false
+  if (data.startsWith('\x1b[<')) {
+    const code = Number(data.slice(3).match(/^\d+/)?.[0])
+    return Number.isFinite(code) && (code & 64) === 0
+  }
+  if (data.startsWith('\x1b[M')) return (data.charCodeAt(3) & 64) === 0
+  const code = Number(data.match(/^\x1b\[([0-9]+)/)?.[1])
+  return Number.isFinite(code) && (code & 64) === 0
+}
+
 function onlyMotionTrackingModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
 }
@@ -295,6 +308,10 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       // A suspended TUI may put a token-consuming resume prompt under the cursor. The first real key is
       // the user's intent boundary; keep it out of tmux until the separate confirmation is answered.
       const pointerReport = isTerminalPointerReport(data)
+      // Mouse traffic is browser chrome, not a conversational turn. xterm emits button/wheel reports
+      // through the same onData callback as typed bytes; forwarding those reports lets a tab click or
+      // focus reactivation reach the native TUI and is exactly the wrong lifecycle boundary.
+      if (isTerminalButtonReport(data)) return
       if (resumeRequiredRef.current && !resumeConfirmedRef.current && !pointerReport) {
         setPendingInput(data)
         setInputConfirmOpen(true)

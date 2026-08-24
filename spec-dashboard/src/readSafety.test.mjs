@@ -19,6 +19,7 @@ test('live terminals are writable by default and only suspended input asks for c
   assert.match(term, /setPendingInput\(data\)/)
   assert.match(term, /isTerminalPointerReport[\s\S]*startsWith\('\\x1b\[M'\)/)
   assert.match(term, /isTerminalPointerReport[\s\S]*\^\\x1b\\\[\[0-9;\]\+\[Mm\]\$/)
+  assert.match(term, /const pointerReport = isTerminalPointerReport\(data\)[\s\S]*?isTerminalButtonReport\(data\)[\s\S]*?return/)
   assert.match(term, /resumeInputConfirm/)
   assert.doesNotMatch(term, /resumeInputConfirm[^\n]*autoFocus/)
 })

@@ -16,7 +16,7 @@ import { publishEndpoint, dropOwnEndpoint } from './host.js'
 import { repoRoot as servedRepoRoot } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
 import { startResourceMonitor } from './host-resources.js'
-import { registerBackendInstance, unregisterBackendInstance } from './runtime-ownership.js'
+import { reapOrphanBackendInstances, registerBackendInstance, unregisterBackendInstance } from './runtime-ownership.js'
 import { sessionIdentityEnvVars } from './harness.js'
 import { serverEntrypointArgs } from './tsx-bin.js'
 
@@ -76,6 +76,8 @@ const instanceId = randomUUID()
 for (const key of sessionIdentityEnvVars()) delete process.env[key]
 process.env.SPEXCODE_PROJECT_ROOT = projectRoot
 process.env.SPEXCODE_INSTANCE_ID = instanceId
+for (const orphan of reapOrphanBackendInstances(projectRoot))
+  console.warn(`[supervisor] reaped stale backend ${orphan.instanceId} PID ${orphan.candidatePid}`)
 registerBackendInstance(instanceId, process.pid, projectRoot)
 
 type Backend = { port: number; child: ChildProcess }

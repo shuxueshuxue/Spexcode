@@ -14,7 +14,6 @@ export const sessionSurfaceStorageKey = (projectId = PROJECT_ID) => `${STORAGE_P
 
 const emptyState = () => ({ defaultSurface: SESSION_SURFACE_TERMINAL, sessions: {} })
 const validBaseSurface = (value) => BASE_SURFACES.has(value)
-export const isBaseSessionSurface = validBaseSurface
 export const isResourceSurface = (value) => typeof value === 'string' && value.startsWith(SESSION_SURFACE_RESOURCE_PREFIX) && value.length > SESSION_SURFACE_RESOURCE_PREFIX.length
 export const isSessionSurface = (value) => validBaseSurface(value) || value === SESSION_SURFACE_DIFF || isResourceSurface(value)
 export const resourceSurfaceKey = (value) => isResourceSurface(value) ? value.slice(SESSION_SURFACE_RESOURCE_PREFIX.length) : null

@@ -45,7 +45,7 @@ export default function SessionsView({ param, query }) {
       sessions={sessions}
       specs={specs}
       focusNode={null}
-      open
+      open={showing}
       searchOpen={!!palette}
       sel={sel}
       surface={query?.surface}

@@ -28,3 +28,18 @@ test('the mobile view consumes the host route instead of opening a second global
   assert.match(app, /<MobileApp[\s\S]*route=\{route\}/)
   assert.match(review, /<MobileApp[\s\S]*route=\{\{ page, param, query \}\}/)
 })
+
+test('hosted review views route only through their ViewScope', () => {
+  const evals = read('EvalsPage.jsx')
+  const issues = read('IssuesPage.jsx')
+  const views = read('views.jsx')
+
+  for (const source of [evals, issues, views]) {
+    assert.doesNotMatch(source, /import\s+\{[^}]*\bnavigate\b[^}]*\}\s+from\s+['"]\.\/route\.js['"]|\bnavigate\s*\(/)
+  }
+  assert.match(evals, /useViewScope\(\)/)
+  assert.match(evals, /scope\.ownQuery\(/)
+  assert.match(issues, /useViewScope\(\)/)
+  assert.match(issues, /scope\.open\([^\n]+\{ replace: true \}\)/)
+  assert.match(views, /useViewScope\(\)/)
+})

@@ -4,7 +4,7 @@ import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery } from '@spexcode/spec-core/review'
 import { addressHash, detailBackHash, evalAddress, sessionAddress, sessionEvalAddress } from './address.js'
-import { navigate, routeHash } from './route.js'
+import { routeHash } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
@@ -13,6 +13,7 @@ import { useTransientNotice } from './TransientNotice.jsx'
 import { usePaneActive } from './workspace.jsx'
 import { apiFetch } from './data.js'
 import { useBackendHealth } from './BackendStatus.jsx'
+import { useViewScope } from './ViewScope.jsx'
 
 // The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
 // page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, the whole face ONE token
@@ -201,6 +202,7 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
 // not be the one showing, and a view that reads the global address follows the reader out of its own pane.
 export default function EvalsPage({ param = null, query = EMPTY_QUERY, specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession }) {
   const t = useT()
+  const scope = useViewScope()
   const showing = usePaneActive()
   const { notify } = useTransientNotice()
   const backendHealth = useBackendHealth()
@@ -238,7 +240,7 @@ export default function EvalsPage({ param = null, query = EMPTY_QUERY, specs = E
   const backLabel = t('detail.backToEvals')
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
   // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).
-  const onQueryText = (text) => navigate('evals', null, { query: queryParam(text, EVAL_QUERY_DEFAULT) })
+  const onQueryText = (text) => scope.ownQuery(queryParam(text, EVAL_QUERY_DEFAULT))
   const hrefForPage = (target) => routeHash('evals', null, reviewRouteQuery(queryText, EVAL_QUERY_DEFAULT, target))
 
   return param

@@ -36,7 +36,9 @@ may select explorer or sessions, but the rail light remains route-only. The dedi
 control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
 a plain click navigates to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it
-as its own tab.
+as its own tab. The row is chrome around the session document, so its pointer press suppresses the native
+button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
+composition from the session currently being read.
 
 **The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
@@ -78,7 +80,9 @@ the family's root status.** Each zone header counts every member of that zone (r
 the family changes visibility, never the count. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
-else: plain click replaces the current tab and ctrl/command-click holds a new one. Moving a row is a
+else: plain click replaces the current tab and ctrl/command-click holds a new one. The `+` door is a compact
+rounded-square primary action with a blue hairline and centered plus mark, keeping the header's other doors visually secondary while
+remaining icon-only and keyboard-focusable. Moving a row is a
 separate gesture with its own section below, and it changes no address.
 
 Every zone heading uses the shared `--divider-rule` hairline for its trailing separator. The zone hue remains

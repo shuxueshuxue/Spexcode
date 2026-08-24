@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
 // bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/sessions, #/graph, #/graph/<node>,
@@ -140,6 +141,12 @@ export function navigate(page, param = null, { replace = false, query = null } =
 // review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
+  // The published graph has one addressable face. Normalize every incoming hash before the shell sees it,
+  // so a deep link cannot leave a graph-only artifact claiming an unavailable Issues/Evals surface.
+  if (PUBLIC_GRAPH_ONLY && window.location.hash !== '#/graph') {
+    window.history.replaceState(null, '', '#/graph')
+    return parseRoute('#/graph')
+  }
   const legacy = legacyEvalHash(window.location.hash) || sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)

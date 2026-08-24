@@ -339,8 +339,11 @@ body {
 }
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
 .dock-head-act:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
-.dock-head-act-new { color: var(--paper); background: var(--blue); box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 70%, var(--line)); }
-.dock-head-act-new:hover { color: var(--paper); background: var(--ink2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 28%, transparent); }
+.dock-head-act-new {
+  width: 24px; height: 24px; color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent);
+  border: 1px solid var(--blue); border-radius: var(--radius); box-shadow: none;
+}
+.dock-head-act-new:hover { color: var(--paper); background: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 28%, transparent); }
 /* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
    is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
    one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself

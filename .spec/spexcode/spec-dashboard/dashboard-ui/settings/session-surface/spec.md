@@ -32,6 +32,11 @@ localStorage payload contains a default and explicit per-session base overrides.
 `terminal` and `conversation`; anything else is rejected on write and dropped on read, so a corrupted or
 hand-edited payload cannot pin a session to an overlay. The default is Terminal. Headless and read-only
 sessions resolve Conversation.
+
+The base-surface predicate is an implementation detail of this store. It is not a second public mechanism: callers
+use the address-level `isSessionSurface` contract or the read/write functions above, and the module exposes no
+standalone base-only compatibility alias.
+
 The storage key includes the current project scope, so one browser's choice for project A cannot affect project B;
 browser storage remains optional, with the same live in-memory result while unavailable.
 

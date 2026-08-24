@@ -47,6 +47,12 @@ captured route as props, so it cannot create a second global route reader while 
 the validation, atomic intent shape, hidden-pane suspension, unowned-route rejection, and host-only route
 ownership.
 
+The hosted review surfaces (Evals and Issues) use this channel for every route write: query edits dispatch
+`ownQuery`, session-originator doors dispatch `open`, and automatic issue creation may mark that same
+`open` intent as a replacement. They do not import the global navigator. `ownershipBoundary.test.mjs` is the
+static guard for that boundary, so a review view cannot quietly grow a second route authority while the
+shell remains the only dispatcher.
+
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 

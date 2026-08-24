@@ -1,5 +1,15 @@
 ---
 scenarios:
+  - name: base-surface-predicate-stays-internal
+    tags: [cli]
+    test: spec-dashboard/src/sessionSurface.test.mjs
+    code: [spec-dashboard/src/sessionSurface.js]
+    description: >-
+      Inspect the real session-surface module after the base-only compatibility alias was removed. The store still
+      accepts terminal/conversation values internally, while its public surface classifier remains address-level.
+    expected: >-
+      The module exports `isSessionSurface` but does not export `isBaseSessionSurface`; a future reintroduction of
+      the unused alias fails this guard before it becomes a second public surface mechanism.
   - name: browser-project-session-surface-resolution
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-toolbar.e2e.mjs

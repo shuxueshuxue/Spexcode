@@ -76,6 +76,7 @@ test('left dock and right context controls use distinct semantic glyphs', () => 
 
 test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {
   const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
-  assert.match(dock, /className="dock-head-act dock-head-act-new"[\s\S]*<Icon name="plus" size=\{15\}/)
+  assert.match(dock, /className="dock-head-act dock-head-act-new"[\s\S]*<Icon name="plus" size=\{14\} strokeWidth=\{2\}/)
   assert.match(css, /\.dock-head-act:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--blue\)/)
+  assert.match(css, /\.dock-head-act-new\s*\{[\s\S]*width:\s*24px; height:\s*24px;[\s\S]*border-radius:\s*var\(--radius-full\)/)
 })

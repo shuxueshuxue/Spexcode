@@ -82,11 +82,11 @@ outer hold closes. Ordinary streamed frames are not wrapped or filtered and reta
 semantics. No renderer clone, screen capture, DOM latch, or reconstructed terminal state participates.
 
 The selected live session keeps one stable browser terminal and terminal socket while its Sessions document is
-visible. Hidden pane layers may remain mounted for route identity, but they own no xterm, WebSocket, or
-ResizeObserver; this prevents an inactive pooled document from parsing output or retaining browser-side live
-resources. Returning to Sessions recreates the selected viewer from the current native stream. Activation never
-exposes an empty replacement canvas after the viewer has settled, and it does not share a hidden session's
-browser resources with the visible one.
+visible. Hidden pane layers may remain mounted for route identity; their xterm and socket identity stay resident,
+but hidden native frames are discarded before xterm parsing and painting. A hidden pane therefore owns no active
+browser output work even while its native helper is inside the bounded linger window. Returning to Sessions reuses
+the same viewer and sends the ordinary visible geometry request, whose acknowledged refresh supplies the current
+screen; no hidden backlog is replayed and no replacement canvas is exposed after the viewer settles.
 
 ## isolated helper
 
@@ -129,17 +129,18 @@ Browser readiness and native rendering have deliberately different lifetimes. Ev
 xterm and opens its socket when the dashboard loads; this is the lightweight prewarm that removes connection
 setup from a tab click. A hidden subscription creates no helper and owns no tmux client. Becoming visible
 creates that subscription's helper at its already-measured grid. Hiding arms one bounded linger window instead
-of an instant release: that viewer's helper stays alive and its stream keeps flowing into its hidden but still-
-mounted xterm, so a quick return continues in place. Expiry releases only that viewer's helper even though its
-socket and xterm remain alive.
+of an instant release: that viewer's helper may stay alive, but its browser drops native frames while hidden so
+there is no continuous xterm parse/paint work and no backlog to fast-forward. Expiry releases only that viewer's
+helper even though its socket and xterm remain alive.
 
 Visibility is the helper lifecycle switch, and the linger window is its one bounded hysteresis. A visible
 claim always carries that viewer's measured grid; the same resize message creates or resizes its native client.
 A claim inside the linger window at the unchanged grid simply resumes, while a changed grid takes the ordinary
 native repaint path. A browser viewer is visible only while both its dashboard session layer and its document
 are visible. Backgrounding the browser tab therefore withdraws the claim. Past the window the socket and cached
-xterm remain but its tmux client does not; returning exposes the cache immediately, then native attach replaces
-it with the current screen. Lingered bytes are written as they arrive, never queued for fast-forward.
+xterm remain but its tmux client does not; returning exposes the cache immediately, then the visible geometry
+request and native attach replace it with the current screen. Lingered bytes are neither written nor queued for
+fast-forward.
 
 Concurrent visible viewers use tmux's classic multi-client model with `window-size latest`: the
 window takes the grid of the most recently active client, so control follows the person actually

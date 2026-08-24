@@ -43,3 +43,21 @@ test('hosted review views route only through their ViewScope', () => {
   assert.match(issues, /scope\.open\([^\n]+\{ replace: true \}\)/)
   assert.match(views, /useViewScope\(\)/)
 })
+
+test('graph and session views cannot bypass the shell ViewScope boundary', () => {
+  const graph = read('GraphView.jsx')
+  const sessions = read('SessionsView.jsx')
+  const sessionInterface = read('SessionInterface.jsx')
+  for (const source of [graph, sessions, sessionInterface]) {
+    assert.doesNotMatch(source, /import\s+\{[^}]*\bnavigate\b[^}]*\}\s+from\s+['"]\.\/route\.js['"]/, 'hosted views do not import the route writer')
+    assert.doesNotMatch(source, /\bnavigateAddress\s*\(/, 'hosted views do not call the address writer')
+    assert.match(source, /useViewScope\(\)/, 'hosted views receive the shell-owned scope')
+  }
+})
+
+test('shell-owned chrome is the explicit route-writing boundary', () => {
+  for (const name of ['Shell.jsx', 'Dock.jsx', 'SideBar.jsx', 'TabStrip.jsx']) {
+    const source = read(name)
+    assert.match(source, /from ['"]\.\/route\.js['"]/, `${name} remains an explicit shell route owner`)
+  }
+})

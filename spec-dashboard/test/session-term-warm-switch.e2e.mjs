@@ -64,17 +64,39 @@ await context.addInitScript(({ tabs: initialTabs }) => {
   class FixtureWebSocket {
     constructor(url) {
       this.url = url; this.readyState = 0; this.listeners = new Map(); this.sent = []
+      this.streamTick = 0; this.hidden = false
       sockets.push(this)
       setTimeout(() => {
         this.readyState = 1; this.dispatch('open', {})
         this.dispatch('message', { data: new TextEncoder().encode('fixture-screen\r\n').buffer })
+        this.streamTimer = setInterval(() => {
+          if (this.readyState !== 1) return
+          const id = this.url.split('/').slice(-2, -1)[0]
+          const prefix = this.hidden ? 'hidden-stream' : 'visible-stream'
+          this.dispatch('message', { data: new TextEncoder().encode(`${prefix}-${id}-${++this.streamTick}\r\n`).buffer })
+        }, 100)
       }, 0)
     }
     addEventListener(name, fn) { this.listeners.set(name, [...(this.listeners.get(name) || []), fn]) }
     removeEventListener(name, fn) { this.listeners.set(name, (this.listeners.get(name) || []).filter((item) => item !== fn)) }
     dispatch(name, event) { for (const fn of this.listeners.get(name) || []) fn(event); this[`on${name}`]?.(event) }
-    send(data) { this.sent.push(String(data)) }
-    close() { if (this.readyState >= 2) return; this.readyState = 3; this.dispatch('close', {}) }
+    send(data) {
+      const message = String(data)
+      this.sent.push(message)
+      if (message.includes('"t":"visible"') && message.includes('"visible":false')) this.hidden = true
+      if (message.includes('"t":"visible"') && message.includes('"visible":true')) this.hidden = false
+      if (message.includes('"t":"resize"')) {
+        this.hidden = false
+        const id = this.url.split('/').slice(-2, -1)[0]
+        setTimeout(() => this.dispatch('message', { data: new TextEncoder().encode(`visible-restored-${id}\r\n`).buffer }), 0)
+      }
+    }
+    close() {
+      if (this.readyState >= 2) return
+      clearInterval(this.streamTimer)
+      this.readyState = 3
+      this.dispatch('close', {})
+    }
   }
   window.WebSocket = FixtureWebSocket
   window.__warmSockets = sockets
@@ -99,8 +121,10 @@ try {
   const hiddenWaitMs = 5_500
   await new Promise((done) => setTimeout(done, hiddenWaitMs))
   assert.equal(await terminals().count(), 2, 'hidden session keeps xterm mounted beyond linger')
+  assert.doesNotMatch(await terminal(0).locator('.xterm-rows').textContent(), /hidden-stream-/, 'hidden native frames do not write into the hidden xterm')
   await page.goto(`${base}/#/sessions/${idA}?surface=terminal`, { waitUntil: 'domcontentloaded' })
   await terminal(0).waitFor({ state: 'visible', timeout: 30_000 })
+  await waitFor(async () => /visible-restored-/.test(await terminal(0).locator('.xterm-rows').textContent()), 'visible native frame after reactivation')
   assert.equal(await terminal(0).evaluate((node) => node.dataset.auditId), identityA, 'reactivation keeps xterm DOM identity')
   assert.equal(await terminal(1).evaluate((node) => node.dataset.auditId), identityB, 'inactive sibling keeps xterm DOM identity')
   const protocol = await page.evaluate(() => window.__warmSockets.map((socket) => ({ url: socket.url, sent: socket.sent })))

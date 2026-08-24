@@ -63,6 +63,11 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
+The console and its `SessionInterface` descendant never write the global route directly. Their host-provided
+`ViewScope` owns every session selection, launch result, eval door, archive return, and resource/base-surface
+transition. Resource and base-surface changes keep their exact `surface` query, while diff/base exits retain
+replacement semantics; moving the write behind the scope does not flatten those address axes. Plain hrefs may
+still use the shared `routeHash` projection, but imperative writes dispatch one checked `open` intent to the shell.
 Leaving the page keeps the console document, its selection, and every visited pane-backed terminal mounted;
 switching tabs changes visibility rather than rebuilding xterm or its browser WebSocket, so the cached screen and
 focus return without a cold start. The active transition claims `visible:false` on the bridge; the bounded native

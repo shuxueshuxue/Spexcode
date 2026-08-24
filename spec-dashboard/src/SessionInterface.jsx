@@ -12,8 +12,8 @@ import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
-import { navigateAddress, sessionEvalAddress } from './address.js'
-import { navigate, routeHash } from './route.js'
+import { routeAddress, sessionEvalAddress } from './address.js'
+import { routeHash } from './route.js'
 import { useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch } from './data.js'
@@ -43,6 +43,7 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useWorkspaceApi } from './workspace.jsx'
+import { useViewScope } from './ViewScope.jsx'
 import { expandSessionFolds, toggleSessionFold, useSessionListState } from './sessionListState.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
@@ -458,6 +459,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null }) {
   const t = useT()
+  const scope = useViewScope()
   const { notify } = useTransientNotice()
   const { lockGraphTo } = useWorkspaceApi()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
@@ -636,7 +638,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setResourceMenu(false)
     // A resource is a file-class workspace tab: navigation appends its address and leaves the session tab's
     // selected base face unchanged. The preview stays warm because the resource address is its own tab.
-    navigate('sessions', tab.sessionId, { query: { surface: resourceSurface(tab.id) } })
+    scope.open({ page: 'sessions', param: tab.sessionId, query: { surface: resourceSurface(tab.id) } })
   }
   const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
     current.id === tab.id ? { ...current, revision: current.revision + 1 } : current,
@@ -739,7 +741,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [resourceMenu])
   // Esc leaves the diff overlay for the session's own base address, the same exit a resource surface has.
   // Diff is never a base surface, so the address it returns to is the bare one.
-  useEscLayer(diffSurface, () => navigate('sessions', active, { replace: true }))
+  useEscLayer(diffSurface, () => scope.open({ page: 'sessions', param: active, query: null }, { replace: true }))
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (value) => setDrafts((draft) => ({
@@ -762,7 +764,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     } else {
       setTerminalFocusRequest((request) => request + 1)
     }
-    if (remember || id === active) navigate('sessions', id, { replace: true, query: { surface } })
+    if (remember || id === active) scope.open({ page: 'sessions', param: id, query: { surface } }, { replace: true })
   }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
@@ -890,7 +892,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         // The create response is the publication fence: move the reader into the new document immediately,
         // while its queued/starting row and live execution trace catch up through the board stream.
-        navigate('sessions', result.id)
+        scope.open({ page: 'sessions', param: result.id, query: null })
         reload?.()
       } else if (!result.ok) {
         notify(result.error || t('session.launchFailed'), { kind: 'error' })
@@ -1356,7 +1358,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // the typed /eval navigates to the session-scoped list through the ONE [[address-routing]] projection
     // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
     // address as a REAL anchor.
-    eval: () => { if (sessionActive) navigateAddress(sessionEvalAddress(active)) },
+    eval: () => { if (sessionActive) scope.open(routeAddress(sessionEvalAddress(active))) },
     merge: mergeSession,
     relaunch: resumeAndReturnToWorking,
     stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → read-only Conversation
@@ -1733,7 +1735,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </section>
       </div>
     </div>
-    {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) navigate('sessions', active === 'new' ? null : active) }} />}
+    {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) scope.open({ page: 'sessions', param: active === 'new' ? null : active, query: null }) }} />}
     <SessionContextMenu
       menu={ctxMenu}
       onClose={() => setCtxMenu(null)}

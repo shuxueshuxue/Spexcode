@@ -22,10 +22,11 @@ It adds nothing to [[source-view]] but an address — and that is the point. A f
 file opened under the spec that claims it, and a file opened from a shared link must be the same reader;
 giving each its own would be three chances to diverge on what a line number means.
 
-**The path goes where facts about the current document go**: it is contributed to [[status-bar]]'s
-registry, the mechanism that already exists for exactly this. A title strip of its own would have been a
-chrome band ([[ui-state-model]]) saying what the tab and the address already say, and it sat directly above
-a viewer footer repeating the same path a third time.
+**The path lives in the tab and the address, nowhere else.** The file once contributed its path to
+[[status-bar]]'s registry; the owner withdrew that item (2026-08-24) — the workspace tab and the address
+already name the document, so the bar copy was ambient noise, and a title strip of its own would still be
+a chrome band ([[ui-state-model]]) saying the same thing a third time. This view contributes nothing to
+the status bar.
 
 It exists because arrival is not always through a node. A reader following a path from a diff, a colleague's
 link, the tree's file row, or a spec chip is looking at a *file*, and asking them to first find which node

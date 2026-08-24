@@ -934,7 +934,12 @@ app.post('/api/sessions/:id/input', async (c) => {
     if (!r.ok) return c.json(r, 502)
     // Start the first handoff without holding the HTTP response on native readiness. The queue remains the
     // acceptance boundary; only a successful dequeue is allowed to publish human activity.
+    // A deferred drain is an asynchronous handoff, not proof that a prompt was delivered. Only the
+    // accepted queue state for this request may reopen a waiting lifecycle; an empty/raced drain must
+    // never turn a focus-only or retry-only path into `working`.
+    const handoffWasQueued = r.delivery === 'queued'
     void drainSession(id).then(() => {
+      if (!handoffWasQueued) return
       const application = configuredSessionApplicationIfCutover()
       if (application ? !application.protocol.listPending(id).length : true) markHumanPromptActive(id)
     }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))

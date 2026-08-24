@@ -215,3 +215,24 @@ test('closing a session stays in the session identity domain', () => {
   assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'empty', param: null, query: null })
   assert.deepEqual(closeDestination({ page: 'spec', param: 'node' }, [], 0), { page: 'graph', param: null, query: null })
 })
+
+test('closing lands on the nearest same-kind tab, then the nearest of any kind, and leaves only from an empty strip', () => {
+  const sess = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
+  const file = (id) => ({ page: 'file', param: id, query: null, pinned: true })
+  const board = (page) => ({ page, param: null, query: null, pinned: true })
+
+  // RIGHT wins the distance tie between two same-kind neighbors
+  assert.deepEqual(closeDestination(file('x'), [file('L'), file('R')], 1), file('R'))
+  // the nearer LEFT same-kind tab beats a farther right one — distance, not scan direction
+  assert.deepEqual(closeDestination(file('x'), [file('L'), sess('s'), file('RR')], 1), file('L'))
+  // CROSS-KIND: no same-kind survivor → the nearest tab of any kind inherits (a file close no longer
+  // conjures the graph while other tabs remain)
+  assert.deepEqual(closeDestination(file('x'), [sess('s'), board('evals')], 1), board('evals'))
+  assert.deepEqual(closeDestination(sess('x'), [board('issues')], 0), board('issues'))
+  // LAST TAB: only an emptied strip leaves the workspace, each kind to its standing no-tab destination
+  assert.deepEqual(closeDestination(file('x'), [], 0), { page: 'graph', param: null, query: null })
+  assert.deepEqual(closeDestination(sess('x'), [], 0), { page: 'empty', param: null, query: null })
+  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
+  assert.deepEqual(closeDestination(resource, [], 0), { page: 'sessions', param: 'new', query: null })
+  assert.deepEqual(closeDestination(board('evals'), [], 0), { page: 'empty', param: null, query: null })
+})

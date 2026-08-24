@@ -764,6 +764,7 @@ export default {
     surfaceSwitcher: '会话视图',
     diffLoading: '正在加载差异……',
     diffEmpty: '没有分支改动',
+    diffUnavailable: '分支 diff 不可用——该会话已没有可对比的分支',
     diffMerged: '已合并到 {base}',
     diffCommit: '打开提交 {commit}',
     diffFailed: '差异不可用：{message}',

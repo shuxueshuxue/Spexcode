@@ -306,7 +306,7 @@ disabled merge remains visible with the exact localized availability reason as i
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
 Surface choice is address state (`?surface=…`) controlled by two compact icon buttons in the document-actions slot:
 one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
-`file-diff` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
+`git-compare` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
 base face and leaves the session tab alone. Both are omitted when the session has only one available face (headless,
 offline, or archived). The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
 to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
@@ -474,7 +474,7 @@ that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, w
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
 hover tooltips. The base surface is selected by its route address and the document-actions slot exposes one compact
-terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `file-diff` icon
+terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `git-compare` icon
 enters or leaves the diff URL with `aria-pressed`; it returns to the remembered base face and is visually distinct from
 the merge action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the

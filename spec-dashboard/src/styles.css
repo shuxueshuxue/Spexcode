@@ -697,7 +697,9 @@ button.sb-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -
 .sb-tally-button:hover { color: var(--ink2); }
 .sb-tally-button:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
 .sb-tally-button:disabled { opacity: .45; cursor: default; }
-.sb-tally-sep { width: 1px; height: 12px; margin: 0 1px; background: var(--line); }
+/* the bar's ONE vertical divider voice: the same full-height --edge hairline the launcher group's
+   border-left draws, so the two seams on the status line cannot read as two different rules. */
+.sb-tally-sep { width: 1px; align-self: stretch; margin: 0 1px; background: var(--edge); }
 .sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
 .sb-launcher-groups { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
 .sb-launcher-list { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }

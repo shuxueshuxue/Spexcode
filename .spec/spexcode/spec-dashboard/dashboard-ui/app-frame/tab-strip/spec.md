@@ -113,6 +113,13 @@ why the old fence was buying safety that was never at risk.
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | close | that tab only; the slot is nothing special to close |
 
+**Closing hands the workspace over by ONE rule, not per-kind branches** (`closeDestination`): the nearest
+remaining tab of the same kind (`tabKind`) inherits — right beating left at equal distance — then the
+nearest remaining tab of any kind; a closed file can no longer conjure the graph while other tabs remain,
+and a closed session no longer skips surviving non-session tabs. Only an emptied strip leaves the
+workspace, each kind to its standing no-tab destination: spec/file documents to the graph, a published
+resource to the session launch page, everything else to the explicit `#/empty` workspace.
+
 **A row that is a real anchor gets the gesture, not a rewrite.** Finding surfaces increasingly render their
 rows as real `<a href>` — the review lists, the spec context panels, the file tree — because that is what
 makes an address copyable, middle-clickable and openable in a browser tab for free. Those rows still owe the

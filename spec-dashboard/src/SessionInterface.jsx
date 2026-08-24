@@ -1389,7 +1389,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     : activeBaseSurface
   const documentActions = sessionActive ? [
     {
-      id: 'resource-picker', icon: 'plus', label: t('session.addResourceTab'), priority: 100,
+      id: 'resource-picker', icon: 'folder-open', label: t('session.addResourceTab'), priority: 100,
       pressed: resourceMenu, haspopup: true,
       onClick: () => setResourceMenu((open) => { if (!open) setCtxMenu(null); return !open }),
       menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
@@ -1409,7 +1409,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         },
       },
       {
-        id: 'diff-switcher', icon: 'file-diff', label: t(diffSurface ? 'session.diffClose' : 'session.diffScope'),
+        id: 'diff-switcher', icon: 'git-compare', label: t(diffSurface ? 'session.diffClose' : 'session.diffScope'),
         priority: 79, pressed: diffSurface,
         menuKey: diffSurface ? 'diff' : 'base',
         onClick: () => {

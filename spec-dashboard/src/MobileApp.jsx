@@ -11,6 +11,7 @@ import { addressHash, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
 import { ComposerTextarea } from './Composer.jsx'
+import { Icon } from './icons.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
 // reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
@@ -195,7 +196,8 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   return (
     <div className="m-sesslist">
       <button className="m-new-btn" onClick={() => setCreating(true)}>
-        <span className="m-new-btn-plus">＋</span>{t('mobile.newSession')}
+        <Icon name="plus" size={16} strokeWidth={1.9} aria-hidden="true" />
+        <span>{t('mobile.newSession')}</span>
       </button>
       {!sessions.length && <div className="m-empty big">{t('mobile.noSessions')}</div>}
       {forest.map((it) => {

@@ -340,10 +340,12 @@ body {
 .dock-head-act:hover { color: var(--ink2); background: var(--panel2); }
 .dock-head-act:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .dock-head-act-new {
-  width: 24px; height: 24px; color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent);
-  border: 1px solid var(--blue); border-radius: var(--radius); box-shadow: none;
+  width: 24px; height: 24px; color: var(--blue); background: transparent;
+  border: 1px solid color-mix(in srgb, var(--blue) 72%, var(--line)); border-radius: var(--radius);
+  box-shadow: none; transition: color var(--dur-fast), background var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-fast);
 }
-.dock-head-act-new:hover { color: var(--paper); background: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 28%, transparent); }
+.dock-head-act-new:hover { color: var(--paper); background: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 22%, transparent); }
+.dock-head-act-new:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 /* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
    is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
    one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
@@ -2764,8 +2766,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font-family: var(--ui-font); font-size: var(--type-subtitle); font-weight: var(--weight-semibold); color: var(--blue); text-align: left;
   background: var(--paper); border: none; border-bottom: 1px solid var(--line); cursor: pointer;
 }
-.m-new-btn:active { background: var(--panel); }
-.m-new-btn-plus { flex: none; font-size: var(--type-icon-sm); line-height: var(--leading-none); }
+.m-new-btn:hover, .m-new-btn:focus-visible { background: var(--panel); color: var(--ink2); }
+.m-new-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.m-new-btn > svg { flex: none; }
 .m-new-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
 .m-new-input { flex: none; min-height: 120px; }
 .m-new-launcher { display: flex; align-items: center; gap: 10px; font-size: var(--type-body); color: var(--muted); }

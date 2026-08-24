@@ -86,6 +86,38 @@ for (const output of ['spec-cli/dist/cli.js', 'packages/spec-core/dist/index.js'
   }
 })
 
+test('test-only source edits do not rebuild the runtime closure', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-source-launcher-test-input-'))
+  const launcher = join(root, 'spec-cli', 'bin', 'spex.mjs')
+  try {
+    mkdirSync(join(root, 'spec-cli', 'bin'), { recursive: true })
+    mkdirSync(join(root, 'spec-cli', 'src'), { recursive: true })
+    copyFileSync(LAUNCHER, launcher)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'node build.mjs' } }))
+    writeFileSync(join(root, 'build.mjs'), `
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+const root = process.cwd()
+appendFileSync(join(root, 'build-count'), 'build\\n')
+for (const output of ['spec-cli/dist/cli.js', 'packages/spec-core/dist/index.js', 'spec-eval/dist/index.js', 'spec-forge/dist/index.js']) {
+  const path = join(root, output)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, output.endsWith('/cli.js') ? 'console.log("compiled source workspace")\\n' : 'export {}\\n')
+}
+`)
+    writeFileSync(join(root, 'spec-cli', 'src', 'runtime.ts'), 'export {}\\n')
+    writeFileSync(join(root, 'spec-cli', 'src', 'runtime.test.ts'), 'export {}\\n')
+    assert.match(execFileSync(process.execPath, [launcher, 'help'], { cwd: root, encoding: 'utf8' }), /compiled source workspace/)
+    const before = readFileSync(join(root, 'build-count'), 'utf8')
+    // A later test edit must not turn the production launcher stale.
+    writeFileSync(join(root, 'spec-cli', 'src', 'runtime.test.ts'), 'export const changed = true\\n')
+    assert.match(execFileSync(process.execPath, [launcher, 'help'], { cwd: root, encoding: 'utf8' }), /compiled source workspace/)
+    assert.equal(readFileSync(join(root, 'build-count'), 'utf8'), before)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('the launcher spawns process.execPath against its compiled CLI, not a TypeScript loader', () => {
   const src = readFileSync(LAUNCHER, 'utf8')
   assert.match(src, /spawn\(process\.execPath,/)

@@ -20,9 +20,9 @@
 <body>
 <main>
   <header>
-    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · canonical-cutover refactor (branch verification)</div>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · canonical-cutover + hook census (branch verification)</div>
     <h1>Session 架构与 Legacy 审计</h1>
-    <p class="lede">结论：SQLite canonical application 已经是生命周期、通信、watch 和 cursor 的唯一生产事实源。运行时只写命名的 <code>runtime.json</code> envelope；旧 <code>session.json</code> 只作为一次性迁移输入，迁移后删除，不能再被当成第二套生命周期。</p>
+    <p class="lede">结论：SQLite canonical application 已经是生命周期、通信、watch 和 cursor 的唯一生产事实源。运行时只写命名的 <code>runtime.json</code> envelope；旧 <code>session.json</code> 只作为一次性迁移输入或历史夹具，不能再被当成第二套生命周期。</p>
   </header>
 
   <section>
@@ -63,12 +63,12 @@
   <section>
     <h2>已修复的直接越权</h2>
     <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS；worktree Codex anchor 只保留空 <code>{hooks:{}}</code>。嵌套 worktree 的纯 SpexCode Claude settings 也只保留一次：主 checkout 是唯一 dispatcher owner，旧副本由 materialize 精确迁移，用户自有配置不碰。</p>
-    <p>本轮聚焦回归：session migration/timeline/materialize <strong>27/27</strong>，materialize 细分 <strong>16/16</strong>；旧 sessions 全量套件仍有 15 个断言读取已删除的 lifecycle envelope 字段，未被伪装成通过，需继续迁移测试本身。</p>
+    <p>本轮聚焦回归：hook dispatch <strong>27/27</strong>，sessions <strong>51/51</strong>，launcher <strong>8/8</strong>；hook 行为测试现在读取 canonical SQLite 状态，并明确断言 runtime envelope 不会被生命周期 hook 改写。仓库里仍有迁移、历史 eval 和旧 fixture 使用 <code>session.json</code>，它们被列为非生产输入，不能被误报成 live reader。</p>
   </section>
 
   <section>
     <h2>迁移删除门的新证据</h2>
-    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。迁移与 timeline 聚焦套件实测 <strong>27/27 pass</strong>；完整旧 sessions 套件的失败集中在旧断言，而不是生产代码重新写入旧字段。</p>
+    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。生产写路径与 hook dispatch 已通过聚焦回归；剩余旧名称集中在迁移输入、spec/eval 夹具和历史文档，下一轮可按删除门逐类消化。</p>
     <div class="callout good"><strong>旧包删除门已通过。</strong> 根 build、发布清单、CI、launcher source closure 和 package-lock 均不再引用 <code>session-core</code>；剩余 <code>session.json</code> 仅属于运行时 envelope 迁移，不能再被当成 lifecycle authority。</div>
   </section>
 
@@ -78,7 +78,7 @@
     <table><thead><tr><th>层</th><th>实测</th><th>结论</th></tr></thead><tbody>
       <tr><td>项目 settings</td><td>每个 settings.json 1 条 PreToolUse dispatcher</td><td>没有 6 条重复注册</td></tr>
       <tr><td>编译后的 manifest</td><td>2 个 handler：mark-active、spec-first</td><td>一次工具调用最多经过这两个项目 handler</td></tr>
-      <tr><td>宿主显示</td><td>用户看到 “Running 6 PreToolUse hooks”</td><td>当前 checkout census 只有 1 个 Claude settings owner；编译 manifest 只有 2 个项目 handler（mark-active、spec-first）。旧嵌套 worktree dispatcher 已精确迁移；若宿主仍显示旧数，应先重启/重新 materialize 当前进程，不能在 hook 内部再叠加逻辑。</td></tr>
+      <tr><td>宿主显示</td><td>用户看到 “Running 6 PreToolUse hooks”</td><td>当前 checkout 只有 1 个 Claude settings dispatcher；编译 manifest 只有 2 个项目 handler（mark-active、spec-first）。这不是仓库注册了 6 个 Spex PreToolUse hook；更可能是宿主对 layered plugins / 历史 worktree 的聚合显示。应清理/重新 materialize 宿主加载面后复测，而不是在 handler 内增加逻辑。</td></tr>
     </tbody></table>
   </section>
 
@@ -87,10 +87,10 @@
     <table><thead><tr><th>检查项</th><th>当前事实</th><th>判断</th></tr></thead><tbody>
       <tr><td>生命周期状态</td><td>由 prompt/tool/stop/error 的事件写入 SQLite；dispatcher 不轮询、不写 SQL。</td><td><span class="status green">单向事件</span></td></tr>
       <tr><td>观测轮询</td><td>follow/board/远端 peer 仍有明确的观测 tick；它们不拥有 lifecycle，也不能把 asking/close 变 working。</td><td><span class="status amber">保留但需限界</span></td></tr>
-      <tr><td>等待常量</td><td>pty linger/restore、delivery stabilization、probe deadline 等是 transport 边界常量；没有用“看见 terminal/获得焦点”伪造 prompt。</td><td><span class="status amber">审计对象</span></td></tr>
+      <tr><td>等待常量</td><td>pty linger/restore、delivery stabilization、probe deadline 等是 transport 边界常量；没有用“看见 terminal/获得焦点”伪造 prompt。测试-only source edits 不再触发完整 workspace build。</td><td><span class="status amber">审计对象</span></td></tr>
       <tr><td>policy 组合</td><td>parent policy、manual watch policy、managed watch source 必须落在 topology/application；hook 只消费事件，不创建第二套 policy。</td><td><span class="status green">边界清晰</span></td></tr>
     </tbody></table>
-    <div class="callout warn"><strong>当前未宣称全部收口。</strong> 旧 sessions 测试仍有 15 个 envelope 断言残留；`eval lint --changed` 仍会报历史 stale/missing advisory。下一步应迁移这些证明，而不是恢复双写或增加兼容分支。</div>
+    <div class="callout warn"><strong>当前未宣称全部收口。</strong> 仓库仍有历史迁移/eval/fixture 对 <code>session.json</code> 的引用；它们必须保持在一次性迁移或测试边界，不能回流到生产 reader。<code>eval lint --changed</code> 仍会报历史 stale/missing advisory。下一步应逐类迁移这些证明，而不是恢复双写或增加兼容分支。</div>
   </section>
 
   <section>
@@ -107,7 +107,7 @@
 
   <section>
     <h2>当前限制</h2>
-    <p>当前报告的删除门结果：旧包 source/build/lockfile/CI/materialize 引用为 <strong>0</strong>；生产 runtime 写路径不再创建 <code>session.json</code>。历史 fixtures、迁移输入和文档中的旧名称仅是迁移记录，不是当前运行时路径。</p>
+    <p>当前报告的删除门结果：旧包 source/build/lockfile/CI/materialize 生产引用为 <strong>0</strong>；生产 runtime 写路径不再创建 <code>session.json</code>。仓库扫描仍能找到历史 fixtures、迁移输入和文档旧名称，这些是待清理证据，不是当前运行时路径；删除前必须逐个确认不属于外部 adopter 的输入契约。</p>
   </section>
 
   <footer>Source of truth: canonical package code/specs, focused tests, hook manifest compilation, materialize worktree census, and runtime read-only checks. This report records architecture and migration state; historical fixture strings are intentionally not live configuration.</footer>

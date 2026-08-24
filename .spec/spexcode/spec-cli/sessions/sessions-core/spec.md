@@ -30,8 +30,8 @@ foundation owner: the features govern their own surfaces and REFERENCE this modu
 
 ## expanded spec
 
-sessions-core owns `sessions.ts` — the common session layer: the global per-session operational metadata read/write
-(`session.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, session↔worktree↔node resolution, the launch-script
+sessions-core owns `sessions.ts` — the common session layer: the global per-session runtime/worktree envelope read/write
+(`runtime.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, while lifecycle, proposal, note, event, queue, and topology facts live only in the canonical session application. It owns session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into

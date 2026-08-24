@@ -55,3 +55,8 @@ ride on. Which nodes plug in is a [[surface]] field decision, not a code change 
 hook is a spec edit. The contract text (the `surface: system` bodies) is materialized by the same pass
 into the AGENTS.md/CLAUDE.md block ([[harness-delivery]]); only the event HOOKS converge through this
 dispatcher.
+
+The generated project settings contain one `PreToolUse` dispatcher command. The current canonical manifest has
+two `PreToolUse` rows behind it — `mark-active` (order 10) and `spec-first` (order 20). A host may report a
+larger aggregate while loading layered plugins or historical worktree state; that display is not an additional
+Spex registration. No hook handler may register a second dispatcher or run SQL directly.

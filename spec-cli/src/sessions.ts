@@ -1650,6 +1650,9 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
   }
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
+// A native receipt is bound before the readiness fence validates it. Suppress only that immediate wake so
+// queued prompts cannot drain during the candidate window; the successful publication path drains normally.
+const readinessWakeSuppressed = new Set<string>()
 
 function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string, live = false): void {
   const reason = error instanceof Error ? error.message : String(error)
@@ -1672,7 +1675,9 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
       // A live post-receipt timeout is a diagnostic, not a new parent-watch transition. If an older failed
       // attempt already published `error`, however, the canonical row must be repaired to the live status or
       // the JSON write below would leave the sole lifecycle authority disagreeing with the runtime witness.
-      if (status !== rec.status) publishCanonicalLifecycle(restored, status, restored.proposal, note)
+      // Publish even when status is unchanged: the warning note is canonical too. Active recipients exclude
+      // the parent, so this diagnostic cannot manufacture a parent-watch transition.
+      publishCanonicalLifecycle(restored, status, restored.proposal, note)
       writeRecord(restored)
     }
   }
@@ -1995,8 +2000,9 @@ const requestQueueDrain = (): void => {
 // Canonical state commits already own the durable recipient queue. This is only the post-commit wake that hands
 // each queued recipient to its existing runtime; a failed or absent runtime leaves the message pending for retry.
 setSessionApplicationCommitWake((recipients) => {
+  const wakeRecipients = recipients.filter(recipient => !readinessWakeSuppressed.has(recipient))
   queueMicrotask(() => {
-    for (const recipient of recipients) {
+    for (const recipient of wakeRecipients) {
       void drainSession(recipient).catch((error) => {
         console.error(`spex: canonical delivery wake failed for ${recipient}: ${error instanceof Error ? error.message : String(error)}`)
       })
@@ -2900,8 +2906,13 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
   if (harness.launchPayloadProof && !current()?.harnessSessionId) {
     for (;;) {
       if (hasReadableLaunchReceipt(id)) {
-        if (recordLockHeld) consumeHarnessLaunchProofUnlocked(id)
-        else await withRecordLock(id, async () => consumeHarnessLaunchProofUnlocked(id))
+        if (recordLockHeld) {
+          readinessWakeSuppressed.add(id)
+          try { consumeHarnessLaunchProofUnlocked(id) } finally { readinessWakeSuppressed.delete(id) }
+        } else await withRecordLock(id, async () => {
+          readinessWakeSuppressed.add(id)
+          try { consumeHarnessLaunchProofUnlocked(id) } finally { readinessWakeSuppressed.delete(id) }
+        })
         break
       }
       if (Date.now() >= deadline) return null
@@ -3111,8 +3122,13 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
         error: `session ${id}: launch readiness changed across the pending publication${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
       }
     }
-    const published = readRecord(id) || candidate
-    publishCanonicalLifecycle(published, published.status, published.proposal, published.note)
+    // `readRecord` projects the still-public pre-resume lifecycle while the candidate fence is pending.
+    // Carrying that stale projection into the final publish used to leave queued/error rows unchanged in
+    // SQLite even though the runtime envelope had crossed readiness. Publish the candidate lifecycle while
+    // retaining the latest non-lifecycle envelope fields.
+    const latestPublished = readRecord(id) || candidate
+    const published = { ...latestPublished, status: candidate.status, proposal: candidate.proposal, note: candidate.note }
+    publishCanonicalLifecycle(published, candidate.status, candidate.proposal, candidate.note)
     writeRecord({ ...published, launchReadinessPending: null })
   } else {
     publishCanonicalLifecycle(current, resumed.status, resumed.proposal, resumed.note)
@@ -4744,6 +4760,9 @@ export async function drainSession(id: string): Promise<void> {
   if (application) {
     const rec = readRecord(id)
     if (!rec) return
+    // An empty canonical queue is a successful no-op. Do not turn a resume with no owed prompt into a
+    // runtime-binding error; require a bound adapter only when there is a message that must be handed over.
+    if (application.readPendingMessages(id).length === 0) return
     const binding = application.resolveRuntime(id, 'spex-governed')
     if (!binding || binding.status !== 'bound') {
       // Claude's TUI has no native conversation id to bind. Preserve the legacy rendezvous identity (the

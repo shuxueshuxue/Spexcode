@@ -10,6 +10,7 @@ import { openProjectSessionApplication } from '@spexcode/session-application'
 
 import { readTimeline } from './session-timeline.js'
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { sessionStateKit } from './session-declarations.js'
 import { rvSock, stampRvSock } from './harness.js'
 import { markHumanPromptActive, sendText } from './sessions.js'
 import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
@@ -76,6 +77,37 @@ test('human re-entry trusts canonical lifecycle when the legacy envelope is stal
     assert.equal(reopened?.status, 'active')
     assert.equal(reopened?.proposal, null)
     assert.equal(reopened?.note, null)
+  } finally {
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('canonical lifecycle writers resolve a Codex thread alias before transition', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-thread-writer-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const databasePath = join(home, 'sessions.sqlite')
+  const id = 'codex-thread-writer-session'
+  const thread = 'codex-thread-writer-native-id'
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/codex-thread-writer', node: null,
+    title: 'codex thread writer', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'waiting',
+    sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: thread, stopped: false, archived: false,
+    cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'asking', note: 'waiting' })
+  try {
+    const { s, sess } = await sessionStateKit(thread)
+    assert.equal(sess, id)
+    assert.equal(s.markState('active', { sessionId: sess }), true)
+    assert.equal(app.readState(id)?.status, 'active')
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()

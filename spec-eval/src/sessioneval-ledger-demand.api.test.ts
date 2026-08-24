@@ -163,6 +163,13 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
       try { body = JSON.parse(raw) } catch { /* preserve the raw response for a loud assertion */ }
       return { response, raw, body }
     }
+    const detailDemand = async () => {
+      const response = await fetch(`${origin}/api/evals/detail?node=eval-ledger-demand-fixture&scenario=value-moves&scope=${SESSION_ID}`)
+      const raw = await response.text()
+      let body: any = null
+      try { body = JSON.parse(raw) } catch { /* preserve the raw response for a loud assertion */ }
+      return { response, raw, body }
+    }
 
     const holder = [
       `import { existsSync, writeFileSync } from 'node:fs'`,
@@ -215,6 +222,14 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
     assert.equal(cold.response.status, 200, `cold review payload waited for the live writer: ${JSON.stringify(observation)}\n${backendStderr.slice(-1500)}`)
     assert.ok(Array.isArray(cold.body?.items) && cold.body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
     assert.deepEqual(ledgerFiles(), [], 'cold read-only demand must not publish a writer-owned ledger')
+
+    const detailStarted = Date.now()
+    const detail = await detailDemand()
+    const detailElapsedMs = Date.now() - detailStarted
+    console.log(JSON.stringify({ phase: 'scoped-detail-live-writer-demand', status: detail.response.status, elapsedMs: detailElapsedMs }))
+    assert.equal(detail.response.status, 200, `scoped detail failed while an unrelated writer was live: ${detail.raw.slice(0, 1200)}`)
+    assert.equal(detail.body?.availability, 'unmeasured')
+    assert.ok(detailElapsedMs < 10_000, `scoped detail inherited a writer/watch reconciliation wall: ${detailElapsedMs}ms`)
 
     await stop(backend)
     backend = null

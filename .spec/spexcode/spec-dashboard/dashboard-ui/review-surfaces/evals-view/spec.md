@@ -174,6 +174,9 @@ pooled Evals document cannot route another pane or follow the window address out
   or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
   detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
   gets the not-found face.
+  When the detail response includes a structured backend error reason, the failure face preserves that
+  reason; it falls back to the HTTP status only when no readable error body is available. A 404 remains
+  the not-found sentinel rather than a load failure.
 - **Backend outage is global while the detail failure stays precise.** A network refusal or 502/503/504 keeps
   the load-failed detail face and also raises [[dashboard-shell]]'s global offline banner with retry. It never
   renders `no eval found` for the same request. Any last-good dock/status numbers visible around that face are

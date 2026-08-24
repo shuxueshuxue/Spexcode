@@ -3,12 +3,11 @@ scenarios:
   - name: internal-entry-composes-fenced-transaction
     tags: [cli]
     description: >
-      Pack and install session-core in a fresh consumer, import `@spexcode/session-core/internal`, and use its
-      record-lock and exact queue-snapshot primitives to compose one bounded transaction. Also inspect the root
-      package entry from that consumer.
+      Pack and install `@spexcode/session-protocol` in a fresh consumer and compose one bounded transaction through
+      the public transaction callback without importing an internal entry. Also inspect the package export map.
     expected: >
-      The named internal entry resolves and the composed operation observes one coherent locked snapshot. The root
-      entry exposes complete accept/drain operations but none of the half-write transaction primitives.
+      The protocol entry resolves, no `session-core` or `/internal` path exists, and the composed operation observes
+      one coherent transaction while exposing no half-write compatibility primitive.
 ---
 
 # internal-transactions loss

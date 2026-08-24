@@ -244,25 +244,6 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     options.onCommitted?.(result)
   }
 
-  // Parent supervision is quiet for routine working transitions. A manual watch opts into the
-  // complete feed; overlapping sources are a union, so one watcher receives one queue item.
-  const lifecycleRecipients = (
-    subjectSessionId: string,
-    previousStatus: string | null,
-    status: string,
-    tx: ProtocolTransaction,
-  ): string[] => {
-    const recipients = new Set<string>()
-    for (const edge of topology.parents(subjectSessionId, undefined, tx)) {
-      const parentOnly = edge.relationType === 'watch:parent'
-      const manual = edge.relationType === 'watch:manual' || edge.relationType === 'watch'
-      if (manual || (parentOnly && (status !== 'active' || previousStatus === 'queued'))) {
-        recipients.add(edge.fromSessionId)
-      }
-    }
-    return [...recipients].sort()
-  }
-
   // Parent supervision is intentionally quiet for routine active/working transitions. A manual watch
   // opts into the complete feed; when both sources exist, the union keeps that manual choice without
   // enqueueing the same watcher twice. Creation still publishes its initial snapshot through the normal

@@ -5,19 +5,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { recordStatus } from './session-timeline.js'
 import type { Session } from './sessions.js'
 
-// Following is reading a LOG past a cursor ([[session-follow]]). Everything below is driven by appending lines
-// to timeline.ndjson and by nothing else: no board, no backend, no process. That is the point — if any of this
-// needed a running server to pass, the mechanism would still be costing the control plane what it used to.
+// Following reads canonical application events past a cursor ([[session-follow]]). Everything below is driven by
+// SQLite state and by nothing else: no board, no backend, no process. That is the point — if any of this needed a
+// running server to pass, the mechanism would still be costing the control plane what it used to.
 
 const ME = 'follower-session'
 const T = 'target-session'
 const freshHome = (): string => {
   const home = mkdtempSync(join(tmpdir(), 'spex-follow-'))
+  resetConfiguredSessionApplicationForTest()
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   configuredSessionApplicationIfCutover()!.createSession({ sessionId: ME, status: 'idle' })
   return home
 }

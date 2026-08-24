@@ -2,11 +2,9 @@ import { configuredSessionApplicationIfCutover } from './session-application.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
 
-// @@@ session-follow - supervision is FOLLOWING a log past a cursor, never polling a derived board. One tick
-// costs ONE stat per target: if timeline.ndjson has not grown, nothing is opened and nothing is parsed. No
-// call here reaches the backend, a rendezvous socket, or tmux, which is the whole point — M followers over N
-// sessions cost the control plane zero, where the old poll cost one board build (a connect + a tmux spawn per
-// live session) per follower per interval.
+// @@@ session-follow - supervision follows canonical SQLite events past an application-owned cursor, never a
+// derived board. The bounded observation tick reads the event sequence and cursor only; it never opens a backend,
+// rendezvous socket, or tmux. M followers over N sessions therefore cost the control plane zero native probes.
 
 // Actionable = a state whose arrival means "a human/supervisor must now act". `offline` is deliberately ABSENT
 // where the old poll had it: liveness is a present-tense probe derivation, never authored, so it can never

@@ -18,10 +18,12 @@ Spex backend, a ZSwarm worker loop, or a short-lived self-launch listener. Its m
 4. dequeue the local address;
 5. pass each returned message to the selected harness runtime adapter.
 
-The shared `session-application` package currently provides only the Stage 1 notification transaction facade: topology
-mutation, recipient resolution, and protocol enqueue in one transaction. The final adopter-owned state → event →
-watcher application service remains planned; no Spex or ZSwarm production cut-in is implied by the shared package
-seams or clean-consumer proofs.
+The shared `session-application` package provides the adopter-owned state → event → watcher transaction service:
+state, topology, event append, recipient resolution, and protocol enqueue commit together, while the optional
+post-commit callback is only a wake hint. It also owns runtime binding and durable follow-cursor boundaries.
+The package does not choose a product policy; Spex resolves parent/manual watch recipients and passes an explicit
+set when its policy differs from neutral topology. No Spex or ZSwarm production cut-in is implied by a clean
+consumer proof alone.
 
 The runtime adapter owns native effects such as launch, ordinary input, interrupt, stop, liveness, and native
 identity. The adopter-owned [[runtime-bindings]] component may bind the exact protocol address to the current
@@ -63,12 +65,13 @@ protocol.
 
 ## Migration order
 
-1. Publish the pure protocol operations, schema, migrations, and conformance fixtures under one new protocol
-   package; switch callers in one cutover and delete the old `@spexcode/session-core` package instead of adding a
-   compatibility re-export, alias, dual-read, or fallback.
+1. Publish the pure protocol operations, schema, migrations, and conformance fixtures under
+   `@spexcode/session-protocol`; switch callers in one cutover and delete the old `@spexcode/session-core` package
+   instead of adding a compatibility re-export, alias, dual-read, or fallback.
 2. Prove self-launch and ZSwarm adopters against the installed package. They exercise recordless/offline and
    multi-workspace/runtime-injected shapes without Spex governance.
-3. Extract the relation model and migrate Spex governed notification publication to the same database transaction
-   as protocol enqueue. Replace callback drain with the Spex runtime's own dequeue/handler loop.
-4. Remove the public `runtime-session` bridge once installed adopter and Spex lifecycle proofs pass on the same
-   fixed protocol; no compatibility package remains.
+3. Keep relation resolution in `@spexcode/session-topology` and lifecycle/event publication in
+   `@spexcode/session-application`, in the same database transaction as protocol enqueue. Replace callback drain
+   with the runtime's own dequeue/handler loop.
+4. The old mixed `runtime-session` bridge is no longer a public entry. New consumers use the split package stack;
+   migration input is handled once by the application migrator and never by a runtime fallback.

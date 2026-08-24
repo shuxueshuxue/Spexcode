@@ -199,6 +199,11 @@ The face keeps its full accessible label and tooltip while its visible title ell
 rendered widths for 2, 5 and 12 tabs in both regimes and verifies that a short label's X right edge leaves only
 normal padding to the tab edge.
 
+Every tab owns the same top-corner radius, including the inactive tab while hovered or keyboard-focused. The
+tab face and close control clip their own hover/focus washes to the matching left/right top corner, so the
+highlight cannot turn into a square patch at either edge. The bottom edge stays square: it is the shared seam
+with the content plane, not a floating chip boundary.
+
 **The action cluster sits at the strip's LAST row**, against the content it acts on ([[document-actions]]).
 It is a sibling of the wrapping list, not a member of it, so it reserves its own column and no tab can run
 under it — an editor needs a measured reserve at the end of the last row only because its toolbar floats

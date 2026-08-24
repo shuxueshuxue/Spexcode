@@ -96,7 +96,7 @@
 
   <section>
     <h2>当前限制</h2>
-    <p>legacy gate 的 dist、tarball、materialized 三层本轮没有明确测量根目录，因此是 <code>NOT-MEASURED</code>，不能把 source-only 结果当成删除完成。当前主线还存在与本次重构无关的 spec anchor drift，未擅自修改。</p>
+    <p>删除门复测：生产源码 gate 已测量，runtime trace 对旧通信文件是 <strong>0 次</strong>；但一次性迁移读取器和旧 <code>@spexcode/session-core</code> 包仍有源码/构建引用。dist、tarball、materialized 三层本轮没有明确根目录，因此是 <code>NOT-MEASURED</code>，不能把 source/runtime 结果当成删除完成。当前主线还有一个与本次迁移无关的 <code>Tooltip</code> anchor-drift 和两个历史 Codex probe fixture 的类型漂移（本分支已修 fixture），未擅自改产品契约。</p>
   </section>
 
   <footer>Source of truth: current main code/specs, <code>spikes/legacy-sabotage/gate.sh</code>, focused tests, and runtime read-only census. This report records architecture and migration state; it is not a claim that legacy deletion is complete.</footer>

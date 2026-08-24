@@ -492,6 +492,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   session-state <st> --session <id>   a lifecycle hook authors the session's state
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
+  session-hook-state --session <id>    hook-only canonical lifecycle read (tab-separated)
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)
   hook-prompt <name>                  render canonical model-facing text for a runtime hook
   nudge <node>      the post-merge hook prints the issue nudge for a merged node

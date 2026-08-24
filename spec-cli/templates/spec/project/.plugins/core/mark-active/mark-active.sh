@@ -32,6 +32,16 @@ payload=$(cat 2>/dev/null)
 # discriminator is the payload's own top-level agent_id stamp (hp_is_subagent) — deterministic, never a
 # timing window.
 [ -n "$(hp_is_subagent "$payload")" ] && exit 0
+# Managed watch deliveries are supervision messages, not work performed by this session. They arrive through
+# the harness's ordinary UserPromptSubmit seam, so the freshness hook must recognize the protocol's exact
+# prefix before treating that seam as a human re-entry. This is deliberately a prefix check, not a broad
+# text heuristic: only the canonical `[spex watch] ` wire form is exempt; ordinary prompts and all tools still
+# mark active.
+if [ "$(hp_field "$payload" hook_event_name)" = "UserPromptSubmit" ]; then
+  case "$(hp_field "$payload" prompt)" in
+    "[spex watch] "*) exit 0 ;;
+  esac
+fi
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 rec="$sdir/session.json"

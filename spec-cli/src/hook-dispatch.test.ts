@@ -408,6 +408,40 @@ test('mark-active never trusts the runtime envelope to skip the canonical writer
   assert.equal(readFileSync(called, 'utf8').trim(), `internal session-state active --session ${sid}`)
 })
 
+test('managed watch UserPromptSubmit does not forge receiver activity', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-watch-freshness-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'watch-receiver'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'UserPromptSubmit\t10\tfalse\thooks/mark-active.sh\n')
+  const record = join(runtime, 'sessions', sid, 'session.json')
+  const fakeSpex = join(dir, 'fake-spex')
+  const calls = join(dir, 'calls')
+  writeFileSync(fakeSpex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fakeSpex, 0o755)
+  const fire = (status: string, prompt: string) => {
+    writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status, proposal: '', note: 'waiting' }, null, 2))
+    return spawnSync('bash', [dispatch, 'claude', 'UserPromptSubmit'], {
+      cwd: dir,
+      env: { ...process.env, SPEX: fakeSpex, SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+      input: JSON.stringify({ session_id: sid, hook_event_name: 'UserPromptSubmit', prompt }),
+      encoding: 'utf8',
+    })
+  }
+  const watch = fire('asking', '[spex watch] child is asking')
+  assert.equal(watch.status, 0, watch.stderr)
+  assert.equal(existsSync(calls), false, 'a protocol watch notice must not call the active writer')
+  const ordinary = fire('asking', 'continue with the requested audit')
+  assert.equal(ordinary.status, 0, ordinary.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-state active --session ${sid}`)
+})
+
 // [[hook-dispatch]] per-tree slots — with no SPEX_HOOK_MANIFEST override, the dispatcher reads the manifest
 // from ITS OWN tree's slot (trees/<enc(toplevel)>), derived from the dispatch cwd; a pre-slot tree (the
 // migration window) falls back to the legacy global file so its hooks never silently no-op.

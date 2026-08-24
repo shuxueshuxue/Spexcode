@@ -110,6 +110,16 @@ export function viewportForFocus({
   // explicit fit pass may lower the zoom to make an oversized frontier reachable.
   const anchorZoom = fit && !currentFits && fitZoom >= minZoom ? fitZoom : zoom
   const desiredY = height / 2 - focus.y * anchorZoom
+  // Focus navigation owns the vertical target: an Arrow move must put the focused tile centre on the
+  // pane centre even when the visible frontier is taller than the viewport. Reachability clamping belongs
+  // only to an explicit fit pass, where the whole frontier is being framed rather than a focus being followed.
+  if (!fit) {
+    return {
+      x: width * anchorRatio - anchorX * anchorZoom,
+      y: desiredY,
+      zoom: anchorZoom,
+    }
+  }
   const minPanY = -minY * anchorZoom
   const maxPanY = height - maxY * anchorZoom
   const y = minPanY <= maxPanY

@@ -32,6 +32,33 @@ One of the SpexCode packages (with spec-core, session-core, spec-eval, spec-forg
 the CLI where they belong, not under the dashboard. It publishes compiled JavaScript; TypeScript remains
 development source rather than a consumer runtime requirement.
 
+## Dependency arrival and subtraction ledger
+
+This is the cross-package history for the dependency rule: when a package edge arrived, this table names the
+predecessor it replaced or records why no package edge existed. Workspace package extractions are included because
+they are dependency arrivals for the published composition even when their manifest has no third-party dependency.
+Version-only release bumps and script-only edits are intentionally omitted. `No package predecessor` means the
+feature had no prior package edge; it is an explicit exception, not an unexamined omission.
+
+| Commit | Arrival | Predecessor or same-change subtraction |
+| --- | --- | --- |
+| `2a5560b11` | `spec-cli` added `@hono/node-ws` and `node-pty` for the first terminal WebSocket/PTY transport. | **No package predecessor:** the backend had no terminal transport dependency; the old boundary was in-tree code, not a package edge. |
+| `f19ce3af2` | Dashboard added `@xterm/addon-canvas` and `@xterm/addon-webgl` as optional xterm renderers. | **No package predecessor:** xterm's built-in renderer remained the fallback; these were optional acceleration edges, not a second terminal implementation. |
+| `59f51a6b0` | Dashboard removed `@xterm/addon-canvas`. | Same-change subtraction: the code-split shell no longer imported or registered the canvas addon. |
+| `bbd00164a` | Dashboard removed `@xterm/addon-webgl` while moving xterm to 6.0 and fit to 0.11. | Same-change subtraction/version replacement: WebGL registration was removed with the old renderer path; the xterm core upgrade is the retained edge. |
+| `0962fb0e0` | Dashboard added `markdown-it` and `katex` for RichText. | **No package predecessor:** the prior prose and math boundaries were local renderers, not replaceable package edges. |
+| `7e90b791d` | Extracted `@spexcode/l0` as the workspace core package. | Source ownership moved out of `spec-cli/src` (anchors, git/layout, graph, identity, resilience, specs, review snapshot, root-LRU); Git renames prove no duplicate implementation remained. |
+| `023e91b4c` | Renamed `@spexcode/l0` to `@spexcode/spec-core`. | Same-change replacement: package name and path were renamed; `@spexcode/l0` did not remain as a second edge. |
+| `dff2d31c7` | Made `@spexcode/spec-core` importable and packable outside the monorepo. | The internal-only source package became the published boundary; no second core implementation was added. |
+| `2f8d5fb71` | `spec-core` added `@vscode/tree-sitter-wasm` for asynchronous syntax anchors. | Same-change replacement: the prior regex extractor in `packages/spec-core/src/anchors.ts` was replaced by the Tree-sitter extractor. |
+| `3d0e60e6b` | Formalized `spec-cli` edges to `@spexcode/spec-core`, `@spexcode/spec-eval`, and `@spexcode/spec-forge` and exposed package exports. | Same-change subtraction: dashboard/CLI relative imports were replaced by public package edges; no parallel relative implementation remained. |
+| `377c832f4` | Extracted `@spexcode/session-core` and added it to `spec-cli`. | Session protocol/cursor/timeline files moved from `spec-cli` into the package (Git renames); the CLI now consumes one durable edge. |
+| `b1c36fb04` | Added `@spexcode/session-application` and `@spexcode/session-selflaunch` to `spec-cli`. | Same-change extraction: application composition and self-launch adapter implementations moved out of the CLI; the old copies were removed. |
+
+The table is an immutable-history ledger, not permission to add a dependency without a review. A future edge must
+either name its same-change subtraction here or add a measured **No package predecessor** exception with an owner and
+an executable boundary check.
+
 ## expanded spec
 
 `spec-cli` is the backend. It owns the read path (turn `.spec` + git into JSON) and the write path

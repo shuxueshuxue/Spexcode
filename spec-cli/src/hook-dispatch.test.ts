@@ -107,7 +107,8 @@ test('dispatch migrates the historical stop-gate source before it can call porce
   execFileSync('git', ['init', '-q'], { cwd: dir })
   const handler = join(dir, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
   mkdirSync(join(dir, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate'), { recursive: true })
-  writeFileSync(handler, execFileSync('git', ['show', 'HEAD:.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh'], { cwd: repo }))
+  // Keep exercising the pre-fix source after the repair lands: the first parent is the old tracked hook.
+  writeFileSync(handler, execFileSync('git', ['show', 'HEAD^:.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh'], { cwd: repo }))
   mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
   writeFileSync(join(runtime, 'sessions', sid, 'session.json'), JSON.stringify({ session_id: sid, governed: true, status: 'active' }, null, 2))
   const manifest = join(runtime, 'hooks-manifest')

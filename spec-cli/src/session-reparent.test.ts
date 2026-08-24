@@ -174,10 +174,9 @@ test('session reparent rewrites parent/watch through live backend and only falls
     const childCDir = writeSession(home, 'reparent-child-c', oldParent)
     writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
     const local = await runCli(['session', 'reparent', 'reparent-child-c', '--to', newParent], env)
-    assert.equal(local.code, 0, local.err)
-    assert.match(local.err, /reparenting in-process/)
-    assert.equal(parentOf(childCDir), newParent)
-    assert.deepEqual(watchers(childCDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
+    assert.equal(local.code, 1)
+    assert.match(local.err, /no canonical application state/)
+    assert.equal(parentOf(childCDir), null, 'unmigrated JSON input is not a live parent authority')
 
     const childDDir = writeSession(home, 'reparent-child-d', oldParent)
     writeFileSync(join(childDDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')

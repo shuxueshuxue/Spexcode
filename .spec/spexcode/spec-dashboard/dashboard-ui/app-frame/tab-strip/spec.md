@@ -161,6 +161,11 @@ at all. **A slot is not exempt.** It is an ordinary entry that happens to be unp
 that flag rather than by position, so it may be dragged anywhere and ordinary navigation still lands in it
 exactly where the reader put it.
 
+While the pointer is held and crosses a new insertion point, the array reorders immediately; the reader sees
+the working set move under the pointer before release, and the same stored order is already the truth if the
+gesture ends there. The unoccupied right side of the tab-list host is also the end insertion point, so dropping
+in that blank area appends the tab without requiring a hit on the last tab face.
+
 The gesture is the workspace's shared pointer drag ([[drag-gesture]]) and it is deliberately not native
 HTML5 drag-and-drop: a tab face is a button, which swallows `dragstart`, and the browser's drop protocol
 and ghost image are machinery neither this strip nor the session dock wants. Six pixels of slack keep a

@@ -514,7 +514,7 @@ function writeRecord(rec: SessRec): void {
     adapter_recovery: rec.adapterRecovery ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
-    launch_owner: (rec.status === 'queued' || rec.status === OWNED_QUEUE_RAW_STATUS)
+    launch_owner: (lifecycle.status === 'queued' || lifecycle.status === OWNED_QUEUE_RAW_STATUS)
       ? rec.launchOwner ?? envelopeLaunchOwner ?? '' : '',
     ...(rec.launchReadinessStartedAt ? { launch_readiness_started_at: rec.launchReadinessStartedAt } : {}),
     ...(rec.runtimeStartToken ? { runtime_start_token: rec.runtimeStartToken } : {}),

@@ -7,10 +7,8 @@ import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { iconFor } from './views.jsx'
 
-// The workspace's rail ([[side-nav]]) — an ACTIVITY BAR, not a page menu. Two kinds of entry, in this
-// order: the dock's two PROJECTION buttons (explorer/sessions — they change what helps you look, and are
-// buttons), then the review/settings BOARD destinations pinned at the bottom. Board entries are navigation
-// only: their plain click changes the route and never creates or focuses a strip tab.
+// The workspace's rail ([[side-nav]]) — a top-level board bar plus the dock visibility control. Board
+// entries are navigation only: their plain click changes the route and never creates a strip tab.
 // Glyphs come from the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria —
 // the rail stays slim.
 // Project identity and switching belong to the ambient status row ([[status-bar]]), so the route rail
@@ -28,6 +26,8 @@ const railHref = (page) => routeHash(page)
 // state control, not a destination.
 const PAGE_KEYS = {
   sessions: ['shell.pageSessions'],
+  // Spec has no accelerator in the current keymap; do not invent one just to decorate this entry.
+  spec: [],
   evals: ['shell.pageEvals', 'shell.evals'],
   issues: ['shell.pageIssues'],
   settings: ['shell.pageSettings'],
@@ -94,7 +94,7 @@ export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDoc
     <nav className="side-rail" aria-label={t('nav.railLabel')} onMouseDownCapture={inertChromePress}>
       {!hideDockToggle && <DockToggle />}
       {entries.map((p) => (
-        <RailLink key={p} page={p} active={page === p}
+        <RailLink key={p} page={p} active={page === p || (p === 'spec' && page === 'file')}
           label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}
           badge={p === 'sessions' ? needsYou : 0}
           disabled={graphOnly && p !== 'graph'}
@@ -103,6 +103,11 @@ export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDoc
               setDock?.(true)
               setDockMode?.('sessions')
               return focusLatestTab((tab) => tab.page === 'sessions' && tab.param)
+            }
+            if (p === 'spec') {
+              setDock?.(true)
+              setDockMode?.('explorer')
+              return focusLatestTab((tab) => tab.page === 'spec')
             }
             if (p === 'graph') { setDock?.(true); setDockMode?.('explorer') }
             return false

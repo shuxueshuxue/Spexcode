@@ -41,7 +41,9 @@ function label(tab, { specs, sessions, names, t }) {
   if (tab.page === 'graph') return t('tabs.graph')
   // a document names itself: a node by its own title, a file by its basename. The strip does not invent a
   // naming scheme for documents it does not own.
-  if (tab.page === 'spec') return isResident(tab.page) ? t('tabs.spec') : (specs?.find((s) => s.id === tab.param)?.title || tab.param)
+  // Spec is one resident slot and keeps the Spec icon, but a selected node is the document being read.
+  // The slot identity is canonicalized by tabModel; only its face changes to the board-owned title.
+  if (tab.page === 'spec') return tab.param ? (specs?.find((s) => s.id === tab.param)?.title || tab.param) : t('tabs.spec')
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
   // Review details are route state inside one dynamic top-level tab. The tab keeps the stable board name;
   // the URL still carries the selected scenario or issue for copy/back/refresh.

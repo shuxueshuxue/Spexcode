@@ -18,8 +18,8 @@ related:
 
 ## Anti-regression boundary
 
-The live top-level rail is governed by `RAIL_PAGES` and contains every resident board: `sessions`, `spec`,
-`evals`, `issues`, and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs`
+The live top-level rail is governed by `RAIL_PAGES` and contains every resident board in this order: `spec`,
+`sessions`, `evals`, `issues`, and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs`
 checks this contract directly so a later lane cannot silently restore the graph as a live rail destination or
 drop a resident board from top-level navigation.
 
@@ -33,7 +33,7 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
 
 ## expanded spec
 
-- **One light, one route.** The compact 40px rail contains anchors for `sessions`, `spec`, `evals`, `issues`,
+- **One light, one route.** The compact 40px rail contains anchors for `spec`, `sessions`, `evals`, `issues`,
   and `settings`. A route anchor carries its canonical hash and uses `aria-current="page"` for the current
   route; at most one anchor is lit. Graph addresses remain directly addressable but do not light a rail
   entry. Spec node and governed-file addresses project their light onto the resident Spec anchor, so the

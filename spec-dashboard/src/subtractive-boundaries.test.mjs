@@ -33,8 +33,30 @@ test('Sessions keeps multi-select and tree movement on the real row surface', ()
 })
 
 test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {
-  assert.deepEqual(RAIL_PAGES, ['sessions', 'spec', 'evals', 'issues', 'settings'])
+  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'evals', 'issues', 'settings'])
   assert.equal(RAIL_PAGES.includes('graph'), false)
+})
+
+test('sessions document owns the only forest and rail labels resolve through i18n', () => {
+  const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const sideBar = readFileSync(join(srcDir, 'SideBar.jsx'), 'utf8')
+  const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
+  const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
+  assert.match(dock, /if \(suppressRows\) return null/)
+  assert.doesNotMatch(dock, /data-session-list-projection="document"/)
+  assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
+  assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
+  assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)
+})
+
+test('session row clicks focus an existing workspace tab before replacing the current slot', () => {
+  const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
+  const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
+  assert.match(dock, /focusSessionTab\(item\.s\.id,/)
+  assert.match(sessionsView, /focusSessionTab\(id,/)
+  assert.match(sessionsView, /scope\.open\(\{ page: 'sessions', param: id, query: null \}\)/)
+  assert.match(sessionInterface, /onSelect=\{\(id\) => onPickSession \? onPickSession\(id\)/)
 })
 
 test('retired generic pane-resizer CSS stays absent', () => {

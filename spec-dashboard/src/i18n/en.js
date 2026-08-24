@@ -136,6 +136,7 @@ export default {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph',
     explorer: 'Explorer',
+    spec: 'Spec',
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
     sessions: 'Sessions',

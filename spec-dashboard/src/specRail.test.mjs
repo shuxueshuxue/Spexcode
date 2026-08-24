@@ -7,7 +7,7 @@ const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 
 test('Spec is a top-level rail destination and owns the selected state for Spec documents', () => {
-  assert.deepEqual(RAIL_PAGES, ['sessions', 'spec', 'evals', 'issues', 'settings'])
+  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'evals', 'issues', 'settings'])
   assert.equal(routeHash('spec'), '#/spec')
   assert.match(sideBar, /p === 'spec' && page === 'file'/)
   assert.match(sideBar, /focusLatestTab\(\(tab\) => tab\.page === 'spec'\)/)

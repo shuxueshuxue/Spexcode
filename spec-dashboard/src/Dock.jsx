@@ -7,7 +7,7 @@ import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
-import { pinTab } from './tabs.js'
+import { focusSessionTab, pinTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
 import { Icon, IconButton } from './icons.jsx'
@@ -26,7 +26,6 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 // thick the dock is. Explorer's count row, the sessions "+" and the archive door were three separate strips
 // stacked around one list; that is three answers to a question the shell already answers once.
 function SessionDock({ sessions, activeId, suppressRows = false }) {
-  if (suppressRows) return <div className="dock-session-body" data-session-list-projection="document" />
   const t = useT()
   const { offline } = useBackendHealth()
   const { expanded, offlineOpen } = useSessionListState()
@@ -61,10 +60,11 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
   // Session navigation lives on the dock now that the old full-width SessionInterface list is retired.
   // Option arrows remain intentional even while a terminal, Command Box, or composer owns native focus.
   useKeyboardScope((event) => {
+    if (suppressRows) return false
     const action = resolveSessionShortcut(rows, activeId, event)
     if (!action) return false
     event.preventDefault()
-    if (action.type === 'move') navigate('sessions', action.id)
+    if (action.type === 'move') focusSessionTab(action.id, (route) => navigate(route.page, route.param, { query: route.query }))
     else if (action.type === 'expand') {
       const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
       if (item && !item.expanded) toggleSessionFold(action.id)
@@ -144,6 +144,10 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
   // rather than an element of its own — an affordance that costs no layout can be shown without moving
   // anything the reader is aiming at.
   const rootArmed = !!drag?.parent
+  // The routed Sessions document owns the complete forest. Do not leave a structural empty body in the
+  // finding dock: the document list is the only session navigation surface for this focused route. This
+  // guard comes after every hook so switching ownership keeps hook order stable.
+  if (suppressRows) return null
   return (
     <div className="dock-session-body">
       <div className={`dock-session-list${rootArmed ? ' root-armed' : ''}${drag?.target === null ? ' root-on' : ''}`}
@@ -176,7 +180,8 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
               onMouseDown: (event) => { event.preventDefault(); startRowDrag(event, item.s) },
               onClick: (event) => {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
-                ;(event.ctrlKey || event.metaKey ? pinTab : navigate)('sessions', item.s.id)
+                if (event.ctrlKey || event.metaKey) pinTab('sessions', item.s.id)
+                else focusSessionTab(item.s.id, (route) => navigate(route.page, route.param, { query: route.query }))
               },
               onDoubleClick: () => pinTab('sessions', item.s.id),
               onContextMenu: (event) => {

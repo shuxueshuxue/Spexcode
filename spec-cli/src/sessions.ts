@@ -478,18 +478,15 @@ function assertLegacyJsonWritesAllowed(): void {
 function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
   const application = configuredSessionApplicationIfCutover()
-  // The JSON file remains the durable runtime/worktree envelope, but it is not a lifecycle writer after
-  // cutover; state transitions happen through application.transitionSession().
-  // Once the application row exists, preserve the old lifecycle bytes exactly as migration evidence. Do not
-  // copy canonical state back into them: that would create a second writer and make a stale JSON snapshot look
-  // current. New records still need the envelope fields until their canonical row is created.
+  // The JSON file is runtime/worktree metadata after cutover, not a lifecycle store. Once the canonical row
+  // exists, omit the four old lifecycle keys entirely; retaining them would leave a second apparent fact for
+  // readers and tempt a future path to trust the wrong writer. New records still need the legacy shape until
+  // their canonical row is created, and non-governed external runtime records keep their own contract.
   const envelope = application && rec.governed ? readAliasedRecordEntry(rec.session) : null
-  const lifecycle = envelope?.kind === 'ok'
-    ? { status: envelope.raw.status, proposal: envelope.raw.proposal, note: envelope.raw.note, parent: envelope.raw.parent }
-    : { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
-  // The JSON envelope intentionally retains its queued lifecycle after canonical state advances to active,
-  // but that historical queue record still needs its lease to remain readable. A successful launch clears the
-  // typed record's owner; preserve the envelope owner until the envelope itself is rewritten as non-queued.
+  const canonicalMetadataOnly = envelope?.kind === 'ok' && rec.governed && !!application
+  const lifecycle = { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
+  // A queued legacy envelope may still carry its lease until this metadata rewrite. The lease is an
+  // operational launch claim, not a lifecycle fact, so preserve only that field while the typed record clears it.
   const envelopeLaunchOwner = envelope?.kind === 'ok'
     ? (envelope.raw as RawRecord & { launch_owner?: string }).launch_owner?.trim() || null
     : null
@@ -503,11 +500,7 @@ function writeRecord(rec: SessRec): void {
     node: rec.node ?? '',
     title: rec.title ?? '',
     name: rec.name ?? '',
-    parent: lifecycle.parent ?? '',
-    status: lifecycle.status,
-    proposal: lifecycle.proposal ?? '',
     merges: rec.merges,
-    note: lifecycle.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
@@ -549,6 +542,12 @@ function writeRecord(rec: SessRec): void {
         adapter_recovery: rec.launchReadinessPending.original.adapterRecovery ?? '',
       },
     } : '',
+    ...(canonicalMetadataOnly ? {} : {
+      parent: lifecycle.parent ?? '',
+      status: lifecycle.status,
+      proposal: lifecycle.proposal ?? '',
+      note: lifecycle.note ?? '',
+    }),
   }
   const dir = sessionStoreDir(rec.session)
   mkdirSync(dir, { recursive: true })

@@ -65,3 +65,15 @@ test('a 502 publishes one global offline state and marks retained tallies stale'
   assert.match(dock, /useBackendHealth/)
   assert.match(dock, /dock-stale/)
 })
+
+test('Command Box turns a lost response into an explicit retryable outcome', () => {
+  const data = source('./data.js')
+  const session = source('./SessionInterface.jsx')
+
+  assert.match(data, /COMMAND_DELIVERY_TIMEOUT_MS = 15_000/)
+  assert.match(session, /new AbortController\(\)/)
+  assert.match(session, /setTimeout\(\(\) => controller\.abort\(\), COMMAND_DELIVERY_TIMEOUT_MS\)/)
+  assert.match(session, /signal: controller\.signal/)
+  assert.match(session, /controller\.signal\.aborted[\s\S]*outcomeUnconfirmed/)
+  assert.match(session, /clearTimeout\(timeout\)/)
+})

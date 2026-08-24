@@ -857,6 +857,7 @@ export default {
     outcomeSending: '正在发送...',
     outcomeDelivered: '已送达',
     outcomeQueued: '已接收，正在等待终端传输 — 可安全重试',
+    outcomeUnconfirmed: '尚未确认送达 — 可安全重试',
     deliveryFailed: ({ status }) => `未送达（HTTP ${status}）`,
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',

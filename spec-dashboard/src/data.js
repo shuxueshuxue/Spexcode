@@ -174,6 +174,10 @@ export function singleLayerFrontier(nodes, focusId) {
 // plain '/api/...' whether the page is the root dashboard or a /p/<id>/ scoped one.
 const BACKOFF = [150, 350, 600, 900]   // waits between 5 attempts (~2.0s total)
 const UNREACHABLE_STATUS = new Set([502, 503, 504])
+// A Command Box request has one transport deadline. It bounds a lost HTTP response; it is not a
+// lifecycle timer and never changes the target session's status. The delivery key makes retrying
+// the same draft idempotent after an indeterminate response.
+export const COMMAND_DELIVERY_TIMEOUT_MS = 15_000
 const backendHealthListeners = new Set()
 let backendHealth = { offline: false, retryKey: 0 }
 

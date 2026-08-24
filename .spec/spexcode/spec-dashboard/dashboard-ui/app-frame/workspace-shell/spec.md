@@ -59,9 +59,9 @@ global navigator, while shell chrome remains the one owner allowed to do so.
 **The window answers four different questions, and each gets its own region.** This is the hierarchy the
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
-  - **Where is everything? — FINDING, on the left.** The rail is an **activity bar** of route anchors
-  (`sessions`, `evals`, `issues`, `settings`) whose one light means the current route. Graph remains an
-  addressable legacy view but is not a top-level rail destination. A separate
+  - **Where is everything? — FINDING, on the left.** The rail is the **top-level board bar** of route anchors
+  (`sessions`, `spec`, `evals`, `issues`, `settings`) whose one light means the current resident board.
+  Graph remains an addressable legacy view but is not a top-level rail destination. A separate
   mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
@@ -69,7 +69,7 @@ whole shell hangs off, re-derived from what the product is rather than from what
   brings the session list, a node or a governed file brings the explorer. Evals, Issues, and Settings use the
   shared workspace/tab strip; Issues omits the activity rail while retaining the strip. A bare
   sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
-  route derives sessions. Thus the sidebar describes the working set rather than being a setting maintained
+  route derives sessions. Spec/file routes keep the Spec rail selection and derive the explorer projection. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the

@@ -19,11 +19,10 @@ import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 // `empty` is the workspace holding NOTHING — an address because the state must be landable, reloadable and
 // leaveable. It is not a rail destination or document; only closing the last tab mints it ([[tab-strip]]).
 export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
-// The rail's DESTINATIONS — deliberately not `PAGES`. `spec` and `file` are addresses you arrive at by
-// opening something (a node, a governed file); there is no "go to the spec page" the way there is a
-// sessions page, and a rail icon for one would name a place that does not exist. Graph remains directly
-// addressable for legacy links but is no longer a workspace destination or rail entry.
-export const RAIL_PAGES = ['sessions', 'evals', 'issues', 'settings']
+// The rail is the workspace's top-level board bar. Spec is a resident board destination; a node or file
+// route projects back onto it instead of making the selected top-level board disappear. Graph remains
+// directly addressable for legacy links but is no longer a workspace destination or rail entry.
+export const RAIL_PAGES = ['sessions', 'spec', 'evals', 'issues', 'settings']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons

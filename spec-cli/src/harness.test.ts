@@ -1646,6 +1646,36 @@ test('codex resource probe reads status only for governed references', async () 
   }
 })
 
+test('codex resource probe completes a draining empty target set without native reads', async () => {
+  const dir = mkdtempSync(join(tmpdir(), `spex-codex-draining-probe-${process.pid}-`))
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
+  const loaded = 'draining-loaded-thread'
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: [{ id: loaded }], nextCursor: null }
+    if (message.method === 'thread/read') throw new Error('draining probe must not read native turn state')
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(dir)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    owner = startCodexOwner(dir)
+    const endpoint = codexHarness.sharedRuntimes?.(dir)[0]
+    if (!endpoint) throw new Error('Codex shared runtime descriptor missing')
+    const started = Date.now()
+    const result = await codexSharedRuntimeProbe(dir, { id: 'legacy', pidFile: endpoint.pidFile, socketPath: socket, receiptFile: endpoint.receiptFile }, [])
+    assert.ok(Date.now() - started < 1000, 'empty draining probe must not wait for the 5s timeout')
+    assert.deepEqual(result, { healthy: true, references: [{ referenceId: loaded, turnPresence: 'unknown' }] })
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('codex resource probe rejects a missing, wrong, or replaced detached receipt generation', async () => {
   const dir = mkdtempSync(join(tmpdir(), `spex-codex-resource-generation-${process.pid}-`))
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

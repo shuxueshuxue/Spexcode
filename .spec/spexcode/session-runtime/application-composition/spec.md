@@ -17,6 +17,7 @@ and closes the shared protocol handle only when that composition closes. State/t
 synchronous transaction; post-commit callbacks are wake hints only. A lifecycle transition may accept a caller-resolved
 recipient set when an adopter owns a richer delivery policy; the composition validates and enqueues that set without
 interpreting relation names. Runtime identities and generation expectations are always caller supplied. Conversation sends use an explicit `enqueueConversationMessage` action: it records the
-model-facing message fact in `session-events` in the same transaction as the protocol queue write. Generic protocol
-messages remain opaque and do not become conversation history. The composition never reads JSON records or exposes
-an opt-in compatibility switch.
+model-facing message fact in `session-events` in the same transaction as the protocol queue write; duplicate checks
+use the event store's scoped message lookup rather than replaying the session history. Generic protocol messages
+remain opaque and do not become conversation history. The composition never reads JSON records or exposes an opt-in
+compatibility switch.

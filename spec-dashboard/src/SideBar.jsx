@@ -22,15 +22,10 @@ const railHref = (page) => routeHash(page)
 
 // Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
 // so an entry names the binding by id and the hint is resolved at render — never typed into the label.
-// Evals lists two because two keys genuinely open it. The dock panel switch has no page key: it is a
-// state control, not a destination.
+// Only Evals has one: the positional ⌥-digit row is gone, and an entry with no accelerator gets no hint
+// rather than an invented one. The dock panel switch has no page key either — it is a state control.
 const PAGE_KEYS = {
-  sessions: ['shell.pageSessions'],
-  // Spec has no accelerator in the current keymap; do not invent one just to decorate this entry.
-  spec: [],
-  evals: ['shell.pageEvals', 'shell.evals'],
-  issues: ['shell.pageIssues'],
-  settings: ['shell.pageSettings'],
+  evals: ['shell.evals'],
 }
 
 // The dock's one rail control owns only open/closed state. Projection choice belongs to the route link

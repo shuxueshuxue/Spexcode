@@ -1472,12 +1472,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
       }
-      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥5 (pages) — is
+      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals) — is
       // reserved over the console too: fall through
       // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
-      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
+      // The ⌥-digit row left the reserve with the bindings it protected: the shell claims no digit now, so
+      // holding one back would only make ⌥1 a key that does nothing anywhere.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF'].includes(e.code)) return
       // Option+Shift is the disclosure grammar for the selected session. Consume it even for a leaf or an
       // already-matching state: otherwise the ordinary Option+Arrow session move would run immediately after
       // a no-op and the key would appear to change selection. The Dock observes the same shared fold store.

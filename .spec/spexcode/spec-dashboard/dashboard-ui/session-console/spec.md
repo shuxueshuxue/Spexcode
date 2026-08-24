@@ -56,7 +56,7 @@ close retain their own action/recovery contracts.
 
 The interface is a **routed page** (`#/sessions`, [[side-nav]]) — it fills the app's main area beside the
 navigation rail as a peer of the graph, with no backdrop, no lift, no pop: Enter (from the graph) or the
-global ⌥2 navigates to it, leaving it is likewise navigation (the rail, ⌥1/⌥3/⌥4, history — never Esc,
+rail navigates to it, leaving it is likewise navigation (the rail, an address, history — never Esc,
 which stays inside the console's own stack), and its selected tab echoes into the URL (`#/sessions/<sel>`)
 so a tab can be deep-linked. Selection validity is the real board session set, not only the currently
 visible rows: a session hidden under a collapsed nesting parent can still be opened by URL, search, or an
@@ -467,9 +467,11 @@ already-matching state is a no-op. Unmodified arrows and every editable control 
 action never changes session data. A transient overlay's own focused control also keeps its native keys: the
 window router yields before any New-tab or list shortcut when the event target is inside a `data-focus-overlay`,
 so a visible confirm's Enter cannot launch a New Session behind it. **⌥+N** reaching the New Session composer is no longer this console's own
-chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
+chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F), which the console's
 key handling deliberately **falls through unhandled** so the window-level handler
-routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
+routes it and tmux never sees `M-n`/`M-f`. The reserve holds exactly the chords the shell still claims, so
+it shrank with them: the positional ⌥-digit page row is gone ([[keyboard-nav]]) and ⌥+digit is ordinary
+console input again, forwarded like any other unclaimed key. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in

@@ -40,7 +40,7 @@ pooled Evals document cannot route another pane or follow the window address out
 
 - **Two pages, one route family.** `#/evals` is the LIST page; `#/evals/<node>/<scenario>` is the DETAIL
   page — each bookmarkable, reloadable, directly openable (hash routing needs no server). The [[side-nav]]
-  rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. The list uses [[review-chrome]]'s ONE
+  rail entry, ⌥F, and the board's bare `f` land on the list. The list uses [[review-chrome]]'s ONE
   25-row paged-review server contract for both trunk and `scope:` sources; it never slices the graph board
   or the scoped REST model in React.
 - **A cold Evals address is a lightweight route entry, not a board boot.** Before the board runtime is

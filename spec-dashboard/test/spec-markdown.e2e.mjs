@@ -25,6 +25,12 @@ const body = [
   '> Quoted line',
   '> second line',
   '',
+  'A wrapped document paragraph ends its first line here',
+  'and continues on the next source line.',
+  '',
+  'A line with a hard break  ',
+  'stays on its own line.',
+  '',
   '[Guide](https://example.com) and $E = mc^2$ plus \\(a+b\\).',
   '',
   '*emphasis* and ~~retired~~.',
@@ -77,6 +83,7 @@ try {
       return {
         headings: [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el) => el.tagName),
         quote: root.querySelector('.doc-quote')?.innerText || '',
+        paragraphs: [...root.querySelectorAll('p')].map((el) => el.innerText),
         timeAnchor: root.querySelector('.fv-anchor[data-time-ms]')?.textContent || null,
         specRef: root.querySelector('.doc-link[href*="prose-renderer"]')?.textContent || null,
         evidence: root.querySelector('[data-evidence-hash]')?.getAttribute('data-evidence-hash') || null,
@@ -92,7 +99,11 @@ try {
       }
     })
     assert.deepEqual(probe.headings, ['H2', 'H3'], `${name}: heading levels survive`)
-    assert.equal(probe.quote, 'Quoted line\nsecond line', `${name}: blockquote survives`)
+    assert.equal(probe.quote, 'Quoted line second line', `${name}: a quote reflows its authoring wrap like any document prose`)
+    const wrapped = probe.paragraphs.find((value) => value.startsWith('A wrapped document paragraph'))
+    const hard = probe.paragraphs.find((value) => value.startsWith('A line with a hard break'))
+    assert.equal(wrapped, 'A wrapped document paragraph ends its first line here and continues on the next source line.', `${name}: an authoring wrap reflows instead of breaking the line`)
+    assert.equal(hard, 'A line with a hard break\nstays on its own line.', `${name}: an authored hard break still breaks`)
     assert.equal(probe.timeAnchor, '▶0:07 · inspect', `${name}: time anchor remains a semantic token`)
     assert.equal(probe.specRef, 'prose-renderer', `${name}: spec reference remains a held anchor`)
     assert.equal(probe.evidence, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', `${name}: evidence remains a semantic token`)

@@ -64,6 +64,7 @@ const pageFilterModel = (data, t) => {
 // implementation above remains named (and removable in the later surface migrations), but is no longer
 // reachable from a dashboard surface.
 export function SpecBody({ body, lineBase = 0 }) {
+  // A spec body is a document: its authoring wraps reflow (Prose's default), unlike the session timeline.
   if (!body) return null
   const { source, removedLines } = stripProseTitle(body)
   const base = lineBase > 0 ? lineBase + removedLines : 0

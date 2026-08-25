@@ -30,5 +30,5 @@ test('spec prose preserves the remaining standard inline and ordered-list semant
   assert.match(proseTokens, /if \(token\.type === 's_open'\)/)
   assert.match(proseTokens, /case 'ordered_list_open': return h\('ol'/)
   assert.match(proseTokens, /case 'list_item_open': return h\('li'/)
-  assert.match(proseTokens, /markdown = new MarkdownIt\(\{ breaks: true, linkify: true, html: false \}\)/)
+  assert.match(proseTokens, /token\.type === 'softbreak'\) current\(\)\.push\(options\.softBreak === 'break'/)
 })

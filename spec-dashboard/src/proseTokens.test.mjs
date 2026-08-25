@@ -46,3 +46,43 @@ test('the mapper renders semantic marks in place through caller handlers', () =>
   assert.equal(output[0].type, 'button')
   assert.equal(output[1].type, 'p')
 })
+
+// A soft break is where the author's line ended; a hard break is content the author asked for. Only the
+// first is a surface decision, so the same tokens must reflow for a document and break for a message.
+test('a soft break follows the surface while a hard break always breaks', () => {
+  const h = (type, props, ...children) => ({ type, props: props || {}, children })
+  const text = (node) => {
+    if (typeof node === 'string') return node
+    if (Array.isArray(node)) return node.map(text).join('')
+    if (node?.type === 'br') return '<br>'
+    return text(node?.children || [])
+  }
+  const render = (source, softBreak) => text(renderProseTokens(parseProseTokens(source), { h, softBreak }))
+
+  assert.equal(render('first line\nsecond line'), 'first line second line')
+  assert.equal(render('first line\nsecond line', 'break'), 'first line<br>second line')
+  assert.equal(render('first line  \nsecond line'), 'first line<br>second line')
+  assert.equal(render('first line\\\nsecond line'), 'first line<br>second line')
+  assert.equal(render('> quoted line\n> second line'), 'quoted line second line')
+})
+
+test('math typesetting survives the cache and degrades a rejected source to its text', () => {
+  const h = (type, props, ...children) => ({ type, props: props || {}, children })
+  const math = (source) => {
+    const found = []
+    const walk = (node) => {
+      if (!node || typeof node === 'string') return
+      if (Array.isArray(node)) return node.forEach(walk)
+      if (node.props?.['data-math-source'] !== undefined) found.push(node)
+      walk(node.children)
+    }
+    walk(renderProseTokens(parseProseTokens(source), { h }))
+    return found
+  }
+  const [first] = math('Energy is $E = mc^2$ today.')
+  const [second] = math('Energy is $E = mc^2$ again.')
+  assert.match(first.props.dangerouslySetInnerHTML.__html, /class="katex"/)
+  assert.equal(first.props.dangerouslySetInnerHTML.__html, second.props.dangerouslySetInnerHTML.__html)
+  assert.equal(first.props['data-math-source'], 'E = mc^2')
+  assert.equal(math('Inline $x^2$ and display below.\n\n$$\\int_0^1 x^2 dx$$').length, 2)
+})

@@ -13,9 +13,9 @@ test('graph has no transient marquee selection toolbar or dispatch state', () =>
   assert.doesNotMatch(spec, /real \*\*marquee selection\*\*/)
 })
 
-test('focus camera keeps zoom and uses root reading pairs but non-root node x anchors', () => {
+test('focus camera keeps zoom, roots use reading pairs, and non-root tiles use pane centre', () => {
   assert.match(data, /const anchorZoom = fit && !currentFits && fitZoom >= minZoom \? fitZoom : zoom/)
   assert.match(data, /const desiredY = height \/ 2 - focus\.y \* anchorZoom/)
-  assert.match(data, /const anchorX = parent \? focus\.x : \(child \? \(focus\.x \+ child\.x\) \/ 2 : focus\.x\)/)
+  assert.match(data, /const focusAnchorRatio = parent \? 0\.5 : anchorRatio/)
   assert.match(graph, /centerRef\.current\(focusRef\.current, undefined, 300, false\)/)
 })

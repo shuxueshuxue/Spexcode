@@ -78,9 +78,13 @@ The service resolves each `KeyboardEvent` through one ordered ownership chain:
    is idempotent; unmounting or being hidden gives the key-owner back to the service. Graph registers relationship walking,
    zoom/cycle, chords, the node popup lens, and its legend. Other views retain their own inputs and review
    navigation without claiming shell shortcuts.
-3. The shell handles window-global actions: `Alt+1..4` ([[side-nav]]'s rail order), `Alt+N`, `Alt+F`, `Alt+/`, explorer dock visibility,
+3. The shell handles window-global actions: `Alt+N`, `Alt+F`, `Alt+/`, explorer dock visibility,
    dock mode, context dock visibility, tab close/next/previous, and sending the active tab to the split pane.
-   These actions use existing workspace/route/tab APIs, so there is no second navigation model.
+   These actions use existing workspace/route/tab APIs, so there is no second navigation model. The
+   positional `Alt+<digit>` page row is **not** among them and no longer exists in the registry: it numbered
+   [[side-nav]]'s rail slots, so every rail change renumbered it and the hints printed for it stopped being
+   true ([[keyboard-nav]]). ⌥ plus a digit reaches no shell action on any route now, and the session console
+   forwards it to the terminal like any other unclaimed key.
 
 The service is the only window capture listener for these layers. Native controls and Ctrl/Meta browser
 accelerators pass through unless the declared Alt family matches. The registry remains the only declaration

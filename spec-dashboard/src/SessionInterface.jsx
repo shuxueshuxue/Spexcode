@@ -13,7 +13,7 @@ import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionForestPanel from './SessionForestPanel.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
-import { routeAddress, sessionEvalAddress } from './address.js'
+import { addressHash, routeAddress, sessionEvalAddress } from './address.js'
 import { routeHash } from './route.js'
 import { useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
@@ -1378,6 +1378,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
   const uiCmds = uiCommandsFor(selSession, runners)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false && command.enabled)
+  // THE EVAL DOOR'S ONE SENTENCE. The summary is a projection with phases, not a number that is either
+  // there or not, so the door says which phase it is reading and carries the last-known counts through
+  // every phase that still has them — a door that silently printed stale counts would be the same control
+  // in two different truths.
+  const evalKnownTitle = Number.isInteger(evalSummary.total) ? t('session.evalDoorSummary', evalSummary) : ''
+  const evalDoorTitle = evalSummary.phase === 'ready'
+    ? evalKnownTitle
+    : evalSummary.phase === 'updating'
+      ? t('session.evalUpdating', { summary: evalKnownTitle })
+      : evalSummary.phase === 'disconnected'
+        ? t('session.evalDisconnected', { summary: evalKnownTitle })
+        : evalSummary.phase === 'dormant'
+          ? (evalKnownTitle ? t('session.evalDormantKnown', { summary: evalKnownTitle }) : t('session.evalDormant'))
+          : evalSummary.phase === 'loading'
+            ? t('session.evalLoading')
+            : evalKnownTitle
+              ? t('session.evalFailedKnown', { summary: evalKnownTitle })
+              : t('session.evalUnavailable')
   const documentKey = sessionActive
     ? routeHash('sessions', active, requestedSurface ? { surface: requestedSurface } : null)
     : null
@@ -1395,6 +1413,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
       menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
     },
+    // THE SESSION'S EVAL DOOR, back in the frame's toolbar where the routed refactor dropped it. The
+    // session console has no measurement surface of its own: a session's evals ARE the Evals page read
+    // through the `scope:<id>` token ([[evals-view]]), so this is navigation and nothing else — a REAL
+    // anchor on the one canonical scoped address, the same one the typed `/eval` opens and the same one
+    // an MR note pastes. The destination names the session in its own query token, so no returning
+    // banner has to be pinned above the list to say where the reader came from.
+    ...(uiCmds.some((command) => command.name === 'eval') ? [
+      {
+        id: 'eval', icon: 'evals', label: evalDoorTitle, priority: 90,
+        // The glance is content the frame cannot compute, so the door draws itself and names its own state.
+        nodeKey: `${evalSummary.phase}|${evalSummary.pass ?? ''}|${evalSummary.fail ?? ''}|${evalSummary.review ?? ''}|${evalSummary.blind ?? ''}|${evalSummary.unknown ?? ''}`,
+        node: (
+          <a className="si-eval-door" data-action="eval" href={addressHash(sessionEvalAddress(active))}
+            data-tip={evalDoorTitle} aria-label={evalDoorTitle}>
+            <Icon name="evals" size={14} />
+            <SessionEvalStats summary={evalSummary} />
+          </a>
+        ),
+      },
+    ] : []),
     ...(!activeResource && surfaceChoices.length > 1 ? [
       {
         id: 'surface-switcher', icon: baseSurface === SESSION_SURFACE_TERMINAL ? 'message-square' : 'terminal',
@@ -1472,12 +1510,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
       }
-      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥5 (pages) — is
+      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals) — is
       // reserved over the console too: fall through
       // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
-      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
+      // The ⌥-digit row left the reserve with the bindings it protected: the shell claims no digit now, so
+      // holding one back would only make ⌥1 a key that does nothing anywhere.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF'].includes(e.code)) return
       // Option+Shift is the disclosure grammar for the selected session. Consume it even for a leaf or an
       // already-matching state: otherwise the ordinary Option+Arrow session move would run immediately after
       // a no-op and the key would appear to change selection. The Dock observes the same shared fold store.

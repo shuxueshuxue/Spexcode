@@ -15,7 +15,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#ReviewState, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]
     description: >
-      Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥3 / f
+      Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥F / f
       from the graph) and read location.hash + the rendered page. Read the list page's DOM: the row
       elements' tag/href and structured content, 32px query with its visible token text, Fail/Pass/Unmeasured
       quick filters, Human review builder, direct menus, and overflow. Edit the query, toggle verdict/evidence values, and add a

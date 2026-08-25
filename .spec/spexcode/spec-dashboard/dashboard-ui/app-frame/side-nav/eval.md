@@ -3,13 +3,13 @@ scenarios:
   - name: rail-sessions-is-a-mode-button
     description: >-
       In the running desktop dashboard, inspect the rail on the graph page and then open the bare
-      `#/sessions` launch hero directly and with the physical Alt+2 shortcut. Inspect the rail DOM in each
-      state and take a settled screenshot of the one-layer icon rail.
+      `#/sessions` launch hero directly by address. Inspect the rail DOM in each state and take a settled
+      screenshot of the one-layer icon rail.
     expected: >-
       The live rail has Explorer, Sessions, and Search buttons, plus graph/evals/issues/settings anchors;
       it has no `href="#/sessions"` anchor. Clicking Sessions changes only dock visibility/projection and
-      never the hash. A direct `#/sessions` load and Alt+2 still reach the sessions launch hero, preserving
-      keyboard/address navigation's deliberate asymmetry. The rail remains one 40px icon strip with no dock
+      never the hash. A direct `#/sessions` load still reaches the sessions launch hero, preserving
+      address navigation's deliberate asymmetry. The rail remains one 40px icon strip with no dock
       modebar duplicated beside it.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/styles.css]
@@ -94,18 +94,19 @@ scenarios:
   - name: global-alt-vocabulary
     tags: [frontend-e2e, desktop]
     description: >
-      In a real browser, exercise the global ⌥ command family from every page: ⌥1..⌥5 (physical digits)
-      must land on graph/sessions/evals/issues/settings, ⌥N on the New Session composer (its pill
-      accented), ⌥F on evals (the leading loss surface) — including when pressed FROM the session board.
-      Also press bare `f` on the graph and read the hash. Then press Esc on the session board and on the
-      evals + issues pages and read location.hash. Check a rail tooltip carries its ⌥ hint, and that the
-      console's top row has exactly the ＋ pill (the old issues pill is gone).
+      In a real browser, exercise the global ⌥ command family from every page: ⌥N on the New Session
+      composer (its pill accented), ⌥F on evals (the leading loss surface), ⌥/ on the search palette —
+      including when pressed FROM the session board. Then press ⌥1 through ⌥5 (physical digits) on each
+      page and read location.hash after every press. Also press bare `f` on the graph and read the hash.
+      Then press Esc on the session board and on the evals + issues pages and read location.hash. Read
+      every rail tooltip.
     expected: >
-      Every ⌥ chord routes to its page regardless of the page it was pressed on (⌥3 → #/evals, ⌥4 →
-      #/issues, ⌥5 → #/settings); ⌥F and bare `f` both land on #/evals; Esc changes NO page's hash (it
-      only closes in-page overlays); the rail tooltips read e.g. "Spec Node Graph (⌥1)" and "Evals (⌥3 /
-      ⌥F)"; the session-list top row holds a single ＋ pill; the console is clean. Zero loss = one global
-      switch vocabulary, and Esc demoted to overlay-closer everywhere.
+      Each NAMED ⌥ chord reaches its destination regardless of the page it was pressed on; ⌥F and bare `f`
+      both land on #/evals. No ⌥+digit changes location.hash on any page — the positional page row was
+      withdrawn ([[keyboard-nav]]), so a digit reaches no shell action anywhere. Esc changes NO page's hash
+      (it only closes in-page overlays). No rail tooltip prints a digit hint: only Evals carries one, and
+      it reads "⌥F". Zero loss = the shell advertises exactly the keys it still fires, and Esc stays an
+      overlay-closer everywhere.
     related: [spec-dashboard/src/App.jsx, spec-dashboard/src/SessionInterface.jsx]
 ---
 # side-nav — measurement

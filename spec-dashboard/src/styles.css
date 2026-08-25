@@ -2280,17 +2280,19 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-resource-menu-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-resource-menu-empty { display: block; padding: 7px; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control); }
 
-/* Eval is a navigation tab: one real anchor carrying the canonical scoped href and a compact glance
-   over the session's lean eval model. ReviewState supplies every pass/fail/blind symbol and tone. */
-.si-eval-tab {
-  flex: none; min-width: 0; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px;
+/* Eval is a navigation DOOR in the frame's document-action band ([[document-actions]]): one real anchor
+   carrying the canonical scoped href and a compact glance over the session's lean eval model. It keeps the
+   band's 24px button geometry and only widens for the glance it carries; ReviewState supplies every
+   pass/fail/blind symbol and tone. */
+.si-eval-door {
+  flex: none; min-width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+  gap: 4px; padding: 0 4px; border: 1px solid transparent; border-radius: var(--radius);
   color: var(--ink2); text-decoration: none; white-space: nowrap;
   font-family: var(--ui-font); font-size: var(--type-meta);
 }
-.si-eval-tab:hover { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 7%, transparent); }
-.si-eval-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
-.si-eval-tab > svg { flex: none; color: var(--cyan); }
-.si-eval-label { color: var(--ink); font-size: var(--type-control); }
+.si-eval-door:hover { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); border-color: var(--cyan); }
+.si-eval-door:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.si-eval-door > svg { flex: none; color: var(--cyan); }
 .si-eval-stats { display: inline-flex; align-items: center; gap: 4px; }
 .si-eval-wait {
   display: inline-flex; align-items: center; gap: 2px; color: var(--muted);
@@ -2319,18 +2321,17 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-resource-file > img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
 .si-resource-web { background: #fff; }
 
-@container (max-width: 720px) {
-  .si-eval-tab { padding-inline: 6px; }
-}
 @container (max-width: 540px) {
-  .si-eval-label, .si-eval-stats .secondary { display: none; }
-  .si-eval-tab { gap: 4px; padding-inline: 6px; }
   .si-actions { gap: 2px; padding-inline: 4px; }
 }
 @container (max-width: 390px) {
   .si-tab-label { display: none; }
   .si-tab { width: 34px; padding-inline: 10px; }
-  .si-eval-tab { padding-inline: 5px; }
+}
+/* The door is in the window's tab band, not the session pane, so its narrow case is a VIEWPORT one: drop
+   the secondary tallies before the band starts pushing tabs, and the door falls back to icon + blind mark. */
+@media (max-width: 720px) {
+  .si-eval-door .si-eval-stats .secondary { display: none; }
 }
 /* The TUI now owns the full remaining pane. Command Box suspends over it without changing xterm geometry. */
 /* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */

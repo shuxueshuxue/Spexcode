@@ -892,7 +892,7 @@ exec "${realGit}" "$@"
     await waitFor(() => existsSync(argvLog) && /HANG /.test(readFileSync(argvLog, 'utf8')),
       `the graph producer never entered the controlled wedge:\n${serverLog}`)
 
-    const sessionPath = join(spexHome, 'projects', project.replace(/[/.]/g, '-'), 'sessions', sessionId, 'session.json')
+    const sessionPath = join(spexHome, 'projects', project.replace(/[/.]/g, '-'), 'sessions', sessionId, 'runtime.json')
     const record = JSON.parse(readFileSync(sessionPath, 'utf8'))
     record.name = 'Changed during failed flight'
     writeFileSync(sessionPath, JSON.stringify(record, null, 2) + '\n')

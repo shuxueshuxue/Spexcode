@@ -63,6 +63,7 @@ test('sessions document owns the only forest and rail labels resolve through i18
   assert.match(dock, /if \(suppressRows\) return null/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
   assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
+  assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
   assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)

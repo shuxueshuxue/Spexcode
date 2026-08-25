@@ -729,6 +729,7 @@ exec sleep 30
 
     await drainQueue()
     await waitUntil(() => existsSync(invocationCount), 'queued first-turn launch')
+    await waitUntil(() => existsSync(firstTurnCount), 'queued first-turn delivery')
     assert.equal(readFileSync(invocationCount, 'utf8'), '1', 'removing the bad proof makes the next drain launch once')
     assert.equal(readFileSync(firstTurnCount, 'utf8'), '1')
     assert.equal(readFileSync(invocationArgs, 'utf8'), launchPayload)

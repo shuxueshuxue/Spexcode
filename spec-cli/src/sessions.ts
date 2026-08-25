@@ -4858,6 +4858,7 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 type MessageIdempotency = { operation: string; requestDigest: string; payloadHash: string }
 type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused'
+export const EMPTY_PROMPT_ERROR = 'empty prompt — nothing to dispatch'
 type AcceptedDispatch = DispatchResult & {
   replayed?: boolean
   code?: DispatchAcceptCode
@@ -4889,7 +4890,7 @@ async function strandedDeliveryError(rec: SessRec): Promise<StrandedDeliveryErro
   )
 }
 export async function sendText(id: string, text: string, from?: string, opts: SendTextOptions = {}): Promise<AcceptedDispatch> {
-  if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
+  if (!text.trim()) return { ok: false, error: EMPTY_PROMPT_ERROR }
   const application = configuredSessionApplicationIfCutover()
   if (application) {
     let message: ReturnType<ProductionSessionApplication['protocol']['enqueue']>

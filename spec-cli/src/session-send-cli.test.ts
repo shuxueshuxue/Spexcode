@@ -83,6 +83,16 @@ test('session send keeps the message positional when routing flags appear before
   })
 })
 
+test('session send rejects an empty or whitespace-only message before backend contact', async () => {
+  await withBackend(async (api, requests, env) => {
+    const result = await runCli(['session', 'send', TARGET, ' \t\n', '--api', api], env)
+    assert.equal(result.code, 2)
+    assert.equal(result.stdout, '')
+    assert.match(result.stderr, /message must not be empty or whitespace/)
+    assert.equal(requests.filter((request) => request.method === 'POST').length, 0)
+  })
+})
+
 test('session send never prints sent when the backend names a stranded transport', async () => {
   await withBackend(async (api, _requests, env) => {
     const result = await runCli(['session', 'send', TARGET, 'do not enqueue', '--api', api], env)

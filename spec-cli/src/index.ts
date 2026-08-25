@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
+import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -930,7 +930,9 @@ app.post('/api/sessions/:id/input', async (c) => {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
     // edge ([[session-timeline]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
-    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined, {
+    const text = typeof body?.text === 'string' ? body.text : ''
+    if (!text.trim()) return c.json({ ok: false, error: EMPTY_PROMPT_ERROR }, 400)
+    const r = await sendText(c.req.param('id'), text, typeof body?.from === 'string' ? body.from : undefined, {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
     })
     return c.json(r, r.ok ? 200 : 502)
@@ -938,6 +940,7 @@ app.post('/api/sessions/:id/input', async (c) => {
   if (body?.kind === 'command') {
     const id = c.req.param('id')
     const text = typeof body?.text === 'string' ? body.text : ''
+    if (!text.trim()) return c.json({ ok: false, error: EMPTY_PROMPT_ERROR }, 400)
     const deliveryKey = typeof body?.deliveryId === 'string' && body.deliveryId.trim() ? body.deliveryId.trim() : undefined
     // Command Box acceptance is the durable append. Do not hold the HTTP request on a
     // slow native handoff: the delivery supervisor already owns the queued retry path.

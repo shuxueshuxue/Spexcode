@@ -37,6 +37,9 @@ matter how many thousands of lines it grows to. A terminal sender is the one exc
 closing a session revokes its **unhanded** outbound debt everywhere, because a dead coordinator must not regain
 control merely because a target was temporarily unavailable.
 
+Text sends reject an empty or whitespace-only body at the CLI and HTTP input boundaries with a structured error;
+the canonical `sendText` seam repeats that guard, so no timeline event, queue row, or adapter delivery is created.
+
 ## expanded spec
 
 The canonical application queue, in the session database, is an ordered list of messages that have been recorded

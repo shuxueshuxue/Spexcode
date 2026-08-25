@@ -5,6 +5,7 @@ hue: 272
 desc: ONE dashboard prose renderer — markdown-it as the only parser, its tokens mapped to React, SpexCode's own marks (node refs, evidence, time anchors) as semantic token plugins, KaTeX the single audited HTML insertion. ACTIVE.
 code: spec-dashboard/src/Prose.js
 related:
+  - spec-dashboard/src/proseTokens.js
   - .spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/prose-renderer/migration-payload.md
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
 ---

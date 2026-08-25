@@ -127,6 +127,24 @@ scenarios:
       on the first line.
     code:
       - spec-dashboard/src/styles.css
+  - name: status-thread-continuous-through-forest
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the running dashboard in a real browser, open the Sessions console with at least one expanded
+      parent and child session visible. Capture the unchanged baseline and the repaired surface. Inspect the
+      colored status marker at the leading edge of consecutive rows in one zone, then inspect the nested child
+      beside its tree rail. Measure the marker boxes and read the rendered list at a group heading boundary.
+      File both before and after screenshots with `spex eval add session-activity --scenario
+      status-thread-continuous-through-forest --image <png> --pass`.
+    expected: >-
+      The status color reads as one continuous 2px thread through adjacent rows: each top-level marker spans
+      its complete row height and neighboring rows touch, while a zone heading breaks the thread naturally.
+      A nested child paints its color over the deepest tree-rail column, so it has one colored rail rather than
+      a colored edge beside a second parallel line. Row height, leading offset, and tree indentation remain
+      stable; no decorative 17px gaps remain.
+    code:
+      - spec-dashboard/src/SessionWindow.jsx
+      - spec-dashboard/src/styles.css
 ---
 # eval.md — session-activity
 

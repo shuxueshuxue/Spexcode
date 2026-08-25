@@ -1631,8 +1631,13 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink);
 }
 .si-item::after {
-  content: ''; position: absolute; left: 1px; top: 50%; width: 2px; height: 17px; transform: translateY(-50%);
+  content: ''; position: absolute; left: 1px; top: 0; bottom: 0; width: 2px; height: auto;
   background: var(--ov, transparent); pointer-events: none;
+}
+.si-tree-row[data-session-depth]:not([data-session-depth="0"]) .si-item::after {
+  /* Nested rows already own a connector rail. Paint the status thread over its deepest column instead of
+     leaving a second parallel line at the list edge. */
+  left: calc(2px + var(--sess-fold-indent));
 }
 .si-item[data-locked]::after { background: var(--blue); }
 .si-item:hover { background: var(--wash-hover); color: var(--ink2); }

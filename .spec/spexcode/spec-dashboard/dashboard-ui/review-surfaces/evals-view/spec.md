@@ -42,19 +42,14 @@ pooled Evals document cannot route another pane or follow the window address out
   rail entry, ⌥F, and the board's bare `f` land on the list. The list uses [[review-chrome]]'s ONE
   25-row paged-review server contract for both trunk and `scope:` sources; it never slices the graph board
   or the scoped REST model in React.
-- **A cold Evals address is a lightweight route entry, not a board boot.** Before the board runtime is
-  imported or mounted, the shell resolves the canonical LIST, canonical DETAIL, and legacy session-eval
-  hashes and mounts the SAME responsive `EvalsPage`/`EventDetail` face in a small route shell. A LIST entry
-  requests only its bounded `/api/evals` page; a DETAIL entry requests only `/api/evals/detail`, the
-  addressed evidence, and detail-local review resources. Neither reads `/api/graph`, opens graph SSE,
-  reads a session collection/timeline/detail, opens a session WebSocket, or downloads graph/terminal
-  chunks. The URL and rendered detail are the same route family as a visit from inside the dashboard;
-  `#/sessions/<id>/eval/<node>/<scenario>` normalizes before the entry decision, so existing MR-note links
-  receive the same light path. Navigation is the initialization gate: following the rail, the list/detail
-  node reference, or another board-backed destination mounts the ordinary dashboard runtime then, never
-  speculatively during a cold Evals view. Phone width keeps the existing mobile review shell and bottom
-  navigation over an empty board projection; it does not boot the board merely to preserve responsive
-  chrome.
+- **A cold Evals address is an ordinary resident-shell address.** The canonical LIST, canonical DETAIL, and
+  legacy session-eval hashes all mount the SAME responsive `EvalsPage`/`EventDetail` face inside the one
+  workspace shell ([[light-entry]]); `#/sessions/<id>/eval/<node>/<scenario>` normalizes to the canonical
+  route first, so existing MR-note links land on the same page. The pages themselves stay bounded: a LIST
+  requests only its 25-row `/api/evals` page, a DETAIL only `/api/evals/detail`, the addressed evidence, and
+  detail-local review resources. The shell's own graph and session runtime is the shell's cost, never a
+  review page's — a review page reads no session collection/timeline/detail and opens no session socket of
+  its own. Phone width keeps the existing mobile review shell and bottom navigation.
 - **The list's state is its URL — as ONE token query.** The whole face rides [[review-chrome]]'s visible
   query text (`is:eval` by default; the [[review-query]] engine) — verdict, freshness,
   evidence kind, node, filer, source-session presence, worktree scope, and human-review lifecycle
@@ -71,8 +66,8 @@ pooled Evals document cannot route another pane or follow the window address out
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
   A displayed spec-node reference is likewise its own `graphNodeAddress` anchor; the list and detail
-  presenters do not depend on a host-injected graph-focus callback, so the cold shell, dashboard shell,
-  and phone shell all mint the same navigation.
+  presenters do not depend on a host-injected graph-focus callback, so the dashboard shell and the phone
+  shell mint the same navigation.
 - **Fail / Pass / Unmeasured leads measured loss; review lifecycle does not.** The ListView's top
   quick-filter group renders Fail, Pass, then Unmeasured through the shared ReviewState icon/tone/count and
   toggles `verdict:` by token surgery + PUSH. Unmeasured is the declared-without-reading population, not a

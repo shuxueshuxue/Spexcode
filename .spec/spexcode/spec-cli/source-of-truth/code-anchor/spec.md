@@ -155,4 +155,4 @@ it has always had. Measured on the reference corpus, the two questions differ by
 are [[hunk-ranges]]'s; the language seam — extractors as data rows over one Tree-sitter runtime, the memo key,
 the declaration vocabulary — is [[anchor-extractors]]'s; the local ref-scoped gate that judges a pending commit
 before its ref advances is [[candidate-gate]]'s; and the measured bounds on the reference history plus the
-oracle discipline any faster implementation must pass are [[anchor-proof]]'s.
+oracle discipline any faster implementation must pass are [[anchor-validation]]'s.

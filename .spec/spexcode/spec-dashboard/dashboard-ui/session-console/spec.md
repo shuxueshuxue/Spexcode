@@ -88,12 +88,16 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. The document has one right area that
 **morphs** by what's focused. Search remains available through the shell palette and the existing ⌥+/ binding;
-the sessions dock owns the list's `＋` New Session door. **The forest sidebar speaks one row grammar**: its two
-doors at the top — `＋ New Session` carrying its word, and one quiet search glyph at the row's end — are rows
+the sessions dock owns the list's `＋` New Session door. **The forest sidebar speaks one row grammar**: its three
+doors at the top — `＋ New Session` carrying its word, then quiet archive and search glyphs — are rows
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
 rows and the session's own overlay colour kept as a hairline on its leading edge. The document is bounded by
 the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
+
+Every session zone starts with the same compact group head: semibold label and outlined count pod inherit the
+zone's `--zh` hue, and one quiet hairline continues from the label to use the remaining row width. The line never
+becomes a full-width divider above or below the group.
 
 The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
 when `N` is zero and carries the complete count of closed records. Like offline, its whole header is one keyboard-
@@ -108,7 +112,8 @@ a working row on the visible archive heading performs the one reversible close t
 While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
 sidebar still owns exactly one scroll container.
 
-`View all N` opens a transient archive index overlay, not a third right-pane mode. The overlay is scoped only to
+The top archive glyph and `View all N` open the same transient archive index overlay through the routed
+`archive=1` doorway, not a third right-pane mode. The overlay is scoped only to
 closed sessions, reads the complete lean index once (the row projection is `id`, visible title, search label,
 `closedAt`, and node), groups newest-first rows under sticky dates, filters locally, and
 closes on Esc or backdrop press. Choosing an index row closes the overlay and hands selection to the ordinary

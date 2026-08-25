@@ -1,4 +1,4 @@
-import { type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
+import { readAliasedRawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { decodeEventJson } from '@spexcode/session-events'
 import { MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from '@spexcode/session-application'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
@@ -9,10 +9,13 @@ export type TimelineEvent =
 
 // The timeline is a history: events read in occurrence order (sequence breaks ties). Migrated legacy history
 // lands after the live events in sequence but before them in time, and it is shown where it happened.
+const canonicalSessionId = (id: string): string => readAliasedRawRecord(id)?.session_id ?? id
+
 const canonicalTimelineEvents = (id: string): TimelineEvent[] | null => {
+  const canonicalId = canonicalSessionId(id)
   const application = configuredSessionApplicationIfCutover()
-  if (!application || !application.readState(id)) return null
-  const ordered = [...application.readEvents(id)].sort((a, b) => a.occurredAtMs - b.occurredAtMs || a.eventSeq - b.eventSeq)
+  if (!application || !application.readState(canonicalId)) return null
+  const ordered = [...application.readEvents(canonicalId)].sort((a, b) => a.occurredAtMs - b.occurredAtMs || a.eventSeq - b.eventSeq)
   return ordered.flatMap((event): TimelineEvent[] => {
     const decoded = decodeEventJson(event.payload)
     if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return []
@@ -39,9 +42,10 @@ const canonicalTimelineEvents = (id: string): TimelineEvent[] | null => {
 export const timelineEvents = (id: string): TimelineEvent[] => canonicalTimelineEvents(id) ?? []
 
 export const timelineStamp = (id: string): string | null => {
+  const canonicalId = canonicalSessionId(id)
   const application = configuredSessionApplicationIfCutover()
-  if (application?.readState(id)) {
-    const events = application.readEvents(id)
+  if (application?.readState(canonicalId)) {
+    const events = application.readEvents(canonicalId)
     return events.length === 0 ? null : String(events.at(-1)!.eventSeq)
   }
   return null
@@ -78,7 +82,8 @@ export const timelineDisplay = (event: { status: SessionLifecycle; proposal: Ses
 // board's display vocabulary. The package beneath it only reads the durable file protocol.
 export function readTimeline(id: string, limit = 500): { events: TimelineEvent[] } | null {
   const application = configuredSessionApplicationIfCutover()
-  if (application && application.readState(id)) {
+  const canonicalId = canonicalSessionId(id)
+  if (application && application.readState(canonicalId)) {
     return { events: canonicalTimelineEvents(id)!.slice(-Math.max(1, limit)).map((event) =>
       event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event) }
   }

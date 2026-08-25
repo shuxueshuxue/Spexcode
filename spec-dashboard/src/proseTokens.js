@@ -137,7 +137,7 @@ const semanticPlugin = (md) => {
   })
 }
 
-const markdown = new MarkdownIt({ breaks: true, linkify: true, html: false })
+const markdown = new MarkdownIt({ linkify: true, html: false })
   .use(mathPlugin)
   .use(semanticPlugin)
 
@@ -195,18 +195,35 @@ const reactStyle = (value) => {
   return Object.keys(result).length ? result : undefined
 }
 
-const mathElement = (h, token, display, lineAttrs = {}) => {
+// @@@math typesetting cache - KaTeX is the one expensive step here and a pure function of (source, mode).
+// Mapping runs on every re-render (see Prose.js), so without this a new timeline message re-typesets every
+// formula already on screen. `null` records a source KaTeX rejected, so a bad formula is not retried either.
+const MATH_CACHE = new Map()
+const MATH_CACHE_MAX = 512
+
+const renderMath = (source, display) => {
+  const key = `${display ? 'd' : 'i'}\u0000${source}`
+  if (MATH_CACHE.has(key)) return MATH_CACHE.get(key)
+  let html = null
   try {
-    const html = katex.renderToString(token.content, { ...MATH_OPTIONS, displayMode: display })
-    return h(display ? 'div' : 'span', {
-      ...lineAttrs,
-      className: display ? 'doc-math-block' : 'doc-math',
-      'data-math-source': token.content,
-      dangerouslySetInnerHTML: { __html: html },
-    })
+    html = katex.renderToString(source, { ...MATH_OPTIONS, displayMode: display })
   } catch {
-    return h(display ? 'pre' : 'span', { ...lineAttrs, className: 'doc-math-error' }, token.content)
+    html = null
   }
+  if (MATH_CACHE.size >= MATH_CACHE_MAX) MATH_CACHE.clear()
+  MATH_CACHE.set(key, html)
+  return html
+}
+
+const mathElement = (h, token, display, lineAttrs = {}) => {
+  const html = renderMath(token.content, display)
+  if (html === null) return h(display ? 'pre' : 'span', { ...lineAttrs, className: 'doc-math-error' }, token.content)
+  return h(display ? 'div' : 'span', {
+    ...lineAttrs,
+    className: display ? 'doc-math-block' : 'doc-math',
+    'data-math-source': token.content,
+    dangerouslySetInnerHTML: { __html: html },
+  })
 }
 
 const inlineElement = (h, token, children, options) => {
@@ -227,7 +244,11 @@ const renderInline = (h, children = [], options) => {
   const current = () => stack[stack.length - 1].children
   for (const token of children) {
     if (token.type === 'text') current().push(token.content)
-    else if (token.type === 'softbreak' || token.type === 'hardbreak') current().push(h('br'))
+    // @@@two kinds of newline - a hard break (trailing spaces or backslash) is authored content and always
+    // breaks. A soft break is only where the author's line ended; whether that is a break is the surface's
+    // call, not the parser's, so `softBreak` decides and documents reflow by default, as Markdown specifies.
+    else if (token.type === 'hardbreak') current().push(h('br'))
+    else if (token.type === 'softbreak') current().push(options.softBreak === 'break' ? h('br') : ' ')
     else if (token.type === 'code_inline') current().push(h('code', attrs(token, options.lineBase), token.content))
     else if (token.type === 'prose_math_inline') current().push(mathElement(h, token, false, attrs(token, options.lineBase)))
     else if (token.type === 'prose_spec_ref') {
@@ -273,7 +294,11 @@ const blockElement = (h, token, children, options) => {
   }
 }
 
-/** Map tokens to React elements. Callers supply only semantic handlers; no HTML renderer is accepted. */
+/**
+ * Map tokens to React elements. Callers supply only semantic handlers; no HTML renderer is accepted.
+ * `softBreak` is the one dialect knob: 'break' renders an authoring wrap as a line break (message surfaces,
+ * where a newline the writer typed is part of the reply), anything else reflows it into a space (documents).
+ */
 export function renderProseTokens(tokens, options = {}) {
   const h = options.h
   if (typeof h !== 'function') throw new TypeError('renderProseTokens requires a React-compatible h function')

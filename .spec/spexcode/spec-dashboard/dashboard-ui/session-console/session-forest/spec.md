@@ -22,8 +22,8 @@ The left sidebar of the [[session-console]] is the mutable home of the session f
 triages, moves, folds, and walks. Its rows are [[session-row]]'s shared face; this node owns what the LIST does
 with them — grouping, disclosure, the archive's fourth zone and its index, the reparent gesture, and the keys.
 
-**The forest sidebar speaks one row grammar**: its two
-doors at the top — `＋ New Session` carrying its word, and one quiet search glyph at the row's end — are rows
+**The forest sidebar speaks one row grammar**: its three
+doors at the top — `＋ New Session` carrying its word, then quiet archive and search glyphs — are rows
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
 rows and the session's own overlay colour kept as a hairline on its leading edge. 
@@ -64,6 +64,10 @@ into history always lands on its visible row. ↑/↓ walk only the visible rows
 selected row is marked by the **highlight wash alone**, no caret. The SessionInterface sidebar, the finding
 dock's projection, and the phone Sessions list share this grouping + compact one-line layout.
 
+Every session zone starts with the same compact group head: semibold label and outlined count pod inherit the
+zone's `--zh` hue, and one quiet hairline continues from the label to use the remaining row width. The line never
+becomes a full-width divider above or below the group.
+
 The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
 when `N` is zero and carries the complete count of closed records. Like offline, its whole header is one keyboard-
 reachable disclosure button; the count chip is a visual marker inside it, not a separate target. The console's
@@ -77,7 +81,8 @@ a working row on the visible archive heading performs the one reversible close t
 While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
 sidebar still owns exactly one scroll container.
 
-`View all N` opens a transient archive index overlay, not a third right-pane mode. The overlay is scoped only to
+The top archive glyph and `View all N` open the same transient archive index overlay through the routed
+`archive=1` doorway, not a third right-pane mode. The overlay is scoped only to
 closed sessions, reads the complete lean index once (the row projection is `id`, visible title, search label,
 `closedAt`, and node), groups newest-first rows under sticky dates, filters locally, and
 closes on Esc or backdrop press. Choosing an index row closes the overlay and hands selection to the ordinary

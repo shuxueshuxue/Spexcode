@@ -14,7 +14,7 @@ const stopGate = readFileSync(stopGatePath, 'utf8')
 
 function sessionHelp(verb?: string) {
   const args = verb ? ['session', verb, '--help'] : ['session']
-  return spawnSync('tsx', [cli, ...args], { cwd: pkgRoot, encoding: 'utf8' })
+  return spawnSync('tsx', [cli, ...args], { cwd: pkgRoot, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } })
 }
 
 test('session noun-verb help projects the exact verb from the shared drawer definition', () => {

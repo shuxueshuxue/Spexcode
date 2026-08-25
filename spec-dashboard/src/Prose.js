@@ -2,12 +2,18 @@ import { createElement, useMemo } from 'react'
 import { parseProseTokens, renderProseTokens } from './proseTokens.js'
 
 // The only React entry to the prose token boundary. Consumers provide semantic handlers; they never
-// choose a parser or a rendering dialect. `lineBase` is caller-owned provenance for governed documents.
-export default function Prose({ children, className = '', lineBase = 0, renderSpecRef, renderEvidence, renderTimeAnchor }) {
+// choose a parser or a rendering dialect beyond `softBreak`. `lineBase` is caller-owned provenance for
+// governed documents.
+export default function Prose({ children, className = '', lineBase = 0, softBreak, renderSpecRef, renderEvidence, renderTimeAnchor }) {
   const tokens = useMemo(() => {
     try { return parseProseTokens(children) } catch { return null }
   }, [children])
-  const content = useMemo(() => tokens ? renderProseTokens(tokens, {
+  // @@@parse is memoised, mapping is not - parsing is a pure function of the source, so it caches cleanly.
+  // Mapping is not: the semantic handlers are caller closures over live state (timeline events, seek
+  // targets) and are rebuilt every render, so a memo keyed on them never hit — it only looked optimised.
+  // Pinning them in a ref would hit, and render stale anchors. Mapping itself is object construction;
+  // KaTeX, the one expensive step, is cached at the parser boundary instead.
+  const content = tokens ? renderProseTokens(tokens, {
     h: (() => {
       let key = 0
       return (type, props, ...children) => {
@@ -17,10 +23,11 @@ export default function Prose({ children, className = '', lineBase = 0, renderSp
       }
     })(),
     lineBase,
+    softBreak,
     renderSpecRef,
     renderEvidence,
     renderTimeAnchor,
-  }) : createElement('p', null, children == null ? '' : String(children)), [tokens, children, lineBase, renderSpecRef, renderEvidence, renderTimeAnchor])
+  }) : createElement('p', null, children == null ? '' : String(children))
   return createElement('div', { className }, content)
 }
 

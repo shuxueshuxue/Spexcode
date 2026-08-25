@@ -1,5 +1,27 @@
 ---
 scenarios:
+  - name: authoring-wrap-reflows-by-content-kind
+    tags: [frontend-e2e, desktop]
+    code: spec-dashboard/src/proseTokens.js
+    related:
+      - spec-dashboard/src/Prose.js
+      - spec-dashboard/src/RichText.js
+      - spec-dashboard/src/TimelineChat.jsx
+      - spec-dashboard/test/spec-markdown.e2e.mjs
+    description: >-
+      In Chromium against the running dashboard, open three real surfaces holding real authored prose: a spec
+      node whose body its author hard-wrapped (`#/spec/session-protocol`), an issue detail carrying replies,
+      and a session's conversation surface. On each, count the `<br>` the prose renderer emitted and the
+      paragraphs whose `innerText` still contains a newline, and read the first spec paragraph back in full.
+      Drive the committed `spec-markdown.e2e.mjs` fixture too, at 1280x800 and 900x844, for the wrap and the
+      authored hard break side by side.
+    expected: >-
+      The document surfaces — the spec body, the issue body, its replies — emit zero `<br>` and leave no
+      paragraph carrying a newline: an editor's wrap reflows into a space, so a wrapped sentence reads back as
+      one continuous line of prose rather than breaking mid-clause. The session transcript is untouched and
+      keeps its breaks, `<br>` present and paragraphs still carrying newlines, because a newline typed
+      mid-conversation is content and not typography. On every surface an authored hard break — two trailing
+      spaces or a backslash — still breaks.
   - name: timeline-selection-copy-migration-gate
     tags: [frontend-e2e, desktop, mobile]
     test:

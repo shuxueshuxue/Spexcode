@@ -29,6 +29,12 @@ One `RichText` entry is the timeline's whole rendering boundary, and it is a thi
 [[prose-renderer]]: `TimelineChat` sends every human-authored prose field through it — the originating prompt,
 sent messages, and authored status notes — and never grows its own Markdown branches or a parser of its own.
 
+`RichText` supplies the timeline's semantic handlers, not its dialect. The same component also previews a
+Markdown FILE, whose authoring wraps are typography rather than speech, so the one newline decision travels
+with the surface instead of living here: `TimelineChat` declares that the transcript keeps its soft line
+breaks, because the transcript is the one place a newline was typed mid-conversation and means what it says.
+[[prose-renderer]] holds that contract for every prose surface, this one included.
+
 The language and its safety envelope are [[prose-renderer]]'s contract, stated once there: compact agent
 Markdown (headings, emphasis, links and images including remote URLs, blockquotes, lists, fenced and inline code,
 tables, strikethrough, soft breaks); inline and display math in `$...$` / `$$...$$` or `\(...\)` / `\[...\]` that

@@ -190,6 +190,23 @@ scenarios:
       The sidebar remains bounded inside the routed page. The working-board region owns its only vertical
       scrollport; the permanent archive zone stays visible at zero, remains in the same scroll flow, and does not
       introduce a second scroll container.
+  - name: session-zone-heads-and-archive-door
+    tags: [frontend-e2e, desktop]
+    code:
+      - spec-dashboard/src/SessionForestPanel.jsx
+      - spec-dashboard/src/styles.css
+    related:
+      - spec-dashboard/src/SessionsView.jsx
+      - spec-dashboard/src/SessionInterface.jsx
+    description: >-
+      In the running dashboard and a real Chromium viewport, open the routed Sessions document with needs-you
+      and running rows. Inspect the forest's group heads and its top action row, then click Archive and observe
+      both the address and the archive overlay.
+    expected: >-
+      Each zone uses a semibold label in its `--zh` hue, an outlined current-colour count pod when present, and
+      a hairline that begins after the label rather than dividing the full row. New, Archive, and Search occupy
+      one 28px-scale pill row. Archive has the localized tooltip and accessible name; clicking it writes
+      `archive=1`, opens the existing transient archive overlay, and closing the overlay clears the query.
   - name: archive-zone-and-index-overlay
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/session-archive-zone.e2e.mjs
@@ -200,7 +217,8 @@ scenarios:
       create real working sessions, drag one row onto the archive zone heading, expand the zone, click its `View all`
       row to open the archive overlay, then add a long closed-index fixture and search that overlay while counting requests.
     expected: >-
-      The top row has only New and Search; the final `archive 0` zone is still visible and folded. Its count chip
+      The top row has New, Archive, and Search in one pill group. Archive writes `archive=1` and opens the same
+      transient index as `View all N`; closing it clears that query. The final `archive 0` zone is still visible and folded. Its count chip
       toggles the zone without changing selection, and opening it shows only the newest bounded rows plus one
       `View all N` row. The header button toggles from its label and trailing rule area, and carries the only
       `aria-expanded`; the chip is a visual marker. The closed rows use ordinary session-row treatment; the `View all N` button uses the same
@@ -219,7 +237,9 @@ scenarios:
     expected: >-
       Needs-you, running, and offline zones are in that order, newest-first within each. Offline liveness wins
       over stale lifecycle for grouping. Compact rows use the shared status glyph and STATUS_COLOR vocabulary,
-      with the full status in the tooltip and no duplicate toolbar identity/status line.
+      with the full status in the tooltip and no duplicate toolbar identity/status line. Each zone label is
+      semibold in its zone hue, its count is an outlined current-color pod, and a hairline extends only through
+      the remaining space after the label rather than dividing the full list row.
   - name: terminal-selection-survives-mouse-mode
     tags: [frontend-e2e, desktop]
     description: >-

@@ -66,6 +66,9 @@ export default function SessionsView({ param, query }) {
       onSeedConsumed={() => setSeed(null)}
       onClose={() => scope.open({ page: 'graph', param: null, query: null })}
       onPickSession={pickSession}
+      onOpenArchive={() => scope.open({
+        page: 'sessions', param: param && param !== 'new' ? param : null, query: { archive: '1' },
+      })}
       onOpenSearch={() => openPalette('sessions')}
       boardLive={boardLive}
       reload={reload}

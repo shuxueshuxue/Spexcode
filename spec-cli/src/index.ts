@@ -676,12 +676,14 @@ app.get('/api/sessions/:id/review', async (c) => {
   const r = await cockpitReview(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// Per-worktree branch diff. Metadata is cheap and patches are fetched per file, with an explicit byte window
-// so a large review never materializes the whole tree in one response.
+// Per-worktree diff: the branch's commits plus, while the session's worktree is on disk, its uncommitted
+// changes. Metadata is cheap and patches are fetched per file — `path` with `scope` names which one — with an
+// explicit byte window so a large review never materializes the whole tree in one response.
 app.get('/api/sessions/:id/diff', async (c) => {
   const offset = Math.max(0, Number(c.req.query('offset')) || 0)
   const limit = Math.min(240_000, Math.max(1, Number(c.req.query('limit')) || 120_000))
-  const result = await sessionDiff(c.req.param('id'), c.req.query('path') || undefined, offset, limit)
+  const scope = c.req.query('scope') === 'working' ? 'working' : 'branch'
+  const result = await sessionDiff(c.req.param('id'), c.req.query('path') || undefined, offset, limit, scope)
   return result ? c.json(result) : c.json({ error: 'no such session' }, 404)
 })
 app.post('/api/sessions/:id/diff-comments', async (c) => {

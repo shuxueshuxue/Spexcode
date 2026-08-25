@@ -236,33 +236,33 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       Switch between a live pane-backed session and a real `claude-headless` session, then route through the
-      permanent Eval tab at wide and narrow desktop widths across themes, locales, long headlines, Command Box
+      permanent Eval door at wide and narrow desktop widths across themes, locales, long headlines, Command Box
       visibility, and eval loading/error/zero states. Let the headless session settle with timeline events and
-      inspect the right pane and toolbar.
+      inspect the right pane and the frame's document-action band.
     expected: >-
       The pane-backed session keeps its warm Terminal pane. The headless session has no terminal or tmux socket:
       its main console is the shared TimelineChat (timeline + declaration notes + fixed `replyVia:"note"`
-      composer). Eval is a real canonical navigation tab, fixed immediately after the current base surface before the resource
-      tab strip, and no inline eval pane mounts. The compact
-      toolbar stays one line, visually separate from either console, with honest eval summary states and all
-      available icon tools visible. Its fixed merge slot turns green only for the live `done --propose merge`
-      review proposal; all other proposal/lifecycle/liveness cases stay muted and disabled without shifting the
-      toolbar. The warm terminal survives navigation and browser Back.
+      composer). Eval is a real canonical navigation DOOR in the frame's document-action band, never a
+      console-local tab, and no inline eval pane mounts. The band stays one line at the tab strip's right edge,
+      with honest eval summary states — the door widens only for the glance it carries and keeps the band's
+      button height in every state — and all available icon tools visible. Its fixed merge slot turns green only
+      for the live `done --propose merge` review proposal; all other proposal/lifecycle/liveness cases stay
+      muted and disabled without shifting the band. The warm terminal survives navigation and browser Back.
   - name: eval-tab-and-resource-picker-order
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-toolbar.e2e.mjs
     description: >-
-      Open a real session console in Chromium and measure the session toolbar while its current surface is visible.
-      Follow keyboard focus from the current surface through the right edge of the tab rail.
+      Open a real session console in Chromium and measure the frame's document-action band while the session's
+      current surface is visible. Read every control in the band with its DOM order, element, and geometry, then
+      open a posted resource and read the band again.
     expected: >-
-      The visual and keyboard sequence is current surface, the real Eval navigation tab, resource tabs, the
-      resource-picker plus button, then one contiguous group of right-edge tools. Opening a resource leaves Eval
-      immediately after the current surface rather than moving it. This tab sequence is compact: a one-pixel
-      divider and short gutter distinguish Eval from a compact circular plus control; its right side has no
-      matching divider. That plus stays visibly subordinate to the command tools — a smaller box than a tool's,
-      a thin neutral ring at rest, accent only under hover or keyboard focus. Files and the
-      Terminal/Conversation switch use the same icon gap as the command tools, with no wrapper-created group
-      gutter. There is no flexible spacer or separate Eval control between the current surface, Eval, resource tabs, and picker.
+      The band is ONE contiguous group at the tab strip's right edge: the resource picker, the real Eval
+      navigation door, the surface and diff switches, the available lifecycle tools, and Command Box pinned to
+      the right. Opening a resource leaves the Eval door in the same place rather than moving it. The door is the
+      band's only element that is not an icon button — a real anchor carrying the eval glance — and it still
+      matches the band's control height, so the row reads as one strip rather than a control with its own
+      geometry. The session pane itself carries no second toolbar, no tab rail, and no separate Eval control;
+      there is no flexible spacer inside the band.
   - name: posted-resources-are-singleton-tabs
     tags: [frontend-e2e, desktop, cli, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs

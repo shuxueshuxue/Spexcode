@@ -64,7 +64,7 @@ test('the published entry has every required runtime export and no extra runtime
   const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
   const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
   assert.deepEqual(packageJson.exports, { '.': './dist/index.js', './package.json': './package.json' })
-  assert.equal(packageJson.private, true)
+  assert.equal(packageJson.private, undefined)
   assert.equal(packageJson.dependencies, undefined)
 
   const declarations = readFileSync(join(packageRoot, 'dist', 'index.d.ts'), 'utf8')

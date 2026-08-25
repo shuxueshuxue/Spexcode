@@ -21,7 +21,7 @@ test('the package entry exposes only adopter-owned resolver capabilities', async
   const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
   const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
   assert.equal(packageJson.name, '@spexcode/session-selflaunch')
-  assert.equal(packageJson.private, true)
+  assert.equal(packageJson.private, undefined)
   assert.deepEqual(packageJson.files, ['dist', 'bin'])
   assert.deepEqual(packageJson.bin, { 'spex-session': './bin/spex-session.mjs' })
   assert.deepEqual(packageJson.exports, { '.': './dist/index.js', './package.json': './package.json' })

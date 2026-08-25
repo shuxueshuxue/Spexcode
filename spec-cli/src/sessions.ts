@@ -6,7 +6,7 @@ import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
-import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
+import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, parseStatPath, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
 import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
@@ -16,7 +16,7 @@ import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
+import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -264,6 +264,7 @@ export type SessRec = {
   createPayloadHash?: string | null // exact normalized create payload bound to createRequestId
   zcodeChildSessionIds?: string[] // persistent exact ZCode child ids; never inferred from title, path, branch, or timing
   base?: string | null   // explicit fork point the creator pinned; absent/null = the auto-detected source-of-truth branch
+  forkCommit?: string | null // the commit the branch was actually created at; absent on records written before it, recovered from the branch reflog
   diffComments?: DiffComment[]
   launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
@@ -372,16 +373,6 @@ export function withSessionRecordLockSync<T>(id: string, body: () => T): T {
   return coreWithSessionRecordLockSync(id, body)
 }
 const withRecordLockSync = withSessionRecordLockSync
-// Synchronous terminal input is another product turn-entry path. The PTY bridge uses this narrow seam to
-// enqueue input while holding the same durable record lock as close, so a close preflight cannot pass idle
-// and then race a just-queued TUI turn.
-export function withSessionInputLock<T>(id: string, body: () => T): T | null {
-  // PTY input is synchronous. A single non-blocking open is the only safe barrier: EEXIST rejects this input
-  // regardless of owner PID, so a same-process async close can never be frozen behind Atomics.wait.
-  const release = trySessionRecordLockSync(id)
-  if (!release) return null
-  try { return body() } finally { release() }
-}
 
 const COLD_PROOF_VERSION = 'cold-v1'
 function coldProofFor(rec: Pick<SessRec, 'session' | 'harness' | 'harnessSessionId'>): string {
@@ -448,6 +439,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     createPayloadHash: raw.create_payload_hash || null,
     zcodeChildSessionIds: [...zcodeChildSessionIds],
     base: raw.base || null,             // records written before pinned bases → null → the source-of-truth branch
+    forkCommit: (raw as RawRecord & { fork_commit?: unknown }).fork_commit as string || null, // records written before the fork commit → null → recovered from the branch reflog
     diffComments: parsedDiffComments,
     launchReadinessPending: pendingRaw ? {
       version: 1,
@@ -517,7 +509,7 @@ function writeRecord(rec: SessRec): void {
     'governed', 'worktreePath', 'branch', 'node', 'title', 'name', 'merges', 'sortKey', 'createdAt',
     'harness', 'harnessSessionId', 'runtimeStartToken', 'stopped', 'archived', 'closedAt', 'coldProof',
     'adapterRecovery', 'launcher', 'launchCmd', 'launchOwner', 'launchReadinessStartedAt', 'createRequestId',
-    'createPayloadHash', 'zcodeChildSessionIds', 'base', 'diffComments', 'launchReadinessPending',
+    'createPayloadHash', 'zcodeChildSessionIds', 'base', 'forkCommit', 'diffComments', 'launchReadinessPending',
   ].some((key) => JSON.stringify((previous as unknown as Record<string, unknown>)[key]) !== JSON.stringify((rec as unknown as Record<string, unknown>)[key]))
   // Once a canonical row exists, a lifecycle-only write is already complete when the application transition
   // commits. Rewriting runtime.json here would recreate a second, stale status/proposal/note authority.
@@ -554,6 +546,9 @@ function writeRecord(rec: SessRec): void {
     // Written only when the creator pinned one: an unpinned record keeps its exact legacy bytes, so a
     // restore-the-frozen-record path stays byte-identical instead of silently gaining a key.
     ...(rec.base ? { base: rec.base } : {}),
+    // The commit `git worktree add` actually started from, written on every create since it was introduced.
+    // Conditional like `base` above, so a record written before it keeps its exact legacy bytes.
+    ...(rec.forkCommit ? { fork_commit: rec.forkCommit } : {}),
     ...((rec.diffComments ?? []).length ? { diff_comments: (rec.diffComments ?? []).map((comment) => ({
       id: comment.id, file_path: comment.filePath, line_start: comment.lineStart, line_end: comment.lineEnd,
       body: comment.body, diff_identity: comment.diffIdentity, sent_at: comment.sentAt,
@@ -2844,6 +2839,13 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           seedWorktreeHostState(root, path)
           traceSessionCreate(id, requestDigest, phase, 'finish', 'seed-worktree-host-state')
 
+          // The branch ref right after `worktree add` IS the fork point. Record it: it is the only thing that
+          // later separates "this branch never authored a commit" from "its commits landed in the base", and
+          // git ancestry alone cannot tell those apart. A read that fails leaves it null — the diff reader
+          // recovers the same commit from the branch's creation reflog entry.
+          const forkResolved = await withGitAbortSignal(signal, () => gitTry(['-C', root, 'rev-parse', '--verify', `refs/heads/${branch}^{commit}`]))
+          const forkCommit = forkResolved.ok && isGitObjectId(root, forkResolved.stdout.trim()) ? forkResolved.stdout.trim() : null
+
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
             node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
@@ -2852,6 +2854,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
             diffComments: [],
             ...(base ? { base } : {}),
+            ...(forkCommit ? { forkCommit } : {}),
           }
           owned.store = true
           const dir = storeDir(id)
@@ -3533,10 +3536,19 @@ export type ReviewPayload = {
 }
 
 export type SessionDiffFile = ReviewDiffFile & { patch: string; diffIdentity: string }
+export type DiffScope = 'branch' | 'working'
+// What is true of the branch's own commits, decided HERE so the reader never infers it from an empty list:
+// 'no-commits' the branch head still stands at its fork point, 'merged' its head is contained in the base,
+// 'open' it carries commits the base does not.
+export type BranchState = 'no-commits' | 'merged' | 'open'
 export type SessionDiffPayload = {
   id: string; scope: 'branch'; branch: string; baseRef: string; base: string; head: string; mergeBase: string
-  mergedIntoBase: boolean; commitUrl: string | null
-  files: SessionDiffFile[]; comments: DiffComment[]
+  branchState: BranchState; commitUrl: string | null
+  files: SessionDiffFile[]
+  // The uncommitted half of "what has this session changed". `readable` is false when the session's own
+  // worktree directory is gone: an unknowable working tree, never a claim that it is clean.
+  working: { readable: boolean; files: SessionDiffFile[] }
+  comments: DiffComment[]
 }
 
 export function commitUrlForRemote(remote: string, commit: string): string | null {
@@ -3572,7 +3584,22 @@ async function diffAnchorRoot(wt: { path: string; branch: string | null; rec: Se
   throw new ResourceConflict(`session ${wt.rec.session} has no worktree on disk and its branch ${wt.branch} no longer exists`, 'diff-unavailable')
 }
 
-async function diffHeadPair(root: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; mergedIntoBase: boolean; commitUrl: string | null }> {
+// @@@ forkCommitOf - the commit the branch was created at, from the most authoritative source that has it.
+// The record carries it for every session created since it was introduced. Older records recover the same
+// commit from the branch ref's OLDEST reflog entry, which is where git itself wrote the `worktree add` start
+// point. Neither available (reflog pruned, or a branch adopted from outside this flow) → null, and the caller
+// falls back to what ancestry alone can prove.
+async function forkCommitOf(root: string, wt: { branch: string | null; rec: SessRec }): Promise<string | null> {
+  if (wt.rec.forkCommit && isGitObjectId(root, wt.rec.forkCommit)) return wt.rec.forkCommit
+  if (!wt.branch) return null
+  const log = await gitTry(['-C', root, 'reflog', 'show', '--no-abbrev', '--format=%H', `refs/heads/${wt.branch}`])
+  if (!log.ok) return null
+  const entries = log.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+  const created = entries[entries.length - 1]
+  return created && isGitObjectId(root, created) ? created : null
+}
+
+async function diffHeadPair(root: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; branchState: BranchState; commitUrl: string | null }> {
   if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`, 'diff-unavailable')
   const baseRef = wt.rec.base || mainBranch()
   const [headOut, baseOut] = await Promise.all([
@@ -3585,31 +3612,122 @@ async function diffHeadPair(root: string, wt: { path: string; branch: string | n
   const mergeBaseOut = await gitTry(['-C', root, 'merge-base', resolvedBase, head])
   const mergeBase = mergeBaseOut.ok ? mergeBaseOut.stdout.trim() : ''
   if (!mergeBase || !isGitObjectId(root, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`, 'diff-unavailable')
-  const [ancestor, remote] = await Promise.all([
+  const [ancestor, remote, forkCommit] = await Promise.all([
     gitTry(['-C', root, 'merge-base', '--is-ancestor', head, resolvedBase]),
     gitTry(['-C', root, 'remote', 'get-url', 'origin']),
+    forkCommitOf(root, wt),
   ])
+  // A branch that never authored a commit is ALSO an ancestor of its base, so ancestry must be asked second.
+  // Without a fork commit the only provable form of "authored nothing" is a head that is still the base head.
+  const authoredNothing = forkCommit ? head === forkCommit : head === resolvedBase
   return {
     branch: wt.branch, baseRef, base: resolvedBase, head, mergeBase,
-    mergedIntoBase: ancestor.ok,
+    branchState: authoredNothing ? 'no-commits' : ancestor.ok ? 'merged' : 'open',
     commitUrl: remote.ok ? commitUrlForRemote(remote.stdout, head) : null,
   }
 }
 
-export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000): Promise<SessionDiffPayload | null> {
+// @@@ workingFiles - the session's uncommitted changes, enumerated from ONE porcelain status plus ONE numstat.
+// Untracked files count their own lines rather than spawning a git child each: the metadata call stays two
+// processes however dirty the tree is, and nothing here touches the index — an `--intent-to-add` would mutate
+// the worktree a live agent is working in.
+const WORKING_STATUS: Record<string, string> = { '??': 'untracked', A: 'added', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
+async function workingFiles(root: string): Promise<ReviewDiffFile[]> {
+  const [statusOut, numstatOut] = await Promise.all([
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all']),
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'diff', '--numstat', '-M', 'HEAD']),
+  ])
+  const counts = new Map<string, { additions: number; deletions: number }>()
+  for (const line of numstatOut.split('\n')) {
+    const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
+    if (!m) continue
+    const { to } = parseStatPath(m[3])
+    counts.set(to, { additions: m[1] === '-' ? 0 : +m[1], deletions: m[2] === '-' ? 0 : +m[2] })
+  }
+  const files: ReviewDiffFile[] = []
+  for (const line of statusOut.split('\n')) {
+    if (!line.trim()) continue
+    const code = line.slice(0, 2)
+    const path = porcelainPath(line)
+    const arrow = line.indexOf(' -> ')
+    const oldPath = arrow >= 0 ? line.slice(3, arrow) : ''
+    const letter = code.trim().replace(/[^A-Z?]/g, '').slice(0, 1) || 'M'
+    const status = WORKING_STATUS[code === '??' ? '??' : letter] ?? 'modified'
+    files.push({
+      path,
+      ...(oldPath && oldPath !== path ? { oldPath } : {}),
+      status,
+      ...(counts.get(path) ?? (code === '??' ? untrackedCounts(join(root, path)) : { additions: 0, deletions: 0 })),
+    })
+  }
+  return files.sort((a, b) => a.path.localeCompare(b.path))
+}
+
+// An untracked file is entirely new, so its addition count is its line count. A NUL byte means git would
+// print `-`/`-` for a binary blob; report the same nothing rather than a line count of bytes.
+function untrackedCounts(absolute: string): { additions: number; deletions: number } {
+  try {
+    const body = readFileSync(absolute)
+    if (body.includes(0)) return { additions: 0, deletions: 0 }
+    const text = body.toString('utf8')
+    return { additions: text.length ? text.replace(/\n$/, '').split('\n').length : 0, deletions: 0 }
+  } catch { return { additions: 0, deletions: 0 } }
+}
+
+async function workingPatch(root: string, file: ReviewDiffFile, untracked: boolean): Promise<string> {
+  if (untracked) {
+    // --no-index against /dev/null renders a whole new file as one addition hunk. It exits 1 when the two
+    // sides differ, which is the normal case here, so the patch is read off stdout rather than off `ok`.
+    const out = await gitTry(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', '--no-index', '--', '/dev/null', file.path])
+    return out.stdout
+  }
+  return gitA(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', 'HEAD', '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
+}
+
+// A working file's identity must move when its CONTENT moves, or a stale editor and a stale comment anchor
+// would survive an edit. Size and mtime are what change on every write, and they cost one stat.
+function workingIdentity(root: string, file: ReviewDiffFile): string {
+  let stamp = 'gone'
+  try { const s = statSync(join(root, file.path)); stamp = `${s.size}:${s.mtimeMs}` } catch { /* deleted in the worktree */ }
+  return createHash('sha256').update(`working\0${file.path}\0${file.oldPath || ''}\0${stamp}`).digest('hex')
+}
+
+export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000, scope: DiffScope = 'branch'): Promise<SessionDiffPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
   const root = await diffAnchorRoot(wt)
   const pair = await diffHeadPair(root, wt)
-  const files = await mergeBaseDiff(root, pair.base, pair.head)
-  const selected = filePath ? files.filter((file) => file.path === filePath || file.oldPath === filePath) : files
-  const result = await Promise.all(selected.map(async (file) => {
+  // The working tree is the session's OWN directory or it is not knowable. `root` falls back to the main
+  // checkout once the worktree is gone ([[diff-document]]), and that checkout's dirty files belong to whoever
+  // is working there — never to this session.
+  const liveRoot = wt.path && existsSync(wt.path) ? wt.path : null
+  const window = (patch: string) => patch.slice(offset, offset + limit)
+
+  // A per-file fetch names its scope, so only that scope is enumerated: opening one file in a worktree with a
+  // hundred dirty paths must not re-walk the other scope's git reads.
+  const branch = scope === 'branch' || !filePath ? await mergeBaseDiff(root, pair.base, pair.head) : []
+  const branchSelected = scope === 'branch' && filePath ? branch.filter((file) => file.path === filePath || file.oldPath === filePath) : (filePath ? [] : branch)
+  const files = await Promise.all(branchSelected.map(async (file) => {
     const identity = createHash('sha256').update(`${pair.mergeBase}\0${pair.head}\0${file.path}\0${file.oldPath || ''}`).digest('hex')
     if (!filePath) return { ...file, patch: '', diffIdentity: identity }
     const patch = await gitA(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
-    return { ...file, patch: patch.slice(offset, offset + limit), diffIdentity: identity }
+    return { ...file, patch: window(patch), diffIdentity: identity }
   }))
-  return { id, scope: 'branch', ...pair, files: result, comments: wt.rec.diffComments ?? [] }
+
+  const dirty = liveRoot && (scope === 'working' || !filePath) ? await workingFiles(liveRoot) : []
+  const workingSelected = scope === 'working' && filePath ? dirty.filter((file) => file.path === filePath || file.oldPath === filePath) : (filePath ? [] : dirty)
+  const working = await Promise.all(workingSelected.map(async (file) => {
+    const identity = workingIdentity(liveRoot!, file)
+    if (!filePath) return { ...file, patch: '', diffIdentity: identity }
+    const patch = await workingPatch(liveRoot!, file, file.status === 'untracked')
+    return { ...file, patch: window(patch), diffIdentity: identity }
+  }))
+
+  return {
+    id, scope: 'branch', ...pair, files,
+    working: { readable: !!liveRoot, files: working },
+    comments: wt.rec.diffComments ?? [],
+  }
 }
 
 export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' | 'sentAt'> & { id?: string }): Promise<DiffComment | null> {

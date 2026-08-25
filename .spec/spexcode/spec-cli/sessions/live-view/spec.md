@@ -83,10 +83,12 @@ semantics. No renderer clone, screen capture, DOM latch, or reconstructed termin
 
 The selected live session keeps one stable browser terminal and terminal socket while its Sessions document is
 visible. Hidden pane layers may remain mounted for route identity; their xterm and socket identity stay resident,
-but hidden native frames are discarded before xterm parsing and painting. A hidden pane therefore owns no active
+but a hidden viewer receives no native output: the bridge stops delivering at the hidden claim, and the browser
+discards any frame still in flight before xterm parsing and painting. A hidden pane therefore owns no active
 browser output work even while its native helper is inside the bounded linger window. Returning to Sessions reuses
-the same viewer and sends the ordinary visible geometry request, whose acknowledged refresh supplies the current
-screen; no hidden backlog is replayed and no replacement canvas is exposed after the viewer settles.
+the same viewer and sends the ordinary visible geometry request, which the bridge always answers with one atomic
+repaint of the current screen — the cached xterm is stale by exactly the hidden window, so no path resumes it
+silently; no hidden backlog is replayed and no replacement canvas is exposed after the viewer settles.
 
 ## isolated helper
 
@@ -113,7 +115,10 @@ The visible viewer may send bounded `{t:'input', data}` messages on its existing
 their order and hands each xterm-produced byte string to the helper, which writes it to the native client's PTY.
 This is the same client whose stdout paints xterm, so terminal modes, paste protocol, control keys, and IME
 commits are decided by xterm and the TUI rather than re-encoded by the dashboard. Hidden, lingering, detached,
-or disconnected viewers cannot inject and never queue input for later replay.
+or disconnected viewers cannot inject and never queue input for later replay. Input is transport and nothing
+else gates it: it never waits for, and is never refused by, the session record lock. That lock serializes
+lifecycle writers, which hold it for a noticeable share of a busy session's wall time; a keystroke that had to
+win that race was silently lost.
 PTY input is transport only. Keyboard bytes, paste, IME commits, resize, visibility, and mouse reports never
 write lifecycle state; they can be accepted while a viewer is attached, but only an explicitly accepted session
 prompt (the command/input API or the harness's UserPromptSubmit/PreToolUse path) re-enters `active`. A terminal
@@ -130,18 +135,19 @@ Browser readiness and native rendering have deliberately different lifetimes. Ev
 xterm and opens its socket when the dashboard loads; this is the lightweight prewarm that removes connection
 setup from a tab click. A hidden subscription creates no helper and owns no tmux client. Becoming visible
 creates that subscription's helper at its already-measured grid. Hiding arms one bounded linger window instead
-of an instant release: that viewer's helper may stay alive, but its browser drops native frames while hidden so
-there is no continuous xterm parse/paint work and no backlog to fast-forward. Expiry releases only that viewer's
-helper even though its socket and xterm remain alive.
+of an instant release: that viewer's helper stays alive so a quick return skips helper spawn and tmux attach,
+but the bridge delivers nothing to it while hidden, so there is no xterm parse/paint work and no backlog to
+fast-forward. Expiry releases only that viewer's helper even though its socket and xterm remain alive.
 
 Visibility is the helper lifecycle switch, and the linger window is its one bounded hysteresis. A visible
 claim always carries that viewer's measured grid; the same resize message creates or resizes its native client.
-A claim inside the linger window at the unchanged grid simply resumes, while a changed grid takes the ordinary
-native repaint path. A browser viewer is visible only while both its dashboard session layer and its document
-are visible. Backgrounding the browser tab therefore withdraws the claim. Past the window the socket and cached
-xterm remain but its tmux client does not; returning exposes the cache immediately, then the visible geometry
-request and native attach replace it with the current screen. Lingered bytes are neither written nor queued for
-fast-forward.
+A claim inside the linger window reuses that viewer's helper but still takes the ordinary native repaint path:
+an unchanged grid refreshes the existing client, a changed grid resizes it, and either way the acknowledged
+transaction replaces the cached screen. A browser viewer is visible only while both its dashboard session layer
+and its document are visible. Backgrounding the browser tab therefore withdraws the claim. Past the window the
+socket and cached xterm remain but its tmux client does not; returning exposes the cache immediately, then the
+visible geometry request and native attach replace it with the current screen. Hidden-window bytes are neither
+delivered, written, nor queued for fast-forward.
 
 Concurrent visible viewers use tmux's classic multi-client model with `window-size latest`: the
 window takes the grid of the most recently active client, so control follows the person actually

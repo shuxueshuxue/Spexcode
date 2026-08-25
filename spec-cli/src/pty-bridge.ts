@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { alive, withSessionInputLock } from './sessions.js'
+import { alive } from './sessions.js'
 
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -14,7 +14,6 @@ export type Viewer = {
 
 type Subscription = {
   visible: boolean
-  lingering: boolean
   cols: number
   rows: number
   bridge?: Bridge
@@ -45,8 +44,9 @@ const subscribers = new Map<string, Map<Viewer, Subscription>>()
 const BSU = Buffer.from('\x1b[?2026h')
 const ESU = Buffer.from('\x1b[?2026l')
 const GEOMETRY_STABILIZATION_MS = 400
-// A hidden but still-alive browser keeps its own client briefly so a quick return is continuous. A dead
-// socket bypasses this window and detaches immediately.
+// A hidden but still-alive browser keeps its own native client briefly so a quick return skips helper spawn
+// and tmux attach. It receives no output while hidden; the return always repaints. A dead socket bypasses
+// this window and detaches immediately.
 const LINGER_MS = Number(process.env.SPEXCODE_TERM_LINGER_MS) > 0 ? Number(process.env.SPEXCODE_TERM_LINGER_MS) : 30_000
 
 function subscriptionMap(id: string): Map<Viewer, Subscription> {
@@ -65,7 +65,7 @@ function isCurrent(bridge: Bridge): boolean {
 
 function deliver(bridge: Bridge, data: Buffer): void {
   const subscription = currentSubscription(bridge.id, bridge.viewer)
-  if (!subscription || (!subscription.visible && !subscription.lingering)) return
+  if (!subscription?.visible) return
   try { bridge.viewer.send(data) } catch { /* socket close or heartbeat expiry owns removal */ }
 }
 
@@ -187,7 +187,6 @@ function ensureBridge(id: string, viewer: Viewer, subscription: Subscription, co
 function cancelLinger(subscription: Subscription): void {
   if (subscription.lingerTimer) clearTimeout(subscription.lingerTimer)
   subscription.lingerTimer = undefined
-  subscription.lingering = false
 }
 
 function cancelRestore(subscription: Subscription): void {
@@ -309,7 +308,7 @@ export function attachViewer(id: string, viewer: Viewer): void {
   const map = subscriptionMap(id)
   const previous = map.get(viewer)
   if (previous) killBridge(previous)
-  map.set(viewer, { visible: false, lingering: false, cols: 0, rows: 0 })
+  map.set(viewer, { visible: false, cols: 0, rows: 0 })
 }
 
 export function hideViewer(id: string, viewer: Viewer): void {
@@ -317,7 +316,6 @@ export function hideViewer(id: string, viewer: Viewer): void {
   if (!subscription) return
   subscription.visible = false
   if (!subscription.bridge) return
-  subscription.lingering = true
   if (subscription.lingerTimer) return
   subscription.lingerTimer = setTimeout(() => {
     subscription.lingerTimer = undefined
@@ -341,14 +339,14 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
   if (!(cols > 0 && rows > 0)) return
   const subscription = currentSubscription(id, viewer)
   if (!subscription) return
-  const seamless = subscription.lingering && !!subscription.bridge
-    && subscription.bridge.cols === cols && subscription.bridge.rows === rows
   cancelLinger(subscription)
   subscription.visible = true
   subscription.cols = cols
   subscription.rows = rows
   const { bridge, created } = ensureBridge(id, viewer, subscription, cols, rows)
-  if (!bridge || created || seamless) return
+  if (!bridge || created) return
+  // A helper kept alive across a hidden window has been rendering to nobody: the browser cache behind this
+  // claim is stale by exactly that window, so an unchanged grid still answers with one atomic repaint.
   if (bridge.cols === cols && bridge.rows === rows) {
     beginDelivery(bridge)
     queueRefresh(bridge)
@@ -359,14 +357,14 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
 
 const MAX_INPUT_BYTES = 64 * 1024
 
+// Input is transport: it goes straight to the helper. It never waits for, or is refused by, the session record
+// lock — that lock serializes lifecycle writers, which hold it for a noticeable share of a busy session's wall
+// time, and a keystroke that lost that race used to vanish silently.
 export function forwardInput(id: string, viewer: Viewer, data: string): boolean {
   const subscription = currentSubscription(id, viewer)
   if (!subscription?.visible || !subscription.bridge || !data || Buffer.byteLength(data, 'utf8') > MAX_INPUT_BYTES) return false
-  const accepted = withSessionInputLock(id, () => {
-    sendControl(subscription.bridge!, { t: 'input', data })
-    return true
-  }) ?? false
-  return accepted
+  sendControl(subscription.bridge, { t: 'input', data })
+  return true
 }
 
 async function restoreBridge(id: string, viewer: Viewer, subscription: Subscription): Promise<void> {

@@ -224,6 +224,14 @@ a pinned run from an unpinned one. It also joins the idempotency payload hash �
 a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
 receipt hash, so nothing that never pinned gains a field.
 
+**A create records the commit it actually forked from.** Whether or not a pin was supplied, the branch ref right
+after `git worktree add` IS the fork point, and the record keeps it. It is written like the optional pin — present
+only on records created since it existed, so an older record keeps its exact bytes — and it is the one fact that
+later separates a branch which never authored a commit from one whose commits the base has absorbed. Git ancestry
+cannot: both heads are ancestors of the base. A reader that lacks the field recovers the same commit from the branch
+ref's creation reflog entry, which is where git wrote that start point; the diff document ([[diff-document]]) is the
+surface that spends it.
+
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation lives at
 `spec-cli/src/session-record-lock.ts`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder

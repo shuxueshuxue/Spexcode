@@ -25,21 +25,17 @@ hostile, or very large content, without turning `TimelineChat` into a second ren
 
 ## expanded spec
 
-One `RichText` component is the whole rendering boundary. `TimelineChat` sends every human-authored prose field
-through it: the originating prompt, sent messages, and authored status notes. One module-scoped parser handles
-them all; the timeline never constructs a parser per row and never grows its own Markdown branches.
+One `RichText` entry is the timeline's whole rendering boundary, and it is a thin door onto the one dashboard
+[[prose-renderer]]: `TimelineChat` sends every human-authored prose field through it — the originating prompt,
+sent messages, and authored status notes — and never grows its own Markdown branches or a parser of its own.
 
-The supported language is compact agent Markdown: headings, emphasis, links, images (including remote image
-URLs), blockquotes, ordered and unordered lists, fenced and inline code, tables, strikethrough, and soft line
-breaks. KaTeX renders inline and display math written with `$...$` / `$$...$$` or `\(...\)` / `\[...\]`. Math
-inside code stays code. An invalid expression stays visibly readable rather than blanking the message or throwing
-through React. Inline math never crosses a code span or line break, so ordinary currency, shell variables, and
-escaped dollar signs remain prose.
-
-The renderer keeps markdown-it and KaTeX's default untrusted-source behavior: source HTML is text and unsafe URL
-schemes do not become active content. It adds no sanitizer, image allowlist, remote-content policy, or other custom
-content filter. Generated HTML has one audited insertion point inside `RichText`; callers never use
-`dangerouslySetInnerHTML` themselves.
+The language and its safety envelope are [[prose-renderer]]'s contract, stated once there: compact agent
+Markdown (headings, emphasis, links and images including remote URLs, blockquotes, lists, fenced and inline code,
+tables, strikethrough, soft breaks); inline and display math in `$...$` / `$$...$$` or `\(...\)` / `\[...\]` that
+stays code inside code, never crosses a code span or line break, and stays visibly readable when invalid; the
+parser's untrusted-source defaults with no sanitizer, allowlist, or remote-content policy of its own; and one
+audited HTML insertion, so no caller here uses `dangerouslySetInnerHTML`. This node holds only what a
+CONVERSATION needs from that renderer.
 
 Rendered mathematics remains ordinary selectable conversation content. KaTeX's accessibility and visual DOM
 representations identify one owning math token. A selection intersecting any portion of that token copies the

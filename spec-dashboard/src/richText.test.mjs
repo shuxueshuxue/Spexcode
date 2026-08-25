@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import RichText from './RichText.js'
 
-const renderRichText = (value) => renderToStaticMarkup(createElement(RichText, null, value))
+const renderRichText = (value, props = null) => renderToStaticMarkup(createElement(RichText, props, value))
 
 test('renders compact agent Markdown and both inline and display math', () => {
   const html = renderRichText([
@@ -67,8 +67,8 @@ test('renders Markdown images while keeping unsafe markup and invalid math reada
   assert.match(html, /definitelyNotACommand/)
 })
 
-test('preserves soft line breaks and does not parse math inside code', () => {
-  const html = renderRichText([
+test('follows the surface on soft breaks and does not parse math inside code', () => {
+  const source = [
     'first',
     'second',
     '',
@@ -77,9 +77,12 @@ test('preserves soft line breaks and does not parse math inside code', () => {
     '```math',
     '\\frac{1}{2}',
     '```',
-  ].join('\n'))
+  ].join('\n')
+  const html = renderRichText(source, { softBreak: 'break' })
 
+  // The timeline passes softBreak='break'; a previewed .md file takes the document default and reflows.
   assert.match(html, /first<br\/>second/)
+  assert.match(renderRichText(source), /first second/)
   assert.match(html, /<code>\$x\^2\$<\/code>/)
   assert.match(html, /<pre class="doc-pre"><code class="language-math">/)
   assert.equal((html.match(/class="katex"/g) || []).length, 0)
@@ -101,7 +104,7 @@ test('does not let unmatched math cross code spans, line breaks, or display deli
     'and neither does this$.',
     '',
     'Inline $$x^2$$ remains literal.',
-  ].join('\n'))
+  ].join('\n'), { softBreak: 'break' })
 
   assert.match(html, /unmatched \$price before <code>\$HOME<\/code>/)
   assert.match(html, /\$x<br\/>and neither does this\$\./)
@@ -121,7 +124,7 @@ test('requires display math to close and leaves malformed blocks readable', () =
     '',
     '$$',
     'never closed',
-  ].join('\n'))
+  ].join('\n'), { softBreak: 'break' })
 
   assert.equal((html.match(/class="doc-math-block"/g) || []).length, 2)
   assert.match(html, /data-math-source="\\sum_\{i=1\}\^n i"/)

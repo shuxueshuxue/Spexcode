@@ -20,8 +20,10 @@ const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 
 const transcriptCache = new Map()
 
+// The transcript is the one message surface in the dashboard: a newline here was typed by a person or an
+// agent mid-conversation, not wrapped by an editor, so it stays a line break instead of reflowing.
 function TimelineRichText({ children, className = '' }) {
-  return <RichText className={className}
+  return <RichText className={className} softBreak="break"
     renderSpecRef={(id, token, provenance) => {
       const href = routeHash('spec', id)
       return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>

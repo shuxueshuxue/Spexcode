@@ -146,8 +146,8 @@ report "not found yet" as "no hit", so a window is settled only by a hit or by h
 end. Because which event hits is unknown until its images are parsed, the existence demand set is DISCOVERED
 rather than declared: the scan advances in rounds that still ask the whole unsettled corpus at once, doubling
 their width so the round count is bounded by hit DEPTH and never by how many readings were asked. A round
-narrowed to one node or one reading would re-fork the batch per unit — the same inversion the READ-is-the-unit
-rule below forbids. Enumeration takes its remaining window in a single slice and so keeps the one-round shape
+narrowed to one node or one reading would re-fork the batch per unit — the same inversion [[hunk-ranges]]'s READ-is-the-unit
+rule forbids. Enumeration takes its remaining window in a single slice and so keeps the one-round shape
 it has always had. Measured on the reference corpus, the two questions differ by 1,158 parsed file revisions
 (52.6 MB) versus 307 (21.9 MB) for the same 858 booleans.
 

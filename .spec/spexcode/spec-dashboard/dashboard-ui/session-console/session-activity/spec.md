@@ -96,9 +96,9 @@ subtree count to its first word.
 
 The row's overlay marker is a continuous status thread, not a decorative short dash. It keeps its 2px width and
 leading offset while spanning the full row box (`top: 0` through `bottom: 0`), so neighboring rows in one zone
-join end-to-end. Zone headings are intentional breaks. For a nested row, the marker moves to the deepest
-connector column and paints over that tree rail; the child therefore has one colored rail, never a colored edge
-beside a second parallel tree line.
+join end-to-end. Zone headings are intentional breaks. Its offset is the ROW's leading edge at
+every depth: a nested row's indent belongs to the row's contents, never to the thread, so one unbroken line
+runs the length of a zone however deeply the sessions inside it nest.
 
 **One name, every surface.** The `sessionTitle`/`sessionHeadline` accessor is a session's display name *everywhere a human reads
 which session this is* — rows, window, the console sidebar, **the search palette, the

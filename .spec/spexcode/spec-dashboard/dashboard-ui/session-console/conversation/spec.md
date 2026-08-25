@@ -18,7 +18,9 @@ related:
 Every existing session in the [[session-console]] — live, offline, archived, headless — renders the same
 Conversation: one timeline body, one footer, one composer. Lifecycle changes what the footer says and whether the
 composer is enabled; it never creates another right-pane face. [[rich-conversation]] owns how prose renders inside
-it; [[message-stream]] owns the native execution trace this surface deliberately does not drill into.
+it — with one decision declared HERE: a newline in the transcript was typed mid-conversation, so it stays a line
+break rather than reflowing as an authoring wrap; [[message-stream]] owns the native execution trace this surface
+deliberately does not drill into.
 
 **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**

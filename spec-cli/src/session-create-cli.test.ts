@@ -162,7 +162,7 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
   await once(server, 'listening')
   const address = server.address()
   assert.ok(address && typeof address === 'object')
-  const env = { ...process.env, NODE_NO_WARNINGS: '1' }
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: '1' }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   env.SPEXCODE_API_URL = ''
 

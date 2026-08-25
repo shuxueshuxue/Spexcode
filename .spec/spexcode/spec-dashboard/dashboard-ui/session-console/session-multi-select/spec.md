@@ -15,8 +15,10 @@ related:
 
 The routed Sessions page owns the complete session forest. A row's context menu can enter multi-select,
 preselecting that row. While selecting, every visible session row is a checkbox-like toggle and clicking it
-never navigates or changes the active terminal. The selection bar reports the count, offers cancel, and has one
-destructive verb: close selected. Confirmation uses the same close endpoint as the single-row action and every
+never navigates or changes the active terminal. The selection bar is one non-wrapping row at the same 28px action
+scale and spacing as the forest's header pills: its count owns the only shrinkable slot and truncates with an
+ellipsis, while close-selected is a danger-coloured trash icon and cancel is an × icon. Both icon buttons keep
+their localized tooltip and `aria-label`. Confirmation uses the same close endpoint as the single-row action and every
 request is reconciled by the board reload; graph marquee selection is unrelated and must not satisfy this contract.
 
 The same page owns row movement. A whole session row becomes a pointer drag after the shared six-pixel gesture

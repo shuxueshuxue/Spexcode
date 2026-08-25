@@ -61,6 +61,16 @@ try {
   await targetRow.click()
   assert.equal(await page.locator('.si-check.on').count(), 2, 'second row toggles into the same selection')
   assert.match(page.url(), new RegExp(`/sessions/${child.id}$`), 'multi-select does not navigate')
+  const selectionBar = page.locator('.si-selbar')
+  const selectionBox = await selectionBar.boundingBox()
+  assert.ok(selectionBox, 'selection bar has layout geometry')
+  assert.equal(await selectionBar.evaluate((bar) => getComputedStyle(bar).flexWrap), 'nowrap', 'selection actions wrapped')
+  assert.equal(await page.locator('.si-selcount').evaluate((count) => getComputedStyle(count).whiteSpace), 'nowrap', 'selection count wrapped')
+  for (const button of await selectionBar.locator('button').all()) {
+    const box = await button.boundingBox()
+    assert.ok(box && box.x >= selectionBox.x && box.x + box.width <= selectionBox.x + selectionBox.width,
+      'selection icon action overflowed the narrow forest')
+  }
   await page.getByRole('button', { name: 'cancel' }).click()
 
   const sourceBox = await childRow.boundingBox()

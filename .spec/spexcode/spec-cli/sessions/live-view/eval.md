@@ -30,12 +30,14 @@ scenarios:
       buffer, then record every browser paint while repeatedly switching between them — both quickly
       (inside the bounded linger window) and again after the helper release.
     expected: >-
-      A switch-back inside the linger window is seamless continuation: the buffer kept consuming the native
-      stream while hidden, so the first visible paint is already the current screen and no reattach, repaint
-      transaction, empty renderer, undersized first layout, renderer replacement, or socket reconnect
-      appears — output simply continues in place. Past the window the first visible paint still contains the
-      cached pixels, and native reattach happens behind that frame, replacing it only with a complete native
-      redraw. Hidden layers remain visually hidden and non-interactive.
+      While hidden the viewer receives no native frames (the bridge stops delivering at the hidden claim), so
+      its buffer stops at the hidden moment. A switch-back inside the linger window reuses the same helper,
+      xterm, and socket — no reattach, empty renderer, undersized first layout, renderer replacement, or
+      socket reconnect — and answers the visible geometry request with exactly one atomic repaint transaction
+      that replaces the stale cache with the current tmux screen, every line produced while hidden included.
+      Past the window the first visible paint still contains the cached pixels, and native reattach happens
+      behind that frame, replacing it only with a complete native redraw. In neither case do hidden-window
+      deltas fast-forward or go missing. Hidden layers remain visually hidden and non-interactive.
   - name: background-return-resyncs-current-screen
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
@@ -44,12 +46,14 @@ scenarios:
       return while recording terminal text, WebSocket frames, helper lifecycle, and every browser paint.
     expected: >-
       Browser-page visibility participates in the same viewer lifecycle as dashboard-session visibility.
-      Within the linger window the hidden page keeps the helper and its buffer keeps consuming the live
-      stream, so an early return continues output in place. Once the window elapses the helper is released:
-      the page retains the browser terminal and socket but holds no native helper and receives no continuing
-      pane deltas. A later return exposes the cached pixels immediately, then one native attach replaces them
-      with the current complete tmux screen. The user never watches queued historical deltas fast-forward to
-      the present, and no second replay, capture, or page-specific terminal path exists.
+      Within the linger window the hidden page keeps the helper but receives no pane deltas; an early return
+      reuses that helper and one atomic repaint transaction replaces the cached screen with the current one,
+      hidden-window lines included. Once the window elapses the helper is released: the page retains the
+      browser terminal and socket but holds no native helper and receives no continuing pane deltas. A later
+      return exposes the cached pixels immediately, then one native attach replaces them with the current
+      complete tmux screen. The user never watches queued historical deltas fast-forward to the present, no
+      hidden-window line is missing after either return, and no second replay, capture, or page-specific
+      terminal path exists.
   - name: cold-visible-attach-is-atomic
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
@@ -65,6 +69,17 @@ scenarios:
       progressive top-to-bottom sweep, standalone clear, eager wrong-size reflow, or repeated full-screen flash.
       The rendition contains the pane only: no tmux status row or other client chrome, and an N-row browser
       grid gives the pane all N rows.
+  - name: typed-input-never-waits-for-lifecycle-lock
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Through the real dashboard terminal, type a long known character sequence into a live pane while another
+      process holds and releases that session's record lock at the cadence measured on a busy host (held roughly
+      a third of the time, in ~150 ms holds). Count the typed characters, the input frames the browser sent while
+      the lock was held, and the characters echoed by the pane.
+    expected: >-
+      Every typed character reaches the pane in order — N of N — including every frame sent while the lock was
+      held. No keystroke is dropped, deferred, reordered, or replayed because a lifecycle writer owned the record
+      lock; the bridge hands input straight to the helper.
   - name: multiple-viewers-fit-all
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/terminal-multi-viewer.e2e.mjs

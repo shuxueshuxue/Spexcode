@@ -1,6 +1,8 @@
 // Each visible browser viewer is one native tmux client. Hidden sockets own none; hiding lingers only that
-// viewer, while socket detach removes it immediately. tmux's latest-active policy, not bridge size voting,
-// lets the most recently active client own the application grid without losing the peer's native viewport.
+// viewer's helper and delivers nothing to it, while socket detach removes it immediately. A return inside the
+// linger window reuses the helper but always repaints (the browser cache is stale by the hidden window).
+// tmux's latest-active policy, not bridge size voting, lets the most recently active client own the
+// application grid without losing the peer's native viewport.
 //
 // Run: SPEXCODE_TMUX=visibility-<pid> npx tsx test/pty-bridge.visibility-lifecycle.ts
 import { execFile } from 'node:child_process'
@@ -111,7 +113,7 @@ async function main(): Promise<void> {
     if (afterLargeDetach[0]?.startsWith(`${largePid}|`)) throw new Error('large viewer left a ghost client')
     await waitFor(windowSize, (value) => value === `${SMALL.cols}x${SMALL.rows}`, 'tmux recompute after large detach')
 
-    // A live but hidden tab keeps only its own client for the bounded continuity window.
+    // A live but hidden tab keeps only its own client for the bounded continuity window, and hears nothing.
     hideViewer(SESSION, smallViewer)
     if (forwardInput(SESSION, smallViewer, 'hidden-after-hide')) throw new Error('hidden viewer injected input')
     await sleep(Math.min(300, LINGER / 2))
@@ -121,16 +123,23 @@ async function main(): Promise<void> {
     }
     const chunksBefore = smallChunks.length
     await tmux('send-keys', '-t', SESSION, 'printf linger-flow-123', 'Enter')
-    await waitFor(async () => smallChunks.length, (value) => value > chunksBefore, 'lingering viewer stream')
+    await waitFor(pane, (value) => value.includes('linger-flow-123'), 'hidden-window pane output')
+    await sleep(200)
+    if (smallChunks.length !== chunksBefore) throw new Error('hidden viewer received native output during linger')
 
-    const commitsBeforeReturn = smallEvents.filter((event) => event.startsWith('commit:')).length
+    // Returning at the unchanged grid keeps the helper but must replace the stale browser cache with one
+    // repaint transaction carrying what happened while hidden.
+    const eventsBeforeReturn = smallEvents.length
     resizeBridge(SESSION, smallViewer, SMALL.cols, SMALL.rows)
-    await sleep(500)
+    await waitFor(async () => smallEvents.slice(eventsBeforeReturn), (value) => value.length >= 2, 'return repaint')
+    const returnEvents = smallEvents.slice(eventsBeforeReturn)
+    if (returnEvents[0] !== `commit:${SMALL.cols}x${SMALL.rows}` || !returnEvents[1]?.startsWith('frame:')) {
+      throw new Error(`unchanged return did not answer with commit + repaint (${returnEvents.join(', ')})`)
+    }
+    const returnFrame = Buffer.concat(smallChunks.slice(chunksBefore)).toString('utf8')
+    if (!returnFrame.includes('linger-flow-123')) throw new Error('return repaint did not carry the hidden-window screen')
     const resumed = await clients()
     if (resumed.length !== 1 || !resumed[0]?.startsWith(`${smallPid}|`)) throw new Error('unchanged return replaced the client')
-    if (smallEvents.filter((event) => event.startsWith('commit:')).length !== commitsBeforeReturn) {
-      throw new Error('unchanged return repainted a continuously streamed buffer')
-    }
 
     hideViewer(SESSION, smallViewer)
     await waitFor(clients, (value) => value.length === 0, 'bounded per-viewer release', LINGER + 4000)
@@ -141,7 +150,7 @@ async function main(): Promise<void> {
 
     detachViewer(SESSION, smallViewer)
     await waitFor(clients, (value) => value.length === 0, 'final immediate socket detach')
-    console.log(`PASS: hidden sockets held 0 clients; visible viewers owned native clients ${smallPid}/${largePid}; latest selected ${LARGE.cols}x${LARGE.rows}; large detach immediately recomputed ${SMALL.cols}x${SMALL.rows}; small hide lingered only ${smallPid}, resumed continuously, expired, and reattached as ${restoredPid}`)
+    console.log(`PASS: hidden sockets held 0 clients; visible viewers owned native clients ${smallPid}/${largePid}; latest selected ${LARGE.cols}x${LARGE.rows}; large detach immediately recomputed ${SMALL.cols}x${SMALL.rows}; small hide lingered only ${smallPid} silently, repainted on return, expired, and reattached as ${restoredPid}`)
   } finally {
     detachViewer(SESSION, smallViewer)
     detachViewer(SESSION, largeViewer)

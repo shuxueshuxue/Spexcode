@@ -12,7 +12,6 @@ related:
   - spec-eval/package.json
   - spec-forge/package.json
   - packages/spec-core/package.json
-  - packages/session-core/package.json
   - spec-cli/src/cli.ts
   - spec-cli/bin/spex.mjs
   - spec-cli/src/node-pty-package.test.ts
@@ -53,11 +52,12 @@ that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repai
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.
 
-The repository holds six real workspace packages: `@spexcode/spec-core`, `@spexcode/session-core`,
-`@spexcode/spec-eval`, `@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name their real
-package dependencies by release version; local workspace resolution is a development convenience, not a
-published `file:` contract. `@spexcode/session-core` is the reusable Node-side durable session protocol;
-runtime controllers supply delivery and lifecycle effects rather than becoming dependencies of the package.
+The repository holds the runtime package stack `@spexcode/session-protocol`, `@spexcode/session-events`,
+`@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-application`, and
+`@spexcode/session-selflaunch`, alongside the product packages `@spexcode/spec-core`, `@spexcode/spec-eval`,
+`@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name real package
+dependencies by release version; local workspace resolution is a development convenience, not a published
+`file:` contract. The retired `@spexcode/session-core` name is not a package or compatibility export.
 `@spexcode/spec-core` has four deliberately narrow package exports. `.` is the Node-side core entry and
 owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
 filter, query, and session presentation functions have no Node, React, store, endpoint, or service

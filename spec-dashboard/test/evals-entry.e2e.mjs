@@ -91,13 +91,13 @@ let scopedRowHref = null
   })
   const page = await context.newPage()
   await page.goto(`${BASE}/#/sessions/${SESSION}`)
-  const consoleEvalTab = await page.waitForSelector('.si-eval-tab', { timeout: 20000 }).catch(() => null)
+  const consoleEvalTab = await page.waitForSelector('.si-eval-door', { timeout: 20000 }).catch(() => null)
   const entry = consoleEvalTab ? await consoleEvalTab.evaluate((el) => ({ tag: el.tagName, href: el.getAttribute('href') })) : null
   check('console Eval entry is a real scoped-list anchor', entry?.tag === 'A' && pathOf(entry.href) === '#/evals' && qOf(entry.href) === SCOPED_Q, JSON.stringify(entry))
   if (!entry) throw new Error('real console Eval tab did not render')
 
   const historyBefore = await page.evaluate(() => history.length)
-  await page.click('.si-eval-tab')
+  await page.click('.si-eval-door')
   await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
   await page.waitForSelector('.se-export', { timeout: 15000 })
   await page.waitForSelector('a.lp-row', { timeout: 15000 })
@@ -124,7 +124,7 @@ let scopedRowHref = null
   await page.keyboard.press('Shift+Tab')
   check('Shift+Tab returns to the list door', await page.evaluate(() => document.activeElement?.classList.contains('se-door')))
   await page.keyboard.press('Enter')
-  await page.waitForSelector('.si-eval-tab', { timeout: 15000 })
+  await page.waitForSelector('.si-eval-door', { timeout: 15000 })
   check('keyboard Enter on list door opens the real session terminal',
     await page.evaluate(() => location.hash) === `#/sessions/${SESSION}` && await page.evaluate(() => !!document.querySelector('.si-term-body')))
   await page.goBack()

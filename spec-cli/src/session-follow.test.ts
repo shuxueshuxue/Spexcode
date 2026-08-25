@@ -1,34 +1,37 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
-import { advanceFollow, followCursor } from '@spexcode/session-core'
+import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { recordStatus } from './session-timeline.js'
-import { sessionStoreDir } from '@spexcode/spec-core'
 import type { Session } from './sessions.js'
 
-// Following is reading a LOG past a cursor ([[session-follow]]). Everything below is driven by appending lines
-// to timeline.ndjson and by nothing else: no board, no backend, no process. That is the point — if any of this
-// needed a running server to pass, the mechanism would still be costing the control plane what it used to.
+// Following reads canonical application events past a cursor ([[session-follow]]). Everything below is driven by
+// SQLite state and by nothing else: no board, no backend, no process. That is the point — if any of this needed a
+// running server to pass, the mechanism would still be costing the control plane what it used to.
 
 const ME = 'follower-session'
 const T = 'target-session'
 const freshHome = (): string => {
   const home = mkdtempSync(join(tmpdir(), 'spex-follow-'))
+  resetConfiguredSessionApplicationForTest()
   process.env.SPEXCODE_HOME = home
-  mkdirSync(sessionStoreDir(ME), { recursive: true })
-  mkdirSync(sessionStoreDir(T), { recursive: true })
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  configuredSessionApplicationIfCutover()!.createSession({ sessionId: ME, status: 'idle' })
   return home
 }
-const log = (id: string) => join(sessionStoreDir(id), 'timeline.ndjson')
 function status(id: string, s: string, proposal: string | null = null, note: string | null = null): void {
-  appendFileSync(log(id), JSON.stringify({ ts: new Date().toISOString(), kind: 'status', status: s, proposal, note }) + '\n')
+  const application = configuredSessionApplicationIfCutover()!
+  if (application.readState(id)) application.transitionSession(id, { status: s, proposal, note, reason: 'follow-test' })
+  else application.createSession({ sessionId: id, status: s, proposal, note })
 }
 const sent = (id: string, text: string, from: string | null = null): void => {
-  appendFileSync(log(id), JSON.stringify({ ts: new Date().toISOString(), kind: 'sent', mid: text, text, from }) + '\n')
+  const application = configuredSessionApplicationIfCutover()!
+  if (!application.readState(id)) application.createSession({ sessionId: id, status: 'idle' })
+  application.enqueueConversationMessage(id, { kind: 'session.prompt.v1', body: Buffer.from(text), senderSessionId: from, idempotencyKey: `follow-test:${id}:${text}` }, { text, from })
 }
 // drive the target's log on a timer while the follow is already running — a transition only counts if the
 // follower OBSERVES it happen, so nothing here may be pre-written into the arrival prefix.
@@ -109,7 +112,7 @@ test('a stored cursor is the resume: a restarted follower starts where it stoppe
   status(T, 'active')
   later(30, () => status(T, 'asking', null, 'which branch?'))
   await take()
-  assert.equal(followCursor(ME, T), 2, 'the cursor names the next unread line')
+  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, T), 2, 'the cursor names the next unread line')
   // the same actionable state is already consumed, so a fresh follow must NOT re-return it
   const r = await take()
   assert.deepEqual(r, { timedOut: true, path: ['asking'] })
@@ -117,10 +120,8 @@ test('a stored cursor is the resume: a restarted follower starts where it stoppe
 
 test('a followed session whose store dir is gone is the gone outcome, not a timeout', async () => {
   const home = freshHome()
-  status(T, 'active')
-  later(30, () => rmSync(sessionStoreDir(T), { recursive: true, force: true }))
-  const r = await take()
-  assert.deepEqual(r, { gone: T })
+  const r = await followSessions(() => {}, { targets: () => ['gone-session'], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
+  assert.deepEqual(r, { gone: 'gone-session' })
   assert.ok(existsSync(home))
 })
 
@@ -138,10 +139,9 @@ test('a message arriving for the follower returns it — that is the other thing
 test('waking on mail leaves the follower own-log position where it was', async () => {
   freshHome()
   sent(ME, 'unread')
-  const r = await followSessions(() => {}, { targets: () => [T], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
+  const r = await followSessions(() => {}, { targets: () => [], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.ok('mail' in r)
-  const { followCursor } = await import('@spexcode/session-core')
-  assert.equal(followCursor(ME, ME) ?? 0, 0, 'the event it stopped on stays unread')
+  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, ME) ?? 0, 0, 'the event it stopped on stays unread')
 })
 
 test('a follow with no session record of its own keeps its cursors in memory and still works', async () => {
@@ -150,7 +150,7 @@ test('a follow with no session record of its own keeps its cursors in memory and
   later(30, () => status(T, 'awaiting', 'merge'))
   const r = await followSessions(() => {}, { targets: () => [T], self: null, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.deepEqual(r, { reached: 'review', id: T, path: ['working', 'review'] })
-  assert.equal(followCursor(ME, T), null, 'nothing was written to a record this follower does not have')
+  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, T), null, 'nothing was written to a record this follower does not have')
 })
 
 test('a session that launches mid-follow is read from its first line, so its arrival is not missed', async () => {
@@ -159,7 +159,6 @@ test('a session that launches mid-follow is read from its first line, so its arr
   let ids = [T]
   status(T, 'active')
   later(30, () => {
-    mkdirSync(sessionStoreDir(LATE), { recursive: true })
     status(LATE, 'active')
     ids = [T, LATE]
     later(40, () => status(LATE, 'awaiting', 'merge'))
@@ -172,7 +171,7 @@ test('a pre-seeded follow cursor replays exactly the lines behind it', async () 
   freshHome()
   status(T, 'active')
   status(T, 'awaiting', 'merge')
-  advanceFollow(ME, T, 1)   // the follower had consumed only the first line before it died
+  configuredSessionApplicationIfCutover()!.advanceFollowCursor(ME, T, 1)   // the follower had consumed only the first line before it died
   const r = await take()
   assert.deepEqual(r, { reached: 'review', id: T, path: ['working', 'review'] })
 })
@@ -182,10 +181,10 @@ test('a wait crosses a rotation boundary without skipping its actionable edge', 
   const previous = process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
   process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = '1024'
   try {
-    recordStatus(T, 'active', null, 'x'.repeat(900))
-    later(30, () => recordStatus(T, 'awaiting', 'merge', 'y'.repeat(900)))
+    status(T, 'active', null, 'x'.repeat(900))
+    later(30, () => status(T, 'awaiting', 'merge', 'y'.repeat(900)))
     assert.deepEqual(await take(), { reached: 'review', id: T, path: ['working', 'review'] })
-    assert.equal(followCursor(ME, T), 2, 'the durable event-index cursor still spans numbered segments')
+    assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, T), 2, 'the durable event-index cursor still spans canonical history')
   } finally {
     if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
     else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
@@ -199,9 +198,7 @@ test('a 13-session fleet follow resumes across 1,664 sealed history events', asy
   const fleet = Array.from({ length: 13 }, (_, index) => `fleet-${String(index).padStart(2, '0')}`)
   try {
     for (const id of fleet) {
-      mkdirSync(sessionStoreDir(id), { recursive: true })
-      for (let event = 0; event < 128; event++) recordStatus(id, 'active', null, `${id}:${String(event).padStart(3, '0')}:${'x'.repeat(1200)}`)
-      assert.equal(readdirSync(join(sessionStoreDir(id), 'timeline')).length, 128)
+      for (let event = 0; event < 128; event++) status(id, 'active', null, `${id}:${String(event).padStart(3, '0')}:${'x'.repeat(1200)}`)
     }
 
     let arrivals = 0
@@ -218,7 +215,7 @@ test('a 13-session fleet follow resumes across 1,664 sealed history events', asy
     })
 
     assert.deepEqual(result, { reached: 'review', id: fleet.at(-1), path: ['working', 'review'] })
-    assert.equal(followCursor(ME, fleet.at(-1)!), 129, 'the event-index cursor resumes across every sealed history segment')
+    assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, fleet.at(-1)!), 129, 'the event-index cursor resumes across canonical history')
   } finally {
     if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
     else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous

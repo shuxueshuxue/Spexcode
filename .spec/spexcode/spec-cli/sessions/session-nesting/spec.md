@@ -30,7 +30,8 @@ glance still answers "whose turn is it?" off the PARENT alone, never a muddled a
 **Provenance is captured once, then supervised through the ordinary watch command.** When `spex new` runs from inside another session,
 `createSession` resolves its OWN session id through the same `ownSessionId` env read the [[agent-reply-channel]]
 reply-hint uses (in the CLI's own process) and passes it as `parent` in the `POST /api/sessions` body;
-`newSession` writes it into the child's `session.json` ([[runtime]]) as a durable field, and it rides onto the
+`newSession` writes it into canonical session-application state (the runtime envelope is `runtime.json`, [[runtime]])
+as a durable field, and it rides onto the
 public `Session` type and `/api/graph`. A human running `spex new` from a plain shell has no session id →
 `parent` stays null, so no phantom nesting — the same no-sender rule [[agent-reply-channel]] already uses.
 After a successful child create, the parent installs the `parent` source through the same durable watcher

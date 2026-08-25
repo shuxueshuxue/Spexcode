@@ -10,7 +10,7 @@ related:
   - .spec/spexcode/session-protocol/concept-map/platform-architecture/spec.md
   - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
   - .spec/spexcode/session-protocol/spec.md
-  - packages/session-core/src/index.ts
+  - packages/session-application/src/index.ts
   - spec-cli/src/sessions.ts
 ---
 # session-management-refactor-review

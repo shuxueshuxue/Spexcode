@@ -2,11 +2,11 @@
 title: session-cursors
 status: active
 hue: 280
-desc: A reader's durable place in a log — one `cursors.json` per session holding its own inbox position plus one entry per followed session, advanced monotonically and reclaimed at read time.
+desc: A reader's durable place in canonical SQLite events — one cursor row per followed session, advanced monotonically and reclaimed at read time.
 code:
-  - packages/session-core/src/session-cursors.ts
+  - spec-cli/src/session-follow.ts
 related:
-  - packages/session-core/src/session-timeline.ts
+  - packages/session-events/src/schema.ts
   - spec-cli/src/sessions.ts
   - .spec/spexcode/.plugins/core/mark-active/mark-active.sh
 ---
@@ -16,10 +16,9 @@ related:
 ## raw source
 
 Once supervision is a read ([[comms]]), the only durable state a watcher needs is **how far it has got**. That
-is one number per (reader, log) pair, and it belongs beside the reader's own record rather than inside the log
-it points at — a log is written by whoever sends, and a position is owned by whoever reads. `cursors.json`, in
-the reader's global store dir, holds all of its positions: one entry per **followed** session
-([[session-follow]]), including its own id when it watches its own log.
+is one number per (reader, event stream) pair, and it belongs in the application database beside the event store
+rather than in the target's record. The application cursor table holds one row per **followed** session
+([[session-follow]]), including its own id when it watches its own stream.
 
 A position is exactly that — a reader's place in something it is watching. It is not a work list. What a
 session still OWES its agent is a debt, not a position, and lives in its own queue ([[delivery-queue]]); an
@@ -31,12 +30,12 @@ TTL to expire — a reader that dies and restarts opens the same file and resume
 
 ## expanded spec
 
-A position is an **event index** into [[session-timeline]]'s `timeline.ndjson`: the number of lines already
-consumed, so `pos` is the index of the next unread event and a fresh reader starts at `0`. One counter covers
+A position is an **event sequence** in [[session-events]]: the greatest event sequence already consumed, so the
+next read starts after that sequence and a fresh reader starts at `0`. One counter covers
 both event kinds, since a follower reads a log rather than a kind.
 
-The file is written whole, atomically (temp + rename), one field per line — the same shape as the session
-record, so a position stays readable by an exact whole-line match where a value regex would not be.
+The cursor row is advanced in the same SQLite store as canonical events. It is monotonic and transactional; there
+is no cursor file, partial rewrite, or second JSON authority.
 
 **Only the reader advances, and it is monotonic.** `advanceFollow` writes the maximum of the stored and the
 offered position, so an interleaved write can leave a position too LOW — whose consequence is an event read

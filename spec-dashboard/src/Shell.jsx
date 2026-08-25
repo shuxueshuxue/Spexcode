@@ -592,18 +592,6 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       event.preventDefault(); closePalette(); toggleHelp(); return true
     }
     if (event.altKey && !event.metaKey && !event.ctrlKey) {
-      const pageOf = [
-        ['shell.pageSessions', 'sessions'], ['shell.pageEvals', 'evals'],
-        ['shell.pageIssues', 'issues'], ['shell.pageSettings', 'settings'],
-      ]
-      const target = pageOf.find(([id]) => firesEvent(id, event))?.[1]
-      if (target) {
-        event.preventDefault(); closePalette()
-        // the keyboard twin of the rail button. Review/settings boards are destinations, not documents, so
-        // this navigation leaves the strip untouched. The sealed face has one view and no destinations.
-        if (!graphOnly) navigate(target)
-        return true
-      }
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
       if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); navigate('evals'); return true }
       // the ⌥ chord is the door that survives a TYPING context, and in this workspace a typing context is a

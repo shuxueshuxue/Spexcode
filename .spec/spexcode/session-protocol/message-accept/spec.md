@@ -4,11 +4,11 @@ status: active
 hue: 280
 desc: One durable acceptance operation owns record fences, timeline receipt, queue publication, and keyed crash recovery.
 code:
-  - packages/session-core/src/message.ts
+  - packages/session-protocol/src/engine.ts
 related:
-  - packages/session-core/src/session-protocol.test.ts
-  - packages/session-core/src/session-timeline.ts
-  - packages/session-core/src/delivery-queue.ts
+  - packages/session-protocol/src/engine.test.ts
+  - packages/session-events/src/schema.ts
+  - packages/session-application/src/production.ts
   - spec-cli/src/sessions.ts
 ---
 # message-accept

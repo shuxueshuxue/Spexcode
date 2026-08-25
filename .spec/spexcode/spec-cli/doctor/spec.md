@@ -65,7 +65,7 @@ reads the same [[harness-adapter]] registry [[harness-delivery]] materializes th
   confusing symptoms.
 - **contract** — the `surface:system` block is present in each harness's contract file (CLAUDE.md / AGENTS.md);
   `spex doctor --contract` prints that exact text for any agent.
-- **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the global store
+- **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the current tree slot
   ([[runtime]]), and EVERY manifest handler script is readable in the worktree. A shim without its handler
   is under-delivery even when the visible wiring looks complete.
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).

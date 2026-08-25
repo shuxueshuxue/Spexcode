@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Cross-process session mutations share one filesystem record fence with bounded waits and dead-owner reclamation.
 code:
-  - packages/session-core/src/record-lock.ts
+  - spec-cli/src/session-record-lock.ts
 related:
   - spec-cli/src/sessions.ts
 ---

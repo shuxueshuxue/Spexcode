@@ -461,7 +461,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
       if (page === 'sessions') return false // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // the Evals and Issues pages own their own keys (j/k list-walk, their inputs, their own Esc stack) —
       // EvalsPage / IssuesPage handle them. Esc does NOT route pages anywhere ([[side-nav]]) — leaving is
-      // ⌥1..⌥5, the rail, or history.
+      // the rail, an address, or history.
       if (page === 'evals' || page === 'issues') return false
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {

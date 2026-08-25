@@ -12,6 +12,17 @@ scenarios:
       path: spec-cli/src/session-production-cutover.yatu.test.ts
       name: "YATU cutover matrix: ten distinct stories through the backend HTTP and migration CLI surfaces"
     code: spec-cli/src/session-application.ts
+  - name: residue-settles-on-first-canonical-access
+    tags: [backend-api]
+    description: >
+      Point the backend composition at a marked store whose legacy tree still holds a session envelope and timeline,
+      inspect the cutover state, take one canonical access, and inspect again.
+    expected: >
+      The state reads residue, the first access migrates the history into the owned store and retires the tree, the
+      state then reads ready from memory, and a later access returns the same composition without re-running.
+    test:
+      path: spec-cli/src/session-application.test.ts
+      name: "a marked store with legacy residue settles on its first canonical access, then reads as ready"
 ---
 # session runtime production cut-in loss
 

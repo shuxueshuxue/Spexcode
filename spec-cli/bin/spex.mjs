@@ -16,7 +16,7 @@ const workspace = join(pkg, '..')
 // carry unresolved conflict markers, so hooks keep the retryable exit-75 contract during a merge.
 const sourceRoot = join(pkg, 'src')
 if (existsSync(sourceRoot)) {
-  const srcRoots = [sourceRoot, join(pkg, '..', 'packages', 'spec-core', 'src'), join(pkg, '..', 'packages', 'session-core', 'src'), join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
+  const srcRoots = [sourceRoot, join(pkg, '..', 'packages', 'spec-core', 'src'), join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
   const conflicted = srcRoots.flatMap((root) => {
     if (!existsSync(root)) return []
     return readdirSync(root, { recursive: true })
@@ -39,17 +39,23 @@ if (existsSync(sourceRoot)) {
   const runtimeEntries = [
     cli,
     join(workspace, 'packages', 'spec-core', 'dist', 'index.js'),
-    join(workspace, 'packages', 'session-core', 'dist', 'index.js'),
     join(workspace, 'spec-eval', 'dist', 'index.js'),
     join(workspace, 'spec-forge', 'dist', 'index.js'),
   ]
+  // Tests and declaration files are typecheck inputs, not runtime build inputs. Counting them here makes a
+  // harmless test edit look like a stale CLI and rebuilds every workspace on the next hook invocation.
+  const isRuntimeSource = (path) => {
+    return /\.(ts|tsx|js|mjs)$/.test(path)
+      && !/\.d\.ts$/.test(path)
+      && !/(^|[./])[^/]+\.test\.(ts|tsx|js|mjs)$/.test(path)
+  }
   const sourceIsStale = () => {
     const newestSource = srcRoots.reduce((newest, root) => {
       if (!existsSync(root)) return newest
       for (const entry of readdirSync(root, { recursive: true })) {
         const path = join(root, String(entry))
         try {
-          if (/\.(ts|tsx|js|mjs)$/.test(path)) newest = Math.max(newest, statSync(path).mtimeMs)
+          if (isRuntimeSource(path)) newest = Math.max(newest, statSync(path).mtimeMs)
         } catch { /* a concurrent source edit can only make the next invocation rebuild again */ }
       }
       return newest

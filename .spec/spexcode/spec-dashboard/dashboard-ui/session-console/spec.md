@@ -56,7 +56,7 @@ close retain their own action/recovery contracts.
 
 The interface is a **routed page** (`#/sessions`, [[side-nav]]) — it fills the app's main area beside the
 navigation rail as a peer of the graph, with no backdrop, no lift, no pop: Enter (from the graph) or the
-global ⌥2 navigates to it, leaving it is likewise navigation (the rail, ⌥1/⌥3/⌥4, history — never Esc,
+rail navigates to it, leaving it is likewise navigation (the rail, an address, history — never Esc,
 which stays inside the console's own stack), and its selected tab echoes into the URL (`#/sessions/<sel>`)
 so a tab can be deep-linked. Selection validity is the real board session set, not only the currently
 visible rows: a session hidden under a collapsed nesting parent can still be opened by URL, search, or an
@@ -270,13 +270,18 @@ selection is never persisted or written to the session/backend, and a bare sessi
 persisted base rather than whatever overlay was last on screen. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
-height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval tab is a REAL anchor whose href is
+height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval door is a REAL anchor whose href is
 the canonical session-scoped Evals list address (the scoped default query, minted by [[address-routing]];
 copy-link/middle-click work for free), so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the console width is stable and a warm pane is never reflowed;
-see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
+see [[live-view]]). **It lives in the FRAME's document-action band** ([[document-actions]]), registered by the
+session document like every other action there, and not in a console-local tab rail — the console has no tab
+rail to hold it, and a door drawn inside the pane would be a second toolbar competing with the one the frame
+already owns. It keeps that band's button geometry and widens only for the glance it carries; because the
+glance is content the frame cannot compute, the door draws itself and states its own render state, exactly as
+an action owning a popup states its menu's. The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
 already bounded by [[session-eval]] to scenarios this worktree affected or measured. Its four mutually exclusive
 scenario tallies are the complete visible accounting: reliable current pass/fail counts use [[review-chrome]]'s
 `ReviewState` vocabulary, measured stale or legacy/unscored scenarios carry a visible clock tally as work still
@@ -471,9 +476,11 @@ already-matching state is a no-op. Unmodified arrows and every editable control 
 action never changes session data. A transient overlay's own focused control also keeps its native keys: the
 window router yields before any New-tab or list shortcut when the event target is inside a `data-focus-overlay`,
 so a visible confirm's Enter cannot launch a New Session behind it. **⌥+N** reaching the New Session composer is no longer this console's own
-chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
+chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F), which the console's
 key handling deliberately **falls through unhandled** so the window-level handler
-routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
+routes it and tmux never sees `M-n`/`M-f`. The reserve holds exactly the chords the shell still claims, so
+it shrank with them: the positional ⌥-digit page row is gone ([[keyboard-nav]]) and ⌥+digit is ordinary
+console input again, forwarded like any other unclaimed key. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in

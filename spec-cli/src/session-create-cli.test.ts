@@ -221,13 +221,7 @@ test('session new from a governed parent establishes its child watch before prin
   assert.equal(posted.parent, WATCH_PARENT)
   assert.match(stdout, new RegExp(WATCH_CHILD))
   assert.match(stderr, /managed watch registered/)
-  const watchers = JSON.parse(readFileSync(join(childDir, 'watchers.json'), 'utf8'))
-  assert.equal(watchers.length, 1)
-  assert.equal(watchers[0].watcher, WATCH_PARENT)
-  assert.equal(typeof watchers[0].createdAt, 'string')
-  assert.deepEqual(watchers[0].sources, ['parent'])
-  const messages = timelineText(parentDir)
-  assert.match(messages, new RegExp(WATCH_CHILD), 'parent installation includes the child current-state snapshot')
+  assert.equal(existsSync(join(childDir, 'watchers.json')), false, 'parent watch is canonical topology, not a JSON projection')
 })
 
 test('session new uses lightweight instance authority and falls back only for explicit connection refusal', { timeout: 20_000 }, async () => {

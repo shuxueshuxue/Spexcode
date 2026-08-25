@@ -24,7 +24,7 @@ related:
 # web
 
 An agent can hand a running local website to the human as a live session reference. A session owns one
-global-store `web.json` beside its `session.json`; its JSON array of canonical loopback HTTP URLs is the
+global-store `web.json` beside its `runtime.json`; its JSON array of canonical loopback HTTP URLs is the
 whole durable state. Posting records only a URL. It does not connect, copy, start, stop, stage, or upload
 the web service, so every preview request reaches the process and bytes that exist at that moment.
 

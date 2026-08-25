@@ -215,6 +215,17 @@ scenarios:
       regenerated for it, and no resume launch runs. `close` remains available to retire the record itself.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/session-record-integrity.test.ts
+  - name: canonical-watch-text-names-subject
+    tags: [backend-api]
+    description: >
+      Render a queued canonical state message for delivery to a supervisor session and read the text it would
+      receive; also render one whose body carries no subject.
+    expected: >
+      The notice reads `[spex watch] <subject> is <display status> — <note>` with the watched child's id, not the
+      supervisor's own id; a body without a subject is refused instead of being rendered about the recipient.
+    test:
+      path: spec-cli/src/sessions.test.ts
+      name: "a delivered canonical state notice names the watched subject, never the recipient reading it"
 ---
 
 # sessions-core — measurement

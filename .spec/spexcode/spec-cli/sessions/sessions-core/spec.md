@@ -6,8 +6,10 @@ desc: The shared session module every session feature builds on — the global p
 code:
   - spec-cli/src/sessions.ts
 related:
-  - packages/session-core/src/record-lock.ts
-  - packages/session-core/src/message.ts
+  - spec-cli/src/session-record-lock.ts
+  - spec-cli/src/delivery-lock.ts
+  - spec-cli/src/session-lock.test.ts
+  - packages/session-protocol/src/engine.ts
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/sessions-hot.test.ts
@@ -28,8 +30,8 @@ foundation owner: the features govern their own surfaces and REFERENCE this modu
 
 ## expanded spec
 
-sessions-core owns `sessions.ts` — the common session layer: the global per-session operational metadata read/write
-(`session.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, session↔worktree↔node resolution, the launch-script
+sessions-core owns `sessions.ts` — the common session layer: the global per-session runtime/worktree envelope read/write
+(`runtime.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, while lifecycle, proposal, note, event, queue, and topology facts live only in the canonical session application. It owns session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
@@ -41,11 +43,13 @@ or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a
 may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses
 the same post-success canonical projection as the HTTP bridge rather than creating a second creation path.
 During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
-before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, those files may remain as
-operational metadata, but the canonical application service is the only state/event/topology authority.
-[[session-follow]]'s durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
-is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
-and uses the existing send queue to notify each watcher only after releasing the target's lock; the canonical
+before it can publish `session.json` or `watchers.json`; after the SQLite migration marker those names are residue
+that the next canonical access migrates and retires ([[production-cutin]]), and the canonical application service is
+the only state/event/topology authority.
+[[session-follow]]'s durable watch relation is stored once in the session application's topology tables. After a
+canonical state record commits, the application projects its watcher edges and uses the existing send queue to
+notify each watcher. When that queued state message is rendered as text for the watcher, the notice names the
+watched subject carried inside the message, never the watcher it is delivered to; the canonical
 application commit invokes the same post-commit wake callback so each recipient's existing durable queue is
 drained immediately in the originating runtime. The callback is a transport wake, not a second queue or source
 of truth: a missing runtime, crash, or failed handover leaves the committed row pending for the normal retry
@@ -54,23 +58,13 @@ reader fallback for callers with no governed delivery address. A watcher identit
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
 id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
-reparenting directly dispatch the current state, except that creation installs its parent source with one durable
-initial-snapshot debt. The launch queue resolves that debt exactly once: a real capacity decision publishes the
-still-queued snapshot, while an admitted launch publishes only after its adapter readiness fence has established
-that the existing active/resource publication is observably working. A launch attempt that fails readiness keeps
-that resource contract and its loud failure note, but retires the debt without fabricating working. A synchronous
-launch/preflight failure likewise retires the debt rather than misreporting its queued record as capacity backlog;
-only the queue's proven full-capacity branch may publish queued. Only a later state write consults the source
+reparenting enqueue one current-state notification through the canonical application queue. Creation uses the same
+queue handoff: there is no snapshot token, deferred-snapshot debt, or second launch-delivery protocol. A launch may
+publish a resource/readiness warning, but it never fabricates `working`; only a later state write consults the source
 policy. In the canonical application path, this caller-owned policy passes the resolved recipient set into the
-neutral application transition; the package never interprets parent/manual names. A retryable launch error retains
-the same debt for the next queue attempt, and a restarted supervisor may
-reclaim readiness observation for an already-active launch without launching or replaying its prompt. Each accepted
-snapshot is keyed by the debt token and authored state; before clearing the token, delivery compares the latest state
-under the record lock and accepts any raced actionable state with its own key. A crash before that compare therefore
-replays neither an accepted initial snapshot nor an accepted catch-up, while still delivering an authored asking,
-review, or error that raced acceptance. Parent-only `active`/working is the suppressed terminal of that comparison;
-manual includes it. Thus creation ordering does not weaken routine-working suppression, and manual+parent yields the
-complete later-state feed without a duplicate or a second mechanism.
+neutral application transition; the package never interprets parent/manual names. Parent-only `active`/working is the
+suppressed terminal of that comparison; manual includes it. Thus creation ordering does not weaken routine-working
+suppression, and manual+parent yields the complete later-state feed without a duplicate or a second mechanism.
 The ordinary stranded-transport refusal applies to a caller's new prompt, not to an already-installed managed
 watch. A parent watch transition is accepted into the parent's normal timeline and delivery queue even when its
 registered process is alive but its native transport is temporarily absent; the queue debt is the wake/resume
@@ -89,9 +83,8 @@ binding is durable, so a queue accepted before native readiness drains without a
 dashboard poll. Canonical acceptance is still successful in this state: the caller is told
 `delivery: queued` after the SQLite message commit, rather than receiving a false append failure because the
 post-commit drain correctly refused an unbound runtime.
-Creation and
-[[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
-source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
+Creation and [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy watcher
+files are migration input only and are deleted after their topology edges and pending messages are imported.
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is settled, its worktree is
 no longer needed, and no human decision or follow-up remains; otherwise the agent declares the state that is true.
@@ -99,7 +92,8 @@ The merge dispatch itself is intentionally a plain prompt: the server does not a
 epochs, or idempotency headers and never mutates `main`; the worker re-syncs and re-runs proof in its own worktree
 before the one no-ff landing.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
-child's parent pointer and watcher list, then delegates the current-state snapshot to the existing dispatch path.
+child's parent pointer and watcher list, then enqueues the current-state notification through the existing dispatch
+path. There is no deferred snapshot debt to reconcile.
 The core never asks a former watcher to participate in its own removal. A null replacement parent is the
 same transaction's top-level detach: it removes the former relation and its pending delivery without creating
 a root record, new watcher, or notification.
@@ -229,13 +223,13 @@ a pinned run from an unpinned one. It also joins the idempotency payload hash �
 a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
 receipt hash, so nothing that never pinned gains a field.
 
-**Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation is
-shared from `@spexcode/session-core`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
+**Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation lives at
+`spec-cli/src/session-record-lock.ts`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
 of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
 layer be a brick an external system can drive rather than a service it must be granted access to.
 
-A text send delegates its record-locked append-plus-queue acceptance to `@spexcode/session-core`; an
+A text send delegates its record-locked append-plus-queue acceptance to the canonical application and the local record lock; an
 agent-attributed send also fences its named sender in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
 transport witness. Its proven-unreachable answer becomes a stranded refusal only when this layer's independent
 registered-pid witness still proves the worker alive; an unproven transport remains queue-retryable and does not
@@ -263,11 +257,12 @@ receipt retains the ordinary descendant refusal before shared-runtime mutation a
 
 ### Record integrity — one writer, three readings, no revival
 
-**The runtime/worktree envelope of `session.json` is produced by ONE writer here**, by serializing the typed
+**The runtime/worktree envelope of `runtime.json` is produced by ONE writer here**, by serializing the typed
 record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
 not a shell, not a route. After JSON migration, lifecycle (`status`, `proposal`, `note`, and `parent`) is owned
-only by the canonical session application and its events; the envelope keeps its old bytes as migration evidence
-and is never written from canonical state. A record whose `runtime_owner` names an external controller is instead written by
+only by the canonical session application and its events; the envelope is runtime metadata and is never written from
+canonical lifecycle state. `session.json` is migration input only and is retired once the migration marker is published.
+A record whose `runtime_owner` names an external controller is instead written by
 [[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
 stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
 format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
@@ -356,7 +351,7 @@ and that the named adapter is healthy. A named native thread must either be abse
 idle, descendant-free native thread that its own adapter archives and re-censuses as unloaded; every live,
 active, owned, ambiguous, descendant-bearing, changed-generation, malformed, or unknown control refuses before
 the record moves. The operation never sends an OS signal, removes a worktree or branch, guesses an adapter, or
-turns opaque bytes into a lifecycle record. On success it atomically moves only `session.json` out of the active
+turns opaque bytes into a lifecycle record. On success it atomically moves only `runtime.json` out of the active
 session directory to a per-project quarantine bundle, preserving its byte-exact payload plus the supplied claim
 and the independently observed absence proof. The ordinary record enumeration then removes the corrupt row from
 the session list, graph, and resource projection without a special hide list. `restore` is the explicit reverse:

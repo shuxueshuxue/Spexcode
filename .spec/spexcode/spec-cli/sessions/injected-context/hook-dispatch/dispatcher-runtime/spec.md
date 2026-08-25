@@ -24,33 +24,13 @@ completion, handler failure, signal, or shell exit.
 
 The materialized shim passes its adapter id before the event. The dispatcher consumes each native id — `claude`,
 `codex`, `opencode`, `pi`, and `zcode` — plus the plugin form, exports it as `SPEXCODE_HARNESS`, then dispatches
-the following event. An old one-argument shim remains the explicit compatibility shape: an unrecognized first
-argument is the event and defaults to Claude. `zcode` shares the Claude-family payload parser in `harness.sh`; it
+the following event. An unknown or missing adapter id is an error. `zcode` shares the Claude-family payload parser; it
 is still an explicit dispatcher id, so its generated `dispatch.sh zcode Stop` command cannot silently turn
 `zcode` into an event name.
 
 The same tree slot carries the dispatch-id allowlist from its last successful materialize. A project transport
 may remain installed after a selection changes, but an event whose baked harness id is absent from THIS tree's
-allowlist exits before any input handling. Before the project migration marker, an absent allowlist is
-the one-version legacy shape; afterwards absence is inert until a git-native materialize publishes it.
+allowlist exits before any input handling. An absent allowlist means this tree is unmaterialized and is an error.
 
-A missing manifest is a no-op because there is no handler work to run. All matching handlers preserve the
+A missing manifest is an error because silently dropping lifecycle hooks hides a broken installation. All matching handlers preserve the
 existing deterministic order, stdout concatenation, blocking declaration, and Codex stderr reason translation.
-
-### Known-corrupt mark-active compatibility
-
-The original shipped `core/mark-active` script treated its note as text safe to substitute into JSON. Its own
-comment asserted that a note never contains a double quote, but neither the declaration nor the harness payload
-enforced that assertion; a quote therefore closed the JSON string and made a live record unreadable. Existing
-projects track their seeded `.plugins` source, and `spex materialize` deliberately renders that source rather
-than overwriting it. Updating the global package alone would otherwise leave a frozen worktree executing the
-bad script.
-
-The dispatcher has one narrow, package-owned compatibility route: when the manifest names the standard
-`.spec/project/.plugins/core/mark-active/mark-active.sh` path **and that file byte-compares equal to either
-identified vulnerable shipped blob**, it executes the package's current structured `mark-active` implementation
-instead. It does not edit the project file, its manifest, or any session record before that implementation runs.
-Any byte difference, including a project customization, executes the project script exactly as the manifest
-requested. This is an emergency execution override, not a plugin updater: a project moves its tracked source to
-the current template only in its own reviewed maintenance change. The compatibility entries remain only for the
-identified broken blobs; a package version label alone never enters this route.

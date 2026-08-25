@@ -16,27 +16,23 @@
 # session-worktree creation, and the pre-commit/post-checkout/post-merge hooks). .plugins edits are
 # git-transactional: they take effect at the commit/checkout/merge that carries them, like any other source.
 set -u
-# args: `<harness> <Event>`. A harness id as $1 (claude|codex|opencode|pi|zcode|plugin) is consumed; otherwise we keep
-# $1 as the event and default the harness to claude — so a stale shim still written as `dispatch.sh <Event>`
-# keeps working. `plugin` is the bundle form ([[plugin-harness]]), `opencode` the generated event-bus plugin
+# args: `<harness> <Event>`. The harness id is explicit. `plugin` is the bundle form ([[plugin-harness]]),
+# `opencode` the generated event-bus plugin
 # ([[opencode-harness]]), `pi` the generated extension ([[pi-harness]]), and `zcode` the native adapter: all four
 # carry Claude-shaped payloads (Claude tool names + file_path), so they join the claude branch in harness.sh via
 # the default case — no parse arm of their own.
 harness=claude
-case "${1:-}" in claude|codex|opencode|pi|zcode|plugin) harness="$1"; shift ;; esac
+case "${1:-}" in claude|codex|opencode|pi|zcode|plugin) harness="$1"; shift ;; *)
+  printf 'dispatch.sh: missing or unknown harness id\n' >&2
+  exit 64
+;; esac
 event="${1:?usage: dispatch.sh <harness> <Event>}"
 export SPEXCODE_HARNESS="$harness"
 # the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it, and we
 # source it here too for hp_runtime_dir (the per-project store dir).
 hook_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-tool_root="$(cd "$hook_root/.." && pwd)"
 export SPEXCODE_HARNESS_LIB="$hook_root/harness.sh"
 . "$SPEXCODE_HARNESS_LIB"
-if [ -n "${SPEX:-}" ]; then
-  read -r -a spex_cmd <<< "$SPEX"
-else
-  spex_cmd=("$tool_root/bin/spex.mjs")
-fi
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 # the manifest lives in THIS tree's materialize slot of the GLOBAL per-project store (mirrors layout.treeSlotDir),
 # NOT the worktree — and per tree, so a dispatch can only read the manifest of the tree it fires in
@@ -46,8 +42,7 @@ rt="$(cd "$proj" 2>/dev/null && hp_runtime_dir)" || rt=""
 slot="$(cd "$proj" 2>/dev/null && hp_tree_dir)" || slot=""
 
 # A project transport can outlive the tree that installed it. The current tree's last successful materialize
-# is the authority for whether its events are active. Before the v1 marker, an absent allowlist is the legacy
-# shape; afterwards absence means this tree never successfully selected a harness and dispatch stays inert.
+# is the authority for whether its events are active. A tree without a published selection is inert.
 allowed="$slot/harnesses"
 if [ -f "$allowed" ]; then
   grep -Fxq "$harness" "$allowed" || exit 0
@@ -56,17 +51,8 @@ elif [ -f "$rt/harness-selection-v1" ]; then
 fi
 
 # --- dispatch ---------------------------------------------------------------------------------------------
-if [ -n "${SPEX_HOOK_MANIFEST:-}" ]; then
-  manifest="$SPEX_HOOK_MANIFEST"
-else
-  # migration window: a tree last materialized by a pre-slot toolchain has no slot until its next git-native
-  # anchor — fall back to the legacy global manifest (its exact pre-migration behavior) so no hook (the
-  # Stop gate included) silently no-ops. The legacy file is never written again; the next anchor plants the
-  # slot and this branch goes dead.
-  manifest="$slot/hooks-manifest"
-  [ -f "$manifest" ] || manifest="$rt/hooks-manifest"
-fi
-[ -f "$manifest" ] || exit 0          # no manifest yet (materialize never ran) → nothing to dispatch
+manifest="${SPEX_HOOK_MANIFEST:-$slot/hooks-manifest}"
+[ -f "$manifest" ] || { printf 'dispatch.sh: current tree has no hook manifest\n' >&2; exit 78; }
 input="$(cat 2>/dev/null || true)"    # capture stdin ONCE; each handler gets its own copy
 err="/tmp/.spex-hook-$$.err"          # per-dispatch (pid-unique) stderr capture; no cross-session race
 cleanup() { rm -f "$err"; }
@@ -78,23 +64,6 @@ rc=0
 while IFS=$'\t' read -r ev order block script; do
   [ "$ev" = "$event" ] || continue
   handler="$proj/$script"
-  # A seeded core hook is tracked project source. These exact legacy identities are migrated at the adapter
-  # boundary to the current package implementation; a user-modified hook remains owned by the project.
-  # `cmp` makes a user-modified hook ineligible without a platform-specific hash utility, and materialize
-  # replaces the legacy source on the next git-native anchor.
-  if [ "$script" = '.spec/project/.plugins/core/mark-active/mark-active.sh' ] &&
-    { cmp -s "$handler" "$hook_root/compat/mark-active-sed-v0.fixture" ||
-      cmp -s "$handler" "$hook_root/compat/mark-active-0.5.2-eef1.fixture"; }; then
-    handler="$tool_root/templates/spec/project/.plugins/core/mark-active/mark-active.sh"
-  fi
-  # The first SQLite cutover shipped a stop gate that called the porcelain `session ask` command on its
-  # forced continuation. That command can wait on delivery/build locks, leaving a stopped session active.
-  # Migrate only that exact historical source identity; customized hooks remain untouched, and the next
-  # materialize replaces this tracked file so this branch disappears rather than becoming a second protocol.
-  if [ "$script" = '.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh' ] && command -v sha256sum >/dev/null 2>&1 &&
-    [ "$(sha256sum "$handler" 2>/dev/null | awk '{print $1}')" = '880f218f2f076a818999202c10ca9204280cd33cfe8110b54562a33ffb8b9fa1' ]; then
-    handler="$tool_root/templates/spec/project/.plugins/core/stop-gate/stop-gate.sh"
-  fi
   out="$(printf '%s' "$input" | bash "$handler" 2>"$err")"; code=$?
   [ -n "$out" ] && printf '%s' "$out"
   if [ "$block" = "true" ] && { [ "$code" = "2" ] || printf '%s' "$out" | grep -q '"decision"[[:space:]]*:[[:space:]]*"block"'; }; then

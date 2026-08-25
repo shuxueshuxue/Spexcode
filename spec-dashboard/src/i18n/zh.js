@@ -460,10 +460,6 @@ export default {
       help: '打开此帮助',
     },
     shell: {
-      pageSessions: '前往会话页面',
-      pageEvals: '前往评测页面',
-      pageIssues: '前往议题页面',
-      pageSettings: '前往设置页面',
       newSession: '打开新会话',
       evals: '打开评测页面',
       search: '搜索会话',

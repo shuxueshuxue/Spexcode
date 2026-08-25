@@ -46,7 +46,7 @@ pooled Issues document tied to its own mounted route.
 ## expanded spec
 
 - **Three pages, one route family — the shared [[review-chrome]].** `#/issues` is the list page (the
-  [[side-nav]] rail entry and ⌥4 land here); `#/issues/<id>` is the detail page; `#/issues/new` is the
+  [[side-nav]] rail entry lands here); `#/issues/<id>` is the detail page; `#/issues/new` is the
   compose page. All three are bookmarkable,
   reloadable, directly openable. `new` is the ONE path word the family spends on something that is not an
   issue id, so the local store RESERVES it at id minting ([[local-issues]]) — an issue can never own an

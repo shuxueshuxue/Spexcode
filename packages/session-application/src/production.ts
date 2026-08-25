@@ -31,6 +31,8 @@ const STATE_EVENT = 'session.state.changed.v1'
 const MESSAGE_EVENT = 'session.message.sent.v1'
 const PARENT_RELATION = 'parent'
 const WATCH_RELATION = 'watch'
+const PARENT_WATCH_RELATION = 'watch:parent'
+const MANUAL_WATCH_RELATION = 'watch:manual'
 const compositions = new Map<string, ProductionSessionApplication>()
 
 export interface LocalityPrecondition {
@@ -126,8 +128,14 @@ export interface ProductionSessionApplication extends SessionApplication {
   listWatchers(watcherSessionId: string, channel?: string): TopologyEdge[]
   bindRuntime(sessionId: string, identity: NativeRuntimeIdentity, expectedGeneration?: number): RuntimeBinding
   resolveRuntime(sessionId: string, namespace: string): RuntimeBinding | null
-  dequeueForRuntime(sessionId: string, namespace: string, expectedGeneration?: number): Message | null
+  dequeueForRuntime(sessionId: string, namespace: string, expectedGeneration?: number, expectedMessageId?: string): Message | null
+  readPendingMessages(sessionId: string): readonly Message[]
+  readMessageHistory(sessionId: string): readonly Message[]
+  dequeuePendingMessage(sessionId: string, expectedMessageId: string): Message | null
   readState(sessionId: string): SessionState | null
+  readEvents(sessionId: string, afterSequence?: number): readonly SessionEvent[]
+  readFollowCursor(watcherSessionId: string, subjectSessionId: string): number | null
+  advanceFollowCursor(watcherSessionId: string, subjectSessionId: string, eventSequence: number): void
   replayState(sessionId: string): SessionState | null
   close(): void
 }
@@ -234,6 +242,22 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
 
   const notifyCommitted = (result: Pick<CommittedSessionChange, 'recipients'>): void => {
     options.onCommitted?.(result)
+  }
+
+  // Parent supervision is intentionally quiet for routine active/working transitions. A manual watch
+  // opts into the complete feed; when both sources exist, the union keeps that manual choice without
+  // enqueueing the same watcher twice. Creation still publishes its initial snapshot through the normal
+  // relation recipients; this filter governs later lifecycle transitions only. A queued creation snapshot is
+  // corrected once by the first ready active publication, otherwise parent-only supervision would retain the
+  // stale queued face forever.
+  const lifecycleRecipients = (subjectSessionId: string, previousStatus: string | null, status: string, tx: ProtocolTransaction): string[] => {
+    const recipients = new Set<string>()
+    for (const edge of topology.parents(subjectSessionId, undefined, tx)) {
+      const parentOnly = edge.relationType === PARENT_WATCH_RELATION
+      const manual = edge.relationType === MANUAL_WATCH_RELATION || edge.relationType === WATCH_RELATION
+      if (manual || (parentOnly && (status !== 'active' || previousStatus === 'queued'))) recipients.add(edge.fromSessionId)
+    }
+    return [...recipients].sort()
   }
 
   const app: ProductionSessionApplication = {
@@ -400,7 +424,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           occurredAtMs: updatedAtMs,
         })
         const recipients = input.recipientSessionIds === undefined
-          ? topology.recipients(sessionId, tx)
+          ? lifecycleRecipients(sessionId, current.status, status, tx)
           : [...new Set(input.recipientSessionIds.map(recipient => {
             requireId(recipient, 'recipientSessionId')
             return recipient
@@ -487,13 +511,32 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       return runtimeBindings.resolve(namespace, sessionId)
     },
 
-    dequeueForRuntime(sessionId, namespace, expectedGeneration) {
+    dequeueForRuntime(sessionId, namespace, expectedGeneration, expectedMessageId) {
       requireId(sessionId, 'sessionId')
       const binding = runtimeBindings.resolve(namespace, sessionId)
       if (!binding || binding.status !== 'bound') throw new Error(`runtime binding is not active for ${sessionId}`)
       if (expectedGeneration !== undefined && binding.bindingGeneration !== expectedGeneration) {
         throw new Error(`runtime binding generation is stale for ${sessionId}`)
       }
+      if (expectedMessageId !== undefined && protocol.listPending(sessionId)[0]?.messageId !== expectedMessageId) return null
+      return protocol.dequeue(sessionId)
+    },
+
+    readPendingMessages(sessionId) {
+      requireId(sessionId, 'sessionId')
+      return protocol.listPending(sessionId)
+    },
+
+    readMessageHistory(sessionId) {
+      requireId(sessionId, 'sessionId')
+      return protocol.readMessages(sessionId)
+    },
+
+    dequeuePendingMessage(sessionId, expectedMessageId) {
+      requireId(sessionId, 'sessionId')
+      requireId(expectedMessageId, 'expectedMessageId')
+      const head = protocol.listPending(sessionId)[0]
+      if (!head || head.messageId !== expectedMessageId) return null
       return protocol.dequeue(sessionId)
     },
 
@@ -503,12 +546,53 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       return state
     },
 
+    readEvents(sessionId, afterSequence) {
+      requireId(sessionId, 'sessionId')
+      return events.read(sessionId, afterSequence === undefined ? undefined : { afterSequence })
+    },
+
+    readFollowCursor(watcherSessionId, subjectSessionId) {
+      requireId(watcherSessionId, 'watcherSessionId')
+      requireId(subjectSessionId, 'subjectSessionId')
+      const rows = protocol.withTransaction(tx => tx.query(
+        'SELECT event_seq FROM session_follow_cursors WHERE watcher_session_id=? AND subject_session_id=?',
+        watcherSessionId,
+        subjectSessionId,
+      ))
+      const value = rows[0]?.event_seq
+      return value === undefined ? null : Number(value)
+    },
+
+    advanceFollowCursor(watcherSessionId, subjectSessionId, eventSequence) {
+      requireId(watcherSessionId, 'watcherSessionId')
+      requireId(subjectSessionId, 'subjectSessionId')
+      if (!Number.isSafeInteger(eventSequence) || eventSequence < 0) throw new TypeError('eventSequence must be a non-negative safe integer')
+      protocol.withTransaction(tx => {
+        const prior = tx.query(
+          'SELECT event_seq FROM session_follow_cursors WHERE watcher_session_id=? AND subject_session_id=?',
+          watcherSessionId,
+          subjectSessionId,
+        )[0]?.event_seq
+        if (prior !== undefined && Number(prior) >= eventSequence) return
+        tx.exec(
+          `INSERT INTO session_follow_cursors (watcher_session_id, subject_session_id, event_seq)
+           VALUES (?, ?, ?)
+           ON CONFLICT(watcher_session_id, subject_session_id) DO UPDATE SET event_seq=excluded.event_seq`,
+          watcherSessionId,
+          subjectSessionId,
+          eventSequence,
+        )
+      })
+    },
+
     replayState(sessionId) {
       requireId(sessionId, 'sessionId')
       initialize(sessionId)
       return events.replay<SessionState | null>(sessionId, {
         initialState: null,
         reducers: {
+          // A conversation message is a public fact beside the state fold, not a state transition.
+          [MESSAGE_EVENT]: state => state,
           [STATE_EVENT]: (_state, event) => {
             const decoded = JSON.parse(new TextDecoder().decode(event.payload)) as SessionStateChange
             return {

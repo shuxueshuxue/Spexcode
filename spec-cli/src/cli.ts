@@ -341,6 +341,7 @@ async function followKit(selectors: string[], verb: string): Promise<{
   const { localCachedSessions } = await import('./client.js')
   const { fromRaw, ownSessionId, selectSessions, toSession } = await import('./sessions.js')
   const { listSessionIds, readPublicRecordEntry } = await import('@spexcode/spec-core')
+  const { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } = await import('./session-application.js')
   const real = selectors.filter((sel) => sel && sel !== '@all')
   let picked: string[] = []
   if (real.length) {
@@ -352,8 +353,36 @@ async function followKit(selectors: string[], verb: string): Promise<{
   // a fresh sample of the mutable record — that resample is what made the old poll lose moves.
   const row = (id: string, status: import('./sessions.js').DisplayStatus, note: string | null) => {
     const entry = readPublicRecordEntry(id)
-    if (entry.kind !== 'ok') return null
-    return { ...toSession(fromRaw(entry.raw), status, 'unknown'), note }
+    if (entry.kind === 'ok') return { ...toSession(fromRaw(entry.raw), status, 'unknown'), note }
+    const cutover = sessionApplicationCutoverState()
+    const state = cutover === 'fresh' ? null : configuredSessionApplicationIfCutover()?.readState(id)
+    if (!state) return null
+    return {
+      id,
+      node: null,
+      branch: null,
+      path: '',
+      label: id,
+      title: id,
+      raw: { name: null, title: null },
+      parent: state.parentSessionId,
+      harness: 'unknown',
+      capabilities: { headless: false },
+      launcher: null,
+      lifecycle: state.status as import('./sessions.js').Lifecycle,
+      proposal: state.proposal as import('./sessions.js').Proposal,
+      merges: 0,
+      status,
+      liveness: 'unknown' as const,
+      note,
+      archived: state.status === 'archived',
+      closedAt: null,
+      prompt: null,
+      promptPreview: null,
+      created: state.updatedAtMs,
+      activity: null,
+      sortKey: null,
+    }
   }
   const watcher = ownSessionId()
   return { watcher, follow: (emit, opts) => followSessions(emit, { ...opts, targets, self: watcher, row }) }

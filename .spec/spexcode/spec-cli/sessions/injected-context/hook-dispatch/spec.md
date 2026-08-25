@@ -35,12 +35,9 @@ session-worktree creation, the pre-commit / post-checkout / post-merge hooks), w
 path pure bash with zero node boots and makes `.plugins` edits git-transactional — they take effect at the
 commit/checkout/merge that carries them, like any other source change.
 
-**Migration window (pre-slot trees).** A worktree last materialized by a pre-slot toolchain has no slot until
-its next git-native anchor plants one. A slot-less dispatch FALLS BACK to the legacy global
-`<runtime>/hooks-manifest` — the very file (and one-slot semantics) it read before the migration — so no
-hook, the Stop gate included, silently no-ops in the window. The legacy file is never written again: the
-tree's next anchor plants its slot, the fallback goes dead, and the stale file is residue until
-[[spex-uninstall]]'s whole-store sweep. An explicit `SPEX_HOOK_MANIFEST` override skips both lookups.
+**Materialization boundary.** A tree must have its own slot manifest before hooks can execute. A missing slot
+is an installation error; dispatch never reads a shared global manifest and never silently inherits another
+tree's handlers. An explicit `SPEX_HOOK_MANIFEST` is reserved for isolated tests and adapter-owned execution.
 
 [[dispatcher-runtime]] owns the shell entry that executes this compiled manifest. The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in
 parallel with no ordering guarantee — but **deterministically**: it feeds each handler the original hook
@@ -51,10 +48,15 @@ propagate back to the model; the stdout JSON is the reason/additionalContext pay
 however, reads a Stop block's continuation prompt from STDERR — so on the JSON-decision path under codex,
 when the handler wrote its `decision:block` to stdout and left stderr empty, the dispatcher extracts the
 `reason` and forwards it to stderr; else codex would see exit 2 with no continuation. A handler that did not
-declare blocking can never block its event; a missing manifest dispatches nothing.
+declare blocking can never block its event; a missing manifest fails loudly.
 
 This is the substrate the spec-aware injections ([[inject-spec-first]], [[inject-spec-of-file]]) and the lifecycle gates
 ride on. Which nodes plug in is a [[surface]] field decision, not a code change here; adding or retiring a
 hook is a spec edit. The contract text (the `surface: system` bodies) is materialized by the same pass
 into the AGENTS.md/CLAUDE.md block ([[harness-delivery]]); only the event HOOKS converge through this
 dispatcher.
+
+The generated project settings contain one `PreToolUse` dispatcher command. The current canonical manifest has
+two `PreToolUse` rows behind it — `mark-active` (order 10) and `spec-first` (order 20). A host may report a
+larger aggregate while loading layered plugins or historical worktree state; that display is not an additional
+Spex registration. No hook handler may register a second dispatcher or run SQL directly.

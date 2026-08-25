@@ -1,8 +1,75 @@
 import { readAliasedRawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
-import { timelineTail, type TimelineEvent } from '@spexcode/session-core'
+import { decodeEventJson } from '@spexcode/session-events'
+import { MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from '@spexcode/session-application'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
 
-export * from '@spexcode/session-core'
+export type TimelineEvent =
+  | { ts: string; kind: 'status'; status: SessionLifecycle; proposal: SessionProposal | null; note: string | null; display?: string }
+  | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
+
+// The timeline is a history: events read in occurrence order (sequence breaks ties). Migrated legacy history
+// lands after the live events in sequence but before them in time, and it is shown where it happened.
+const canonicalSessionId = (id: string): string => readAliasedRawRecord(id)?.session_id ?? id
+
+const canonicalTimelineEvents = (id: string): TimelineEvent[] | null => {
+  const canonicalId = canonicalSessionId(id)
+  const application = configuredSessionApplicationIfCutover()
+  if (!application || !application.readState(canonicalId)) return null
+  const ordered = [...application.readEvents(canonicalId)].sort((a, b) => a.occurredAtMs - b.occurredAtMs || a.eventSeq - b.eventSeq)
+  return ordered.flatMap((event): TimelineEvent[] => {
+    const decoded = decodeEventJson(event.payload)
+    if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return []
+    const payload = decoded as Record<string, unknown>
+    if (event.type === 'session.state.changed.v1' || event.type === MIGRATED_STATE_EVENT) return [{
+      ts: new Date(event.occurredAtMs).toISOString(),
+      kind: 'status',
+      status: String(payload.status) as SessionLifecycle,
+      proposal: payload.proposal === null || payload.proposal === undefined ? null : String(payload.proposal) as SessionProposal,
+      note: payload.note === null || payload.note === undefined ? null : String(payload.note),
+    }]
+    if (event.type === 'session.message.sent.v1' || event.type === MIGRATED_MESSAGE_EVENT) return [{
+      ts: new Date(event.occurredAtMs).toISOString(),
+      kind: 'sent',
+      mid: String(payload.messageId),
+      text: String(payload.text),
+      from: payload.from === null || payload.from === undefined ? null : String(payload.from),
+      ...(payload.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
+    }]
+    return []
+  })
+}
+
+export const timelineEvents = (id: string): TimelineEvent[] => canonicalTimelineEvents(id) ?? []
+
+export const timelineStamp = (id: string): string | null => {
+  const canonicalId = canonicalSessionId(id)
+  const application = configuredSessionApplicationIfCutover()
+  if (application?.readState(canonicalId)) {
+    const events = application.readEvents(canonicalId)
+    return events.length === 0 ? null : String(events.at(-1)!.eventSeq)
+  }
+  return null
+}
+
+export const timelineTail = (id: string, limit = 500): TimelineEvent[] =>
+  timelineEvents(id).slice(-Math.max(1, limit))
+
+export const lastHumanSendVia = (id: string): 'note' | null => {
+  const events = timelineEvents(id)
+  const sent = [...events].reverse().find((event): event is Extract<TimelineEvent, { kind: 'sent' }> => event.kind === 'sent' && event.from === null)
+  return sent?.replyVia ?? null
+}
+
+export const currentHumanTurn = (id: string): { token: string; acceptedAt: string } | null => {
+  const sent = [...timelineEvents(id)].reverse().find((event): event is Extract<TimelineEvent, { kind: 'sent' }> => event.kind === 'sent' && event.from === null)
+  return sent ? { token: sent.mid, acceptedAt: sent.ts } : null
+}
+
+export const recordStatus = (id: string, status: SessionLifecycle, proposal: SessionProposal | null, note: string | null): void => {
+  const application = configuredSessionApplicationIfCutover()
+  if (!application?.readState(id)) throw new Error(`cannot record status for unknown canonical session ${id}`)
+  application.transitionSession(id, { status, proposal, note, reason: 'cli-status' })
+}
 
 const PROPOSAL_DISPLAY: Record<string, DisplayWord> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 type DisplayWord = 'working' | 'idle' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
@@ -14,38 +81,11 @@ export const timelineDisplay = (event: { status: SessionLifecycle; proposal: Ses
 // The HTTP projection remains a SpexCode concern: it resolves aliases, hides unmanaged records, and adds the
 // board's display vocabulary. The package beneath it only reads the durable file protocol.
 export function readTimeline(id: string, limit = 500): { events: TimelineEvent[] } | null {
-  let raw: ReturnType<typeof readAliasedRawRecord> = null
-  try { raw = readAliasedRawRecord(id) } catch { /* cutover sessions may have no legacy record */ }
   const application = configuredSessionApplicationIfCutover()
-  const sessionId = raw?.session_id ?? id
-  if (application && application.readState(sessionId)) {
-    const events = application.events.read(sessionId).flatMap((event): TimelineEvent[] => {
-      const payload = JSON.parse(new TextDecoder().decode(event.payload)) as Record<string, unknown>
-      if (event.type === 'session.state.changed.v1') {
-        return [{
-          ts: new Date(event.occurredAtMs).toISOString(),
-          kind: 'status',
-          status: String(payload.status) as SessionLifecycle,
-          proposal: payload.proposal === null ? null : String(payload.proposal) as SessionProposal,
-          note: payload.note === null ? null : String(payload.note),
-        }]
-      }
-      if (event.type === 'session.message.sent.v1') {
-        return [{
-          ts: new Date(event.occurredAtMs).toISOString(),
-          kind: 'sent',
-          mid: String(payload.messageId),
-          text: String(payload.text),
-          from: payload.from === null ? null : String(payload.from),
-          ...(payload.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
-        }]
-      }
-      return []
-    })
-    return { events: events.slice(-Math.max(1, limit)).map((event) =>
+  const canonicalId = canonicalSessionId(id)
+  if (application && application.readState(canonicalId)) {
+    return { events: canonicalTimelineEvents(id)!.slice(-Math.max(1, limit)).map((event) =>
       event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event) }
   }
-  if (!raw || !raw.governed) return null
-  return { events: timelineTail(raw.session_id, limit).map((event) =>
-    event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event) }
+  return null
 }

@@ -78,6 +78,39 @@ export function retiredAxisNotice(cfg: { render?: string; private?: boolean }): 
 function gitCommonDirOf(proj: string): string {
   return git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
 }
+
+// Codex resolves linked-worktree project hooks from the main checkout, but old materializers left a second
+// executable copy in each worktree. Migrate only an exact SpexCode-only JSON config; a file with any user
+// hook is theirs and remains untouched. This is a one-time identity migration, not a sibling configuration
+// sweep: it never creates files and never changes the main checkout's owner.
+function retireLegacyCodexAnchors(checkout: string): void {
+  let listing: string
+  try { listing = git(['-C', checkout, 'worktree', 'list', '--porcelain']) } catch { return }
+  const paths = [...listing.matchAll(/^worktree (.+)$/gm)].map(match => match[1]).filter(path => path !== checkout)
+  for (const tree of paths) {
+    const file = join(tree, '.codex', 'hooks.json')
+    if (!existsSync(file)) continue
+    let parsed: unknown
+    try { parsed = JSON.parse(readFileSync(file, 'utf8')) } catch { continue }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+    const hooks = (parsed as { hooks?: unknown }).hooks
+    if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks)) continue
+    const commands: string[] = []
+    for (const groups of Object.values(hooks as Record<string, unknown>)) {
+      if (!Array.isArray(groups)) continue
+      for (const group of groups) {
+        if (!group || typeof group !== 'object') continue
+        for (const hook of ((group as { hooks?: unknown }).hooks as unknown[] | undefined) ?? []) {
+          if (hook && typeof hook === 'object' && typeof (hook as { command?: unknown }).command === 'string')
+            commands.push((hook as { command: string }).command)
+        }
+      }
+    }
+    if (!commands.length || commands.some(command => !command.includes('dispatch.sh'))) continue
+    writeFileIfChanged(file, '{\n  "hooks": {}\n}\n')
+  }
+}
+
 function infoExcludePath(proj: string): string {
   return join(gitCommonDirOf(proj), 'info', 'exclude')
 }
@@ -274,6 +307,20 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const targets = resolveHarnessTargets(cfg.harnesses)
   retiredAxisNotice(cfg)                                                  // [[residence]] — the vote axis is retired
   const { selected, plugins } = partitionHarnesses(targets)
+  // Codex's project shim is shared by every linked worktree. Its command paths therefore belong to the
+  // main checkout, while tree-scoped shims may use this checkout's toolchain. Otherwise the last worktree
+  // to materialize silently steals the root hook owner from every other session.
+  const checkout = mainCheckout(proj)
+  retireLegacyCodexAnchors(checkout)
+  const projectDispatch = existsSync(join(checkout, 'spec-cli', 'hooks', 'dispatch.sh'))
+    ? join(checkout, 'spec-cli', 'hooks', 'dispatch.sh')
+    : DISPATCH
+  const projectSpex = existsSync(join(checkout, 'spec-cli', 'bin', 'spex.mjs'))
+    ? join(checkout, 'spec-cli', 'bin', 'spex.mjs')
+    : SPEX
+  const shimFor = (h: typeof HARNESSES[number]) => h.shimScope === 'project'
+    ? h.shim(projectDispatch, projectSpex)
+    : h.shim(DISPATCH, SPEX)
   const skillNodes = loadSkillConfig()
   const agentNodes = loadAgentConfig()
   const commandNodes = loadConfig()
@@ -315,15 +362,20 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   }
   for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) addTarget(contractTargets, f, contract)
-    const shim = h.shim(DISPATCH, SPEX)
+    const shim = shimFor(h)
+    // Codex discovers the root-checkout shim through this worktree anchor, but also parses the anchor as a
+    // project config layer. A second copy of our dispatcher therefore runs the same PreToolUse event twice.
+    // Keep the anchor present for layer discovery while leaving its hook set empty; the root checkout remains
+    // the sole executable hook owner.
+    // Claude reads project settings from the session's cwd only (measured on Claude Code 2.1.241: a hook
+    // configured solely in the main checkout never fires inside a nested linked worktree), so every tree
+    // carries its own tree-scoped shim; a session launched at the root fires the root's, never both.
     const target: ShimTarget = { ownership: h.shimOwnership, content: shim.content, hooks: shim.hooks }
-    if (h.shimScope === 'tree') {
-      addShimTarget(treeShimTargets, h.shimFile(proj), target)
-    }
+    if (h.shimScope === 'tree') addShimTarget(treeShimTargets, h.shimFile(proj), target)
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) addShimTarget(anchorTargets, anchor, target)
+    if (anchor) addShimTarget(anchorTargets, anchor, { ownership: 'exclusive', content: '{\n  "hooks": {}\n}\n' })
   }
   for (const sk of skillNodes) for (const h of selected) {
     const dir = h.skillDir(proj); if (!dir) continue
@@ -368,7 +420,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     console.warn(`spexcode: ${visibleShims.map((f) => relative(proj, f)).join(', ')} carries your own configuration, so it stays visible to git — and it now also holds SpexCode's hook entries, whose commands are absolute paths to THIS machine's toolchain. Committing them would break the file for everyone else. Keep them out of your commits (each clone re-materializes its own), or adopt with "harnesses": [] and wire the hooks yourself.`)
   const selectedByDispatch = new Map(selected.map((h) => [h.dispatchId, h]))
   for (const h of selectedByDispatch.values()) {
-    const shim = h.shim(DISPATCH, SPEX)
+    const shim = shimFor(h)
     if (h.shimScope === 'project') {
       const file = h.shimFile(proj)
       mkdirSync(dirname(file), { recursive: true })

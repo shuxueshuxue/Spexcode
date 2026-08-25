@@ -196,7 +196,7 @@ surface:
 - **trust** — make an agent run our hooks with zero prompts. This is codex's HARDEST divergence, because
   `--dangerously-bypass-hook-trust` covers only ONE of THREE independent codex tiers a dispatched worker must
   satisfy — the other two the adapter establishes explicitly (bypass alone leaves a fresh-init codex worker
-  firing ZERO hooks, session.json frozen, no Session trailer):
+  firing ZERO hooks, runtime.json frozen, no Session trailer):
   - **(a) layer BUILT** — the worktree needs a `.codex/` anchor (the events/shim point above); without it codex
     builds no project layer and the hooks are never even seen.
   - **(b) layer ENABLED** — codex-rs drops a DISABLED (untrusted) project layer BEFORE hook discovery runs
@@ -646,7 +646,7 @@ from the SHARED per-project app-server process, whose env can inherit the FIRST 
 `SPEXCODE_SESSION_ID`, so a governed codex hook must NOT trust that env var. On codex, `hp_session_id` resolves
 from the hook payload's `session_id` — the acting codex THREAD id — and id→record resolution carries an ALIAS
 step: when no record sits at the id directly, find the one record that captured this id as `harness_session_id`
-(a `grep` over the few session.json files on the shell hot path — no jq; the typed TS read mirrors it in
+(a `grep` over the few runtime.json files on the shell hot path — no jq; the typed TS read mirrors it in
 `readAliasedRawRecord`). This is what lets the pure-shell `mark-active` re-flip and the ask-capture, plus every
 shell hook lifecycle write, reach the right record from a thread id even when the app-server env is contaminated.
 The alias needs no cleanup artifact — it lives in the record's own `harness_session_id`, swept with the record on
@@ -708,7 +708,7 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   AUTO-TRUSTS, masking the dispatched-worker gap: a linked-worktree thread on the shared app-server needs the
   layer BUILT + ENABLED + hooks HASHED (the trust point above) before dispatch.sh ever runs. Verified on a real
   FRESH-INIT dispatched codex worker: with the anchor + project trust + per-hook hashes in place, SessionStart…
-  Stop fire through dispatch.sh, session.json advances past launch, and the commit carries the Session trailer.
+  Stop fire through dispatch.sh, runtime.json advances past launch, and the commit carries the Session trailer.
 - **session-id model** (codex-rs source-verified): codex MINTS its own thread id internally (`Uuid::new_v4`/
   `ThreadId::new`) — there is NO flag/env to pin a NEW session's id (`CODEX_THREAD_ID` is an OUTPUT codex
   injects, not an input; resume takes an existing rollout id). So a dashboard-launched codex session can't have

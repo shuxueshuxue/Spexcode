@@ -52,18 +52,6 @@ test('release producer rejects a stale internal release reference before npm run
   }
 })
 
-test('release producer rejects a stale session-core reference from its CLI consumer', () => {
-  const dir = fixture()
-  try {
-    changeManifest(dir, RELEASE_PACKAGES.find((entry) => entry.id === 'cli'), (manifest) => {
-      manifest.dependencies['@spexcode/session-core'] = '0.0.0'
-    })
-    assert.throws(() => releasePlan(dir), /references @spexcode\/session-core@0\.0\.0/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
 test('release producer rejects a package version that drifts from the release set', () => {
   const dir = fixture()
   try {

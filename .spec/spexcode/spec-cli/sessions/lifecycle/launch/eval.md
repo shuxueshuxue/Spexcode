@@ -113,7 +113,7 @@ scenarios:
     description: >
       Measure the creation-time materialize failure path at the session-creation seam: make the worktree
       materialize throw during session creation and inspect (a) the backend's stderr and (b) the
-      session's global `session.json` record. The creation-time materialize is bootstrap — it wires the very
+      session's global `runtime.json` record. The creation-time materialize is bootstrap — it wires the very
       hooks every lifecycle dispatch rides on — so a swallowed failure means the worker launches ungoverned with
       nothing anywhere saying so.
     expected: |

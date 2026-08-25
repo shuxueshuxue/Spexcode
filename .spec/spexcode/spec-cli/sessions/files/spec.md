@@ -22,7 +22,7 @@ related:
 # files
 
 An agent hands an artifact to the human by publishing its path, not its bytes. Each session owns one
-global-store `files.json` beside its `session.json`; its JSON array of absolute paths is the complete,
+global-store `files.json` beside its `runtime.json`; its JSON array of absolute paths is the complete,
 durable state. Posting, listing, and removing edit only that list. They never copy, move, stage, or upload
 the target, so a listed path remains a live reference and may point anywhere the session host can reach.
 

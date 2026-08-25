@@ -71,7 +71,22 @@ plugin node. This replaces the launch-time
   SHARES with the user takes only our identity-stamped hook entries, merged in beside whatever they already
   had ([[harness-adapter]]'s `shimOwnership`). This pipeline never learns which harness that is — it reads the
   ownership off the adapter and picks the writer. The post-erase empty-dir sweep covers each artifact dir AND its parent
-  (never a checkout root), since a harness may nest its shim a level below its home;
+  (never a checkout root), since a harness may nest its shim a level below its home. For a linked Codex
+  worktree, the root checkout owns the executable `.codex/hooks.json` dispatcher. The worktree's
+  `.codex/hooks.json` is an empty `{ "hooks": {} }` anchor only: Codex needs the project layer anchor, but
+  parsing a second dispatcher there would execute every PreToolUse handler twice. Claude is the opposite
+  case: it loads project settings from the session's cwd only (measured on Claude Code 2.1.241 — a hook
+  configured solely in the main checkout never fires inside a nested linked worktree, and a worktree's
+  generated settings file is picked up by a running session without a restart), so every worktree carries
+  its own generated `.claude/settings.json`, and a session launched at the root fires the root's, never both.
+  Retiring the nested shim in favour of the root silently disabled every Claude lifecycle hook (mark-active,
+  stop-gate, the SessionStart runtime binding) for nested sessions. A settings file with user keys or hooks
+  is merged, never replaced. The shared
+  Codex project shim always points at the main checkout's `dispatch.sh` and `spex.mjs`, even when materialize
+  is invoked from a linked worktree; a worktree's CLI may only write its empty anchor and tree-local artifacts,
+  never replace the shared root hook owner. In a throwaway or package-installed project where the main checkout
+  has no local `spec-cli` tree, the renderer falls back to the invoking package's executable rather than
+  emitting a path that cannot run;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

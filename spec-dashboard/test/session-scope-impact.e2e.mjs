@@ -77,9 +77,9 @@ try {
   const toolbar = await page.evaluate(() => ({
     aggregateCount: document.querySelectorAll('.si-eval-measured').length,
     review: document.querySelector('.si-eval-stats .st-review')?.textContent?.trim() || '',
-    label: document.querySelector('.si-eval-tab')?.getAttribute('aria-label') || '',
+    label: document.querySelector('.si-eval-door')?.getAttribute('aria-label') || '',
     tips: [...document.querySelectorAll('.si-eval-stats [data-tip]')].map((el) => el.getAttribute('data-tip')),
-    href: document.querySelector('.si-eval-tab')?.getAttribute('href') || '',
+    href: document.querySelector('.si-eval-door')?.getAttribute('href') || '',
   }))
   check('toolbar omits the redundant measured/declared aggregate', toolbar.aggregateCount === 0, String(toolbar.aggregateCount))
   check('toolbar visibly accounts for measured scenarios still needing review', expected.needsReview === 0
@@ -91,7 +91,7 @@ try {
   check('Terminal Eval tab has the canonical scoped query', toolbar.href.split('?')[0] === '#/evals'
     && new URLSearchParams(toolbar.href.split('?')[1]).get('q') === scopedQuery, toolbar.href)
 
-  await page.click('.si-eval-tab')
+  await page.click('.si-eval-door')
   await page.waitForSelector('.se-gates > .se-door', { timeout: 20_000 })
   await page.waitForFunction((count) => document.querySelectorAll('.lp-row').length === count, expected.total)
   const list = await page.evaluate(() => ({

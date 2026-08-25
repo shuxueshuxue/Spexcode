@@ -467,10 +467,6 @@ export default {
       help: 'open this help',
     },
     shell: {
-      pageSessions: 'go to sessions page',
-      pageEvals: 'go to evals page',
-      pageIssues: 'go to issues page',
-      pageSettings: 'go to settings page',
       newSession: 'open new session',
       evals: 'open evals page',
       search: 'search sessions',

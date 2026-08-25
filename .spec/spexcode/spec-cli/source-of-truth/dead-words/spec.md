@@ -27,7 +27,7 @@ its historical names). CI enforces this permanently.
 locally, exit 0 clean / 1 findings) scans exactly the surfaces where the words are dead, not the
 whole repo:
 
-- **string literals** in source under `spec-cli/src`, `packages/session-core/src`, `spec-eval/src`, `spec-forge/src`,
+- **string literals** in source under `spec-cli/src`, `packages/session-*/src`, `spec-eval/src`, `spec-forge/src`,
   `spec-dashboard/src`, `spec-cli/templates` — a command, route, or label lives in a string; a code
   comment is prose and never scanned. A real tokenizer (comment/string/template/regex-aware) does the
   extraction, so a quoted word inside a comment can't false-positive and a regex body can't open a

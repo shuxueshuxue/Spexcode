@@ -26,12 +26,9 @@ export const ACT = [
   // modals
   { id: 'graph.settings',  keys: [','],      rebind: true, desc: 'legend.graph.settings' },
   { id: 'graph.help',      keys: ['?'],      rebind: true, desc: 'legend.graph.help' },
-  // the page-jump vocabulary is the RAIL's order, and it lost its first entry when the graph left the rail
-  // ([[side-nav]]): sessions is now ⌥1. A retired destination does not keep a digit warm.
-  { id: 'shell.pageSessions',keys: ['Alt+Digit1'], rebind: false, desc: 'legend.shell.pageSessions' },
-  { id: 'shell.pageEvals',   keys: ['Alt+Digit2'], rebind: false, desc: 'legend.shell.pageEvals' },
-  { id: 'shell.pageIssues',  keys: ['Alt+Digit3'], rebind: false, desc: 'legend.shell.pageIssues' },
-  { id: 'shell.pageSettings',keys: ['Alt+Digit4'], rebind: false, desc: 'legend.shell.pageSettings' },
+  // No positional page-jump row. A digit named a rail SLOT, so every rail change renumbered the whole set
+  // and the hint a control printed stopped matching the finger that learned it ([[side-nav]]). The named
+  // doors below survive a reorder because they name a destination, not a position.
   { id: 'shell.newSession',  keys: ['Alt+KeyN'],   rebind: false, desc: 'legend.shell.newSession' },
   { id: 'shell.evals',       keys: ['Alt+KeyF'],   rebind: false, desc: 'legend.shell.evals' },
   { id: 'shell.search',      keys: ['Alt+Slash'],  rebind: false, desc: 'legend.shell.search' },

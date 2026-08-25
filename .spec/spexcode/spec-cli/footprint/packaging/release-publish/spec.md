@@ -8,7 +8,6 @@ code:
 related:
   - package.json
   - packages/spec-core/package.json
-  - packages/session-core/package.json
   - spec-eval/package.json
   - spec-forge/package.json
   - spec-cli/package.json
@@ -17,9 +16,10 @@ related:
 ---
 # release-publish
 
-The metapackage is not a release unit by itself. A release is the committed set of seven public packages:
-`@spexcode/spec-core`, `@spexcode/session-core`, `@spexcode/spec-eval`, `@spexcode/spec-forge`, `@spexcode/spec-cli`,
-`@spexcode/spec-dashboard`, and `spexcode`. They all carry one exact release version. Every internal package
+The metapackage is not a release unit by itself. A release is the committed set of six public packages:
+`@spexcode/spec-core`, `@spexcode/spec-eval`, `@spexcode/spec-forge`, `@spexcode/spec-cli`,
+`@spexcode/spec-dashboard`, and `spexcode`. The `@spexcode/session-*` packages are private workspace implementation
+packages selected through the CLI's dependency closure, not separately published release members. Every public package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
 the publication order is core, dashboard, session, eval, forge, CLI, root. Session follows the independently
 published dashboard and still precedes its CLI consumer. Dashboard is independent of the root's

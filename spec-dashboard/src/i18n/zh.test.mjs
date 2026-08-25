@@ -43,11 +43,11 @@ test('no dictionary hardcodes a keyboard shortcut into a label', () => {
 })
 
 test('shortcut hints resolve from the registry, modifiers included', () => {
-  // the digits are the RAIL's order, so retiring the graph from the rail moved every one of them down
-  // ([[side-nav]] / [[keyboard-nav]]): ⌥1 names sessions now, and `shell.pageGraph` is not an action at all.
-  assert.equal(shortcutHint('shell.pageGraph'), '')
-  assert.equal(shortcutHint('shell.pageSessions'), '⌥1')
-  assert.equal(shortcutHint('shell.pageEvals', 'shell.evals'), '⌥2 · ⌥F')
+  // the positional ⌥-digit page row is retired ([[side-nav]] / [[keyboard-nav]]): no page id is an action
+  // any more, so a reader asking for one gets no hint — never a digit the keyboard no longer fires.
+  assert.equal(shortcutHint('shell.pageSessions'), '')
+  assert.equal(shortcutHint('shell.pageIssues'), '')
+  assert.equal(shortcutHint('shell.pageEvals', 'shell.evals'), '⌥F')
   assert.equal(shortcutHint('graph.search', 'shell.search'), '/ · ⌥/')
   assert.equal(shortcutHint('shell.commandBox'), '⌥I')
   assert.equal(shortcutHint('graph.newChild'), 'nn')

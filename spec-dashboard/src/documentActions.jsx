@@ -7,9 +7,14 @@ const DocumentActionApi = createContext(null)
 const DocumentActionState = createContext(null)
 
 const actionKey = (document, id) => `${document}\u0000${id}`
+// `menuKey`/`nodeKey` are how a document states that content the frame cannot inspect has changed: a React
+// element is opaque to a value comparison, so an action that draws itself names its own state the same way
+// a popup does. Without that, the registry keeps the FIRST element it was handed and the action goes stale
+// while its data moves on.
 const renderKey = (action) => [
   action.document, action.id, action.icon, action.label, action.disabled ? '1' : '0',
   action.disabledReason || '', action.pressed ? '1' : '0', action.menuKey || (action.menu ? 'menu' : ''),
+  action.nodeKey || (action.node ? 'node' : ''),
 ].join('|')
 
 export function DocumentActionProvider({ children }) {

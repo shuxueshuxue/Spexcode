@@ -84,8 +84,8 @@ hp_session_id() {
     codex) hp_field "$1" session_id ;;
     *)     pid=$(hp_field "$1" session_id)
            if [ -n "$pid" ] && [ -n "$SPEXCODE_SESSION_ID" ] && [ "$pid" != "$SPEXCODE_SESSION_ID" ] \
-              && [ ! -e "$(hp_store_dir "$pid")/session.json" ] \
-              && [ -e "$(hp_store_dir "$SPEXCODE_SESSION_ID")/session.json" ]; then
+              && [ ! -e "$(hp_store_dir "$pid")/runtime.json" ] \
+              && [ -e "$(hp_store_dir "$SPEXCODE_SESSION_ID")/runtime.json" ]; then
              printf '%s' "$SPEXCODE_SESSION_ID"
            else
              printf '%s' "${pid:-$SPEXCODE_SESSION_ID}"
@@ -139,19 +139,19 @@ hp_tree_dir() {
 # payload session_id on codex: the codex THREAD id, NOT the SpexCode record id the dir is keyed by. So when no
 # record sits at <id> directly, find the one record that captured this id as `harness_session_id` (the backend
 # stored it at thread/start, before the first tool turn).
-# A grep over the few session.json files — no jq on the hot path; the trailing quote anchors the value so a
+# A grep over the few runtime.json files — no jq on the hot path; the trailing quote anchors the value so a
 # thread id can't match a longer one as a prefix. Direct hit wins; a miss with no alias echoes the direct path
 # unchanged, so the caller's `[ -e "$rec" ]` still no-ops gracefully. Mirrors layout.ts `readAliasedRawRecord`.
 hp_store_dir() {
   local rd; rd=$(hp_runtime_dir) || return 1
   local direct="$rd/sessions/$1"
-  if [ -e "$direct/session.json" ]; then printf '%s' "$direct"; return 0; fi
+  if [ -e "$direct/runtime.json" ]; then printf '%s' "$direct"; return 0; fi
   # same two-halves-of-absence rule as layout.ts's readAliasedRecordEntry: an id owning a store dir is already
   # one of ours, so its emptiness is settled and the alias grep is the wrong question (and a whole-store scan).
   if [ -d "$direct" ]; then printf '%s' "$direct"; return 0; fi
   local hit
-  hit=$(grep -lF "\"harness_session_id\": \"$1\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1)
-  [ -n "$hit" ] && { printf '%s' "${hit%/session.json}"; return 0; }
+  hit=$(grep -lF "\"harness_session_id\": \"$1\"" "$rd"/sessions/*/runtime.json 2>/dev/null | head -1)
+  [ -n "$hit" ] && { printf '%s' "${hit%/runtime.json}"; return 0; }
   printf '%s' "$direct"
 }
 

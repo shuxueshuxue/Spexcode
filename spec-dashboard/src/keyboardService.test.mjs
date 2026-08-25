@@ -54,6 +54,21 @@ test('typing guard reaches graph and shared list/player owners', () => {
   assert.doesNotMatch(reviewShell, /isTypingTarget/)
 })
 
+// THE POSITIONAL PAGE ROW IS WITHDRAWN, not merely unbound. A digit named a rail SLOT, so every change to
+// [[side-nav]]'s order renumbered the whole set at once and the hints the rail, the legend and the settings
+// editor printed for it stopped matching the keyboard. Keeping a retired chord in the table would keep all
+// three readers advertising a key nothing fires, which is the exact failure the one-registry rule exists to
+// prevent — so the assertion is on the REGISTRY, not on the handler that used to read it.
+test('no shell action is bound to a positional Alt+digit page jump', () => {
+  const digits = ACT.filter((action) => (action.keys || []).some((key) => /Digit\d/.test(key)))
+  assert.deepEqual(digits.map((action) => action.id), [])
+  assert.deepEqual(ACT.filter((action) => /^shell\.page/.test(action.id)).map((action) => action.id), [])
+  assert.doesNotMatch(shell, /shell\.page(?:Sessions|Evals|Issues|Settings)/)
+  // the named doors that survive a reorder are untouched
+  for (const id of ['shell.newSession', 'shell.evals', 'shell.search'])
+    assert.ok(ACT.some((action) => action.id === id), `${id} must remain a shell door`)
+})
+
 test('fixed chord display is complete while rebindable display follows live keys', () => {
   const child = ACT.find((action) => action.id === 'graph.newChild')
   const del = ACT.find((action) => action.id === 'graph.del')

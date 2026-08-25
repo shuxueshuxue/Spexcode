@@ -13,14 +13,14 @@
 # request_user_input tool) — read via hp_is_ask, so this hook never names a harness tool.
 # Fires BEFORE the tool runs, so a `spex session done` declaration (itself a tool) lands AFTER this and wins;
 # the next real tool flips back to active, forcing a fresh Stop-gate declaration.
-# @@@ one writer - this hook is on the hot path (every tool call), but it must not inspect session.json to
+# @@@ one writer - this hook is on the hot path (every tool call), but it must not inspect runtime.json to
 # decide whether a transition is needed. That file is only a runtime/worktree envelope; the canonical
 # session application is the lifecycle authority. The structured writer is idempotent for an unchanged state,
 # so every eligible event goes through the same writer and cannot short-circuit on a second fact. It never
-# edits session.json itself: an asking note is arbitrary prose, and shell substitution is not a record writer
+# edits runtime.json itself: an asking note is arbitrary prose, and shell substitution is not a record writer
 # ([[sessions-core]]).
 # @@@ global store - the lifecycle state lives in the canonical session application, keyed by the harness
-# session_id, grouped per-project (see hp_store_dir). The sibling session.json is only the runtime/worktree
+# session_id, grouped per-project (see hp_store_dir). The sibling runtime.json is only the runtime/worktree
 # envelope. GATED on `governed`: a user-self-launched
 # (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
@@ -43,14 +43,9 @@ if [ "$(hp_field "$payload" hook_event_name)" = "UserPromptSubmit" ]; then
   esac
 fi
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
-sdir=$(hp_store_dir "$sid") || exit 0
-rec="$sdir/session.json"
-# board-lifecycle gate: only a GOVERNED (dashboard-launched) session has a board state to maintain.
-grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
-
-# The writer's own stdout is a human confirmation, not hook output — swallow it so a PreToolUse handler never
-# emits a decision-shaped line; its stderr (a refusal — a corrupt or retired record) still surfaces. We always
-# exit 0: this hook observes freshness, it is not a gate on the tool that triggered it.
+# The canonical writer owns governed/lifecycle validation. The hook must not inspect runtime.json: that file is
+# a runtime envelope, and using it as a gate is how old/missing envelopes silently disabled mark-active.
+# The writer's stdout is a human confirmation, not hook output; stderr remains visible for real refusals.
 if [ -n "$(hp_is_ask "$payload")" ]; then
   # first question's text → the note (best-effort). It is passed as ONE argv word to the writer, so quotes,
   # backslashes, newlines, and non-ASCII reach the record intact — no shell ever composes the JSON.

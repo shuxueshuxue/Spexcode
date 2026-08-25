@@ -320,6 +320,16 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   spex(wt, 'materialize')                                  // per-worktree materialize (as sessions.ts does at launch)
 
   assert.ok(existsSync(join(wt, '.codex', 'hooks.json')), 'worktree has a .codex/hooks.json anchor')
+  assert.deepEqual(JSON.parse(readFileSync(join(wt, '.codex', 'hooks.json'), 'utf8')), { hooks: {} }, 'anchor is empty so the root checkout is the sole hook owner')
+  // Claude loads project settings from the session cwd only, so the nested worktree needs its own dispatcher shim
+  const nestedClaude = JSON.parse(readFileSync(join(wt, '.claude', 'settings.json'), 'utf8')) as { hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>> }
+  assert.ok(nestedClaude.hooks.PreToolUse?.some((entry) => entry.hooks.some((hook) => hook.command.includes('dispatch.sh claude PreToolUse'))), 'nested worktree carries its own Claude dispatcher shim')
+  writeFileSync(join(wt, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash(git:*)'] }, hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'user-owned-hook' }] }] } }))
+  spex(wt, 'materialize')
+  const userClaude = JSON.parse(readFileSync(join(wt, '.claude', 'settings.json'), 'utf8'))
+  assert.equal(userClaude.permissions.allow[0], 'Bash(git:*)', 'a user-owned nested Claude settings file survives materialize')
+  assert.ok(userClaude.hooks.PreToolUse.some((entry: { hooks: Array<{ command: string }> }) => entry.hooks.some((hook) => hook.command === 'user-owned-hook')), 'user hook survives materialize')
+  assert.ok(userClaude.hooks.PreToolUse.some((entry: { hooks: Array<{ command: string }> }) => entry.hooks.some((hook) => hook.command.includes('dispatch.sh claude PreToolUse'))), 'our dispatcher is merged beside the user hook')
   assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'main checkout still has the codex shim')
   const cfg = readFileSync(join(codex, 'config.toml'), 'utf8')
   assert.ok(cfg.includes(`[projects."${proj}"]`) && cfg.includes('trust_level = "trusted"'), 'main-checkout project trusted')

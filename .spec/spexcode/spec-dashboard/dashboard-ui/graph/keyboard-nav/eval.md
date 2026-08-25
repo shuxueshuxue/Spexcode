@@ -166,8 +166,9 @@ scenarios:
     expected: >-
       Modified browser/system shortcuts pass through the graph handler: they are not prevented, do not
       move focus, do not open graph overlays, and do not navigate the dashboard. The only modified
-      shortcuts the graph claims are the explicit app accelerators: Alt+/ for session-boosted search
-      and the Alt page jumps.
+      shortcuts the app claims are the NAMED ⌥ doors — Alt+/ for session-boosted search, Alt+N, Alt+F,
+      and the ⌥⇧ session/tab chords. There is no Alt page-jump row any more, so Alt+1..Alt+5 join the
+      pass-through set: unprevented, and changing neither route nor focus nor overlay.
     code:
       - spec-dashboard/src/Shell.jsx
       - spec-dashboard/src/GraphView.jsx

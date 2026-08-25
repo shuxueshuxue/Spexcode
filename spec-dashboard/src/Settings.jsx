@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { ACT, displayKeysOf, keyCap } from './keymap.js'
@@ -19,9 +19,43 @@ import {
   setDefaultSessionSurface,
 } from './sessionSurface.js'
 
+// The page's one control grammar: a SECTION is a heading over rows, a ROW is a label beside its control,
+// and a choice among a few values is a segmented control — one selected segment, the rest quiet. The
+// segments keep the `set-lang` class every list of choices has always worn.
+function Section({ title, children }) {
+  return (
+    <section className="set-sec">
+      <h2 className="set-h">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="set-row">
+      <span className="set-label">{label}</span>
+      <div className="set-control">{children}</div>
+    </div>
+  )
+}
+
+function Segmented({ label, value, options, onPick }) {
+  return (
+    <div className="set-seg" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button key={option.value} type="button" className={option.value === value ? 'set-lang on' : 'set-lang'}
+          aria-pressed={option.value === value} onClick={() => onPick(option.value)}>
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // Shortcuts editor — one row per action; a click on a rebindable cell captures the next keypress.
 function Shortcuts({ t }) {
-  const [tick, setTick] = useState(0)        // re-render after a binding changes
+  const [, setTick] = useState(0)          // re-render after a binding changes
   const [cap, setCap] = useState(null)       // action id being captured, or null
   const refresh = () => setTick((n) => n + 1)
 
@@ -35,12 +69,11 @@ function Shortcuts({ t }) {
   }, 20)
 
   return (
-    <section className="legend-sec">
-      <div className="legend-h">{t('settings.secShortcuts')}</div>
+    <Section title={t('settings.secShortcuts')}>
       <div className="set-keys">
         {ACT.map((a) => (
           <div className="set-key-row" key={a.id}>
-            <span className="legend-desc">{t(a.desc)}</span>
+            <span className="set-key-desc">{t(a.desc)}</span>
             <button
               className={`bind-cell${cap === a.id ? ' capturing' : ''}${a.rebind ? '' : ' fixed'}${isCustom(a.id) ? ' custom' : ''}`}
               disabled={!a.rebind}
@@ -53,10 +86,27 @@ function Shortcuts({ t }) {
         ))}
       </div>
       <div className="set-foot">
-        <span className="legend-desc set-hint">{t('settings.shortcutsHint')}</span>
+        <span className="set-hint">{t('settings.shortcutsHint')}</span>
         <button className="set-reset" onClick={() => { resetBindings(); setCap(null); refresh() }}>{t('settings.reset')}</button>
       </div>
-    </section>
+    </Section>
+  )
+}
+
+// The theme picker shows each preset as itself: its ground under its paper, its ink, its accent — read from
+// the registry's swatch, which the styles gate holds to the sheet's theme rows.
+function ThemeSwatch({ theme, on, onPick, label }) {
+  const { ground, paper, ink, accent } = theme.swatch
+  return (
+    <button type="button" className={on ? 'set-swatch on' : 'set-swatch'} aria-pressed={on} onClick={onPick}>
+      <span className="set-swatch-chip" aria-hidden="true" style={{ background: ground }}>
+        <span className="set-swatch-paper" style={{ background: paper, color: ink }}>
+          <span className="set-swatch-line" style={{ background: ink }} />
+          <span className="set-swatch-line short" style={{ background: accent }} />
+        </span>
+      </span>
+      <span className="set-swatch-name">{label}</span>
+    </button>
   )
 }
 
@@ -71,72 +121,44 @@ export default function Settings() {
   return (
     <PageScroll className="page-settings-scroll">
       <div className="settings-body">
-      <h1 className="page-title">{t('settings.title')}</h1>
-      <section className="legend-sec">
-        <div className="legend-h">{t('settings.secLanguage')}</div>
-        <div className="set-langs">
-          {LANGUAGES.map((l) => (
-            <button
-              key={l.code}
-              className={l.code === lang ? 'set-lang on' : 'set-lang'}
-              onClick={() => setLang(l.code)}
-              aria-pressed={l.code === lang}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="legend-sec">
-        <div className="legend-h">{t('settings.secTheme')}</div>
-        <div className="set-langs">
-          {THEMES.map((th) => (
-            <button
-              key={th.code}
-              className={th.code === theme ? 'set-lang on' : 'set-lang'}
-              onClick={() => pickTheme(th.code)}
-              aria-pressed={th.code === theme}
-            >
-              {t(th.label)}
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="legend-sec">
-        <div className="legend-h">{t('settings.secTerminal')}</div>
-        <div className="set-terminal-surface">
-          <span>{t('settings.defaultSessionSurface')}</span>
-          <div className="set-langs" role="group" aria-label={t('settings.defaultSessionSurface')}>
-            <button
-              className={defaultSessionSurface === SESSION_SURFACE_TERMINAL ? 'set-lang on' : 'set-lang'}
-              onClick={() => pickDefaultSessionSurface(SESSION_SURFACE_TERMINAL)}
-              aria-pressed={defaultSessionSurface === SESSION_SURFACE_TERMINAL}
-            >
-              {t('session.tabTerminal')}
-            </button>
-            <button
-              className={defaultSessionSurface === SESSION_SURFACE_CONVERSATION ? 'set-lang on' : 'set-lang'}
-              onClick={() => pickDefaultSessionSurface(SESSION_SURFACE_CONVERSATION)}
-              aria-pressed={defaultSessionSurface === SESSION_SURFACE_CONVERSATION}
-            >
-              {t('session.tabConversation')}
-            </button>
+        <h1 className="page-title">{t('settings.title')}</h1>
+        <Section title={t('settings.secLanguage')}>
+          <Row label={t('settings.uiLanguage')}>
+            <Segmented label={t('settings.secLanguage')} value={lang} onPick={setLang}
+              options={LANGUAGES.map((l) => ({ value: l.code, label: l.label }))} />
+          </Row>
+        </Section>
+        <Section title={t('settings.secTheme')}>
+          <div className="set-swatches" role="group" aria-label={t('settings.secTheme')}>
+            {THEMES.map((th) => (
+              <ThemeSwatch key={th.code} theme={th} label={t(th.label)} on={th.code === theme} onPick={() => pickTheme(th.code)} />
+            ))}
           </div>
-        </div>
-        <label className="set-terminal-font">
-          <span>{t('settings.terminalFontSize')}</span>
-          <input
-            type="range"
-            min={TERMINAL_FONT_MIN}
-            max={TERMINAL_FONT_MAX}
-            step={TERMINAL_FONT_STEP}
-            value={terminalFontSize}
-            onChange={(event) => pickTerminalFontSize(event.target.value)}
-          />
-          <output>{terminalFontSize}px</output>
-        </label>
-      </section>
-      <Shortcuts t={t} />
+        </Section>
+        <Section title={t('settings.secTerminal')}>
+          <Row label={t('settings.defaultSessionSurface')}>
+            <Segmented label={t('settings.defaultSessionSurface')} value={defaultSessionSurface} onPick={pickDefaultSessionSurface}
+              options={[
+                { value: SESSION_SURFACE_TERMINAL, label: t('session.tabTerminal') },
+                { value: SESSION_SURFACE_CONVERSATION, label: t('session.tabConversation') },
+              ]} />
+          </Row>
+          <Row label={t('settings.terminalFontSize')}>
+            <label className="set-terminal-font">
+              <input
+                type="range"
+                min={TERMINAL_FONT_MIN}
+                max={TERMINAL_FONT_MAX}
+                step={TERMINAL_FONT_STEP}
+                value={terminalFontSize}
+                onChange={(event) => pickTerminalFontSize(event.target.value)}
+                aria-label={t('settings.terminalFontSize')}
+              />
+              <output>{terminalFontSize}px</output>
+            </label>
+          </Row>
+        </Section>
+        <Shortcuts t={t} />
       </div>
     </PageScroll>
   )

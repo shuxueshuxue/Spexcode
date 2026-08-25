@@ -12,6 +12,7 @@ import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { holdAnchor } from './tabs.js'
 import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
+import { GLYPH } from './specMeta.js'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
 import { stripProseTitle } from './proseTokens.js'
@@ -58,9 +59,6 @@ const pageFilterModel = (data, t) => {
     facets: Object.fromEntries(Object.entries(data?.facets || {}).map(([key, facet]) => [key, localize(facet)])),
   }
 }
-
-// op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
-const OP_GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
 // Compatibility shell: all body callers now cross the shared markdown-it token boundary. The legacy
 // implementation above remains named (and removable in the later surface migrations), but is no longer
@@ -172,8 +170,8 @@ export function SpecPane({ node, graphOnly = false }) {
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
-      <h1># {node.title}</h1>
-      <blockquote>{node.desc}</blockquote>
+      <h1 className="doc-title">{node.title}</h1>
+      <blockquote className="doc-desc">{node.desc}</blockquote>
       <div className="doc-stat">
         <span className={`stat-status st-${node.status}`} data-tip={t('nodeView.statusLabel')}>
           <i className="stat-dot" />{t(`status.${node.status}`)}
@@ -438,7 +436,7 @@ function EditOverlay({ node, ov }) {
   return (
     <figure className="edit-rev">
       <figcaption className="edit-by">
-        <span className={`ov-mark ov-${ov.op}`}>{OP_GLYPH[ov.op] || '•'}</span>
+        <span className={`ov-mark ov-${ov.op}`}>{GLYPH[ov.op] || '•'}</span>
         <span className="edit-by-label">{ov.label}</span>
         <span className="edit-state">{ov.committed ? t('nodeView.editCommitted') : t('nodeView.editDirty')}</span>
       </figcaption>

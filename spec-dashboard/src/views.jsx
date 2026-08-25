@@ -122,8 +122,6 @@ export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
 registerPlugin(createSettingsViewPlugin(SettingsView))
 
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
-export const preloadView = () => Promise.resolve()
-export const surfaceFor = (page) => viewFor(page).surface || 'workspace'
 export const iconFor = (page) => viewRegistry.get(page)?.icon || null
 export const isDocument = (page, param = null) => {
   const view = viewRegistry.get(page)

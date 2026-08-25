@@ -79,11 +79,6 @@ function StepRail({ events, axis, extent, activeStepIdx, onSeek }) {
   )
 }
 
-// the deterministic concern key binding an eval's remark thread to its (node, scenario) — the thread IS a
-// local Issue, keyed by this exact concern text (ids de-collide, concerns don't). Kept only for display /
-// marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
-export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
-
 // the A/B strip's bounded window ([[event-detail]]): at most this many verdict pips render — the strip
 // stays ONE line at a stable height however many readings a scenario accrues.
 export const AB_WINDOW = 8

@@ -477,7 +477,7 @@ function RowMenu({ menu, onClose }) {
   )
 }
 
-export function ListPage({ notice, leading, error, loading = false, title, action, search, sections = [], sectionMode = 'tabs', facets, secondaryFilters, rows, empty, pagination, children }) {
+export function ListPage({ leading, error, loading = false, title, action, search, sections = [], sectionMode = 'tabs', facets, secondaryFilters, rows, empty, pagination, children }) {
   const t = useT()
   const [cur, setCur] = useState(null)
   const [rowMenu, setRowMenu] = useState(null)
@@ -509,7 +509,6 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
   const tabId = (index) => `${tabsId}-tab-${index}`
   return (
     <PageScroll className="lp-page">
-      {notice && <div className="fv-notice">{notice}</div>}
       {leading}
       <div className="rl-content">
         <div className="rl-titlebar">

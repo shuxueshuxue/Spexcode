@@ -24,5 +24,9 @@ lettering in the mono font and the blue-to-magenta ink, then gives the input its
 launch state's job is still to make the input the first control in the room; restoring the banner returns the
 identity cue that the human noticed was lost when it became plain text.
 
+The input under the banner is the floating composer: a paper card on the plane that pays the one elevation
+([[typography]]) behind a felt edge, and whose focus adds the shared ring to that same shadow rather than
+recolouring its border — the room stays quiet while the card reads as the thing to type into.
+
 The wordmark is the [[session-console]] New tab's only decorative element; everything else on that tab
 (input, launcher chip, hint line) belongs to the console's launch grammar, not to this node.

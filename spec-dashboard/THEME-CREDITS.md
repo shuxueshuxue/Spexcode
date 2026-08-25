@@ -8,6 +8,10 @@ the bare `:root` default, the rest as `:root[data-theme=<code>]` rows); licenses
 against each upstream repository (SPDX: MIT, all eight) at
 porting time (2026-07-18). The upstream license notices are preserved in full below.
 
+The **Notion** preset is not a port: it is an original palette written after the look of the Notion
+app's reading surface (warm off-white chrome, near-black ink, one blue), carries no third-party code or
+tokens, and is not affiliated with or endorsed by Notion Labs, Inc.
+
 ## Minimal
 
 Upstream: <https://github.com/kepano/obsidian-minimal>

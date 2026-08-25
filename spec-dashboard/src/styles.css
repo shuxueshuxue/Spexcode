@@ -1592,9 +1592,18 @@ a.scenario-count:hover { background: var(--wash-hover); }
   overflow: hidden; border-right: 1px solid var(--line); background: var(--panel);
 }
 .si-session-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.si-selcount { flex: 1; color: var(--ink2); font-size: var(--type-meta); }
-.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
+.si-selbar {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1); min-width: 0;
+  padding: var(--space-4) var(--space-4) var(--space-2); border-bottom: 1px solid var(--line);
+}
+.si-selcount { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink2); font-size: var(--type-meta); text-overflow: ellipsis; white-space: nowrap; }
+.si-selaction {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  color: var(--muted); background: none; border: 0; border-radius: var(--radius); cursor: pointer;
+}
+.si-selaction:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+.si-selaction.danger { color: var(--red); }
+.si-selaction:disabled { opacity: .45; cursor: default; }
 .si-check { flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: var(--radius); box-sizing: border-box; }
 .si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
 .si-check.on::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px; border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
@@ -1683,8 +1692,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {
   --zh: var(--muted);
-  display: flex; align-items: center; gap: 8px; padding: var(--space-5) var(--space-6) var(--space-2);
-  font-size: var(--type-caption); font-weight: var(--weight-medium); letter-spacing: var(--tracking-normal); user-select: none;
+  display: flex; align-items: center; gap: var(--space-4); padding: calc(var(--space-4) + var(--space-1)) var(--space-5) var(--space-2);
+  font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); user-select: none;
   color: var(--zh);
 }
 /* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
@@ -1693,8 +1702,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-zone-fold:hover { background: var(--wash-hover); }
 .si-zone-count {
-  flex: none; padding: 0 6px; border: 1px solid transparent; border-radius: var(--radius);
-  background: color-mix(in srgb, currentColor 12%, transparent); color: inherit; font: inherit;
+  flex: none; padding: 0 var(--space-3); border: 1px solid currentColor; border-radius: var(--radius);
+  background: transparent; color: inherit; font: inherit; opacity: .8;
   font-size: var(--type-caption); line-height: var(--line-badge);
 }
 .si-zone-label { flex: none; }
@@ -1708,8 +1717,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-zone-all-lead { color: var(--muted); align-items: center; }
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the sidebar's two doors are rows in the same grammar as the sessions under them: New carries its word and
-   wears the selection wash while the launch face is open; Search is one quiet glyph at the row's end. */
+/* the sidebar's three doors are rows in the same grammar as the sessions under them: New carries its word;
+   Archive and Search are quiet glyphs at the row's end. */
 .si-toprow { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-4) var(--space-4) var(--space-2); }
 .si-pill {
   display: inline-flex; align-items: center; gap: var(--space-3); height: 28px; padding: 0 var(--space-4);
@@ -1720,10 +1729,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-pill-label { white-space: nowrap; }
 .si-pill.new { flex: 1; min-width: 0; color: var(--ink2); font-weight: var(--weight-medium); }
 .si-pill:hover { background: var(--wash-hover); color: var(--ink2); }
-.si-pill.new.on { background: var(--wash-selected); color: var(--blue); }
-/* the Search pill is the click twin of ⌥+/ ([[session-search]]): a secondary action beside New —
-   muted at rest. Momentary (opens the palette), so it never wears an .on state. */
-.si-pill.search { flex: none; width: 28px; padding: 0; justify-content: center; color: var(--muted); }
+.si-pill.new.on, .si-pill.archive.on { background: var(--wash-selected); color: var(--blue); }
+/* Archive is routed overlay state; Search is the momentary click twin of ⌥+/ ([[session-search]]). */
+.si-pill.archive, .si-pill.search { flex: none; width: 28px; padding: 0; justify-content: center; color: var(--muted); }
 
 
 /* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page

@@ -367,3 +367,11 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   to reading the one loaded thread (`thread/loaded/list`) only for a pre-existing session whose id was never
   stored. Explicit `--remote` is the default because it deterministically binds the pane and backend control to
   the project app-server.
+
+## a launch before its native identity exists
+
+For adapters whose native id is minted at launch, absence of `harness_session_id` while the authoritative
+resolved `launch` payload remains is a recoverable pre-identity launch, not permission to create an empty
+conversation. Resume replays that payload through the adapter; only the adapter's proof that identity and the
+first durable turn both landed may bind `harness_session_id` and consume it. A missing payload leaves the record
+unchanged and refuses loudly.

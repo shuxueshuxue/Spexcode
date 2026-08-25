@@ -78,7 +78,12 @@ export async function boardSnapshot(): Promise<BoardSnapshot> {
   if (timelineCache?.key === key) {
     timelines = timelineCache.timelines
   } else {
-    timelines = await evalTimelines(nodeIds, context)
+    // The board carries only latest-per-scenario counts, so the cold build reads latest-only: the retained
+    // sidecar history is served by the detail endpoints and probing it here scales graph latency with the
+    // reading count instead of the live verdict population. Freshness itself is NOT deferred — the board
+    // publishes verdicts, and a verdict whose freshness was never computed is not a stale verdict, it is no
+    // verdict at all. An order-only board would report every measured row as stale and none as fresh.
+    timelines = await evalTimelines(nodeIds, context, { latestOnly: true })
     timelineCache = { key, timelines }
   }
   return {

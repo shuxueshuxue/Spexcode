@@ -422,6 +422,8 @@ test('the project-root sweep skips linked worktrees but still sees the served tr
     mkdirSync(join(root, '.worktrees', 'other-branch', '.spec', `n${node}`), { recursive: true })
   }
   mkdirSync(join(root, 'node_modules', 'dep'), { recursive: true })
+  mkdirSync(join(root, 'packages', 'spec-core', '.dist-next-123', 'review'), { recursive: true })
+  mkdirSync(join(root, 'spec-cli', 'dist', 'review'), { recursive: true })
 
   const { opened, factory } = fakeFactory()
   const inputs: string[] = []
@@ -448,6 +450,11 @@ test('the project-root sweep skips linked worktrees but still sees the served tr
       watched.some((path) => path.split(/[\\/]/).includes('node_modules')),
       false,
       'the existing exclusions still hold',
+    )
+    assert.equal(
+      watched.some((path) => path.split(/[\\/]/).some((segment) => segment === 'dist' || segment.startsWith('.dist-next-'))),
+      false,
+      'generated build output is not graph input and must not turn each build into a graph rebuild',
     )
 
     // ★ the half that "watch count dropped" cannot distinguish: the served tree must STILL be observed.

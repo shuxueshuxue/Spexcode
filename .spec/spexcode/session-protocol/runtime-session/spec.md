@@ -4,21 +4,19 @@ status: active
 hue: 280
 desc: The temporary mixed bridge being dismantled as external-runtime records, topology, projection, and message publication return to their owning layers.
 code:
-  - packages/session-core/src/runtime-session.ts
+  - packages/session-runtime/src/index.ts
 related:
-  - packages/session-core/src/index.ts
-  - packages/session-core/src/session-protocol.test.ts
+  - packages/session-runtime/src/index.test.ts
   - packages/spec-core/src/layout.ts
 ---
 # runtime-session
 
-`runtime-session.ts` is the existing ZCode-oriented mixed bridge, not part of the final
-[[session-protocol]] language. It currently registers an external runtime record, writes `parent` and
-`watchers.json`, projects runtime state into Spex lifecycle words, composes parent notifications, and enqueues
-them. Those are four valid operations owned by different layers; their co-location is migration evidence, not a
-public abstraction to copy into another adopter.
+The former ZCode-oriented `runtime-session.ts` bridge is retired. It is not part of the public package surface and
+must not be restored as a compatibility layer. Its old responsibilities now have explicit owners: protocol
+addresses and messages in [[session-protocol]], relations in [[session-topology]], lifecycle/events/watch delivery
+in [[session application service]], and native identity in [[runtime-bindings]].
 
-The migration moves each responsibility directly; the bridge is not a supported compatibility layer:
+The migration keeps each responsibility at its owner; the bridge is not a supported compatibility layer:
 
 - address initialization and fixed message enqueue/dequeue move to the published protocol;
 - parent/child and subscription relations move to [[session-topology]] or adopter-owned topology policy;
@@ -30,8 +28,6 @@ Once ZSwarm and Spex governed composition use the split contracts, this module i
 from the source tree. Its revision-keyed recovery is preserved by the owning topology transaction and protocol
 idempotency; a permanent bridge or outbox is not an acceptable migration substitute.
 
-While this bridge remains, its lifecycle projection has one writable source: the append-only session timeline.
-Registration and publication scrub the legacy `status`, `proposal`, and `note` keys from `session.json`; replaying
-an older record migrates its last valid values into a status event before the file is rewritten. The JSON file keeps
-only operational and topology metadata, so a consumer cannot accidentally treat the compatibility projection as a
+One-time migration may read old JSON and timeline inputs, replay their last valid values into the canonical
+application event store, and retire those inputs. Normal runtime never reads or writes them and never exposes a
 second lifecycle authority.

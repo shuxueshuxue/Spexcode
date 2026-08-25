@@ -460,12 +460,12 @@ scenarios:
     description: >-
       Through the REAL dashboard/app-server launch path (NOT `codex exec`, whose interactive approval flow
       AUTO-TRUSTS the cwd and hides the gap): dispatch a codex worker into a FRESH-INIT project (no skill nodes)
-      and trace `dispatch.sh` across its first turn, then read session.json and the worker's commit. The worker
+      and trace `dispatch.sh` across its first turn, then read runtime.json and the worker's commit. The worker
       runs as a BACKEND-owned thread on the shared per-project app-server with `cwd = a linked worktree`, launched
       with `--dangerously-bypass-hook-trust`.
     expected: >-
       The codex thread fires the full lifecycle through `dispatch.sh` — SessionStart, UserPromptSubmit, PreToolUse,
-      PostToolUse, Stop — with NO interactive "Hooks need review" prompt; session.json advances past the launch
+      PostToolUse, Stop — with NO interactive "Hooks need review" prompt; runtime.json advances past the launch
       state (the Stop gate flips it to `asking`/`awaiting`/`idle`); and the worker's commit carries the `Session:`
       trailer. This requires THREE codex preconditions that `--dangerously-bypass-hook-trust` does NOT provide, all
       established by materialize (bypass is read only PER-HANDLER, after layer discovery — it can neither BUILD nor
@@ -476,10 +476,10 @@ scenarios:
       TUI is a PERSISTENT RESUME on which codex forces the hook-review prompt regardless of the bypass flag — an
       unhashed hook WEDGES the worker at an interactive menu. The failure this locks (the real regression): with the
       bypass sent but the anchor/trust/hashes missing, a fresh-init codex worker fires ZERO dispatch events (frozen
-      session.json, no Stop gate, no Session trailer), while a STANDALONE `.codex` in the cwd — which the exec/TUI
+      runtime.json, no Stop gate, no Session trailer), while a STANDALONE `.codex` in the cwd — which the exec/TUI
       flow auto-trusts — still fires them, so a standalone or exec-only check passes green and the dispatched-worker
       regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
-      reading session.json + the commit trailer.
+      reading runtime.json + the commit trailer.
     code:
       - spec-cli/src/harness.ts#writeCodexTrust
       - spec-cli/src/harness.ts#codexHookHash

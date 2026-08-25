@@ -14,8 +14,8 @@ related:
   - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
   - packages/spec-core/src/project-store.ts
   - packages/spec-core/src/layout.ts
-  - packages/session-core/src/index.ts
-  - packages/session-core/src/runtime-session.ts
+  - packages/session-application/src/index.ts
+  - packages/session-runtime/src/index.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/sessions.ts
 ---

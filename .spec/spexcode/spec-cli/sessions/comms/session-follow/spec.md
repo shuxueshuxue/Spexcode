@@ -7,8 +7,8 @@ code:
   - spec-cli/src/session-follow.ts
 related:
   - spec-cli/src/sessions.ts
-  - packages/session-core/src/session-cursors.ts
-  - packages/session-core/src/session-timeline.ts
+  - spec-cli/src/session-follow.ts
+  - packages/session-events/src/schema.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/session-follow.test.ts
   - spec-cli/src/follow-cli.api.test.ts
@@ -42,15 +42,14 @@ waits on the target's log in its own background command instead.
 
 **`spex session watch <SEL...>` establishes a manual relation and exits.** When the caller's own session and every
 selected target are governed records in the same store, the command adds the caller's `manual` source to each
-target's `watchers.json`. That file, co-located with the target's timeline, is the ONE truth: every watcher row
+target in the session application's topology tables. That canonical relation is the ONE truth: every watcher row
 has one watcher id and a small set of sources (`manual` and, when the tree owns it, `parent`). The transition hot
 path projects those rows to unique watcher ids, appends one normal `sent` event to each watcher's timeline, and
 enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
 exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
-Installing a source or reparenting a child directly sends the child's current authored state — a new supervisor
-needs that context even when it is routine `active`/working. The creation transaction is the one ordering
-exception: it owns a deferred initial snapshot until the launch queue has resolved queued capacity or published
-readiness-backed working; [[sessions-core]] owns that fence. Later state writes take the transition path instead:
+Installing a source or reparenting a child directly enqueues the child's current authored state — a new supervisor
+needs that context even when it is routine `active`/working. Creation uses the same canonical queue handoff; it does
+not own a deferred snapshot token or a second launch-delivery protocol. Later state writes take the transition path instead:
 a parent-only watch suppresses routine working, while a `manual` source explicitly asks for the complete feed and
 includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
 manual's complete-feed policy winning for later state changes. Thus a one-shot `ls` remains a current-state read,
@@ -61,17 +60,17 @@ absent native transport: the normal parent queue retains the event and a later r
 The ordinary stranded-send refusal remains in force for caller-originated prompts; watch supervision does not
 silently turn those prompts into a second transport or alter lifecycle cutover.
 
-`spex session watch list` scans targets' `watchers.json` files to show the caller's relations, and
+`spex session watch list` reads the session application's topology projection to show the caller's relations, and
 `spex session watch cancel <SEL...>` removes only that caller's `manual` source from the selected targets.
 It does not dissolve an overlapping `parent` source: a still-parented child must remain supervised. Conversely,
 [[session-reparent]] moves only the `parent` source, so a former parent with an independent manual watch remains
 subscribed after the tree edge moves. That scan is a manual management read, never a transition hot path. There
 is no second watcher-to-target index, heartbeat, TTL, or background daemon to reconcile. A removed target takes
-its watchers file with it; a missing watcher record is discarded when the target next emits or a list is read.
+its topology edges with it; a missing watcher record is discarded by the canonical relation query.
 
 **The unmanaged fallback is still following.** If the caller has no governed session address, `watch` writes
 no unusable subscription and instead names `spex session wait <SEL...>` as the command the harness must run
-in the background. A wait is reading a file past `cursors.json` beside its own record: one stat per target per
+in the background. A wait is reading canonical event rows past an application cursor: one cheap sequence check per target per
 tick, no tmux, socket, backend, registration, or probe. This is also the explicit escape hatch for a caller
 that wants to decide locally when an event is actionable rather than receive every pushed state message.
 

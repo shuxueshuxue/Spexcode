@@ -114,9 +114,10 @@ their order and hands each xterm-produced byte string to the helper, which write
 This is the same client whose stdout paints xterm, so terminal modes, paste protocol, control keys, and IME
 commits are decided by xterm and the TUI rather than re-encoded by the dashboard. Hidden, lingering, detached,
 or disconnected viewers cannot inject and never queue input for later replay.
-An accepted non-mouse input is also a human turn entry: if the session is `asking` or inferred `idle`, the
-canonical lifecycle moves to `active` after the PTY write. Mouse reports are navigation and do not change the
-authored lifecycle.
+PTY input is transport only. Keyboard bytes, paste, IME commits, resize, visibility, and mouse reports never
+write lifecycle state; they can be accepted while a viewer is attached, but only an explicitly accepted session
+prompt (the command/input API or the harness's UserPromptSubmit/PreToolUse path) re-enters `active`. A terminal
+click or attach therefore cannot turn an `asking` session into `working`.
 
 The browser view contains the pane, not tmux's client chrome. Before native attach the helper disables the
 target session's status line, so a browser grid of N rows gives the pane N rows instead of N-1 pane rows plus
@@ -173,8 +174,9 @@ claude's TUI stalls its pinned status-line repaint after receiving mouse input (
 truth: 48s frozen elapsed-timer while the transcript kept repainting), until a keystroke or content
 change clears it. The motion filter removes the hover trigger — only actual wheeling can arm it —
 and every xterm pointer encoding (SGR, X10, or URXVT) stays navigation-only: the PTY bridge must never
-count a pointer report as a human turn entry or reopen a waiting lifecycle. Only non-pointer terminal
-bytes are eligible for the terminal-input re-entry path.
+count a pointer report as a human turn entry or reopen a waiting lifecycle. Terminal bytes are transport input
+only as well; lifecycle re-entry belongs to an explicitly accepted prompt, never to attach, focus, resize, or
+typing in the PTY bridge.
 and the residual stall is claude's bug to fix, not this bridge's to disguise. The tempting
 alternative — denying the alternate screen and scrolling real tmux history — was measured and
 rejected: claude repaints in place, so nothing ever scrolls off the top and the "history" a viewer

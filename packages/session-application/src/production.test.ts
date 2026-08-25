@@ -34,6 +34,12 @@ test('production composition runs the parent/child state, event, replay, publish
   const childEvents = first.events.read('child')
   assert.equal(childEvents.length, 2)
   assert.equal(childEvents[1]?.type, 'session.state.changed.v1')
+  assert.equal(first.readEvents('child').length, childEvents.length)
+  assert.deepEqual(first.readEvents('child', childEvents[0]?.eventSeq).map(event => event.eventSeq), [childEvents[1]?.eventSeq])
+  assert.equal(first.readFollowCursor('parent', 'child'), null)
+  first.advanceFollowCursor('parent', 'child', 2)
+  first.advanceFollowCursor('parent', 'child', 1)
+  assert.equal(first.readFollowCursor('parent', 'child'), 2)
   assert.equal(first.protocol.listPending('parent').length, 3)
   assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
   assert.equal(first.protocol.dequeue('parent')?.kind, 'fixture.direct.v1')
@@ -78,6 +84,38 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.deepEqual(localityCalls, [databasePath, databasePath])
 })
 
+test('lifecycle publication applies parent and manual watch policies as a union', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-watch-policy-'))
+  const app = openProjectSessionApplication({ databasePath: join(root, 'sessions.sqlite'), locality: () => {} })
+  try {
+    app.createSession({ sessionId: 'parent' })
+    app.createSession({ sessionId: 'child', parentSessionId: 'parent', status: 'queued' })
+    while (app.protocol.dequeue('parent')) { /* discard the creation snapshot */ }
+
+    app.attachWatcher('parent', 'child', 'watch:parent')
+    app.transitionSession('child', { status: 'active', reason: 'working' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'queued creation gets one ready-active correction')
+    app.protocol.dequeue('parent')
+
+    app.transitionSession('child', { status: 'active', reason: 'working' })
+    assert.equal(app.protocol.listPending('parent').length, 0, 'parent-only watch suppresses routine working')
+
+    app.transitionSession('child', { status: 'awaiting', proposal: 'merge', note: 'ready' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'parent-only watch receives actionable transitions')
+    app.protocol.dequeue('parent')
+
+    app.attachWatcher('parent', 'child', 'watch:manual')
+    app.transitionSession('child', { status: 'active', proposal: null, note: null, reason: 'working' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'manual watch opts into working transitions')
+    app.protocol.dequeue('parent')
+
+    app.transitionSession('child', { status: 'awaiting', proposal: 'close', note: 'ready to close' })
+    assert.equal(app.protocol.listPending('parent').length, 1, 'overlapping sources enqueue one unioned notification')
+  } finally {
+    app.close()
+  }
+})
+
 test('production composition refuses missing locality and relative database paths before opening', () => {
   assert.throws(
     () => openProjectSessionApplication({ databasePath: 'relative.sqlite', locality: () => {} }),
@@ -99,6 +137,12 @@ test('runtime binding emits the delivery wake after the binding commit', () => {
   const binding = app.bindRuntime('bound', identity('native', 'start'))
   assert.equal(binding.status, 'bound')
   assert.deepEqual(wakes, ['bound'])
+  const pending = app.readPendingMessages('bound')
+  assert.equal(pending.length, 1)
+  assert.equal(app.readMessageHistory('bound').length, 1)
+  assert.equal(app.dequeuePendingMessage('bound', '00000000000000000000000000000000'), null)
+  assert.equal(app.dequeuePendingMessage('bound', pending[0]!.messageId)?.messageId, pending[0]!.messageId)
+  assert.equal(app.readPendingMessages('bound').length, 0)
   app.close()
 })
 

@@ -21,7 +21,6 @@
   ],
   "bundledDependencies": [
     "@spexcode/spec-core",
-    "@spexcode/session-core",
     "@spexcode/spec-eval",
     "@spexcode/spec-forge"
   ],
@@ -37,7 +36,6 @@
   },
   "dependencies": {
     "@spexcode/session-application": "0.6.7",
-    "@spexcode/session-core": "0.6.7",
     "@spexcode/session-selflaunch": "0.6.7",
     "@spexcode/spec-core": "0.6.7",
     "@spexcode/spec-eval": "0.6.7",

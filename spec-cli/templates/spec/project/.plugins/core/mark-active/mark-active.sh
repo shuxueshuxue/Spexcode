@@ -13,12 +13,14 @@
 # request_user_input tool) — read via hp_is_ask, so this hook never names a harness tool.
 # Fires BEFORE the tool runs, so a `spex session done` declaration (itself a tool) lands AFTER this and wins;
 # the next real tool flips back to active, forcing a fresh Stop-gate declaration.
-# @@@ one writer - this hook is on the hot path (every tool call), but lifecycle writes go through the
-# canonical session application. The old `.spec/project` materialization used to substitute status into its
-# runtime envelope; that was a second fact source and let legacy sessions drift. This source is the migration
-# target for that materialization: it never reads or writes lifecycle fields in the envelope.
+# @@@ one writer - this hook is on the hot path (every tool call), but it must not inspect runtime.json to
+# decide whether a transition is needed. That file is only a runtime/worktree envelope; the canonical
+# session application is the lifecycle authority. The structured writer is idempotent for an unchanged state,
+# so every eligible event goes through the same writer and cannot short-circuit on a second fact. It never
+# edits runtime.json itself: an asking note is arbitrary prose, and shell substitution is not a record writer
+# ([[sessions-core]]).
 # @@@ global store - the lifecycle state lives in the canonical session application, keyed by the harness
-# session_id, grouped per-project (see hp_store_dir). The sibling session.json is only the runtime/worktree
+# session_id, grouped per-project (see hp_store_dir). The sibling runtime.json is only the runtime/worktree
 # envelope. GATED on `governed`: a user-self-launched
 # (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
@@ -41,11 +43,15 @@ if [ "$(hp_field "$payload" hook_event_name)" = "UserPromptSubmit" ]; then
   esac
 fi
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
-# A governed session is the only one with a board lifecycle. The identity check is deliberately delegated to
-# the writer; unlike the retired envelope grep it cannot select one record while writing another.
+# The canonical writer owns governed/lifecycle validation. The hook must not inspect runtime.json: that file is
+# a runtime envelope, and using it as a gate is how old/missing envelopes silently disabled mark-active.
+# The writer's stdout is a human confirmation, not hook output; stderr remains visible for real refusals.
 if [ -n "$(hp_is_ask "$payload")" ]; then
+  # first question's text → the note (best-effort). It is passed as ONE argv word to the writer, so quotes,
+  # backslashes, newlines, and non-ASCII reach the record intact — no shell ever composes the JSON.
   ${SPEX:-spex} internal session-state asking --session "$sid" --note "$(hp_ask_note "$payload")" >/dev/null
-else
-  ${SPEX:-spex} internal session-state active --session "$sid" >/dev/null
+  exit 0
 fi
+
+${SPEX:-spex} internal session-state active --session "$sid" >/dev/null
 exit 0

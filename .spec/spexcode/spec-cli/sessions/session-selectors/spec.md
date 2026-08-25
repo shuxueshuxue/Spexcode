@@ -65,3 +65,7 @@ here: they never NAME another session at all. Each resolves the agent's OWN sess
 <id>` the hooks pass from the payload, else the harness env var (`ownSessionId`) — and writes (or, for
 `review`-as-propose, reads by exact id) that session's GLOBAL record directly ([[state]]), so it must work
 with no backend up. There is no selector to match here, and never a lookup against the backend board.
+
+When a read/control-adjacent local cache resolves a selector without a backend, it enumerates session
+directories and joins each id against the canonical application store. The runtime envelope is only metadata;
+its absence during cutover must not make a durable SQLite row disappear from `ls`, follow, or watch selection.

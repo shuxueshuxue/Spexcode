@@ -20,6 +20,6 @@ scenarios:
 ---
 Measured YATU on the hook surface itself: invoke stop-gate.sh the way dispatch.sh invokes it — the
 Stop payload on stdin, SPEXCODE_HARNESS_LIB sourced, the session resolved through hp_store_dir into
-a governed session.json — and read the `{"decision":"block"}` reasons the harness would show the
+a governed runtime.json — and read the `{"decision":"block"}` reasons the harness would show the
 agent. A live confirmation on a real governed session (stop undeclared, read the block feedback,
 park on a background task, wake, stop undeclared again) is the same measurement on the same surface.

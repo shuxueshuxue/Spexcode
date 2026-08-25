@@ -3,15 +3,36 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { HookPromptCatalog } from './hook-prompts.js'
+import { compileManifest } from './hooks.js'
+import { openProjectSessionApplication } from '@spexcode/session-application'
 
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
-const legacyMarkActive = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-sed-v0.fixture')
-const legacyMarkActive052 = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-0.5.2-eef1.fixture')
-const legacyMarkActive052Sha256 = '6124673259e0b79318fb5a66e7d8138d5bb7735dca1ecf6f7d2dffa6fbb7affa'
+
+function seedCanonicalSessions(home: string, rows: Array<{ id: string; status: string; proposal?: string | null; note?: string | null }>) {
+  const databasePath = join(home, 'sessions.sqlite')
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try {
+    for (const row of rows) app.createSession({ sessionId: row.id, status: row.status, proposal: row.proposal ?? null, note: row.note ?? null })
+  } finally {
+    app.close()
+  }
+  return databasePath
+}
+
+test('compiled hook surface has one dispatcher and two PreToolUse handlers', () => {
+  const rows = compileManifest().trim().split('\n').filter(Boolean)
+  const pre = rows.filter((row) => row.startsWith('PreToolUse\t'))
+  assert.equal(pre.length, 2)
+  assert.deepEqual(pre.map((row) => row.split('\t')[3]), [
+    '.spec/spexcode/.plugins/core/mark-active/mark-active.sh',
+    '.spec/spexcode/.plugins/core/spec-first/spec-first.sh',
+  ])
+})
 
 test('dispatch exits 2 when a blocking handler emits decision:block JSON', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-'))
@@ -43,10 +64,11 @@ test('stop-gate is silent for self-launched sessions and renders the catalog pro
   writeFileSync(join(dir, 'hooks', 'stop-gate.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(source)}\n`)
   const manifest = join(runtime, 'hooks-manifest')
   writeFileSync(manifest, 'Stop\t10\ttrue\thooks/stop-gate.sh\n')
-  const record = join(runtime, 'sessions', sid, 'session.json')
+  const databasePath = seedCanonicalSessions(home, [{ id: sid, status: 'active' }])
+  const record = join(runtime, 'sessions', sid, 'runtime.json')
   const fire = () => spawnSync('bash', [dispatch, 'claude', 'Stop'], {
     cwd: dir,
-    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: databasePath, SPEX_HOOK_MANIFEST: manifest },
     input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }),
     encoding: 'utf8',
   })
@@ -74,7 +96,7 @@ test('stop-gate forced continuation writes asking through the internal lifecycle
   execFileSync('git', ['init', '-q'], { cwd: dir })
   mkdirSync(join(dir, 'hooks'), { recursive: true })
   mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
-  writeFileSync(join(runtime, 'sessions', sid, 'session.json'), JSON.stringify({
+  writeFileSync(join(runtime, 'sessions', sid, 'runtime.json'), JSON.stringify({
     session_id: sid, governed: true, status: 'active', proposal: '', note: '',
   }, null, 2))
   const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
@@ -188,113 +210,19 @@ test('the generated zcode Stop command reaches its manifest stop gate', () => {
   assert.match(readFileSync(join(slot, 'harnesses'), 'utf8'), /^zcode$/m)
   const recordDir = join(runtime, 'sessions', sid)
   mkdirSync(recordDir, { recursive: true })
-  writeFileSync(join(recordDir, 'session.json'), JSON.stringify({
+  writeFileSync(join(recordDir, 'runtime.json'), JSON.stringify({
     session_id: sid, governed: true, status: 'active', proposal: '', note: '',
   }, null, 2) + '\n')
+  const databasePath = seedCanonicalSessions(home, [{ id: sid, status: 'active' }])
 
   const result = spawnSync('bash', ['-c', command], {
     cwd: dir,
-    env: { ...process.env, SPEXCODE_HOME: home },
+    env: { ...process.env, SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: databasePath },
     input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }),
     encoding: 'utf8',
   })
   assert.equal(result.status, 2, result.stderr)
   assert.match(JSON.parse(result.stdout).reason, /Your session state is a CLAIM/)
-})
-
-function legacyMarkActiveRig(source = legacyMarkActive, custom = false) {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-legacy-mark-active-'))
-  const home = join(dir, 'home')
-  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
-  const sid = 'legacy-mark-active'
-  const hook = join(dir, '.spec', 'project', '.plugins', 'core', 'mark-active', 'mark-active.sh')
-  execFileSync('git', ['init', '-q'], { cwd: dir })
-  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
-  mkdirSync(join(dir, '.spec', 'project', '.plugins', 'core', 'mark-active'), { recursive: true })
-  const legacy = readFileSync(source, 'utf8')
-  writeFileSync(hook, custom ? legacy.replace('payload=$(cat 2>/dev/null)', 'printf "CUSTOM-HOOK\\n"\npayload=$(cat 2>/dev/null)') : legacy)
-  const manifest = join(runtime, 'hooks-manifest')
-  writeFileSync(manifest, 'PreToolUse\t10\tfalse\t.spec/project/.plugins/core/mark-active/mark-active.sh\n')
-  const rec = join(runtime, 'sessions', sid, 'session.json')
-  const writeRecord = (status = 'asking', proposal = 'old', note = 'old note') => writeFileSync(rec, JSON.stringify({
-    session_id: sid, governed: true, status, proposal, note,
-  }, null, 2))
-  const fire = (payload: unknown) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
-    cwd: dir,
-    env: {
-      ...process.env,
-      SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
-      SPEXCODE_HOME: home,
-      SPEX_HOOK_MANIFEST: manifest,
-    },
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-  })
-  return { dir, home, hook, fire, rec, sid, writeRecord }
-}
-
-const legacyMarkActiveFixtures = [
-  ['incident-captured pre-subagent source', legacyMarkActive],
-  ['0.5.2 release eef1e154 source', legacyMarkActive052],
-] as const
-
-test('the 0.5.2 release fixture retains its recorded bytes', () => {
-  const actual = createHash('sha256').update(readFileSync(legacyMarkActive052)).digest('hex')
-  assert.equal(actual, legacyMarkActive052Sha256)
-})
-
-for (const [label, source] of legacyMarkActiveFixtures) {
-  test(`${label} corrupts a quoted note when invoked directly`, () => {
-    const t = legacyMarkActiveRig(source)
-    t.writeRecord()
-    const r = spawnSync('bash', [t.hook], {
-      cwd: t.dir,
-      env: {
-        ...process.env,
-        SPEXCODE_HARNESS: 'claude',
-        SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'),
-        SPEXCODE_HOME: t.home,
-      },
-      input: JSON.stringify({
-        session_id: t.sid,
-        hook_event_name: 'PreToolUse',
-        tool_name: 'AskUserQuestion',
-        tool_input: { question: 'GUGU_E2E_PORT="undefined"' },
-      }),
-      encoding: 'utf8',
-    })
-    assert.equal(r.status, 0, r.stderr)
-    assert.throws(() => JSON.parse(readFileSync(t.rec, 'utf8')))
-  })
-
-  test(`dispatch routes ${label} through the structured writer`, () => {
-    const t = legacyMarkActiveRig(source)
-    const note = 'GUGU_E2E_PORT="undefined"\n中文'
-    t.writeRecord()
-    const r = t.fire({
-      session_id: t.sid,
-      hook_event_name: 'PreToolUse',
-      tool_name: 'AskUserQuestion',
-      tool_input: { question: note },
-    })
-    assert.equal(r.status, 0, r.stderr)
-    const record = JSON.parse(readFileSync(t.rec, 'utf8'))
-    assert.equal(record.status, 'asking')
-    assert.equal(record.note, note)
-  })
-}
-
-test('dispatch does not override a byte-different 0.5.2 mark-active customization', () => {
-  const t = legacyMarkActiveRig(legacyMarkActive052, true)
-  t.writeRecord()
-  const r = t.fire({
-    session_id: t.sid,
-    hook_event_name: 'PreToolUse',
-    tool_name: 'Bash',
-    tool_input: { command: 'true' },
-  })
-  assert.equal(r.status, 0, r.stderr)
-  assert.match(r.stdout, /CUSTOM-HOOK/)
 })
 
 type GateHarness = 'claude' | 'codex'
@@ -446,13 +374,17 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
   writeFileSync(join(runtime, 'hooks-manifest'), 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
   // no content-hash pinning needed: the dispatcher never materializes ([[commit-surgery]] — the old gate is
   // retired), so the handcrafted manifest can never be re-materialized away by a dispatch.
-  writeFileSync(join(runtime, 'sessions', 'id_A', 'session.json'), JSON.stringify({
+  writeFileSync(join(runtime, 'sessions', 'id_A', 'runtime.json'), JSON.stringify({
     session_id: 'id_A', governed: true, status: 'asking', proposal: 'old', note: 'wrong',
   }, null, 2))
-  writeFileSync(join(runtime, 'sessions', 'id_B', 'session.json'), JSON.stringify({
+  writeFileSync(join(runtime, 'sessions', 'id_B', 'runtime.json'), JSON.stringify({
     session_id: 'id_B', governed: true, status: 'asking', proposal: 'old', note: 'right',
     harness_session_id: 'thread_B',
   }, null, 2))
+  const databasePath = seedCanonicalSessions(home, [
+    { id: 'id_A', status: 'asking', proposal: 'old', note: 'wrong' },
+    { id: 'id_B', status: 'asking', proposal: 'old', note: 'right' },
+  ])
   const r = spawnSync('bash', [dispatch, 'codex', 'PreToolUse'], {
     cwd: dir,
     env: {
@@ -460,17 +392,22 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
       SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
       SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'),
       SPEXCODE_HOME: home,
+      SPEX_SESSION_DATABASE_PATH: databasePath,
       SPEXCODE_SESSION_ID: 'id_A',
     },
     input: JSON.stringify({ session_id: 'thread_B', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'sleep 1' } }),
     encoding: 'utf8',
   })
   assert.equal(r.status, 0, r.stderr)
-  assert.match(readFileSync(join(runtime, 'sessions', 'id_A', 'session.json'), 'utf8'), /"status": "asking"/)
-  const b = readFileSync(join(runtime, 'sessions', 'id_B', 'session.json'), 'utf8')
-  assert.match(b, /"status": "active"/)
-  assert.match(b, /"proposal": ""/)
-  assert.match(b, /"note": ""/)
+  assert.match(readFileSync(join(runtime, 'sessions', 'id_A', 'runtime.json'), 'utf8'), /"status": "asking"/)
+  const b = readFileSync(join(runtime, 'sessions', 'id_B', 'runtime.json'), 'utf8')
+  assert.match(b, /"status": "asking"/, 'runtime metadata remains a stale envelope, never lifecycle authority')
+  const canonical = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try {
+    assert.equal(canonical.readState('id_B')?.status, 'active')
+    assert.equal(canonical.readState('id_B')?.proposal, null)
+    assert.equal(canonical.readState('id_B')?.note, null)
+  } finally { canonical.close() }
 })
 
 test('mark-active never trusts the runtime envelope to skip the canonical writer', () => {
@@ -485,7 +422,7 @@ test('mark-active never trusts the runtime envelope to skip the canonical writer
   writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
   const manifest = join(runtime, 'hooks-manifest')
   writeFileSync(manifest, 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
-  const record = join(runtime, 'sessions', sid, 'session.json')
+  const record = join(runtime, 'sessions', sid, 'runtime.json')
   // This is deliberately the stale envelope shape that caused the production drift: it says active while
   // the canonical application may still be asking/close-pending. The hook must still call the one writer.
   writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status: 'active', proposal: '', note: '' }, null, 2))
@@ -520,7 +457,8 @@ test('managed watch UserPromptSubmit does not forge receiver activity', () => {
   writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
   const manifest = join(runtime, 'hooks-manifest')
   writeFileSync(manifest, 'UserPromptSubmit\t10\tfalse\thooks/mark-active.sh\n')
-  const record = join(runtime, 'sessions', sid, 'session.json')
+  const record = join(runtime, 'sessions', sid, 'runtime.json')
+  const databasePath = seedCanonicalSessions(home, [{ id: sid, status: 'asking', note: 'waiting' }])
   const fakeSpex = join(dir, 'fake-spex')
   const calls = join(dir, 'calls')
   writeFileSync(fakeSpex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
@@ -529,7 +467,7 @@ test('managed watch UserPromptSubmit does not forge receiver activity', () => {
     writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status, proposal: '', note: 'waiting' }, null, 2))
     return spawnSync('bash', [dispatch, 'claude', 'UserPromptSubmit'], {
       cwd: dir,
-      env: { ...process.env, SPEX: fakeSpex, SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+      env: { ...process.env, SPEX: fakeSpex, SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: databasePath, SPEX_HOOK_MANIFEST: manifest },
       input: JSON.stringify({ session_id: sid, hook_event_name: 'UserPromptSubmit', prompt }),
       encoding: 'utf8',
     })
@@ -544,7 +482,7 @@ test('managed watch UserPromptSubmit does not forge receiver activity', () => {
 
 // [[hook-dispatch]] per-tree slots — with no SPEX_HOOK_MANIFEST override, the dispatcher reads the manifest
 // from ITS OWN tree's slot (trees/<enc(toplevel)>), derived from the dispatch cwd; a pre-slot tree (the
-// migration window) falls back to the legacy global file so its hooks never silently no-op.
+// migration uses a per-tree slot; a missing slot is an installation error.
 function slotRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-slot-'))
   const home = join(dir, 'home')
@@ -572,25 +510,13 @@ test('dispatch reads the manifest from the dispatching tree\'s own slot', () => 
   assert.equal(siblingOnly.stdout, '', 'a shared shim is inert when this tree did not select its harness')
 })
 
-test('legacy dispatch remains live until the project marker; then only a successful tree allowlist activates it', () => {
+test('slot-less dispatch fails loudly instead of using a legacy global manifest', () => {
   const { dir, runtime, env } = slotRepo()
   mkdirSync(runtime, { recursive: true })
   writeFileSync(join(runtime, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
-  const legacy = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.equal(legacy.status, 0, legacy.stderr)
-  assert.match(legacy.stdout, /SLOT-HIT/, 'pre-slot tree: hooks still fire off the legacy global manifest')
-  // The first v1 materialize marks the project. An old/unmaterialized sibling has no authority until it
-  // publishes its own allowlist; its slot manifest alone must not inherit a shared transport.
-  const slot = join(runtime, 'trees', dir.replace(/[/.]/g, '-'))
-  mkdirSync(slot, { recursive: true })
-  writeFileSync(join(slot, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
-  writeFileSync(join(runtime, 'harness-selection-v1'), '')
-  const inert = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.equal(inert.status, 0, inert.stderr)
-  assert.equal(inert.stdout, '')
-  writeFileSync(join(slot, 'harnesses'), 'claude\n')
-  const active = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.match(active.stdout, /SLOT-HIT/)
+  const result = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
+  assert.equal(result.status, 78)
+  assert.match(result.stderr, /current tree has no hook manifest/)
 })
 
 // [[mark-active]] in-process subagents (issue #60) — a Task-subagent tool call fires the PARENT's hooks with
@@ -612,6 +538,7 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
   const record = () => JSON.stringify({
     session_id: 'sid_P', governed: true, status: 'parked', proposal: '', note: 'waiting on a background wait',
   }, null, 2)
+  const databasePath = seedCanonicalSessions(home, [{ id: 'sid_P', status: 'parked', note: 'waiting on a background wait' }])
   const fire = (payload: string, envSession?: string) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
     cwd: dir,
     env: {
@@ -619,12 +546,13 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
       SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
       SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'),
       SPEXCODE_HOME: home,
+      SPEX_SESSION_DATABASE_PATH: databasePath,
       ...(envSession ? { SPEXCODE_SESSION_ID: envSession } : {}),
     },
     input: payload,
     encoding: 'utf8',
   })
-  const rec = join(runtime, 'sessions', 'sid_P', 'session.json')
+  const rec = join(runtime, 'sessions', 'sid_P', 'runtime.json')
 
   // subagent-executed call: top-level agent_id (harness stamp, before tool_input) → record untouched
   writeFileSync(rec, record())
@@ -638,14 +566,15 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
   r = fire('{"session_id":"sid_P","transcript_path":"/x/sid_P.jsonl","cwd":"/x","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo PARENT"}}')
   assert.equal(r.status, 0, r.stderr)
   j = readFileSync(rec, 'utf8')
-  assert.match(j, /"status": "active"/, 'the freshness signal itself must survive the fix')
-  assert.match(j, /"note": ""/)
+  assert.match(j, /"status": "parked"/, 'runtime metadata remains a stale envelope, never lifecycle authority')
+  const canonical = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try { assert.equal(canonical.readState('sid_P')?.status, 'active'); assert.equal(canonical.readState('sid_P')?.note, null) } finally { canonical.close() }
 
   // an agent_id-NAMED tool parameter lives inside tool_input (past the scan prefix) → NOT a subagent stamp
   writeFileSync(rec, record())
   r = fire('{"session_id":"sid_P","hook_event_name":"PreToolUse","tool_name":"mcp__x__y","tool_input":{"agent_id":"a-param-not-a-stamp"}}')
   assert.equal(r.status, 0, r.stderr)
-  assert.match(readFileSync(rec, 'utf8'), /"status": "active"/, 'a tool param named agent_id must still flip (deterministic prefix scan)')
+  assert.match(readFileSync(rec, 'utf8'), /"status": "parked"/, 'runtime metadata remains a stale envelope')
 
   // a child whose payload id names no record — not what claude 2.1.207 sends (it forwards the PARENT's id),
   // but the shape identity resolution must survive: the fallback lands on the env parent, and the agent_id
@@ -666,7 +595,7 @@ function identityRig() {
   execFileSync('git', ['init', '-q'], { cwd: dir })
   const record = (sid: string) => {
     mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
-    writeFileSync(join(runtime, 'sessions', sid, 'session.json'), JSON.stringify({ session_id: sid, governed: true }))
+    writeFileSync(join(runtime, 'sessions', sid, 'runtime.json'), JSON.stringify({ session_id: sid, governed: true }))
   }
   const resolve = (payloadId: string, envId: string) => spawnSync('bash', ['-c',
     `. "$1"; hp_session_id "$2"`, 'bash', join(repo, 'spec-cli', 'hooks', 'harness.sh'),

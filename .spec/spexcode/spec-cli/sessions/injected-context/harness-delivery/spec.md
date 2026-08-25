@@ -71,7 +71,19 @@ plugin node. This replaces the launch-time
   SHARES with the user takes only our identity-stamped hook entries, merged in beside whatever they already
   had ([[harness-adapter]]'s `shimOwnership`). This pipeline never learns which harness that is — it reads the
   ownership off the adapter and picks the writer. The post-erase empty-dir sweep covers each artifact dir AND its parent
-  (never a checkout root), since a harness may nest its shim a level below its home;
+  (never a checkout root), since a harness may nest its shim a level below its home. For a linked Codex
+  worktree, the root checkout owns the executable `.codex/hooks.json` dispatcher. The worktree's
+  `.codex/hooks.json` is an empty `{ "hooks": {} }` anchor only: Codex needs the project layer anchor, but
+  parsing a second dispatcher there would execute every PreToolUse handler twice. Claude uses the same
+  single-owner rule when the worktree is nested under the main checkout: the root `.claude/settings.json`
+  is inherited by that path, so a generated sibling settings file is retired and not recreated. A worktree
+  outside the checkout keeps its own Claude settings. A settings file with user keys or hooks is never
+  removed; only an exact SpexCode-only dispatcher file is eligible for this one-time migration. The shared
+  Codex project shim always points at the main checkout's `dispatch.sh` and `spex.mjs`, even when materialize
+  is invoked from a linked worktree; a worktree's CLI may only write its empty anchor and tree-local artifacts,
+  never replace the shared root hook owner. In a throwaway or package-installed project where the main checkout
+  has no local `spec-cli` tree, the renderer falls back to the invoking package's executable rather than
+  emitting a path that cannot run;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

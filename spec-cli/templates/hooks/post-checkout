@@ -15,10 +15,12 @@
 [ "${SPEXCODE_DEFER_FOOTPRINT_REFRESH:-}" = "session-create" ] && exit 0
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-if command -v spex >/dev/null 2>&1; then
-  spex internal refresh-footprint >/dev/null 2>&1 || true
+if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then
+  "$repo_root/spec-cli/bin/spex.mjs" internal refresh-footprint >/dev/null 2>&1 || true
 elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
   "$repo_root/node_modules/.bin/spex" internal refresh-footprint >/dev/null 2>&1 || true
+elif command -v spex >/dev/null 2>&1; then
+  spex internal refresh-footprint >/dev/null 2>&1 || true
 elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
   "$main_root/spec-cli/bin/spex.mjs" internal refresh-footprint >/dev/null 2>&1 || true
 fi

@@ -3,7 +3,7 @@ scenarios:
   - name: advance-can-duplicate-never-skip
     tags: [cli]
     description: >-
-      Exercise `advanceFollow` against a real store through the installed public session-core package surface.
+      Exercise the application-owned cursor against a real store through the supported `spex session wait` surface.
       Offer positions lower and higher than the stored one, and confirm through the real CLI that sending a
       message to a session changes no cursor at all.
     expected: >-
@@ -14,25 +14,22 @@ scenarios:
   - name: cursor-expires-by-being-read
     tags: [cli]
     description: >-
-      Follow two live sessions, then delete one target's store dir — a close, not an unfollow. Read the
-      follower's cursors, list what it follows, then make any unrelated write and inspect the file on disk.
-      Separately, read a cursors file that is missing, empty, and syntactically broken.
+      Follow two live sessions, then close one target. Read the follower's application cursor rows, list what it
+      follows, then make any unrelated write and inspect the canonical database. Separately, open a fresh store with
+      no cursor rows.
     expected: >-
       The dead target's entry is gone from the read, and listing follows no longer names it: the follow
-      ended because the target did, with nothing unregistered and no timer involved. The next write
-      persists that reckoning, so the file stops naming it. A missing, empty, or unparseable file reads as
-      "nothing consumed" rather than throwing — the honest recovery for a lost position is to re-show a
-      message, never to skip one.
+      ended because the target did, with nothing unregistered and no timer involved. The next write persists that
+      reckoning in SQLite. A missing cursor row reads as "nothing consumed" rather than throwing — the honest
+      recovery for a lost position is to re-show a message, never to skip one.
   - name: whole-line-readable-position
     tags: [cli]
     description: >-
-      Write cursors through the installed public package surface with several follows present, then read one
-      target's position back by matching a whole line — no JSON parser, no value regex that could match a
-      neighbour.
+      Advance cursors through the supported application surface with several follows present, then read one target's
+      event sequence back from SQLite — no JSON parser, no value regex that could match a neighbour.
     expected: >-
-      The file is one field per line, so a whole-line match finds a position exactly — the same shape and
-      the same reason as the session record. Every write goes through the one writer that rewrites the file
-      whole, so no reader's entry can be clobbered by a partial write of someone else's.
+      The cursor query identifies one reader/target pair exactly. Every advance is monotonic and transactional, so
+      no reader's entry can be clobbered by a partial JSON rewrite.
   - name: reader-sees-edges-not-lines
     tags: [cli]
     description: >-
@@ -49,9 +46,8 @@ scenarios:
 
 # session-cursors — yatsu
 
-Every scenario here has a supported surface: `spex session wait` exercises cursors from the product, while the
-installed `@spexcode/session-core` public entry exposes their reusable read/write contract. Never import a source
-file or substitute a unit test.
+Every scenario here has a supported surface: `spex session wait` exercises application cursors from the product.
+Never import a source file or substitute a unit test.
 
 The loss being scored is asymmetric and worth naming: a position that ends up too low costs an event read
 twice, while one too high costs an event nobody ever sees. Every scenario is a check that the second

@@ -1,14 +1,10 @@
-import { existsSync } from 'node:fs'
-import { sessionStoreDir } from '@spexcode/spec-core'
-import { advanceFollow, followCursor, unreadSince } from '@spexcode/session-core'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
 
-// @@@ session-follow - supervision is FOLLOWING a log past a cursor, never polling a derived board. One tick
-// costs ONE stat per target: if timeline.ndjson has not grown, nothing is opened and nothing is parsed. No
-// call here reaches the backend, a rendezvous socket, or tmux, which is the whole point — M followers over N
-// sessions cost the control plane zero, where the old poll cost one board build (a connect + a tmux spawn per
-// live session) per follower per interval.
+// @@@ session-follow - supervision follows canonical SQLite events past an application-owned cursor, never a
+// derived board. The bounded observation tick reads the event sequence and cursor only; it never opens a backend,
+// rendezvous socket, or tmux. M followers over N sessions therefore cost the control plane zero native probes.
 
 // Actionable = a state whose arrival means "a human/supervisor must now act". `offline` is deliberately ABSENT
 // where the old poll had it: liveness is a present-tense probe derivation, never authored, so it can never
@@ -80,8 +76,16 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const f of state.values()) if (f.path.length) return f.path
     return []
   }
-  const readCursor = (id: string): number | null => (self ? followCursor(self, id) : memo.get(id) ?? null)
-  const writeCursor = (id: string, to: number): void => { if (self) advanceFollow(self, id, to); else memo.set(id, to) }
+  const application = configuredSessionApplicationIfCutover()
+  const canonicalSelf = self && application?.readState(self) ? self : null
+  const readCursor = (id: string): number | null => {
+    if (!self) return memo.get(id) ?? null
+    return canonicalSelf ? application!.readFollowCursor(canonicalSelf, id) : null
+  }
+  const writeCursor = (id: string, to: number): void => {
+    if (!self) memo.set(id, to)
+    else if (canonicalSelf) application!.advanceFollowCursor(canonicalSelf, id, to)
+  }
   const line = (id: string, st: DisplayStatus, note: string | null, first: boolean): void => {
     const s = row?.(id, st, note)
     if (!s) return
@@ -97,7 +101,7 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const id of ids) {
       if (id === self) continue   // the follower's own log is its INBOX, followed below on its own cursor rule
       seen.add(id)
-      if (!existsSync(sessionStoreDir(id))) {
+      if (!application?.readState(id)) {
         if (state.delete(id)) emit(`${tag}[spex] closed · removed  [id ${id}]`)
         if (take) return { gone: id }
         continue
@@ -125,7 +129,12 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       if (stamp !== null && stamp === f.stamp) continue   // THE cheap tick: nothing appended, nothing parsed
       f.stamp = stamp
       const evs = timelineEvents(id)
-      const slice = unreadSince(evs, f.pos)
+      const unread = evs.slice(f.pos)
+      const slice = {
+        events: unread,
+        at: unread.map((_, index) => f.pos + index),
+        next: evs.length,
+      }
       let hit: FollowOutcome | null = null
       for (let k = 0; k < slice.events.length && !hit; k++) {
         const e = slice.events[k]
@@ -158,12 +167,18 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       state.delete(id)
       emit(`${tag}[spex] closed · removed  [id ${id}]`)
     }
-    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own entry in `cursors.json`. It is
+    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own canonical cursor row. It is
     // a WATCH, not a delivery: a message reaches the agent as a prompt through the adapter ([[delivery-queue]]),
     // so this position only decides what THIS process has already reported and can never make an agent miss
     // mail. Never advanced here in take mode — the waiter stops on the event and the next wait resumes on it.
-    if (self && existsSync(sessionStoreDir(self))) {
-      const mine = unreadSince(timelineEvents(self), followCursor(self, self) ?? 0)
+    if (self && application?.readState(self)) {
+      const ownEvents = timelineEvents(self)
+      const ownStart = readCursor(self) ?? 0
+      const ownUnread = ownEvents.slice(ownStart)
+      const mine = {
+        events: ownUnread,
+        at: ownUnread.map((_, index) => ownStart + index),
+      }
       for (let k = 0; k < mine.events.length; k++) {
         const e = mine.events[k]
         if (e.kind !== 'sent') continue

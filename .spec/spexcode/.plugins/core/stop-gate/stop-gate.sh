@@ -14,7 +14,7 @@
 # @@@ governed gate - the session id comes from the payload. The gate acts ONLY on a GOVERNED
 # (dashboard-launched) session: a user-self-launched agent has no board to feed, so an undeclared stop is
 # none of our business. Lifecycle status/proposal come from the canonical session application through one
-# CLI read; this shell never treats session.json as a second lifecycle database.
+# CLI read; this shell never treats runtime.json as a second lifecycle database.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 S="${SPEX:-spex}"
 input=$(cat 2>/dev/null || true)
@@ -109,7 +109,7 @@ fi
 
 # first stop in an undeclared state -> block. The FULL teaching text prints ONCE per session; every later
 # undeclared stop gets a ONE-LINE version (a heavy session hits this gate 15-20x a night — re-printing the
-# full menu each time is pure token noise). The once-sentinel is a plain file beside session.json in the
+# full menu each time is pure token noise). The once-sentinel is a plain file beside runtime.json in the
 # session's global store dir — the same per-session-sentinel mechanism as the CLI's note-echo-taught; $sdir
 # is already alias-resolved here, so a codex thread id lands on the same file, and an unwritable dir just
 # teaches again (never blocks the block). The terse line must stay SELF-EXPLANATORY: an agent whose context

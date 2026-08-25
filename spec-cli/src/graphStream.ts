@@ -400,7 +400,7 @@ function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
 
 // ---- event source 0: an EXPLICIT server-side nudge ----
 // for a server-side mutation that must show instantly regardless of watcher health: /rename writes the
-// session's global record (`session.json` — [[session-rename]]), which lives INSIDE the watched store, so
+// session's global runtime envelope (`runtime.json` — [[session-rename]]), which lives INSIDE the watched store, so
 // source 1 normally sees the write too. The explicit route call stays because that fs watch is best-effort
 // (it can fail to attach), and the nudge makes the sub-second rename guarantee deterministic. Same
 // debounced funnel as every other source; defaults to 'full' but the rename route passes 'sessions'.

@@ -152,7 +152,7 @@ esac
     const projects = join(home, 'projects')
     if (!existsSync(projects)) return []
     const runtime = readdirSync(projects).map((name) => join(projects, name, 'sessions')).find(existsSync)
-    return runtime ? readdirSync(runtime) : []
+    return runtime ? readdirSync(runtime, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name) : []
   }
   const candidateReceipts = () => {
     return existsSync(candidateDir) ? readdirSync(candidateDir).map((name) => join(candidateDir, name)) : []
@@ -160,7 +160,7 @@ esac
   const recordPath = (id: string) => {
     const runtime = readdirSync(join(home, 'projects')).map((name) => join(home, 'projects', name, 'sessions')).find(existsSync)
     assert.ok(runtime, 'the public session store exists')
-    return join(runtime, id, 'session.json')
+    return join(runtime, id, 'runtime.json')
   }
   const nodeRefs = () => git(project, 'for-each-ref', 'refs/heads/task', '--format=%(refname)')
   const worktrees = () => git(project, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length ?? 0

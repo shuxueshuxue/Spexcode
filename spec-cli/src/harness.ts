@@ -3164,7 +3164,7 @@ const governedSharedRuntimeOwners = (runtimeDir: string, descriptorKey: string, 
     if (!entry.isDirectory()) continue
     if (entry.name === excludingSessionId) continue
     let parsed: unknown
-    try { parsed = JSON.parse(readFileSync(join(root, entry.name, 'session.json'), 'utf8')) }
+    try { parsed = JSON.parse(readFileSync(join(root, entry.name, 'runtime.json'), 'utf8')) }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
       return null

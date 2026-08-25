@@ -421,16 +421,12 @@ async function doctor(): Promise<number> {
     const shim = read(h.shimFile(base))
     line(`${h.id} shim`, /dispatch\.sh/.test(shim) ? `wired (${h.shimFile(base).replace(base + '/', '')})` : 'NOT wired (no dispatch shim)')
   }
-  // manifest resolution mirrors dispatch.sh: this tree's materialize slot first, then the legacy global file
-  // (a pre-slot tree's migration-window fallback) — so the doctor reads exactly what a dispatch would.
+  // Manifest resolution mirrors dispatch.sh: only the current tree slot is executable.
   let manifestText = ''
   let manifestHome = 'tree slot'
   try { manifestText = read(join(treeSlotDir(base), 'hooks-manifest')) } catch { /* non-git / no store */ }
   if (!manifestText) {
-    try { manifestText = read(join(runtimeRoot(base), 'hooks-manifest')); manifestHome = 'legacy global file (pre-slot materialize — re-run `spex materialize`)' } catch { /* neither */ }
-  }
-  if (!manifestText) {
-    line('manifest', 'MISSING from the global store — materialize never ran (hooks fire but find no manifest)')
+    line('manifest', 'MISSING from the current tree slot — materialize must run before hooks can execute')
   } else {
     const scripts = manifestScripts(manifestText)
     const missing = scripts.filter((s) => !existsSync(join(base, s)))

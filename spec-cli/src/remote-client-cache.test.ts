@@ -8,11 +8,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { openProjectSessionApplication } from '@spexcode/session-application'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 const ID = 'cache-fallback-1111-1111-1111-111111111111'
+const CANONICAL_ID = 'canonical-cache-2222-2222-2222-222222222222'
 
 async function refusedPort(): Promise<number> {
   const child = createServer()
@@ -74,6 +76,30 @@ test('cache reads use the local store with unknown liveness only when no backend
     assert.equal(review.code, 0, review.stderr)
     assert.match(review.stdout, new RegExp(`"id": "${ID}"`))
     assert.match(review.stderr, /source: local session store \(liveness unknown\)/)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('selectors resolve a canonical application row without a runtime envelope', { timeout: 30_000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-client-canonical-cache-'))
+  const port = await refusedPort()
+  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
+  const records = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', CANONICAL_ID)
+  mkdirSync(records, { recursive: true })
+  const databasePath = join(home, 'sessions.sqlite')
+  writeFileSync(`${databasePath}.json-migration.json`, JSON.stringify({ version: 1, sourceDigest: 'fixture' }) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: CANONICAL_ID, status: 'awaiting', proposal: 'close', note: 'canonical row' })
+  app.close()
+  try {
+    const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(port), SPEX_SESSION_DATABASE_PATH: databasePath }
+    for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
+    const ls = await runCli(['session', 'ls', '--json'], env)
+    assert.equal(ls.code, 0, ls.stderr)
+    assert.match(ls.stdout, new RegExp(`"id": "${CANONICAL_ID}"`))
+    assert.match(ls.stdout, /"status": "close-pending"/)
+    assert.match(ls.stdout, /"note": "canonical row"/)
   } finally {
     rmSync(home, { recursive: true, force: true })
   }

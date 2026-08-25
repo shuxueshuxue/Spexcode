@@ -65,10 +65,12 @@ fi
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 spex_kind=
-if command -v spex >/dev/null 2>&1; then
-  spex_kind=path
+if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then
+  spex_kind=pkg
 elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
   spex_kind=local
+elif command -v spex >/dev/null 2>&1; then
+  spex_kind=path
 elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
   spex_kind=pkg
 fi
@@ -76,7 +78,7 @@ spex_cli() {
   case "$spex_kind" in
     path) spex "$@" ;;
     local) "$repo_root/node_modules/.bin/spex" "$@" ;;
-    pkg) "$main_root/spec-cli/bin/spex.mjs" "$@" ;;
+    pkg) if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then "$repo_root/spec-cli/bin/spex.mjs" "$@"; else "$main_root/spec-cli/bin/spex.mjs" "$@"; fi ;;
     *) return 127 ;;
   esac
 }

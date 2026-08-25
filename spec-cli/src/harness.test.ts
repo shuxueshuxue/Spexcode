@@ -1628,7 +1628,7 @@ test('codex resource probe reads status only for governed references', async () 
     owner = startCodexOwner(dir)
     const endpoint = codexHarness.sharedRuntimes?.(dir)[0]
     if (!endpoint) throw new Error('Codex shared runtime descriptor missing')
-    const result = await codexSharedRuntimeProbe(dir, { id: 'legacy', pidFile: endpoint.pidFile, socketPath: socket, receiptFile: endpoint.receiptFile }, [target])
+    const result = await codexSharedRuntimeProbe(dir, { id: 'legacy', pidFile: endpoint.pidFile, logFile: join(dir, 'codex.log'), socketPath: socket, receiptFile: endpoint.receiptFile }, [target])
     assert.deepEqual(result, {
       healthy: true,
       references: [
@@ -1664,7 +1664,7 @@ test('codex resource probe completes a draining empty target set without native 
     const endpoint = codexHarness.sharedRuntimes?.(dir)[0]
     if (!endpoint) throw new Error('Codex shared runtime descriptor missing')
     const started = Date.now()
-    const result = await codexSharedRuntimeProbe(dir, { id: 'legacy', pidFile: endpoint.pidFile, socketPath: socket, receiptFile: endpoint.receiptFile }, [])
+    const result = await codexSharedRuntimeProbe(dir, { id: 'legacy', pidFile: endpoint.pidFile, logFile: join(dir, 'codex.log'), socketPath: socket, receiptFile: endpoint.receiptFile }, [])
     assert.ok(Date.now() - started < 1000, 'empty draining probe must not wait for the 5s timeout')
     assert.deepEqual(result, { healthy: true, references: [{ referenceId: loaded, turnPresence: 'unknown' }] })
   } finally {

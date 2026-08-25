@@ -39,6 +39,6 @@ scenarios:
     related: spec-cli/hooks/harness.sh
 ---
 Measured the way dispatch.sh invokes the hook: the captured payload on stdin, SPEXCODE_HARNESS_LIB
-sourced, the session resolved through hp_store_dir into a governed session.json. The payloads are
+sourced, the session resolved through hp_store_dir into a governed runtime.json. The payloads are
 captured live from a real claude session running a real Task subagent (a probe project whose hooks
 dump every event's stdin), so the fields measured are the harness's actual contract, not a guess.

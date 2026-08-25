@@ -36,8 +36,11 @@ function writeSession(home: string, id: string, parent: string | null): string {
   return dir
 }
 
+// the legacy envelope is retired to runtime.json at the store's first canonical access; read whichever is there
+const envelope = (dir: string): { session_id: string } => JSON.parse(readFileSync(join(dir, existsSync(join(dir, 'runtime.json')) ? 'runtime.json' : 'session.json'), 'utf8'))
+
 function watchers(dir: string): { watcher: string; createdAt: string; sources?: string[] }[] {
-  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const raw = envelope(dir)
   const application = openProjectSessionApplication({ databasePath: resolveDatabasePath(), locality: () => {} })
   try {
     const grouped = new Map<string, { watcher: string; createdAt: string; sources: string[] }>()
@@ -53,21 +56,21 @@ function watchers(dir: string): { watcher: string; createdAt: string; sources?: 
 }
 
 function parentOf(dir: string): string | null {
-  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const raw = envelope(dir)
   const databasePath = resolveDatabasePath()
   const application = openProjectSessionApplication({ databasePath, locality: () => {} })
   try { return application.readState(raw.session_id)?.parentSessionId ?? null } finally { application.close() }
 }
 
 function pendingFrom(dir: string): string[] {
-  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const raw = envelope(dir)
   const application = openProjectSessionApplication({ databasePath: resolveDatabasePath(), locality: () => {} })
   try { return application.readPendingMessages(raw.session_id).map((entry) => entry.senderSessionId ?? '') }
   finally { application.close() }
 }
 
 function timelineText(dir: string): string {
-  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const raw = envelope(dir)
   const application = openProjectSessionApplication({ databasePath: resolveDatabasePath(), locality: () => {} })
   try { return application.readMessageHistory(raw.session_id).map((entry) => Buffer.from(entry.body).toString('utf8')).join('') }
   finally { application.close() }
@@ -209,8 +212,9 @@ test('session reparent updates the canonical projection after cutover', { timeou
   seed.createSession({ sessionId: newParent })
   seed.createSession({ sessionId: child, parentSessionId: oldParent })
   seed.close()
-  writeFileSync(`${databasePath}.json-migration.json`, '{}\n')
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(port) }
+  writeFileSync(`${databasePath}.json-migration.json`, JSON.stringify({ version: 1, sourceDigest: 'fixture' }) + '\n')
+  // the test worker pins the canonical database beside its own home; this fixture's backend must open THIS store
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: databasePath, SPEXCODE_API_URL: '', PORT: String(port) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(port)], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let log = ''
@@ -220,7 +224,7 @@ test('session reparent updates the canonical projection after cutover', { timeou
     const response = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ children: [child], parent: newParent }),
     })
-    assert.equal(response.status, 200, await response.text())
+    assert.equal(response.status, 200, `${await response.text()}\nBACKEND LOG:\n${log}`)
     const replay = await fetch(`http://127.0.0.1:${port}/api/session-runtime/${child}/replay`)
     assert.equal(replay.status, 200)
     assert.equal((await replay.json() as { parentSessionId: string | null }).parentSessionId, newParent)
@@ -228,6 +232,14 @@ test('session reparent updates the canonical projection after cutover', { timeou
     assert.equal(board.status, 200)
     const boardChild = (await board.json() as Array<{ id: string; parent: string | null }>).find(row => row.id === child)
     assert.equal(boardChild?.parent, newParent)
+    // the new supervisor is told the child's current state once; the former parent gets nothing new
+    await stop(backend)
+    const after = openProjectSessionApplication({ databasePath, locality: () => {} })
+    try {
+      const snapshots = after.readPendingMessages(newParent).filter(message => message.senderSessionId === child)
+      assert.deepEqual(snapshots.map(message => Buffer.from(message.body).toString('utf8')), [`[spex watch] ${child} is created`])
+      assert.deepEqual(after.topology.parents(child, 'watch:parent').map(edge => edge.fromSessionId), [newParent])
+    } finally { after.close() }
   } finally {
     await stop(backend)
     rmSync(home, { recursive: true, force: true })

@@ -1963,3 +1963,11 @@ test('the spawner pointer names the parent worktree and stays quiet without one'
     'fail-quiet by absence: a parent record with no worktree appends nothing',
   )
 })
+
+test('a delivered canonical state notice names the watched subject, never the recipient reading it', async () => {
+  const { canonicalMessageText, fromRaw } = await import('./sessions.js')
+  const supervisor = fromRaw({ session_id: 'supervisor', governed: true, worktree_path: '/tmp/supervisor', branch: 'node/supervisor', status: 'active' } as never)
+  const body = Buffer.from(JSON.stringify({ sessionId: 'worker', status: 'awaiting', proposal: 'close', note: 'landed as main 8b1d2fc21', parentSessionId: 'supervisor' }), 'utf8')
+  assert.equal(canonicalMessageText({ kind: 'session.state.changed.v1', body }, supervisor), '[spex watch] worker is close-pending — landed as main 8b1d2fc21')
+  assert.throws(() => canonicalMessageText({ kind: 'session.state.changed.v1', body: Buffer.from('{"status":"active"}') }, supervisor), /names no subject session/)
+})

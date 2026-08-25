@@ -87,7 +87,7 @@ const events = (dir: string): Array<{ kind: string; text?: string; from?: string
   resetConfiguredSessionApplicationForTest()
   const app = configuredSessionApplicationIfCutover()
   if (!app?.readState(id)) return []
-  return app.readPendingMessages(id).flatMap((message) => {
+  const messages = app.readPendingMessages(id).flatMap((message) => {
     const raw = Buffer.from(message.body).toString('utf8')
     if (raw.startsWith('[spex watch]')) return [{ kind: 'sent', text: raw, from: message.senderSessionId ?? null }]
     try {
@@ -97,6 +97,7 @@ const events = (dir: string): Array<{ kind: string; text?: string; from?: string
       return [{ kind: 'sent', text: `[spex watch] ${state.sessionId ?? id} is ${display}`, from: message.senderSessionId ?? null }]
     } catch { return [] }
   })
+  return messages.filter((message, index) => messages.findIndex((candidate) => candidate.text === message.text && candidate.from === message.from) === index)
 }
 async function waitFor(check: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 2_000

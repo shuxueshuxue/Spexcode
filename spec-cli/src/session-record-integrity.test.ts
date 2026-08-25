@@ -74,6 +74,7 @@ test('a note carrying quote/backslash/newline/unicode survives every real declar
   const tmux = `spex-record-integrity-${process.pid}-${Date.now()}`
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    NODE_NO_WARNINGS: '1',
     SPEXCODE_HOME: home,
     SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
     SPEXCODE_TMUX: tmux,

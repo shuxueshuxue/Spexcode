@@ -20,3 +20,11 @@ It is a board-lifecycle hook, so it acts only on a GOVERNED (dashboard-launched)
 This hook carries no conversation. A message addressed to the session reaches its agent as an ordinary prompt through the harness adapter (delivery-queue), which is the only way anything enters a turn. The one protocol exception is a managed watch notice: the canonical `[spex watch] ` prefix identifies a supervision snapshot, not work performed by the receiving agent, so UserPromptSubmit for that exact wire form does not flip the receiver to `active`. Other inter-agent prompts remain ordinary prompt activity. A hook that also injected mail delivered every message a second time and made the agent's context depend on which of two paths won a race; a freshness signal reports a fact about the session and hands nothing over.
 
 This is the freshness half of the [[core]] discipline: it keeps the board honest about whether a session is working, waiting, or asking, so the gates and the dashboard read a true present state rather than a stale one.
+
+## legacy handler migration
+
+For the two known pre-structured `mark-active` source blobs still tracked by existing projects, dispatch performs
+a bounded migration at the adapter boundary: it executes the current package-owned structured implementation,
+and the next materialize replaces the old tracked handler with that implementation. This is a migration of a
+legacy source identity, not a second lifecycle protocol or a permanent backward-compatibility path. The old
+handler's envelope writes are never allowed to author current lifecycle state.

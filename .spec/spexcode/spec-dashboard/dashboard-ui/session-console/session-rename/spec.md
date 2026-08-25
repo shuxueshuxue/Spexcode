@@ -146,3 +146,15 @@ separate destructive close row. This node supplies the session actions; it never
 This node's slices of the shared files are the rename/confirm-modal styling in `styles.css` and the
 rename route in `index.ts`; the eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in
 the measure-and-score reframe, are [[spec-eval]]'s churn, not session-rename's drift.
+
+## the row context menu
+
+A **right-click on a session row** opens its context menu — **lock on graph**, rename, archive or close
+([[session-rename]] / [[archive]]), and **attach** for a live row ([[attach-menu]], which hands over the
+`spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
+suppression. Archive and close share the menu's danger group and each confirms before its lifecycle request.
+Lock on graph locks the board to that session and navigates to
+`#/graph`; it has no pending-ops precondition, so an ops-less session still lands on the graph with the lock
+banner explaining the empty grip. The shared `sessionName` puts a rename first in the label precedence.
+Context menus and anchored dropdowns use their border with shallow ambient depth only; they do not cast a bright
+halo around the menu edge.

@@ -90,3 +90,16 @@ The row, its rails, its fold, and its zone change together: adding a column to t
 the fold slot must reserve, and changing the forest shape changes both. Splitting them would put a
 single visual decision under two owners. Feature specs that need one piece reference this node's file
 in `related:` or claim a selector under it; they do not become its owner.
+
+## the four hues
+
+The session-list row surfaces share name and status from `session.js`, whose `sessionDisplayState` projection
+and single **`STATUS_COLOR`** map paint the liveness dot, the status word, **and** the compact sidebar's status
+**glyph** (`STATUS_GLYPH`) the SAME hue everywhere those rows appear (window row, console sidebar row, and the
+mobile card). @-mention and search entries remain their own thin joins and do not mint a second session forest.
+The document-action slot deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
+light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
+= waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
+(`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour
+only answers *does this session need me?* so a glance sorts the board without a legend; the word still spells the
+exact state. Green for `working` also matches the avatar's liveness ring, so dot, word, and ring never disagree.

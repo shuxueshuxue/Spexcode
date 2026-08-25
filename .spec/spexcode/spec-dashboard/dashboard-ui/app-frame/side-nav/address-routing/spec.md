@@ -98,3 +98,8 @@ page. Any query builder removes page before it PUSHES, so a new filtered populat
 page-1 form. Direct open, refresh, Back, and Forward retain an explicit `page=1`; the two page-1 forms are
 action/history state, not a canonical-address error. Automatic legacy normalization and invalid/non-positive
 page repair REPLACE; human pagination/filter actions PUSH.
+
+`copyText(text)` is the clipboard path itself, and `copyAddress` is its address-shaped caller. A reader is
+also offered plain subjects to copy — a repository path from the explorer's row menu ([[file-tree]]) — and
+they take the same Clipboard-API-then-textarea route, so a denied or insecure clipboard degrades identically
+wherever a copy is offered instead of once per surface.

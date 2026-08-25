@@ -1,5 +1,16 @@
 ---
 scenarios:
+  - name: menu-opening-decides-focus
+    tags: [frontend-e2e, desktop]
+    description: >
+      In the running dashboard open one menu with the pointer and the same menu from the keyboard. Inspect
+      where real DOM focus sits after each opening, walk the menu with the arrow keys, and close it.
+    expected: |
+      The pointer opening leaves focus exactly where it was; the keyboard opening puts focus on the menu's
+      first command. Arrow keys move focus between commands without reaching the surface underneath, and
+      closing returns focus to whatever the keyboard borrowed it from. A command that has a binding prints
+      that binding's live cap beside its word.
+    related: spec-dashboard/src/ContextMenu.jsx
   - name: session-menu-compact-icon-chrome
     tags: [frontend-e2e, desktop]
     description: >

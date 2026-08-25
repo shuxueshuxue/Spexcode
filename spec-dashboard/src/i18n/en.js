@@ -484,6 +484,10 @@ export default {
       tabSplit: 'send active tab to split pane',
       commandBox: 'toggle the session Command Box',
     },
+    explorer: {
+      menu: 'open the row menu for the focused explorer row',
+      openInNewTab: 'open the focused explorer row in a new tab',
+    },
     popup: {
       switch: 'switch pane (spec / history)',
       scroll: 'scroll · reveal the next version',
@@ -666,6 +670,19 @@ export default {
   },
 
   // the node right-click menu ([[node-menu]]) — labels for the board's node verbs, mouse-side.
+  // [[file-tree]] row menu — one vocabulary for both explorer projections.
+  explorerMenu: {
+    nodeLabel: 'node actions',
+    fileLabel: 'file actions',
+    revealOnGraph: 'reveal on graph',
+    revealOwner: 'reveal owning node',
+    copyLink: 'copy link',
+    copyPath: 'copy path',
+    copyNodeId: 'copy node id',
+    copied: 'copied',
+    failed: 'copy failed',
+  },
+
   nodeMenu: {
     menuLabel: 'node actions',
     info: 'node info',

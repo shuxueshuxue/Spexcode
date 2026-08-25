@@ -49,3 +49,8 @@ row is a real anchor at `#/file/<path>` on the workspace's ordinary slot semanti
 click reads it in the current slot, ctrl/⌘ holds it as its own tab, through the same helper every other
 anchor-row surface calls. It is the same address the node tree's governed-file rows open, because one file
 has one address however the reader found it.
+
+Its rows carry the same `data-menu-*` subject declaration the node tree's rows carry, and that is all they
+carry: the row menu is the explorer's one seam ([[file-tree]]), so this projection grows no menu, no
+right-click handler, and no second copy of the file vocabulary. A directory row declares itself a directory
+and is offered only what a folder can answer.

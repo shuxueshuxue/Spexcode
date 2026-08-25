@@ -477,6 +477,10 @@ export default {
       tabSplit: '将当前页签送入分屏',
       commandBox: '开关会话 Command Box',
     },
+    explorer: {
+      menu: '打开当前资源管理器行的右键菜单',
+      openInNewTab: '在新标签打开当前行',
+    },
     popup: {
       switch: '切换页签（规格 / 历史）',
       scroll: '滚动 · 展开下一版本',
@@ -656,6 +660,18 @@ export default {
   },
 
   // 节点右键菜单（[[node-menu]]）——板上节点动词的鼠标侧标签。
+  explorerMenu: {
+    nodeLabel: '节点操作',
+    fileLabel: '文件操作',
+    revealOnGraph: '在图中定位',
+    revealOwner: '打开所属节点',
+    copyLink: '复制链接',
+    copyPath: '复制路径',
+    copyNodeId: '复制节点 id',
+    copied: '已复制',
+    failed: '复制失败',
+  },
+
   nodeMenu: {
     menuLabel: '节点操作',
     info: '查看详情',

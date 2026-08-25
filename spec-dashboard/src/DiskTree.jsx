@@ -41,8 +41,11 @@ function Dir({ entry, depth }) {
           be one — so clicking it opens the branch and nothing else. The node tree's rows do both because a
           node IS a document; a folder is not, and giving it a navigation would be inventing an address for
           something that has nothing to show. */}
+      {/* the row menu reads its subject off the row ([[file-tree]]'s one explorer seam), so a folder offers
+          exactly the one verb it has and never grows a handler of its own. */}
       <button type="button" className="ft-row ft-dir" style={{ paddingLeft: 6 + depth * 11 }}
-        aria-expanded={open} data-tip={entry.path} onClick={() => setOpen((v) => !v)}>
+        aria-expanded={open} data-tip={entry.path} data-menu-kind="dir" data-menu-path={entry.path}
+        onClick={() => setOpen((v) => !v)}>
         <span className="ft-caret">{open ? '▾' : '▸'}</span>
         <span className="ft-label">{entry.name}</span>
       </button>
@@ -58,6 +61,7 @@ function FileRow({ entry, depth }) {
   const href = routeHash('file', entry.path)
   return (
     <a className="ft-row ft-code" style={{ paddingLeft: 6 + depth * 11 }} href={href} data-tip={entry.path}
+      data-menu-kind="file" data-menu-path={entry.path}
       onClick={(event) => holdAnchor(event, href)}
       onDoubleClick={(event) => { event.preventDefault(); navigate('file', entry.path) }}>
       <span className="ft-caret" />

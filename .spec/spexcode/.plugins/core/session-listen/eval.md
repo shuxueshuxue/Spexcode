@@ -52,7 +52,7 @@ scenarios:
       The explicit executable wins over PATH; when it is absent, command -v spex-session is the only resolver. No
       Node package import or guessed node_modules path is used by the hook.
 code: .spec/spexcode/.plugins/core/session-listen/session-listen.sh
-related: .spec/spexcode/session-runtime/self-launch-cutover/spec.md
+related: .spec/spexcode/session-runtime/self-launch-entry/self-launch-cutover/spec.md
 ---
 # session-listen loss
 

@@ -8,7 +8,7 @@ code:
 related:
   - spec-cli/src/index.ts
   - .spec/spexcode/session-runtime/application-service/spec.md
-  - .spec/spexcode/session-runtime/production-cutin-yatu/spec.md
+  - .spec/spexcode/session-runtime/application-service/production-cutin/production-cutin-yatu/spec.md
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
   - .spec/spexcode/session-runtime/runtime-bindings/spec.md
 ---

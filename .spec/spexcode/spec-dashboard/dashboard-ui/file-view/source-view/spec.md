@@ -44,9 +44,10 @@ never read as a complete short one — so that, and only that, floats over the t
 while it is still true and leaves when it stops being news. A refused or failed read shows the reason in
 the same place and keeps it.
 
-The reader also exposes a selection event for a non-empty CodeMirror selection. A small action affordance
-may call the parent with `{ path, startLine, endLine, text }`; the viewer owns neither the prompt nor any
-dispatch. The parent routes that context into the ordinary New Session composer, because New is the existing
+The reader reports its selection to the parent as it changes — `{ path, startLine, endLine, text }` plus the
+viewport coordinates of the selection's end, so the parent can anchor its own affordance at the pointer — and
+reports `null` when the selection collapses or the document leaves. The viewer draws no affordance of its own
+and owns neither the prompt nor any dispatch. The parent routes that context into the ordinary New Session composer, because New is the existing
 long-form, explicit-launch surface while Command Box is an immediate message to an already selected session.
 The composer encodes the context as a human-readable, parseable prompt token, renders it back as a removable
 attachment chip, and leaves the surrounding prompt editable. Selecting code never launches by itself, and the

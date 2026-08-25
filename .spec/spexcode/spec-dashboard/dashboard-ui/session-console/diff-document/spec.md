@@ -69,7 +69,9 @@ A reader can click a changed line to author a comment. Comments live in the sess
 lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending
 un-sent comments formats them as one review message and uses the existing session input/send path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
-Sent comments remain inline in the diff with their delivery marker.
+Sent comments remain inline in the diff with their delivery marker. A reload after saving or sending a comment is
+not a navigation: the open file stays selected while it still exists, so the reader lands beside the comment they
+just filed rather than back on the first file.
 
 The branch scope is a proof over commits, not over a working directory, so the endpoint anchors its git reads at a
 root that exists: the session worktree while it is on disk, and the shared main checkout — which holds the

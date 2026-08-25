@@ -9,9 +9,9 @@ related:
   - .spec/spexcode/session-runtime/runtime-bindings/spec.md
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
   - .spec/spexcode/session-protocol/spec.md
-  - .spec/spexcode/session-runtime/spex-governed-bindings-adapter/spec.md
-  - .spec/spexcode/session-runtime/spex-governed-bindings-tests/spec.md
-  - .spec/spexcode/session-runtime/spex-governed-bindings-yatu/spec.md
+  - .spec/spexcode/session-runtime/spex-governed-bindings/spex-governed-bindings-adapter/spec.md
+  - .spec/spexcode/session-runtime/spex-governed-bindings/spex-governed-bindings-tests/spec.md
+  - .spec/spexcode/session-runtime/spex-governed-bindings/spex-governed-bindings-yatu/spec.md
 ---
 # Spex governed runtime bindings
 

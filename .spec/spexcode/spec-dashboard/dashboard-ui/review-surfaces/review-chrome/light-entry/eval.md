@@ -1,24 +1,21 @@
 ---
 scenarios:
-  - name: cold-detail-runtime-boundary
-    test: spec-dashboard/test/evals-light-entry.e2e.mjs
-    tags: [frontend-e2e, desktop, mobile]
+  - name: review-route-in-resident-shell
+    test: spec-dashboard/src/reviewWorkspaceContract.test.mjs
+    tags: [desktop]
     code: [spec-dashboard/src/Root.jsx]
-    related: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
+    related: [spec-dashboard/src/App.jsx, spec-dashboard/src/views.jsx]
     description: >
-      In fresh desktop and phone Chromium contexts with cache disabled, open the canonical Evals LIST and
-      an existing Eval detail by its canonical URL and by the legacy session URL. Record CDP requests,
-      EventSource and WebSocket creation, loaded chunks, the normalized address, and the rendered list/detail.
-      From the canonical list/detail pages, follow the real Graph rail anchor and then browser Back.
+      Read the root and the view registry as the product ships them: the root's route selection, and the surface
+      each review view (evals, issues) declares.
     expected: >
-      The trunk list, canonical detail, and legacy detail render their Evals face; legacy links normalize to
-      the canonical route. Before real board navigation there is only one bounded list/detail request plus
-      any detail evidence, with no graph request or SSE, no session request or socket, and no board/graph/
-      terminal chunk. The phone renders the same responsive review face. Entering Graph starts the ordinary
-      graph request and SSE exactly once; Back restores the list/detail without restarting the now-warm runtime.
+      The root mounts one App for every address and selects no lighter review surface; every review view declares
+      the `workspace` surface, so a cold `#/evals` or `#/issues` URL lands in the same resident shell — with its tab
+      strip — that in-app navigation uses.
 ---
 # measuring light-entry
 
-YATU is a cold real-browser route probe, not a component render. Chromium records the complete CDP Network
-ledger until the detail and evidence settle, then uses the product's own rail anchor and browser Back to
-prove both sides of the initialization boundary.
+The one-runtime rule is a structural claim about the root and the registry, so its instrument reads the shipped
+source rather than driving a browser: a lighter review host cannot exist if no view declares a second surface
+and the root selects none. The cold-boundary browser probe that measured the withdrawn fast path is retired with
+it.

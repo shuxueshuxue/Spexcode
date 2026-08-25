@@ -27,6 +27,10 @@ a branch never pays for its folder listing.
 those into two hit targets would make the common move — look inside this node — cost two clicks in a list
 built for scanning.
 
+**The graph is one click from the tree.** A graph entry at the tree's head opens the resident Spec tab at its
+bare address, which both focuses the held tab and clears any node or file selector; merely restoring the
+previous selector would leave the door looking inert whenever a concrete Spec document is already open.
+
 **Files keep the colours their chips have in the popup**, so a governed file and an attachment look the same
 wherever they are listed rather than teaching the reader two vocabularies for one thing.
 

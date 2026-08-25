@@ -115,10 +115,10 @@ width (each pane scrolls its own content, no stray horizontal scrollbar) — but
 The original intention survives as one work loop across two truthful surfaces: intent in the node popup,
 live change in the session console.
 
-**The body renderer stamps line provenance.** Rendering markdown is lossy on purpose — paragraphs re-flow,
-markers are eaten, blank lines vanish — so nothing in the rendered prose says which lines of the file it
-came from. The tokenizer walks the source line by line and therefore already knows, so each block it emits
-carries the body lines that produced it; [[prose-selection]] reads those stamps back to turn a reader's
+**The body renders through the one shared [[prose-renderer]], which stamps line provenance.** Rendering
+markdown is lossy on purpose — paragraphs re-flow, markers are eaten, blank lines vanish — so nothing in the
+rendered prose says which lines of the file it came from. The renderer keeps each block's source lines, so
+each block it emits carries the body lines that produced it; [[prose-selection]] reads those stamps back to turn a reader's
 selection into a line range. Stamping is opt-in per render: a caller that can vouch for where its text sits
 in the body passes that offset, and a caller that cannot (an issue body is not a spec body) passes nothing
 and gets no stamps at all — a wrong line number would be worse than no addressing. The two-part card

@@ -550,7 +550,6 @@ scenarios:
   - name: stranded-rendezvous-refuses-text-send
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#DeliveryTransportState
       - spec-cli/src/harness.ts#rendezvousDeliveryTransport
       - spec-cli/src/sessions.ts#sendText
     related:

@@ -7,11 +7,11 @@ code:
   - docs/session-events-plan.md
 related:
   - .spec/spexcode/session-runtime/spec.md
-  - .spec/spexcode/session-runtime/session-events-package/spec.md
-  - .spec/spexcode/session-runtime/session-events-store/spec.md
-  - .spec/spexcode/session-runtime/session-events-schema/spec.md
-  - .spec/spexcode/session-runtime/session-events-errors/spec.md
-  - .spec/spexcode/session-runtime/session-events-yatu/spec.md
+  - .spec/spexcode/session-runtime/session-events/session-events-package/spec.md
+  - .spec/spexcode/session-runtime/session-events/session-events-store/spec.md
+  - .spec/spexcode/session-runtime/session-events/session-events-schema/spec.md
+  - .spec/spexcode/session-runtime/session-events/session-events-errors/spec.md
+  - .spec/spexcode/session-runtime/session-events/session-events-yatu/spec.md
   - .spec/spexcode/session-protocol/spec.md
 ---
 # session events

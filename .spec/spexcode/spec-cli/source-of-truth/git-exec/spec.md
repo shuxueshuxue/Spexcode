@@ -126,3 +126,23 @@ failure before ancestry is considered, while a real non-ancestor retains the act
 The hard-exit-128 distinction remains the unfixed boundary above. Five of the seven sites are reached only on
 a machine where Git is missing, unexecutable, or timing out, so ordinary runs still cannot stand in for this
 failure proof.
+
+## the four call shapes
+
+The git layer exposes four call shapes by how
+failure should behave: a sync read that throws (`git`, stderr piped so
+a fail-soft probe stays quiet from a non-repo dir); an async optional read that hides failure as `''` (`gitA`);
+a runner where the exit code IS the verdict (`gitTry`, returns ok + stderr); and an unbounded streaming required
+read (`gitRequiredA`) for history facts whose absence would change a verdict. The streaming shape also accepts an
+input roster on stdin, so a walk over many revisions keeps a fixed argv instead of growing one that would then
+need chunking. Required derivation never turns a
+spawn, timeout, non-zero exit, or fixed stdout buffer into an empty fact set. Inside a graph build all four also inherit that build's bounded pack footprint ([[graph-cache]]) —
+one place decides it, every shape obeys it, and the transport never learns which walk it is running. All of them BOUND their
+child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a
+generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
+the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise
+disguise the pathology as an innocently-empty result. A caller's awaited promise therefore always settles;
+[[graph-cache]]'s settle guarantee leans on this. All four strip an inherited `GIT_DIR`/work-tree env so a
+hook can't misdirect repository discovery; the local commit gate avoids the hook index entirely by judging
+the real pending commit oid. The HTTP
+entrypoint that serves the results belongs to [[spec-cli]].

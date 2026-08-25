@@ -29,12 +29,7 @@ and status. The loader reads `.spec` from the filesystem and overlays these git-
 loader itself takes the **checkout root as a parameter** (default: the backend's own checkout): an eval
 surface rooted at a session's worktree loads the spec tree from that same root, so a branch-ADDED node
 exists for it — the pending-proposal principle applied to node existence, not only to readings. Nothing
-is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read. Drift is
-netted against **acknowledgement**: a one-parent `spex ack` commit whose tree equals its sole parent's tree
-checkpoints the named node valid at its tip, quieting drift reachable from that checkpoint back to the
-version. Every other `Spec-OK` commit acknowledges only itself, never older debt; a merge is therefore
-self-only even when an `ours` strategy leaves its first-parent tree unchanged, because it introduces new
-reachable history.
+is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read. Drift is netted against acknowledgement by the one ack-cover rule [[drift-by-ancestry]] states.
 
 **A body reference is NOT a loaded edge.** The loader used to resolve every `[[id]]` a body names into a
 per-node `mentions` list and ship it with the node. It is gone, and what removed it is a judgement about
@@ -60,109 +55,13 @@ Ownership itself has one relation algebra: exact path, directory prefix, or glob
 preflight, eval changed-set selection, and session impact all call the same pure matcher; an immutable snapshot
 changes where declarations are read, never what a declaration claims.
 
-Git's default history presentation suppresses merge diffs, but a merge can author content or rename a lineage
-while resolving conflicts. Dense combined (`--cc`) lines different from every parent are that merge's own
-writes: a cc change to `spec.md` is a version, and one in governed code enters drift/anchor judgment. Combined
-raw paths separately carry merge-authored rename identity into projection without charging the rename as a
-code hit. A merge with neither stays transport. First-parent diff is not a substitute: it would duplicate
-side-branch writes at the project's normal `--no-ff` landing step.
-
 Two principles keep that derivation cheap on a long-running server:
 
-- **Scale with history, not node count.** Ordinary repositories derive two shared event streams: one
-  repository-wide NUL-framed raw identity stream for `.spec` content versions and governed drift/acks, and
-  one merge raw+patch stream for rename identity and all-parent authored lines. The identity stream fixes
-  `--root -M -l0 --raw -z --no-abbrev --no-ext-diff --no-textconv`: each compact record carries status, one
-  path (or both rename endpoints), and old/new blob ids. Its blob predicate, not attribute-sensitive line
-  counts, decides whether a one-parent `.spec` row is a version. Numeric numstat statistics are read only
-  for the selected history node in one `diff-tree --stdin` batch, never retained in the shared ledger.
-  The persistent ledger appends immutable commit events and
-  every verdict projects those events through the current tip's rename and ancestry topology. There is no
-  path-scoped alternate representation: Git's path simplification, rename following, path reuse, and parallel
-  rename forks cannot preserve the same identity relation, so a size threshold must not silently change the
-  product meaning. Resolving any node is a pure lookup after that shared projection. The recent/history tab for a single node is served off
-  that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
-  The `.spec` timeline is the **full reachable history**, not Git's default path-simplified presentation:
-  every reachable one-parent content commit remains a version even when a later TREESAME merge would hide
-  that side of a directory-scoped walk. Merge rows are then admitted separately by the all-parent authored-line
-  predicate above, so restoring hidden ordinary commits never turns inherited merge content into a duplicate
-  version. Single-parent rename aliases are coalesced independent of encounter order: if parallel branches
-  edit the old and new paths, both histories join the current node, and the complete row set is ordered by
-  one full-history date-order walk only after alias resolution. Date order retains walk-newest choice among
-  parallel versions while forbidding an ancestor from displacing its own descendant merely because both
-  commits share a timestamp. Alias continuity is event-scoped: reusing the vacated old path after the rename
-  starts a separate node history. A pure rename remains a zero-content move.
-  Both indices are read for **several checkouts at once** — the backend's own root plus every session
-  worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
-  in-flight promise for equal checkout heads in one common Git store while its ownership is keyed by the
-  current checkout. Its immutable content key is the checkout HEAD plus the project-namespaced persistent
-  ledger path: that path binds the common repository store and Git interpretation identity, so linked
-  worktrees share but independent same-HEAD clones never do. The root path is an LRU owner only, never a
-  second content dimension. When a root advances to a new HEAD, its old index is released immediately unless another live root still
-  references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
-  retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
-  in-flight build.
-
-  The persistent event ledger has one **build-local transaction** across the history, drift, merge-authorship,
-  and anchor-hunk demands a build actually makes. It also holds immutable anchor hunk facts, not selector verdicts: each fact is
-  keyed by the anchor engine's pinned range-semantics schema plus the ordered result/parent image identity
-  (blob oid and historical path). A reader asks the ledger for its whole hunk demand once, derives only absent
-  facts through Git, then joins those validated ranges to the already-open snapshot through the SAME lock and
-  atomic replacement as event rows; the anchor engine never reopens, re-decodes, or independently writes that
-  ledger. A missing fact costs its first derivation; a malformed ledger row is rejected as a whole ledger and
-  rebuilt from Git. The ledger grammar version names both its identity and filename: adding a row type advances
-  that version, so an older process never reads a new row then atomically writes it away; the new namespace
-  seeds from Git. Parser units, selector resolution, windows, reachability, and lint verdicts remain
-  process-local/current computations, so the ledger can never certify a changed selector or tree from an old
-  answer. Let `H` be reachable commits, `L` the encoded ledger bytes, and `D` the newly
-  reachable immutable events. A cold seed necessarily pays one `O(H)` Git extraction and one `O(L)` encode;
-  an exact-tip hit pays one `O(L)` read, integrity pass, and decode with no event Git walk; an advancing tip
-  pays one `O(L)` snapshot plus `O(D)` event extraction and at most one atomic `O(L + D)` replacement. The
-  topology and the tip-relative projection are still rebuilt per build, because reachability, rename forks, and
-  the walk-newest version rule are current-tip questions; the ledger removes repeated immutable-fact extraction,
-  not that semantic lower bound. Its cost decomposes into three separate terms, and only the first is
-  parameterized by the RENAME count. Every reachability question the projection asks compares some commit with a
-  **rename** commit, so the reachability closure is held per consulted rename rather than per event: for `K`
-  consulted renames, at most `2K` full-size closures, `O(K(H+G))` construction time over `H` reachable commits
-  and `G` parent edges, and `O(KH)` retained bits. Holding the closure at the other end instead builds one per
-  distinct event commit that is actually compared against a rename — `C` of them, `O(C(H+G))` construction and
-  `Θ(CH)` retained bits — which the linear history whose events all sit on one renamed path drives to `Θ(H²)`.
-  That improvement is bounded only where it is claimed: the `2K` ceiling bounds full-size closure buffers, in
-  count and bytes, against `C`; it does NOT bound runtime or edge visits, because a rename with many unrelated
-  descendants traverses ground the event-side ancestor walk never touched. The other two terms are unchanged by
-  that choice: one scan of the `N` immutable events, and the lineage walk itself, whose frontier compares each
-  step's applicable renames pairwise — `Σ d(candidate)²` constant-time queries, worst case `Θ(NK²)` when one
-  path carries `K` mutually incomparable renames. None of this is a linear-in-history promise: at `K ≈ H` the
-  closure term is `O(H(H+G))` — quadratic only where the commit DAG is sparse enough that `G = O(H)` — and the
-  unchanged frontier term is cubic when `N`, `K` and `H` grow together.
-  Within one build, stream count and anchor demand must not multiply ledger work: all consumers share one decoded
-  snapshot, one integrity verdict, and at most one locked merge/write, with no write-then-reload verification pass.
-  The pair projector also parses the current-tip topology and tree-path listing once and passes those
-  immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
-  text must never be split into separate equivalent maps per builder.
-  When `loadSpecs` already knows several current version bases and their named checkpoint acks, it parses
-  each relation once and primes each finite query roster in one child-to-parent topology pass. The same
-  prepared relation entries decide which bases need ancestry and become the relation published to consumers;
-  the loader does not reconstruct either view. It first resolves the bases, then retains
-  only the acks which can actually cover one of them. Each output is the same dense bitset an independent
-  `ancestorsOf` lookup would have stored; the compact endpoint frontier is discarded on return, and an arbitrary
-  later SHA still uses that normal lookup. This is a batch entrance to one current projection, never a persisted
-  matrix or another reachability truth.
-  Cross-process writers still merge under the project-scoped lock; a corrupt or interpretation-mismatched
-  snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker. The raw
-  identity stream is parsed once at the Git adapter boundary through its structural NUL protocol; the ledger
-  stores compact typed records and both projectors receive those records directly, so a
-  pathname containing the human-facing record-separator byte can never reframe history.
-
-  The expected peak-memory shape is one encoded ledger payload (events plus immutable hunk facts) plus one decoded event state plus the current
-  projection, not one copy of those per stream or per optimistic-lock retry. The slow full-history derivation
-  remains the correctness oracle. Release evidence compares the two implementations in separate processes
-  and homes on a fixed current tree, proves a known finding first, and reports cold, exact-tip, and advancing-tip
-  wall, CPU, and peak RSS; a hit-rate win does not excuse a material cold or append RSS regression.
-- **Keep candidates transient.** An explicit pending commit is not a checkout's current HEAD and may remain
-  dangling after rejection. Its history/drift indices are shared only within the invoking lint call and are
-  never registered in the root-owned HEAD cache, so it neither evicts that root's hot board index nor leaks
-  one cache entry per rejected commit.
+- **Scale with history, not node count.** The derivation reads one shared, persistent event ledger per project and projects it through the current tip;
+  what that ledger holds, how it is transacted, and what each build costs in reachable history are
+  [[event-ledger-demand]]'s contract. Several checkouts share one index per HEAD under [[root-lru]]'s ownership rule.
+- **Keep candidates transient.** A pending commit's indices live only inside the lint call that judges it and never
+  enter the HEAD cache ([[root-lru]]).
 - **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
   cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
   Shallow/graft bytes and the refs storage that can carry `refs/replace/*` are part of that filesystem
@@ -171,17 +70,9 @@ Two principles keep that derivation cheap on a long-running server:
   A new commit moves the key and the board reflects the new version and drift at once; an unreadable
   key bypasses the cache and recomputes rather than ever serving stale data.
 
-The same discipline governs the runtime reads the dashboard makes alongside the spec data. The board
-**overlay** — each managed worktree's pending spec-delta versus `main`, owned by [[portable-layout]] —
-is a pure function of the worktree's **fork point** (its merge-base with `main`), its HEAD, its
-working-tree `.spec`, and **main's tip**, memoized on exactly those. An op must BOTH differ from main's
-current content AND be the branch's own post-fork work, so neither staleness class paints a phantom: a
-worktree merely behind a freshly-advanced `main` shows nothing for content `main` moved (not it), and a
-foreign-base or already-landed tree whose content equals main shows nothing at all (the anchoring itself
-lives in [[worktree-linker]]). The key costs one `git merge-base` per managed worktree plus one main-tip
-resolve per board read; HEAD and the `.spec` signature are filesystem reads, so a warm board re-runs no
-per-worktree diff yet still reflects a fresh commit, edit, or landed merge immediately. Session liveness
-is owned by [[sessions]].
+The board **overlay** — each managed worktree's pending spec-delta versus `main` — is [[worktree-linker]]'s pure
+function of fork point, worktree HEAD, working-tree `.spec`, and main's tip, memoized on exactly those; session
+liveness is owned by [[sessions]].
 
 Status is a four-state derived value computed from version and drift, with frontmatter kept only as a
 fallback when git is unreadable: the loader derives the git-only part (pending / drift / merged), and
@@ -190,34 +81,13 @@ states are specified in [[spec-node-states]]. The loader also attaches the body'
 — raw source and expanded spec — there being no agent-narrated current-state part, because what's-done
 is derived, never narrated (see [[three-part-body]]).
 
-A directory before `git init` is a valid adoption starting state, but it has no Git-backed graph or history
-to derive. The Git-workspace boundary owns that distinction before a board touches runtime/layout state and
-before any public history entrance starts a projection. Its one user-facing refusal names the resolved absolute
-workspace and says to run `git init` there before retrying. Thus graph assembly and direct history callers
-receive the same repair, while `gitRequiredA` remains a transport safety net for a Git child that did run and
-failed; a missing executable, timeout, unreadable checkout, or malformed Git metadata keeps that original
-failure rather than being misrepresented as an uninitialized directory.
+A directory before `git init` has no Git-backed graph to derive; the Git-workspace boundary owns that refusal
+([[git-exec]]).
 
 This node owns the derivation pair: the loader/aggregator (`specs.ts`) and its git-access layer
 (`git.ts`). The loader also assigns each node a unique-by-construction id: its leaf dir name, or the minimal
 parent-qualified suffix when that name collides — always a single URL-safe token, never a `/`-path
-([[id-url-safe]]). The git layer exposes four call shapes by how
-failure should behave: a sync read that throws (`git`, stderr piped so
-a fail-soft probe stays quiet from a non-repo dir); an async optional read that hides failure as `''` (`gitA`);
-a runner where the exit code IS the verdict (`gitTry`, returns ok + stderr); and an unbounded streaming required
-read (`gitRequiredA`) for history facts whose absence would change a verdict. The streaming shape also accepts an
-input roster on stdin, so a walk over many revisions keeps a fixed argv instead of growing one that would then
-need chunking. Required derivation never turns a
-spawn, timeout, non-zero exit, or fixed stdout buffer into an empty fact set. Inside a graph build all four also inherit that build's bounded pack footprint ([[graph-cache]]) —
-one place decides it, every shape obeys it, and the transport never learns which walk it is running. All of them BOUND their
-child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a
-generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
-the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise
-disguise the pathology as an innocently-empty result. A caller's awaited promise therefore always settles;
-[[graph-cache]]'s settle guarantee leans on this. All four strip an inherited `GIT_DIR`/work-tree env so a
-hook can't misdirect repository discovery; the local commit gate avoids the hook index entirely by judging
-the real pending commit oid. The HTTP
-entrypoint that serves the results belongs to [[spec-cli]].
+([[id-url-safe]]). The git layer's four call shapes, their bounded children, and their environment hygiene are [[git-exec]]'s.
 
 `loadSpecs` publishes a node's relation as PARSED ENTRIES, and the flat shapes beside them are views of that
 one source. `codeEntries`/`relatedEntries` are the relation; `code`/`related` are its base paths for the many

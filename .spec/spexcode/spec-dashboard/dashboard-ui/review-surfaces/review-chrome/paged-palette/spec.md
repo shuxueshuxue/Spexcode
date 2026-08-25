@@ -40,5 +40,7 @@ typing context is the one place the bare key cannot fire and a session console i
 
 An empty query is the plain jump-list: planes group in the caller's order and each keeps its source
 surface's stable order. Picking routes through [[address-routing]] — a node opens its `#/spec/<id>` document,
-a session jumps to its tab ([[session-console]]). Plane boost, keyboard ownership and selection routing remain
-[[session-search]]'s single shared behavior.
+a session jumps to its tab ([[session-console]]). A pick can also HOLD: ctrl/⌘-click on a row, or ctrl/⌘+Enter
+on the keyboard selection — the pointer hold's twin for the hand that arrived by typing — hands the address to
+the shell with the hold mark, and [[tab-strip]] decides what holding means. Plane boost, keyboard ownership and
+selection routing remain [[session-search]]'s single shared behavior.

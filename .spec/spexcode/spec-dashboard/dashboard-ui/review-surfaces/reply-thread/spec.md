@@ -33,7 +33,9 @@ one governing home, and the two pages reference it instead of re-describing it.
   variant of the thread.
 - **A reply's marks live IN the reply.** A reply may carry a time anchor (`▶m:ss · step`), evidence blobs,
   and — when it is a remark ([[remark-substrate]]) — its resolve/retract verb with its resolved bit. Those
-  are parsed from and rendered with the reply, so every home that shows a thread shows them; a home that
+  are rendered from the reply's own text by the one shared [[prose-renderer]] — node references, time anchors
+  and evidence are its semantic tokens, and this node supplies only what each token DOES in a thread (navigate,
+  seek, show) — so every home that shows a thread shows them; a home that
   cannot act on one (no clip to seek) renders it inert rather than hiding it.
 - **The writing surface is not this node's to invent.** The composer's shell — the quiet bordered container,
   the auto-growing borderless textarea, the persistent action row, the IME Enter boundary — is [[composer]];
@@ -46,4 +48,6 @@ one governing home, and the two pages reference it instead of re-describing it.
   ([[review-chrome]]), skinned — never a parallel span/anchor variant.
 - **Delivery stays the caller's.** `onSend(text, evidence)` is the whole write contract: the thread does not
   know whether it is replying to a local file, a forge comment, or creating a thread lazily — the home routes
-  it by the issue's own store ([[issues]]). An `@` reference remains in that authored text and never dispatches.
+  it by the issue's own store ([[issues]]). An `@session` reference remains in that authored text and never
+  dispatches; `@new` is [[mentions]]'s one explicit worker action, and the thread's composer offers the same
+  launcher chooser every other input box does.

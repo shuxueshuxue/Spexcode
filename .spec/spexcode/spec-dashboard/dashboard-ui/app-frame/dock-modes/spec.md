@@ -173,3 +173,23 @@ header, the dock renders content only — the tree, or the session forest. There
 160px: wide enough that a session headline or a file name reads before it ellipses, narrow enough that the
 finding surface stays beside the document rather than competing with it. A reader who wants more drags it
 and that choice is what persists, so the default only decides what an unopinionated window looks like.
+
+## the session projection, as the console describes it
+
+**The finding dock's session projection** ([[dock-modes]]) is the read-only glance, built from the shared
+**`SessionRow`** face ([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the
+console list: the session
+**headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
+always wins) + a single colour-coded status **glyph** + pending-op count; the session's `launcher` remains
+durable data on the API payload but is not rendered as a per-row badge, keeping the glance clean. On one line,
+with a **monochrome
+inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the headline's end when the
+row is locked. It stays a
+**bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and
+always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
+than extending down over the board's stats bar. A single click **locks** the board onto
+that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
+no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with different gestures:
+single click switches tab, while double-click has no separate meaning and therefore only leaves that tab
+selected. Locking from the console is the row's explicit **right-click → lock on graph** action above, not a
+hidden double-click gesture. 

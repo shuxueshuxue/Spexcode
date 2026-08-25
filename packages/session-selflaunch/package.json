@@ -1,7 +1,7 @@
 {
   "name": "@spexcode/session-selflaunch",
   "version": "0.6.7",
-  "private": true,
+  "publishConfig": { "access": "public" },
   "type": "module",
   "description": "A fail-closed self-launch adopter for the SpexCode session protocol.",
   "bin": {
@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "node ../../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../../scripts/release-publish.mjs --from-package-publish",
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {

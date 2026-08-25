@@ -8,6 +8,12 @@ code:
 related:
   - package.json
   - packages/spec-core/package.json
+  - packages/session-protocol/package.json
+  - packages/session-topology/package.json
+  - packages/session-runtime/package.json
+  - packages/session-events/package.json
+  - packages/session-application/package.json
+  - packages/session-selflaunch/package.json
   - spec-eval/package.json
   - spec-forge/package.json
   - spec-cli/package.json
@@ -16,13 +22,14 @@ related:
 ---
 # release-publish
 
-The metapackage is not a release unit by itself. A release is the committed set of six public packages:
-`@spexcode/spec-core`, `@spexcode/spec-eval`, `@spexcode/spec-forge`, `@spexcode/spec-cli`,
-`@spexcode/spec-dashboard`, and `spexcode`. The `@spexcode/session-*` packages are private workspace implementation
-packages selected through the CLI's dependency closure, not separately published release members. Every public package
+The metapackage is not a release unit by itself. A release is the committed set of twelve public packages:
+`@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-events`,
+`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/spec-core`, `@spexcode/spec-eval`,
+`@spexcode/spec-forge`, `@spexcode/spec-cli`, `@spexcode/spec-dashboard`, and `spexcode`. Every public package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
-the publication order is core, dashboard, session, eval, forge, CLI, root. Session follows the independently
-published dashboard and still precedes its CLI consumer. Dashboard is independent of the root's
+the publication order is session-protocol, session-topology, session-runtime, session-events, session-application,
+session-selflaunch, core, dashboard, eval, forge, CLI, root. The session stack is published in dependency order;
+dashboard is independent of the root's
 install closure, but it is still a public installation entrypoint and belongs to the same release action. It
 follows core (its only runtime dependency) and precedes CLI, so when a new CLI first tells someone to install
 the dashboard package, that exact same-version repair is already resolvable from the registry.
@@ -30,7 +37,7 @@ the dashboard package, that exact same-version repair is already resolvable from
 `npm run release:check` is the local rehearsal: it validates the version/dependency graph, builds the owned
 artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.
 `npm run release:publish` first requires a clean checkout on `main`, then repeats the rehearsal, proves the
-registry contains none of this version of the seven-package set, and publishes in that order with public access.
+registry contains none of this version of the twelve-package set, and publishes in that order with public access.
 It never edits versions, commits, tags, pushes, or repairs a partial registry state. A version found for only
 some members is a loud refusal: publishing again cannot turn a partial release into a trustworthy release.
 

@@ -1,7 +1,7 @@
 {
   "name": "@spexcode/session-topology",
   "version": "0.6.7",
-  "private": true,
+  "publishConfig": { "access": "public" },
   "type": "module",
   "description": "A neutral SQLite relation model for session addresses.",
   "files": ["dist"],

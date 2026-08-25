@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -79,7 +79,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
     assert.equal(timeline.status, 200)
     const body = await timeline.json() as { events: Array<{ kind: string; text?: string }> }
     assert.deepEqual(body.events.map((event) => event.text?.slice(0, 3)), Array.from({ length: 50 }, (_, index) => String(index + 78).padStart(3, '0')))
-    assert.deepEqual(readdirSync(join(dir, 'timeline')).sort(), Array.from({ length: total }, (_, index) => `${String(index + 1).padStart(12, '0')}.ndjson`))
+    assert.equal(existsSync(join(dir, 'timeline')), false, 'canonical SQLite events do not recreate legacy timeline files')
   } finally {
     if (backend) await stop(backend)
     rmSync(fixture, { recursive: true, force: true })
@@ -154,8 +154,11 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
     assert.ok(response)
     const body = await response.json() as { events: Array<{ kind: string; status?: string; proposal?: string | null; note?: string | null }> }
     const events = body.events.filter((event) => event.kind === 'status')
-    assert.deepEqual(events.map((event) => [event.status, event.proposal, event.note]), moves.map(([status, proposal], index) => [status, proposal ?? null, notes[index]]))
-    assert.deepEqual(readdirSync(join(dir, 'timeline')).sort(), Array.from({ length: moves.length }, (_, index) => `${String(index + 1).padStart(12, '0')}.ndjson`))
+    assert.deepEqual(events.map((event) => [event.status, event.proposal, event.note]), [
+      ['idle', '', ''],
+      ...moves.map(([status, proposal], index) => [status, proposal ?? null, notes[index]]),
+    ])
+    assert.equal(existsSync(join(dir, 'timeline')), false, 'canonical SQLite events do not recreate legacy timeline files')
   } finally {
     await Promise.all(backends.map((backend) => stop(backend)))
     rmSync(fixture, { recursive: true, force: true })
@@ -180,8 +183,9 @@ test('YATU: a dispatched probe worker receives the note-to-terminal counter-inse
     git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')
     git(project, 'add', '.'); git(project, 'commit', '-qm', 'fixture')
     const env: NodeJS.ProcessEnv = {
-      ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux, FAKE_HARNESS_INTERVAL_MS: '50',
+      ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux, CLAUDE_CONFIG_DIR: join(home, 'claude'), FAKE_HARNESS_INTERVAL_MS: '1000',
     }
+    mkdirSync(join(home, 'claude'), { recursive: true })
     delete env.SPEXCODE_API_URL
     delete env.SPEXCODE_SESSION_ID
     for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'OPENCODE_SESSION_ID', 'PI_SESSION_ID']) delete env[key]
@@ -271,7 +275,7 @@ process.exit(result.status === null ? 1 : result.status)
     git(project, 'add', '.'); git(project, 'commit', '-qm', 'fixture')
     const env: NodeJS.ProcessEnv = {
       ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux,
-      SPEX_FIXTURE_TURNS: turns, SPEX_FIXTURE_NODE: process.execPath, SPEX_FIXTURE_SPEX: spex,
+      SPEX_FIXTURE_TURNS: turns, SPEX_FIXTURE_NODE: process.execPath, SPEX_FIXTURE_SPEX: join(here, '..', 'dist', 'cli.js'),
     }
     delete env.SPEXCODE_API_URL
     delete env.SPEXCODE_SESSION_ID
@@ -325,7 +329,7 @@ process.exit(result.status === null ? 1 : result.status)
     assert.deepEqual(JSON.parse(closedText), { ok: true })
     const sessionStore = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
     assert.equal(existsSync(sessionStore), true, 'close retains the archived session store')
-    assert.equal(JSON.parse(readFileSync(join(sessionStore, 'session.json'), 'utf8')).archived, true,
+    assert.equal(JSON.parse(readFileSync(join(sessionStore, 'runtime.json'), 'utf8')).archived, true,
       'close marks the retained session record archived')
     assert.equal(existsSync(path), false, 'close removes the worktree')
     assert.notEqual(spawnSync('git', ['branch', '--list', branch], { cwd: project, encoding: 'utf8' }).stdout.trim(), '',

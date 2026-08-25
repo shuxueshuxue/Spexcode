@@ -127,6 +127,23 @@ test('production composition refuses missing locality and relative database path
   )
 })
 
+test('a toolchain with an older application schema refuses a newer shared store before composition', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-future-schema-'))
+  const databasePath = join(root, 'sessions.sqlite')
+  const first = openProjectSessionApplication({ databasePath, locality: () => {} })
+  first.protocol.withTransaction(tx => {
+    tx.exec(
+      "INSERT INTO schema_migrations(component,version,checksum,applied_at_ms) VALUES('session-application',4,'future-toolchain',1)",
+    )
+  })
+  first.close()
+
+  assert.throws(
+    () => openProjectSessionApplication({ databasePath, locality: () => {} }),
+    /session-application carries schema generation 4; this build understands 3/,
+  )
+})
+
 test('runtime binding emits the delivery wake after the binding commit', () => {
   const root = mkdtempSync(join(tmpdir(), 'session-application-runtime-wake-'))
   const databasePath = join(root, 'sessions.sqlite')

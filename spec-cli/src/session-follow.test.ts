@@ -133,15 +133,18 @@ test('a message arriving for the follower returns it — that is the other thing
   assert.deepEqual(r, { mail: { from: 'someone-else', text: 'the merge landed' } })
 })
 
-// A wait that STOPS on an event leaves it unread, so the next wait resumes on it rather than skipping past.
-// Watching one's own log is a watch, never a handover — the agent gets the message as a prompt
-// ([[delivery-queue]]), so this position cannot make it miss mail either way.
-test('waking on mail leaves the follower own-log position where it was', async () => {
+// A take wait consumes the returned inbox message. Its own cursor must move past that message, otherwise an
+// empty cursor makes every subsequent wait return the same oldest mail.
+test('waking on mail advances the follower own-log cursor and takes the next message next', async () => {
   freshHome()
   sent(ME, 'unread')
-  const r = await followSessions(() => {}, { targets: () => [], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
-  assert.ok('mail' in r)
-  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, ME) ?? 0, 0, 'the event it stopped on stays unread')
+  sent(ME, 'second')
+  const first = await followSessions(() => {}, { targets: () => [], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
+  assert.deepEqual(first, { mail: { from: null, text: 'unread' } })
+  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, ME), 2)
+  const second = await followSessions(() => {}, { targets: () => [], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
+  assert.deepEqual(second, { mail: { from: null, text: 'second' } })
+  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, ME), 3)
 })
 
 test('a follow with no session record of its own keeps its cursors in memory and still works', async () => {

@@ -4772,13 +4772,16 @@ export async function drainSession(id: string): Promise<void> {
     // An empty canonical queue is a successful no-op. Do not turn a resume with no owed prompt into a
     // runtime-binding error; require a bound adapter only when there is a message that must be handed over.
     if (application.readPendingMessages(id).length === 0) return
+    const h = harnessById(rec.harness || defaultHarness.id)
     const binding = application.resolveRuntime(id, 'spex-governed')
     if (!binding || binding.status !== 'bound') {
-      // Claude's TUI has no native conversation id to bind. Preserve the legacy rendezvous identity (the
-      // governed tmux session) while the record is missing a harness session id, then acknowledge the same
-      // canonical queue directly. Codex and records with a binding problem remain fail-closed.
-      if (rec.harness === 'claude' && !rec.harnessSessionId) {
-        const h = harnessById(rec.harness || defaultHarness.id)
+      // Leaf adapters own their per-session controller and can deliver without a shared native identity.
+      // Preserve the governed transport while that identity is absent, then acknowledge the same canonical
+      // queue directly. Shared adapter runtimes (Codex) remain fail-closed until their exact binding exists.
+      const leafWithoutNativeIdentity = !rec.harnessSessionId && (
+        rec.harness === 'claude' || h.runtimeOwnership === 'leaf'
+      )
+      if (leafWithoutNativeIdentity) {
         await withDeliveryLocks([id], async () => {
           for (;;) {
             const pending = application.readPendingMessages(id)
@@ -4800,7 +4803,6 @@ export async function drainSession(id: string): Promise<void> {
       }
       throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
     }
-    const h = harnessById(rec.harness || defaultHarness.id)
     await withDeliveryLocks([id], async () => {
       for (;;) {
         const pending = application.readPendingMessages(id)

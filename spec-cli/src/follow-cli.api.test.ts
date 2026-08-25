@@ -15,6 +15,7 @@ const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 const ID = 'wwww2222-2222-4222-8222-222222222222'
 const WATCHER = 'wwww1111-1111-4111-8111-111111111111'
+const seededParents = new Map<string, string | null>()
 
 function row(status: string, archived = false): Record<string, unknown> {
   return {
@@ -56,6 +57,7 @@ function seedSession(home: string, id = ID, parent: string | null = null): strin
   mkdirSync(dir, { recursive: true })
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  seededParents.set(id, parent)
   writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'node/follow-cli', node: 'session-follow',
     title: 'followed', name: '', parent,
@@ -73,7 +75,7 @@ const append = (dir: string, ev: Record<string, unknown>): void =>
       const proposal = (ev.proposal as string | null) ?? null
       const note = (ev.note as string | null) ?? null
       if (app.readState(id)) app.transitionSession(id, { status, proposal, note, reason: 'follow-fixture' })
-      else app.createSession({ sessionId: id, status, proposal, note })
+      else app.createSession({ sessionId: id, status, proposal, note, parentSessionId: seededParents.get(id) ?? null })
     } else if (ev.kind === 'sent') {
       if (!app.readState(id)) app.createSession({ sessionId: id, status: 'active' })
       app.enqueueConversationMessage(id, { kind: 'session.prompt.v1', body: Buffer.from(String(ev.text)), senderSessionId: (ev.from as string | null) ?? null, idempotencyKey: `follow-fixture:${id}:${String(ev.mid ?? ev.text)}` }, { text: String(ev.text), from: (ev.from as string | null) ?? null })

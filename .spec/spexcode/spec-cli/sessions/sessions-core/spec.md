@@ -179,36 +179,6 @@ The record's existing `name` is the one human display override: CLI creation may
 rename later replaces or clears that same field. It affects only the shared label/title projection;
 the prompt-derived node, branch, worktree slug, and stored prompt title retain their own responsibilities.
 
-**Public session creation asks one lightweight authority question before it may use the local path.** The CLI
-asks only `GET /api/instance` — an identity route that enumerates no governed records and derives no worktree
-overlays — against its own 1500ms budget; an optional recorded-endpoint health read is discovery only and never
-consumes it. An explicit target skips project comparison and normally owns the one keyed `POST /api/sessions`; an
-implicit target does so once the instance identity canonically matches, compared through the shared main-root
-resolver (which follows a linked worktree to its common checkout and applies the configured `main`) rather than
-by raw path. Any HTTP response proves ownership, and a proven mismatch is still refused. The SOLE licence for the
-in-process fallback is an exact no-listener failure whose entire transport cause chain is `ECONNREFUSED`;
-timeout, reset, DNS, and every other transport result fail without local creation, and a response already
-received is never relabelled indeterminate.
-
-**A create may pin its fork point.** Creation accepts an optional `base` — any commit-ish the main checkout can
-resolve. Absent, the session forks from the auto-detected source-of-truth branch, i.e. from whatever that branch
-has drifted to at the moment the worktree is made; that is right for ordinary work but leaves a run against a
-frozen commit inexpressible, so an evaluation, a bisect, or a replay could not name the code it actually ran on.
-A supplied `base` is resolved during target resolution, BEFORE any Git mutation: one that names no commit fails
-the request with a 400 and leaves no half-made worktree, branch, store, or private candidate receipt behind. A
-resolved pin becomes the `git worktree add` start point and is stored on the record, so a later reader can tell
-a pinned run from an unpinned one. It also joins the idempotency payload hash — a retry that changes the pin is
-a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
-receipt hash, so nothing that never pinned gains a field.
-
-**A create records the commit it actually forked from.** Whether or not a pin was supplied, the branch ref right
-after `git worktree add` IS the fork point, and the record keeps it. It is written like the optional pin — present
-only on records created since it existed, so an older record keeps its exact bytes — and it is the one fact that
-later separates a branch which never authored a commit from one whose commits the base has absorbed. Git ancestry
-cannot: both heads are ancestors of the base. A reader that lacks the field recovers the same commit from the branch
-ref's creation reflog entry, which is where git wrote that start point; the diff document ([[diff-document]]) is the
-surface that spends it.
-
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation lives at
 `spec-cli/src/session-record-lock.ts`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
@@ -241,83 +211,6 @@ receipt before the stop guard may admit a known native descendant collection. If
 the same object authorizes adapter compensation of the original collection. A missing, forged, stale, or changed
 receipt retains the ordinary descendant refusal before shared-runtime mutation and cannot authorize compensation.
 
-### Record integrity — one writer, three readings, no revival
-
-**The runtime/worktree envelope of `runtime.json` is produced by ONE writer here**, by serializing the typed
-record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
-not a shell, not a route. After JSON migration, lifecycle (`status`, `proposal`, `note`, and `parent`) is owned
-only by the canonical session application and its events; the envelope is runtime metadata and is never written from
-canonical lifecycle state. `session.json` is migration input only and is retired once the migration marker is published.
-A record whose `runtime_owner` names an external controller is instead written by
-[[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
-stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
-format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
-ownership mode is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
-existing JSON eventually meets a quote, a backslash, or a newline and leaves a record nothing can parse. Both
-note-carrying entries — the agent's typed declaration and the hook's capture of an asked question — therefore
-land through the canonical application, and a note round-trips byte-for-byte on every surface. The shell hooks
-call that package entry point for every event; it compares canonical state and emits no event for a semantic
-no-op. They do not inspect or write JSON lifecycle fields ([[state]]).
-
-A published create record is also the durable fence for any private pre-publication candidate receipt whose
-best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and
-the exact recorded branch/path resource lock, retires a valid matching receipt, and proves it absent before
-stopping or removing any public resource. After its target tmux kill, it also proves that exact session has no
-pane left before accepting adapter cold proof or deleting durable resources. Failure preserves the row, store,
-worktree, and branch; deleting the record first would let the old receipt regain cleanup authority over a later
-name collision.
-
-Launch readiness is the one durable internal publication fence within that record. Its pending value freezes
-the exact pre-resume lifecycle/proposal/note/stopped/archived and offline projection while the raw candidate is
-available to the adapter's post-launch validator. The record/layout boundary owns one public-record parser:
-list/API/graph, resource owners and shared references, resolved-layout settings, and the timeline observer all
-consume that same three-way projected entry rather than raw candidate fields. A successful fence clear
-publishes the final record and its lifecycle event once; failure or stale recovery restores the original and
-emits nothing. Malformed pending bytes are a corrupt/unknown public entry everywhere, never a reason to reuse a
-last-known online row, perform a git walk, or infer an owner from candidate lifecycle fields. "Malformed"
-includes a structurally complete original whose lifecycle or proposal string is outside the same closed enums
-the typed session reader accepts. While the fence exists, the compact public display is pinned offline rather
-than reconciled from candidate runtime evidence, even if the frozen original says `stopped:false` with an
-`active`/`idle` lifecycle and a candidate process is live.
-
-Reading a record has **three** outcomes and collapsing them is what once made a live session answer "no
-session record". **Absent** is the legitimate nothing. **Corrupt** — present but unparseable — is a fact about
-a session that EXISTS: it keeps its row (naming the file and the parse error, liveness `unknown` since nothing
-was probed), and every writer refuses on it rather than repairing it into a plausible empty shell. A corrupt
-record cannot prove the adapter, session leaf, worktree, or branch owner, so `close` may quarantine the original
-bytes as control-plane evidence but then refuses loudly: it sends no signal and preserves the session runtime,
-worktree, and branch, reporting those residues instead of guessing. Retiring only the corrupt row requires a
-future record-only control-plane seam; it must not be approximated by skipping the runtime guard or by adding a
-second process terminator. Any other read failure still throws:
-a transient fault must read as neither. **Retired** is the third integrity reading, derived not stored: the
-recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
-put it back to `active`/`idle`, and no delayed launch-readiness observer may replace its frozen note after the
-worktree disappears. No launch is assembled for it; only `close` remains.
-
-The leaf-ownership guard that gates every stop distinguishes **a dead leaf from an unprovable one**. Both look
-alike from the recorded pid — neither yields a start identity — but they call for opposite answers. A pid that
-names no live process has nothing to signal and nothing a signal could hit by mistake, so the leaf is already
-in the state stop wants and teardown proceeds record-only, exactly as for an explicitly stopped record. A pid
-that IS alive while refusing to prove its identity is the case the guard exists for, and it still refuses
-loudly, because signalling it could kill whatever now wears that number. Collapsing the two into one refusal is
-what made a session impossible to retire: a launcher that dies before readiness leaves a dead pid on the
-record, and `stop` and `close` then both refused it forever — the row could be neither run nor closed, and
-`quarantine` does not apply because the record is perfectly readable. Liveness is asked with the same probe the
-escalation path already uses to tell a vanished leaf from a replaced one, so one question has one answer here.
-
-The prompt seam carries ONE invariant for every harness: **the text handed to an agent never begins with `-`**.
-Human prompts legitimately do — a pasted browser-console line, a diff hunk, a quoted flag — and downstream that
-first character decides whether the text is read as a prompt or as machinery. Each harness parses its own argv
-by its own rules (one honours an end-of-options `--`, one silently drops a detached value starting with `-`,
-one has no end-of-options branch at all), and the launch scripts additionally recognize their resume/continue
-markers by comparing the tail to a literal flag. Answering that per harness would mean an escape per adapter
-plus a refusal for whichever harness has none — several answers to one question, and still nothing covering a
-prompt that IS the literal marker. So the guarantee is made once, here, where every launch and every send
-already passes through, and everything downstream hands over one plain quoted operand knowing nothing about
-who parses it. The cost is a single leading space on the prompts that would otherwise be undeliverable, with
-the human's own words following byte-for-byte; the alternative was refusing to carry them at all. This is why
-no `if (harness)` and no per-adapter prompt escape exists in the launch path ([[harness-adapter]]).
-
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
 no branch, no resolvable launcher command, or a rendezvous owner's derived socket pathname at/over its OS byte
 limit. Those are facts about this machine that no number of attempts can change, so each is one loud refusal
@@ -327,26 +220,15 @@ creation before any candidate resource exists and again before its launch-time s
 settle stays with the bounded readiness retry, and what only the harness can recognize is the harness's to
 declare ([[harness-adapter]]).
 
-An unreadable governed record has one separate recovery control: **quarantine** is neither `close` nor a
-repair. The caller supplies the exact former adapter/thread (or explicitly no native thread), tmux session,
-worktree path, and branch it extracted from the opaque incident. The thread field is an adapter-native
-conversation id, never the SpexCode session id: CLI omission explicitly sends no native thread, which is the
-required witness for an adapter such as Claude that has none to archive. The shared layer then re-proves, at execution
-time, that the session's registered leaf process is absent, that exact tmux session/worktree/branch are absent,
-and that the named adapter is healthy. A named native thread must either be absent, or be an exactly-unowned,
-idle, descendant-free native thread that its own adapter archives and re-censuses as unloaded; every live,
-active, owned, ambiguous, descendant-bearing, changed-generation, malformed, or unknown control refuses before
-the record moves. The operation never sends an OS signal, removes a worktree or branch, guesses an adapter, or
-turns opaque bytes into a lifecycle record. On success it atomically moves only `runtime.json` out of the active
-session directory to a per-project quarantine bundle, preserving its byte-exact payload plus the supplied claim
-and the independently observed absence proof. The ordinary record enumeration then removes the corrupt row from
-the session list, graph, and resource projection without a special hide list. `restore` is the explicit reverse:
-it atomically moves the byte-identical record back only while no active record exists, making the corrupt row
-visible again; it does not resurrect a runtime or infer lifecycle. CLI, HTTP, and the dashboard context control
-all call this one operation and surface refusal details.
-
 Session records may also carry `diff_comments`, the durable review conversation for the branch diff document
 ([[diff-document]]). Each row has a file path, an inclusive line range, the diff identity it was authored against,
 body text, and nullable `sent_at`. The record writer owns this array under the ordinary session lock. Editing a row
 replaces its body/range/identity and clears `sent_at`; sending uses the existing `sendText` channel and marks the
 selected rows sent only after acceptance, so a changed comment cannot be silently replayed.
+
+**Four of this module's concerns are big enough to answer for themselves.** How the record file is written and
+what reading it can mean are [[record-integrity]]'s; the one recovery control for a record that cannot be parsed
+is [[record-quarantine]]'s; the authority question a public create asks before it may use the local path, and the
+fork point it pins and records, are [[session-create-authority]]'s; and the invariant that keeps a human's prompt
+from being read as machinery is [[prompt-operand]]'s. Each anchors on the function in `sessions.ts` that
+implements it, so its drift is its own.

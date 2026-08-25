@@ -66,6 +66,18 @@ scenarios:
       correct. A same-input render reconciles against its current target map; it never deletes and recreates
       correct materialized files merely to arrive at the same bytes.
     test: spec-cli/src/materialize.test.ts
+  - name: nested-worktree-claude-shim
+    tags: [cli]
+    description: >
+      Adopt a project with claude and codex, add a linked worktree under `.worktrees/`, materialize it, then
+      overwrite its Claude settings with a user-owned file and materialize again.
+    expected: >
+      The nested worktree carries its own generated `.claude/settings.json` whose hook entries run
+      `dispatch.sh claude <Event>`; after the user file exists, materialize keeps the user's keys and hook and
+      merges the dispatcher beside them instead of replacing or retiring the file.
+    test:
+      path: spec-cli/src/materialize.test.ts
+      name: "codex worktree materialize plants the .codex anchor + unconditional project trust + per-hook hashes"
   - name: codex-trust-is-scoped-and-additive
     tags: [backend-api]
     description: >-

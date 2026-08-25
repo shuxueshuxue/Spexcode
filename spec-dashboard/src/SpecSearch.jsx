@@ -6,10 +6,8 @@ import { rankDocs } from '@spexcode/spec-cli/ranker'
 import { useSpecCorpus } from './corpus.js'
 import { sessionAddress, specAddress } from './address.js'
 import { isHoldGesture } from './tabs.js'
-
-// the breadcrumb path the rows show + match against (`.spec/a/b/<id>/spec.md` minus the shell + leaf),
-// so a row reads like the tree path it is. Mirrors SessionInterface's @-mention path.
-const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
+// the breadcrumb path the rows show + match against — the same path the @-mention rows read
+import { specPath } from './mentions.jsx'
 
 // TWO PLANES — the things a workspace HOLDS. A node and a session are what a tab can be, so every row here
 // is somewhere the reader can go and stay; that is what makes this a jump-list rather than a report.

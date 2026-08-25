@@ -48,7 +48,9 @@ message already claimed by the adapter before the transaction gets the queue loc
 returns, but an unhanded stale `continue` cannot arrive afterwards. This is a transfer of supervision, not a
 general messaging ACL: a still-live former session may deliberately send a new peer message later. After the
 rewrite commits, the new parent is sent one current-state snapshot through normal dispatch, including routine
-`active`/working. Later parent-only working transitions are suppressed by [[session-follow]], while an
+`active`/working; the snapshot is enqueued after the new `parent` watch relation exists (the parent transition
+itself publishes only to the former watcher set) and is keyed by that transition's own state event, so a retried
+rewrite never sends it twice. Later parent-only working transitions are suppressed by [[session-follow]], while an
 overlapping manual source receives them once. For a top-level detach there is no new target lock, parent source,
 or notification; the same old-parent queue revocation applies while an unrelated manual source remains intact.
 

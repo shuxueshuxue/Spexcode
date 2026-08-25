@@ -42,8 +42,8 @@ scenarios:
     expected: >-
       `#/spec` shows Spec, Sessions, Evals, Issues, and Settings as peer rail anchors, with only Spec
       selected and the Explorer dock exposing exactly Specs and Files. `#/file/<path>` keeps Spec selected
-      and the same two Explorer sections. `#/issues` keeps the existing full-width contract: no activity
-      rail and no Explorer dock.
+      and the same two Explorer sections. `#/issues` keeps the same rail with Issues selected, no fold
+      control, and no Explorer dock: the board takes the whole width right of the rail.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/Shell.jsx]
     test: spec-dashboard/test/spec-rail.e2e.mjs
@@ -108,6 +108,22 @@ scenarios:
       it reads "⌥F". Zero loss = the shell advertises exactly the keys it still fires, and Esc stays an
       overlay-closer everywhere.
     related: [spec-dashboard/src/App.jsx, spec-dashboard/src/SessionInterface.jsx]
+  - name: rail-on-every-board-and-fold-follows-sidebar
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real desktop Chromium against the running dashboard, open `#/sessions`, `#/spec`, `#/evals`,
+      `#/issues`, and `#/settings` in turn; on each read whether the `.side-rail` is visible and whether it
+      carries the `.rail-panel-toggle` control. On `#/sessions` press the control and read the forest
+      (`.si-list`) visibility and the control's `aria-pressed`; move to `#/spec` and read the Explorer
+      dock; return to `#/sessions` and press the control again.
+    expected: >-
+      The rail is visible on all five routes. The fold control is present exactly where a sidebar exists
+      to fold — `#/sessions` (the document's forest) and `#/spec` (the Explorer dock) — and absent on the
+      bare Evals, Issues, and Settings boards. On `#/sessions` the first press hides the forest and flips
+      `aria-pressed` to false; `#/spec` then shows no Explorer dock, because Spec and Sessions fold from
+      the same open/closed state; back on `#/sessions` the second press restores the forest and
+      `aria-pressed` returns to true. Zero loss = one fold control, one state, every board reachable.
+    code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/SideBar.jsx, spec-dashboard/src/SessionInterface.jsx]
 ---
 # side-nav — measurement
 

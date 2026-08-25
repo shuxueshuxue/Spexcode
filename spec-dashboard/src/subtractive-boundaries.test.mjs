@@ -46,10 +46,22 @@ test('sessions document owns the only forest and rail labels resolve through i18
   assert.match(dock, /if \(suppressRows\) return null/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
   assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
-  assert.match(shell, /hideDockToggle=\{page === 'sessions'\}/)
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
   assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)
+})
+
+test('the rail panel control folds the Sessions forest and is absent only where no sidebar exists', () => {
+  const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
+  const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
+  // Sessions mounts no shell dock, yet its document draws its own forest sidebar — so the control stays
+  // mounted there and folds that forest through the one workspace open/closed boolean. Bare review and
+  // settings boards have neither sidebar, and only they lose the control.
+  assert.match(shell, /const foldable = dockKind !== 'none' \|\| page === 'sessions'/)
+  assert.match(shell, /hideDockToggle=\{!foldable\}/)
+  assert.doesNotMatch(shell, /hideDockToggle=\{page === 'sessions'\}/)
+  assert.match(sessionInterface, /const \{ dock: forestOpen \} = useWorkspace\(\)/)
+  assert.match(sessionInterface, /\{forestOpen && <SessionForestPanel/)
 })
 
 test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {

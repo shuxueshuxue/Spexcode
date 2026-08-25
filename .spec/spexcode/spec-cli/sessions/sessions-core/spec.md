@@ -48,7 +48,8 @@ that the next canonical access migrates and retires ([[production-cutin]]), and 
 the only state/event/topology authority.
 [[session-follow]]'s durable watch relation is stored once in the session application's topology tables. After a
 canonical state record commits, the application projects its watcher edges and uses the existing send queue to
-notify each watcher; the canonical
+notify each watcher. When that queued state message is rendered as text for the watcher, the notice names the
+watched subject carried inside the message, never the watcher it is delivered to; the canonical
 application commit invokes the same post-commit wake callback so each recipient's existing durable queue is
 drained immediately in the originating runtime. The callback is a transport wake, not a second queue or source
 of truth: a missing runtime, crash, or failed handover leaves the committed row pending for the normal retry

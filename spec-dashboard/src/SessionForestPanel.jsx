@@ -133,11 +133,14 @@ export default function SessionForestPanel({ sessions = [], activeId, onSelect, 
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
       ) : (
         <div className="si-toprow">
+          {/* the two doors read as sidebar rows, not as boxed buttons: New carries its word, Search is one
+              quiet glyph at the end; both keep their class names for the surfaces that reach them */}
           <button type="button" className={`si-pill new${activeId === 'new' ? ' on' : ''}`} aria-label={t('session.newSessionTitle')} onClick={() => onSelect?.('new')}>
-            <span className="si-pill-glyph"><Icon name="plus" size={15} /></span>
+            <span className="si-pill-glyph"><Icon name="plus" size={14} /></span>
+            <span className="si-pill-label">{t('session.newSessionTitle')}</span>
           </button>
-          <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} onClick={onSearch}>
-            <span className="si-pill-glyph"><Icon name="search" size={15} /></span>
+          <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} data-tip={t('session.searchTitle')} onClick={onSearch}>
+            <span className="si-pill-glyph"><Icon name="search" size={14} /></span>
           </button>
         </div>
       )}

@@ -64,7 +64,7 @@ scenarios:
       mint a workspace tab merely to carry an icon. Board-local filter tabs, when present, remain view-local
       controls and do not become route tabs.
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/ReviewSurface.jsx, spec-dashboard/src/SettingsSurface.jsx, spec-dashboard/src/TabStrip.jsx]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/src/tabStrip.test.mjs
   - name: hold-gesture-on-every-row-surface
     description: >-
@@ -113,6 +113,22 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TabStrip.jsx, spec-dashboard/src/tabs.js, spec-dashboard/src/tabModel.js]
     test: spec-dashboard/test/tab-strip-drag.e2e.mjs
+  - name: close-returns-to-last-focused-same-kind-first
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real desktop Chromium against the running dashboard. Scene A: open `#/spec`, `#/evals`,
+      `#/issues`, then `#/spec`, then `#/evals`, and close the active Evals tab through its visible
+      `.tab-x`; read `location.hash`. Scene B (fresh storage): open `#/file/README.md` and double-click its
+      tab to hold it, open `#/file/CLAUDE.md` and hold it likewise, open `#/spec/<node>`, open
+      `#/file/package.json` (the file slot), then refocus `#/file/README.md`, `#/spec/<node>`, and
+      `#/file/package.json` in that order, and close the active package.json tab; read `location.hash`.
+    expected: >-
+      Scene A lands on `#/spec` — the tab the reader was on before Evals — not on Issues, the positional
+      neighbour. Scene B lands on `#/file/README.md`: the most recently focused surviving tab of the same
+      kind wins over both the nearer file (CLAUDE.md) and the more recently focused tab of another kind
+      (the Spec node). Only the closed tab leaves the strip. Zero loss = closing returns the reader where
+      they came from, same kind first.
+    code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

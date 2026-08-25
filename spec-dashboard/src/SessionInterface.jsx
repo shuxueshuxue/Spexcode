@@ -44,7 +44,7 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
 import TabStrip from './TabStrip.jsx'
 import { useStatusItem } from './StatusBar.jsx'
-import { useWorkspaceApi } from './workspace.jsx'
+import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 import { expandSessionFolds, toggleSessionFold, useSessionListState } from './sessionListState.js'
 
@@ -464,6 +464,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const scope = useViewScope()
   const { notify } = useTransientNotice()
   const { lockGraphTo } = useWorkspaceApi()
+  // The forest is this document's sidebar and folds from the rail's one panel control like the explorer
+  // does ([[side-nav]]): the same workspace open/closed boolean, read here rather than a second fold state
+  // the console would have to keep in step.
+  const { dock: forestOpen } = useWorkspace()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -1577,7 +1581,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
-      <SessionForestPanel
+      {forestOpen && <SessionForestPanel
         sessions={sessions}
         activeId={active}
         // The Sessions document owns both its forest and its document chrome. Keeping these siblings
@@ -1590,7 +1594,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         selectRequest={selectRequest}
         onSelectRequestConsumed={() => setSelectRequest(null)}
         onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
-      />
+      />}
       <div className="si-document">
         {route && <TabStrip specs={specs} sessions={sessions} route={route}
           onSessionContextMenu={(next) => { setResourceMenu(false); setCtxMenu(next) }} />}

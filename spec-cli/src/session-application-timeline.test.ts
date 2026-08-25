@@ -15,11 +15,23 @@ import { rvSock, stampRvSock } from './harness.js'
 import { markHumanPromptActive, sendText } from './sessions.js'
 import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
+function selectTestStore(home: string, databasePath: string): () => void {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = databasePath
+  return () => {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
+  }
+}
+
 test('cutover timeline projection reads conversation events from the application database', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-timeline-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   mkdirSync(home, { recursive: true })
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   const app = openProjectSessionApplication({ databasePath, locality: () => {} })
@@ -46,16 +58,14 @@ test('cutover timeline projection reads conversation events from the application
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })
 
 test('human re-entry trusts canonical lifecycle when the legacy envelope is stale', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-human-reentry-canonical-state-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   const id = 'stale-envelope-reentry-session'
   mkdirSync(home, { recursive: true })
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
@@ -80,16 +90,14 @@ test('human re-entry trusts canonical lifecycle when the legacy envelope is stal
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })
 
 test('canonical lifecycle writers resolve a Codex thread alias before transition', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-thread-writer-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   const id = 'codex-thread-writer-session'
   const thread = 'codex-thread-writer-native-id'
   mkdirSync(home, { recursive: true })
@@ -108,19 +116,18 @@ test('canonical lifecycle writers resolve a Codex thread alias before transition
     assert.equal(sess, id)
     assert.equal(s.markState('active', { sessionId: sess }), true)
     assert.equal(app.readState(id)?.status, 'active')
+    assert.ok(readTimeline(thread), 'Codex native thread ids resolve to the canonical timeline')
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })
 
 test('a migrated legacy Claude session still receives a prompt without a synthetic runtime binding', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-legacy-dispatch-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   const id = 'legacy-claude-session'
   const received: string[] = []
   const server = createServer(socket => socket.on('data', chunk => received.push(String(chunk))))
@@ -147,16 +154,14 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
     await new Promise<void>(resolve => server.close(() => resolve()))
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })
 
 test('an unbound human prompt stays waiting without treating queue acceptance as activity', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-human-prompt-reentry-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   const id = 'asking-reentry-session'
   mkdirSync(home, { recursive: true })
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
@@ -181,16 +186,14 @@ test('an unbound human prompt stays waiting without treating queue acceptance as
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })
 
 test('a transport miss stays queued and a Command Box retry reuses the same canonical message', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-queued-command-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   const id = 'queued-command-session'
   const deliveryId = 'command-delivery-key-1'
   let rejectTransport = true
@@ -236,16 +239,14 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
     await new Promise<void>(resolve => server.close(() => resolve()))
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })
 
 test('canonical acceptance stays successful when a runtime binding is not ready yet', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-unbound-command-'))
-  const previousHome = process.env.SPEXCODE_HOME
-  process.env.SPEXCODE_HOME = home
   const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
   const id = 'unbound-command-session'
   mkdirSync(home, { recursive: true })
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
@@ -265,7 +266,6 @@ test('canonical acceptance stays successful when a runtime binding is not ready 
   } finally {
     app.close()
     resetConfiguredSessionApplicationForTest()
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
+    restore()
   }
 })

@@ -22,19 +22,6 @@ export function isTerminalPointerReport(data) {
   return data.startsWith('\x1b[<') || data.startsWith('\x1b[M') || /^\x1b\[[0-9;]+[Mm]$/.test(data)
 }
 
-// Wheel reports carry the high bit in the button code and remain native tmux navigation. Button/motion
-// reports are browser chrome: forwarding them can make a focus click look like an agent input event.
-export function isTerminalButtonReport(data) {
-  if (!isTerminalPointerReport(data)) return false
-  if (data.startsWith('\x1b[<')) {
-    const code = Number(data.slice(3).match(/^\d+/)?.[0])
-    return Number.isFinite(code) && (code & 64) === 0
-  }
-  if (data.startsWith('\x1b[M')) return (data.charCodeAt(3) & 64) === 0
-  const code = Number(data.match(/^\x1b\[([0-9]+)/)?.[1])
-  return Number.isFinite(code) && (code & 64) === 0
-}
-
 // xterm focus reporting (CSI I/O) is terminal control traffic emitted when browser focus moves. It is
 // never a user's command byte; forwarding it lets a session click look like activity to the native TUI.
 export function isTerminalFocusReport(data) {

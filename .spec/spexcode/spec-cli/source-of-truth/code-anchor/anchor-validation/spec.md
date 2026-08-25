@@ -1,5 +1,5 @@
 ---
-title: anchor-proof
+title: anchor-validation
 status: active
 hue: 15
 desc: How the anchor engine is proven: measured bounds on the reference history, a positive control before any equivalence run, an oracle that does not share the projector, and every finding channel captured on every exit status.
@@ -11,7 +11,7 @@ related:
   - packages/spec-core/src/git.ts
 ---
 
-# anchor-proof
+# anchor-validation
 
 A faster [[code-anchor]] implementation earns its place only against an oracle that can fail. This node holds the
 reference measurements and the discipline that keeps a benchmark from agreeing with itself.

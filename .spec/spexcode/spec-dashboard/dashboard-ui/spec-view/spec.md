@@ -21,6 +21,13 @@ document. SpecView never mounts a source reader and never chooses a file to show
 the same node must never be two implementations that can disagree about what the node says. The popup keeps
 its place as a quick lens on board focus; this is where a node is READ.
 
+**The node opens like a page.** Its title is the one statement size the page spends ([[typography]]) with
+no markdown `#` in front of it; its one-line description reads as a muted subtitle directly under it; and
+the at-a-glance signals — the status word with its colour tick, the version, the eval count, drift when
+any, and the last editing session — sit in one property row above a hairline, as tints and plain text
+rather than a boxed strip. The governed-file and attachment rows follow as labelled chip rows, and the
+prose begins under them without a rule of its own.
+
 Inline `[[id]]` references in that shared renderer are real detail anchors: they use the canonical
 `#/spec/<id>` address, ordinary clicks focus the resident Spec tab, and Ctrl/Command-click uses [[tab-strip]]'s
 `holdAnchor` gesture to keep a second document. The popup and both document panes therefore expose the same

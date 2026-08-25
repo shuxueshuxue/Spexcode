@@ -138,6 +138,19 @@ test('how the board responds is spent through interaction tokens a preset can re
   assert.match(css, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/s)
 })
 
+test('the theme picker paints each preset with the palette the sheet actually resolves', async () => {
+  // Settings shows a swatch per preset from theme.js; a swatch that drifted from its :root row would show a
+  // palette nobody gets. Ground, paper, ink, and accent are read straight from each theme block.
+  const { THEMES } = await import('./theme.js')
+  const rows = Object.fromEntries([...css.matchAll(/:root(?:\[data-theme=(\w+)\])?\s*\{([\s\S]*?)\n\}/g)].map((m) => [m[1] || 'minimal', m[2]]))
+  const value = (block, token) => block.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`))?.[1]
+  for (const theme of THEMES) {
+    const block = rows[theme.code]
+    assert.ok(block, `${theme.code} has a theme row in the sheet`)
+    assert.deepEqual(theme.swatch, { ground: value(block, '--ground'), paper: value(block, '--paper'), ink: value(block, '--ink'), accent: value(block, '--blue') }, `${theme.code} swatch`)
+  }
+})
+
 test('seams and group heads use one divider rule', () => {
   assert.match(css, /--divider-rule:\s*1px solid var\(--edge\);/)
   assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)

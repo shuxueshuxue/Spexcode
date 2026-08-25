@@ -170,8 +170,8 @@ export function SpecPane({ node, graphOnly = false }) {
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
-      <h1># {node.title}</h1>
-      <blockquote>{node.desc}</blockquote>
+      <h1 className="doc-title">{node.title}</h1>
+      <blockquote className="doc-desc">{node.desc}</blockquote>
       <div className="doc-stat">
         <span className={`stat-status st-${node.status}`} data-tip={t('nodeView.statusLabel')}>
           <i className="stat-dot" />{t(`status.${node.status}`)}

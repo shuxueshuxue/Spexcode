@@ -88,8 +88,12 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. The document has one right area that
 **morphs** by what's focused. Search remains available through the shell palette and the existing ⌥+/ binding;
-the sessions dock owns the list's `＋` New Session door. The document is bounded by the routed page's viewport
-and owns the terminal/timeline surface without a second navigation scrollbar.
+the sessions dock owns the list's `＋` New Session door. **The forest sidebar speaks one row grammar**: its two
+doors at the top — `＋ New Session` carrying its word, and one quiet search glyph at the row's end — are rows
+in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
+that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
+rows and the session's own overlay colour kept as a hairline on its leading edge. The document is bounded by
+the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
 
 The archive is a fourth session **zone**, after needs-you, running, and offline. Its heading remains visible even
 when `N` is zero and carries the complete count of closed records. Like offline, its whole header is one keyboard-
@@ -523,7 +527,7 @@ single click switches tab, while double-click has no separate meaning and theref
 selected. Locking from the console is the row's explicit **right-click → lock on graph** action above, not a
 hidden double-click gesture. The console renders the row in its **compact, avatar-less** variant
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with
-a 204px default width (15% below the former 240px) and caption-size row text; the selected headline may expand
+a 204px default width (15% below the former 240px) and meta-size row text; the selected headline may expand
 in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
 status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)

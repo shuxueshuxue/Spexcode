@@ -9,17 +9,19 @@ const THEME_KEY = 'spexcode.theme'   // localStorage key holding the explicit us
 
 // One flat identifier per theme, all ported presets, Minimal first as the default. Labels are proper
 // nouns and deliberately untranslated: t() passes an unknown key through verbatim, so Settings can
-// feed every label to t() uniformly.
+// feed every label to t() uniformly. The swatch is the preset's own ground, paper, ink, and accent —
+// the four values the picker paints so a reader sees a theme before choosing it; the styles gate holds
+// each swatch to the theme row in styles.css, so the picker can never show a palette the sheet no longer has.
 export const THEMES = [
-  { code: 'minimal', label: 'Minimal' },
-  { code: 'notion', label: 'Notion' },
-  { code: 'things', label: 'Things' },
-  { code: 'tokyonight', label: 'Tokyo Night' },
-  { code: 'catppuccin', label: 'Catppuccin' },
-  { code: 'everforest', label: 'Everforest' },
-  { code: 'gruvbox', label: 'Gruvbox' },
-  { code: 'rosepine', label: 'Rosé Pine Dawn' },
-  { code: 'dracula', label: 'Dracula' },
+  { code: 'minimal', label: 'Minimal', swatch: { ground: '#1b1b1b', paper: '#262626', ink: '#d1d1d1', accent: '#6c99bb' } },
+  { code: 'notion', label: 'Notion', swatch: { ground: '#f7f7f5', paper: '#ffffff', ink: '#37352f', accent: '#2383e2' } },
+  { code: 'things', label: 'Things', swatch: { ground: '#eceef0', paper: '#ffffff', ink: '#555e68', accent: '#2e80f2' } },
+  { code: 'tokyonight', label: 'Tokyo Night', swatch: { ground: '#101018', paper: '#1a1b26', ink: '#a9b1d6', accent: '#7aa2f7' } },
+  { code: 'catppuccin', label: 'Catppuccin', swatch: { ground: '#11111b', paper: '#1e1e2e', ink: '#cdd6f4', accent: '#89b4fa' } },
+  { code: 'everforest', label: 'Everforest', swatch: { ground: '#232a2e', paper: '#333c43', ink: '#d3c6aa', accent: '#7fbbb3' } },
+  { code: 'gruvbox', label: 'Gruvbox', swatch: { ground: '#151718', paper: '#282828', ink: '#ebdbb2', accent: '#83a598' } },
+  { code: 'rosepine', label: 'Rosé Pine Dawn', swatch: { ground: '#eee4d9', paper: '#faf4ed', ink: '#575279', accent: '#56949f' } },
+  { code: 'dracula', label: 'Dracula', swatch: { ground: '#191a21', paper: '#282a36', ink: '#f8f8f2', accent: '#bd93f9' } },
 ]
 const CODES = new Set(THEMES.map((t) => t.code))
 const DEFAULT = 'minimal'

@@ -821,8 +821,9 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 }
 .page-settings-scroll { display: flex; justify-content: center; }
 .page-detail-stack { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.settings-body { width: min(720px, 94%); padding: 16px 0 50px; }
-.page-title { font-size: var(--type-heading); font-weight: var(--weight-semibold); color: var(--ink2); margin: 6px 2px 14px; }
+.settings-body { width: min(720px, 94%); padding: var(--space-7) 0 50px; }
+/* the page's one statement size ([[typography]]) */
+.page-title { font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); color: var(--ink2); margin: 0 0 var(--space-7); }
 
 /* the session board's divider sits in the flex row, straddling the list border via negative margins */
 /* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
@@ -1068,24 +1069,29 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* pane: spec doc */
 .pane-doc { flex: 1; padding: 22px 26px; overflow: auto; }
-.pane-doc h1 { font-size: var(--type-heading); color: var(--ink2); margin: 0 0 14px; }
-.pane-doc blockquote {
-  margin: 0 0 16px; padding: 8px 14px; border-left: 3px solid var(--blue);
-  background: var(--panel2); color: var(--ink); line-height: var(--leading-body); font-size: var(--type-body);
+/* the node's page: its title is the one statement size a page may spend ([[typography]]), its one-line
+   description reads as a subtitle, and the at-a-glance signals sit in a property row under a hairline —
+   not in a boxed strip. */
+.pane-doc h1 { font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); color: var(--ink2); margin: 0 0 var(--space-3); }
+.doc-desc { margin: 0 0 var(--space-6); padding: 0; border: 0; background: none; color: var(--muted); font-size: var(--type-subtitle); line-height: var(--leading-relaxed); }
+/* quotes inside the prose keep a quiet quote bar */
+.doc-body blockquote {
+  margin: 0 0 10px; padding: var(--space-2) var(--space-6); border-left: 3px solid var(--line);
+  color: var(--ink); line-height: var(--leading-body); font-size: var(--type-body);
 }
 .pane-doc .doc-stat {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-  margin: 0 0 16px; padding: 6px 10px;
-  background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius);
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-5) var(--space-6);
+  margin: 0 0 var(--space-6); padding: 0 0 var(--space-5);
+  border-bottom: var(--divider-rule);
 }
-.stat-status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); }
+.stat-status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); font-weight: var(--weight-medium); letter-spacing: var(--tracking-normal); }
 .stat-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; background: var(--muted); } /* square tick, like the node */
 .stat-status.st-merged  { color: var(--green);  } .stat-status.st-merged  .stat-dot { background: var(--green); }
 .stat-status.st-active  { color: var(--orange); } .stat-status.st-active  .stat-dot { background: var(--orange); }
 .stat-status.st-drift   { color: var(--yellow); } .stat-status.st-drift   .stat-dot { background: var(--yellow); }
 .stat-status.st-pending { color: var(--muted);  } .stat-status.st-pending .stat-dot { background: var(--muted); }
-.stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 1px 6px; }
-.stat-chip.stat-drift { color: var(--yellow); font-weight: var(--weight-semibold); border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+.stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--ink2); background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; }
+.stat-chip.stat-drift { color: var(--yellow); font-weight: var(--weight-medium); background: color-mix(in srgb, var(--yellow) 12%, transparent); }
 .stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
 .stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1119,7 +1125,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .srcview-progress.is-error { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
 
 /* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
-.doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: var(--type-body); line-height: var(--leading-body); color: var(--ink); }
+.doc-body { padding-top: var(--space-2); font-size: var(--type-body); line-height: var(--leading-body); color: var(--ink); }
 .doc-body p { margin: 0 0 10px; }
 /* the lazy spec-body loading spinner ([[graph-lean]]): a thin ring in the palette, centred where the body will land */
 .pane-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
@@ -1469,16 +1475,38 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .legend-ring.ring-ghost { border: 1px dashed var(--line); background: transparent; opacity: .72; }
 
 /* ---- settings page: reuses the legend section vocabulary; only the language picker is bespoke ---- */
-.set-langs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+/* ONE control grammar for the page: a section is a heading over rows, a row is a label beside its control,
+   a choice among a few values is a segmented control — the chosen segment lifted onto paper, the rest quiet. */
+.set-sec { padding: var(--space-6) 0; border-bottom: var(--divider-rule); }
+.set-sec:last-child { border-bottom: 0; }
+.set-h { margin: 0 0 var(--space-5); font-size: var(--type-subtitle); font-weight: var(--weight-medium); color: var(--ink2); }
+.set-row { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; align-items: center; gap: var(--space-6); padding: var(--space-3) 0; }
+.set-label { color: var(--ink); font-size: var(--type-control); }
+.set-control { min-width: 0; display: flex; align-items: center; }
+.set-seg { display: inline-flex; padding: var(--space-1); gap: var(--space-1); background: var(--panel2); border-radius: var(--radius); }
 .set-lang {
   font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink); cursor: pointer;
-  border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; background: var(--paper);
+  border: 0; border-radius: var(--radius); height: 26px; padding: 0 var(--space-5); background: transparent;
 }
-.set-lang:hover { background: var(--wash-hover); color: var(--ink2); }
-.set-lang.on { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); color: var(--blue); background: var(--wash-selected); font-weight: var(--weight-semibold); }
+.set-lang:hover { color: var(--ink2); }
+.set-lang.on { color: var(--ink2); background: var(--paper); font-weight: var(--weight-medium); box-shadow: 0 0 0 1px var(--edge); }
 .set-hint { display: block; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
+/* the theme picker shows each preset as itself: ground under paper, an ink line and an accent line */
+.set-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-4); }
+.set-swatch {
+  display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); cursor: pointer; text-align: left;
+  background: transparent; border: 0; border-radius: var(--radius); color: var(--ink); font-family: var(--ui-font); font-size: var(--type-meta);
+}
+.set-swatch:hover { background: var(--wash-hover); color: var(--ink2); }
+.set-swatch.on { background: var(--wash-selected); color: var(--ink2); }
+.set-swatch-chip { display: block; height: 56px; padding: var(--space-4) 0 0 var(--space-4); border-radius: var(--radius); box-shadow: 0 0 0 1px var(--edge); overflow: hidden; }
+.set-swatch.on .set-swatch-chip { box-shadow: 0 0 0 2px var(--blue); }
+.set-swatch-paper { display: flex; flex-direction: column; gap: var(--space-2); height: 100%; padding: var(--space-3); border-radius: var(--radius) 0 0 0; }
+.set-swatch-line { display: block; height: 4px; width: 60%; border-radius: var(--radius-full); opacity: .85; }
+.set-swatch-line.short { width: 32%; }
+.set-swatch-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .set-terminal-font {
-  display: grid; grid-template-columns: 90px minmax(120px, 320px) 48px; align-items: center; gap: 12px;
+  display: grid; grid-template-columns: minmax(120px, 320px) 48px; align-items: center; gap: var(--space-5);
   color: var(--ink); font-size: var(--type-control);
 }
 .set-terminal-font input { width: 100%; accent-color: var(--blue); }
@@ -1487,7 +1515,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
 /* ---- shortcuts editor: one row per action, a click-to-rebind keyboard cell ---- */
 .set-keys { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
 .set-key-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.set-key-row .legend-desc { flex: 1; font-size: var(--type-control); }
+.set-key-desc { flex: 1; color: var(--ink); font-size: var(--type-control); line-height: var(--leading-ui); }
 .bind-cell {
   flex: none; min-width: 92px; min-height: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   justify-content: center; cursor: pointer; background: var(--paper);
@@ -1501,10 +1529,10 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .bind-hint { font-size: var(--type-meta); color: var(--blue); }
 .set-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .set-reset {
-  flex: none; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--muted); cursor: pointer;
-  border: 1px solid var(--line); border-radius: var(--radius); padding: 3px 10px; background: var(--paper);
+  flex: none; height: 26px; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--muted); cursor: pointer;
+  border: 0; border-radius: var(--radius); padding: 0 var(--space-5); background: transparent;
 }
-.set-reset:hover { border-color: var(--red); color: var(--red); }
+.set-reset:hover { background: var(--wash-hover); color: var(--red); }
 
 .search-backdrop { align-items: flex-start; padding-top: 12vh; }
 .search-panel {
@@ -1575,21 +1603,24 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .si-root-drop.on { position: relative; z-index: 51; background: color-mix(in srgb, var(--green) 12%, var(--panel2)); border-color: var(--green); color: var(--green); }
 .si-session-drag-ghost { position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0; box-shadow: var(--shadow); opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left; }
 body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
+/* a session is a ROW in a sidebar: an inset rounded band with a wash under the pointer and a wash when
+   selected — no rule between rows, no ledger border. The session's own colour ([[node-graph]] overlays) stays
+   as a hairline inset on the leading edge, so the row still names which overlay is whose. */
 .si-item {
-  display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
-  padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);
-  border-left: 2px solid var(--ov, transparent); cursor: pointer; text-align: left;
-  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink2);
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: calc(100% - var(--space-4) * 2);
+  margin: 0 var(--space-4); padding: 9px 10px; background: none; border: none; border-radius: var(--radius);
+  box-shadow: inset 2px 0 0 var(--ov, transparent); cursor: pointer; text-align: left;
+  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink);
 }
-.si-item:hover { background: var(--wash-hover); }
-.si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: var(--weight-semibold); border-left-width: 3px; }
-.si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
+.si-item:hover { background: var(--wash-hover); color: var(--ink2); }
+.si-item.on { background: var(--wash-selected); color: var(--ink2); font-weight: var(--weight-medium); }
+.si-item.on:hover { background: var(--wash-selected); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: var(--weight-semibold); }
 /* compact one-line face ([[session-console]]) — the console's own list is a dense, terminal-styled sidebar:
    no avatar, headline + a single colour-coded status GLYPH (no word) + op tally on ONE row (nowrap). It uses
    the shared app-theme tokens (var(--panel/--ink2/--blue…)) like every other console surface, so re-theming
    the app re-themes it too. */
-.si-item { flex-wrap: nowrap; padding: 5px 12px; font-size: var(--type-caption); line-height: var(--line-session-row); }
+.si-item { flex-wrap: nowrap; padding: var(--space-2) 10px; font-size: var(--type-meta); line-height: var(--line-session-row); }
 .si-item .sess-rail { min-height: var(--line-session-row); }
 .si-item.on::before { content: none; }   /* selected caret removed — the highlight wash is enough (per request) */
 /* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
@@ -1646,8 +1677,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {
   --zh: var(--muted);
-  display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px;
-  font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); user-select: none;
+  display: flex; align-items: center; gap: 8px; padding: var(--space-5) var(--space-6) var(--space-2);
+  font-size: var(--type-caption); font-weight: var(--weight-medium); letter-spacing: var(--tracking-normal); user-select: none;
   color: var(--zh);
 }
 /* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
@@ -1656,9 +1687,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-zone-fold:hover { background: var(--wash-hover); }
 .si-zone-count {
-  flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: var(--radius);
-  background: transparent; color: inherit; font: inherit;
-  font-size: var(--type-caption); line-height: var(--line-badge); opacity: .8;
+  flex: none; padding: 0 6px; border: 1px solid transparent; border-radius: var(--radius);
+  background: color-mix(in srgb, currentColor 12%, transparent); color: inherit; font: inherit;
+  font-size: var(--type-caption); line-height: var(--line-badge);
 }
 .si-zone-label { flex: none; }
 .si-zone-need    { --zh: var(--yellow); }
@@ -1671,20 +1702,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-zone-all-lead { color: var(--muted); align-items: center; }
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+/* the sidebar's two doors are rows in the same grammar as the sessions under them: New carries its word and
+   wears the selection wash while the launch face is open; Search is one quiet glyph at the row's end. */
+.si-toprow { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-4) var(--space-4) var(--space-2); }
 .si-pill {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  padding: 7px 0; background: none; border: 1px solid var(--line); border-radius: var(--radius);
-  cursor: pointer; font-family: var(--ui-font); line-height: var(--leading-none);
+  display: inline-flex; align-items: center; gap: var(--space-3); height: 28px; padding: 0 var(--space-4);
+  background: none; border: 0; border-radius: var(--radius); cursor: pointer;
+  font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-none); color: var(--ink);
 }
-.si-pill-glyph { font-size: var(--type-icon-sm); display: flex; }
-.si-pill.new { color: var(--blue); }
-.si-pill:hover { background: var(--wash-hover); border-color: currentColor; }
-.si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
+.si-pill-glyph { display: flex; }
+.si-pill-label { white-space: nowrap; }
+.si-pill.new { flex: 1; min-width: 0; color: var(--ink2); font-weight: var(--weight-medium); }
+.si-pill:hover { background: var(--wash-hover); color: var(--ink2); }
+.si-pill.new.on { background: var(--wash-selected); color: var(--blue); }
 /* the Search pill is the click twin of ⌥+/ ([[session-search]]): a secondary action beside New —
-   muted at rest, inking blue on hover. Momentary (opens the palette), so it never wears an .on state. */
-.si-pill.search { color: var(--ink2); }
-.si-pill.search:hover { color: var(--blue); }
+   muted at rest. Momentary (opens the palette), so it never wears an .on state. */
+.si-pill.search { flex: none; width: 28px; padding: 0; justify-content: center; color: var(--muted); }
 
 
 /* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page
@@ -1694,8 +1727,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    container whose 48px metadata bar owns section tabs at left and invisible facets at right. */
 .lp-page { display: flex; flex-direction: column; background: var(--paper); }
 .rl-content { width: min(1136px, calc(100% - 32px)); min-width: 0; margin: 0 auto; padding: 16px 0 24px; }
-.rl-titlebar { height: 32px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.rl-titlebar h1 { min-width: 0; margin: 0; color: var(--ink); font-size: var(--type-title); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
+.rl-titlebar { height: 36px; display: flex; align-items: center; gap: 12px; margin-bottom: var(--space-5); }
+.rl-titlebar h1 { min-width: 0; margin: 0; color: var(--ink2); font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
 /* New is a real anchor into the compose address ([[issues-view]]) — it wears the action's chrome, so the
    browser's default link underline is cancelled here rather than in a page-local override. */
 .rl-new { margin-left: auto; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--paper); background: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 75%, var(--line)); border-radius: var(--radius); font-family: var(--ui-font); font-size: var(--type-control); font-weight: var(--weight-semibold); text-decoration: none; cursor: pointer; }
@@ -1732,9 +1765,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .lp-head { position: sticky; top: 0; z-index: 5; height: 48px; box-sizing: border-box; display: flex; align-items: center; padding: 0 var(--space-2); background: var(--paper); border-bottom: var(--divider-rule); }
 .rl-sections, .rl-facets { display: flex; align-items: center; min-width: 0; }
 .rl-sections { align-self: stretch; flex: none; }
-.rl-section { align-self: stretch; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--ink2); background: transparent; border: 0; font-family: var(--ui-font); font-size: var(--type-control); cursor: pointer; }
-.rl-section.active { color: var(--ink); font-weight: var(--weight-semibold); }
-.rl-section:hover { color: var(--ink); }
+.rl-section { align-self: stretch; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--muted); background: transparent; border: 0; font-family: var(--ui-font); font-size: var(--type-control); cursor: pointer; }
+/* the chosen section is underlined, not bolded: the count chip keeps its weight, the tab wears the mark */
+.rl-section.active { color: var(--ink2); font-weight: var(--weight-medium); box-shadow: inset 0 -2px 0 var(--ink2); }
+.rl-section:hover { color: var(--ink2); }
 .rl-section-count, .rl-menu-count { display: inline-flex; min-width: 18px; height: 18px; box-sizing: border-box; align-items: center; justify-content: center; padding: 0 5px; color: var(--ink2); background: color-mix(in srgb, var(--line) 65%, transparent); border-radius: var(--radius); font-size: var(--type-caption); }
 /* the split section's quieter second count — subordinate to the fresh count it trails, never a pill of
    its own weight, so the chip still reads as ONE number plus its remeasurement debt. */
@@ -2133,11 +2167,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   white-space: pre; user-select: none; background: linear-gradient(180deg, var(--blue), var(--magenta));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
+/* the launch composer floats on the plane ([[typography]]: the floating composer is one of the things that pays
+   the elevation); focus adds the one ring to the same shadow rather than recolouring the edge. */
 .si-inputwrap {
   position: relative;
-  width: 100%; display: flex; border: 1px solid var(--blue); border-radius: var(--radius);
-  background: var(--panel); padding: 10px 12px; transition: height .12s ease;
+  width: 100%; display: flex; border: 1px solid var(--edge); border-radius: var(--radius);
+  background: var(--paper); padding: var(--space-5) var(--space-6); box-shadow: var(--shadow); transition: height .12s ease;
 }
+.si-inputwrap:focus-within { box-shadow: var(--shadow), var(--focus-ring); }
 
 .mention-menu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;

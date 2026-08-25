@@ -8,6 +8,7 @@ import SessionSelectBar from './SessionSelectBar.jsx'
 import { useT } from './i18n/index.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { isHoldGesture } from './tabs.js'
+import { useResizable } from './useResizable.js'
 
 const GHOST_SCALE = 0.75
 
@@ -21,6 +22,7 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
   const [drag, setDrag] = useState(null)
   const dragAbort = useRef(null)
   const listRef = useRef(null)
+  const [width, onDrag, reset] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
 
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
@@ -128,7 +130,8 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
   const rootDrop = !!drag?.parent
 
   return (
-    <aside className="si-list" ref={listRef}>
+    <>
+      <aside className="si-list" ref={listRef} style={{ width }}>
       {selecting ? (
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
       ) : (
@@ -181,6 +184,9 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
       </div>
       {draggedItem && <SessionConsoleTreeRow item={draggedItem} activeId={activeId} selecting={selecting} picked={picked} inert
         style={{ width: drag.width, '--si-session-drag-ghost-scale': GHOST_SCALE, left: drag.x - drag.offsetX * GHOST_SCALE, top: drag.y - drag.offsetY * GHOST_SCALE }} />}
-    </aside>
+      </aside>
+      <div className="si-resizer" onMouseDown={onDrag} onDoubleClick={reset}
+        role="separator" aria-orientation="vertical" aria-label={t('session.resizeList')} />
+    </>
   )
 }

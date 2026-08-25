@@ -68,6 +68,14 @@ scenarios:
       Neither the pending nor the post-close message reaches the recipient's transcript. The recipient's
       timeline retains the originally accepted message as audit history, but its pending queue progresses
       past the revoked head. The post-close send fails loudly; no stale sender can restart work after close.
+  - name: empty-text-is-refused
+    tags: [cli, backend-api]
+    description: >-
+      Attempt `spex session send` with an empty or whitespace-only message, then POST the same text and a
+      whitespace-only command to the session input endpoint.
+    expected: >-
+      The CLI rejects the message before contacting the backend. HTTP returns a structured 400 error for each
+      blank body; no timeline event, queue row, or adapter delivery is created.
 ---
 
 # delivery-queue — yatsu

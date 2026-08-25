@@ -70,6 +70,12 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
     backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], { cwd: project, env: { ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, PORT: String(port), SPEXCODE_HOME: home, SPEXCODE_TIMELINE_SEGMENT_BYTES: '1024', SPEXCODE_TMUX: `timeline-api-${port}` }, stdio: 'ignore', detached: true })
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((r) => r.ok).catch(() => false), 'backend health')
+    const empty = await fetch(`${base}/api/sessions/${id}/input`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: ' \n\t' }) })
+    assert.equal(empty.status, 400)
+    assert.deepEqual(await empty.json(), { ok: false, error: 'empty prompt — nothing to dispatch' })
+    const emptyCommand = await fetch(`${base}/api/sessions/${id}/input`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text: ' \n\t' }) })
+    assert.equal(emptyCommand.status, 400)
+    assert.deepEqual(await emptyCommand.json(), { ok: false, error: 'empty prompt — nothing to dispatch' })
     const total = 128
     for (let index = 0; index < total; index++) {
       const mark = String(index).padStart(3, '0')

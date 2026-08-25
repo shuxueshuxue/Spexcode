@@ -212,6 +212,7 @@ function parseSessionSendArgs(args: string[]): SessionSendArgs {
     return { selector: positionals[0], kind: 'keys', keys }
   }
   if (positionals.length !== 2) sessionSendUsage('plain send requires exactly one selector and one message')
+  if (!positionals[1].trim()) sessionSendUsage('message must not be empty or whitespace')
   return { selector: positionals[0], kind: 'text', text: positionals[1], ...(values.has('--ssh') ? { sshAddress: values.get('--ssh')! } : {}) }
 }
 

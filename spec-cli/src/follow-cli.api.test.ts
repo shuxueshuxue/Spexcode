@@ -141,7 +141,7 @@ test('spex session wait returns on a declaration with no backend running at all'
 test('managed watch registers once, delivers child states, and cancel stops delivery', { timeout: 60_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-watch-cli-'))
   const parentDir = seedSession(home, WATCHER)
-  const childDir = seedSession(home, ID, WATCHER)
+  const childDir = seedSession(home, ID)
   append(parentDir, { kind: 'status', status: 'active', proposal: null, note: null })
   append(childDir, { kind: 'status', status: 'active', proposal: null, note: null })
   const base: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await refusedPort()) }

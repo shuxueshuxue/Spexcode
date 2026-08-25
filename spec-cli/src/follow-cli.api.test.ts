@@ -89,7 +89,7 @@ const events = (dir: string): Array<{ kind: string; text?: string; from?: string
     kind: 'sent',
     text: Buffer.from(message.body).toString('utf8'),
     from: message.senderSessionId ?? null,
-  }))
+  })).filter((message) => message.text.startsWith('[spex watch]'))
 }
 async function waitFor(check: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 2_000

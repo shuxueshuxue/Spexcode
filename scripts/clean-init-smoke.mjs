@@ -43,17 +43,19 @@ const HARNESSES = [
     id: 'claude',
     contract: 'CLAUDE.md',
     shim: '.claude/settings.json',
+    skillRoot: '.claude/skills',
     skill: '.claude/skills/distill/SKILL.md',
     absent: ['AGENTS.md', '.codex'],
-    receiptKinds: ['hook manifest', 'contract', 'shim', 'skill'],
+    receiptKinds: ['hook manifest', 'contract', 'shim'],
   },
   {
     id: 'codex',
     contract: 'AGENTS.md',
     shim: '.codex/hooks.json',
+    skillRoot: '.codex/skills',
     skill: '.codex/skills/distill/SKILL.md',
     absent: ['CLAUDE.md', '.claude'],
-    receiptKinds: ['hook manifest', 'contract', 'shim', 'trust', 'skill'],
+    receiptKinds: ['hook manifest', 'contract', 'shim', 'trust'],
   },
 ]
 
@@ -175,8 +177,21 @@ function parseReceipt(output, caseName) {
 }
 
 function assertReceipt({ entries, initOutput, project, codexHome, harness, caseName }) {
-  assert.deepEqual(entries.map((entry) => entry.kind), harness.receiptKinds,
+  const generatedSkills = walkFiles(join(project, harness.skillRoot))
+    .filter((path) => path.endsWith(`${sep}SKILL.md`))
+    .map((path) => relative(project, path))
+  const expectedKinds = [
+    ...harness.receiptKinds,
+    ...generatedSkills.map(() => 'skill'),
+  ]
+  assert.deepEqual(entries.map((entry) => entry.kind), expectedKinds,
     `[${caseName}] receipt has exactly the selected harness artifact kinds`)
+
+  assert.deepEqual(
+    entries.filter((entry) => entry.kind === 'skill').map((entry) => entry.path),
+    generatedSkills,
+    `[${caseName}] receipt names every generated skill exactly once`,
+  )
 
   for (const entry of entries) {
     const path = isAbsolute(entry.path) ? entry.path : join(project, entry.path)

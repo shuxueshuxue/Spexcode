@@ -38,14 +38,14 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session console (Enter) and read the session
-      list's top button row: beside the ＋ New Session pill there must be a Search pill whose glyph is a
+      list's top button row: beside the ＋ New Session pill there must be Archive and Search pills; Search's glyph is a
       monochrome inline-SVG magnifier (currentColor stroke, never an emoji) and whose tooltip (title
       attribute) teaches the ⌥+/ chord. Click it and compare what opens against pressing ⌥+/: it must
       be the SAME palette component (`.search-panel` over its backdrop), sessions leading the ranked rows.
       Esc closes it back to the console with the selected tab unchanged and the pill wearing no pressed/on
       state. Screenshot the top row and the open palette.
     expected: |
-      A Search pill sits beside ＋ in the top row — inline-SVG magnifier, no emoji, title naming ⌥+/.
+      Archive and Search pills sit beside ＋ in the top row; Search is an inline-SVG magnifier, no emoji, title naming ⌥+/.
       Clicking it opens the one shared search palette exactly as the chord does (same `.search-panel`,
       session plane boosted to lead), never a second search implementation; the selected session tab does
       not change, and after Esc the console is back with no persistent .on state on the pill. Button and

@@ -459,7 +459,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null, route = null }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenArchive, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null, route = null }) {
   const t = useT()
   const scope = useViewScope()
   const { notify } = useTransientNotice()
@@ -1585,6 +1585,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         // makes the forest push the tabstrip/content column right instead of starting underneath a
         // shell-level tabstrip.
         onSelect={(id, options) => onPickSession ? onPickSession(id, options) : (id === 'new' ? setSel('new') : selectSession(id))}
+        archiveActive={archiveRequested}
+        onArchive={onOpenArchive}
         onSearch={onOpenSearch}
         reload={reload}
         onContextMenu={setCtxMenu}

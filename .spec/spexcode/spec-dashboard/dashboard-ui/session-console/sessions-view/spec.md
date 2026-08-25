@@ -19,7 +19,9 @@ the human described: "一个 session 的视图可以在 terminal 和 conversatio
 
 This is the route/view adapter child of [[session-console]], not a second session surface. `session-console`
 owns the interface behavior; this child owns only how the routed view derives its selection and receives workspace
-compose handoffs.
+compose handoffs. The archive header pill writes the existing `archive=1` query through this adapter; the console
+reads that query to open its transient archive overlay and clears it on close, so the doorway and browser address
+cannot disagree.
 
 The live console, mounted as a view. Every behaviour it had, it kept; what changed is where its state lives.
 The bare `#/sessions` route is a finding surface and is never a top-strip document; a selected session

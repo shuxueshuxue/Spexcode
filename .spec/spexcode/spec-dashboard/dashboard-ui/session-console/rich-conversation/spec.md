@@ -29,6 +29,12 @@ One `RichText` component is the whole rendering boundary. `TimelineChat` sends e
 through it: the originating prompt, sent messages, and authored status notes. One module-scoped parser handles
 them all; the timeline never constructs a parser per row and never grows its own Markdown branches.
 
+`RichText` supplies the timeline's semantic handlers, not its dialect. The same component also previews a
+Markdown FILE, whose authoring wraps are typography rather than speech, so the one newline decision travels
+with the surface instead of living here: `TimelineChat` declares that the transcript keeps its soft line
+breaks, because the transcript is the one place a newline was typed mid-conversation and means what it says.
+[[prose-renderer]] holds that contract for every prose surface, this one included.
+
 The supported language is compact agent Markdown: headings, emphasis, links, images (including remote image
 URLs), blockquotes, ordered and unordered lists, fenced and inline code, tables, strikethrough, and soft line
 breaks. KaTeX renders inline and display math written with `$...$` / `$$...$$` or `\(...\)` / `\[...\]`. Math

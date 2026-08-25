@@ -6,6 +6,13 @@ desc: ONE dashboard prose renderer — markdown-it as the only parser, its token
 code: spec-dashboard/src/Prose.js
 related:
   - .spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/prose-renderer/migration-payload.md
+  - spec-dashboard/src/proseTokens.js
+  - spec-dashboard/src/proseTokens.test.mjs
+  - spec-dashboard/src/RichText.js
+  - spec-dashboard/src/TimelineChat.jsx
+  - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/Thread.jsx
+  - spec-dashboard/test/spec-markdown.e2e.mjs
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
 ---
 
@@ -57,9 +64,10 @@ made this node necessary.
 - **ONE module renders every prose surface.** The node-body view ([[node-popup]]), the Issues detail body
   and its compose preview ([[issues-view]]), every thread reply
   (issue threads and [[event-detail]]'s remarks), and the session timeline ([[message-stream]]) all call
-  the same renderer. It carries no page branch, no per-surface mode flag, and no "rich" vs "plain"
-  dialect: a surface may pass DATA (a resolver, handlers, which source it wants rendered) but never a
-  rendering mode. Two dialects of one content type is the defect, not a feature.
+  the same renderer. It carries no page branch and no "rich" vs "plain" dialect: a surface may pass DATA
+  (a resolver, handlers, which source it wants rendered) and must name which KIND of prose it holds (the
+  line-break contract below), but it never selects a language. Two dialects of one content type is the
+  defect, not a feature; one renderer reading two kinds of content correctly is not that defect.
 - **markdown-it is the only parser.** Its flat token stream is first grouped into ONE generic token tree,
   then a single mapper turns standard tokens into standard React elements. Ordinary prose is never
   injected as a block of HTML — the tree becomes elements, so React owns the DOM, keys, and events.
@@ -75,7 +83,7 @@ made this node necessary.
   extraction and the sibling anchor/media rendering are DELETED, and a mark renders in place, wherever
   the text is read.
 - **The supported language is a measured contract, and it is BEHAVIOUR, not shape.** The parser runs
-  with soft line breaks and link autodetection on (`breaks` + `linkify`), and renders standard Markdown:
+  with link autodetection on (`linkify`) and renders standard Markdown:
   real heading levels, emphasis and italics, links, remote images, blockquotes, ordered and unordered
   lists, inline and fenced code, GFM tables, strikethrough. Mathematics is written `$…$`, `$$…$$`,
   `\(…\)`, or `\[…\]`. Images go through the standard image renderer — no allowlist and no
@@ -83,6 +91,31 @@ made this node necessary.
   explicitly NOT contract is the current implementation's *shape*: no options object, CSS class name, or
   HTML-injection strategy is protected — only the visible and behavioural result is, so the renderer may
   be rewritten wholesale into the token→React form above without renegotiating this list.
+- **A soft break is not a line break; the content decides.** markdown-it emits `softbreak` wherever the
+  author's line happened to end and `hardbreak` only where they asked for one (two trailing spaces, a
+  backslash). A hard break always breaks, on every surface. A soft break is where the two kinds of prose
+  this dashboard carries genuinely differ, so the surface holding the text names its kind through the one
+  `softBreak` option and the renderer does the rest:
+  - **documents** — a spec body, an issue body and its compose preview, a thread reply, a previewed `.md`
+    file — are Markdown written into a file or a record, wrapped by their author's editor at some column.
+    That wrap is typography, so it reflows into a space, exactly as Markdown specifies. Measured, not
+    assumed: real issue replies wrap at 78–80 columns, breaking mid-word.
+  - **messages** — the session timeline's transcript — are typed into a conversation, where a newline the
+    writer entered is part of what they said. Measured the same way: real transcript lines run past 500
+    characters without a wrap. They keep their breaks.
+  This is not the mode flag this node forbids. That flag would let one text mean two things; this one lets
+  one renderer read two kinds of text correctly, while the parser, the token stream, and every mark stay
+  identical across both. markdown-it's `breaks` option is NOT how it is done, and is not set: it reaches
+  only that library's own HTML renderer, which this boundary never uses, so it changes nothing while
+  reading as though it decided everything.
+- **What is memoised follows what is actually expensive.** Parsing is a pure function of its source and is
+  memoised per surface. Token-to-React mapping is not: the semantic handlers are caller closures over live
+  state (timeline events, seek targets) rebuilt on every render, so a memo keyed on them never hits — it
+  only looks optimised — and pinning them in a ref would hit while rendering stale anchors. Measured on a
+  real 10.5 kB spec body, parsing costs 0.61 ms and mapping 0.30 ms. KaTeX is the one step worth caching
+  at the boundary: four formulas cost 0.43 ms to typeset and 0.002 ms once cached, so typeset output is
+  keyed by (source, display mode) and shared across every surface, and a source KaTeX rejects is
+  remembered as rejected instead of retried on each render.
 - **The math delimiter guards are the contract's sharp edge.** An inline marker ignores escapes, refuses
   whitespace immediately inside either end, and fails its scan on a newline or a backtick; a closing
   dollar may be neither half of a `$$` nor followed by a digit. Together those guards are what keep

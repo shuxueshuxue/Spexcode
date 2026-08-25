@@ -13,7 +13,7 @@ const GHOST_SCALE = 0.75
 
 // The Sessions page owns the full mutable forest. The dock remains a compact finding projection; this panel
 // is the product surface where row selection, bulk close, and parent movement have one coherent owner.
-export default function SessionForestPanel({ sessions = [], activeId, onSelect, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
+export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
   const t = useT()
   const { expanded, offlineOpen } = useSessionListState()
   const [selecting, setSelecting] = useState(false)
@@ -133,11 +133,14 @@ export default function SessionForestPanel({ sessions = [], activeId, onSelect, 
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
       ) : (
         <div className="si-toprow">
-          {/* the two doors read as sidebar rows, not as boxed buttons: New carries its word, Search is one
-              quiet glyph at the end; both keep their class names for the surfaces that reach them */}
+          {/* The three doors share the sidebar row grammar: New carries its word; archive and search are
+              quiet glyphs at the end. Archive is route state, while search remains momentary. */}
           <button type="button" className={`si-pill new${activeId === 'new' ? ' on' : ''}`} aria-label={t('session.newSessionTitle')} onClick={() => onSelect?.('new')}>
             <span className="si-pill-glyph"><Icon name="plus" size={14} /></span>
             <span className="si-pill-label">{t('session.newSessionTitle')}</span>
+          </button>
+          <button type="button" className={`si-pill archive${archiveActive ? ' on' : ''}`} aria-label={t('session.archiveTitle')} data-tip={t('session.archiveTitle')} onClick={onArchive}>
+            <span className="si-pill-glyph"><Icon name="archive" size={14} /></span>
           </button>
           <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} data-tip={t('session.searchTitle')} onClick={onSearch}>
             <span className="si-pill-glyph"><Icon name="search" size={14} /></span>

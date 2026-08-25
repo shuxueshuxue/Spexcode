@@ -3,7 +3,10 @@ import Prose from './Prose.js'
 
 // Timeline and file previews use the same token-to-React renderer as spec bodies and review threads.
 // Keep this small compatibility name while callers migrate; it is not a second parser or HTML surface.
-export default function RichText({ children, className = '', renderSpecRef, renderEvidence, renderTimeAnchor }) {
+// It supplies default semantic handlers and nothing else: `softBreak` passes straight through, because its
+// two consumers disagree — a timeline message keeps the newlines its writer typed, a previewed .md file is
+// a document whose authoring wraps reflow. Only the surface knows which it is holding.
+export default function RichText({ children, className = '', softBreak, renderSpecRef, renderEvidence, renderTimeAnchor }) {
   const specRef = renderSpecRef || ((id, token, provenance) => {
     return createElement('span', { className: 'doc-ref', 'data-spec-id': id, ...provenance }, id)
   })
@@ -12,6 +15,7 @@ export default function RichText({ children, className = '', renderSpecRef, rend
   }, meta.alt || meta.hash))
   return createElement(Prose, {
     className: `rich-text${className ? ` ${className}` : ''}`,
+    softBreak,
     renderSpecRef: specRef,
     renderEvidence: evidence,
     renderTimeAnchor,

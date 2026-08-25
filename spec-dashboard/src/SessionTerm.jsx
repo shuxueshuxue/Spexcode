@@ -200,8 +200,9 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const base = `${proto}://${location.host}${apiUrl(`/api/sessions/${sessionId}/socket`)}`
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
-    // True once native bytes arrive while this pane is hidden — the backend's bounded linger is still
-    // streaming into this buffer, so its grid belongs to that stream, not to a local reflow.
+    // True once native bytes arrive while this pane is hidden. The bridge stops delivering at the hidden claim,
+    // so these are only frames already in flight; they are written as they arrive, and the buffer keeps their
+    // grid until the visible claim's repaint replaces the whole screen.
     let hiddenStreamFlowing = false
 
     // Hidden panes fit their browser-only grid while invisible. A visible pane leaves its painted buffer alone
@@ -222,8 +223,8 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
       if (!viewerIsVisible()) {
-        // A lingering stream still writes into this hidden buffer at the shared grid; reflowing it locally
-        // would corrupt those frames. The buffer keeps its grid — the visible claim reconciles divergence.
+        // An in-flight frame still writes into this hidden buffer at its own grid; reflowing it locally would
+        // corrupt that frame. The buffer keeps its grid — the visible claim's repaint reconciles divergence.
         if (!hiddenStreamFlowing) {
           try { term.resize(cols, rows) } catch { /* a later layout pass retries */ }
         }
@@ -295,15 +296,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
           return
         }
         if (!(e.data instanceof ArrayBuffer)) return
-        if (!viewerIsVisible()) {
-          // Resident panes keep their browser identity, but hidden native output must not spend CPU parsing
-          // and painting into an invisible xterm. The next visible geometry request asks the bridge for a
-          // fresh repaint, so there is no hidden backlog to fast-forward.
-          hiddenStreamFlowing = true
-          committedSize = null
-          frameQueue.length = 0
-          return
-        }
+        if (!viewerIsVisible()) hiddenStreamFlowing = true
         const frame = new Uint8Array(e.data)
         const size = committedSize
         committedSize = null

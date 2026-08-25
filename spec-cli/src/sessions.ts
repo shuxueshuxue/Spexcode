@@ -16,7 +16,7 @@ import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
+import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -373,16 +373,6 @@ export function withSessionRecordLockSync<T>(id: string, body: () => T): T {
   return coreWithSessionRecordLockSync(id, body)
 }
 const withRecordLockSync = withSessionRecordLockSync
-// Synchronous terminal input is another product turn-entry path. The PTY bridge uses this narrow seam to
-// enqueue input while holding the same durable record lock as close, so a close preflight cannot pass idle
-// and then race a just-queued TUI turn.
-export function withSessionInputLock<T>(id: string, body: () => T): T | null {
-  // PTY input is synchronous. A single non-blocking open is the only safe barrier: EEXIST rejects this input
-  // regardless of owner PID, so a same-process async close can never be frozen behind Atomics.wait.
-  const release = trySessionRecordLockSync(id)
-  if (!release) return null
-  try { return body() } finally { release() }
-}
 
 const COLD_PROOF_VERSION = 'cold-v1'
 function coldProofFor(rec: Pick<SessRec, 'session' | 'harness' | 'harnessSessionId'>): string {
@@ -1605,7 +1595,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
       // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
       // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
       // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-.}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,

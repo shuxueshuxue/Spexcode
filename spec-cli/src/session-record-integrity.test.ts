@@ -75,6 +75,7 @@ test('a note carrying quote/backslash/newline/unicode survives every real declar
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     SPEXCODE_HOME: home,
+    SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
     SPEXCODE_TMUX: tmux,
     SPEXCODE_CODEX_SOCKET_DIR: join(home, 'codex-sockets'),
     FAKE_HARNESS_INTERVAL_MS: '80',

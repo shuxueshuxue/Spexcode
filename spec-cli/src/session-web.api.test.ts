@@ -72,9 +72,12 @@ test('session web CLI records a live loopback URL and the host gateway authorize
     git(project, 'commit', '-qm', 'fixture')
 
     process.env.SPEXCODE_HOME = home
+    process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     process.chdir(project)
     mkdirSync(sessionStoreDir(id), { recursive: true })
-    writeFileSync(join(sessionStoreDir(id), 'session.json'), JSON.stringify({ session_id: id }) + '\n')
+    writeFileSync(join(sessionStoreDir(id), 'runtime.json'), JSON.stringify({
+      session_id: id, governed: true, worktree_path: project, branch: 'main', status: 'active',
+    }) + '\n')
 
     let page = 'first page'
     let requests = 0

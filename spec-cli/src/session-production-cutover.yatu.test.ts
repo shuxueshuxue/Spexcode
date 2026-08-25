@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { openProjectSessionApplication } from '@spexcode/session-application'
+import { migrateJsonSessionRecords, openProjectSessionApplication } from '@spexcode/session-application'
 
 async function freePort(): Promise<number> {
   const server = net.createServer()
@@ -42,8 +42,8 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
   const records = join(fixture, 'legacy')
   mkdirSync(join(records, 'migrated'), { recursive: true })
   writeFileSync(join(records, 'migrated', 'session.json'), JSON.stringify({ session_id: 'migrated', status: 'active', parent: null, createdAt: 1 }))
-  const firstMigration = JSON.parse(execFileSync(process.execPath, ['scripts/migrate-session-json.mjs', '--records-root', records], { cwd: process.cwd(), env, encoding: 'utf8' })) as { replayed: boolean; markerPath: string; backupRoot: string }
-  const secondMigration = JSON.parse(execFileSync(process.execPath, ['scripts/migrate-session-json.mjs', '--records-root', records], { cwd: process.cwd(), env, encoding: 'utf8' })) as { replayed: boolean; markerPath: string; backupRoot: string }
+  const firstMigration = migrateJsonSessionRecords({ databasePath, recordsRoot: records, locality: () => {} })
+  const secondMigration = migrateJsonSessionRecords({ databasePath, recordsRoot: records, locality: () => {} })
   assert.equal(firstMigration.replayed, false)
   assert.equal(secondMigration.replayed, true)
   const seed = openProjectSessionApplication({ databasePath, locality: () => {} })
@@ -51,7 +51,7 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
   seed.transitionSession('child', { parentSessionId: 'parent' }); seed.close()
   let backend: ChildProcess | null = null
   let backendLog = ''
-  const indexPath = join(process.cwd(), 'spec-cli/src/index.ts')
+  const indexPath = join(process.cwd(), 'src/index.ts')
   const start = () => {
     backendLog = ''
     backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), indexPath], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })

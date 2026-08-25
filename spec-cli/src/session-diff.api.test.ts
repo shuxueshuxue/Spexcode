@@ -37,13 +37,11 @@ async function waitForHealth(base: string, child: ChildProcess, log: () => strin
   throw new Error(`backend never became healthy: ${log()}`)
 }
 
-// A record with no `status` is not a shape the product writes: the JSON store's cutover reads it as a
-// lifecycle-less envelope and refuses the whole tree, so the fixture must carry one or the backend answers
-// 500 for reasons that have nothing to do with the diff.
 function record(id: string, worktreePath: string, branch: string): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(join(sessionStoreDir(id), 'session.json'), JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktreePath, branch, node: '', title: 'diff API', name: '', parent: '', status: 'active',
+    session_id: id, governed: true, worktree_path: worktreePath, branch, node: '', title: 'diff API', name: '', parent: '',
+    status: 'active', proposal: '', note: '', createdAt: Date.now(), harness: 'claude', harness_session_id: null,
   }) + '\n')
 }
 
@@ -104,6 +102,12 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
     record('fresh-diff-session', freshWorktree, 'node/diff-fresh')
     record('landed-diff-session', join(fixture, 'gone-landed'), 'node/diff-landed')
     record('vanished-diff-session', join(fixture, 'gone-vanished'), 'node/diff-vanished')
+    const { migrateJsonSessionRecords } = await import('@spexcode/session-application')
+    migrateJsonSessionRecords({
+      databasePath: join(home, 'sessions.sqlite'),
+      recordsRoot: join(dirname(sessionStoreDir('live-diff-session'))),
+      locality: () => {},
+    })
     const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, PORT: String(port) }
 
     let log = ''

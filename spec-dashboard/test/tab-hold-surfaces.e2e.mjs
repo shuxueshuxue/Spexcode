@@ -1,5 +1,5 @@
-// YATU proof for [[tab-strip]]'s hold whitelist across EVERY row surface that lists a workspace object.
-// One law, five surfaces: the law says ctrl/⌘-click, a double-click, and a document's own explicit
+// YATU proof for [[tab-strip]]'s hold whitelist across every row surface that lists an object a second tab
+// can hold. One law, five surfaces: ctrl/⌘-click, a double-click, and a document's own explicit
 // "open in a new tab" action are the gestures that mint a tab. This run performs each of them through the
 // real dashboard against the running backend and reports how many surfaces kept it.
 //
@@ -7,6 +7,10 @@
 // surface that honours the law ends with one more tab, held (no `.slot` class); a surface that ignores it
 // replaces the slot and the count never moves. That distinction is why the slot is established first —
 // a deep link into an empty workspace also mints a tab, and would read as a false pass.
+//
+// RESIDENT BOARD ADDRESSES ARE OUT OF THE POPULATION ON PURPOSE. A spec, evals, issues, or settings detail
+// canonicalizes to one top-level tab identity, so there is no second tab for a hold to mint there; probing
+// one would measure the residency rule rather than the gesture.
 import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -29,9 +33,9 @@ rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true 
 const board = await fetch(`${apiUrl}/api/graph`).then((r) => { assert.equal(r.ok, true, 'backend /api/graph'); return r.json() })
 const liveSessions = (board.sessions || []).filter((s) => s.id && !s.archived)
 assert.ok(liveSessions.length >= 3, `three live sessions required, have ${liveSessions.length}`)
-const specNodes = (board.nodes || []).filter((n) => n.parent && /^[a-z][a-z0-9-]*$/.test(n.id))
-assert.ok(specNodes.length >= 2, 'two addressable spec nodes required')
-const [nodeA, nodeB] = specNodes
+const governedFile = (board.nodes || []).flatMap((n) => (n.code || []).map((c) => String(c).split('#')[0])).find(Boolean)
+assert.ok(governedFile, 'the board must expose one governed file')
+const firstFile = governedFile
 
 let anchorSession = null
 
@@ -112,7 +116,23 @@ try {
   assert.ok(shownFirst.length >= 2, `the forest must show two session rows, showed ${shownFirst.length}`)
   anchorSession = liveSessions.find((s) => s.id === shownFirst[0]) || { id: shownFirst[0] }
 
-  // 1 — the Sessions page's own forest row, ctrl/⌘-click.
+  // 1 — the Explorer tree's governed-file row. It already keeps the law, and stays in the census as the
+  // regression guard: a shared gesture helper must not cost the surfaces that were already right.
+  await probe('explorer governed-file row', 'ctrl/⌘-click', async () => {
+    await settle(`#/file/${firstFile}`, '.ft-row')
+    const before = await tabState()
+    await page.locator('.ft-row.ft-node').first().click()
+    const fileRow = page.locator('.ft-row.ft-code').first()
+    await fileRow.waitFor({ state: 'visible', timeout: 20_000 })
+    const label = await fileRow.getAttribute('data-tip')
+    await fileRow.click({ modifiers: [HOLD] })
+    await page.waitForTimeout(700)
+    const after = await tabState()
+    const arrived = after.find((tab) => tab.key.startsWith('#/file/') && !before.some((b) => b.key === tab.key))
+    return { held: !!arrived?.held && after.length === before.length + 1, target: label, before: before.map((t) => t.key), after: after.map((t) => `${t.key}${t.held ? '' : ' (slot)'}`) }
+  })
+
+  // 2 — the Sessions page's own forest row, ctrl/⌘-click.
   await probe('sessions-page forest row', 'ctrl/⌘-click', async () => {
     const [, other] = await sessionsOnScreen()
     const before = await tabState()
@@ -121,7 +141,7 @@ try {
     return verdict(before, await tabState(), `#/sessions/${other}`)
   })
 
-  // 2 — the same row, double-click.
+  // 3 — the same row, double-click.
   await probe('sessions-page forest row', 'double-click', async () => {
     const [, other] = await sessionsOnScreen()
     const before = await tabState()
@@ -130,7 +150,7 @@ try {
     return verdict(before, await tabState(), `#/sessions/${other}`)
   })
 
-  // 3 — the session row's own context menu action.
+  // 4 — the session row's own context menu action.
   await probe('session row context menu', 'open in a new tab', async () => {
     const [, other] = await sessionsOnScreen()
     const before = await tabState()
@@ -142,33 +162,18 @@ try {
     return verdict(before, await tabState(), `#/sessions/${other}`)
   })
 
-  // 4 — the graph node's context menu action (the spec document, held).
-  await probe('graph node context menu', 'open in a new tab', async () => {
-    await settle(`#/spec/${encodeURIComponent(nodeA.id)}`, '.tabstrip-tabs [role="tab"]')
-    const before = await tabState()
-    await page.goto(`${base}/#/graph/${encodeURIComponent(nodeB.id)}`, { waitUntil: 'domcontentloaded' })
-    const node = page.locator('.react-flow__node.selected')
-    await node.waitFor({ state: 'visible', timeout: 60_000 })
-    await node.click({ button: 'right' })
-    const item = page.getByRole('menuitem', { name: 'open in a new tab' })
-    await item.waitFor({ state: 'visible', timeout: 5_000 })
-    await item.click()
-    await page.waitForTimeout(800)
-    return verdict(before, await tabState(), `#/spec/${nodeB.id}`)
-  })
-
-  // 5 — the search palette row, ctrl/⌘-click.
-  await probe('search palette row', 'ctrl/⌘-click', async () => {
-    await settle(`#/spec/${encodeURIComponent(nodeA.id)}`, '.tabstrip-tabs [role="tab"]')
+  // 5 — the search palette's session row. The palette is the workspace's keyboard finding surface, so the
+  // hold has to be reachable from it with the same modifier the pointer surfaces use.
+  await probe('search palette session row', 'ctrl/⌘-click', async () => {
+    const [anchor, other] = await sessionsOnScreen()
     const before = await tabState()
     await page.keyboard.press('Alt+Slash')
     await page.locator('.search-panel').waitFor({ state: 'visible', timeout: 10_000 })
-    await page.locator('.search-input').fill(nodeB.id)
-    const row = page.locator(`.search-item[data-kind="spec"][data-target="${nodeB.id}"]`)
+    const row = page.locator(`.search-item[data-kind="session"][data-target="${other}"]`)
     await row.waitFor({ state: 'visible', timeout: 10_000 })
     await row.click({ modifiers: [HOLD] })
     await page.waitForTimeout(800)
-    return verdict(before, await tabState(), `#/spec/${nodeB.id}`)
+    return { anchor, ...verdict(before, await tabState(), `#/sessions/${other}`) }
   })
 
   const kept = results.filter((r) => r.held)

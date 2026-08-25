@@ -69,19 +69,22 @@ scenarios:
   - name: hold-gesture-on-every-row-surface
     description: >-
       In a real Chromium dashboard against the running backend, perform the strip's tab-minting whitelist on
-      each row surface that lists a workspace object, and report how many of them kept it. Every probe first
-      settles a workspace whose only same-kind tab is the replaceable slot, then acts on a DIFFERENT object:
-      ctrl/cmd-click and double-click a Sessions-page forest row; take the session row context menu's open-in-a-new-tab
-      action; take the graph node context menu's open-in-a-new-tab action; ctrl/cmd-click a search palette
-      spec row. Read the VISIBLE strip after each gesture and capture a screenshot of the settled workspace.
+      each row surface that lists an object a second tab can actually hold, and report how many kept it. Every
+      probe first settles a workspace whose only same-kind tab is the replaceable slot, then acts on a
+      DIFFERENT object: ctrl/cmd-click a governed-file row in the Explorer tree; ctrl/cmd-click and
+      double-click a Sessions-page forest row; take the session row context menu's open-in-a-new-tab action;
+      ctrl/cmd-click a session row in the search palette. Read the VISIBLE strip after each gesture and
+      capture a screenshot of the settled workspace. Resident board addresses are deliberately out of the
+      population: a spec, evals, issues, or settings detail canonicalizes to one top-level tab, so it has no
+      second tab to mint.
     expected: >-
       All 5 probed surfaces keep the gesture: each one leaves exactly one more tab than before, the arriving
-      tab carries the acted-on object's address, and it is held rather than the italic replaceable slot. Both
-      context menus offer an explicit open-in-a-new-tab item. The run reports the kept count over the probed
-      count, and the browser console raises no product error.
+      tab carries the acted-on object's address, and it is held rather than the italic replaceable slot. The
+      session row context menu offers an explicit open-in-a-new-tab item. The run reports the kept count over
+      the probed count, and the browser console raises no product error.
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SessionForestPanel.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/NodeContextMenu.jsx, spec-dashboard/src/SpecSearch.jsx]
-    related: [spec-dashboard/src/tabs.js, spec-dashboard/src/SessionsView.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Dock.jsx, spec-dashboard/src/FileTree.jsx]
+    code: [spec-dashboard/src/SessionForestPanel.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/SpecSearch.jsx]
+    related: [spec-dashboard/src/tabs.js, spec-dashboard/src/SessionsView.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Dock.jsx, spec-dashboard/src/FileTree.jsx, spec-dashboard/src/Shell.jsx]
     test: spec-dashboard/test/tab-hold-surfaces.e2e.mjs
   - name: live-pointer-reorder-and-tail-drop
     description: >-

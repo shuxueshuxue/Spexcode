@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
-import { pinTab } from './tabs.js'
+import { isHoldGesture, pinTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
@@ -66,19 +66,19 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
         // code, so a click that asked to read a node must not mint a file tab behind it.
         onClick={(e) => {
           setOpen((v) => !v)
-          if (e.ctrlKey || e.metaKey) pinTab('spec', node.id)
+          if (isHoldGesture(e)) pinTab('spec', node.id)
           else navigate('spec', node.id)
         }} onDoubleClick={() => pinTab('spec', node.id)} />
       {open && (
         <>
           {governed.map((f) => (
             <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()}
-              onClick={(e) => (e.ctrlKey || e.metaKey ? pinTab : navigate)('file', f)}
+              onClick={(e) => (isHoldGesture(e) ? pinTab : navigate)('file', f)}
               onDoubleClick={() => pinTab('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
-              onClick={(e) => (e.ctrlKey || e.metaKey ? pinTab : navigate)('file', `.spec/${node.id}/${f.name}`)}
+              onClick={(e) => (isHoldGesture(e) ? pinTab : navigate)('file', `.spec/${node.id}/${f.name}`)}
               onDoubleClick={() => pinTab('file', `.spec/${node.id}/${f.name}`)} />
           ))}
           {children.map((c) => (

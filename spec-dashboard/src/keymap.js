@@ -43,6 +43,7 @@ export const ACT = [
   { id: 'shell.tabClose',     keys: ['Alt+Shift+KeyX'],          rebind: false, desc: 'legend.shell.tabClose' },
   { id: 'shell.tabNext',      keys: ['Alt+Shift+ArrowRight'],    rebind: false, desc: 'legend.shell.tabNext' },
   { id: 'shell.tabPrevious',  keys: ['Alt+Shift+ArrowLeft'],     rebind: false, desc: 'legend.shell.tabPrevious' },
+  { id: 'shell.tabHold',      keys: ['Alt+Shift+KeyP'],          rebind: false, desc: 'legend.shell.tabHold' },
   { id: 'shell.tabSplit',     keys: ['Alt+Shift+Enter'],         rebind: false, desc: 'legend.shell.tabSplit' },
   // The console's Command Box chord was matched inline in the session console's own key handler and was
   // therefore invisible to every reader of this table — the legend, the settings editor, and (since a

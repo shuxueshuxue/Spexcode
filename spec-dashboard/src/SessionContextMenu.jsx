@@ -3,6 +3,7 @@ import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } 
 import Modal from './Modal.jsx'
 import SessionAttach from './SessionAttach.jsx'
 import { apiFetch, loadSettings } from './data.js'
+import { pinTab } from './tabs.js'
 import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
@@ -54,6 +55,18 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
 
   // select the prefilled name when the prompt opens, so a human can just type the replacement.
   useEffect(() => { if (renaming) requestAnimationFrame(() => inputRef.current?.select()) }, [renaming])
+
+  // [[tab-strip]]'s explicit hold, in the place a reader looks for it. The pointer gestures (ctrl/⌘-click,
+  // a double-click) are discoverable only if you already know them; a right-click is where a workspace is
+  // asked what it can do with the thing under the cursor, which is why the review lists' row menu already
+  // carries the same item. This menu opens from the finding dock, the Sessions page forest, and a session
+  // tab's own right-click, so all three inherit the action from one place.
+  const openInNewTab = (e) => {
+    e.stopPropagation()
+    const { id } = menu.session
+    onClose()
+    pinTab('sessions', id)
+  }
 
   const lockOnGraph = (e) => {
     e.stopPropagation()
@@ -188,6 +201,7 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.session.id} label={t('sessionWindow.menuLabel')}>
           <ContextMenuGroup>
+            <ContextMenuItem icon="plus" onClick={openInNewTab}>{t('tabs.openInNewTab')}</ContextMenuItem>
             <ContextMenuItem icon="lock" onClick={lockOnGraph}>{t('sessionWindow.lock')}</ContextMenuItem>
             <ContextMenuItem icon="pencil" onClick={startRename}>{t('sessionWindow.rename')}</ContextMenuItem>
             <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>

@@ -19,9 +19,13 @@ the node first (the clicked tile stays screen-stable while the camera absorbs an
 anchor contract as click), so the menu always acts on the node under the cursor and the board visibly agrees
 about which node that is.
 
-The menu exposes the node verbs plus one address handoff, with no new node mutation behind them:
+The menu exposes the node verbs plus one document door and one address handoff, with no new node mutation
+behind them:
 
-- **node info** — the `i` popup ([[node-popup]]).
+- **node info** — the node's own `#/spec/<id>` document ([[spec-view]]), which is this menu's door to
+  reading the node. It lands in the workspace's current Spec tab rather than a second one, because a spec
+  detail canonicalizes to ONE resident top-level tab ([[tab-strip]]); the graph therefore offers no
+  "open in a new tab" here, because there is no second spec tab for the model to mint.
 - **copy node URL** — copies the canonical [[address-routing]] `graph-node` address as a full URL resolved
   against the current dashboard document. It therefore preserves the current public origin and `/p/<project>/`
   scope rather than baking a tunnel host into the product. Clipboard API denial or an HTTP context falls back

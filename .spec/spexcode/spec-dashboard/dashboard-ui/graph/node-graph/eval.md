@@ -85,10 +85,10 @@ scenarios:
 # eval.md — node-graph
 
 Current camera measurements supersede older centre-framing readings: on every keyboard/click/programmatic
-focus move assert the focus→child midpoint at the `43%` horizontal token (or parent↔focus for a leaf), with
-the focus tile centre at the vertical canvas centre and the pre-move zoom unchanged. Only the first frame or
-an explicit pane resize may use fit-left with one grid-column gutter; fit may lower zoom but never raise a
-deliberate user zoom.
+focus move assert a root's focus→child midpoint at the `43%` horizontal token, or a non-root focus tile
+centre at the `50%` horizontal token, with the focus tile centre at the vertical canvas centre and the
+pre-move zoom unchanged. Only the first frame or an explicit pane resize may use fit-left with one grid-column
+gutter; fit may lower zoom but never raise a deliberate user zoom.
 
 This view is product surface — it is measured by **looking** (YATU), not by a unit test: the agent opens
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following

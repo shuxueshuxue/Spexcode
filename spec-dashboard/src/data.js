@@ -108,6 +108,7 @@ export function viewportForFocus({
   // entered the tree, the node itself owns the horizontal anchor; a parent/child midpoint pulls the
   // focused node away from its actual column and makes keyboard navigation feel like it lands between rows.
   const anchorX = parent ? focus.x : (child ? (focus.x + child.x) / 2 : focus.x)
+  const focusAnchorRatio = parent ? 0.5 : anchorRatio
   // A keyboard/programmatic focus move (`fit: false`) must never change camera height. Only an
   // explicit fit pass may lower the zoom to make an oversized frontier reachable.
   const anchorZoom = fit && !currentFits && fitZoom >= minZoom ? fitZoom : zoom
@@ -117,7 +118,7 @@ export function viewportForFocus({
   // only to an explicit fit pass, where the whole frontier is being framed rather than a focus being followed.
   if (!fit) {
     return {
-      x: width * anchorRatio - anchorX * anchorZoom,
+      x: width * focusAnchorRatio - anchorX * anchorZoom,
       y: desiredY,
       zoom: anchorZoom,
     }
@@ -128,7 +129,7 @@ export function viewportForFocus({
     ? Math.min(maxPanY, Math.max(minPanY, desiredY))
     : minPanY
   return {
-    x: width * anchorRatio - anchorX * anchorZoom,
+    x: width * focusAnchorRatio - anchorX * anchorZoom,
     y,
     zoom: anchorZoom,
   }

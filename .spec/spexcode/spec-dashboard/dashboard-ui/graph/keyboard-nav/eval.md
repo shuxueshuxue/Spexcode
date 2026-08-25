@@ -84,8 +84,9 @@ scenarios:
       `spex yatsu eval keyboard-nav --image <png> --pass`.
     expected: >-
       A mouse click re-focuses and expands the clicked node, and its viewport target matches keyboard focus:
-      focus→nearest-child midpoint at the `43%` canvas token (or parent↔focus for a leaf), with the focus tile
-      centre exactly on the vertical canvas centre during the anchored move. The visible bbox never changes
+      a root uses the focus→nearest-child midpoint at the `43%` canvas token, while a non-root focus tile
+      centre uses the `50%` canvas token (never a parent/child midpoint), with the focus tile centre exactly
+      on the vertical canvas centre during the anchored move. The visible bbox never changes
       that Y target; only the initial/explicit fit pass may use a vertical reachability clamp. When the visible
       bbox fits at the current user zoom, that fit uses one left gutter at or below the user's zoom; fit may
       lower but never raise a deliberate user zoom, and it does not leak into later anchored moves.

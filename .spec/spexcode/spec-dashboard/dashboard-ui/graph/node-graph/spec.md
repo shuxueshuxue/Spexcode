@@ -25,10 +25,10 @@ related:
 
 **Current camera rule.** A root focus keeps the reading-pair anchor: the midpoint between the root and its
 nearest child column sits at the `43%` canvas token (a root with no child uses itself). Once focus enters a
-non-root node, the focused node's own x coordinate is the horizontal anchor; the camera never substitutes a
-parent/child midpoint for that node's column. During keyboard, click, and programmatic focus navigation the
-focused tile's centre is the vertical canvas centre, clamped only when the visible frontier cannot physically
-reach that row; the current zoom is preserved, so changing focus never changes camera height. The initial
+non-root node, the focused node's own centre is the horizontal anchor at the `50%` canvas token; the camera
+never substitutes a parent/child midpoint for that node's column. During keyboard, click, and programmatic
+focus navigation the focused tile's centre is the vertical canvas centre, clamped only when the visible frontier
+cannot physically reach that row; the current zoom is preserved, so changing focus never changes camera height. The initial
 frame and pane resize may still perform fit-left treatment with one grid-column gutter, and fit may lower zoom
 but never raise a deliberate user zoom. A click absorbs the instantaneous 0px screen jump and the existing
 smooth camera transition supplies the reading motion. Only the camera moves; layout coordinates never change.

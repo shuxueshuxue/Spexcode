@@ -52,8 +52,8 @@ A **game controller** drives this same registry from **inside the page** — [[g
 ## principles
 
 **Camera rule (current).** Arrow nav, mouse click, and programmatic jumps all use [[node-graph]]'s anchor:
-a root uses the focus→nearest child midpoint at the `43%` canvas token, while a non-root focus uses that
-node's own x coordinate (never a parent/child midpoint). During focus follow (`fit: false`), the current
+a root uses the focus→nearest child midpoint at the `43%` canvas token, while a non-root focus uses its own
+centre at the `50%` canvas token (never a parent/child midpoint). During focus follow (`fit: false`), the current
 focus tile centre is exactly on the pane's vertical centre; the visible frontier's bbox never changes that Y
 target. Only an explicit fit pass may clamp an oversized frontier to a reachable edge. If the visible bbox
 already fits at the current user zoom, that fit pass uses one left gutter at or below the user zoom; it may

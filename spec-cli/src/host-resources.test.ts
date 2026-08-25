@@ -12,6 +12,7 @@ import {
   assertSessionStopSafe,
   collectResourceReport,
 } from './host-resources.js'
+import { initializeFreshSessionApplication } from './session-application.js'
 import { parseProcStat, processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
 import { registerBackendInstance, spawnDetachedRuntime, unregisterBackendInstance } from './runtime-ownership.js'
 
@@ -29,13 +30,16 @@ test('parseProcStat keeps PID identity separate from process name punctuation', 
 
 test('resource sweep keeps resolvable owners visible beside an unknown historical harness', async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const home = mkdtempSync(join(tmpdir(), 'spex-resource-unknown-harness-'))
   const known = `resource-known-${process.pid}`
   const unknown = `resource-unknown-${process.pid}`
   let child: ReturnType<typeof spawn> | null = null
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   try {
     const root = runtimeRoot()
+    const application = initializeFreshSessionApplication()
     const record = (id: string, harness: string) => ({
       session_id: id, governed: true, worktree_path: root, branch: `node/${id}`, node: null,
       title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0,
@@ -45,7 +49,8 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
     for (const [id, harness] of [[known, 'codex'], [unknown, 'removed-plugin-harness']] as const) {
       const dir = join(root, 'sessions', id)
       mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, harness), null, 2)}\n`)
+      writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify(record(id, harness), null, 2)}\n`)
+      application.createSession({ sessionId: id, status: 'awaiting', proposal: 'nothing' })
     }
     child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',
@@ -69,6 +74,8 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
     }
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })
@@ -108,9 +115,12 @@ test('shared runtime spawn records an observed detached process boundary', async
 
 test('session stop guard reads only the exact governed target and fails closed on target ambiguity', async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const originalSharedRuntimes = codexHarness.sharedRuntimes
   const home = mkdtempSync(join(tmpdir(), 'spex-target-scoped-stop-home-'))
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  const application = initializeFreshSessionApplication()
   const root = runtimeRoot()
   const runtime = join(home, 'shared-runtime')
   mkdirSync(root, { recursive: true })
@@ -133,12 +143,13 @@ test('session stop guard reads only the exact governed target and fails closed o
   const targetThread = 'target-scoped-thread'
   const recordDir = join(root, 'sessions', target)
   mkdirSync(recordDir, { recursive: true })
-  writeFileSync(join(recordDir, 'session.json'), `${JSON.stringify({
+  writeFileSync(join(recordDir, 'runtime.json'), `${JSON.stringify({
     session_id: target, governed: true, worktree_path: root, branch: 'node/target-scoped-stop', node: null,
     title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: targetThread, stopped: false,
     archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
   }, null, 2)}\n`)
+  application.createSession({ sessionId: target, status: 'awaiting', proposal: 'nothing' })
   let mode: 'idle' | 'active' | 'unknown' | 'descendant' = 'idle'
   let loadedIdCensuses = 0
   let exactTargetReads = 0
@@ -251,25 +262,31 @@ test('session stop guard reads only the exact governed target and fails closed o
     }
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })
 
 test('resource report retains the full shared projection and reports its sibling timeout', async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const originalSharedRuntimes = codexHarness.sharedRuntimes
   const home = mkdtempSync(join(tmpdir(), 'spex-full-resource-projection-'))
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  const application = initializeFreshSessionApplication()
   const root = runtimeRoot()
   const id = 'full-resource-projection'
   const recordDir = join(root, 'sessions', id)
   mkdirSync(recordDir, { recursive: true })
-  writeFileSync(join(recordDir, 'session.json'), `${JSON.stringify({
+  writeFileSync(join(recordDir, 'runtime.json'), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: root, branch: 'node/full-resource-projection', node: null,
     title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: 'resource-target-thread',
     stopped: false, archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
   }, null, 2)}\n`)
+  application.createSession({ sessionId: id, status: 'awaiting', proposal: 'nothing' })
   let residencyCalls = 0
   let siblingThreadReads = 0
   codexHarness.sharedRuntimes = () => [{
@@ -292,6 +309,8 @@ test('resource report retains the full shared projection and reports its sibling
     codexHarness.sharedRuntimes = originalSharedRuntimes
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })
@@ -299,7 +318,10 @@ test('resource report retains the full shared projection and reports its sibling
 test('shared-runtime projection uses live adapter refs and fail-closed process identity', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-resources-'))
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  const application = initializeFreshSessionApplication()
   const target = 'resource-target'
   const sibling = 'resource-sibling'
   const queued = 'resource-queued'
@@ -359,7 +381,8 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     for (const [id, thread, terminal] of [[target, 'thread-target', true], [sibling, 'thread-sibling', false], [queued, null, false]] as const) {
       const dir = join(root, 'sessions', id)
       mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
+      writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
+      application.createSession({ sessionId: id, status: record(id, thread, terminal).status as any, proposal: record(id, thread, terminal).proposal as any })
     }
     const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationGuard: undefined, probe: async () => probe }))
     codexHarness.sharedRuntimes = fallbackSharedRuntimes
@@ -389,12 +412,14 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     const foreignDir = join(root, 'sessions', foreign)
     mkdirSync(foreignDir, { recursive: true })
-    writeFileSync(join(foreignDir, 'session.json'), `${JSON.stringify(record(foreign, 'thread-without-record', false, { harness: 'claude' }), null, 2)}\n`)
+    writeFileSync(join(foreignDir, 'runtime.json'), `${JSON.stringify(record(foreign, 'thread-without-record', false, { harness: 'claude' }), null, 2)}\n`)
+    application.createSession({ sessionId: foreign, status: 'active' })
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     rmSync(foreignDir, { recursive: true, force: true })
     const nonGovernedDir = join(root, 'sessions', nonGoverned)
     mkdirSync(nonGovernedDir, { recursive: true })
-    writeFileSync(join(nonGovernedDir, 'session.json'), `${JSON.stringify(record(nonGoverned, 'thread-without-record', false, { governed: false }), null, 2)}\n`)
+    writeFileSync(join(nonGovernedDir, 'runtime.json'), `${JSON.stringify(record(nonGoverned, 'thread-without-record', false, { governed: false }), null, 2)}\n`)
+    application.createSession({ sessionId: nonGoverned, status: 'active' })
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     const collisionReport = await collectResourceReport({ persist: false })
     const collisionShared = collisionReport.owners.find((owner) => owner.kind === 'shared-runtime' && owner.id === 'codex-app-server')
@@ -403,7 +428,8 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     probe = governedProbe(false)
     const duplicateDir = join(root, 'sessions', duplicate)
     mkdirSync(duplicateDir, { recursive: true })
-    writeFileSync(join(duplicateDir, 'session.json'), `${JSON.stringify(record(duplicate, 'thread-target'), null, 2)}\n`)
+    writeFileSync(join(duplicateDir, 'runtime.json'), `${JSON.stringify(record(duplicate, 'thread-target'), null, 2)}\n`)
+    application.createSession({ sessionId: duplicate, status: 'active' })
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /target thread thread-target has no one exact governed session owner/)
     probe = { healthy: true, references: [] }
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /target thread thread-target has no one exact governed session owner/,
@@ -448,7 +474,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     assert.equal(governed?.branch, `node/${target}`)
     assert.equal(governed?.proposal, 'nothing')
     assert.equal(governed?.reclaim?.eligible, true, 'an exact terminal target stays reclaimable while unrelated unowned refs protect the shared root')
-    writeFileSync(join(root, 'sessions', target, 'session.json'), `${JSON.stringify(record(target, 'thread-target'), null, 2)}\n`)
+    writeFileSync(join(root, 'sessions', target, 'runtime.json'), `${JSON.stringify(record(target, 'thread-target'), null, 2)}\n`)
 
     const owner = report.owners.find((entry) => entry.kind === 'orphan' && entry.id === orphan)
     assert.equal(owner?.reclaim?.eligible, true, 'proven absent owner is projected as eligible without creating a mutation token')
@@ -492,6 +518,8 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     codexHeadlessHarness.sharedRuntimes = originalHeadlessSharedRuntimes
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })

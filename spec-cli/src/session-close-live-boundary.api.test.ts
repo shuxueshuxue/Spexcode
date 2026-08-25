@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { initializeFreshSessionApplication } from './session-application.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -64,14 +65,18 @@ test('public direct close removes the worktree only after the live target is col
   const worktree = join(fixture, 'live-worktree')
   const runtime = join(home, 'projects', project.replace(/[/.]/g, '-'))
   const recordDir = join(runtime, 'sessions', id)
-  const record = join(recordDir, 'session.json')
+  const record = join(recordDir, 'runtime.json')
   const pidFile = join(recordDir, 'agent.pid')
   const socket = join(fixture, 'rendezvous.sock')
   const capture = join(fixture, 'filing-boundary.txt')
   const config = join(fixture, 'agent.json')
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   let backend: ChildProcess | null = null
   let agentPid = 0
   try {
+    process.env.SPEXCODE_HOME = home
+    process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     mkdirSync(dirname(spec), { recursive: true })
     writeFileSync(spec, '---\ntitle: project\nstatus: active\n---\n# project\n\nFixture.\n')
     writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }, null, 2) + '\n')
@@ -107,6 +112,7 @@ setInterval(() => {}, 1000)
       PATH: `${bin}:${process.env.PATH || ''}`,
       PORT: String(port),
       SPEXCODE_HOME: home,
+      SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
       SPEXCODE_TMUX: tmuxServer,
       LIVE_WORKTREE: worktree,
       LIVE_RECORD: record,
@@ -135,6 +141,7 @@ setInterval(() => {}, 1000)
       note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
     }, null, 2) + '\n')
+    initializeFreshSessionApplication().createSession({ sessionId: id, status: 'idle', proposal: 'nothing' })
     writeFileSync(config, JSON.stringify({ pidFile, socket }) + '\n')
     const started = spawnSync('/usr/bin/tmux', ['-L', tmuxServer, 'new-session', '-d', '-s', id, process.execPath, agentScript, config, id], { encoding: 'utf8' })
     assert.equal(started.status, 0, started.stderr)
@@ -142,6 +149,7 @@ setInterval(() => {}, 1000)
     agentPid = Number(readFileSync(pidFile, 'utf8').trim())
     await waitFor(async () => {
       const sessions = await fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as Array<{ id: string; liveness: string }>
+      if (!Array.isArray(sessions)) assert.fail(`unexpected sessions response: ${JSON.stringify(sessions)}\n${log}`)
       return sessions.some((session) => session.id === id && session.liveness === 'online')
     }, 'online public session projection')
 
@@ -161,6 +169,10 @@ setInterval(() => {}, 1000)
     if (agentPid && pidAlive(agentPid)) {
       try { process.kill(agentPid, 'SIGKILL') } catch { /* already exited */ }
     }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(fixture, { recursive: true, force: true })
   }
 })

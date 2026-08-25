@@ -3,17 +3,19 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 const ID = 'wwww2222-2222-4222-8222-222222222222'
 const WATCHER = 'wwww1111-1111-4111-8111-111111111111'
+const seededParents = new Map<string, string | null>()
 
 function row(status: string, archived = false): Record<string, unknown> {
   return {
@@ -53,27 +55,49 @@ function seedSession(home: string, id = ID, parent: string | null = null): strin
   const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  seededParents.set(id, parent)
+  writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'node/follow-cli', node: 'session-follow',
-    title: 'followed', name: '', parent, status: 'active', proposal: null, merges: 0, note: null,
+    title: 'followed', name: '', parent,
     sortkey: null, createdAt: Date.now(), harness: 'claude', harness_session_id: '', stopped: false,
     archived: false, launcher: 'fixture', launch_cmd: 'true',
   }, null, 2)}\n`)
   return dir
 }
 const append = (dir: string, ev: Record<string, unknown>): void =>
-  appendFileSync(join(dir, 'timeline.ndjson'), `${JSON.stringify({ ts: new Date().toISOString(), ...ev })}\n`)
+  (() => {
+    const id = dir.split('/').at(-1)!
+    const app = configuredSessionApplicationIfCutover()!
+    if (ev.kind === 'status') {
+      const status = String(ev.status)
+      const proposal = (ev.proposal as string | null) ?? null
+      const note = (ev.note as string | null) ?? null
+      if (app.readState(id)) app.transitionSession(id, { status, proposal, note, reason: 'follow-fixture' })
+      else app.createSession({ sessionId: id, status, proposal, note, parentSessionId: seededParents.get(id) ?? null })
+    } else if (ev.kind === 'sent') {
+      if (!app.readState(id)) app.createSession({ sessionId: id, status: 'active' })
+      app.enqueueConversationMessage(id, { kind: 'session.prompt.v1', body: Buffer.from(String(ev.text)), senderSessionId: (ev.from as string | null) ?? null, idempotencyKey: `follow-fixture:${id}:${String(ev.mid ?? ev.text)}` }, { text: String(ev.text), from: (ev.from as string | null) ?? null })
+    }
+  })()
 
 const events = (dir: string): Array<{ kind: string; text?: string; from?: string | null }> => {
-  // An unowned observer joins the legacy head and immutable numbered tail — the same logical timeline the
-  // CLI command just caused its writer to append. Its own seeded fixture events deliberately stay legacy.
-  const paths: string[] = []
-  const legacy = join(dir, 'timeline.ndjson')
-  if (existsSync(legacy)) paths.push(legacy)
-  const segments = join(dir, 'timeline')
-  if (existsSync(segments)) paths.push(...readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)))
-  try { return paths.flatMap((path) => readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))) }
-  catch { return [] }
+  const id = dir.split('/').at(-1)!
+  resetConfiguredSessionApplicationForTest()
+  const app = configuredSessionApplicationIfCutover()
+  if (!app?.readState(id)) return []
+  const messages = app.readPendingMessages(id).flatMap((message) => {
+    const raw = Buffer.from(message.body).toString('utf8')
+    if (raw.startsWith('[spex watch]')) return [{ kind: 'sent', text: raw, from: message.senderSessionId ?? null }]
+    try {
+      const state = JSON.parse(raw) as { sessionId?: string; status?: string; proposal?: string | null }
+      if (!state.status) return []
+      const display = state.status === 'awaiting' ? (state.proposal === 'merge' ? 'review' : state.proposal === 'close' ? 'close-pending' : 'done') : state.status === 'active' ? 'working' : state.status
+      return [{ kind: 'sent', text: `[spex watch] ${state.sessionId ?? id} is ${display}`, from: message.senderSessionId ?? null }]
+    } catch { return [] }
+  })
+  return messages.filter((message, index) => messages.findIndex((candidate) => candidate.text === message.text && candidate.from === message.from) === index)
 }
 async function waitFor(check: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 2_000
@@ -117,7 +141,9 @@ test('spex session wait returns on a declaration with no backend running at all'
 test('managed watch registers once, delivers child states, and cancel stops delivery', { timeout: 60_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-watch-cli-'))
   const parentDir = seedSession(home, WATCHER)
-  const childDir = seedSession(home, ID, WATCHER)
+  const childDir = seedSession(home, ID)
+  append(parentDir, { kind: 'status', status: 'active', proposal: null, note: null })
+  append(childDir, { kind: 'status', status: 'active', proposal: null, note: null })
   const base: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await refusedPort()) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete base[key]
   const parentEnv = { ...base, SPEXCODE_SESSION_ID: WATCHER }
@@ -150,7 +176,7 @@ test('managed watch registers once, delivers child states, and cancel stops deli
   const unmanaged = await runCli(['session', 'watch', ID], base)
   assert.equal(unmanaged.code, 0, unmanaged.stderr)
   assert.match(unmanaged.stderr, new RegExp(`spex session wait ${ID}`))
-  assert.ok(readFileSync(join(childDir, 'session.json'), 'utf8').includes('"asking"'))
+  assert.equal(configuredSessionApplicationIfCutover()!.readState(ID)?.status, 'asking')
 })
 
 test('CLI stop and close exit nonzero when the backend commits no target transition', async () => {

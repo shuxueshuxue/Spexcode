@@ -247,11 +247,13 @@ test('the live rename command resolves to the self-rename prompt through the sha
 
 test('Codex registration does not persist an unbound thread when exact generation binding fails', serial, () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-registration-'))
   const id = `codex-registration-${process.pid}`
   const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   process.env.SPEXCODE_CODEX_GENERATION = 'missing-generation'
   try {
     mkdirSync(sessionStoreDir(id), { recursive: true })
@@ -271,6 +273,8 @@ test('Codex registration does not persist an unbound thread when exact generatio
   } finally {
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     if (previousGeneration === undefined) delete process.env.SPEXCODE_CODEX_GENERATION
     else process.env.SPEXCODE_CODEX_GENERATION = previousGeneration
     rmSync(home, { recursive: true, force: true })
@@ -279,12 +283,14 @@ test('Codex registration does not persist an unbound thread when exact generatio
 
 test('Codex launch retry reuses a staged native target after the first payload is consumed', serial, () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-retry-target-'))
   const id = `codex-retry-target-${process.pid}`
   const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
   const payload = 'authoritative first turn'
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   delete process.env.SPEXCODE_CODEX_GENERATION
   try {
     mkdirSync(sessionStoreDir(id), { recursive: true })
@@ -318,6 +324,8 @@ test('Codex launch retry reuses a staged native target after the first payload i
   } finally {
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     if (previousGeneration === undefined) delete process.env.SPEXCODE_CODEX_GENERATION
     else process.env.SPEXCODE_CODEX_GENERATION = previousGeneration
     rmSync(home, { recursive: true, force: true })
@@ -670,9 +678,18 @@ exec sleep 30
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
+  const watcherId = `watcher-${id}`
+  mkdirSync(sessionStoreDir(watcherId), { recursive: true })
+  writeFileSync(sessionRecordPath(watcherId), `${JSON.stringify({
+    session_id: watcherId, governed: true, worktree_path: worktree, branch,
+    node: 'watcher', title: '', name: '', parent: '', status: 'active', proposal: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+    runtime_start_token: 'watcher-start', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
+    launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
+  }, null, 2)}\n`)
   writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${process.pid}\n`)
   writeFileSync(join(sessionStoreDir(id), 'watchers.json'), `${JSON.stringify([{
-    watcher: `watcher-${id}`, createdAt: new Date().toISOString(), sources: ['parent'], snapshotPending: 'readiness-timeout-snapshot',
+    watcher: watcherId, createdAt: new Date().toISOString(), sources: ['parent'], snapshotPending: 'readiness-timeout-snapshot',
   }])}\n`)
 
   const proofPath = sessionArtifactPath(id, 'launch.receipt')
@@ -712,6 +729,7 @@ exec sleep 30
 
     await drainQueue()
     await waitUntil(() => existsSync(invocationCount), 'queued first-turn launch')
+    await waitUntil(() => existsSync(firstTurnCount), 'queued first-turn delivery')
     assert.equal(readFileSync(invocationCount, 'utf8'), '1', 'removing the bad proof makes the next drain launch once')
     assert.equal(readFileSync(firstTurnCount, 'utf8'), '1')
     assert.equal(readFileSync(invocationArgs, 'utf8'), launchPayload)
@@ -1721,7 +1739,14 @@ test('a launch failure the harness itself called settled is attempted exactly on
     let pane = ''
     for (;;) {
       pane = tmuxTry('-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name).stdout ?? ''
-      if (/not retrying/.test(pane) || /attempt 3/.test(pane) || Date.now() > deadline) break
+      const attemptsSoFar = existsSync(counter) ? readFileSync(counter, 'utf8').split('\n').filter(Boolean).length : 0
+      if (/not retrying/.test(pane) || attemptsSoFar >= 3 || Date.now() > deadline) {
+        if (attemptsSoFar >= 3) {
+          spawnSync('sleep', ['0.2'])
+          pane = tmuxTry('-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name).stdout ?? pane
+        }
+        break
+      }
       spawnSync('sleep', ['0.5'])
     }
     const attempts = readFileSync(counter, 'utf8').split('\n').filter(Boolean).length

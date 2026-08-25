@@ -25,7 +25,7 @@ Names are lowercase kebab-case, every definition must provide a callable compone
 component object such as `React.lazy`, and registration is
 fail-closed: an existing core or plugin view cannot be replaced. Plugin registration validates every view
 before mutating the registry, so a collision leaves all prior entries intact. A plugin can be removed by id,
-which removes only the views it owns. The registry is the sole lookup used by `viewFor`, `surfaceFor`, and the
+which removes only the views it owns. The registry is the sole lookup used by `viewFor`, `iconFor`, and the
 document predicates, so an extension receives the same route-props contract and shell ownership as a built-in
 view. This is an extension seam, not a second navigation system: plugins provide views, while routing and tab
 identity remain shell-owned.
@@ -45,8 +45,8 @@ view that reads the global address follows the reader out of its own pane: a hid
 itself from whatever was opened next. Both now take `{ param, query }` like everything else, and the cold
 review entry hands them the same props the shell does.
 
-**`surface` is the shell boundary.** `workspace` owns Explorer, tab strip, document pool, and dock;
-`workspace` owns the evals/issues board and detail layout with the shared Explorer/tab strip/working set;
+**`surface` is the shell boundary, and `workspace` is the only surface.** It owns Explorer, tab strip, document
+pool, and dock, and hosts the evals/issues board and detail layout inside that same shared working set;
 Issues omits the activity rail while retaining the shared strip. Settings is a resident workspace tab. The
 registry is the single source for view ownership and document/residency policy; the root mounts the shared
 workspace host for these routes both on a cold URL and after in-app navigation. A review view cannot acquire a

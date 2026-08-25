@@ -9,6 +9,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { codexAppServerPid, codexAppServerReceipt, codexAppServerSock, listenerAt } from './harness.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
+import { initializeFreshSessionApplication } from './session-application.js'
 import { processStartToken } from '@spexcode/spec-core'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -152,7 +153,9 @@ test('close refuses active native turns and missing evidence while retaining rec
   const spec = join(project, '.spec', 'project', 'spec.md')
   const bin = join(fixture, 'bin')
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_CODEX_SOCKET_DIR = socketDir
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const threads = new Map<string, CodexFixtureThread>()
   const server = codexRpcFixture(threads)
   let owner: ReturnType<typeof spawnDetachedRuntime> | null = null
@@ -179,20 +182,36 @@ test('close refuses active native turns and missing evidence while retaining rec
       command: process.execPath,
       args: ['-e', 'setInterval(() => {}, 1000)'],
     })
+    const application = initializeFreshSessionApplication()
     const writeRecord = (id: string, threadId: string) => {
       const dir = join(sessions, id)
       const worktree = join(fixture, `${id}-worktree`)
       const branch = `node/${id}`
       git(project, 'worktree', 'add', '-q', '-b', branch, worktree, 'main')
       mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'session.json'), JSON.stringify({
+      writeFileSync(join(dir, 'runtime.json'), JSON.stringify({
         session_id: id, governed: true, worktree_path: worktree, branch,
         node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: '', merges: 0,
         note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId,
         stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
       }, null, 2) + '\n')
-      return join(dir, 'session.json')
+      application.createSession({ sessionId: id, status: 'awaiting', proposal: 'nothing' })
+      return join(dir, 'runtime.json')
     }
+    const settledId = 'rollout-settled-close'
+    const settledThread = 'rollout-settled-thread'
+    const settledRecord = writeRecord(settledId, settledThread)
+    threads.set(settledThread, { id: settledThread, presence: 'unknown', archived: false, loaded: true })
+    const activeId = 'rollout-active-close'
+    const activeThread = 'rollout-active-thread'
+    const activeChild = 'rollout-active-child'
+    const activeRecord = writeRecord(activeId, activeThread)
+    threads.set(activeThread, { id: activeThread, presence: 'idle', archived: false, loaded: true })
+    threads.set(activeChild, { id: activeChild, presence: 'active', archived: false, loaded: true, parentThreadId: activeThread })
+    const missingId = 'rollout-missing-close'
+    const missingThread = 'rollout-missing-thread'
+    const missingRecord = writeRecord(missingId, missingThread)
+    threads.set(missingThread, { id: missingThread, presence: 'unknown', archived: false, loaded: true })
     const port = await freePort()
     const env: NodeJS.ProcessEnv = {
       ...process.env,
@@ -215,10 +234,6 @@ test('close refuses active native turns and missing evidence while retaining rec
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), `backend health\n${log}`)
 
-    const settledId = 'rollout-settled-close'
-    const settledThread = 'rollout-settled-thread'
-    const settledRecord = writeRecord(settledId, settledThread)
-    threads.set(settledThread, { id: settledThread, presence: 'unknown', archived: false, loaded: true })
     const rollout = join(codexHome, 'sessions', '2026', '08', '13', `rollout-2026-08-13-${settledThread}.jsonl`)
     mkdirSync(dirname(rollout), { recursive: true })
     writeFileSync(rollout, `${JSON.stringify({ type: 'event_msg', payload: { type: 'task_complete' } })}\n`)
@@ -226,12 +241,6 @@ test('close refuses active native turns and missing evidence while retaining rec
     assert.equal(settled.code, 0, `${settled.stdout}\n${settled.stderr}`)
     assert.equal(existsSync(settledRecord), true, 'soft close retains the public record after a terminal rollout tail')
 
-    const activeId = 'rollout-active-close'
-    const activeThread = 'rollout-active-thread'
-    const activeChild = 'rollout-active-child'
-    const activeRecord = writeRecord(activeId, activeThread)
-    threads.set(activeThread, { id: activeThread, presence: 'idle', archived: false, loaded: true })
-    threads.set(activeChild, { id: activeChild, presence: 'active', archived: false, loaded: true, parentThreadId: activeThread })
     const activeBefore = readFileSync(activeRecord, 'utf8')
     const active = await runCli(['session', 'close', activeId, '--api', base], project, env)
     assert.notEqual(active.code, 0)
@@ -244,10 +253,6 @@ test('close refuses active native turns and missing evidence while retaining rec
     assert.notEqual(spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/spex-archive/${activeId}`], { cwd: project }).status, 0,
       'active-turn refusal publishes no archive ref')
 
-    const missingId = 'rollout-missing-close'
-    const missingThread = 'rollout-missing-thread'
-    const missingRecord = writeRecord(missingId, missingThread)
-    threads.set(missingThread, { id: missingThread, presence: 'unknown', archived: false, loaded: true })
     const missing = await runCli(['session', 'close', missingId, '--api', base], project, env)
     assert.notEqual(missing.code, 0)
     assert.match(`${missing.stdout}\n${missing.stderr}`, /live Codex client/)
@@ -259,6 +264,8 @@ test('close refuses active native turns and missing evidence while retaining rec
     await stopDetachedOwner(owner)
     if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
     else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(fixture, { recursive: true, force: true })
   }
 })

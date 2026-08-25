@@ -111,45 +111,6 @@ function retireLegacyCodexAnchors(checkout: string): void {
   }
 }
 
-function spexGeneratedHooksFile(file: string): boolean {
-  if (!existsSync(file)) return false
-  let parsed: unknown
-  try { parsed = JSON.parse(readFileSync(file, 'utf8')) } catch { return false }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
-  const root = parsed as { hooks?: unknown }
-  const keys = Object.keys(parsed as Record<string, unknown>)
-  if (keys.some((key) => key !== 'hooks') || !root.hooks || typeof root.hooks !== 'object' || Array.isArray(root.hooks)) return false
-  const commands: string[] = []
-  for (const groups of Object.values(root.hooks as Record<string, unknown>)) {
-    if (!Array.isArray(groups)) continue
-    for (const group of groups) {
-      if (!group || typeof group !== 'object') continue
-      for (const hook of ((group as { hooks?: unknown }).hooks as unknown[] | undefined) ?? []) {
-        if (hook && typeof hook === 'object' && typeof (hook as { command?: unknown }).command === 'string')
-          commands.push((hook as { command: string }).command)
-      }
-    }
-  }
-  return commands.length > 0 && commands.every((command) => command.includes('dispatch.sh'))
-}
-
-// Claude walks up from a linked worktree and can load both the worktree settings and the main checkout
-// settings. Older materialize passes wrote the same dispatcher into both, so one PreToolUse became a
-// multiplied host report. The main checkout is the single owner when the worktree is nested under it;
-// delete only an exact generated sibling file, never a settings file with user keys/hooks.
-function retireLegacyClaudeSettings(checkout: string): void {
-  const rootFile = join(checkout, '.claude', 'settings.json')
-  if (!spexGeneratedHooksFile(rootFile)) return
-  let listing: string
-  try { listing = git(['-C', checkout, 'worktree', 'list', '--porcelain']) } catch { return }
-  const root = `${checkout.endsWith('/') ? checkout : `${checkout}/`}`
-  for (const tree of [...listing.matchAll(/^worktree (.+)$/gm)].map((match) => match[1]).filter((path) => path !== checkout && path.startsWith(root))) {
-    const file = join(tree, '.claude', 'settings.json')
-    if (!spexGeneratedHooksFile(file)) continue
-    rmSync(file, { force: true })
-    try { rmdirSync(join(tree, '.claude')) } catch {}
-  }
-}
 function infoExcludePath(proj: string): string {
   return join(gitCommonDirOf(proj), 'info', 'exclude')
 }
@@ -351,15 +312,12 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   // to materialize silently steals the root hook owner from every other session.
   const checkout = mainCheckout(proj)
   retireLegacyCodexAnchors(checkout)
-  retireLegacyClaudeSettings(checkout)
   const projectDispatch = existsSync(join(checkout, 'spec-cli', 'hooks', 'dispatch.sh'))
     ? join(checkout, 'spec-cli', 'hooks', 'dispatch.sh')
     : DISPATCH
   const projectSpex = existsSync(join(checkout, 'spec-cli', 'bin', 'spex.mjs'))
     ? join(checkout, 'spec-cli', 'bin', 'spex.mjs')
     : SPEX
-  const nestedUnderCheckout = proj !== checkout && proj.startsWith(`${checkout.endsWith('/') ? checkout : `${checkout}/`}`)
-  const claudeRootOwnsSettings = nestedUnderCheckout && spexGeneratedHooksFile(join(checkout, '.claude', 'settings.json'))
   const shimFor = (h: typeof HARNESSES[number]) => h.shimScope === 'project'
     ? h.shim(projectDispatch, projectSpex)
     : h.shim(DISPATCH, SPEX)
@@ -409,10 +367,11 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     // project config layer. A second copy of our dispatcher therefore runs the same PreToolUse event twice.
     // Keep the anchor present for layer discovery while leaving its hook set empty; the root checkout remains
     // the sole executable hook owner.
+    // Claude reads project settings from the session's cwd only (measured on Claude Code 2.1.241: a hook
+    // configured solely in the main checkout never fires inside a nested linked worktree), so every tree
+    // carries its own tree-scoped shim; a session launched at the root fires the root's, never both.
     const target: ShimTarget = { ownership: h.shimOwnership, content: shim.content, hooks: shim.hooks }
-    if (h.shimScope === 'tree' && !(h.dispatchId === 'claude' && claudeRootOwnsSettings)) {
-      addShimTarget(treeShimTargets, h.shimFile(proj), target)
-    }
+    if (h.shimScope === 'tree') addShimTarget(treeShimTargets, h.shimFile(proj), target)
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)

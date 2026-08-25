@@ -760,7 +760,7 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       }
       for (const [id, record] of current) {
         if (record.parent === parent) continue
-        application.transitionSession(id, { parentSessionId: parent, reason: 'reparent' })
+        const change = application.transitionSession(id, { parentSessionId: parent, reason: 'reparent' })
         if (record.parent) {
           try { application.detachWatcher(record.parent, id, 'watch:parent') }
           catch (error) {
@@ -775,7 +775,16 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
           catch (error) {
             if (!(error instanceof Error) || !/already exists|duplicate|active topology edge/i.test(error.message)) throw error
           }
-          notify.push({ ...record, parent })
+          // The transition above published to the OLD watcher set. The new supervisor learns the child's current
+          // state here, keyed by that transition's own event so a retried rewrite never sends it twice.
+          const moved = { ...record, parent }
+          application.enqueueMessage(parent, {
+            kind: 'session.prompt.v1',
+            body: Buffer.from(watchMessage(moved), 'utf8'),
+            senderSessionId: id,
+            idempotencyKey: digest(`reparent-snapshot\0${change.event.eventId}`),
+          })
+          notify.push(moved)
         }
       }
     }))
@@ -4814,13 +4823,19 @@ export async function drainSession(id: string): Promise<void> {
   throw new ResourceConflict('session application is unavailable; refusing the legacy delivery path')
 }
 
-function canonicalMessageText(message: { kind: string; body: Uint8Array }, target: SessRec): string {
+// `recipient` is the session this text is delivered TO; a state message speaks about its `sessionId`, the
+// watched subject, and the notice must name that subject — never the reader of the notice.
+export function canonicalMessageText(message: { kind: string; body: Uint8Array }, recipient: SessRec): string {
   if (message.kind === 'session.prompt.v1') return Buffer.from(message.body).toString('utf8')
   if (message.kind === 'session.state.changed.v1') {
     try {
-      const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as Partial<SessRec> & { status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }
-      return watchMessage({ ...target, status: (change.status ?? target.status) as Lifecycle, proposal: change.proposal ?? null, note: change.note ?? null, parent: change.parentSessionId ?? target.parent })
-    } catch { throw new ResourceConflict(`canonical state message for ${target.session} is not valid JSON`) }
+      const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as { sessionId?: string; status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }
+      if (typeof change.sessionId !== 'string' || !change.sessionId) throw new ResourceConflict(`canonical state message delivered to ${recipient.session} names no subject session`)
+      return watchMessage({ ...recipient, session: change.sessionId, status: (change.status ?? recipient.status) as Lifecycle, proposal: change.proposal ?? null, note: change.note ?? null, parent: change.parentSessionId ?? null })
+    } catch (error) {
+      if (error instanceof ResourceConflict) throw error
+      throw new ResourceConflict(`canonical state message for ${recipient.session} is not valid JSON`)
+    }
   }
   throw new ResourceConflict(`canonical message kind ${message.kind} cannot be delivered as session text`)
 }

@@ -18,6 +18,16 @@ scenarios:
     tags: [cli, backend-api]
     test: "spec-cli/src/session-reparent.test.ts"
     code: [spec-cli/src/session-reparent.ts, spec-cli/src/sessions.ts]
+  - name: reparent-delivers-new-parent-snapshot
+    tags: [backend-api]
+    description: >
+      In a migrated store, reparent a child through the backend API and read the new and former parents' queues.
+    expected: >
+      The new parent holds exactly one current-state snapshot sent by the child (`[spex watch] <child> is
+      <status>`) and the child's `parent` watch relation names only the new parent.
+    test:
+      path: spec-cli/src/session-reparent.test.ts
+      name: "session reparent updates the canonical projection after cutover"
   - name: backendless-owner-fallback
     description: >
       Stop the project's backend after creating governed parent and child records, then run the same

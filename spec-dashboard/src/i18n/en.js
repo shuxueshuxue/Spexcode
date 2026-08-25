@@ -787,6 +787,7 @@ export default {
     diffCommentPlaceholder: 'leave a review comment',
     diffCommentSave: 'save comment',
     diffEdit: 'edit comment',
+    diffRetract: 'retract comment',
     diffSend: 'send comments to agent',
     diffMode: 'diff mode',
     diffSplit: 'split',

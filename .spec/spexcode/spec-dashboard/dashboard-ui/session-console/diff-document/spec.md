@@ -69,7 +69,14 @@ A reader can click a changed line to author a comment. Comments live in the sess
 lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending
 un-sent comments formats them as one review message and uses the existing session input/send path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
-Sent comments remain inline in the diff with their delivery marker.
+Sent comments remain inline in the diff with their delivery marker, and a reload keeps the reader on the file they
+commented on, because that marker appears where the comment was filed.
+
+A row can also be RETRACTED. A review conversation that only ever appends is not one: a comment landed on the
+wrong line, or left behind by a measurement, would otherwise stay on the record forever. Retract removes that one
+row under the record lock and names what it removed, and a retract of a row that is already gone is an honest 404
+rather than a silent success. It retracts the RECORD's row, never the message that was already delivered — the
+agent read that text, and the product does not pretend otherwise.
 
 The branch scope is a proof over commits, not over a working directory, so the endpoint anchors its git reads at a
 root that exists: the session worktree while it is on disk, and the shared main checkout — which holds the

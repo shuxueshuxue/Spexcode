@@ -75,7 +75,7 @@ const stillPresent = (data, key) => !!key && [
 ].includes(key)
 const firstEntry = (data) => (data?.files || []).length ? { scope: 'branch', file: data.files[0] } : (data?.working?.files || []).length ? { scope: 'working', file: data.working.files[0] } : null
 
-function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onComment, onEdit, onView, onNext, onPrevious }) {
+function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onComment, onEdit, onRetract, onView, onNext, onPrevious }) {
   const t = useT(); const host = useRef(null); const mounted = useRef(null)
   const [patch, setPatch] = useState(file.patch || '')
   const parsed = useMemo(() => parseUnifiedPatch(patch), [patch])
@@ -156,6 +156,7 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
     {comments.length > 0 && <div className="diff-comments">{comments.map((comment) => <div key={comment.id} className={`diff-comment${comment.sentAt ? ' sent' : ''}`}>
       <span className="diff-comment-line">L{comment.lineStart}{comment.lineEnd !== comment.lineStart ? `-L${comment.lineEnd}` : ''}</span>
       <span className="diff-comment-body">{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}<IconButton icon="pencil" size={12} label={t('session.diffEdit')} onClick={() => onEdit(comment)} />
+      <IconButton icon="trash" size={12} label={t('session.diffRetract')} onClick={() => onRetract(comment)} />
     </div>)}</div>}
   </section>
 }
@@ -252,6 +253,13 @@ export default function DiffDocument({ sessionId }) {
     setSelected(entryKey(entries[(selectedIndex + direction + entries.length) % entries.length]))
   }
   const save = async () => { if (!draft || !body.trim()) return; const entry = entries.find((candidate) => candidate.file.path === draft.filePath) || current; if (!entry) return; const res = await apiFetch(sessionUrl(sessionId, 'diff-comments'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, filePath: draft.filePath || entry.file.path, body, diffIdentity: entry.file.diffIdentity }) }); if (res.ok) { setDraft(null); setBody(''); load() } }
+  // Retracting the row a draft is currently editing would leave the composer pointed at something gone.
+  const retract = async (comment) => {
+    const res = await apiFetch(`${sessionUrl(sessionId, 'diff-comments')}/${encodeURIComponent(comment.id)}`, { method: 'DELETE' })
+    if (!res.ok) return
+    setDraft((current) => current?.id === comment.id ? null : current)
+    load()
+  }
   const send = async () => { const res = await apiFetch(sessionUrl(sessionId, 'diff-comments', 'send'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (res.ok) load() }
   if (state.phase === 'loading') return <div className="diff-state">{t('session.diffLoading')}</div>
   if (state.phase === 'unavailable') return <div className="diff-state diff-unavailable">{t('session.diffUnavailable')}{state.detail ? <code className="diff-oids">{state.detail}</code> : null}</div>
@@ -288,7 +296,7 @@ export default function DiffDocument({ sessionId }) {
           open mode={mode} wrap={wrap} comments={comments.filter((comment) => comment.filePath === current.file.path)}
           onView={(path, view) => registerView(entryKey(current), view)} onNext={() => navigateChunk(1)} onPrevious={() => navigateChunk(-1)}
           onComment={(start, end) => { if (start == null) return; setDraft({ filePath: current.file.path, lineStart: start, lineEnd: end }); setBody('') }}
-          onEdit={(comment) => { setDraft(comment); setBody(comment.body) }} />}
+          onEdit={(comment) => { setDraft(comment); setBody(comment.body) }} onRetract={retract} />}
       </div>
     </div>}
     {draft && <div className="diff-comment-compose" role="dialog"><strong>{t('session.diffComment')}</strong><span>{draft.filePath || current?.file.path}:L{draft.lineStart}</span><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} placeholder={t('session.diffCommentPlaceholder')} /><div><button type="button" onClick={() => setDraft(null)}>{t('common.cancel')}</button><button type="button" disabled={!body.trim()} onClick={save}>{t('session.diffCommentSave')}</button></div></div>}

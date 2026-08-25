@@ -1600,7 +1600,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
       // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
       // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
       // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-.}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,

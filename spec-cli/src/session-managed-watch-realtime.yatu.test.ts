@@ -6,11 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { migrateJsonSessionRecords } from '@spexcode/session-application'
-import { resolveDatabasePath } from '@spexcode/session-selflaunch'
-import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
+import { sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
-import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { configuredSessionApplication, initializeFreshSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { drainSession, linkZCodeChildSession, markIdle, markState, sessionHookState } from './sessions.js'
 import { stampRvSock } from './harness.js'
 
@@ -33,15 +31,17 @@ function seedRecord(home: string, id: string, parentId = ''): void {
 test('canonical managed watch wakes the real parent transport once per state commit', { timeout: 30_000, concurrency: false }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-managed-watch-realtime-'))
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   let server: ReturnType<typeof createServer> | undefined
   try {
+    const application = initializeFreshSessionApplication()
     seedRecord(home, parent)
     seedRecord(home, child, parent)
-    const recordsRoot = join(runtimeRoot(), 'sessions')
-    migrateJsonSessionRecords({ databasePath: resolveDatabasePath(), recordsRoot, locality: () => {} })
-
-    const application = configuredSessionApplication()
+    application.createSession({ sessionId: parent, status: 'active' })
+    application.createSession({ sessionId: child, status: 'active' })
+    application.attachWatcher(parent, child, 'watch:parent')
     application.bindRuntime(parent, {
       namespace: 'spex-governed', runtimeKind: 'opencode', nativeSessionId: parent, nativeStartToken: 'start-1',
     })
@@ -94,19 +94,23 @@ test('canonical managed watch wakes the real parent transport once per state com
     resetConfiguredSessionApplicationForTest()
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
   }
 })
 
 test('canonical lifecycle repairs a stale JSON snapshot without writing a second lifecycle fact', { concurrency: false }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-canonical-lifecycle-authority-'))
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   try {
+    const application = initializeFreshSessionApplication()
     seedRecord(home, parent)
     seedRecord(home, child)
-    const recordsRoot = join(runtimeRoot(), 'sessions')
-    migrateJsonSessionRecords({ databasePath: resolveDatabasePath(), recordsRoot, locality: () => {} })
-    const application = configuredSessionApplication()
+    application.createSession({ sessionId: parent, status: 'active' })
+    application.createSession({ sessionId: child, status: 'active' })
 
     // This is the observed production failure: the legacy envelope still says active while the canonical
     // lifecycle says asking. A raw-file short circuit would return here and leave the board asking forever.
@@ -137,5 +141,7 @@ test('canonical lifecycle repairs a stale JSON snapshot without writing a second
     resetConfiguredSessionApplicationForTest()
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
   }
 })

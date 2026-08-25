@@ -141,7 +141,16 @@ export function SessionZone({ item, baseClass, onToggle }) {
   const t = useT()
   const foldable = item.zone === 'offline' || item.zone === 'archive'
   const classes = `${baseClass} ${baseClass}-${item.zone}${foldable ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}${item.dropTarget ? ' drop-target' : ''}`
-  if (!foldable) return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
+  // ONE zone-head grammar. The foldable heads (offline/archive) always carried the designed row — a count
+  // pod outlined in the zone's own hue, the label, then the hairline that runs off it — while needs-you and
+  // running printed a bare word, so the list read as two different kinds of heading depending on which zone
+  // you were looking at. The pod is the group's population, which every zone item already carries.
+  if (!foldable) return (
+    <div className={classes}>
+      {item.count > 0 && <span className="si-zone-count" aria-hidden="true">{item.count}</span>}
+      <span className="si-zone-label">{t(`sessionZone.${item.zone}`)}</span>
+    </div>
+  )
   const label = item.zone === 'archive'
     ? t(item.folded ? 'sessionZone.showArchive' : 'sessionZone.hideArchive', { n: item.count })
     : t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })

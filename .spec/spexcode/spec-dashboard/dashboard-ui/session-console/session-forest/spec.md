@@ -144,3 +144,9 @@ it shrank with them: the positional ⌥-digit page row is gone ([[keyboard-nav]]
 console input again, forwarded like any other unclaimed key. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) 
+
+**Every zone head is the same designed row.** A count pod outlined in the zone's own hue, the label, then a
+hairline that runs off the label to the panel edge — a rule that stops at the text reads as a heading, where a
+full-width divider would read as one more row. The foldable heads (offline, archive) always had that row while
+the working zones printed a bare word, so the list carried two kinds of heading at once; the pod is the zone's
+whole population, which the forest already computes for every zone, folded or not.

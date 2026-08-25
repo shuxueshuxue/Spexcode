@@ -55,6 +55,7 @@ async function stopChild(child: ChildProcess | null): Promise<void> {
 }
 
 function record(id: string, project: string, pending: unknown, harness = 'claude'): Record<string, unknown> {
+  const original = (pending as { original?: { status?: string; proposal?: string; note?: string } } | null)?.original
   return {
     session_id: id,
     governed: true,
@@ -64,10 +65,10 @@ function record(id: string, project: string, pending: unknown, harness = 'claude
     title: null,
     name: null,
     parent: null,
-    status: 'idle',
-    proposal: '',
+    status: original?.status ?? 'idle',
+    proposal: original?.proposal || null,
     merges: 0,
-    note: 'candidate note must stay internal',
+    note: original?.note ?? 'candidate note must stay internal',
     sortkey: null,
     createdAt: Date.now(),
     harness,
@@ -198,6 +199,7 @@ test('all public record APIs share pending projection and malformed fail-closed 
       PATH: `${bin}:${process.env.PATH || ''}`,
       PORT: String(port),
       SPEXCODE_HOME: home,
+      SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
       SPEXCODE_TMUX: `spex-public-record-${port}`,
     }
     delete env.SPEXCODE_API_URL

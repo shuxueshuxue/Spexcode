@@ -49,7 +49,9 @@ async function control(request: Parameters<typeof peerRpc>[0]) {
 function project(home: string, id: string, session = SESSION, worktreePath = ''): string {
   const root = join(home, 'projects', id)
   mkdirSync(join(root, 'sessions', session), { recursive: true })
-  writeFileSync(join(root, 'sessions', session, 'session.json'), `${JSON.stringify(worktreePath ? { worktree_path: worktreePath } : {})}\n`)
+  writeFileSync(join(root, 'sessions', session, 'runtime.json'), `${JSON.stringify({
+    session_id: session, governed: true, worktree_path: worktreePath, branch: worktreePath ? 'node/fixture' : null, status: 'active',
+  })}\n`)
   return root
 }
 

@@ -566,7 +566,7 @@ export default {
   },
 
   nodeView: {
-    carries: 'carries',
+    carries: 'Carries',
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',
@@ -586,8 +586,8 @@ export default {
     statusLabel: 'status:',
     versionLabel: 'version:',
     lastEditedBy: 'last edited by:',
-    governs: '// governs',
-    proseNode: '// no file owned · prose node',
+    governs: 'Governs',
+    proseNode: 'No file owned · prose node',
     rawTitle: 'raw source',
     rawOwner: 'human',
     rawNote: 'rarely changed · needs approval',
@@ -891,17 +891,18 @@ export default {
   },
 
   settings: {
-    title: 'settings',
+    title: 'Settings',
     close: 'close (esc)',
-    secLanguage: 'language',
-    secTheme: 'theme',
-    secTerminal: 'terminal',
-    defaultSessionSurface: 'default session view',
-    terminalFontSize: 'font size',
-    secShortcuts: 'shortcuts',
-    bindPrompt: 'press a key…',
-    shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (a game controller binds to actions, not keys — rebinding here never touches the pad.)',
-    reset: 'reset to defaults',
+    secLanguage: 'Language',
+    uiLanguage: 'Interface language',
+    secTheme: 'Theme',
+    secTerminal: 'Terminal',
+    defaultSessionSurface: 'Default session view',
+    terminalFontSize: 'Font size',
+    secShortcuts: 'Shortcuts',
+    bindPrompt: 'Press a key…',
+    shortcutsHint: 'Click a key to rebind it. Nav & chord keys are fixed. (A game controller binds to actions, not keys — rebinding here never touches the pad.)',
+    reset: 'Reset to defaults',
   },
 
   search: {

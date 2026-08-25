@@ -55,12 +55,13 @@ test('resource tabs name the resource only, without leaking the owning session t
   assert.doesNotMatch(source, /return `\$\{title\} · \$\{resource\?\.label \|\| key\}`/)
 })
 
-test('resident review tabs share the workspace strip while Issues removes the activity rail', () => {
-  // Evals, Issues, and Settings are resident tabs. Issues is the focused full-width reading surface; its
-  // detail still has the shared strip, while the activity rail is intentionally omitted.
+test('resident review tabs share the workspace strip and every board keeps the activity rail', () => {
+  // Evals, Issues, and Settings are resident tabs. Issues is the focused reading surface with no workspace
+  // dock, but the rail — the top-level board switch — never disappears under any board.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{page === 'sessions'\} \/>/)
+  assert.match(shell, /<SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
+  assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
   assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
 })
 
@@ -90,7 +91,8 @@ test('left dock and right context controls use distinct semantic glyphs', () => 
 test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {
   const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
   assert.match(dock, /<IconButton icon="plus" size=\{15\}[\s\S]*className="dock-head-act dock-head-act-new"/)
-  assert.match(css, /\.dock-head-act:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--blue\)/)
+  // keyboard focus is the one shared ring ([[typography]]); the door hand-writes no outline of its own
+  assert.match(css, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/)
+  assert.doesNotMatch(css, /\.dock-head-act(?:-new)?:focus-visible\s*\{[^}]*outline:/)
   assert.match(css, /\.dock-head-act-new\s*\{[\s\S]*width:\s*24px; height:\s*24px;[\s\S]*background:\s*transparent;[\s\S]*border:\s*1px solid color-mix\(in srgb, var\(--blue\) 72%, var\(--line\)\);[\s\S]*border-radius:\s*var\(--radius\)/)
-  assert.match(css, /\.dock-head-act-new:focus-visible\s*\{[^}]*outline-offset:\s*2px;/)
 })

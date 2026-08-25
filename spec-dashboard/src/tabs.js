@@ -59,6 +59,19 @@ const putTabs = (next) => {
   return stable
 }
 
+// THE STRIP'S FOCUS HISTORY — tab keys, most recent first, in memory only. It is the reader's movement, not
+// the working set, so it is session-scoped like the browser's own history rather than persisted with the
+// list; until the reader has moved after a reload, `closeDestination` falls back to position. Keys that
+// left the strip (a replaced slot, a closed tab) are dropped on the next touch, so the list never outgrows
+// the strip.
+let recent = []
+const touch = (key) => {
+  if (recent[0] === key) return
+  const held = new Set(getTabs().map(tabKey))
+  recent = [key, ...recent.filter((k) => k !== key && held.has(k))]
+}
+export const recentTabKeys = () => recent
+
 // A finding surface cannot reach the strip's state directly: an explicit hold MARKS the next navigation and
 // the strip's route subscription reads the mark. The mark is an address, not a flag, so two subscribers
 // (the strip and the session console both call useTabs) read the same answer for the same navigation; it
@@ -155,6 +168,7 @@ export function useTabs({ onCloseStart } = {}) {
     if (!isDocument(route.page, route.param)) return
     const mode = pinKey === key ? 'pin' : 'slot'
     putTabs(placeTab(getTabs(), route, mode))
+    touch(key)
   }, [route.page, route.param, route.query])
 
   // Resident view routes keep their detail address in the URL but focus the one top-level view tab.
@@ -162,8 +176,9 @@ export function useTabs({ onCloseStart } = {}) {
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
-  // Closing hands the workspace to the nearest same-kind tab, then the nearest tab of any kind; only an
-  // emptied strip leaves for a kind's explicit no-tab destination (`closeDestination` is the one selector).
+  // Closing hands the workspace to the last-focused same-kind tab (position when none was focused), then
+  // the same over any kind; only an emptied strip leaves for a kind's explicit no-tab destination
+  // (`closeDestination` is the one selector, and the focus history is its only extra input).
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()
@@ -172,8 +187,9 @@ export function useTabs({ onCloseStart } = {}) {
     onCloseStartRef.current?.(tab)
     const next = prev.filter((_, n) => n !== i)
     putTabs(next)
+    recent = recent.filter((k) => k !== key)
     if (key === activeKey) {
-      const destination = closeDestination(tab, next, i)
+      const destination = closeDestination(tab, next, i, recent)
       navigate(destination.page, destination.param, { query: destination.query })
     }
   }, [activeKey])

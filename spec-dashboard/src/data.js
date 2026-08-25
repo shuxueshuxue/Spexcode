@@ -520,15 +520,6 @@ export async function loadSessionDetail(id) {
   return res.json()
 }
 
-export async function loadSessionDiff(id, path, offset = 0, limit = 120000) {
-  const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
-  if (path) query.set('path', path)
-  const res = await apiFetch(`${sessionUrl(id, 'diff')}?${query}`, { cache: 'no-store' })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok) return { ok: false, error: body?.error || `HTTP ${res.status}` }
-  return { ok: true, data: body }
-}
-
 // dispatch a prompt to a session through the ONE input route every surface shares ([[dispatch]]).
 // `replyVia:'note'` marks a terminal-free sender: the SERVER appends the note-reply insert
 // ([[session-timeline]]), so the phrase lives in one place. Returns { ok, error? }.

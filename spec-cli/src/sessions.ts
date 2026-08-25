@@ -3744,6 +3744,25 @@ export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' 
   })
 }
 
+// A review conversation you can only append to is not a conversation. Saving, editing and sending all
+// existed; nothing could take a row back, so a comment filed on the wrong line — or a probe left by a
+// measurement — stayed on the record forever. Retract is the same shape as the other two `retract` verbs
+// this product already has ([[session-files]], eval): it removes the row under the record lock and says
+// which one it removed. Already-DELIVERED text is not recalled — the agent read it — so this retracts the
+// record's row, never the message that was sent.
+export async function retractDiffComment(id: string, commentId: string): Promise<DiffComment | null> {
+  if (!commentId) throw new ResourceConflict('retracting a diff comment needs its id')
+  return withRecordLock(id, async () => {
+    const rec = readLiveRecord(id)
+    if (!rec) return null
+    const comments = rec.diffComments ?? []
+    const removed = comments.find((comment) => comment.id === commentId)
+    if (!removed) return null
+    writeRecord({ ...rec, diffComments: comments.filter((comment) => comment.id !== commentId) })
+    return removed
+  })
+}
+
 export async function sendDiffComments(id: string, ids?: string[]): Promise<{ ok: boolean; sentAt?: string; count?: number; error?: string }> {
   const selected = await withRecordLock(id, async () => {
     const rec = readLiveRecord(id)

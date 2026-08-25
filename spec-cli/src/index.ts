@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
+import { retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
@@ -697,6 +697,14 @@ app.post('/api/sessions/:id/diff-comments', async (c) => {
       diffIdentity: typeof body?.diffIdentity === 'string' ? body.diffIdentity : '',
     })
     return comment ? c.json(comment, 201) : c.json({ error: 'no such session' }, 404)
+  } catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 400) }
+})
+// Retract removes one row from the record's review conversation. 404 for a row (or session) that is not
+// there, so a double-retract is honestly "already gone" rather than a silent success.
+app.delete('/api/sessions/:id/diff-comments/:commentId', async (c) => {
+  try {
+    const removed = await retractDiffComment(c.req.param('id'), c.req.param('commentId'))
+    return removed ? c.json(removed) : c.json({ error: 'no such diff comment' }, 404)
   } catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 400) }
 })
 app.post('/api/sessions/:id/diff-comments/send', async (c) => {

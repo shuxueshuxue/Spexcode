@@ -24,8 +24,11 @@ scenarios:
     expected: >-
       The diff document loads without an extra navigation model, files are read-only and line-addressed, the saved
       comment is visible inline as unsent, sending marks it sent exactly once, and the same review text appears in
-      the session conversation/timeline. Editing a sent comment clears sentAt and the edited body is not silently
-      replayed.
+      the session conversation/timeline. Sending leaves the reader on the file they commented on, so the delivery
+      marker is visible where it was filed. Editing a sent comment clears sentAt and the edited body is not silently
+      replayed. Retracting a row removes it from the record and the diff — including an already-sent row, whose
+      delivered message is NOT recalled — and retracting one that is already gone is refused rather than silently
+      accepted.
     code:
       - spec-dashboard/src/DiffDocument.jsx
       - spec-cli/src/sessions.ts

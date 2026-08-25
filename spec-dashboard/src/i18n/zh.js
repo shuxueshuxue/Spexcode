@@ -776,6 +776,7 @@ export default {
     diffCommentPlaceholder: '留下评审评论',
     diffCommentSave: '保存评论',
     diffEdit: '编辑评论',
+    diffRetract: '撤回评论',
     diffSend: '发送评论给智能体',
     diffMode: '差异模式',
     diffSplit: '并排',

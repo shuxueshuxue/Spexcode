@@ -164,6 +164,23 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
     assert.equal(landedBody.working.readable, false)
     assert.deepEqual(landedBody.working.files, [])
 
+    // a review conversation must be retractable: create one, take it back, and find the second retract
+    // honestly refused rather than silently succeeding
+    const created = await fetch(`${base}/api/sessions/live-diff-session/diff-comments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath: 'live.txt', lineStart: 1, lineEnd: 1, body: 'retract me', diffIdentity: 'x' }),
+    }).then((response) => response.json())
+    assert.equal(typeof created.id, 'string')
+    const withComment = await fetch(`${base}/api/sessions/live-diff-session/diff`).then((response) => response.json())
+    assert.deepEqual(withComment.comments.map((comment: { id: string }) => comment.id), [created.id])
+    const retracted = await fetch(`${base}/api/sessions/live-diff-session/diff-comments/${created.id}`, { method: 'DELETE' })
+    assert.equal(retracted.status, 200)
+    assert.equal((await retracted.json()).body, 'retract me')
+    const afterRetract = await fetch(`${base}/api/sessions/live-diff-session/diff`).then((response) => response.json())
+    assert.deepEqual(afterRetract.comments, [])
+    const again = await fetch(`${base}/api/sessions/live-diff-session/diff-comments/${created.id}`, { method: 'DELETE' })
+    assert.equal(again.status, 404, 'retracting a row that is already gone must be refused, not silently accepted')
+
     // no worktree and no branch ref anywhere: a stable conflict, never an unhandled 500
     const vanished = await fetch(`${base}/api/sessions/vanished-diff-session/diff`)
     assert.equal(vanished.status, 409, `vanished branch must be a structured conflict, got ${vanished.status}: ${await vanished.clone().text()}`)

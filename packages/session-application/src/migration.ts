@@ -97,6 +97,7 @@ export interface JsonResidueMigrationReport {
   sourceDigest: string
   records: number
   events: number
+  parentEdges: number
   watchEdges: number
   pending: number
   unclaimed: string[]
@@ -324,6 +325,15 @@ function assertInputsUnchanged(recordsRoot: string, expectedFiles: string[], exp
   }
 }
 
+function assertResidueInputsUnchanged(recordsRoot: string, expectedFiles: string[], expectedDigest: string): void {
+  const current = readLegacyTree(recordsRoot).flatMap(dir => dir.files).sort()
+  const filesEqual = current.length === expectedFiles.length && current.every((file, index) => file === expectedFiles[index])
+  const digest = digestInputs(recordsRoot, current)
+  if (!filesEqual || digest !== expectedDigest) {
+    fail(`JSON migration residue changed while fenced; refusing retire (expected ${expectedDigest}, found ${digest})`)
+  }
+}
+
 const eventIdFor = (seed: string, ...parts: string[]): string =>
   createHash('sha256').update([seed, ...parts].join('\0')).digest('hex').slice(0, 32)
 
@@ -445,6 +455,12 @@ function attachWatches(app: ProductionSessionApplication, subject: string, entri
   return { edges, attached }
 }
 
+function attachParent(app: ProductionSessionApplication, subject: string, parent: string | null): number {
+  if (!parent || app.topology.parents(subject, 'parent').some(edge => edge.fromSessionId === parent)) return 0
+  app.protocol.withTransaction(tx => app.topology.attach(tx, parent, subject, 'parent'))
+  return 1
+}
+
 function createFromRecord(app: ProductionSessionApplication, record: JsonMigrationRecord, eventId: string): void {
   const nativeSessionId = typeof record.harness_session_id === 'string' && record.harness_session_id ? record.harness_session_id : null
   app.createSession({
@@ -548,19 +564,26 @@ function migrateLegacyResidue(options: JsonSessionMigrationOptions, tree: Legacy
     requireParentForest(records)
     backupInputs(options.recordsRoot, files, residueBackupRoot, sourceDigest)
     const seedFor = (id: string) => `migration\0residue\0${sourceDigest}\0${id}`
-    let created = 0, events = 0, watchEdges = 0, pending = 0
+    let created = 0, events = 0, parentEdges = 0, watchEdges = 0, pending = 0
     const unclaimed: string[] = []
     if (orphanParentPolicy === 'tombstone') events += tombstoneOrphans(app, orphanParents, `migration\0residue\0${sourceDigest}`)
     for (const dir of tree) {
       const seed = seedFor(dir.id)
       let state = app.readState(dir.id)
+      let createdFromResidue = false
       if (!state && dir.record) {
         createFromRecord(app, dir.record, eventIdFor(seed))
         created++
         events++
+        createdFromResidue = true
         state = app.readState(dir.id)
       }
       if (!state) { unclaimed.push(dir.id); continue }
+      // The canonical row is authoritative for an existing session; a stale legacy envelope must not rewrite
+      // its parent. For a newly created row this is the validated parent copied by createFromRecord.
+      parentEdges += createdFromResidue && state.parentSessionId !== null
+        ? 1
+        : attachParent(app, dir.id, state.parentSessionId)
       const retiredCreatedAt = typeof dir.retired?.createdAt === 'number' ? dir.retired.createdAt : null
       const fallback: HistoryFallback = {
         status: state.status,
@@ -573,7 +596,8 @@ function migrateLegacyResidue(options: JsonSessionMigrationOptions, tree: Legacy
       events += debt.events
       watchEdges += attachWatches(app, dir.id, dir.watches).attached
     }
-    return { sourceDigest, records: created, events, watchEdges, pending, unclaimed, backupRoot: residueBackupRoot }
+    assertResidueInputsUnchanged(options.recordsRoot, files, sourceDigest)
+    return { sourceDigest, records: created, events, parentEdges, watchEdges, pending, unclaimed, backupRoot: residueBackupRoot }
   } finally {
     if (owned) app.close()
   }

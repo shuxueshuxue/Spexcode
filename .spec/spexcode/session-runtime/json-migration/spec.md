@@ -49,9 +49,14 @@ first import). A retired `runtime.json` with no canonical row is refused. A dire
 row) is not a session: its files are backed up, reported by name, and retired, never imported. Each session's history
 lands in one transaction keyed by its first deterministic event id, so an interrupted run resumes without appending a
 line twice, and every stored follow cursor on that subject advances by the number of history lines that now precede
-its position — a consumed event never becomes unread again. Cursor files themselves are positions in the retired
+its position — a consumed event never becomes unread again. Before retiring the residue tree, the importer rechecks
+the complete file set and digest; a writer that ignored the migration fence therefore fails the cutover loudly.
+Cursor files themselves are positions in the retired
 projection and are backed up, not imported. Residue is backed up under the marker's backup root before anything is
 removed, and the report names what was absorbed. A tree with no residue is a no-op, so the entry point is idempotent.
+When residue creates a previously unseen application row, its validated canonical `parentSessionId` is also attached to
+the `parent` topology; when the row already exists, the canonical row's parent repairs a missing edge and stale
+envelope fields cannot rewrite it.
 
 The importer owns a durable `.json-migration.lock` fence in the legacy sessions root. Legacy writers reject a fenced
 store before touching legacy `session.json` or `watchers.json`; after the SQLite marker is published, canonical application

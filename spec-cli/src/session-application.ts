@@ -54,16 +54,17 @@ export type SessionApplicationCutoverState = 'ready' | 'residue' | 'fresh' | 'mi
 // A marked store is `ready` only once its legacy tree holds nothing left to absorb. The scan runs once per process
 // per store: after residue is migrated (or none was found) no legacy writer exists to create more, so later calls
 // answer from memory instead of walking every session directory on the hot path.
-const settledResidueRoots = new Set<string>()
+const settledResidueStores = new Set<string>()
 
 /** Inspect cutover state without initializing a fresh database as a side effect of a rejected request. */
 export function sessionApplicationCutoverState(): SessionApplicationCutoverState {
   const databasePath = resolveDatabasePath()
   const recordsRoot = join(runtimeRoot(), 'sessions')
+  const storeKey = `${databasePath}\0${recordsRoot}`
   if (existsSync(`${databasePath}.json-migration.json`)) {
-    if (settledResidueRoots.has(recordsRoot)) return 'ready'
+    if (settledResidueStores.has(storeKey)) return 'ready'
     if (legacyResidueExists(recordsRoot)) return 'residue'
-    settledResidueRoots.add(recordsRoot)
+    settledResidueStores.add(storeKey)
     return 'ready'
   }
   if (existsSync(jsonMigrationFencePath(recordsRoot))) return 'fenced'
@@ -98,10 +99,10 @@ function initializeMigratedSessionApplication(state: 'migration-required' | 'res
   }
   const application = configuredSessionApplication()
   const report = migrateJsonSessionRecords({ databasePath, recordsRoot, locality, application })
-  settledResidueRoots.add(recordsRoot)
+  settledResidueStores.add(`${databasePath}\0${recordsRoot}`)
   const residue = report.residue
   if (residue) {
-    console.log(`[session-application] migrated legacy residue from ${recordsRoot}: ${residue.records} record(s), ${residue.events} event(s), ${residue.watchEdges} watch edge(s), ${residue.pending} pending; ${residue.unclaimed.length} unclaimed dir(s)${residue.unclaimed.length ? ` (${residue.unclaimed.join(', ')})` : ''}; backup ${residue.backupRoot}`)
+    console.log(`[session-application] migrated legacy residue from ${recordsRoot}: ${residue.records} record(s), ${residue.events} event(s), ${residue.parentEdges} parent edge(s), ${residue.watchEdges} watch edge(s), ${residue.pending} pending; ${residue.unclaimed.length} unclaimed dir(s)${residue.unclaimed.length ? ` (${residue.unclaimed.join(', ')})` : ''}; backup ${residue.backupRoot}`)
   }
   return application
 }
@@ -166,7 +167,7 @@ export function releaseFreshSessionApplicationForCreate(owned: boolean, committe
 export function resetConfiguredSessionApplicationForTest(): void {
   cached?.close()
   cached = undefined
-  settledResidueRoots.clear()
+  settledResidueStores.clear()
   freshStoreOwned = false
   freshStoreCommitted = false
   freshStoreLeases = 0

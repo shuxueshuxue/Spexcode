@@ -21,4 +21,6 @@ The migration list is this component's entire schema generation ledger, and it i
 been applied to any store is never rewritten or removed, because its checksum is verified on every open. Every build
 that may open a shared store carries the complete ledger, including generations whose tables it never reads: a build
 whose ledger stops short refuses the store outright rather than half-understanding it, so an omitted generation locks
-out every consumer of that store, not only the surface that introduced the table.
+out every consumer of that store, not only the surface that introduced the table. Schema migration is therefore a
+landed-toolchain operation: a build must verify the complete ledger before it can compose the shared store, and an
+older or unlanded build fails loudly before opening the application rather than migrating a store it cannot fully read.

@@ -27,9 +27,10 @@ doors at the top — `＋ New Session` carrying its word, then quiet archive and
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
 rows. Its overlay colour is a **continuous 2px status thread**: on top-level rows it spans the complete row
-height at the same leading offset, so adjacent rows touch; group headings naturally break the thread. A nested
-row paints that colour over its deepest tree-rail column, so the tree rail carries one line rather than leaving
-two parallel marks.
+height at the same leading offset, so adjacent rows touch; group headings naturally break the thread. It hangs on the ROW, at the list's own left edge, so it is the same
+line at every fold depth: a thread carried by the indented row body stepped right with each level and stopped
+reading as one line at all. The tree's connector rails stay uncoloured — the thread is the list's edge, the
+rails are the shape of the tree, and neither has to borrow the other's job.
 
 The console renders the row in its **compact, avatar-less** variant
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with

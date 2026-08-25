@@ -1630,16 +1630,18 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   position: relative; cursor: pointer; text-align: left;
   font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink);
 }
-.si-item::after {
-  content: ''; position: absolute; left: 1px; top: 0; bottom: 0; width: 2px; height: auto;
-  background: var(--ov, transparent); pointer-events: none;
+/* THE STATUS THREAD belongs to the ROW, not to the button inside it. The button carries the list's own
+   horizontal breathing room and, in a nested row, the tree's indent — so a thread painted there stepped
+   right with every fold level and stopped reading as one line at all. Painted on the row wrapper it hugs
+   the panel's left edge at every depth, and consecutive rows meet with no gap, so the list carries a single
+   continuous line that changes colour exactly where the session under it changes. Zone heads are not rows,
+   so the line breaks at a group boundary by construction rather than by a rule about it. */
+.si-tree-row::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--ov, transparent); pointer-events: none; z-index: 1;
 }
-.si-tree-row[data-session-depth]:not([data-session-depth="0"]) .si-item::after {
-  /* Nested rows already own a connector rail. Paint the status thread over its deepest column instead of
-     leaving a second parallel line at the list edge. */
-  left: calc(2px + var(--sess-fold-indent));
-}
-.si-item[data-locked]::after { background: var(--blue); }
+/* a locked session's thread is the lock colour, read from the row that actually holds the locked button. */
+.si-tree-row:has(.si-item[data-locked])::before { background: var(--blue); }
 .si-item:hover { background: var(--wash-hover); color: var(--ink2); }
 .si-item.on { background: var(--wash-selected); color: var(--ink2); font-weight: var(--weight-medium); }
 .si-item.on:hover { background: var(--wash-selected); }

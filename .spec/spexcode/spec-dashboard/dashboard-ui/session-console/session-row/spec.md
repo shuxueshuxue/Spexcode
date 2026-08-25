@@ -64,9 +64,9 @@ the rail columns while preserving one predictable indentation step per depth. Th
 positioned in that reserved column, and remains a sibling of the row button because a nested button
 inside the row button would invalidate the row's own activation.
 
-The row's overlay colour is a continuous 2px status thread on the leading edge: a top-level row's spans the
-complete row height at the same leading offset so adjacent rows touch and only a group heading breaks the
-thread, and a nested row paints it over its deepest tree-rail column so the rail carries one line. It is an
+The row's overlay colour is a continuous 2px status thread on the leading edge: it spans the complete row
+height at the list's left edge — the ROW carries it, not the inset body, so a nested row's indent cannot step
+it right and every depth shares one line; adjacent rows touch and only a group heading breaks it. It is an
 independent mark rather than an inset border or shadow, so the rounded row wash cannot turn it into a bracket
 or make it touch the fold/count column.
 

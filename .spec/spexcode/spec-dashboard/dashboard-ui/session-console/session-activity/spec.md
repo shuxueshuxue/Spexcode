@@ -94,6 +94,12 @@ When the selected row belongs to the nesting forest, its leading connector/fold 
 gap before the title after the row changes from flex to block flow; revealing a title never glues the
 subtree count to its first word.
 
+The row's overlay marker is a continuous status thread, not a decorative short dash. It keeps its 2px width and
+leading offset while spanning the full row box (`top: 0` through `bottom: 0`), so neighboring rows in one zone
+join end-to-end. Zone headings are intentional breaks. For a nested row, the marker moves to the deepest
+connector column and paints over that tree rail; the child therefore has one colored rail, never a colored edge
+beside a second parallel tree line.
+
 **One name, every surface.** The `sessionTitle`/`sessionHeadline` accessor is a session's display name *everywhere a human reads
 which session this is* — rows, window, the console sidebar, **the search palette, the
 lock-hint banner, and the [[node-menu]] overlay list** (right-clicking a node lists its live sessions —

@@ -76,7 +76,7 @@ export function SessionConsoleTreeRow({ item, activeId, selecting = false, picke
   </>
   const treeStyle = { '--ov': labelColor(s.id), '--sess-fold-indent': `${item.depth * 14}px`, ...style }
   return (
-    <div className={treeClass} style={treeStyle} {...(!inert ? { 'data-session-drop-id': s.id } : { 'aria-hidden': 'true' })}>
+    <div className={treeClass} data-session-depth={item.depth} style={treeStyle} {...(!inert ? { 'data-session-drop-id': s.id } : { 'aria-hidden': 'true' })}>
       <button type="button" className={itemClass} tabIndex={inert ? -1 : undefined} {...rowProps}>
         {selecting && !inert && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
         {face}

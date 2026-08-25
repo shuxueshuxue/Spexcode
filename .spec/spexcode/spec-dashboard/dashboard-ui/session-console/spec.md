@@ -92,7 +92,10 @@ the sessions dock owns the list's `＋` New Session door. **The forest sidebar s
 doors at the top — `＋ New Session` carrying its word, then quiet archive and search glyphs — are rows
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
-rows and the session's own overlay colour kept as a hairline on its leading edge. The document is bounded by
+rows. Its overlay colour is a **continuous 2px status thread**: on top-level rows it spans the complete row
+height at the same leading offset, so adjacent rows touch; group headings naturally break the thread. A nested
+row paints that colour over its deepest tree-rail column, so the tree rail carries one line rather than leaving
+two parallel marks. The document is bounded by
 the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
 
 Every session zone starts with the same compact group head: semibold label and outlined count pod inherit the

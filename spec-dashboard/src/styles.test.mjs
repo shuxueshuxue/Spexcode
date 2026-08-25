@@ -413,10 +413,11 @@ test('selected nested session keeps its lead separated from the revealed headlin
   )
 })
 
-test('session forest uses a short colour bar and a dedicated fold column', () => {
+test('session forest uses a continuous colour thread and a dedicated fold column', () => {
   const item = css.match(/\.si-item\s*\{([^}]*)\}/s)?.[1] || ''
   assert.doesNotMatch(item, /box-shadow:\s*inset\s*2px\s+0/)
-  assert.match(css, /\.si-item::after\s*\{[^}]*width:\s*2px;[^}]*height:\s*17px;/s)
+  assert.match(css, /\.si-item::after\s*\{[^}]*left:\s*1px;[^}]*top:\s*0;[^}]*bottom:\s*0;[^}]*width:\s*2px;[^}]*height:\s*auto;/s)
+  assert.match(css, /\.si-tree-row\[data-session-depth\]:not\(\[data-session-depth="0"\]\) \.si-item::after\s*\{[^}]*left:\s*calc\(2px \+ var\(--sess-fold-indent\)\);/s)
   assert.match(css, /\.si-tree-row\s*\{[^}]*--sess-fold-pad-x:\s*18px;/s)
   assert.match(css, /\.si-tree-row\s*>\s*\.sess-fold-control\s*\{[^}]*left:\s*var\(--sess-fold-pad-x\);/s)
 })

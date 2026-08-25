@@ -19,13 +19,13 @@ const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.
 
 type Run = { code: number | null; out: string; err: string }
 
-function sessionDir(home: string, id: string): string {
-  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
+function sessionDir(home: string, id: string, projectRoot = pkgRoot): string {
+  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: projectRoot, encoding: 'utf8' }).trim())
   return join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
 }
 
-function writeSession(home: string, id: string, parent: string | null): string {
-  const dir = sessionDir(home, id)
+function writeSession(home: string, id: string, parent: string | null, projectRoot = pkgRoot): string {
+  const dir = sessionDir(home, id, projectRoot)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
     session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`, node: 'session-reparent',
@@ -87,6 +87,22 @@ async function freePort(): Promise<number> {
   return address.port
 }
 
+function fixtureProject(root: string): string {
+  const project = join(root, 'project')
+  mkdirSync(project, { recursive: true })
+  writeFileSync(join(project, 'README.md'), 'reparent fixture\n')
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  execFileSync('git', ['config', 'user.email', 'reparent@example.test'], { cwd: project })
+  execFileSync('git', ['config', 'user.name', 'reparent fixture'], { cwd: project })
+  execFileSync('git', ['add', '.'], { cwd: project })
+  execFileSync('git', ['commit', '-qm', 'fixture base'], { cwd: project })
+  execFileSync('git', ['checkout', '-qb', 'node/reparent-fixture'], { cwd: project })
+  writeFileSync(join(project, 'fixture.txt'), 'ahead\n')
+  execFileSync('git', ['add', 'fixture.txt'], { cwd: project })
+  execFileSync('git', ['commit', '-qm', 'fixture node branch'], { cwd: project })
+  return project
+}
+
 async function waitFor(check: () => Promise<boolean>, message: string): Promise<void> {
   const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
@@ -96,8 +112,8 @@ async function waitFor(check: () => Promise<boolean>, message: string): Promise<
   throw new Error(message)
 }
 
-async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<Run> {
-  const child = spawn(process.execPath, [tsxCli, cli, ...args], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
+async function runCli(args: string[], env: NodeJS.ProcessEnv, cwd = pkgRoot): Promise<Run> {
+  const child = spawn(process.execPath, [tsxCli, cli, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = '', err = ''
   child.stdout.setEncoding('utf8').on('data', (chunk) => { out += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { err += chunk })
@@ -113,28 +129,40 @@ async function stop(server: ReturnType<typeof spawn>): Promise<void> {
 
 test('session reparent rewrites parent/watch through live backend and only falls back after a local refusal', { timeout: 60_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-reparent-'))
+  const project = fixtureProject(home)
+  const databasePath = join(home, 'sessions.sqlite')
+  writeFileSync(`${databasePath}.json-migration.json`, JSON.stringify({ version: 1, sourceDigest: 'reparent-fixture' }) + '\n')
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabase = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = databasePath
   const port = await freePort()
   const oldParent = 'reparent-old-parent'
   const newParent = 'reparent-new-parent'
   const childA = 'reparent-child-a'
   const childB = 'reparent-child-b'
-  const childADir = writeSession(home, childA, oldParent)
-  const childBDir = writeSession(home, childB, oldParent)
-  writeSession(home, oldParent, null)
-  writeSession(home, newParent, null)
+  const childADir = writeSession(home, childA, oldParent, project)
+  const childBDir = writeSession(home, childB, oldParent, project)
+  writeSession(home, oldParent, null, project)
+  writeSession(home, newParent, null, project)
+  const seed = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try {
+    seed.createSession({ sessionId: childA, parentSessionId: oldParent })
+    seed.createSession({ sessionId: childB, parentSessionId: oldParent })
+    seed.createSession({ sessionId: oldParent })
+    seed.createSession({ sessionId: newParent })
+  } finally { seed.close() }
   writeFileSync(join(childADir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent', 'manual'] }]) + '\n')
   writeFileSync(join(childBDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
   writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'old-parent-command', text: 'stale continue', from: oldParent }]) + '\n')
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await freePort()) }
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: '1', SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: databasePath, SPEXCODE_API_URL: '', PORT: String(await freePort()) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
-  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(port)], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(port)], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let log = ''
   backend.stderr.setEncoding('utf8').on('data', (chunk) => { log += chunk })
   try {
     await waitFor(async () => (await fetch(`http://127.0.0.1:${port}/health`).catch(() => null))?.ok === true, `backend did not become healthy: ${log}`)
-    const online = await runCli(['session', 'reparent', childA, childB, '--to', newParent, '--api', `http://127.0.0.1:${port}`], env)
+    const online = await runCli(['session', 'reparent', childA, childB, '--to', newParent, '--api', `http://127.0.0.1:${port}`], env, project)
     assert.equal(online.code, 0, online.err)
     assert.match(online.out, new RegExp(`reparented .*${newParent}`))
     assert.equal(parentOf(childADir), newParent)
@@ -144,19 +172,19 @@ test('session reparent rewrites parent/watch through live backend and only falls
     ].sort())
     assert.equal(parentOf(childBDir), newParent)
     assert.deepEqual(watchers(childBDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
-    const oldParentTimelineBefore = timelineText(sessionDir(home, oldParent))
-    const newParentTimelineAtHandoff = timelineText(sessionDir(home, newParent))
+    const oldParentTimelineBefore = timelineText(sessionDir(home, oldParent, project))
+    const newParentTimelineAtHandoff = timelineText(sessionDir(home, newParent, project))
     assert.match(newParentTimelineAtHandoff, new RegExp(childA), 'reparent delivers the first child current-state snapshot')
     assert.match(newParentTimelineAtHandoff, new RegExp(childB), 'reparent delivers an already-working child current-state snapshot')
-    const manualWatchState = await runCli(['session', 'done', '--propose', 'merge', '--session', childA, '--api', `http://127.0.0.1:${port}`], env)
+    const manualWatchState = await runCli(['session', 'done', '--propose', 'merge', '--session', childA, '--api', `http://127.0.0.1:${port}`], env, project)
     assert.equal(manualWatchState.code, 0, manualWatchState.err)
-    await waitFor(async () => timelineText(sessionDir(home, oldParent)).length > oldParentTimelineBefore.length,
+    await waitFor(async () => timelineText(sessionDir(home, oldParent, project)).length > oldParentTimelineBefore.length,
       'the former parent\'s overlapping manual watch must survive reparent')
-    await waitFor(async () => timelineText(sessionDir(home, newParent)).length > newParentTimelineAtHandoff.length,
+    await waitFor(async () => timelineText(sessionDir(home, newParent, project)).length > newParentTimelineAtHandoff.length,
       'the new parent must receive a later non-working child transition')
-    assert.match(timelineText(sessionDir(home, oldParent)), /"proposal":"merge"/)
+    assert.match(timelineText(sessionDir(home, oldParent, project)), /"proposal":"merge"/)
     assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
-    const newParentTimeline = timelineText(sessionDir(home, newParent))
+    const newParentTimeline = timelineText(sessionDir(home, newParent, project))
     assert.match(newParentTimeline, new RegExp(childA))
     assert.match(newParentTimeline, new RegExp(childB))
     assert.match(newParentTimeline, /"proposal":"merge"/)
@@ -174,18 +202,18 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.deepEqual(pendingFrom(childADir), [], 'detaching revokes an undelivered command from the former parent')
 
     await stop(backend)
-    const childCDir = writeSession(home, 'reparent-child-c', oldParent)
+    const childCDir = writeSession(home, 'reparent-child-c', oldParent, project)
     writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
     // A legacy envelope left in a marked store is residue: the CLI's first canonical access absorbs it (a row is
     // created from the envelope, the file is retired), and only then is the child a reparentable session.
-    const local = await runCli(['session', 'reparent', 'reparent-child-c', '--to', newParent], env)
+    const local = await runCli(['session', 'reparent', 'reparent-child-c', '--to', newParent], env, project)
     assert.equal(local.code, 0, local.err)
     assert.ok(!existsSync(join(childCDir, 'session.json')) && existsSync(join(childCDir, 'runtime.json')), 'residue envelope is retired at the first canonical access')
     assert.equal(parentOf(childCDir), newParent, 'the absorbed child moves like any other')
 
-    const childDDir = writeSession(home, 'reparent-child-d', oldParent)
+    const childDDir = writeSession(home, 'reparent-child-d', oldParent, project)
     writeFileSync(join(childDDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
-    const remote = await runCli(['session', 'reparent', 'reparent-child-d', '--to', newParent, '--api', `http://127.0.0.1:${await freePort()}`], env)
+    const remote = await runCli(['session', 'reparent', 'reparent-child-d', '--to', newParent, '--api', `http://127.0.0.1:${await freePort()}`], env, project)
     assert.equal(remote.code, 1)
     assert.match(remote.err, /no backend reachable/)
     assert.equal(parentOf(childDDir), null)
@@ -194,6 +222,8 @@ test('session reparent rewrites parent/watch through live backend and only falls
     await stop(backend)
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabase === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabase
     rmSync(home, { recursive: true, force: true })
   }
 })

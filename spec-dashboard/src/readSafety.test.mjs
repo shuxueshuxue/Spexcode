@@ -107,7 +107,7 @@ test('session row focus is navigation-only', () => {
   const view = source('./SessionsView.jsx')
   const tabs = source('./tabs.js')
 
-  assert.match(view, /focusSessionTab\(id, \(route\) => scope\.open\(route\)\)/)
+  assert.match(view, /focusSessionTab\(id, \(held\) => scope\.open\(held\)\)/)
   assert.doesNotMatch(view, /fetch\(|apiUrl\(|markHumanPromptActive|resumeSession/)
   assert.match(tabs, /export function focusSessionTab\(id, open\)/)
   assert.match(tabs, /open\?\.\(held \? \{ \.\.\.route \} : route\)/)

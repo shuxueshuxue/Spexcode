@@ -1583,7 +1583,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         // The Sessions document owns both its forest and its document chrome. Keeping these siblings
         // makes the forest push the tabstrip/content column right instead of starting underneath a
         // shell-level tabstrip.
-        onSelect={(id) => onPickSession ? onPickSession(id) : (id === 'new' ? setSel('new') : selectSession(id))}
+        onSelect={(id, options) => onPickSession ? onPickSession(id, options) : (id === 'new' ? setSel('new') : selectSession(id))}
         onSearch={onOpenSearch}
         reload={reload}
         onContextMenu={setCtxMenu}

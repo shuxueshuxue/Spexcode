@@ -72,7 +72,19 @@ export function registerTabCommands(commands) {
 export function runTabCommand(name, ...args) {
   return tabCommands?.[name]?.(...args)
 }
-// The explicit hold. Ordinary navigation needs nothing from this module — `navigate` lands in the slot,
+// THE HOLD GESTURE, as ONE predicate. Every row surface asks the same question of the same event, so
+// "ctrl/⌘-click holds this" cannot mean one thing in the finding dock and another on the Sessions page —
+// which is exactly what it meant while each surface hand-rolled its own modifier test. Shift, alt and
+// middle-click are deliberately NOT ours: they are the window-level gestures a browser gives a real anchor
+// for free, and a reader asking for a second document beside the first is asking this workspace for a tab,
+// not the browser for a second copy of the app.
+export const isHoldGesture = (event) => event.button === 0 && !event.shiftKey && !event.altKey
+  && (event.ctrlKey || event.metaKey)
+
+// The explicit hold, split into its two halves. `markTabHold` records the intent WITHOUT writing the route,
+// so a surface whose route writes belong to its own view scope ([[workspace-shell]]) can hold without
+// reaching around that boundary; `pinTab` is the mark plus the navigation, for surfaces that own both.
+// Ordinary navigation needs neither — `navigate` lands in the slot,
 // which is what makes "a new tab is a gesture" true by default rather than by discipline at every call site.
 //
 // It pins the ADDRESS it was given, never "whatever is active". A double-click is two clicks and then the
@@ -80,14 +92,20 @@ export function runTabCommand(name, ...args) {
 // processing of that navigation, and losing it pinned the document the reader had just left instead of the
 // one they were holding. Naming the address removes the race: if the tab is already in the list it is
 // pinned here, and if the navigation is still in flight the mark makes the placement itself pinned.
-export function pinTab(page, param = null, query = null) {
+export function markTabHold(page, param = null, query = null) {
   const key = tabKey(tabRoute({ page, param, query }))
   pinKey = key
   const held = getTabs()
   if (held.some((tab) => tabKey(tab) === key)) {
-    putTabs(held.map((tab) => (tabKey(tab) === key ? { ...tab, pinned: true } : tab)))
+    // The same hold `placeTab` records when the address is NOT yet open. An explicit hold means the same
+    // thing whichever branch runs, so both write the same pair; marking only `pinned` here left a resident
+    // board tab held in memory and demoted back to a slot by the next reload's normalization.
+    putTabs(held.map((tab) => (tabKey(tab) === key ? { ...tab, pinned: true, held: true } : tab)))
     pinKey = null
   }
+}
+export function pinTab(page, param = null, query = null) {
+  markTabHold(page, param, query)
   navigate(page, param, { query })
 }
 
@@ -105,7 +123,7 @@ export const routeOfHash = (href) => {
 // for a second tab in the strip, not a second copy of the app. Shift, alt and middle-click are left alone,
 // so every window-level gesture a real anchor gives for free still works. Returns whether it took the event.
 export function holdAnchor(event, href) {
-  if (event.button !== 0 || event.shiftKey || event.altKey || !(event.ctrlKey || event.metaKey)) return false
+  if (!isHoldGesture(event)) return false
   event.preventDefault()
   const route = routeOfHash(href)
   pinTab(route.page, route.param, route.query)
@@ -201,6 +219,14 @@ export function useTabs({ onCloseStart } = {}) {
       const index = list.findIndex((tab) => tabKey(tab) === activeKey)
       if (index < 0 || list.length < 2) return
       open(list[(index + dir + list.length) % list.length])
+    },
+    // The keyboard's half of the hold. The pointer gestures all name an address the reader is pointing at;
+    // a keyboard has no such target, so the chord holds the document already showing — the tab a reader
+    // would otherwise have to reach for with a double-click to stop ordinary browsing from replacing it.
+    hold: () => {
+      const active = getTabs().find((tab) => tabKey(tab) === activeKey)
+      if (active && !active.pinned) pinTab(active.page, active.param, active.query)
+      return active || null
     },
     active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
   }), [activeKey, open, close])

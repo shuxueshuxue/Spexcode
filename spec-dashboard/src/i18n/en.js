@@ -72,7 +72,7 @@ export default {
   dockSessions: {
     new: 'New session',
     archive: 'Archived sessions',
-    rowTip: 'open · ctrl-click holds a tab · alt-click scopes the graph to this session',
+    rowTip: 'open · ctrl-click or double-click holds a tab · alt-click scopes the graph to this session',
   },
   sessionPicker: {
     label: 'choose a session',
@@ -480,6 +480,7 @@ export default {
       tabClose: 'close active tab',
       tabNext: 'select next tab',
       tabPrevious: 'select previous tab',
+      tabHold: 'hold the active tab so ordinary navigation stops replacing it',
       tabSplit: 'send active tab to split pane',
       commandBox: 'toggle the session Command Box',
     },
@@ -713,8 +714,8 @@ export default {
     // the ellipsis on the session document: it is the ONLY route to rename / tmux attach / graph
     // lock on this surface, so the tooltip says so rather than naming a shape.
     menuLabel: 'session actions — rename, attach, lock on graph, close',
-    opsTitle: 'nodes this session is changing — right-click for session actions',
-    lockTitle: 'right-click for session actions, including lock on graph',
+    opsTitle: 'nodes this session is changing — ctrl-click or double-click holds a tab · right-click for session actions',
+    lockTitle: 'ctrl-click or double-click holds a tab · right-click for session actions, including lock on graph',
     newSession: 'New Session',
     newSessionTitle: 'New Session',
     searchTitle: 'Search',

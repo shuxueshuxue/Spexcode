@@ -69,7 +69,7 @@ test('session row clicks focus an existing workspace tab before replacing the cu
   assert.match(dock, /focusSessionTab\(item\.s\.id,/)
   assert.match(sessionsView, /focusSessionTab\(id,/)
   assert.match(sessionsView, /scope\.open\(\{ page: 'sessions', param: id, query: null \}\)/)
-  assert.match(sessionInterface, /onSelect=\{\(id\) => onPickSession \? onPickSession\(id\)/)
+  assert.match(sessionInterface, /onSelect=\{\(id, options\) => onPickSession \? onPickSession\(id, options\)/)
 })
 
 test('retired generic pane-resizer CSS stays absent', () => {

@@ -54,6 +54,7 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const liveWorktree = join(fixture, 'wt-live')
+  const freshWorktree = join(fixture, 'wt-fresh')
   const port = await freePort()
   const previousCwd = process.cwd()
   const previousHome = process.env.SPEXCODE_HOME
@@ -74,6 +75,12 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
     git(liveWorktree, 'add', '.')
     git(liveWorktree, 'commit', '-qm', 'live change')
 
+    // a branch that never authored a commit, with uncommitted work: a tracked edit and an untracked add.
+    // Its head is an ancestor of main exactly like a landed branch's — ancestry alone cannot separate them.
+    git(project, 'worktree', 'add', '-q', '-b', 'node/diff-fresh', freshWorktree)
+    writeFileSync(join(freshWorktree, 'README.md'), 'fixture\nedited but never committed\n')
+    writeFileSync(join(freshWorktree, 'brand-new.txt'), 'untracked line one\nuntracked line two\n')
+
     // a landed branch whose worktree directory no longer exists: ref kept, head an ancestor of main
     git(project, 'checkout', '-q', '-b', 'node/diff-landed')
     writeFileSync(join(project, 'landed.txt'), 'landed change\n')
@@ -92,6 +99,7 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
     process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     process.chdir(project)
     record('live-diff-session', liveWorktree, 'node/diff-live')
+    record('fresh-diff-session', freshWorktree, 'node/diff-fresh')
     record('landed-diff-session', join(fixture, 'gone-landed'), 'node/diff-landed')
     record('vanished-diff-session', join(fixture, 'gone-vanished'), 'node/diff-vanished')
     const { migrateJsonSessionRecords } = await import('@spexcode/session-application')
@@ -115,22 +123,46 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
 
     // live worktree: the existing contract is untouched
     const live = await fetch(`${base}/api/sessions/live-diff-session/diff`)
-    assert.equal(live.status, 200)
+    assert.equal(live.status, 200, `live diff: ${await live.clone().text()}`)
     const liveBody = await live.json()
     assert.equal(liveBody.branch, 'node/diff-live')
-    assert.equal(liveBody.mergedIntoBase, false)
+    assert.equal(liveBody.branchState, 'open')
     assert.deepEqual(liveBody.files.map((file: { path: string }) => file.path), ['live.txt'])
+    assert.equal(liveBody.working.readable, true)
+    assert.deepEqual(liveBody.working.files, [])
     const livePatch = await fetch(`${base}/api/sessions/live-diff-session/diff?path=live.txt`).then((response) => response.json())
     assert.match(livePatch.files[0].patch, /\+live change/)
+
+    // A branch that never authored a commit is an ancestor of main just like a landed one. It must be told
+    // apart by its fork point, and its uncommitted work — tracked edit AND untracked add — must be readable.
+    const fresh = await fetch(`${base}/api/sessions/fresh-diff-session/diff`)
+    assert.equal(fresh.status, 200)
+    const freshBody = await fresh.json()
+    assert.equal(freshBody.branchState, 'no-commits', `a branch with no commits of its own must not be reported merged: ${JSON.stringify(freshBody.branchState)}`)
+    assert.deepEqual(freshBody.files, [])
+    assert.equal(freshBody.working.readable, true)
+    assert.deepEqual(
+      freshBody.working.files.map((file: { path: string; status: string }) => `${file.status} ${file.path}`).sort(),
+      ['modified README.md', 'untracked brand-new.txt'],
+    )
+    assert.equal(freshBody.working.files.find((file: { path: string }) => file.path === 'brand-new.txt').additions, 2)
+    const trackedPatch = await fetch(`${base}/api/sessions/fresh-diff-session/diff?scope=working&path=README.md`).then((response) => response.json())
+    assert.match(trackedPatch.working.files[0].patch, /\+edited but never committed/)
+    const untrackedPatch = await fetch(`${base}/api/sessions/fresh-diff-session/diff?scope=working&path=brand-new.txt`).then((response) => response.json())
+    assert.match(untrackedPatch.working.files[0].patch, /\+untracked line one/)
 
     // removed worktree, surviving branch ref: the diff stays provable from the shared main checkout,
     // and the merged state carries the real head id instead of a 500.
     const landed = await fetch(`${base}/api/sessions/landed-diff-session/diff`)
     assert.equal(landed.status, 200, `landed session diff must answer structurally, got ${landed.status}: ${await landed.clone().text()}`)
     const landedBody = await landed.json()
-    assert.equal(landedBody.mergedIntoBase, true)
+    assert.equal(landedBody.branchState, 'merged')
     assert.equal(landedBody.head, landedHead)
     assert.deepEqual(landedBody.files, [])
+    // the worktree is gone, so the working tree is UNKNOWABLE — never a claim that it is clean, and never
+    // the main checkout's own dirty files borrowed as this session's
+    assert.equal(landedBody.working.readable, false)
+    assert.deepEqual(landedBody.working.files, [])
 
     // no worktree and no branch ref anywhere: a stable conflict, never an unhandled 500
     const vanished = await fetch(`${base}/api/sessions/vanished-diff-session/diff`)

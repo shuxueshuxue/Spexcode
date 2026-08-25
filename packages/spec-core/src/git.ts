@@ -2383,7 +2383,7 @@ function parseNameStatus(out: string): { code: string; from: string; to: string 
 
 export type ReviewDiffFile = { path: string; oldPath?: string; status: string; additions: number; deletions: number }
 const DIFF_STATUS: Record<string, string> = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
-function parseStatPath(token: string): { from: string; to: string } {
+export function parseStatPath(token: string): { from: string; to: string } {
   const b = token.indexOf('{'), arrow = token.indexOf(' => ', b), close = token.indexOf('}', arrow)
   if (b >= 0 && arrow > b && close > arrow) {
     const pre = token.slice(0, b), post = token.slice(close + 1)

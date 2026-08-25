@@ -8,10 +8,12 @@ import { codexHarness } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { closeSession } from './sessions.js'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
+import { initializeFreshSessionApplication } from './session-application.js'
 
 test('close uses a target tmux probe when the global listing is busy', { concurrency: false }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
@@ -37,6 +39,7 @@ test('close uses a target tmux probe when the global listing is busy', { concurr
   execFileSync('git', ['-C', project, 'worktree', 'add', '-q', '-b', branch, worktree, 'main'])
   process.chdir(project)
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   process.env.PATH = `${bin}:${previousPath || ''}`
   try {
     mkdirSync(bin, { recursive: true })
@@ -54,6 +57,7 @@ case "$args" in
 esac
 `)
     chmodSync(tmux, 0o755)
+    const application = initializeFreshSessionApplication()
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
       session_id: id, governed: true, worktree_path: worktree, branch,
@@ -61,6 +65,7 @@ esac
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
     }, null, 2)}\n`)
+    application.createSession({ sessionId: id, status: 'awaiting', proposal: 'close' })
     leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', thread], { stdio: 'ignore' })
     for (let attempt = 0; attempt < 50 && !processStartToken(leaf.pid!); attempt++)
       await new Promise((resolve) => setTimeout(resolve, 20))
@@ -91,6 +96,8 @@ esac
     else process.env.SPEXCODE_HOME = previousHome
     if (previousPath === undefined) delete process.env.PATH
     else process.env.PATH = previousPath
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     process.chdir(previousCwd)
     rmSync(home, { recursive: true, force: true })
   }

@@ -7,7 +7,7 @@ code:
   - packages/session-application/src/migration.ts
 related:
   - .spec/spexcode/session-runtime/application-service/spec.md
-  - .spec/spexcode/session-runtime/production-cutin/spec.md
+  - .spec/spexcode/session-runtime/application-service/production-cutin/spec.md
   - scripts/migrate-session-json.mjs
   - scripts/session-live-cutover.mjs
   - scripts/session-live-cutover.test.mjs

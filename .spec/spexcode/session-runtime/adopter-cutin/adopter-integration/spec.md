@@ -9,7 +9,7 @@ related:
   - docs/session-adopter-integration-plan.md
   - .spec/spexcode/session-runtime/spec.md
   - .spec/spexcode/session-runtime/runtime-bindings/spec.md
-  - .spec/spexcode/session-runtime/zswarm-adopter/spec.md
+  - .spec/spexcode/session-runtime/zswarm-cutover/zswarm-adopter/spec.md
   - .spec/spexcode/session-topology/spec.md
 ---
 # adopter integration proof

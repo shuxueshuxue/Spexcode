@@ -86,6 +86,21 @@ scenarios:
     code: [spec-dashboard/src/SessionForestPanel.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/SpecSearch.jsx]
     related: [spec-dashboard/src/tabs.js, spec-dashboard/src/SessionsView.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Dock.jsx, spec-dashboard/src/FileTree.jsx, spec-dashboard/src/Shell.jsx]
     test: spec-dashboard/test/tab-hold-surfaces.e2e.mjs
+  - name: hold-without-a-pointer
+    description: >-
+      In a real Chromium dashboard against the running backend, reach a session by ADDRESS so its tab is the
+      replaceable slot, press the hold chord, and read the visible strip. Then open the help legend on the
+      board that owns the key and read the row for that chord.
+    expected: >-
+      The chord holds the tab already showing: the same one tab remains, at the same address, no longer the
+      italic slot — it neither mints a second tab nor changes which document is showing. The legend names the
+      chord exactly once and prints it as the complete modifier glyph the registry holds, never a
+      modifier-stripped key or a label with the shortcut typed into it. The browser console raises no
+      product error.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/keymap.js]
+    related: [spec-dashboard/src/tabs.js, spec-dashboard/src/Shell.jsx, spec-dashboard/src/Legend.jsx, spec-dashboard/src/bindings.js]
+    test: spec-dashboard/test/tab-hold-chord.e2e.mjs
   - name: live-pointer-reorder-and-tail-drop
     description: >-
       In a real Chromium dashboard with three held document tabs, press and drag one tab across another and

@@ -1,20 +1,3 @@
-// `run` is bound in SessionInterface (it needs the live closures); here we hold the complete static identity.
-// `button:false` = no toolbar twin. `typed:false` = toolbar-only (relaunch is not an inbox command).
-// Availability, colour, icon, label, typed twin, and execution all flow through this one registry.
-export function mergeAvailability(session = {}) {
-  if (session.archived) return { enabled: false, disabledTitleKey: 'session.cmd.mergeUnavailableArchived' }
-  if (session.proposal !== 'merge') {
-    if (session.proposal === 'nothing') return { enabled: false, disabledTitleKey: 'session.cmd.mergeUnavailableNothing' }
-    if (session.proposal === 'close') return { enabled: false, disabledTitleKey: 'session.cmd.mergeUnavailableClose' }
-    return { enabled: false, disabledTitleKey: 'session.cmd.mergeUnavailableNoProposal' }
-  }
-  if (session.lifecycle !== 'awaiting' || session.status !== 'review') {
-    return { enabled: false, disabledTitleKey: 'session.cmd.mergeUnavailableLifecycle' }
-  }
-  if (session.liveness !== 'online') return { enabled: false, disabledTitleKey: 'session.cmd.mergeUnavailableLiveness' }
-  return { enabled: true }
-}
-
 export const UI_COMMANDS = [
   // The resident Command Box opener pins to the toolbar's right edge. It is toolbar-only: direct xterm
   // input is the default, so there is no typed `/type` command or takeover mode.
@@ -28,9 +11,6 @@ export const UI_COMMANDS = [
   // every session state; an offline input is disabled, but the registry still states the honest capability).
   { name: 'eval', color: 'cyan',   button: false, when: (session) => !!session?.status,
     labelKey: 'sessionEval.btn', titleKey: 'sessionEval.btnTitle', descKey: 'session.cmd.evalDesc' },
-  { name: 'merge', color: 'green', icon: 'git-merge', button: true,
-    when: (session) => !!session?.status, availability: mergeAvailability,
-    labelKey: 'session.merge', titleKey: 'session.cmd.mergeTitle', descKey: 'session.cmd.mergeDesc' },
   { name: 'relaunch', color: 'blue', icon: 'rotate-ccw', button: true, typed: false,
     when: (session) => !!session?.status && session.status !== 'queued' && session.status !== 'retired' && session.liveness === 'offline',
     labelKey: 'session.relaunch', titleKey: 'session.relaunchTitle' },
@@ -43,10 +23,8 @@ export const UI_COMMANDS = [
 // current session state. `runners` maps name → the closure that DOES the thing (the same closure the toolbar
 // tool and typed command call), so the surfaces cannot drift apart.
 export function uiCommandsFor(session, runners = {}) {
-  // Archive suppresses every lifecycle action and Command Box, but the disabled merge witness keeps the
-  // selected session's toolbar geometry and proposal affordance honest.
-  const commands = session?.archived ? UI_COMMANDS.filter((command) => command.name === 'merge') : UI_COMMANDS
-  return commands
+  if (session?.archived) return []
+  return UI_COMMANDS
     .filter((c) => c.when(session))
     .map((c) => ({ ...c, ...(c.availability?.(session) || { enabled: true }), run: runners[c.name] }))
 }

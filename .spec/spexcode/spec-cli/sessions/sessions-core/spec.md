@@ -46,45 +46,31 @@ During the one-time JSON migration, the durable `.json-migration.lock` fence mak
 before it can publish `session.json` or `watchers.json`; after the SQLite migration marker those names are residue
 that the next canonical access migrates and retires ([[production-cutin]]), and the canonical application service is
 the only state/event/topology authority.
-[[session-follow]]'s durable watch relation is stored once in the session application's topology tables. After a
-canonical state record commits, the application projects its watcher edges and uses the existing send queue to
-notify each watcher. When that queued state message is rendered as text for the watcher, the notice names the
-watched subject carried inside the message, never the watcher it is delivered to; the canonical
-application commit invokes the same post-commit wake callback so each recipient's existing durable queue is
-drained immediately in the originating runtime. The callback is a transport wake, not a second queue or source
-of truth: a missing runtime, crash, or failed handover leaves the committed row pending for the normal retry
-path. No monitor loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed
-reader fallback for callers with no governed delivery address. A watcher identity owns a small independent
-source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
-The entry persists while either source exists, and the transition path projects the source set to one watcher
-id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
-reparenting enqueue one current-state notification through the canonical application queue. Creation uses the same
-queue handoff: there is no snapshot token, deferred-snapshot debt, or second launch-delivery protocol. A launch may
-publish a resource/readiness warning, but it never fabricates `working`; only a later state write consults the source
-policy. In the canonical application path, this caller-owned policy passes the resolved recipient set into the
-neutral application transition; the package never interprets parent/manual names. Parent-only `active`/working is the
-suppressed terminal of that comparison; manual includes it. Thus creation ordering does not weaken routine-working
-suppression, and manual+parent yields the complete later-state feed without a duplicate or a second mechanism.
-The ordinary stranded-transport refusal applies to a caller's new prompt, not to an already-installed managed
-watch. A parent watch transition is accepted into the parent's normal timeline and delivery queue even when its
-registered process is alive but its native transport is temporarily absent; the queue debt is the wake/resume
-contract, and the next transport sweep drains it. This durable watch path never treats `asking`, `parked`, `error`,
-or either `awaiting` proposal (`review`/`close-pending`) as terminal or requires a dashboard poll, and it does not
-change the lifecycle or cutover rules of either session.
-When legacy record metadata carries a waiting, error, stopped, or archived lifecycle, it is only migration evidence;
-the canonical application row is the lifecycle fact and always wins the public projection. After cutover, governed
-metadata writes omit the legacy `status`, `proposal`, `note`, and `parent` keys entirely; they are not a second
-runtime state surface. Non-governed external runtime records retain their separate contract, and migration input
-may still require the legacy keys. A retired protocol address is likewise not delivery debt: the retry sweep
-must drop that impossible lookup rather than polling and logging it forever.
-An existing queue with no bound governed runtime is also retained but not polled; binding/resume is the event
-that makes it drainable again. The application emits the ordinary post-commit delivery wake after a runtime
-binding is durable, so a queue accepted before native readiness drains without a later human message or
-dashboard poll. Canonical acceptance is still successful in this state: the caller is told
-`delivery: queued` after the SQLite message commit, rather than receiving a false append failure because the
-post-commit drain correctly refused an unbound runtime.
-Creation and [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy watcher
-files are migration input only and are deleted after their topology edges and pending messages are imported.
+[[session-follow]] owns the durable watch relation and what its `manual` and `parent` sources mean; this layer
+supplies the transport. A committed state record projects its watcher edges, notifies each through the existing
+send queue, and invokes ONE post-commit wake callback so each recipient's queue drains in the originating
+runtime. That callback is a wake, not a second queue or a second truth: a missing runtime, a crash, or a failed
+handover leaves the row pending for the normal retry. No monitor loop, second transport, or bidirectional index
+enters the shared layer; `wait` stays the cursor-backed fallback for a caller with no governed delivery address,
+and a rendered state message names the watched SUBJECT, never its recipient. Creation, [[session-reparent]], and
+watch cancellation each move exactly one source through that same handoff — no snapshot token, no deferred debt,
+no second delivery protocol — and a null replacement parent is one transaction's top-level detach, removing the
+relation and its pending delivery without minting a root record, a watcher, or a notification.
+
+Through the JSON-to-application cutover this module is the LEGACY writer and fails closed rather than publishing
+a second truth: the `.json-migration.lock` fence blocks it from writing `session.json`/`watchers.json`, and after
+the marker those names are residue the next canonical access retires ([[production-cutin]]). Legacy lifecycle
+metadata is migration EVIDENCE only — the canonical row always wins the public projection — so governed metadata
+writes omit `status`, `proposal`, `note`, and `parent` after cutover, while non-governed external runtime records
+keep their own contract. One exception is deliberate: a legacy active Claude record still lacking a native
+harness identity drains through its adapter-owned rendezvous transport rather than being stranded behind a false
+`ok`; every other binding problem stays fail-closed.
+
+A retired protocol address is not delivery debt — the sweep drops that impossible lookup instead of polling it
+forever — and a queue with no bound runtime is retained but not polled, since binding or resume is what makes it
+drainable. Acceptance there is still success: the caller is told `delivery: queued` after the message commits,
+never a false append failure because the post-commit drain refused an unbound runtime.
+
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is settled, its worktree is
 no longer needed, and no human decision or follow-up remains; otherwise the agent declares the state that is true.
@@ -148,24 +134,19 @@ hands it back only through the resolved adapter's no-native-identity recovery se
 with one receipt call carrying the exact payload and native id; under the record lock the shared layer rejects a
 missing/changed artifact or changed identity, persists the identity, and only then consumes the artifact. Raw
 originating `prompt` bytes remain a separate display/audit artifact and never participate in recovery.
-The receipt is atomically no-replace and consumption is record-first, payload-second, receipt-last: every
-crash boundary is retryable without forgetting or replaying the first turn, while malformed or cross-bound
-receipts fail rather than repairing themselves from weaker input.
-Readiness is a bounded launch transaction, not an advisory note. If the native identity/first-turn receipt or
-post-receipt liveness fence misses its deadline, the launch owner re-reads the same record and consults the
-existing real agent/adapter liveness witness before deciding its lifecycle. A live registered process or online
-resource is not terminalized by a readiness timeout: it retains `active`/online truth, restores `stopped:false`
-if a racing timeout already wrote a terminal projection, and receives a loud, non-terminal readiness warning;
-the first-turn receipt and runtime binding are not replayed. The witness and recovery write are one record-locked
-decision, and an online warning leaves any pending watcher snapshot debt intact for the existing queue. Only a
-proven-dead process/resource may publish one explicit terminal failure on the record: lifecycle `error`,
-stopped/offline liveness, and the complete `queued launch readiness failed: ...` reason. That write uses the
-ordinary transition/watch path, so a parent watcher is notified and the row cannot remain queued/active while
-claiming launch is still in progress. A backend restart reconciles each durable launch residue only while that
-launch/resume transaction still carries its readiness marker and the witness is not online. A row already online
-with a bound identity or live pane is settled: reload clears the stale marker (and any old readiness diagnostic)
-without rebuilding the observer, starting a new timer, or writing a warning note. An expired or provably dead residue
-is failed closed with the same terminal record. No launch residue may remain an indefinitely in-progress row.
+The receipt is atomically no-replace, and consumption is record-first, payload-second, receipt-last, so every
+crash boundary is retryable without forgetting or replaying the first turn while a malformed or cross-bound
+receipt fails rather than repairing itself from weaker input.
+
+Readiness is a bounded launch transaction, and this layer owns the one record-locked decision inside it: when
+the receipt or the post-receipt liveness fence misses its deadline, the launch owner re-reads the record and asks
+the real agent/adapter liveness witness before deciding anything. A live process or online resource is never
+terminalized by a timeout — it keeps `active`/online truth, restores `stopped:false` if a racing timeout already
+wrote a terminal projection, takes a loud non-terminal warning, and replays neither receipt nor binding — while
+only a proven-dead one publishes the terminal record, through the ordinary transition/watch path so a parent
+watcher is notified and the row cannot sit queued while claiming a launch is in progress. Witness and recovery
+write are ONE locked decision. [[launch]] owns the window and the terminal reason.
+
 An explicit successful `session resume` is a new runtime attempt, not a continuation of a terminal launch or turn
 failure: it clears the prior `error` lifecycle and its failure note, publishes the resumed conversation as `idle`
 until a real activity hook makes it `active`, and never leaves an online worker represented as `error`. Waiting
@@ -197,40 +178,6 @@ restart reconciliation cannot overwrite it.
 The record's existing `name` is the one human display override: CLI creation may set it once with `--name`, and
 rename later replaces or clears that same field. It affects only the shared label/title projection;
 the prompt-derived node, branch, worktree slug, and stored prompt title retain their own responsibilities.
-
-**Public session creation has one lightweight backend-authority decision before it can use the legacy local
-path.** The CLI asks only `GET /api/instance`, never the board-shaped settings projection: this identity route
-does not enumerate governed records or derive worktree overlays. An explicit target runs that same availability
-probe but skips project comparison and normally owns the one keyed `POST /api/sessions`; an implicit target
-does so after the instance identity canonically matches. The sole exception for either route is an exact
-no-listener failure whose entire transport cause chain is `ECONNREFUSED`: only then may the existing in-process
-fallback run. The raw instance root is not compared directly: both the caller and served roots pass through the
-shared main-root resolver, which follows linked worktrees to their common checkout and applies configured
-`main`. That preserves project identity without rebuilding layout. An HTTP response of any status proves
-ownership; the project-match check runs only when a usable instance identity is available and still refuses a
-proven mismatch. Timeout, reset, DNS, and every other transport result fail without local creation; an already
-received HTTP response is never relabelled `backend_availability_indeterminate`. The instance authority wall
-remains its independent 1500ms budget: the optional recorded-endpoint health read is discovery only and never
-consumes that budget.
-
-**A create may pin its fork point.** Creation accepts an optional `base` — any commit-ish the main checkout can
-resolve. Absent, the session forks from the auto-detected source-of-truth branch, i.e. from whatever that branch
-has drifted to at the moment the worktree is made; that is right for ordinary work but leaves a run against a
-frozen commit inexpressible, so an evaluation, a bisect, or a replay could not name the code it actually ran on.
-A supplied `base` is resolved during target resolution, BEFORE any Git mutation: one that names no commit fails
-the request with a 400 and leaves no half-made worktree, branch, store, or private candidate receipt behind. A
-resolved pin becomes the `git worktree add` start point and is stored on the record, so a later reader can tell
-a pinned run from an unpinned one. It also joins the idempotency payload hash — a retry that changes the pin is
-a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
-receipt hash, so nothing that never pinned gains a field.
-
-**A create records the commit it actually forked from.** Whether or not a pin was supplied, the branch ref right
-after `git worktree add` IS the fork point, and the record keeps it. It is written like the optional pin — present
-only on records created since it existed, so an older record keeps its exact bytes — and it is the one fact that
-later separates a branch which never authored a commit from one whose commits the base has absorbed. Git ancestry
-cannot: both heads are ancestors of the base. A reader that lacks the field recovers the same commit from the branch
-ref's creation reflog entry, which is where git wrote that start point; the diff document ([[diff-document]]) is the
-surface that spends it.
 
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation lives at
 `spec-cli/src/session-record-lock.ts`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
@@ -264,83 +211,6 @@ receipt before the stop guard may admit a known native descendant collection. If
 the same object authorizes adapter compensation of the original collection. A missing, forged, stale, or changed
 receipt retains the ordinary descendant refusal before shared-runtime mutation and cannot authorize compensation.
 
-### Record integrity — one writer, three readings, no revival
-
-**The runtime/worktree envelope of `runtime.json` is produced by ONE writer here**, by serializing the typed
-record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
-not a shell, not a route. After JSON migration, lifecycle (`status`, `proposal`, `note`, and `parent`) is owned
-only by the canonical session application and its events; the envelope is runtime metadata and is never written from
-canonical lifecycle state. `session.json` is migration input only and is retired once the migration marker is published.
-A record whose `runtime_owner` names an external controller is instead written by
-[[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
-stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
-format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
-ownership mode is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
-existing JSON eventually meets a quote, a backslash, or a newline and leaves a record nothing can parse. Both
-note-carrying entries — the agent's typed declaration and the hook's capture of an asked question — therefore
-land through the canonical application, and a note round-trips byte-for-byte on every surface. The shell hooks
-call that package entry point for every event; it compares canonical state and emits no event for a semantic
-no-op. They do not inspect or write JSON lifecycle fields ([[state]]).
-
-A published create record is also the durable fence for any private pre-publication candidate receipt whose
-best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and
-the exact recorded branch/path resource lock, retires a valid matching receipt, and proves it absent before
-stopping or removing any public resource. After its target tmux kill, it also proves that exact session has no
-pane left before accepting adapter cold proof or deleting durable resources. Failure preserves the row, store,
-worktree, and branch; deleting the record first would let the old receipt regain cleanup authority over a later
-name collision.
-
-Launch readiness is the one durable internal publication fence within that record. Its pending value freezes
-the exact pre-resume lifecycle/proposal/note/stopped/archived and offline projection while the raw candidate is
-available to the adapter's post-launch validator. The record/layout boundary owns one public-record parser:
-list/API/graph, resource owners and shared references, resolved-layout settings, and the timeline observer all
-consume that same three-way projected entry rather than raw candidate fields. A successful fence clear
-publishes the final record and its lifecycle event once; failure or stale recovery restores the original and
-emits nothing. Malformed pending bytes are a corrupt/unknown public entry everywhere, never a reason to reuse a
-last-known online row, perform a git walk, or infer an owner from candidate lifecycle fields. "Malformed"
-includes a structurally complete original whose lifecycle or proposal string is outside the same closed enums
-the typed session reader accepts. While the fence exists, the compact public display is pinned offline rather
-than reconciled from candidate runtime evidence, even if the frozen original says `stopped:false` with an
-`active`/`idle` lifecycle and a candidate process is live.
-
-Reading a record has **three** outcomes and collapsing them is what once made a live session answer "no
-session record". **Absent** is the legitimate nothing. **Corrupt** — present but unparseable — is a fact about
-a session that EXISTS: it keeps its row (naming the file and the parse error, liveness `unknown` since nothing
-was probed), and every writer refuses on it rather than repairing it into a plausible empty shell. A corrupt
-record cannot prove the adapter, session leaf, worktree, or branch owner, so `close` may quarantine the original
-bytes as control-plane evidence but then refuses loudly: it sends no signal and preserves the session runtime,
-worktree, and branch, reporting those residues instead of guessing. Retiring only the corrupt row requires a
-future record-only control-plane seam; it must not be approximated by skipping the runtime guard or by adding a
-second process terminator. Any other read failure still throws:
-a transient fault must read as neither. **Retired** is the third integrity reading, derived not stored: the
-recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
-put it back to `active`/`idle`, and no delayed launch-readiness observer may replace its frozen note after the
-worktree disappears. No launch is assembled for it; only `close` remains.
-
-The leaf-ownership guard that gates every stop distinguishes **a dead leaf from an unprovable one**. Both look
-alike from the recorded pid — neither yields a start identity — but they call for opposite answers. A pid that
-names no live process has nothing to signal and nothing a signal could hit by mistake, so the leaf is already
-in the state stop wants and teardown proceeds record-only, exactly as for an explicitly stopped record. A pid
-that IS alive while refusing to prove its identity is the case the guard exists for, and it still refuses
-loudly, because signalling it could kill whatever now wears that number. Collapsing the two into one refusal is
-what made a session impossible to retire: a launcher that dies before readiness leaves a dead pid on the
-record, and `stop` and `close` then both refused it forever — the row could be neither run nor closed, and
-`quarantine` does not apply because the record is perfectly readable. Liveness is asked with the same probe the
-escalation path already uses to tell a vanished leaf from a replaced one, so one question has one answer here.
-
-The prompt seam carries ONE invariant for every harness: **the text handed to an agent never begins with `-`**.
-Human prompts legitimately do — a pasted browser-console line, a diff hunk, a quoted flag — and downstream that
-first character decides whether the text is read as a prompt or as machinery. Each harness parses its own argv
-by its own rules (one honours an end-of-options `--`, one silently drops a detached value starting with `-`,
-one has no end-of-options branch at all), and the launch scripts additionally recognize their resume/continue
-markers by comparing the tail to a literal flag. Answering that per harness would mean an escape per adapter
-plus a refusal for whichever harness has none — several answers to one question, and still nothing covering a
-prompt that IS the literal marker. So the guarantee is made once, here, where every launch and every send
-already passes through, and everything downstream hands over one plain quoted operand knowing nothing about
-who parses it. The cost is a single leading space on the prompts that would otherwise be undeliverable, with
-the human's own words following byte-for-byte; the alternative was refusing to carry them at all. This is why
-no `if (harness)` and no per-adapter prompt escape exists in the launch path ([[harness-adapter]]).
-
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
 no branch, no resolvable launcher command, or a rendezvous owner's derived socket pathname at/over its OS byte
 limit. Those are facts about this machine that no number of attempts can change, so each is one loud refusal
@@ -350,26 +220,15 @@ creation before any candidate resource exists and again before its launch-time s
 settle stays with the bounded readiness retry, and what only the harness can recognize is the harness's to
 declare ([[harness-adapter]]).
 
-An unreadable governed record has one separate recovery control: **quarantine** is neither `close` nor a
-repair. The caller supplies the exact former adapter/thread (or explicitly no native thread), tmux session,
-worktree path, and branch it extracted from the opaque incident. The thread field is an adapter-native
-conversation id, never the SpexCode session id: CLI omission explicitly sends no native thread, which is the
-required witness for an adapter such as Claude that has none to archive. The shared layer then re-proves, at execution
-time, that the session's registered leaf process is absent, that exact tmux session/worktree/branch are absent,
-and that the named adapter is healthy. A named native thread must either be absent, or be an exactly-unowned,
-idle, descendant-free native thread that its own adapter archives and re-censuses as unloaded; every live,
-active, owned, ambiguous, descendant-bearing, changed-generation, malformed, or unknown control refuses before
-the record moves. The operation never sends an OS signal, removes a worktree or branch, guesses an adapter, or
-turns opaque bytes into a lifecycle record. On success it atomically moves only `runtime.json` out of the active
-session directory to a per-project quarantine bundle, preserving its byte-exact payload plus the supplied claim
-and the independently observed absence proof. The ordinary record enumeration then removes the corrupt row from
-the session list, graph, and resource projection without a special hide list. `restore` is the explicit reverse:
-it atomically moves the byte-identical record back only while no active record exists, making the corrupt row
-visible again; it does not resurrect a runtime or infer lifecycle. CLI, HTTP, and the dashboard context control
-all call this one operation and surface refusal details.
-
 Session records may also carry `diff_comments`, the durable review conversation for the branch diff document
 ([[diff-document]]). Each row has a file path, an inclusive line range, the diff identity it was authored against,
 body text, and nullable `sent_at`. The record writer owns this array under the ordinary session lock. Editing a row
 replaces its body/range/identity and clears `sent_at`; sending uses the existing `sendText` channel and marks the
 selected rows sent only after acceptance, so a changed comment cannot be silently replayed.
+
+**Four of this module's concerns are big enough to answer for themselves.** How the record file is written and
+what reading it can mean are [[record-integrity]]'s; the one recovery control for a record that cannot be parsed
+is [[record-quarantine]]'s; the authority question a public create asks before it may use the local path, and the
+fork point it pins and records, are [[session-create-authority]]'s; and the invariant that keeps a human's prompt
+from being read as machinery is [[prompt-operand]]'s. Each anchors on the function in `sessions.ts` that
+implements it, so its drift is its own.

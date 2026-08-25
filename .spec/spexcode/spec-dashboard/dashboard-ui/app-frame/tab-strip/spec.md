@@ -25,13 +25,6 @@ related:
 ---
 # tab-strip
 
-## Anti-regression boundary
-
-Evals and Issues details keep their detail address in the URL while their tab identity remains the
-single top-level board address. The empty workspace remains an explicit `#/empty` route backed by `EmptyView`;
-it is not replaced by the graph when the last document closes. The executable boundary test covers these
-subtractive and resident-tab invariants alongside the pure tab model.
-
 **The strip holds the workspace working set.** Object tabs include `#/file/<path>` and `#/sessions/<id>`.
 Spec, Evals, Issues, and Settings are dynamic top-level tabs (`#/spec`, `#/evals`, `#/issues`,
 `#/settings`); the workspace store does not seed or pin all four pages on cold boot. Opening a route creates

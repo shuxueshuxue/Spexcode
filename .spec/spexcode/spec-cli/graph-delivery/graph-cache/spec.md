@@ -178,35 +178,25 @@ verdict is a memory lookup — never one `merge-base --is-ancestor` process per 
 batch is not cached, a retry can recover, and advancing a root to a new HEAD evicts its old set through the
 same current-root cache ownership. Path-specific history remains lazy and bounded.
 
-**The same rule binds reading freshness, which is the larger half of a cold build's child work.** A window's
-Git images and ordinary hunks are permanent properties of their commits, so the build asks for them ONCE.
-Assembly therefore plans every node's rows first — a pure sidecar-read and axis projection that forks
-nothing — then primes the content and anchor probes with the WHOLE demand set, and only then decorates rows
-from settled verdicts. The invariant is that anchored-reading cost is bounded by what the verdicts actually
-require and is INDEPENDENT of the reading count N — never one batch per reading. That is the property to
-preserve; "one batch" was its original spelling because the two then coincided: every window was scanned to
-its end, so the whole demand set was known before any bytes moved and one batch WAS the entire read. A board
-asks the anchor engine only whether a window holds ANY hit ([[code-anchor]]'s existence read), so the scan
-stops at its first hit and the demand set must be discovered rather than declared; it advances in
-corpus-wide rounds whose number is bounded by hit DEPTH, still independent of N. Rounds that asked one
-reading at a time would re-fork the batch per unit, which is exactly what this rule forbids. This is a cost
-boundary only: the same verdicts are computed from the same immutable inputs, and the served board is
-byte-identical to the reading-at-a-time path at every tip, which is the standing obligation whenever the
-batch is retuned. The waste it removed is the shape to recognize again: priming per reading forked ~2,700
-children to answer ~800 verdicts, of which ~2,500 were the same two `cat-file --batch` calls re-spawned per
-row — the exact inverse of what a batch flag is for. Scanning a window past its first hit is the same shape
-one layer up: measured on this corpus, it parsed 1,158 historical file revisions (52.6 MB through the host
-TypeScript parser) to settle 858 booleans that 307 revisions (21.9 MB) already decide.
+**The same rule binds reading freshness, the larger half of a cold build's child work, and this build's share
+of it is to PLAN before it forks.** Assembly derives every node's rows first — a pure sidecar-read and axis
+projection that forks nothing — then primes the content and anchor probes with the whole demand set, and only
+then decorates rows from settled verdicts. The invariant it owes is that anchored-reading cost is bounded by
+what the verdicts require and is INDEPENDENT of the reading count N, whether the engine can plan its demand set
+up front or must discover it in rounds ([[code-anchor]]'s existence read, whose batching rule and measurements
+are [[hunk-ranges]]'). Priming per reading instead is the shape to recognize again: it re-forks the batch per
+unit, which is the exact inverse of what a batch is for. This is a cost boundary only — the served board is
+byte-identical to the reading-at-a-time path at every tip, which is the standing obligation whenever the batch
+is retuned.
 
-The same invariant binds the CURRENT-tree half, and along a different axis. Before a reading's code axis may
-testify, every `code:` selector is resolved against the working tree, which parses that file — and a node's
-entries are asked one at a time, so the identical file was re-parsed once per entry: measured, 922 parses
-over 46 distinct files, 40.4 MB, and again on every rebuild because nothing carried the result. Extraction is
-a pure function of (text, path, extractor), so the bound is DISTINCT CONTENT, never the entry count: one
-parse per content digest, reused for every entry that content backs and across rebuilds until the bytes
-change. The key is a digest and never mtime or size, because this gate decides whether a reading may testify
-at all — a stale unit list would let a dead selector read as alive, the exact silence this gate exists to
-break — and digesting costs about a tenth of parsing, so the read remains and only the parse is saved.
+The CURRENT-tree half is bounded along a different axis. Resolving a reading's `code:` selectors parses the
+working-tree file, and a node's entries were asked one at a time, so the identical file was re-parsed once per
+entry: measured, 922 parses over 46 distinct files, 40.4 MB, repeated on every rebuild because nothing carried
+the result. Extraction is a pure function of (text, path, extractor), so the bound is DISTINCT CONTENT, never
+the entry count: one parse per content digest, reused for every entry that content backs and across rebuilds
+until the bytes change. The key is a digest, never mtime or size, because this gate decides whether a reading
+may testify at all — a stale unit list would let a dead selector read as alive, the exact silence the gate
+exists to break — and digesting costs about a tenth of parsing, so the read remains and only the parse is saved.
 
 Two costs this build still pays are named here rather than folded in, because each needs its own argument.
 The per-revision extraction memo is process-local, so a cold process re-parses revisions a previous one
@@ -340,19 +330,15 @@ selector queries reach the hit engine there and it cannot show this cost at all.
 (`order: true`, 229.8ms) is not the substitute it looks like —
 it deliberately emits `freshnessDeferred`, and the review summary's counts need real fresh/stale decisions.
 
-Three measurement pitfalls belong with those numbers, because each produces a wrong answer that looks clean.
-`startBuild()` deliberately defers its producer one event-loop turn and the warning timer starts after that
-defer, so end-to-end waiting (2117–2329ms on the same corpus) is a different quantity from the logged build
-time and the two may not be compared. A 3755ms sample from a live server is a real slow sample of this same
-path, not a corpus floor: that run was interleaved with asynchronous `session summary build failed` and
-resource-monitor work, while the board's own synchronous `sessionEvalProjections()` call measures 0.4ms in an
-isolated process. And **one build per fresh process does not merely hide the in-process memos, it can invert the
-conclusion** — the 507ms-versus-12ms gap above is a factor of forty, which is the whole distance between "a
-cache buys nothing here" and "this is the dominant cost", decided by sampling method alone. A build measured
-once per process is a measurement of process startup reported as steady state, so per-build claims need a
-repeat rebuild inside one process, and on a loaded box a fixed wall-clock threshold is not a claim at all:
-compare load-matched pairs and anchor the falsifiable half on something load-independent, such as a count of
-git child processes.
+Three measurement pitfalls belong with those numbers, because each produces a clean-looking wrong answer.
+`startBuild()` defers its producer one event-loop turn and the warning timer starts after that defer, so
+end-to-end waiting (2117–2329ms on the same corpus) is a different quantity from the logged build time and the
+two may not be compared. A 3755ms sample from a live server is a real slow sample of this same path rather than
+a corpus floor: that run interleaved asynchronous `session summary build failed` and resource-monitor work,
+while the board's own synchronous `sessionEvalProjections()` call measures 0.4ms in an isolated process. And
+one build per fresh process does not merely hide the in-process memos — the 507ms-versus-12ms gap above is a
+factor of forty, the whole distance between "a cache buys nothing here" and "this is the dominant cost",
+decided by sampling method alone ([[taste]]'s sampling rule and its load-matched-pairs corollary).
 
 This is the third half of [[graph-delivery]]'s one budget: [[graph-lean]] decides *how much* rides the
 wire, [[graph-stream]] decides *when* the wire is paid, and graph-cache decides *how often the graph is

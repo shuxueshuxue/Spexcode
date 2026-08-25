@@ -18,6 +18,9 @@ second, mirrored home: `hooks/harness.sh`, sourced by every handler and exported
 the divergences a handler must read from a hook's stdin — never a lifecycle decision — and every handler consumes
 its helpers instead of parsing JSON of its own.
 
+A Codex hook payload carries `session_id` (uuid), `turn_id`, `transcript_path`, `cwd`, `hook_event_name`
+(CamelCase, e.g. `PreToolUse`), `model`, `permission_mode`, `tool_name`, `tool_input`, `tool_use_id`, and
+`prompt` — measured against a real codex 0.142.3, and snake_case is only the trust-hash key format.
 Codex has NO `file_path`; the touched file lives inside `tool_input.command`, and the tool that carries it
 differs by operation: an **edit is its own first-class tool `tool_name:"apply_patch"`** whose command is the
 **bare patch envelope** (`*** Update File: <path>` lines, with NO literal `apply_patch` token), while a **read/

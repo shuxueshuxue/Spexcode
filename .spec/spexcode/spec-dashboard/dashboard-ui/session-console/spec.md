@@ -238,7 +238,7 @@ suspended TUI gates only its first actual key behind the non-focused resume conf
 [[terminal-input]]; archived/offline records have no terminal pane and remain read-only Conversation surfaces.
 `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. The shell tab row owns the
-session document's action slot ([[document-actions]]); this document registers its merge, menu, resource-picker,
+session document's action slot ([[document-actions]]); this document registers its menu, resource-picker,
 diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
 top [[tab-strip]] names the session object with its headline and status dot, with no face suffix; Evals keeps its one canonical scoped address
 and is reached by navigation.
@@ -308,10 +308,9 @@ still blind-spot mark when it does not, and an accessible name naming the door i
 it. The door is already that anchor, so opening it is the whole repair; the console never fetches a summary
 of its own to fill the gap.
 
-The session document renders no internal toolbar. Its merge, menu, resource picker, diff door, Command Box,
+The session document renders no internal toolbar. Its menu, resource picker, diff door, Command Box,
 relaunch, and selected-resource actions register with the shell's [[document-actions]] slot at the tab row's
-right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness;
-disabled merge remains visible with the exact localized availability reason as its tooltip. The resource picker
+right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness. The resource picker
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
 Surface choice is address state (`?surface=…`) controlled by two compact icon buttons in the document-actions slot:
 one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
@@ -403,9 +402,10 @@ may instead name a **board command**, intercepted client-side because sending th
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every document-action twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
 worktree; `/close` performs the soft terminal transition into the permanent archive place ([[archive]]),
-removing the worktree while retaining the branch, record, and conversation; `/merge` is offered
-only for the live review proposal declared by `done --propose merge`; `/eval` opens the canonical
-session-scoped Evals page.
+removing the worktree while retaining the branch, record, and conversation; `/eval` opens the canonical
+session-scoped Evals page. `/merge` is deliberately not a board command: the [[merge]] `surface: command,
+skill` plugin resolves it to an agent-owned atomic landing workflow, so dashboard-launched and self-launched
+sessions use one capability and the document toolbar owns no merge state.
 Lifecycle actions consume both HTTP status and the structured `{ok,error}` body before the board reloads, so
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
 and lifecycle actions use one selected-session, right-pane action-outcome mechanism only while they are pending:
@@ -416,7 +416,7 @@ renders no action alert, batch-selection state, or bulk lifecycle action. Any fu
 specified as an explicit selection mode owned by the dock session list.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
-stop, close, or merge would falsely claim the dashboard sent the agent a prompt.
+stop or close would falsely claim the dashboard sent the agent a prompt.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` stays
@@ -487,21 +487,18 @@ selected session's projected path list is empty; otherwise it opens a file-name-
 hover tooltips. The base surface is selected by its route address and the document-actions slot exposes one compact
 terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `git-compare` icon
 enters or leaves the diff URL with `aria-pressed`; it returns to the remembered base face and is visually distinct from
-the merge action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
+the diff action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live. The
 document-action set is surface-specific: every selected resource shows its one refresh tool; a selected web has
-no file download/copy actions. Merge is green and dispatchable only for the
-persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
-close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
-localized tooltip and accessible reason. An activation is one plain `POST /merge`: no preliminary review read,
-request body, idempotency key, Git identifier, or client-side merge authority. Disabled merge never appears as a
-typed `/merge` command and never dispatches. Every visible
-action uses one shared compact icon-toolbutton primitive and a familiar [[icon-system]] / Lucide mark
-(command, git-merge, rotate/relaunch), with its registry identity colour; there is no emoji, visible text
+no file download/copy actions. Merge has no document action, disabled witness, localized availability copy, or
+dashboard-local runner. `/merge` comes from the [[merge]] plugin and is sent to the agent as a resolved prompt;
+the supervisor-facing `spex session merge <SEL>` remains the one external dispatcher for that same workflow.
+Every visible action uses one shared compact icon-toolbutton primitive and a familiar [[icon-system]] / Lucide mark
+(command, rotate/relaunch), with its registry identity colour; there is no emoji, visible text
 label, or document-local icon/action mapping. The registry remains the single row that decides availability,
-colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution. Command Box exposes
+colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution for dashboard-owned commands. Command Box exposes
 `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) also exposes the same
 primitive's relaunch action, and review is **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
 permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the document-action entry

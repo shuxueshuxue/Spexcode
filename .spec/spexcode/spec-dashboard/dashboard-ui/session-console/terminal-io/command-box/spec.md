@@ -53,6 +53,8 @@ by Issues and Evals.
 Its grammar is the old control plane, kept in one place: `[[node]]` resolves at send to the node id plus its
 live `spec.md` pointer; `@session` and `@new` use [[mentions]]; `/` lists available board commands first,
 then command presets, then harness commands. Board rows execute locally from the same registry as toolbar
-twins; authoring rows insert text. `/stop`, `/close`, `/merge`, and `/eval` retain their existing meaning.
+twins; authoring rows insert text. `/stop`, `/close`, and `/eval` retain their dashboard meaning. `/merge`
+is the [[merge]] plugin preset: the box sends its resolved workflow to the agent, and the agent performs the
+landing with the same on-demand skill available to self-launched sessions. It has no toolbar twin.
 There is no `/type`: direct TUI input is already the default. File paste, drop, and pick reuse [[file-attach]],
 uploading bytes to the worker machine and inserting the returned local path at the caret.

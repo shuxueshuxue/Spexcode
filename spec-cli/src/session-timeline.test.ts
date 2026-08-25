@@ -4,7 +4,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { encodeEventJson } from '@spexcode/session-events'
+import { MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from '@spexcode/session-application'
+
+import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import {
   currentHumanTurn,
   lastHumanSendVia,
@@ -30,6 +33,9 @@ const PARENT = 'timeline-parent'
 const freshHome = (): string => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   process.env.SPEXCODE_HOME = home
+  // the test worker pins the canonical database path once per process; a fresh home moves it along
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  resetConfiguredSessionApplicationForTest()
   const app = configuredSessionApplicationIfCutover()!
   app.createSession({ sessionId: ID, status: 'idle' })
   app.createSession({ sessionId: PARENT, status: 'idle' })
@@ -55,6 +61,28 @@ test('timeline reads canonical state events and preserves declaration history', 
     ['active', null, null, 'working'],
   ])
   assert.equal(timelineStamp(ID), String(app().readEvents(ID).at(-1)!.eventSeq))
+})
+
+test('timeline shows migrated legacy history where it happened, not where it was appended', () => {
+  const id = 'timeline-migrated-order'
+  app().createSession({ sessionId: id, status: 'idle' })
+  app().transitionSession(id, { status: 'active', reason: 'timeline-test' })
+  const before = app().readEvents(id).at(-1)!.occurredAtMs
+  app().protocol.withTransaction((tx) => {
+    app().events.append(tx, { eventId: 'a'.repeat(32), type: MIGRATED_STATE_EVENT, schemaVersion: 1, subjectSessionId: id, ignorable: true, occurredAtMs: before - 5_000, payload: encodeEventJson({ eventId: 'a'.repeat(32), sessionId: id, status: 'active', proposal: null, note: 'legacy launch', parentSessionId: null, reason: 'json-migration-history' }) })
+    app().events.append(tx, { eventId: 'b'.repeat(32), type: MIGRATED_MESSAGE_EVENT, schemaVersion: 1, subjectSessionId: id, ignorable: true, occurredAtMs: before - 4_000, payload: encodeEventJson({ messageId: 'legacy-mid', text: 'legacy mail', from: PARENT }) })
+  })
+  const timeline = readTimeline(id)
+  assert.ok(timeline)
+  assert.deepEqual(timeline.events.map((event) => event.kind === 'status' ? [event.kind, event.status, event.note] : [event.kind, event.mid, event.from]), [
+    ['status', 'active', 'legacy launch'],
+    ['sent', 'legacy-mid', PARENT],
+    ['status', 'idle', null],
+    ['status', 'active', null],
+  ])
+  // migrated history is a record, not a state fact: replay still ends on the live transition
+  assert.equal(app().replayState(id)?.status, 'active')
+  assert.equal(timelineStamp(id), String(app().readEvents(id).at(-1)!.eventSeq))
 })
 
 test('recordStatus is a canonical write and rejects unknown ids', () => {

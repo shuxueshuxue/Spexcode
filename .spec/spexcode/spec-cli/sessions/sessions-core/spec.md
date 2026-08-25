@@ -43,8 +43,9 @@ or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a
 may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses
 the same post-success canonical projection as the HTTP bridge rather than creating a second creation path.
 During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
-before it can publish `session.json` or `watchers.json`; after the SQLite migration marker, those files may remain as
-operational metadata, but the canonical application service is the only state/event/topology authority.
+before it can publish `session.json` or `watchers.json`; after the SQLite migration marker those names are residue
+that the next canonical access migrates and retires ([[production-cutin]]), and the canonical application service is
+the only state/event/topology authority.
 [[session-follow]]'s durable watch relation is stored once in the session application's topology tables. After a
 canonical state record commits, the application projects its watcher edges and uses the existing send queue to
 notify each watcher; the canonical

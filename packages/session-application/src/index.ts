@@ -73,7 +73,7 @@ export function openSessionApplication(
 }
 
 export { openProjectSessionApplication } from './production.js'
-export { jsonMigrationFencePath, migrateJsonSessionRecords } from './migration.js'
+export { jsonMigrationFencePath, legacyResidueExists, migrateJsonSessionRecords, MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from './migration.js'
 export type {
   CommittedSessionChange,
   ConversationMessageInput,
@@ -89,6 +89,7 @@ export type {
 export type { SessionEvent } from '@spexcode/session-events'
 export type {
   JsonMigrationRecord,
+  JsonResidueMigrationReport,
   JsonSessionMigrationOptions,
   JsonSessionMigrationReport,
 } from './migration.js'

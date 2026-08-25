@@ -29,6 +29,12 @@ The one-time JSON migration must complete before cutover. New `/api/sessions` re
 application database, and after the migration marker exists the list reads lifecycle status and parent topology from
 that database, refusing a governed record with no canonical row; `runtime.json`, when retained,
 are operational worktree metadata only and are not read as application state, events, topology, or watcher authority.
+A marked store whose legacy tree still holds residue (`session.json`, `watchers.json`, `pending.json`, `cursors.json`,
+or timeline files) is the `residue` cutover state, not `ready`: the first canonical access in a process runs the same
+migration entry point, which absorbs the residue into the store this process already owns and retires the tree, and
+only then does the store read as `ready`. The residue scan runs once per process per store; after it settles nothing
+legacy can write again, so later accesses answer from memory. A residue tree is never read around: a legacy envelope
+that the list cannot see is a migration to run, not a row to drop or a second format to read.
 Lifecycle changes, watcher subscriptions, direct sends, and delivery after the marker use the application service and
 canonical SQLite queue. A bound native runtime is required before dequeue; an unbound runtime leaves durable debt
 pending and never falls back to `pending.json` or the legacy session-core timeline. The old JSON names are

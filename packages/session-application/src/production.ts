@@ -591,6 +591,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       return events.replay<SessionState | null>(sessionId, {
         initialState: null,
         reducers: {
+          // A conversation message is a public fact beside the state fold, not a state transition.
+          [MESSAGE_EVENT]: state => state,
           [STATE_EVENT]: (_state, event) => {
             const decoded = JSON.parse(new TextDecoder().decode(event.payload)) as SessionStateChange
             return {

@@ -1,26 +1,30 @@
 import { type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { decodeEventJson } from '@spexcode/session-events'
+import { MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from '@spexcode/session-application'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
 
 export type TimelineEvent =
   | { ts: string; kind: 'status'; status: SessionLifecycle; proposal: SessionProposal | null; note: string | null; display?: string }
   | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
 
+// The timeline is a history: events read in occurrence order (sequence breaks ties). Migrated legacy history
+// lands after the live events in sequence but before them in time, and it is shown where it happened.
 const canonicalTimelineEvents = (id: string): TimelineEvent[] | null => {
   const application = configuredSessionApplicationIfCutover()
   if (!application || !application.readState(id)) return null
-  return application.readEvents(id).flatMap((event): TimelineEvent[] => {
+  const ordered = [...application.readEvents(id)].sort((a, b) => a.occurredAtMs - b.occurredAtMs || a.eventSeq - b.eventSeq)
+  return ordered.flatMap((event): TimelineEvent[] => {
     const decoded = decodeEventJson(event.payload)
     if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return []
     const payload = decoded as Record<string, unknown>
-    if (event.type === 'session.state.changed.v1') return [{
+    if (event.type === 'session.state.changed.v1' || event.type === MIGRATED_STATE_EVENT) return [{
       ts: new Date(event.occurredAtMs).toISOString(),
       kind: 'status',
       status: String(payload.status) as SessionLifecycle,
       proposal: payload.proposal === null || payload.proposal === undefined ? null : String(payload.proposal) as SessionProposal,
       note: payload.note === null || payload.note === undefined ? null : String(payload.note),
     }]
-    if (event.type === 'session.message.sent.v1') return [{
+    if (event.type === 'session.message.sent.v1' || event.type === MIGRATED_MESSAGE_EVENT) return [{
       ts: new Date(event.occurredAtMs).toISOString(),
       kind: 'sent',
       mid: String(payload.messageId),

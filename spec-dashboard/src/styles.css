@@ -490,7 +490,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .dock > .filetree { flex: 1; min-height: 0; border-right: 0; background: transparent; }
 /* the row that currently owns the graph ([[workspace-shell]]'s lock) wears the claim, so the dock is where
    both the claiming and the claimed state are visible. */
-.dock-session-list .si-item[data-locked] { box-shadow: inset 2px 0 0 var(--blue); }
+.dock-session-list .si-item[data-locked] { --ov: var(--blue); }
 .dock-session-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: auto; }
 .ft-body, .dock-session-list, .ds-side, .m-sesslist, .m-sessdetail {
   scrollbar-width: none;
@@ -1609,9 +1609,14 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: calc(100% - var(--space-4) * 2);
   margin: 0 var(--space-4); padding: 9px 10px; background: none; border: none; border-radius: var(--radius);
-  box-shadow: inset 2px 0 0 var(--ov, transparent); cursor: pointer; text-align: left;
+  position: relative; cursor: pointer; text-align: left;
   font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink);
 }
+.si-item::after {
+  content: ''; position: absolute; left: 3px; top: 50%; width: 2px; height: 12px; transform: translateY(-50%);
+  background: var(--ov, transparent); pointer-events: none;
+}
+.si-item[data-locked]::after { background: var(--blue); }
 .si-item:hover { background: var(--wash-hover); color: var(--ink2); }
 .si-item.on { background: var(--wash-selected); color: var(--ink2); font-weight: var(--weight-medium); }
 .si-item.on:hover { background: var(--wash-selected); }
@@ -1646,7 +1651,8 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-item.on .sess-lead { float: left; margin-right: 7px; }
 .si-item.on .sess-meta { float: right; margin: 0 0 0 8px; }
 .si-item.on .sess-id { display: block; max-height: 3lh; white-space: normal; overflow: clip; overflow-wrap: anywhere; }
-.si-tree-row { --sess-fold-pad-x: 12px; }
+.si-tree-row { --sess-fold-pad-x: 18px; }
+.si-tree-row > .sess-fold-control { left: var(--sess-fold-pad-x); }
 .si-tree-row.dragging > .si-item { opacity: .28; }
 .si-tree-row.drop-target { z-index: 51; }
 .si-tree-row.drop-target > .si-item {

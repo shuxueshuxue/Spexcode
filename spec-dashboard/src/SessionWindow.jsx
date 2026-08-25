@@ -25,15 +25,16 @@ export function opSummary(ops) {
 
 // Reserve FoldPod's sibling slot here; a nested button would invalidate the row button.
 export function RowLead({ guides = [], expandable, kin = 0 }) {
+  const reservesFoldColumn = expandable || guides.length > 0
   return (
     <span className="sess-lead">
+      {reservesFoldColumn && (
+        <span className="sess-fold pod sess-fold-slot" aria-hidden="true">{kin}</span>
+      )}
       {guides.map((cont, i) => {
         const kind = i === guides.length - 1 ? (cont ? 'tee' : 'elbow') : (cont ? 'rail' : 'gap')
         return <span key={i} className={`sess-rail ${kind}`} aria-hidden="true" />
       })}
-      {expandable && (
-        <span className="sess-fold pod sess-fold-slot" aria-hidden="true">{kin}</span>
-      )}
     </span>
   )
 }

@@ -129,6 +129,7 @@ scenarios:
       (the Spec node). Only the closed tab leaves the strip. Zero loss = closing returns the reader where
       they came from, same kind first.
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
+    test: spec-dashboard/test/tab-close-focus-history.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

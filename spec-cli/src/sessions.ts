@@ -1692,6 +1692,27 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
   }
 }
 
+function clearReadinessResidueUnlocked(rec: SessRec, clearDiagnostic: boolean): void {
+  const application = configuredSessionApplicationIfCutover()
+  const next = {
+    ...rec,
+    status: 'active' as const,
+    stopped: false,
+    note: clearDiagnostic ? null : rec.note,
+    launchReadinessStartedAt: null,
+  }
+  if (application?.readState(rec.session) && (clearDiagnostic || rec.status !== 'active' || rec.stopped)) {
+    application.transitionSession(rec.session, {
+      status: 'active',
+      proposal: rec.proposal,
+      note: next.note,
+      parentSessionId: rec.parent,
+      recipientSessionIds: [],
+    })
+  }
+  writeRecord(next)
+}
+
 export function canonicalWatchRecipients(
   application: Pick<ProductionSessionApplication, 'topology'>,
   sessionId: string,
@@ -1945,6 +1966,13 @@ async function drainQueueUnlocked(): Promise<void> {
           const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
           const harness = harnessById(rec.harness || defaultHarness.id)
           const live = await launchReadinessWitnessAlive(session.id, harness, rec)
+          if (live) {
+            await withRecordLock(session.id, async () => {
+              const current = readRecord(session.id)
+              if (current && !current.archived && !current.stopped) clearReadinessResidueUnlocked(current, true)
+            })
+            continue
+          }
           await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(
             session.id,
             priorReason,
@@ -1958,23 +1986,33 @@ async function drainQueueUnlocked(): Promise<void> {
         // mtime is the only durable age witness available; seed the new field so the same bounded recovery
         // rule applies on this and later restarts.
         if (rec.status === 'active' && !rec.stopped && existsSync(sessionArtifactPath(session.id, 'launch')) && rec.launchReadinessStartedAt == null) {
-          let startedAt = Date.now()
-          try { startedAt = statSync(sessionArtifactPath(session.id, 'launch')).mtimeMs } catch { /* race: observer below will fail loud */ }
-          writeRecord({ ...rec, launchReadinessStartedAt: startedAt })
+          const harness = harnessById(rec.harness || defaultHarness.id)
+          const live = await launchReadinessWitnessAlive(session.id, harness, rec)
+          if (!live) {
+            let startedAt = Date.now()
+            try { startedAt = statSync(sessionArtifactPath(session.id, 'launch')).mtimeMs } catch { /* race: observer below will fail loud */ }
+            writeRecord({ ...rec, launchReadinessStartedAt: startedAt })
+          }
         }
         const refreshed = readRecord(session.id) || rec
         if (refreshed.launchReadinessStartedAt && !refreshed.stopped && !refreshed.archived) {
+          const harness = harnessById(refreshed.harness || defaultHarness.id)
+          const live = await launchReadinessWitnessAlive(session.id, harness, refreshed)
+          if (live) {
+            await withRecordLock(session.id, async () => {
+              const current = readRecord(session.id)
+              if (current && !current.archived && !current.stopped) {
+                clearReadinessResidueUnlocked(current, /^launch readiness warning:/.test(current.note || ''))
+              }
+            })
+            continue
+          }
           launching.add(session.id)
           const remaining = Math.max(0, SOCKET_READY_TIMEOUT_MS - (Date.now() - refreshed.launchReadinessStartedAt))
-          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id), remaining)
+          observeQueuedLaunchReadiness(session.id, harness, remaining)
           continue
         }
         if (rec.status === 'queued') continue
-        if (rec.status === 'active' && !rec.stopped && !rec.archived) {
-          launching.add(session.id)
-          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id))
-          continue
-        }
       }
       // if the liveness probe FAILED (tmux timing out — the overload condition), occupancy is UNKNOWABLE: every
       // session would read window-less and isOccupying would undercount, so the drainer would OVER-launch and pile

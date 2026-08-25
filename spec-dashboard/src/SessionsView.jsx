@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import SessionInterface from './SessionInterface.jsx'
 import { useBoard, useBoardApi, usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
-import { focusSessionTab } from './tabs.js'
+import { focusSessionTab, markTabHold } from './tabs.js'
 
 // [[sessions-view]]: the live console as a view. It kept every behaviour it had; what changed is where its
 // state lives. `sel` used to be held by the component that also held the graph's camera and every other
@@ -13,9 +13,15 @@ export default function SessionsView({ param, query }) {
   const { palette } = useWorkspace()
   const { openPalette, takeCompose, watchCompose } = useWorkspaceApi()
   const scope = useViewScope()
-  const pickSession = (id) => {
+  // A hold and a plain read differ only in what the workspace is told BEFORE the address is written: the
+  // mark is [[tab-strip]]'s, the route write stays this view's ([[workspace-shell]] owns every address a
+  // view lands on). The launch page names no session, so it is never held.
+  const pickSession = (id, { hold = false } = {}) => {
     if (id === 'new') return scope.open({ page: 'sessions', param: id, query: null })
-    focusSessionTab(id, (route) => scope.open(route))
+    const route = { page: 'sessions', param: id, query: null }
+    if (hold) markTabHold(route.page, route.param, route.query)
+    else return focusSessionTab(id, (held) => scope.open(held))
+    return scope.open(route)
   }
   const [sel, setSel] = useState(() => param || 'new')
   // a board chord may have composed text for this view before it existed; collect it on arrival — in an

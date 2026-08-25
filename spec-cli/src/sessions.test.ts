@@ -97,6 +97,46 @@ test('canonical lifecycle always wins over stale JSON status bytes', () => {
   assert.equal(canonicalRecordProjection(waiting, canonical).status, 'active')
 })
 
+test('backend restart does not re-arm readiness for a witnessed active session', serial, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalLaunchReady = (claudeHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-readiness-reload-'))
+  const id = `readiness-reload-${process.pid}`
+  process.env.SPEXCODE_HOME = home
+  assertIsolatedResumeStore(home, id)
+  let readinessCalls = 0
+  try {
+    writeResumeFixtureRecord(id, process.cwd(), 'true', {
+      harness: 'claude', harness_session_id: '', stopped: false, note: 'operator note',
+    })
+    fsWriteFileSync(sessionArtifactPath(id, 'agent.pid'), `${process.pid}\n`)
+    ;(claudeHarness as any).launchReady = async () => {
+      readinessCalls++
+      return null
+    }
+
+    await drainQueue()
+    assert.equal(readinessCalls, 0, 'an active row without a launch marker has no readiness observer after reload')
+    assert.equal(canonicalState(id).status, 'active')
+    assert.equal(canonicalState(id).note, 'operator note')
+
+    const raw = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')) as Record<string, unknown>
+    fsWriteFileSync(sessionRecordPath(id), `${JSON.stringify({
+      ...raw, note: 'launch readiness warning: stale reload diagnostic', launch_readiness_started_at: Date.now() - 1000,
+    }, null, 2)}\n`)
+    transitionFixtureState(id, 'active', null, 'launch readiness warning: stale reload diagnostic')
+    await drainQueue()
+    assert.equal(readinessCalls, 0, 'an online pane witness suppresses a stale readiness observer')
+    assert.equal(canonicalState(id).status, 'active')
+    assert.equal(canonicalState(id).note, null, 'reload clears stale readiness diagnostics instead of rewriting a warning')
+  } finally {
+    ;(claudeHarness as any).launchReady = originalLaunchReady
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('session diff commit links preserve the full forge repository and commit identity', () => {
   const commit = '2dcade6662e89689444e3ee1cc73a866dcab83d0'
   assert.equal(commitUrlForRemote('git@github.com:shuxueshuxue/spexcode.git', commit),

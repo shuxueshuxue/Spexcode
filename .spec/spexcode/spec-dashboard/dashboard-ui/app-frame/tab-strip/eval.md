@@ -66,6 +66,41 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/src/tabStrip.test.mjs
+  - name: hold-gesture-on-every-row-surface
+    description: >-
+      In a real Chromium dashboard against the running backend, perform the strip's tab-minting whitelist on
+      each row surface that lists an object a second tab can actually hold, and report how many kept it. Every
+      probe first settles a workspace whose only same-kind tab is the replaceable slot, then acts on a
+      DIFFERENT object: ctrl/cmd-click a governed-file row in the Explorer tree; ctrl/cmd-click and
+      double-click a Sessions-page forest row; take the session row context menu's open-in-a-new-tab action;
+      ctrl/cmd-click a session row in the search palette. Read the VISIBLE strip after each gesture and
+      capture a screenshot of the settled workspace. Resident board addresses are deliberately out of the
+      population: a spec, evals, issues, or settings detail canonicalizes to one top-level tab, so it has no
+      second tab to mint.
+    expected: >-
+      All 5 probed surfaces keep the gesture: each one leaves exactly one more tab than before, the arriving
+      tab carries the acted-on object's address, and it is held rather than the italic replaceable slot. The
+      session row context menu offers an explicit open-in-a-new-tab item. The run reports the kept count over
+      the probed count, and the browser console raises no product error.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SessionForestPanel.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/SpecSearch.jsx]
+    related: [spec-dashboard/src/tabs.js, spec-dashboard/src/SessionsView.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Dock.jsx, spec-dashboard/src/FileTree.jsx, spec-dashboard/src/Shell.jsx]
+    test: spec-dashboard/test/tab-hold-surfaces.e2e.mjs
+  - name: hold-without-a-pointer
+    description: >-
+      In a real Chromium dashboard against the running backend, reach a session by ADDRESS so its tab is the
+      replaceable slot, press the hold chord, and read the visible strip. Then open the help legend on the
+      board that owns the key and read the row for that chord.
+    expected: >-
+      The chord holds the tab already showing: the same one tab remains, at the same address, no longer the
+      italic slot — it neither mints a second tab nor changes which document is showing. The legend names the
+      chord exactly once and prints it as the complete modifier glyph the registry holds, never a
+      modifier-stripped key or a label with the shortcut typed into it. The browser console raises no
+      product error.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/keymap.js]
+    related: [spec-dashboard/src/tabs.js, spec-dashboard/src/Shell.jsx, spec-dashboard/src/Legend.jsx, spec-dashboard/src/bindings.js]
+    test: spec-dashboard/test/tab-hold-chord.e2e.mjs
   - name: live-pointer-reorder-and-tail-drop
     description: >-
       In a real Chromium dashboard with three held document tabs, press and drag one tab across another and
@@ -94,6 +129,7 @@ scenarios:
       (the Spec node). Only the closed tab leaves the strip. Zero loss = closing returns the reader where
       they came from, same kind first.
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
+    test: spec-dashboard/test/tab-close-focus-history.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

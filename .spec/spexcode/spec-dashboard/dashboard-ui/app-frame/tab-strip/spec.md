@@ -13,6 +13,11 @@ related:
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
+  - spec-dashboard/src/SessionForestPanel.jsx
+  - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-dashboard/src/SessionsView.jsx
+  - spec-dashboard/src/SpecSearch.jsx
+  - spec-dashboard/src/keymap.js
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
@@ -111,7 +116,37 @@ why the old fence was buying safety that was never at risk.
 | plain click / plain navigation | that page kind's slot takes the address (or one is opened if none exists) |
 | ctrl/⌘-click | a new pinned tab |
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
+| ⌘/ctrl+Enter (the palette) | the highlighted row opens already held — the pointer gesture's keyboard twin |
+| `shell.tabHold` | hold the tab already showing; the pointer names an address, a keyboard has only the current one |
 | close | that tab only; the slot is nothing special to close |
+
+**THE LAW IS ONE MECHANISM, NOT A HABIT EACH SURFACE KEEPS.** `isHoldGesture` is the single predicate every
+row surface asks of a pointer event, and `markTabHold`/`pinTab` are the single way an address becomes held.
+This is not tidiness: while each surface hand-rolled `ctrlKey || metaKey`, the law held wherever someone had
+remembered it and was silently absent everywhere else — the finding dock held a session while the Sessions
+page projecting the same forest replaced its slot, and the palette, which is where a reader arrives without a
+pointer at all, had no hold in either hand. A surface may still decide the gesture does not apply (a session
+row in select mode claims the click for picking); it may not decide what the gesture MEANS.
+
+**Every surface that lists a workspace object owes the law both halves**: the pointer gestures, and the
+explicit action in whatever menu that surface opens over a row. The finding dock's session rows, the Sessions
+page's own forest rows, the Explorer tree's node and file rows, the review lists' anchor rows, and the search
+palette's rows all carry the gestures; the session row menu and the review row menu carry the explicit
+"open in a new tab" item. A pointer gesture is invisible until someone already knows it, so a surface with a
+row menu and no such item is a surface where the capability exists and cannot be found.
+
+**Holding needs a keyboard hand too.** The pointer gestures each name the address under the cursor; a
+keyboard has no such target, so `shell.tabHold` holds the document already showing — the reader who navigated
+by address or by chord can stop ordinary browsing from replacing what they are reading, without reaching for
+a double-click. Its chord lives in the one binding registry, so the legend and the settings editor render it
+without a second copy. Both hold branches record the same `pinned`/`held` pair, so an explicit hold survives
+the next reload's normalization rather than being demoted back to a slot.
+
+**A resident board address has no second tab to hold.** Spec, Evals, Issues and Settings details canonicalize
+to one top-level tab identity, so ctrl/⌘-click on a spec row holds that ONE Spec tab at that node's address —
+it cannot, and must not claim to, open a second spec document beside the first. Surfaces that act on those
+addresses therefore offer an open action, never an "open in a new tab" that would promise a tab the model
+does not mint. Sessions and files are the object kinds a second tab is real for.
 
 **Closing hands the workspace over by ONE rule, not per-kind branches** (`closeDestination`): the reader
 goes back where they came from, same kind first. The strip keeps a focus history — the active tab's key,

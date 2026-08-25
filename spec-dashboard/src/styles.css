@@ -1613,7 +1613,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink);
 }
 .si-item::after {
-  content: ''; position: absolute; left: 3px; top: 50%; width: 2px; height: 12px; transform: translateY(-50%);
+  content: ''; position: absolute; left: 1px; top: 50%; width: 2px; height: 17px; transform: translateY(-50%);
   background: var(--ov, transparent); pointer-events: none;
 }
 .si-item[data-locked]::after { background: var(--blue); }

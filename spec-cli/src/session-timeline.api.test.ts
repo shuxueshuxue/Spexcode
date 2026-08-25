@@ -36,8 +36,6 @@ async function waitFor(check: () => Promise<boolean>, label: string, timeoutMs =
 async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   const signal = (name: NodeJS.Signals) => {
-    // `spex serve` is a supervisor plus its Hono child. The fixture owns a separate process group, so its
-    // cleanup has to reach both; killing only the supervisor leaves a listening child keeping node --test alive.
     if (child.pid && process.platform !== 'win32') {
       try { process.kill(-child.pid, name); return } catch { /* parent may have already reaped the group */ }
     }
@@ -45,7 +43,10 @@ async function stop(child: ChildProcess): Promise<void> {
   }
   signal('SIGTERM')
   await Promise.race([once(child, 'exit'), new Promise((resolve) => setTimeout(resolve, 3_000))])
-  if (child.exitCode === null && child.signalCode === null) signal('SIGKILL')
+  if (child.exitCode === null && child.signalCode === null) {
+    signal('SIGKILL')
+    await once(child, 'exit').catch(() => {})
+  }
 }
 
 test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async (t) => {

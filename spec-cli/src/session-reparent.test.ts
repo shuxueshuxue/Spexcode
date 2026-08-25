@@ -176,10 +176,12 @@ test('session reparent rewrites parent/watch through live backend and only falls
     await stop(backend)
     const childCDir = writeSession(home, 'reparent-child-c', oldParent)
     writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
+    // A legacy envelope left in a marked store is residue: the CLI's first canonical access absorbs it (a row is
+    // created from the envelope, the file is retired), and only then is the child a reparentable session.
     const local = await runCli(['session', 'reparent', 'reparent-child-c', '--to', newParent], env)
-    assert.equal(local.code, 1)
-    assert.match(local.err, /no canonical application state/)
-    assert.equal(parentOf(childCDir), null, 'unmigrated JSON input is not a live parent authority')
+    assert.equal(local.code, 0, local.err)
+    assert.ok(!existsSync(join(childCDir, 'session.json')) && existsSync(join(childCDir, 'runtime.json')), 'residue envelope is retired at the first canonical access')
+    assert.equal(parentOf(childCDir), newParent, 'the absorbed child moves like any other')
 
     const childDDir = writeSession(home, 'reparent-child-d', oldParent)
     writeFileSync(join(childDDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')

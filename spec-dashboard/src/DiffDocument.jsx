@@ -69,6 +69,10 @@ function readOnlyExtensions(numbers, lang, wrap) {
 }
 
 const entryKey = (entry) => entry ? `${entry.scope}:${entry.file.path}` : ''
+const stillPresent = (data, key) => !!key && [
+  ...(data?.files || []).map((file) => `branch:${file.path}`),
+  ...(data?.working?.files || []).map((file) => `working:${file.path}`),
+].includes(key)
 const firstEntry = (data) => (data?.files || []).length ? { scope: 'branch', file: data.files[0] } : (data?.working?.files || []).length ? { scope: 'working', file: data.working.files[0] } : null
 
 function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onComment, onEdit, onView, onNext, onPrevious }) {
@@ -220,7 +224,11 @@ export default function DiffDocument({ sessionId }) {
   const registerView = useCallback((key, view) => { if (view) views.current.set(key, view); else views.current.delete(key) }, [])
   // A 409 is the endpoint's structured "this diff is honestly unavailable" state (no branch, or worktree AND
   // branch ref both gone) — a calm product fact, not the red transport-error face.
-  const load = () => { setState((current) => ({ ...current, phase: 'loading' })); apiFetch(sessionUrl(sessionId, 'diff'), { cache: 'no-store' }).then(async (res) => { const data = await res.json().catch(() => ({})); if (res.status === 409) { setState({ phase: 'unavailable', data: null, error: null, detail: data?.error || '' }); return } if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`); setState({ phase: 'ready', data, error: null }); setSelected(entryKey(firstEntry(data)))
+  const load = () => { setState((current) => ({ ...current, phase: 'loading' })); apiFetch(sessionUrl(sessionId, 'diff'), { cache: 'no-store' }).then(async (res) => { const data = await res.json().catch(() => ({})); if (res.status === 409) { setState({ phase: 'unavailable', data: null, error: null, detail: data?.error || '' }); return } if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`); setState({ phase: 'ready', data, error: null })
+    // A reload is not a navigation: saving or sending a comment re-reads the payload, and resetting the
+    // selection there would throw the reader back to the first file — away from the very comment they just
+    // filed, which is where its delivery marker appears. Keep the open file whenever it still exists.
+    setSelected((current) => stillPresent(data, current) ? current : entryKey(firstEntry(data)))
     // A review wants the whole tree in view; the compressed chains keep that a short list, and a reader
     // who wants less closes what they do not need.
     setOpenDirs(new Set([...treeDirKeys(buildDiffTree(data.files || [])), ...treeDirKeys(buildDiffTree(data.working?.files || []))]))

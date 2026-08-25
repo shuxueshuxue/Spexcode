@@ -220,7 +220,7 @@ export function mainRoot(proj?: string): string {
 
 // @@@ global per-session store - Fork A: NO SpexCode files live in the worktree any more, so the worktree's
 // spec/code tree is pristine (zero per-session pollution). Every per-session runtime artifact — the
-// structured record (session.json) AND the launcher products (prompt, launch, launch.sh) AND the recorded comms AND
+// runtime envelope (runtime.json) AND the launcher products (prompt, launch, launch.sh) AND the recorded comms AND
 // the spec-discipline sentinels — lives in a per-USER GLOBAL store, keyed by the harness `session_id` so two
 // agents in one folder never clobber, and grouped PER PROJECT (mirroring Claude's ~/.claude/projects/<enc>/)
 // so the board enumerates ONE directory. This is the single seam that knows where the store sits; sessions.ts
@@ -253,10 +253,10 @@ export function treeSlotDir(wt: string): string {
 // all keyed by session_id under <home>/projects/<enc>/sessions/.
 export function sessionsRoot(): string { return join(runtimeRoot(), 'sessions') }
 export function sessionStoreDir(id: string): string { return join(sessionsRoot(), id) }
-export function sessionRecordPath(id: string): string { return join(sessionStoreDir(id), 'session.json') }
+export function sessionRecordPath(id: string): string { return join(sessionStoreDir(id), 'runtime.json') }
 export function sessionArtifactPath(id: string, name: string): string { return join(sessionStoreDir(id), name) }
 
-// the structured per-session record, as it sits on disk. Written one-field-per-line with EVERY key present
+// the structured per-session runtime envelope, as it sits on disk. Written one-field-per-line with EVERY key present
 // (see sessions.ts writeRecord) so the hot-path mark-active shell hook can value-replace status/proposal/note
 // with sed and never needs jq. Read here for the overlay; sessions.ts owns the full typed read/write.
 export type RawRecord = {
@@ -278,7 +278,7 @@ export type RawRecord = {
   runtime_owner?: string // external process/runtime that owns control; absent means SpexCode owns the runtime policy
   runtime_state?: string // opaque external state; Spex lifecycle remains the board-compatible projection
   runtime_revision?: string // caller-owned idempotency revision for runtime-state publication
-  runtime_metadata?: Record<string, string> // opaque external address fields; session-core validates bytes but assigns no meaning
+  runtime_metadata?: Record<string, string> // opaque external address fields; the runtime boundary validates bytes but assigns no meaning
   base?: string // the exact fork point pinned at creation; absent/empty → the auto-detected source-of-truth branch
   diff_comments?: Array<{
     id: string; file_path: string; line_start: number; line_end: number; body: string

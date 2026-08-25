@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readRecordEntry, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
+import { readRecordEntry, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 import { projectRuntimeRoot } from '@spexcode/spec-core'
 
 export class SessionWebError extends Error {
@@ -19,8 +19,8 @@ const webPath = (id: string, projectRoot?: string): string => projectRoot
   : sessionArtifactPath(id, 'web.json')
 
 const recordPath = (id: string, projectRoot?: string): string => projectRoot
-  ? join(projectRuntimeRoot(join(projectRoot, '.git')), 'sessions', id, 'session.json')
-  : join(sessionStoreDir(id), 'session.json')
+  ? join(projectRuntimeRoot(join(projectRoot, '.git')), 'sessions', id, 'runtime.json')
+  : sessionRecordPath(id)
 
 function validSessionId(id: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)
@@ -97,7 +97,7 @@ export function listSessionWebs(id: string, projectRoot?: string): SessionWeb[] 
   return readSessionWebs(id, projectRoot)
 }
 
-// Session projections already hold a parsed record; re-checking session.json here would make an in-memory
+// Session projections already hold a parsed runtime envelope; re-checking it here would make an in-memory
 // projection depend on the public route's existence guard. The route-facing list keeps that guard above.
 export function readSessionWebs(id: string, projectRoot?: string): SessionWeb[] {
   return readWebs(id, projectRoot).map(toWeb)

@@ -4,15 +4,20 @@ status: active
 hue: 280
 desc: What a session is still OWED — a small ordered queue of messages not yet handed to its agent, drained by adapter insert, empty when nothing is owed.
 code:
-  - packages/session-core/src/delivery-queue.ts
+  - packages/session-protocol/src/engine.ts
 related:
+  - spec-cli/src/delivery-lock.ts
   - spec-cli/src/sessions.ts
-  - packages/session-core/src/session-timeline.ts
+  - packages/session-events/src/schema.ts
   - spec-cli/src/index.ts
-  - packages/session-core/src/delivery-queue.test.ts
+  - packages/session-protocol/src/engine.test.ts
 ---
 
 # delivery-queue
+
+> Migration boundary: this file queue is a legacy adapter for records that have not crossed the SQLite
+> application fence. Canonical sessions use `session-application`'s protocol queue and never read or write
+> `pending.json`; the canonical CLI queue is application-owned and the legacy file is migration input only.
 
 ## raw source
 
@@ -35,9 +40,10 @@ control merely because a target was temporarily unavailable.
 
 ## expanded spec
 
-`pending.json`, in the session's global store dir, is an ordered list of the messages that have been recorded
-but not yet handed to the agent. Each entry is self-contained — the message id, the sender, and the text
-exactly as it will be handed over, mechanism inserts already composed in ([[session-timeline]] owns that seam;
+The canonical application queue, in the session database, is an ordered list of messages that have been recorded
+but not yet handed to the agent. `pending.json` is migration input only, never a live queue. Each canonical entry is
+self-contained — the message id, the sender, and the text exactly as it will be handed over, mechanism inserts
+already composed in ([[session-timeline]] owns that seam;
 the log keeps the raw conversational text, the queue keeps the transport form). A caller-keyed entry also
 carries the operation plus request digest that its private timeline receipt names, never the raw key. A protocol
 producer may add immutable string attributes; keyed drain compares them with the same frozen receipt bytes before

@@ -11,7 +11,7 @@ scenarios:
       close it after releasing the lock.
     expected: >-
       A materialize failure remains a visible degraded session whose note round-trips exactly as one JSON value:
-      session.json parses and preserves its one-field-per-line shape, list/show never project corrupt, and
+      runtime.json parses and preserves its one-field-per-line shape, list/show never project corrupt, and
       stop/close still prove the readable owner. The config-lock race either rolls back completely or publishes
       one clean recoverable failure record for the joined key; it never leaves a corrupt or falsely active row,
       and any partial materialized worktree residue is removed before that record is published.

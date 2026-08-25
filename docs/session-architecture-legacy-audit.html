@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Session 架构与 Legacy 审计</title>
+  <style>
+    :root{color-scheme:light;--ink:#18212b;--muted:#596775;--line:#d7dee5;--blue:#145da0;--blue-soft:#eaf3fb;--amber:#8a4b08;--amber-soft:#fff5e6;--red:#9c2b2b;--red-soft:#fff0f0;--green:#166534;--green-soft:#ecfdf3}
+    *{box-sizing:border-box} body{margin:0;background:#f5f7f9;color:var(--ink);font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{max-width:1100px;margin:0 auto;padding:42px 28px 72px} header{border-bottom:1px solid var(--line);padding-bottom:26px;margin-bottom:30px}
+    h1{font-size:34px;line-height:1.2;margin:0 0 10px;letter-spacing:0} h2{font-size:22px;margin:34px 0 12px;line-height:1.3} h3{font-size:17px;margin:22px 0 6px}
+    p{max-width:86ch;margin:8px 0} .meta{color:var(--muted);font-size:13px}.lede{font-size:18px;max-width:78ch}
+    .callout{border:1px solid var(--line);border-left:4px solid var(--blue);background:#fff;padding:16px 18px;margin:18px 0}.callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}.callout.good{border-left-color:var(--green);background:var(--green-soft)}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.card{background:#fff;border:1px solid var(--line);padding:15px 16px}.card strong{display:block;font-size:24px;line-height:1.2}.card span{color:var(--muted);font-size:13px}
+    table{width:100%;border-collapse:collapse;background:#fff;margin:12px 0 20px}th,td{text-align:left;vertical-align:top;border:1px solid var(--line);padding:10px 12px}th{background:#eef2f5;font-weight:650}code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef2f5;padding:1px 4px;border-radius:3px}pre{background:#18212b;color:#f3f6f8;padding:16px;overflow:auto;border-radius:5px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+    .status{display:inline-block;border-radius:3px;padding:1px 7px;font-size:12px;font-weight:650}.status.red{background:var(--red-soft);color:var(--red)}.status.amber{background:var(--amber-soft);color:var(--amber)}.status.green{background:var(--green-soft);color:var(--green)}
+    footer{border-top:1px solid var(--line);margin-top:42px;padding-top:16px;color:var(--muted);font-size:13px}@media(max-width:760px){main{padding:28px 16px 52px}.grid{grid-template-columns:1fr}h1{font-size:28px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="meta">SpexCode / Session architecture audit · 2026-08-24 · canonical-cutover + hook census (branch verification)</div>
+    <h1>Session 架构与 Legacy 审计</h1>
+    <p class="lede">结论：SQLite canonical application 已经是生命周期、通信、watch 和 cursor 的唯一生产事实源。运行时只写命名的 <code>runtime.json</code> envelope；旧 <code>session.json</code> 只作为一次性迁移输入或历史夹具，不能再被当成第二套生命周期。</p>
+  </header>
+
+  <section>
+    <h2>一页结论</h2>
+    <div class="callout good"><strong>旧通信包已退出构建图。</strong> <code>@spexcode/session-core</code> 已从 workspace、root build、CLI launcher、发布清单和 CI 删除；生产依赖只走 <code>session-protocol → session-application</code> 的分层 stack。运行时 envelope 已切到 <code>runtime.json</code>，旧输入只经过一次迁移。</div>
+    <div class="callout good"><strong>生命周期事实已收口。</strong> envelope 不再保存 <code>status</code>、<code>proposal</code>、<code>note</code>；这些字段只来自 SQLite application。hook 权限旁路已修复，canonical writer 负责治理边界。CLI 本地 selector 也已修复为在缺少 <code>runtime.json</code> 时回读 canonical application row，不再把“没有 envelope”误报成“没有 session”。</div>
+    <div class="grid"><div class="card"><strong>0</strong><span>session-core 生产依赖</span></div><div class="card"><strong>1</strong><span>canonical application owner</span></div><div class="card"><strong>1</strong><span>PreToolUse dispatcher owner per checkout</span></div></div>
+  </section>
+
+  <section>
+    <h2>替代栈：一组分层包，不是五个产品</h2>
+    <pre>SpexCode
+  └─ @spexcode/session-application   ← 唯一生产消费边界
+       ├─ session-protocol           ← SQLite 事务、消息队列
+       ├─ session-topology           ← parent/child/watch 关系
+       ├─ session-runtime            ← native identity / generation binding
+       └─ session-events             ← append-only event schema</pre>
+    <table><thead><tr><th>包</th><th>当前责任</th><th>终态判断</th></tr></thead><tbody>
+      <tr><td><code>session-application</code></td><td>组合 protocol、topology、events、runtime；给 CLI 提供 state/transition/enqueue/watch/bind/dequeue。</td><td><span class="status green">保留为门面</span></td></tr>
+      <tr><td><code>session-protocol</code></td><td>SQLite 事务与 durable message protocol。</td><td><span class="status green">内核边界</span></td></tr>
+      <tr><td><code>session-topology</code></td><td>parent/child 和 watcher relation。</td><td><span class="status amber">只有多 adopter 时才需独立公开</span></td></tr>
+      <tr><td><code>session-runtime</code></td><td>native identity、generation、binding。</td><td><span class="status green">application 的明确适配边界</span></td></tr>
+      <tr><td><code>session-events</code></td><td>事件 schema、append 与 replay 输入。</td><td><span class="status green">application 的明确事实边界</span></td></tr>
+    </tbody></table>
+    <p>新包负责生产运行时；<code>session-core</code> 不再是 workspace package，也不再进入 dist、tarball、materialized executable 或 CI。</p>
+  </section>
+
+  <section>
+    <h2>仍活跃的旧路径</h2>
+    <table><thead><tr><th>设施</th><th>生产位置</th><th>问题</th></tr></thead><tbody>
+      <tr><td>delivery queue</td><td><code>packages/session-application</code><br><code>spec-cli/src/delivery-lock.ts</code></td><td>canonical SQLite queue + local cross-process lock；生产路径不回落到 <code>pending.json</code>。</td></tr>
+      <tr><td>watch relation</td><td><code>spec-cli/src/sessions.ts</code><br><code>session-application</code></td><td>parent/manual source 从 canonical topology 读取；parent-only 抑制 routine working，manual watch 保留完整流，重叠来源只入队一次；<code>watchers.json</code> 只作迁移输入。</td></tr>
+      <tr><td>timeline / follow</td><td><code>spec-cli/src/session-timeline.ts</code><br><code>spec-cli/src/session-follow.ts</code></td><td>canonical event/cursor reads and writes use the application; migration replays old timeline entries before retiring <code>timeline.ndjson</code>/<code>cursors.json</code>.</td></tr>
+      <tr><td>runtime envelope</td><td><code>spec-cli/hooks/harness.sh</code><br><code>codex-runtime-generations.ts</code></td><td>命名 envelope <code>runtime.json</code> 只承载 worktree/native identity；旧 <code>session.json</code> 仅由迁移器读取一次并删除。</td></tr>
+    </tbody></table>
+  </section>
+
+  <section>
+    <h2>已修复的直接越权</h2>
+    <p>旧 idle/session-fail shell 曾自行 grep <code>session.json</code> 决定治理范围，造成 hook 层拥有第二套 authority。现在 hook 只传递 identity，canonical writer 统一检查 <code>governed</code> 与 active-only CAS；worktree Codex anchor 只保留空 <code>{hooks:{}}</code>。嵌套 worktree 的纯 SpexCode Claude settings 也只保留一次：主 checkout 是唯一 dispatcher owner，旧副本由 materialize 精确迁移，用户自有配置不碰。</p>
+    <p>本轮聚焦回归：hook dispatch <strong>27/27</strong>，sessions <strong>51/51</strong>，launcher <strong>8/8</strong>；hook 行为测试现在读取 canonical SQLite 状态，并明确断言 runtime envelope 不会被生命周期 hook 改写。仓库里仍有迁移、历史 eval 和旧 fixture 使用 <code>session.json</code>，它们被列为非生产输入，不能被误报成 live reader。</p>
+  </section>
+
+  <section>
+    <h2>迁移删除门的新证据</h2>
+    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。生产写路径与 hook dispatch 已通过聚焦回归；实机复核发现旧项目目录仍可能残留旧 <code>session.json</code>，但 canonical marker 已存在。它是迁移/materialization 残留，不是第二 authority；本轮通过 canonical fallback 让 selector 在迁移未完成时仍可达，后续应按删除门清掉残留，而不是恢复双读生命周期。</p>
+    <div class="callout good"><strong>旧包删除门已通过。</strong> 根 build、发布清单、CI、launcher source closure 和 package-lock 均不再引用 <code>session-core</code>；剩余 <code>session.json</code> 仅属于运行时 envelope 迁移，不能再被当成 lifecycle authority。</div>
+  </section>
+
+  <section>
+    <h2>PreToolUse 计数核验</h2>
+    <div class="callout good"><strong>仓库注册数不是 6。</strong> 当前项目 settings 各只有一个 dispatcher 注册；live project manifest 只有两个 PreToolUse handler：<code>mark-active</code> 与 <code>spec-first</code>。它们由同一个 dispatcher 按顺序执行。Linked worktree 的 Codex anchor 已改为空 hooks，根 checkout 是唯一可执行 owner。</div>
+    <table><thead><tr><th>层</th><th>实测</th><th>结论</th></tr></thead><tbody>
+      <tr><td>项目 settings</td><td>每个 settings.json 1 条 PreToolUse dispatcher</td><td>没有 6 条重复注册</td></tr>
+      <tr><td>编译后的 manifest</td><td>2 个 handler：mark-active、spec-first</td><td>一次工具调用最多经过这两个项目 handler</td></tr>
+      <tr><td>宿主显示</td><td>用户看到 “Running 6 PreToolUse hooks”</td><td>当前 checkout 只有 1 个 Claude settings dispatcher；编译 manifest 只有 2 个项目 handler（mark-active、spec-first）。这不是仓库注册了 6 个 Spex PreToolUse hook；6 是宿主层对 plugins/settings/worktree 的聚合计数，不能作为 Spex 实际执行次数。Codex 的 <code>hooks.state</code> 也只是各临时项目的信任哈希缓存，不是待执行 hook。另有宿主级官方 <code>hookify</code> 插件注册 1 个独立的 PreToolUse；它不属于 Spex，是否禁用必须在宿主配置层决定。Spex 修复方式是清理/重新 materialize 自己的加载面并复测，不是在 handler 内叠加逻辑。</td></tr>
+    </tbody></table>
+  </section>
+
+  <section>
+    <h2>轮询、等待与 policy</h2>
+    <table><thead><tr><th>检查项</th><th>当前事实</th><th>判断</th></tr></thead><tbody>
+      <tr><td>生命周期状态</td><td>由 prompt/tool/stop/error 的事件写入 SQLite；dispatcher 不轮询、不写 SQL。</td><td><span class="status green">单向事件</span></td></tr>
+      <tr><td>观测轮询</td><td>follow/board/远端 peer 仍有明确的观测 tick；它们不拥有 lifecycle，也不能把 asking/close 变 working。</td><td><span class="status amber">保留但需限界</span></td></tr>
+      <tr><td>等待常量</td><td>pty linger/restore、delivery stabilization、probe deadline 等是 transport 边界常量；没有用“看见 terminal/获得焦点”伪造 prompt。测试-only source edits 不再触发完整 workspace build。</td><td><span class="status amber">审计对象</span></td></tr>
+      <tr><td>policy 组合</td><td>parent policy、manual watch policy、managed watch source 必须落在 topology/application；hook 只消费事件，不创建第二套 policy。</td><td><span class="status green">边界清晰</span></td></tr>
+    </tbody></table>
+    <div class="callout warn"><strong>当前未宣称全部收口。</strong> 仓库仍有历史迁移/eval/fixture 对 <code>session.json</code> 的引用；它们必须保持在一次性迁移或测试边界，不能回流到生产 reader。<code>eval lint --changed</code> 仍会报历史 stale/missing advisory。下一步应逐类迁移这些证明，而不是恢复双写或增加兼容分支。</div>
+  </section>
+
+  <section>
+    <h2>大重构路线</h2>
+    <ol>
+      <li><strong>事件读取边界：</strong><code>session-application</code> 提供稳定的 event projection，CLI 不再直接 import 旧通信包。</li>
+      <li><strong>cursor 边界：</strong>follow cursor 已在 application SQLite component；正常运行不读写 <code>cursors.json</code>。</li>
+      <li><strong>queue/watch 收口：</strong>queue debt 和 watcher source 只通过 application API 读写；<code>pending.json</code>、<code>watchers.json</code> 只存在于一次性迁移器。</li>
+      <li><strong>adopter 边界：</strong>protocol/topology/runtime/events 是可复用的中性包，Spex policy 由 application/CLI 明确组合；不以兼容包伪造公共契约。</li>
+      <li><strong>Envelope migration：</strong>已完成生产写路径切换到 <code>runtime.json</code>；保留一次性旧输入迁移器和删除门，禁止重新引入 dual-read/dual-write。</li>
+    </ol>
+    <div class="callout">禁止的终态：dual-read、dual-write、永久 translation adapter、按当前 session 特判的 fallback。</div>
+  </section>
+
+  <section>
+    <h2>当前限制</h2>
+    <p>当前报告的删除门结果：旧包 source/build/lockfile/CI/materialize 生产引用为 <strong>0</strong>；生产 runtime 写路径不再创建 <code>session.json</code>。仓库扫描仍能找到历史 fixtures、迁移输入和文档旧名称，这些是待清理证据，不是当前运行时路径；删除前必须逐个确认不属于外部 adopter 的输入契约。</p>
+    <div class="callout warn"><strong>生态边界仍需单独迁移。</strong> 当前 SpexCode checkout 已没有 <code>session-core</code> 生产 import，但历史 ZSwarm adopter 证据曾在另一个 checkout 声明该包。它不能被“本仓库扫描为 0”掩盖：外部 adopter 必须迁到 protocol/topology/runtime stack 后，生态删除门才算完成；本报告不把外部迁移伪装成已完成。</div>
+  </section>
+
+  <footer>Source of truth: canonical package code/specs, focused tests, hook manifest compilation, materialize worktree census, and runtime read-only checks. This report records architecture and migration state; historical fixture strings are intentionally not live configuration.</footer>
+</main>
+</body>
+</html>

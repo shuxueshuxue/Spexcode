@@ -29,7 +29,7 @@ runner proves the complete user-shaped chain: `POST /api/sessions` creates the r
 the fake stream and a rendezvous-delivered control marker, and `POST /api/sessions/:id/close` removes the tmux
 session, rendezvous socket, worker process, and worktree while retaining the archived session record and branch.
 
-The fixture never edits `session.json`, invents a product route, invokes a real model, or contacts the network.
+The fixture never edits `runtime.json`, invents a product route, invokes a real model, or contacts the network.
 The runner is intentionally version-tolerant at the create boundary: it uses the named `launcher` field when
 available and retries without that field only when an older backend explicitly reports it as unknown. The same
 command can therefore drive a current or historical backend whose existing claude launcher is pointed at the fake

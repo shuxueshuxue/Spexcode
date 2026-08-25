@@ -28,7 +28,7 @@ recoverable session receipt, or one structured failure after all session-specifi
 
 ## expanded spec
 
-Creation is a bounded transaction whose commit point is the atomic `session.json` publication. Before that
+Creation is a bounded transaction whose commit point is the atomic `runtime.json` publication. Before that
 point, launcher resolution and prompt composition are read-only; Git may create exactly the candidate branch
 and worktree; and the global store may contain only the candidate's private preparation files. A deadline,
 client disconnect, cancellation, or phase failure before publication aborts active Git work, opens no launcher

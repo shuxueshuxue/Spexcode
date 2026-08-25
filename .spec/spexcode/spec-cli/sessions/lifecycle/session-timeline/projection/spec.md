@@ -6,7 +6,8 @@ desc: SpexCode's HTTP timeline projection resolves governed aliases and adds dis
 code:
   - spec-cli/src/session-timeline.ts
 related:
-  - packages/session-core/src/session-timeline.ts
+  - spec-cli/src/session-timeline.ts
+  - packages/session-events/src/schema.ts
   - spec-cli/src/index.ts
 ---
 # session-timeline-projection

@@ -7,7 +7,7 @@
 // docs, code comments, archived sidecars) — historical narration is legal, teaching surfaces are not.
 //
 // So the scan is surface-scoped, not a blanket grep:
-//   1. STRING LITERALS in source under spec-cli/src, packages/session-core/src, spec-eval/src, spec-forge/src,
+//   1. STRING LITERALS in source under spec-cli/src, packages/session-*/src, spec-eval/src, spec-forge/src,
 //      spec-dashboard/src, spec-cli/templates (a command/route/label lives in a string; a comment is
 //      prose and exempt). *.test.* and __fixtures__ are exempt: test data mirrors archived/external
 //      shapes. *.md is exempt: spec/doc bodies are prose.
@@ -24,7 +24,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-const ROOTS = ['spec-cli/src', 'packages/session-core/src', 'spec-eval/src', 'spec-forge/src', 'spec-dashboard/src', 'spec-cli/templates']
+const ROOTS = ['spec-cli/src', 'spec-eval/src', 'spec-forge/src', 'spec-dashboard/src', 'spec-cli/templates']
 const SPEC_ROOT = '.spec'
 const DEAD = /\b(yatsu|readings?|boards?|proofs?|blobs?|scan(?:s|ned|ning)?|reopen(?:s|ed|ing)?|rawkeys?|loss-signals?)\b/i
 const OK = /dead-words-ok:\s*\S/

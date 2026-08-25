@@ -1,6 +1,7 @@
 import test from 'node:test'
 
 import { openProjectSessionApplication } from '@spexcode/session-application'
+import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -36,28 +37,40 @@ function writeSession(home: string, id: string, parent: string | null): string {
 }
 
 function watchers(dir: string): { watcher: string; createdAt: string; sources?: string[] }[] {
-  const path = join(dir, 'watchers.json')
-  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : []
+  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const application = openProjectSessionApplication({ databasePath: resolveDatabasePath(), locality: () => {} })
+  try {
+    const grouped = new Map<string, { watcher: string; createdAt: string; sources: string[] }>()
+    for (const edge of application.topology.parents(raw.session_id)) {
+      if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
+      const source = edge.relationType === 'parent' || edge.relationType === 'watch:parent' ? 'parent' : 'manual'
+      const current = grouped.get(edge.fromSessionId)
+      if (current) { if (!current.sources.includes(source)) current.sources.push(source) }
+      else grouped.set(edge.fromSessionId, { watcher: edge.fromSessionId, createdAt: new Date(edge.createdAtMs).toISOString(), sources: [source] })
+    }
+    return [...grouped.values()]
+  } finally { application.close() }
 }
 
 function parentOf(dir: string): string | null {
   const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
-  return raw.parent || null
+  const databasePath = resolveDatabasePath()
+  const application = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try { return application.readState(raw.session_id)?.parentSessionId ?? null } finally { application.close() }
 }
 
 function pendingFrom(dir: string): string[] {
-  const path = join(dir, 'pending.json')
-  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')).map((entry: { from?: string | null }) => entry.from ?? '') : []
+  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const application = openProjectSessionApplication({ databasePath: resolveDatabasePath(), locality: () => {} })
+  try { return application.readPendingMessages(raw.session_id).map((entry) => entry.senderSessionId ?? '') }
+  finally { application.close() }
 }
 
 function timelineText(dir: string): string {
-  const legacy = join(dir, 'timeline.ndjson')
-  const segments = join(dir, 'timeline')
-  const files = [
-    ...(existsSync(legacy) ? [legacy] : []),
-    ...(existsSync(segments) ? readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)) : []),
-  ]
-  return files.map((path) => readFileSync(path, 'utf8')).join('')
+  const raw = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'))
+  const application = openProjectSessionApplication({ databasePath: resolveDatabasePath(), locality: () => {} })
+  try { return application.readMessageHistory(raw.session_id).map((entry) => Buffer.from(entry.body).toString('utf8')).join('') }
+  finally { application.close() }
 }
 
 async function freePort(): Promise<number> {
@@ -97,6 +110,8 @@ async function stop(server: ReturnType<typeof spawn>): Promise<void> {
 
 test('session reparent rewrites parent/watch through live backend and only falls back after a local refusal', { timeout: 60_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-reparent-'))
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
   const port = await freePort()
   const oldParent = 'reparent-old-parent'
   const newParent = 'reparent-new-parent'
@@ -120,10 +135,10 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.equal(online.code, 0, online.err)
     assert.match(online.out, new RegExp(`reparented .*${newParent}`))
     assert.equal(parentOf(childADir), newParent)
-    assert.deepEqual(watchers(childADir), [
-      { watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['manual'] },
-      { watcher: newParent, createdAt: watchers(childADir)[1].createdAt, sources: ['parent'] },
-    ])
+    assert.deepEqual(watchers(childADir).map(({ watcher, sources }) => [watcher, sources]).sort(), [
+      [oldParent, ['manual']],
+      [newParent, ['parent']],
+    ].sort())
     assert.equal(parentOf(childBDir), newParent)
     assert.deepEqual(watchers(childBDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
     const oldParentTimelineBefore = timelineText(sessionDir(home, oldParent))
@@ -136,12 +151,12 @@ test('session reparent rewrites parent/watch through live backend and only falls
       'the former parent\'s overlapping manual watch must survive reparent')
     await waitFor(async () => timelineText(sessionDir(home, newParent)).length > newParentTimelineAtHandoff.length,
       'the new parent must receive a later non-working child transition')
-    assert.match(timelineText(sessionDir(home, oldParent)), /review/)
+    assert.match(timelineText(sessionDir(home, oldParent)), /"proposal":"merge"/)
     assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
     const newParentTimeline = timelineText(sessionDir(home, newParent))
     assert.match(newParentTimeline, new RegExp(childA))
     assert.match(newParentTimeline, new RegExp(childB))
-    assert.match(newParentTimeline, /review/)
+    assert.match(newParentTimeline, /"proposal":"merge"/)
 
     writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'new-parent-command', text: 'stale continue', from: newParent }]) + '\n')
     const detached = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {
@@ -150,8 +165,8 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.equal(detached.status, 200)
     assert.deepEqual(await detached.json(), { children: [childA], parent: null, notified: [] })
     assert.equal(parentOf(childADir), null)
-    assert.deepEqual(watchers(childADir), [
-      { watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['manual'] },
+    assert.deepEqual(watchers(childADir).map(({ watcher, sources }) => [watcher, sources]), [
+      [oldParent, ['manual']],
     ], 'detaching removes only the former parent source')
     assert.deepEqual(pendingFrom(childADir), [], 'detaching revokes an undelivered command from the former parent')
 
@@ -159,20 +174,21 @@ test('session reparent rewrites parent/watch through live backend and only falls
     const childCDir = writeSession(home, 'reparent-child-c', oldParent)
     writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
     const local = await runCli(['session', 'reparent', 'reparent-child-c', '--to', newParent], env)
-    assert.equal(local.code, 0, local.err)
-    assert.match(local.err, /reparenting in-process/)
-    assert.equal(parentOf(childCDir), newParent)
-    assert.deepEqual(watchers(childCDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
+    assert.equal(local.code, 1)
+    assert.match(local.err, /no canonical application state/)
+    assert.equal(parentOf(childCDir), null, 'unmigrated JSON input is not a live parent authority')
 
     const childDDir = writeSession(home, 'reparent-child-d', oldParent)
     writeFileSync(join(childDDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
     const remote = await runCli(['session', 'reparent', 'reparent-child-d', '--to', newParent, '--api', `http://127.0.0.1:${await freePort()}`], env)
     assert.equal(remote.code, 1)
     assert.match(remote.err, /no backend reachable/)
-    assert.equal(parentOf(childDDir), oldParent)
-    assert.deepEqual(watchers(childDDir).map((entry) => [entry.watcher, entry.sources]), [[oldParent, ['parent']]])
+    assert.equal(parentOf(childDDir), null)
+    assert.deepEqual(watchers(childDDir), [], 'remote refusal leaves unmigrated JSON input untouched and non-authoritative')
   } finally {
     await stop(backend)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
     rmSync(home, { recursive: true, force: true })
   }
 })

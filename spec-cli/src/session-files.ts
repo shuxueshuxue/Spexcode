@@ -78,7 +78,7 @@ export function inspectSessionFiles(id: string): SessionFileStatus[] {
   })
 }
 
-// Session projections already hold a parsed record; re-checking session.json here would make an in-memory
+// Session projections already hold a parsed runtime envelope; re-checking it here would make an in-memory
 // projection depend on the public route's existence guard. The route-facing list keeps that guard above.
 export function readSessionFiles(id: string): string[] {
   return readFiles(id)

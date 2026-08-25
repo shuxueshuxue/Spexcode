@@ -942,7 +942,7 @@ app.post('/api/sessions/:id/input', async (c) => {
     void drainSession(id).then(() => {
       if (!handoffWasQueued) return
       const application = configuredSessionApplicationIfCutover()
-      if (application ? !application.protocol.listPending(id).length : true) markHumanPromptActive(id)
+      if (application ? !application.readPendingMessages(id).length : true) markHumanPromptActive(id)
     }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })
@@ -989,7 +989,7 @@ app.post('/api/sessions/:id/quarantine/restore', async (c) => {
   return c.json({ ok: true, ...result })
 })
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
-// (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
+// (`runtime.json`) so it survives a restart. Unknown id → 404. That envelope sits INSIDE the watched store, but
 // the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly
 // ([[graph-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
 app.post('/api/sessions/:id/rename', async (c) => {

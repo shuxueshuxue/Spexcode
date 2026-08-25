@@ -41,7 +41,7 @@ scenarios:
       from the rendezvous socket, `spex session send` delivery landing as a user message, and
       reopen resuming the SAME pi conversation (`--session <id>`).
     expected: >-
-      The worker launches with zero trust prompts; session.json advances past launch (SessionStart …
+      The worker launches with zero trust prompts; runtime.json advances past launch (SessionStart …
       Stop fire through dispatch.sh with SPEXCODE_HARNESS=pi); the commit carries the `Session:` trailer;
       liveness reads online while the pane lives and offline within seconds of a kill; a delivered prompt
       appears in the pi TUI as a user turn (best-effort poke); resume brings back the same

@@ -39,6 +39,9 @@ backend answers.
   What degrades is only the derived half: liveness needs a probe an unowned reader must not run, so it
   reports `unknown` — the same honest value a failed probe yields, and one that already withholds every
   action that would need death to be proven ([[state]]).
+  The local cache joins the canonical application row even when the metadata-only `runtime.json` envelope has
+  not yet been materialized (or has already been retired). Missing envelope metadata is therefore not a
+  missing session; the row keeps its durable lifecycle/proposal/note while liveness remains `unknown`.
 - **Remote transport** — the state is physically on another machine. An explicit `--api`/`--port` naming a
   remote endpoint has no local answer, so an unreachable backend is a genuine, loud failure. Nothing is
   faked and nothing falls back.

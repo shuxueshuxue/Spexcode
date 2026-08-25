@@ -11,6 +11,7 @@ import { runtimeRoot } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 
 let cached: ProductionSessionApplication | undefined
+let cachedPath: string | undefined
 let freshStoreOwned = false
 let freshStoreCommitted = false
 let freshStoreLeases = 0
@@ -31,8 +32,9 @@ export function setSessionApplicationCommitObserver(observer: (change: Pick<Comm
 
 /** The backend's sole session application composition. Path selection is shared with self-launch. */
 export function configuredSessionApplication(): ProductionSessionApplication {
-  if (cached !== undefined) return cached
   const databasePath = resolveDatabasePath()
+  if (cached !== undefined && cachedPath === databasePath) return cached
+  if (cached !== undefined) cached.close()
   cached = openProjectSessionApplication({
     databasePath,
     locality: path => { requireLocalDatabasePath(path) },
@@ -42,6 +44,7 @@ export function configuredSessionApplication(): ProductionSessionApplication {
     },
     onRuntimeBound: sessionId => commitWake([sessionId]),
   })
+  cachedPath = databasePath
   return cached
 }
 
@@ -58,11 +61,24 @@ export function sessionApplicationCutoverState(): SessionApplicationCutoverState
   return 'fresh'
 }
 
-/** Resolve the canonical application only when its marker already exists; reads never initialize a fresh store. */
+/** Resolve the canonical application. A legacy tree is cut over at its first canonical access; runtime code
+ * never gets to choose between JSON and SQLite based on the caller or request path. */
 export function configuredSessionApplicationIfCutover(): ProductionSessionApplication | undefined {
   const state = sessionApplicationCutoverState()
   if (state === 'ready') return configuredSessionApplication()
+  if (state === 'migration-required') return initializeMigratedSessionApplication()
+  if (state === 'fresh') return initializeFreshSessionApplication()
+  if (state === 'fenced' || state === 'ambiguous') {
+    throw new Error(`session application cutover is ${state}; refusing a legacy/runtime split`)
+  }
   return undefined
+}
+
+function initializeMigratedSessionApplication(): ProductionSessionApplication {
+  const databasePath = resolveDatabasePath()
+  const recordsRoot = join(runtimeRoot(), 'sessions')
+  migrateJsonSessionRecords({ databasePath, recordsRoot, locality: path => { requireLocalDatabasePath(path) } })
+  return configuredSessionApplication()
 }
 
 /** Initialize a fresh canonical store only after an accepted create has crossed its no-side-effect boundary. */

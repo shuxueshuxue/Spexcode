@@ -39,9 +39,14 @@ jobs:
       - name: typecheck
         working-directory: spec-cli
         run: npx tsc --noEmit
-      - name: Session protocol unit suite
-        working-directory: packages/session-core
-        run: npm test
+      - name: Session package unit suites
+        run: |
+          npm test --workspace=@spexcode/session-protocol
+          npm test --workspace=@spexcode/session-topology
+          npm test --workspace=@spexcode/session-runtime
+          npm test --workspace=@spexcode/session-events
+          npm test --workspace=@spexcode/session-application
+          npm test --workspace=@spexcode/session-selflaunch
       - name: Unit and integration suite
         working-directory: spec-cli
         run: npm test

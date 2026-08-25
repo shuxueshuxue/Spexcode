@@ -26,7 +26,7 @@ scenarios:
     expected: >-
       The event arrives on the debounce scale (sub-second), NOT the ~15s cold tick — the rename route's
       explicit nudge (`notifyBoardChanged`, event source 0) reaches the same debounced funnel as every
-      watcher. The rename writes the session's global `session.json` (inside the watched store), but the
+      watcher. The rename commits canonical session state; the runtime envelope is `runtime.json` inside the watched store, but the
       store fs.watch is best-effort, so the explicit nudge is what makes the sub-second arrival a
       guarantee rather than watcher luck.
   - name: lifecycle-push-latency
@@ -36,8 +36,8 @@ scenarios:
     description: >-
       With a delta subscriber attached (`curl -N '/api/board/stream?mode=delta'`), watch the per-user
       session store with fs.watch (the truth clock) and time, for REAL worker lifecycle transitions
-      (create / propose close / close through the real spex surface), the gap between the session.json
-      write and the SSE frame that renders the new status. Aggregate several runs; report the median per
+      (create / propose close / close through the real spex surface), the gap between the canonical SQLite
+      transition and the SSE frame that renders the new status. Aggregate several runs; report the median per
       transition kind.
     expected: >-
       A lifecycle write reaches a delta subscriber in ≤200ms end to end on the dev box: the change signal

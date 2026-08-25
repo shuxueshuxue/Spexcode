@@ -86,6 +86,7 @@ export type {
   SessionStateChange,
   TransitionSessionInput,
 } from './production.js'
+export type { SessionEvent } from '@spexcode/session-events'
 export type {
   JsonMigrationRecord,
   JsonSessionMigrationOptions,

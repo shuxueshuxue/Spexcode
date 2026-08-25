@@ -5,7 +5,7 @@ session: 29e0d645-6173-4e13-bbaf-f008e25af769
 hue: 280
 desc: The session's append-only log — every authored transition and every message — is the DELIVERY itself, and the one thing about a session any process may observe without owning anything.
 code:
-  - packages/session-core/src/session-timeline.ts
+  - packages/session-events/src/schema.ts
 related:
   - spec-cli/src/session-timeline.ts
   - spec-cli/src/sessions.ts
@@ -90,11 +90,11 @@ archived. A public reader of this log learns what was said; only the queue says 
 
 **Append authored state at its write boundary.** A declaration note is conversation content, so it cannot
 depend on a later sample of the mutable current-state record. Every lifecycle write compares the prior
-`(status, proposal, note)` and synchronously appends a moved value after the new `session.json` lands, in
+`(status, proposal, note)` and synchronously appends a moved value after the canonical SQLite transition commits, in
 whichever process owns that write. A later status may replace the current snapshot, but it can never
 replace or erase the already-appended declaration event. **There is exactly one writer path** — every hook
 shells to `spex internal session-*`, which is the same TypeScript writer the CLI declarations use, so no
-lifecycle move reaches `session.json` without reaching this log. The log is therefore complete on its own:
+lifecycle move reaches the canonical application without reaching this log. The log is therefore complete on its own:
 no observer process, no repair tick, and no read-time deduplication of a move recorded twice.
 
 Internal launch-readiness-pending state is not an authored lifecycle transition. While resume validates a

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync as fsWriteFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
@@ -16,6 +16,29 @@ import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
+import { configuredSessionApplicationIfCutover } from './session-application.js'
+
+// Test fixtures write the runtime envelope directly to exercise harness edges. The production contract has
+// no JSON fallback after cutover, so seed the canonical application row only the first time a fixture envelope
+// is written. Later envelope edits intentionally do NOT update SQLite: those tests prove canonical lifecycle
+// wins over stale runtime metadata.
+function writeFileSync(path: string, data: string, options?: any): void {
+  fsWriteFileSync(path, data, options)
+  if (!path.endsWith('/runtime.json')) return
+  const id = basename(dirname(path))
+  const raw = JSON.parse(data) as Record<string, unknown>
+  const application = configuredSessionApplicationIfCutover()
+  if (!application) throw new Error('fixture write requires the canonical session application')
+  if (application.readState(id)) return
+  const rawStatus = raw.status === OWNED_QUEUE_RAW_STATUS ? 'queued' : raw.status
+  application.createSession({
+    sessionId: id,
+    status: typeof rawStatus === 'string' && rawStatus ? rawStatus : 'idle',
+    proposal: typeof raw.proposal === 'string' && raw.proposal ? raw.proposal : null,
+    note: typeof raw.note === 'string' && raw.note ? raw.note : null,
+    parentSessionId: typeof raw.parent === 'string' && raw.parent ? raw.parent : null,
+  })
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // This file mutates process-global harness and runtime state, so its fixtures must not overlap.
@@ -31,14 +54,14 @@ const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) 
 }
 
 test('canonical delivery retry reads the SQLite queue instead of legacy pending.json', () => {
-  const pending = { protocol: { listPending: () => [{ messageId: 'sqlite-message' }] } } as any
-  const empty = { protocol: { listPending: () => [] } } as any
+  const pending = { readPendingMessages: () => [{ messageId: 'sqlite-message' }] } as any
+  const empty = { readPendingMessages: () => [] } as any
   assert.equal(sessionHasPendingDelivery('canonical-pending', pending), true)
   assert.equal(sessionHasPendingDelivery('canonical-empty', empty), false)
 })
 
 test('canonical delivery retry drops a record whose protocol address was retired', () => {
-  const missing = { protocol: { listPending: () => { const error = new Error('unknown protocol address: legacy-id'); (error as any).code = 'PROTOCOL_SESSION_UNKNOWN'; throw error } } } as any
+  const missing = { readPendingMessages: () => { const error = new Error('unknown protocol address: legacy-id'); (error as any).code = 'PROTOCOL_SESSION_UNKNOWN'; throw error } } as any
   assert.equal(sessionHasPendingDelivery('legacy-id', missing), false)
 })
 
@@ -46,11 +69,11 @@ test('canonical delivery retry waits for a runtime binding instead of polling an
   let reads = 0
   const unbound = {
     resolveRuntime: () => null,
-    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+    readPendingMessages: () => { reads += 1; return [{ messageId: 'queued-message' }] },
   } as any
   const bound = {
     resolveRuntime: () => ({ status: 'bound' }),
-    protocol: { listPending: () => { reads += 1; return [{ messageId: 'queued-message' }] } },
+    readPendingMessages: () => { reads += 1; return [{ messageId: 'queued-message' }] },
   } as any
   assert.equal(sessionHasPendingDelivery('unbound', unbound), false)
   assert.equal(sessionHasPendingDelivery('bound', bound), true)
@@ -128,8 +151,25 @@ function assertLiveSessionsUnchanged(before: LiveSessionsCensus, label: string):
     `${label} must not create, remove, or retarget any id in ${LIVE_PROJECT_SESSIONS}`)
 }
 function assertIsolatedResumeStore(home: string, id: string): void {
+  // The test bootstrap pins an explicit database path. Keep that path aligned with the temporary home when
+  // a fixture swaps homes inside one worker; otherwise the runtime envelope and canonical SQLite row split.
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   assert.ok(sessionStoreDir(id).startsWith(`${home}/`), `resume fixture ${id} store escaped isolated SPEXCODE_HOME`)
   assert.ok(runtimeRoot().startsWith(`${home}/`), `resume fixture ${id} runtime root escaped isolated SPEXCODE_HOME`)
+}
+function canonicalState(id: string): { status: string; proposal: string | null; note: string | null; parentSessionId: string | null } {
+  const state = configuredSessionApplicationIfCutover()?.readState(id)
+  assert.ok(state, `fixture ${id} must have a canonical session row`)
+  return state
+}
+function transitionFixtureState(id: string, status: string, proposal: string | null = null, note: string | null = null): void {
+  const application = configuredSessionApplicationIfCutover()
+  assert.ok(application, 'fixture state transition requires the canonical session application')
+  application.transitionSession(id, { status, proposal, note })
+}
+function withoutLifecycleFields(raw: Record<string, unknown>): Record<string, unknown> {
+  const { status: _status, proposal: _proposal, note: _note, parent: _parent, ...metadata } = raw
+  return metadata
 }
 
 test('command presets compose once at the backend prompt boundary while unknown slash text passes through', serial, () => {
@@ -254,8 +294,10 @@ test('session-create API rejects stale fields before entering the transaction', 
 
 test('session-create API refuses the retired JSON store while migration is fenced', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const home = mkdtempSync(join(tmpdir(), 'spex-json-migration-fence-'))
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   try {
     const fence = jsonMigrationFencePath(join(runtimeRoot(), 'sessions'))
     mkdirSync(dirname(fence), { recursive: true })
@@ -267,6 +309,8 @@ test('session-create API refuses the retired JSON store while migration is fence
   } finally {
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })
@@ -353,7 +397,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
     node: 'sessions-core', title: '', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
-    harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
+    harness_session_id: `thread-${id}`, runtime_start_token: 'fixture-start', stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',
     ...overrides,
@@ -367,9 +411,9 @@ function writeResumeTmuxFixture(bin: string, commandPath: string, launchPidPath:
 set -eu
 args=" $* "
 if [[ "$args" == *" list-sessions "* ]] || [[ "$args" == *" list-panes "* ]]; then exit 0; fi
-if [[ "$args" == *" send-keys "* && "$args" == *" -l "* ]]; then printf '%s' "\${!#}" > ${JSON.stringify(commandPath)}; exit 0; fi
-if [[ "$args" == *" send-keys "* && "\${!#}" == "Enter" ]]; then
-  bash -c "$(cat ${JSON.stringify(commandPath)})" >/dev/null 2>&1 &
+if [[ "\${3-}" == "send-keys" && "\${6-}" == "-l" ]]; then printf '%s' "\${!#}" > ${JSON.stringify(commandPath)}; exit 0; fi
+if [[ "\${3-}" == "send-keys" && "\${6-}" == "Enter" ]]; then
+  nohup bash -c "$(cat ${JSON.stringify(commandPath)})" >/dev/null 2>&1 &
   printf '%s' "$!" > ${JSON.stringify(launchPidPath)}
 fi
 exit 0
@@ -438,7 +482,7 @@ exec sleep 30
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch,
     node: 'launch', title: '', name: '', parent: '', status: 'active', proposal: '',
-    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '', runtime_start_token: 'fixture-start',
     stopped: true, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
@@ -470,8 +514,11 @@ exec sleep 30
 
     // This is the durable state left by the first start budget expiring before native identity/rollout proof.
     // A later send is accepted, but cannot become the conversation's first actual task.
-    assert.deepEqual(await sendText(id, 'later durable task'), { ok: true })
-    await Promise.all([drainSession(id), drainSession(id)])
+    assert.deepEqual(await sendText(id, 'later durable task'), { ok: true, delivery: 'queued' })
+    await Promise.all([
+      assert.rejects(drainSession(id), /no bound spex-governed runtime/),
+      assert.rejects(drainSession(id), /no bound spex-governed runtime/),
+    ])
     assert.deepEqual(handedOver, [], 'later durable send waits behind the authoritative launch payload')
     assert.equal(readFileSync(sessionArtifactPath(id, 'launch'), 'utf8'), resolvedLaunch,
       'the first timed-out start leaves the authoritative payload recoverable')
@@ -579,7 +626,7 @@ exec sleep 30
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch,
     node: 'launch', title: '', name: '', parent: '', status: 'queued', proposal: '',
-    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '', runtime_start_token: 'fixture-start',
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
@@ -610,7 +657,7 @@ exec sleep 30
       writeFileSync(proofPath, contents)
       await assert.rejects(drainQueue(), pattern)
       const rejected = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-      assert.match(rejected.note, /launch readiness warning/)
+      await waitUntil(() => /launch readiness warning/.test(canonicalState(id).note || ''), 'launch readiness warning publication')
       assert.equal(rejected.harness_session_id, '')
       assert.equal(readFileSync(sessionArtifactPath(id, 'launch'), 'utf8'), launchPayload)
       assert.equal(readFileSync(proofPath, 'utf8'), contents)
@@ -628,19 +675,18 @@ exec sleep 30
     assert.equal(readFileSync(invocationCount, 'utf8'), '1', 'removing the bad proof makes the next drain launch once')
     assert.equal(readFileSync(firstTurnCount, 'utf8'), '1')
     assert.equal(readFileSync(invocationArgs, 'utf8'), launchPayload)
-    assert.deepEqual(await sendText(id, 'later durable task'), { ok: true })
+    assert.deepEqual(await sendText(id, 'later durable task'), { ok: true, delivery: 'queued' })
     assert.deepEqual(handedOver, [])
     assert.equal(stageHarnessLaunchProof(id, 'thread-queued', launchPayload), true)
     assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch receipt/)
-    await waitUntil(() => /forced post-proof launch readiness timed out/.test(
-      JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).note || ''), 'post-proof queued liveness note')
+    await waitUntil(() => /forced post-proof launch readiness timed out/.test(canonicalState(id).note || ''), 'post-proof queued liveness note')
     await sleep(0)
 
     const rejectedLiveness = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(rejectedLiveness.harness_session_id, 'thread-queued')
-    assert.equal(rejectedLiveness.status, 'active', 'an online worker remains active after readiness timeout')
+    assert.equal(canonicalState(id).status, 'active', 'an online worker remains active after readiness timeout')
     assert.equal(rejectedLiveness.stopped, false, 'an online worker is not marked stopped by readiness timeout')
-    assert.match(rejectedLiveness.note, /^launch readiness warning:/)
+    assert.match(canonicalState(id).note || '', /^launch readiness warning:/)
     assert.match(readFileSync(join(sessionStoreDir(id), 'watchers.json'), 'utf8'), /readiness-timeout-snapshot/, 'watcher snapshot debt survives the warning')
     assert.equal(existsSync(sessionArtifactPath(id, 'launch')), false)
     assert.equal(existsSync(proofPath), false)
@@ -648,13 +694,14 @@ exec sleep 30
     assert.deepEqual(handedOver, [], 'post-proof liveness rejection does not drain later delivery')
 
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({ ...rejectedLiveness, status: 'queued' }, null, 2)}\n`)
+    transitionFixtureState(id, 'queued', null, null)
     await drainQueue()
     const slotRetry = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.match(slotRetry.note, /authoritative resolved launch payload is missing/,
-      'the next drain reaches the record only after the asynchronous slot is released')
+    assert.equal(canonicalState(id).status, 'queued', 'a readiness warning releases the slot without inventing another launch')
     assert.equal(readFileSync(invocationCount, 'utf8'), '1')
 
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({ ...slotRetry, status: 'active', stopped: true, note: '' }, null, 2)}\n`)
+    transitionFixtureState(id, 'active', null, null)
     assert.deepEqual(await resumeSession(id, { force: true }), { ok: true })
     await waitUntil(() => readFileSync(invocationCount, 'utf8') === '2', 'bound-thread resume')
     assert.equal(readFileSync(invocationArgs, 'utf8'), '--resume thread-queued')
@@ -705,11 +752,13 @@ test('resume holds the launch-readiness fence after shared-runtime spawn until t
   const spex = join(process.cwd(), 'bin', 'spex.mjs')
   writeFileSync(helper, `#!/usr/bin/env bash
 set -eu
+mkdir -p ${JSON.stringify(sharedDir)}
 ${JSON.stringify(process.execPath)} ${JSON.stringify(spex)} internal shared-runtime-spawn ${JSON.stringify(sharedDir)} ${JSON.stringify(join(sharedDir, 'runtime.log'))} ${JSON.stringify(sharedPid)} ${JSON.stringify(sharedReceipt)} ${JSON.stringify(process.execPath)} -e 'setInterval(() => {}, 1000)'
 touch ${JSON.stringify(consumed)}
 `)
   chmodSync(helper, 0o755)
   writeResumeFixtureRecord(id, project, helper)
+  const initialTimeline = readTimeline(id)?.events ?? []
 
   let releaseReady!: () => void
   const ready = new Promise<void>((resolve) => { releaseReady = resolve })
@@ -749,7 +798,7 @@ touch ${JSON.stringify(consumed)}
     await waitUntil(() => validationEntered, 'post-pending readiness validation')
     const internalPending = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(internalPending.stopped, false, 'the internal candidate crosses its durable pending boundary')
-    assert.equal(internalPending.status, 'idle')
+    assert.equal(canonicalState(id).status, 'active', 'the public canonical lifecycle remains the pre-resume state during the internal fence')
     assert.equal(internalPending.launch_readiness_pending?.original?.status, 'active')
     const apiRows = await listSessions(true)
     const apiRow = apiRows.find((row) => row.id === id)
@@ -758,15 +807,15 @@ touch ${JSON.stringify(consumed)}
     assert.equal(apiRow.status, 'offline', 'sessions API source never projects the pending candidate online')
     assert.equal(apiRow.liveness, 'offline', 'sessions API source remains stopped while validation is pending')
     assert.equal(apiRow.note, 'preserve-before-readiness')
-    assert.deepEqual(readTimeline(id)?.events ?? [], [], 'pending publication emits no lifecycle event')
+    assert.deepEqual(readTimeline(id)?.events ?? [], initialTimeline, 'pending publication emits no lifecycle event')
     releaseValidation()
     assert.deepEqual(await pending, { ok: true })
     assert.equal(readinessValidations, 1, 'the same fence is validated after the record commit')
     const published = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(published.stopped, false)
-    assert.equal(published.status, 'idle')
+    assert.equal(canonicalState(id).status, 'idle')
     assert.equal(published.launch_readiness_pending, '')
-    assert.deepEqual((readTimeline(id)?.events ?? []).map((event) => event.kind === 'status'
+    assert.deepEqual((readTimeline(id)?.events ?? []).slice(initialTimeline.length).map((event) => event.kind === 'status'
       ? [event.status, event.proposal, event.note]
       : [event.kind]), [['idle', null, 'preserve-before-readiness']], 'success publishes the real lifecycle exactly once')
     await waitUntil(() => existsSync(sharedPid), 'shared runtime pid')
@@ -819,6 +868,9 @@ test('successful resume publishes a capacity-queued record as idle after readine
   process.env.PATH = `${bin}:${previousPath}`
   const helper = join(home, 'helper.sh'); writeFileSync(helper, '#!/usr/bin/env bash\nexit 0\n'); chmodSync(helper, 0o755)
   writeResumeFixtureRecord(id, project, helper)
+  configuredSessionApplicationIfCutover()?.bindRuntime(id, {
+    namespace: 'spex-governed', runtimeKind: 'codex-headless', nativeSessionId: `thread-${id}`, nativeStartToken: 'fixture-start',
+  })
   const queued = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     ...queued,
@@ -826,6 +878,7 @@ test('successful resume publishes a capacity-queued record as idle after readine
     stopped: false,
     launch_owner: backendLaunchAuthority(),
   }, null, 2)}\n`)
+  transitionFixtureState(id, 'queued', null, null)
   try {
     ;(codexHeadlessHarness as any).launchReady = async () => ({
       proof: { kind: 'queued-resume-ready' },
@@ -834,7 +887,7 @@ test('successful resume publishes a capacity-queued record as idle after readine
     assert.deepEqual(await resumeSession(id), { ok: true })
 
     const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'idle', 'readiness publishes a live lifecycle, never the pre-launch queue state')
+    assert.equal(canonicalState(id).status, 'idle', 'readiness publishes a live lifecycle, never the pre-launch queue state')
     assert.equal(stored.stopped, false)
     assert.equal(stored.launch_owner, '')
     const publicRow = (await listSessions(true)).find((row) => row.id === id)
@@ -868,6 +921,7 @@ test('successful resume clears a prior terminal error instead of leaving an onli
   execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const id = `error-resume-state-${process.pid}`
   const commandPath = join(home, 'tmux-command')
   const launchPidPath = join(home, 'launch.pid')
@@ -878,6 +932,10 @@ test('successful resume clears a prior terminal error instead of leaving an onli
   writeResumeFixtureRecord(id, project, helper, {
     status: 'error', stopped: true, note: 'queued launch readiness failed: previous attempt',
   })
+  transitionFixtureState(id, 'error', null, 'queued launch readiness failed: previous attempt')
+  configuredSessionApplicationIfCutover()?.bindRuntime(id, {
+    namespace: 'spex-governed', runtimeKind: 'codex-headless', nativeSessionId: `thread-${id}`, nativeStartToken: 'fixture-start',
+  })
   try {
     codexHeadlessHarness.launchCmd = () => helper
     ;(codexHeadlessHarness as any).launchReady = async () => ({
@@ -886,8 +944,8 @@ test('successful resume clears a prior terminal error instead of leaving an onli
     })
     assert.deepEqual(await resumeSession(id), { ok: true })
     const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'idle', 'a successful resume returns an errored record to the resting live lifecycle')
-    assert.equal(stored.note, '', 'the prior terminal error is no longer current after successful resume')
+    assert.equal(canonicalState(id).status, 'idle', 'a successful resume returns an errored record to the resting live lifecycle')
+    assert.equal(canonicalState(id).note, null, 'the prior terminal error is no longer current after successful resume')
     assert.equal(stored.stopped, false)
     const publicRow = (await listSessions(true)).find((row) => row.id === id)
     assert.ok(publicRow)
@@ -934,7 +992,7 @@ test('a stopped queued record is ineligible for automatic and repeated queue dra
     session_id: id, governed: true, worktree_path: project, branch: 'main',
     node: 'launch', title: '', name: '', parent: '', status: OWNED_QUEUE_RAW_STATUS, proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
-    harness_session_id: id, stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
+    harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: helper, launch_owner: backendLaunchAuthority(),
     create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
@@ -951,7 +1009,7 @@ test('a stopped queued record is ineligible for automatic and repeated queue dra
 
     const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(stored.stopped, true)
-    assert.equal(stored.status, OWNED_QUEUE_RAW_STATUS, 'stop wins over every drain/replay entry')
+    assert.equal(canonicalState(id).status, 'queued', 'stop wins over every drain/replay entry')
     assert.equal(existsSync(launches), false, 'no drain launches the stopped prepared prompt')
     assert.equal(canDrainQueued(fromRaw(stored), backendLaunchAuthority()), false)
   } finally {
@@ -992,6 +1050,7 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
     const helper = join(home, 'helper.sh'); writeFileSync(helper, '#!/usr/bin/env bash\nexit 7\n'); chmodSync(helper, 0o755)
     writeResumeFixtureRecord(id, project, helper)
     const original = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    const initialTimeline = readTimeline(id)?.events ?? []
     try {
       codexHeadlessHarness.launchCmd = () => helper
       ;(codexHeadlessHarness as any).sharedRuntimeSpawn = false
@@ -1014,9 +1073,18 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
           ? /adapter validator threw/
           : /did not become ready|readiness changed/)
       const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-      assert.deepEqual(stored, original, 'every failed readiness outcome restores the complete pre-resume record')
+      assert.deepEqual(withoutLifecycleFields(stored), withoutLifecycleFields(original),
+        'every failed readiness outcome restores the complete runtime envelope')
+      const originalState = {
+        status: original.status,
+        proposal: original.proposal || null,
+        note: original.note || null,
+      }
+      const restoredState = canonicalState(id)
+      assert.deepEqual({ status: restoredState.status, proposal: restoredState.proposal, note: restoredState.note }, originalState,
+        'every failed readiness outcome restores the canonical lifecycle')
       assert.equal(codexHeadlessHarness.liveness({ session: id, stopped: stored.stopped }, false), 'offline')
-      assert.deepEqual(readTimeline(id)?.events ?? [], [], 'failed readiness emits no lifecycle transition')
+      assert.deepEqual(readTimeline(id)?.events ?? [], initialTimeline, 'failed readiness emits no lifecycle transition')
     } finally {
       codexHeadlessHarness.launchCmd = originalLaunchCmd
       ;(codexHeadlessHarness as any).sharedRuntimeSpawn = originalSharedRuntimeSpawn
@@ -1069,6 +1137,7 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
       },
     },
   }, null, 2)}\n`)
+  const initialTimeline = readTimeline(id)?.events ?? []
   try {
     ;(codexHeadlessHarness as any).launchReady = async () => { throw new Error('stale pending reached launch') }
     const staleRow = (await listSessions(true)).find((row) => row.id === id)
@@ -1080,10 +1149,15 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
     assert.equal(result.ok, false)
     assert.equal(result.refused, true)
     assert.match(result.error || '', /stale launch readiness pending.*retry/i)
-    assert.deepEqual(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')), original,
-      'stale recovery restores the exact frozen record and clears pending')
+    const restored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.deepEqual(withoutLifecycleFields(restored), withoutLifecycleFields(original),
+      'stale recovery restores the exact runtime envelope and clears pending')
+    const restoredState = canonicalState(id)
+    assert.deepEqual({ status: restoredState.status, proposal: restoredState.proposal, note: restoredState.note }, {
+      status: original.status, proposal: original.proposal || null, note: original.note || null,
+    }, 'stale recovery restores the canonical lifecycle')
     assert.equal(existsSync(commandPath), false, 'stale recovery occurs before any launch transport')
-    assert.deepEqual(readTimeline(id)?.events ?? [], [], 'stale recovery emits no lifecycle event')
+    assert.deepEqual(readTimeline(id)?.events ?? [], initialTimeline, 'stale recovery emits no lifecycle event')
   } finally {
     ;(codexHeadlessHarness as any).launchReady = originalLaunchReady
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
@@ -1097,8 +1171,10 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
 
 test('expired launch readiness residue becomes terminal error/offline during queue recovery', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const home = mkdtempSync(join(tmpdir(), 'spex-launch-limbo-'))
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const id = `launch-limbo-${process.pid}`
   const worktree = process.cwd()
   const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
@@ -1112,13 +1188,15 @@ test('expired launch readiness residue becomes terminal error/offline during que
   }, null, 2)}\n`)
   try {
     await drainQueue()
-    await waitUntil(() => JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).status === 'error', 'terminal launch readiness error')
+    await waitUntil(() => canonicalState(id).status === 'error', 'terminal launch readiness error')
     const settled = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(settled.stopped, true, 'terminal readiness failure is offline')
-    assert.match(settled.note, /^queued launch readiness failed: native identity and first-turn rollout receipt/)
+    assert.match(canonicalState(id).note || '', /^queued launch readiness failed: native identity and first-turn rollout receipt/)
   } finally {
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })
@@ -1410,6 +1488,7 @@ esac
 
 test('public close files queued and unbound rows without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
@@ -1424,6 +1503,7 @@ test('public close files queued and unbound rows without entering the unrelated 
   process.chdir(project)
   const main = mainRoot()
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
 
   const prepare = (suffix: string, thread = '') => {
     const id = `queued-close-${suffix}-${process.pid}`
@@ -1463,6 +1543,7 @@ test('public close files queued and unbound rows without entering the unrelated 
     const unbound = prepare('unbound')
     const raw = JSON.parse(readFileSync(sessionRecordPath(unbound.id), 'utf8'))
     writeFileSync(sessionRecordPath(unbound.id), `${JSON.stringify({ ...raw, status: 'active', launch_owner: '' }, null, 2)}\n`)
+    transitionFixtureState(unbound.id, 'active', null, null)
     rmSync(sessionArtifactPath(unbound.id, 'launch'))
     assert.equal(await closeSession(unbound.id), true)
     assert.equal(existsSync(unbound.path), false, 'unbound launch residue close removes the clean worktree')
@@ -1473,6 +1554,7 @@ test('public close files queued and unbound rows without entering the unrelated 
     const unboundDirty = prepare('unbound-dirty')
     const dirtyRaw = JSON.parse(readFileSync(sessionRecordPath(unboundDirty.id), 'utf8'))
     writeFileSync(sessionRecordPath(unboundDirty.id), `${JSON.stringify({ ...dirtyRaw, status: 'active', launch_owner: '' }, null, 2)}\n`)
+    transitionFixtureState(unboundDirty.id, 'active', null, null)
     rmSync(sessionArtifactPath(unboundDirty.id, 'launch'))
     writeFileSync(join(unboundDirty.path, 'uncommitted.txt'), 'owned work\n')
     assert.equal(await closeSession(unboundDirty.id), true)
@@ -1529,6 +1611,8 @@ test('public close files queued and unbound rows without entering the unrelated 
     }
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
     process.chdir(previousCwd)
     rmSync(home, { recursive: true, force: true })
   }
@@ -1713,8 +1797,10 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
 
 test('machine turn failures share one active-only error projection', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
+  const prevDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const home = mkdtempSync(join(tmpdir(), 'spex-headless-turn-state-'))
   process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const id = `headless-turn-state-${process.pid}`
   // a REAL worktree dir: a record naming a directory that does not exist is a retired session, which no
   // lifecycle writer may touch — this test is about the turn-failure CAS on a LIVE one.
@@ -1731,19 +1817,16 @@ test('machine turn failures share one active-only error projection', serial, () 
     writeFileSync(sessionRecordPath(id), JSON.stringify(raw, null, 2) + '\n')
     assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '1'), true)
     let stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'error')
-    assert.equal(stored.note, 'opencode-headless turn exited with exit code 1')
+    assert.equal(canonicalState(id).status, 'error')
+    assert.equal(canonicalState(id).note, 'opencode-headless turn exited with exit code 1')
 
-    stored.status = 'awaiting'
-    stored.proposal = 'nothing'
-    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    transitionFixtureState(id, 'awaiting', 'nothing', canonicalState(id).note)
     assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '7'), false, 'a declaration wins over a late child close')
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'awaiting')
-    assert.equal(stored.note, 'opencode-headless turn exited with exit code 1')
+    assert.equal(canonicalState(id).status, 'awaiting')
+    assert.equal(canonicalState(id).note, 'opencode-headless turn exited with exit code 1')
 
-    stored.status = 'active'
-    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    transitionFixtureState(id, 'active', null, canonicalState(id).note)
     const nativeNote = turnFailureNote('codex', {
       message: '  context   window exceeded  ',
       completedAt: 1_700_000_000,
@@ -1751,25 +1834,25 @@ test('machine turn failures share one active-only error projection', serial, () 
     assert.equal(nativeNote, 'codex turn failed at 2023-11-14T22:13:20.000Z: context window exceeded')
     assert.equal(markTurnFailure(id, nativeNote), true)
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'error')
-    assert.equal(stored.note, nativeNote)
+    assert.equal(canonicalState(id).status, 'error')
+    assert.equal(canonicalState(id).note, nativeNote)
 
-    stored.status = 'active'
-    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    transitionFixtureState(id, 'active', null, canonicalState(id).note)
     assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '0'), false, 'zero exit never manufactures an error')
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'active')
-    assert.equal(stored.note, nativeNote)
+    assert.equal(canonicalState(id).status, 'active')
+    assert.equal(canonicalState(id).note, nativeNote)
 
-    stored.stopped = true
-    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    writeFileSync(sessionRecordPath(id), JSON.stringify({ ...stored, stopped: true }, null, 2) + '\n')
     assert.equal(markTurnFailure(id, 'late failure after stop'), false, 'explicit stop wins over a late native completion')
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    assert.equal(stored.status, 'active')
-    assert.equal(stored.note, nativeNote)
+    assert.equal(canonicalState(id).status, 'active')
+    assert.equal(canonicalState(id).note, nativeNote)
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome
+    if (prevDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = prevDatabasePath
     rmSync(home, { recursive: true, force: true })
   }
 })

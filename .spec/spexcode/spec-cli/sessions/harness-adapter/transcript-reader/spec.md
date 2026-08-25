@@ -32,4 +32,4 @@ tool result in one native event is matched independently. A result whose call li
 omitted, but its bytes are counted rather than silently represented as an empty result. After passing `to`, the
 reader scans a fixed lookahead window for timestamp disorder before stopping, so the cold tail remains bounded.
 A status row in the dashboard supplies the interval and fetches it only when expanded. The transcript remains a
-payload, never a field in `timeline.ndjson` or `session.json`.
+payload, never a field in `timeline.ndjson` or `runtime.json`.

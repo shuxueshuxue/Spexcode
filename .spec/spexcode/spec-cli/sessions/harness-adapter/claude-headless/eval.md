@@ -35,7 +35,7 @@ scenarios:
       - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.interrupt
       - spec-cli/src/claude-headless.ts#INTERRUPT_TIMEOUT_MS
   - name: record-liveness
-    description: Read the public session state with and without a resident turn child, and after deliberately making the controller transport unreachable while leaving session.json intact.
+    description: Read the public session state with and without a resident turn child, and after deliberately making the controller transport unreachable while leaving runtime.json intact.
     expected: The intact record always reads online; the unreachable controller is reported only as a loud deliver failure, and removing the session record removes the session rather than producing an offline row.
     tags: [backend-api, cli]
     code: [spec-cli/src/claude-headless.ts]

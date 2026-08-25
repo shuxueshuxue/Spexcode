@@ -23,7 +23,7 @@ shared protocol transaction seam. It does not create the protocol address or inf
 The adapter does not own storage placement. Production composition must first resolve one explicit absolute protocol
 database path, positively establish local-filesystem locking capability, open that database, initialize the governed
 protocol address, and obtain the shared runtime-binding component. Neither `runtimeRoot()`, the legacy session record
-directory, nor `session.json` is a protocol database-path authority.
+directory, nor the runtime envelope `runtime.json`, is a protocol database-path authority.
 
 The current governed registration path has a durable `harness_session_id` and Codex generation identity, but it does
 not yet receive an explicit protocol database handle or a locality verdict. Non-Codex direct registration also does

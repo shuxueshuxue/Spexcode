@@ -255,11 +255,12 @@ receipt retains the ordinary descendant refusal before shared-runtime mutation a
 
 ### Record integrity — one writer, three readings, no revival
 
-**The runtime/worktree envelope of `session.json` is produced by ONE writer here**, by serializing the typed
+**The runtime/worktree envelope of `runtime.json` is produced by ONE writer here**, by serializing the typed
 record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
 not a shell, not a route. After JSON migration, lifecycle (`status`, `proposal`, `note`, and `parent`) is owned
-only by the canonical session application and its events; the envelope keeps its old bytes as migration evidence
-and is never written from canonical state. A record whose `runtime_owner` names an external controller is instead written by
+only by the canonical session application and its events; the envelope is runtime metadata and is never written from
+canonical lifecycle state. `session.json` is migration input only and is retired once the migration marker is published.
+A record whose `runtime_owner` names an external controller is instead written by
 [[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
 stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
 format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
@@ -348,7 +349,7 @@ and that the named adapter is healthy. A named native thread must either be abse
 idle, descendant-free native thread that its own adapter archives and re-censuses as unloaded; every live,
 active, owned, ambiguous, descendant-bearing, changed-generation, malformed, or unknown control refuses before
 the record moves. The operation never sends an OS signal, removes a worktree or branch, guesses an adapter, or
-turns opaque bytes into a lifecycle record. On success it atomically moves only `session.json` out of the active
+turns opaque bytes into a lifecycle record. On success it atomically moves only `runtime.json` out of the active
 session directory to a per-project quarantine bundle, preserving its byte-exact payload plus the supplied claim
 and the independently observed absence proof. The ordinary record enumeration then removes the corrupt row from
 the session list, graph, and resource projection without a special hide list. `restore` is the explicit reverse:

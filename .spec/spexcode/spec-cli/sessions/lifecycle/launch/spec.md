@@ -31,7 +31,7 @@ prompt. There is no separate CLI flag, API field, or function parameter that can
 text the worker sees.
 
 The launch adds the `node/<slug>` worktree (off the base branch), then writes
-the session's `governed:true` record `session.json` (+ the originating `prompt`, the authoritative resolved
+the session's `governed:true` record `runtime.json` (+ the originating `prompt`, the authoritative resolved
 `launch` payload, and at launch the `launch.sh` script) into the GLOBAL per-session store ([[runtime]]) — NOT the worktree, which stays
 pristine — `materialize`s the spec-discipline contract into the worktree's own `CLAUDE.md`/`AGENTS.md`
 ([[harness-delivery]]), and **queues the worktree for launch** on a private

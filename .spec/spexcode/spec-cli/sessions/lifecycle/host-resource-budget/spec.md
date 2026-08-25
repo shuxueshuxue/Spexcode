@@ -114,7 +114,7 @@ available through `spex session resources` and its JSON form, with:
 - unattributed cost kept visible as an explicit blind spot.
 
 Session owners and shared-runtime references join through [[runtime]]'s one public-record projection, never
-directly through candidate `session.json` bytes. A launch-readiness-pending owner/reference therefore retains
+directly through candidate `runtime.json` bytes. A launch-readiness-pending owner/reference therefore retains
 its frozen lifecycle fields and reports offline until publication. A malformed pending fence remains visible
 as a corrupt/unknown session owner with no reclaim authority; it cannot be reclassified from candidate status,
 stopped, archive, or proposal fields. Invalid lifecycle/proposal enum members are malformed, and a live

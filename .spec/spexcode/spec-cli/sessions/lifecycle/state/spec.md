@@ -201,20 +201,20 @@ hooks run inside the shared per-project app-server, whose env can carry another 
 that through `harness_session_id` to the governed SpexCode record. That alias is created by the backend launch
 path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, fires and persists the
 first prompt, then stages the returned thread id for the lifecycle owner to bind on the governed record. The runtime
-envelope path is project key from the git common dir → `<store>/projects/<enc>/sessions/<id>/session.json`; lifecycle
+envelope path is project key from the git common dir → `<store>/projects/<enc>/sessions/<id>/runtime.json`; lifecycle
 state is read and written through the canonical application. Hook shells pass native event identity directly to the
-canonical writer; they do not read `session.json` as a second governed/lifecycle authority.
+canonical writer; they do not read `runtime.json` as a second governed/lifecycle authority.
 The hooks split on the canonical application's session address, not on an envelope grep. The **board-lifecycle**
 hooks below (mark-active, the Stop gate, StopFailure→error, idle) ask the canonical writer whether the session is
 governed; a non-governed (user-self-launched) record — or none at all — no-ops (the Stop gate exits 0 SILENTLY),
-because a self-launched agent has no board to feed. The hook shell never reads `session.json` to make that decision:
+because a self-launched agent has no board to feed. The hook shell never reads `runtime.json` to make that decision:
 the runtime envelope is metadata, not a lifecycle gate, and an old/missing envelope must not disable mark-active.
 The board-lifecycle hooks pass the id explicitly to the canonical session application because there is no worktree
 `.session` to fall back on. mark-active has one path: it asks the package to compare against canonical state, and a
 semantic no-op emits no event. A writer that refuses (an unreadable record, a retired session — [[sessions-core]])
 says so instead of silently repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
-global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
+global session dir (created on demand even for a session with no `runtime.json`). So board state is a managed-
 session concern; spec-awareness is universal.
 
 For the two known pre-structured `mark-active` source blobs still tracked by existing projects, dispatch performs
@@ -284,7 +284,7 @@ irritation). Trimming stays the author's informed choice — never a silent loss
 the notice is a nudge riding the confirmation, not a gate.
 
 A record that EXISTS but cannot carry state is a different answer from a missing one, and the writer must not
-blur them: an unreadable `session.json` or a retired session (worktree gone) is refused with that reason and
+blur them: an unreadable `runtime.json` or a retired session (worktree gone) is refused with that reason and
 its repair — never the wrong-cwd diagnosis below, which would send the author hunting a directory that is fine
 ([[sessions-core]]). A declaration that genuinely cannot find its record **diagnoses itself** instead of
 answering a bare "no session record". The store resolves from the **current directory** (the cwd's git common dir), so the classic failure

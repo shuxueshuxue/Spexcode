@@ -28,7 +28,7 @@
   <section>
     <h2>一页结论</h2>
     <div class="callout good"><strong>旧通信包已退出构建图。</strong> <code>@spexcode/session-core</code> 已从 workspace、root build、CLI launcher、发布清单和 CI 删除；生产依赖只走 <code>session-protocol → session-application</code> 的分层 stack。运行时 envelope 已切到 <code>runtime.json</code>，旧输入只经过一次迁移。</div>
-    <div class="callout good"><strong>生命周期事实已收口。</strong> envelope 不再保存 <code>status</code>、<code>proposal</code>、<code>note</code>；这些字段只来自 SQLite application。hook 权限旁路已修复，canonical writer 负责治理边界。</div>
+    <div class="callout good"><strong>生命周期事实已收口。</strong> envelope 不再保存 <code>status</code>、<code>proposal</code>、<code>note</code>；这些字段只来自 SQLite application。hook 权限旁路已修复，canonical writer 负责治理边界。CLI 本地 selector 也已修复为在缺少 <code>runtime.json</code> 时回读 canonical application row，不再把“没有 envelope”误报成“没有 session”。</div>
     <div class="grid"><div class="card"><strong>0</strong><span>session-core 生产依赖</span></div><div class="card"><strong>1</strong><span>canonical application owner</span></div><div class="card"><strong>1</strong><span>PreToolUse dispatcher owner per checkout</span></div></div>
   </section>
 
@@ -68,7 +68,7 @@
 
   <section>
     <h2>迁移删除门的新证据</h2>
-    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。生产写路径与 hook dispatch 已通过聚焦回归；剩余旧名称集中在迁移输入、spec/eval 夹具和历史文档，下一轮可按删除门逐类消化。</p>
+    <p><code>session-application</code> 的 JSON cutover 现在把旧 timeline 的 status/sent 事件和 pending debt 导入 SQLite，再备份并删除 <code>watchers.json</code>、<code>pending.json</code>、<code>timeline.ndjson</code>、编号 timeline 段与 <code>cursors.json</code>；每个 envelope 只保留 runtime/worktree 元数据。生产写路径与 hook dispatch 已通过聚焦回归；实机复核发现旧项目目录仍可能残留旧 <code>session.json</code>，但 canonical marker 已存在。它是迁移/materialization 残留，不是第二 authority；本轮通过 canonical fallback 让 selector 在迁移未完成时仍可达，后续应按删除门清掉残留，而不是恢复双读生命周期。</p>
     <div class="callout good"><strong>旧包删除门已通过。</strong> 根 build、发布清单、CI、launcher source closure 和 package-lock 均不再引用 <code>session-core</code>；剩余 <code>session.json</code> 仅属于运行时 envelope 迁移，不能再被当成 lifecycle authority。</div>
   </section>
 

@@ -40,7 +40,7 @@ a file in that dir:
 
 | file | written by |
 |---|---|
-| `session.json` | `readRecord` / `writeRecord` — runtime/worktree metadata only: governed, worktree_path, node, branch, createdAt, harness_session_id, …; lifecycle status/proposal/note/parent live only in the SQLite session application after migration. |
+| `runtime.json` | `readRecord` / `writeRecord` — runtime/worktree metadata only: governed, worktree_path, node, branch, createdAt, harness_session_id, …; lifecycle status/proposal/note/parent live only in the SQLite session application. |
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the authoritative resolved first-turn payload, retained through queue drain and failed launch until adapter proof consumes it ([[launch]]) |
 | `launch.proof` | the adapter's narrow staged receipt (native id, payload hash, runtime generation) after first-turn durability; the session lifecycle owner consumes it with `launch` under the record lock ([[harness-adapter]]) |
@@ -84,7 +84,7 @@ AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `
 mirror — a change to the seam must update both, noted at the layout.ts helpers). Because the only in-tree
 SpexCode artifacts are gitignored (the materialize shims/skills) or tracked-and-committed (the contract block
 in CLAUDE.md/AGENTS.md), none shows as an uncommitted change, so the Stop-gate's dirty count needs no runtime
-filtering, and `session.json` is written one-field-per-line with every key present so the hot-path hook can
+filtering, and `runtime.json` is written one-field-per-line with every key present so the hot-path hook can
 READ it with a grep instead of jq ([[state]]) — it never writes the file itself, since the single structured
 writer ([[sessions-core]]) is the only thing that may compose a record. That writer lands each version by
 atomic replace, so a reader landing between two writes sees one whole record, never a half-written one. A
@@ -92,7 +92,7 @@ record that is nonetheless unreadable may be quarantined (its bytes copied to th
 when close is attempted, but the unreadable runtime dir remains the live residue: without an exact owner close
 fails before signaling a process or deleting runtime, worktree, or branch state.
 
-`session.json` writes are by canonical governed `session_id`, never by cwd. Claude's harness id equals that
+`runtime.json` writes are by canonical governed `session_id`, never by cwd. Claude's harness id equals that
 record id. Codex hook payloads and spawned commands carry the acting thread id, while the shared app-server env
 may carry a stale `SPEXCODE_SESSION_ID`; those Codex ids are resolved through `harness_session_id` before a
 governed record is written. Self-launched agents with no governed record may still get raw-id sentinel dirs for
@@ -105,7 +105,7 @@ project may be using the same control plane. It is a project resource with expli
 ([[host-resource-budget]]), not a process-tree child owned by whichever session is being stopped; routing is
 by `harness_session_id`, not by socket ownership.
 
-This is a CLEAN cut from the old per-worktree `.session/` layout — there is no compat shim. An in-flight session
-launched under the old backend keeps its worktree `.session/` until it drains; the new backend simply doesn't
-read it (those sessions relaunch into the global store). The old `.gitignore` entries for `.session*` are inert
+This is a CLEAN cut from the old per-worktree `.session/` layout — there is no compat shim. `session.json` is
+accepted only as the one-time migration input described by [[json-migration]]; after the marker is published it
+is retired and no current reader or writer may consult it. The old `.gitignore` entries for `.session*` are inert
 and may be dropped.

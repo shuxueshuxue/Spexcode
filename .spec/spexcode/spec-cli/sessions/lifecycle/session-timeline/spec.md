@@ -90,11 +90,11 @@ archived. A public reader of this log learns what was said; only the queue says 
 
 **Append authored state at its write boundary.** A declaration note is conversation content, so it cannot
 depend on a later sample of the mutable current-state record. Every lifecycle write compares the prior
-`(status, proposal, note)` and synchronously appends a moved value after the new `session.json` lands, in
+`(status, proposal, note)` and synchronously appends a moved value after the canonical SQLite transition commits, in
 whichever process owns that write. A later status may replace the current snapshot, but it can never
 replace or erase the already-appended declaration event. **There is exactly one writer path** — every hook
 shells to `spex internal session-*`, which is the same TypeScript writer the CLI declarations use, so no
-lifecycle move reaches `session.json` without reaching this log. The log is therefore complete on its own:
+lifecycle move reaches the canonical application without reaching this log. The log is therefore complete on its own:
 no observer process, no repair tick, and no read-time deduplication of a move recorded twice.
 
 Internal launch-readiness-pending state is not an authored lifecycle transition. While resume validates a

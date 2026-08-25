@@ -65,9 +65,9 @@ protocol.
 
 ## Migration order
 
-1. Publish the pure protocol operations, schema, migrations, and conformance fixtures under
-   `@spexcode/session-protocol`; switch callers in one cutover and delete the old `@spexcode/session-core` package
-   instead of adding a compatibility re-export, alias, dual-read, or fallback.
+1. The pure protocol operations, schema, migrations, and conformance fixtures now live under
+   `@spexcode/session-protocol`; the retired `@spexcode/session-core` package has no production edge and is not
+   a compatibility export. New callers must use the split package stack rather than restoring that name.
 2. Prove self-launch and ZSwarm adopters against the installed package. They exercise recordless/offline and
    multi-workspace/runtime-injected shapes without Spex governance.
 3. Keep relation resolution in `@spexcode/session-topology` and lifecycle/event publication in

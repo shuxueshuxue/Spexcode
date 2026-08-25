@@ -33,12 +33,13 @@ reads the JSON root or fabricates missing application state.
 
 Import creates protocol addresses, application state, parent/watch topology edges, and one deterministic state event per
 record (plus one deterministic archived event per explicit tombstone). Re-running the exact source is a no-op after
-marker verification; a changed source or a missing marked database is an error. After the marker is written, JSON
-remains only operational worktree metadata and is never a runtime source for state, events, topology, or watchers.
+marker verification; a changed source or a missing marked database is an error. After the marker is written, only
+the renamed `runtime.json` envelope remains as operational worktree metadata; the legacy JSON names are retired and
+never become a runtime source for state, events, topology, or watchers.
 
 The importer owns a durable `.json-migration.lock` fence in the legacy sessions root. Legacy writers reject a fenced
-store before touching `session.json` or `watchers.json`; after the SQLite marker is published, canonical application
-state is authoritative and any remaining JSON writes are only the existing operational projection. The importer takes
+store before touching legacy `session.json` or `watchers.json`; after the SQLite marker is published, canonical application
+state is authoritative and only `runtime.json` may remain as the operational projection. The importer takes
 the fence before its source snapshot, re-reads the complete file set and digest immediately before installing SQLite,
 and aborts without publishing the database when the source changed during the window. A successful cutover therefore
 requires a quiet writer set, and a live process that does not honor the fence is a cutover failure, not a reason to

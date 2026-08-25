@@ -5,6 +5,7 @@ import { repoRoot } from '@spexcode/spec-core'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
+import { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } from './session-application.js'
 import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
 import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 import { resolveMachinePeer } from './machine-peer.js'
@@ -144,16 +145,57 @@ function corruptCachedSession(id: string, reason: string): Session {
 // follow exists to eliminate. Every field here comes from the store — nothing is probed.
 export function localCachedSessions(includeArchived = false): Session[] {
   const rows: Session[] = []
+  // The runtime envelope is deliberately metadata-only after migration. A live session may therefore have
+  // a canonical application row before its runtime.json is materialized (or after it is retired). Selectors
+  // must still resolve that row; treating the missing envelope as "no such session" strands watch/cancel.
+  // Do not create a fresh SQLite store while merely reading an empty project. A canonical application is
+  // needed only when a marker or legacy records prove that this project already has session state.
+  const cutover = sessionApplicationCutoverState()
+  const application = cutover === 'fresh' ? undefined : configuredSessionApplicationIfCutover()
   for (const id of listSessionIds()) {
     const entry = readPublicRecordEntry(id)
     if (entry.kind === 'corrupt') {
       rows.push(corruptCachedSession(id, entry.error))
       continue
     }
-    if (entry.kind !== 'ok') continue
-    const rec = fromRaw(entry.raw)
-    if (!rec.governed) continue
-    rows.push(toSession(rec, cachedStatus(rec), 'unknown'))
+    if (entry.kind === 'ok') {
+      const rec = fromRaw(entry.raw)
+      if (!rec.governed) continue
+      rows.push(toSession(rec, cachedStatus(rec), 'unknown'))
+      continue
+    }
+    const state = application?.readState(id)
+    if (!state) continue
+    const lifecycle = state.status as Session['lifecycle']
+    const status = state.status === 'awaiting'
+      ? displayStatusForProposal(state.proposal as Session['proposal'])
+      : state.status === 'archived' ? 'offline' : state.status as DisplayStatus
+    rows.push({
+      id,
+      node: null,
+      branch: null,
+      path: '',
+      label: id,
+      title: id,
+      raw: { name: null, title: null },
+      parent: state.parentSessionId,
+      harness: 'unknown',
+      capabilities: { headless: false },
+      launcher: null,
+      lifecycle,
+      proposal: state.proposal as Session['proposal'],
+      merges: 0,
+      status,
+      liveness: 'unknown',
+      note: state.note,
+      archived: state.status === 'archived',
+      closedAt: null,
+      prompt: null,
+      promptPreview: null,
+      created: state.updatedAtMs,
+      activity: null,
+      sortKey: null,
+    })
   }
   return rows.filter((session) => includeArchived || !session.archived)
     .sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))

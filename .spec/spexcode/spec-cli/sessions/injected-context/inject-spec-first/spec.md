@@ -33,7 +33,7 @@ nothing. `spec-first.sh` contains no harness branch.
 The path is then resolved through the authoritative spec graph (`spex internal spec-governors`, a stable
 machine projection of the same ownership resolver as `spex spec owner`). Only a real `code:` governor is
 actionable; uncovered and related-only files are ungoverned. The session sentinel (`spec-checked`,
-a sibling of `session.json` under [[runtime]]) therefore has exactly one transition:
+a sibling of `runtime.json` under [[runtime]]) therefore has exactly one transition:
 
 - **armed + irrelevant/unresolvable/ungoverned event -> armed, allow silently**;
 - **armed + governed read -> spent, block once**, naming the actual governor and requiring its relevant parent,

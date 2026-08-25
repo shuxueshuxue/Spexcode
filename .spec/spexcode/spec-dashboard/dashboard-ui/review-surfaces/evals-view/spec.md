@@ -11,7 +11,6 @@ code:
 related:
   - spec-dashboard/src/Root.jsx
   - spec-dashboard/test/evals-entry.e2e.mjs
-  - spec-dashboard/test/evals-light-entry.e2e.mjs
   - spec-dashboard/src/i18n/zh.test.mjs
 ---
 

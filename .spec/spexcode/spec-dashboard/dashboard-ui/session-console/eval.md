@@ -175,7 +175,7 @@ scenarios:
       Clear the saved pane width, open a console with short and very long generated session headlines, select
       the longest row, then resize the sidebar and inspect typography, row geometry, tooltip, and terminal width.
     expected: >-
-      The default sidebar is 204px, remains user-resizable, and uses caption-size row text. Resting rows stay one
+      The default sidebar is 204px, remains user-resizable, and uses meta-size row text. Resting rows stay one
       line. Only the selected headline expands, to no more than three lines; its complete text remains in the
       tooltip/accessibility name and status metadata stays at the first-line top-right. No row overlap occurs.
   - name: session-sidebar-viewport-scroll

@@ -37,12 +37,20 @@ keypress as that action's new binding, saved per-user and reset to defaults on d
 different entry points. (Game-controller mapping is **not** here — the pad binds to action ids, not keys, in
 [[game-controller]]'s controller mode; see [[keyboard-nav]].)
 
-Its third accreted section is **Theme**: a preset picker mirroring the language section, listing the
-community presets (Minimal — the default, Things, Tokyo Night, Catppuccin, Everforest, Gruvbox,
-Rosé Pine Dawn, Dracula) as proper-noun labels. An
-explicit pick persists and flips the whole app live; absent a valid saved choice the app is simply
-Minimal — there is no system `prefers-color-scheme` detection and no light/dark pair. Only the picker
-lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
+Its third accreted section is **Theme**: a swatch picker listing the presets (Minimal — the default,
+Notion, Things, Tokyo Night, Catppuccin, Everforest, Gruvbox, Rosé Pine Dawn, Dracula) as proper-noun
+labels, each under a small card painted in that preset's own ground, paper, ink, and accent so a reader
+sees a theme before choosing it; the chosen card wears the selection wash and an accent ring. The swatch
+values live in the theme registry beside the code, and the styles gate holds each to the preset's row in
+the sheet. An explicit pick persists and flips the whole app live; absent a valid saved choice the app is
+simply Minimal — there is no system `prefers-color-scheme` detection and no light/dark pair. Only the
+picker lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
+
+**The page has one control grammar.** Its title is sentence case at the page's statement size
+([[typography]]); a section is a heading over rows separated by the divider rule; a row is a label in a
+fixed left column beside its control; and a choice among a few values (interface language, default
+session view) is a segmented control — the chosen segment lifted onto paper inside a quiet track, the rest
+plain. No control on the page draws a bordered pill of its own.
 
 Its terminal section controls the default base surface for newly unchosen pane-backed sessions and the embedded
 terminal's font size relative to the surrounding UI. Both choices are local to this browser and project, persist

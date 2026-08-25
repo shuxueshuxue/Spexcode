@@ -566,7 +566,7 @@ export default {
   },
 
   nodeView: {
-    carries: 'carries',
+    carries: 'Carries',
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',
@@ -586,8 +586,8 @@ export default {
     statusLabel: 'status:',
     versionLabel: 'version:',
     lastEditedBy: 'last edited by:',
-    governs: '// governs',
-    proseNode: '// no file owned · prose node',
+    governs: 'Governs',
+    proseNode: 'No file owned · prose node',
     rawTitle: 'raw source',
     rawOwner: 'human',
     rawNote: 'rarely changed · needs approval',
@@ -846,7 +846,6 @@ export default {
     relaunchTitle: 'relaunch and resume this session',
     offlineReadOnly: '⏻ agent offline · read only',
     archivedReadOnly: '▤ archived · read only',
-    merge: 'merge',
     relaunchResume: '⏵ relaunch & resume',
     merges: ({ n }) => `merged ×${n}`,
     mergesTitle: 'times merged to main',
@@ -880,18 +879,10 @@ export default {
     attachDismiss: 'dismiss attachment status',
     codeSelectionAttachments: 'code selection attachments',
     removeCodeSelection: 'remove code selection',
-    // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
-    // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
+    // board commands — the `/` commands Command Box runs HERE (not in the agent). Agent workflows such as
+    // /merge are plugin presets and deliberately have no dashboard-local label or availability copy.
     cmd: {
       evalDesc: "open this session's Evals page — affected scenarios and measured evidence",
-      mergeTitle: 'merge this review proposal to main',
-      mergeDesc: 'merge this review proposal to main',
-      mergeUnavailableArchived: 'merge unavailable — this session is archived',
-      mergeUnavailableNoProposal: 'merge unavailable — this session has not proposed a merge; only done --propose merge makes it available',
-      mergeUnavailableNothing: 'merge unavailable — done --propose nothing is done without proposing a merge',
-      mergeUnavailableClose: 'merge unavailable — done --propose close is awaiting close, not merge',
-      mergeUnavailableLifecycle: 'merge unavailable — the merge proposal is no longer awaiting review',
-      mergeUnavailableLiveness: 'merge unavailable — the session is not online',
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',
       stopDesc: 'stop — kill the agent + tmux but KEEP the worktree, so it can be resumed',
       closeTitle: 'close this session (removes the worktree)',
@@ -900,17 +891,18 @@ export default {
   },
 
   settings: {
-    title: 'settings',
+    title: 'Settings',
     close: 'close (esc)',
-    secLanguage: 'language',
-    secTheme: 'theme',
-    secTerminal: 'terminal',
-    defaultSessionSurface: 'default session view',
-    terminalFontSize: 'font size',
-    secShortcuts: 'shortcuts',
-    bindPrompt: 'press a key…',
-    shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (a game controller binds to actions, not keys — rebinding here never touches the pad.)',
-    reset: 'reset to defaults',
+    secLanguage: 'Language',
+    uiLanguage: 'Interface language',
+    secTheme: 'Theme',
+    secTerminal: 'Terminal',
+    defaultSessionSurface: 'Default session view',
+    terminalFontSize: 'Font size',
+    secShortcuts: 'Shortcuts',
+    bindPrompt: 'Press a key…',
+    shortcutsHint: 'Click a key to rebind it. Nav & chord keys are fixed. (A game controller binds to actions, not keys — rebinding here never touches the pad.)',
+    reset: 'Reset to defaults',
   },
 
   search: {

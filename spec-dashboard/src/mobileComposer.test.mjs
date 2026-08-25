@@ -36,7 +36,9 @@ test('mobile new-session action uses the shared plus icon, not a Unicode glyph',
   assert.match(mobileApp, /import \{ Icon \} from '\.\/icons\.jsx'/)
   assert.match(mobileApp, /<button className="m-new-btn"[\s\S]*<Icon name="plus" size=\{16\}/)
   assert.doesNotMatch(mobileApp, /m-new-btn-plus|＞|＋/)
-  assert.match(styles, /\.m-new-btn:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--blue\)/)
+  // its keyboard focus is the one shared ring ([[typography]]), not an outline of its own
+  assert.match(styles, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/)
+  assert.doesNotMatch(styles, /\.m-new-btn:focus-visible\s*\{[^}]*outline:/)
 })
 
 test('mobile composer transport requests a declaration-note reply', async () => {

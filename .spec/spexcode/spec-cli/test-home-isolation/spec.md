@@ -29,3 +29,8 @@ An inherited `SPEXCODE_HOME` resolving to the invoking user's real default home 
 suite starts. That host home remains the reference even when a fixture supplies its own temporary `HOME`.
 This failure is deliberately loud: silently replacing an unsafe host-home input would make a broken test
 invocation appear isolated while hiding a persistent-store hazard from its caller.
+
+The same bootstrap pins the session application's SQLite database inside the disposable home and clears any
+inherited session-configuration override, so a fixture backend or CLI a test starts can never open the operator's
+canonical session database. The isolation is whole-store for SQLite exactly as it is for the record tree: both
+live under the redirected root and die with it.

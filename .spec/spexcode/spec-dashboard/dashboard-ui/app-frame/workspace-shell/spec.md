@@ -68,7 +68,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   **The dock is a property of the focused tab** — both its projection and its existence. A node or a governed
   file brings the explorer. The Sessions surface brings no shell dock at all: it is a complete document that owns
   its own forest and console ([[session-console]]), so a finding dock beside it would only repeat the same list
-  under an empty header. Evals, Issues, and Settings use the shared workspace/tab strip; Issues omits the
+  under an empty header. Review surfaces and Settings have no dock anywhere in their address family — a detail
+  route never inherits the previous Spec/Explorer projection from workspace state, which belongs to document
+  routes only. Evals, Issues, and Settings use the shared workspace/tab strip; Issues omits the
   activity rail while retaining the strip. Spec/file routes keep the Spec rail selection and derive the explorer
   projection. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the

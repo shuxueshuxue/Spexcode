@@ -8,6 +8,8 @@ code:
 related:
   - spec-dashboard/src/readSafety.test.mjs
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/diffTree.js
+  - spec-dashboard/src/diffTree.test.mjs
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/session-diff.api.test.ts
@@ -36,7 +38,23 @@ shrinkable columns, so the document adds only the divider between them: any rule
 intrinsic-width or flex box sizes the pair to the widest line and carries the new side outside the scroll container,
 where a reader sees the old text alone and reads it as a diff that did not render. A changed line is tinted in the
 document's own red and green rather than the editor library's near-transparent default, because which lines moved
-must be legible at a glance on this surface's background.
+must be legible at a glance on this surface's background. The endpoint pays for a wide context window per hunk and
+the viewer keeps it: it folds only runs longer than a dozen lines and leaves ten on each side of a change, because
+a reader judging a change needs the code it sits in, and collapsing to a three-line margin throws away what was
+already fetched.
+
+**The reader is in ONE file at a time, and the panel is a tree.** The changed files are the panel's job; repeating
+them as an accordion below the open diff was a second navigation of the same list that spent the height the diff
+itself needs. So the panel owns selection and the pane owns the file, whose header stays put while its hunks scroll,
+because the thing a reader loses inside a long hunk is which file they are in.
+
+The panel is a DIRECTORY TREE rather than a list of paths, because in this repository a path is a bad label twice
+over: the tail is the only part that differs, so truncating it makes thirty rows read alike, and the leaf carries
+no information either, since the spec graph names every node's file `spec.md`. A tree factors the shared prefix out
+and leaves each row the one segment it owns, and a directory holding nothing but one more directory collapses into
+its child so a leaf is never pushed a dozen indents to the right. Where a label still has to give — the sticky
+header's directories, a collapsed chain — it gives at the FRONT, never at the leaf, and the untruncated path stays
+on the row's tooltip. Two changed files never render the same label.
 
 The second scope is the session's uncommitted work: the tracked edits and untracked additions its worktree holds
 but has not committed. It is enumerated from one porcelain status plus one numstat however dirty the tree is, and

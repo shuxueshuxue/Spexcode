@@ -161,10 +161,11 @@ decision, and an online warning leaves any pending watcher snapshot debt intact 
 proven-dead process/resource may publish one explicit terminal failure on the record: lifecycle `error`,
 stopped/offline liveness, and the complete `queued launch readiness failed: ...` reason. That write uses the
 ordinary transition/watch path, so a parent watcher is notified and the row cannot remain queued/active while
-claiming launch is still in progress. A backend restart reconciles every durable
-launch residue: a live registered runtime gets its readiness observer rebuilt without replaying the first turn;
-an expired or provably dead residue is failed closed with the same terminal record. No launch residue may remain
-an indefinitely in-progress row.
+claiming launch is still in progress. A backend restart reconciles each durable launch residue only while that
+launch/resume transaction still carries its readiness marker and the witness is not online. A row already online
+with a bound identity or live pane is settled: reload clears the stale marker (and any old readiness diagnostic)
+without rebuilding the observer, starting a new timer, or writing a warning note. An expired or provably dead residue
+is failed closed with the same terminal record. No launch residue may remain an indefinitely in-progress row.
 An explicit successful `session resume` is a new runtime attempt, not a continuation of a terminal launch or turn
 failure: it clears the prior `error` lifecycle and its failure note, publishes the resumed conversation as `idle`
 until a real activity hook makes it `active`, and never leaves an online worker represented as `error`. Waiting

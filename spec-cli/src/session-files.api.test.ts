@@ -75,9 +75,12 @@ test('public session files CLI stores a live path and the backend authorizes onl
     writeFileSync(unpreviewable, '<svg/>\n')
 
     process.env.SPEXCODE_HOME = home
+    process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     process.chdir(project)
     mkdirSync(sessionStoreDir(id), { recursive: true })
-    writeFileSync(join(sessionStoreDir(id), 'session.json'), JSON.stringify({ session_id: id }) + '\n')
+    writeFileSync(join(sessionStoreDir(id), 'runtime.json'), JSON.stringify({
+      session_id: id, governed: true, worktree_path: project, branch: 'main', status: 'active',
+    }) + '\n')
     const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id, PORT: String(port) }
     delete env.SPEXCODE_API_URL
 

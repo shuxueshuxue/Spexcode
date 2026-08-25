@@ -71,11 +71,19 @@ let board: typeof import('./graphSnapshot.js')
 let cache: typeof import('./graphCache.js')
 let layout: typeof import('@spexcode/spec-core')
 let evalProjection: typeof import('../../spec-eval/src/sessioneval.js')
+let sessionApplication: any
 
 function writeSessionRecord(over: Record<string, unknown>) {
   const rec = { ...baseRecord(), ...over }
   mkdirSync(layout.sessionStoreDir(SESS_ID), { recursive: true })
   writeFileSync(layout.sessionRecordPath(SESS_ID), JSON.stringify(rec, null, 2) + '\n')
+  sessionApplication.transitionSession(SESS_ID, {
+    status: rec.status,
+    proposal: rec.proposal || null,
+    note: rec.note || null,
+    parentSessionId: rec.parent || null,
+    reason: 'graph-scope-fixture',
+  })
 }
 
 async function waitForFile(path: string, message: string): Promise<void> {
@@ -144,8 +152,9 @@ if (gitOk) {
   // isolate BEFORE the imports: SPEXCODE_HOME (read live) points the session store at a temp dir; SPEXCODE_TMUX
   // (read at sessions.ts import) is an EMPTY socket with no server, so liveness reads a deterministic `offline`
   // in every build (no real tmux session of the box can interfere). chdir so repoRoot()/ROOT resolve to `proj`.
-  process.env.SPEXCODE_HOME = home
-  process.env.SPEXCODE_TMUX = 'boardscope-iso'
+process.env.SPEXCODE_HOME = home
+process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+process.env.SPEXCODE_TMUX = 'boardscope-iso'
   process.env.SPEXCODE_BOARD_DEBUG = '1'
   delete process.env.SPEXCODE_SESSION_ID
   process.chdir(proj)
@@ -155,6 +164,10 @@ if (gitOk) {
   layout = await import('@spexcode/spec-core')
   evalProjection = await import('../../spec-eval/src/sessioneval.js')
 
+  // The JSON envelope is only the public projection now; seed its canonical application state first.
+  const { configuredSessionApplicationIfCutover } = await import('./session-application.js')
+  sessionApplication = configuredSessionApplicationIfCutover()!
+  sessionApplication.createSession({ sessionId: SESS_ID, status: 'active' })
   writeSessionRecord({ status: 'active', note: 'first' })   // one governed record in the isolated store
 }
 

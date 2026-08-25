@@ -235,6 +235,7 @@ test('a fresh selected-harness default drives no-choice session creation and pin
   const refusedPort = await freePort()
   const createEnv = {
     ...env,
+    SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
     PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
     SPEXCODE_API_URL: `http://127.0.0.1:${refusedPort}`,
     SPEXCODE_TMUX: `safe-init-${process.pid}`,
@@ -252,7 +253,7 @@ test('a fresh selected-harness default drives no-choice session creation and pin
   assert.equal(created.harness, 'codex')
 
   const projectKey = proj.replace(/[/.]/g, '-')
-  const rec = JSON.parse(readFileSync(join(home, 'projects', projectKey, 'sessions', created.id, 'session.json'), 'utf8'))
+  const rec = JSON.parse(readFileSync(join(home, 'projects', projectKey, 'sessions', created.id, 'runtime.json'), 'utf8'))
   assert.equal(rec.launcher, 'codex')
   assert.equal(rec.harness, 'codex')
   assert.equal(rec.launch_cmd, 'codex', 'session creation pins the plain command from the named launcher')

@@ -41,6 +41,7 @@ function record(id: string, worktreePath: string, branch: string): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(join(sessionStoreDir(id), 'session.json'), JSON.stringify({
     session_id: id, governed: true, worktree_path: worktreePath, branch, node: '', title: 'diff API', name: '', parent: '',
+    status: 'active', proposal: '', note: '', createdAt: Date.now(), harness: 'claude', harness_session_id: null,
   }) + '\n')
 }
 
@@ -93,6 +94,12 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
     record('live-diff-session', liveWorktree, 'node/diff-live')
     record('landed-diff-session', join(fixture, 'gone-landed'), 'node/diff-landed')
     record('vanished-diff-session', join(fixture, 'gone-vanished'), 'node/diff-vanished')
+    const { migrateJsonSessionRecords } = await import('@spexcode/session-application')
+    migrateJsonSessionRecords({
+      databasePath: join(home, 'sessions.sqlite'),
+      recordsRoot: join(dirname(sessionStoreDir('live-diff-session'))),
+      locality: () => {},
+    })
     const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, PORT: String(port) }
 
     let log = ''

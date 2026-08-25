@@ -30,7 +30,8 @@ rows and the session's own overlay colour kept as a hairline on its leading edge
 
 The console renders the row in its **compact, avatar-less** variant
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with
-a 204px default width (15% below the former 240px) and meta-size row text; the selected headline may expand
+a resizable width — 204px by default, bounded to 180–480px, persisted per browser, dragged on its separator and
+reset by a double-click — and meta-size row text; the selected headline may expand
 in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
 status is a single colour glyph, not a word. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)

@@ -73,23 +73,18 @@ the plain ancestry window ([[drift-by-ancestry]]) and never subtracts `Spec-OK` 
 question asked at the axis, not a new verdict: freshness's decision functions stay pure over their inputs and
 the anchor answer is fed in at the call sites, exactly like the content probe and the remark track.
 
-The anchor probe's prime is **plural**, mirroring the engine it feeds ([[code-anchor]]'s one-batch-per-read
-rule): a caller hands it every (anchor, entry) demand its whole read will ask about, and ONE batch answers
-them all. A reader that walks many readings therefore plans its rows first — a pure sidecar-and-axis pass —
-and primes once, instead of asking row by row; the same computation billed per row cost ~2,500 redundant Git
-children for ~800 verdicts on this corpus. Verdicts stay keyed by (anchor, path, selector set) exactly as
-before, so the batch changes only cost: a batched read and a reading-at-a-time read return the same verdicts,
-and that equality is what any faster path owes.
-
-**The scenario-block read is plural on the same terms.** Deciding whether a scenario's semantic block moved
-between an anchor and HEAD needs that eval.md's object id at both revisions and then its bytes — and asking
-per reading is the identical defect one level down: on a 415-node session scope it billed 1212 `rev-parse`
-children plus a blob read each. Git answers an arbitrary set of `rev:path` lookups on one `cat-file
---batch-check` and their bytes on one `cat-file --batch`, so the whole read's demand costs two children and
-the child count stops tracking the demand count. The content probe therefore RECORDS each block demand as it
-settles an anchor verdict and answers them together when its caller flushes. Flushing is a cost seam, not a
-correctness one: an unflushed demand falls back to the singular lookup and returns the same block, so a
-caller that learns its demands one at a time stays correct while a caller that plans a whole read pays once.
+**Every Git demand in one read is planned and batched once, because the READ is the unit** ([[hunk-ranges]]).
+A reader that walks many readings plans its rows first — a pure sidecar-and-axis pass — and primes the anchor
+engine with every (anchor, entry) demand at once; the same computation billed per row cost ~2,500 redundant Git
+children for ~800 verdicts on this corpus. The scenario-block read obeys the same rule one level down: deciding
+whether a block moved between an anchor and HEAD needs that eval.md's object id at both revisions and then its
+bytes, and asking per reading billed 1,212 `rev-parse` children plus a blob read each on a 415-node scope, where
+one `cat-file --batch-check` and one `cat-file --batch` answer the whole demand. So the content probe records
+each block demand as it settles an anchor verdict and answers them together when its caller flushes. Batching is
+a COST seam, never a correctness one: verdicts stay keyed by (anchor, path, selector set), an unflushed demand
+falls back to the singular lookup and returns the same block, and a batched read owes byte-equality with a
+reading-at-a-time read — which is why no verdict assertion can observe it and the regression is pinned by
+counting children.
 
 The narrowing exists because **a shared file is not a shared behaviour**, and on this corpus that gap is
 expensive. `harness.ts` is ONE file carrying eight adapters, and its scenarios measure liveness, delivery,
@@ -225,18 +220,15 @@ changed-path set. [[off-history-content-probe]] owns the one plural Git schedule
 when a whole read carries many off-history anchors; eval-core consumes its settled verdicts and never grows a
 second transport or cache.
 
-**Every immutable-key answer under that schedule is joined while it is in flight, not merely reused once it
-settles.** A memo holding only settled values is silent about the window that matters — the whole timeline
-pass primes concurrently, so callers naming one key all miss together and each forks its own child. This
-governs the two per-reading lookups beside the anchor batch as well: the drift COUNT for an (anchor, path)
-and the eval.md object/blob read at a revision. Both keys name immutable Git objects, so a joiner cannot be
-handed another question's answer, and both write their memo once, on settle. This is a cost rule only —
-a joined read and a re-forked one return the same verdict, which is why no verdict assertion can observe
-it and the regression is pinned by counting children. A graph
-abort or timeout rejects both its active and queued work with the existing `AbortError` and caches nothing,
-so a later call retries; an unreadable anchor object is recorded as exactly that — the anchor axis — not as
-a content verdict. Synchronous freshness decisions consume only
-successfully settled verdicts — they never bypass a failed asynchronous prime by starting another diff.
+**An immutable-key answer is joined while it is IN FLIGHT, not merely reused once it settles.** A memo holding
+only settled values is silent about the window that matters — a whole timeline pass primes concurrently, so
+callers naming one key all miss together and each forks its own child. This governs the two per-reading lookups
+beside the anchor batch: the drift count for an (anchor, path), and the eval.md object/blob read at a revision.
+Both name immutable Git objects, so a joiner cannot be handed another question's answer, and both write their
+memo once, on settle. A graph abort or timeout rejects active and queued work alike with the existing
+`AbortError` and caches nothing, so a later call retries; an unreadable anchor object is recorded as exactly
+that — the anchor axis — never as a content verdict. Synchronous freshness decisions consume only successfully
+settled verdicts and never bypass a failed prime by starting another diff.
 
 **A root retains ONE head's verdicts — the head it is currently read at.** A settled verdict stays true of
 its two immutable trees, but a checkout only ever answers at its current head, so keeping a head in the
@@ -341,14 +333,10 @@ The surface mirrors the code-drift report:
   edits actually measured — a pass for code that never ran — and the stale flag after the next commit is
   freshness correctly exposing that lie, not an engine bug. add therefore probes the scenario's governed
   files (its `code` subset, else the node's list, plus its own eval.md) for uncommitted changes and warns
-  LOUD when it finds any — a warning, never a block (the filing proceeds; retract is the repair). The
-  discipline it teaches is NOT "commit before you test" — gaining confidence and archiving sha-anchored
-  evidence are two different acts. ① **Measure on the working tree** (dirty, with the fix), re-measure until
-  green: the informal confidence gate, before any commit. ② **Commit that just-tested tree as-is** — what
-  lands is code already verified, so no blind commit and no revert-as-routine — and now the tree is clean:
-  HEAD *is* the code measured. ③ **Only then file the reading**: codeSha=HEAD names committed, verified
-  code, the guard stays silent, and the eval sidecar appends as the last layer of evidence. The sha anchor
-  can only land after the commit; the confidence must land before it. The seam has a **write half over data** too (filing.ts): a caller with a
+  LOUD when it finds any — a warning, never a block (the filing proceeds; retract is the repair). The order that
+  satisfies both halves is measure on the dirty tree until green, commit that just-tested tree as-is, then file
+  — confidence lands before the commit, the sha anchor only after it, and neither is traded for the other.
+  The seam has a **write half over data** too (filing.ts): a caller with a
   verdict but no argv — the HTTP eval-write route (`POST /api/specs/:id/evals`, the REST pair of the GET), a
   programmatic filer — appends through the SAME seam. Filing is the CLI/agent surface: [[event-detail]] reads
   readings and hosts remarks, it files nothing.

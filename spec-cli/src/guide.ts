@@ -635,12 +635,12 @@ Use the session's file list when an artifact belongs in the human's hands:
   spex session files retract <path>  withdraw one path
 
 Posting resolves a relative path from your current directory and records its absolute path beside the global
-session record only after proving it is a readable regular file. It copies, moves, stages, and uploads NOTHING. The path is live: editing the file after
+session record only after confirming it is a readable regular file. It copies, moves, stages, and uploads NOTHING. The path is live: editing the file after
 posting changes what the human downloads. The reference is host-local; opening the session elsewhere cannot
 make its path point at another machine's file.
 
 Put raw run artifacts in a persistent directory OUTSIDE the product repository by default. A worktree artifact
-makes merge readiness report a dirty tree and pressures generated proof into the product commit. Before review,
+makes merge readiness report a dirty tree and pressures generated evidence into the product commit. Before review,
 run \`spex session files ls\`: a target that disappeared or became unreadable is printed as \`INVALID\` and must be
 recreated or retracted; a valid path prints normally.
 

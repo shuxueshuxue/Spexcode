@@ -12,7 +12,7 @@ test('the shell owns one complete board ledger on every route', () => {
   assert.match(shell, /<BoardStatus specs=\{specs\} sessions=\{sessions\} page=\{page\} \/>/)
   assert.doesNotMatch(shell, /quiet=\{page === 'graph'\}/)
   assert.match(shell, /const SCORE_VIEW = \[[\s\S]*'pass'[\s\S]*'fail'[\s\S]*'stalePass'[\s\S]*'staleFail'[\s\S]*'empty'/)
-  for (const id of ['board-nodes', 'board-evals', 'board-issues', 'board-sessions']) {
+  for (const id of ['ledger-nodes', 'ledger-evals', 'ledger-issues', 'ledger-sessions']) {
     assert.equal((shell.match(new RegExp(`id: '${id}'`, 'g')) || []).length, 1, `${id} has one owner`)
   }
 })

@@ -83,7 +83,7 @@ provably cannot land.`, ['selector', 'project-bound']],
 existing gateway-to-gateway communication tunnel and requires a full session id; live-pane capture stays local.`, ['selector']],
     resume: ['spex session resume <SEL> [--force]', 'Relaunch ONLY if confirmed offline; --force is for a wedged session.', ['selector', 'project-bound']],
     stop: ['spex session stop <SEL>', 'Soft stop: kill the exact agent and KEEP the worktree resumable.', ['selector', 'project-bound']],
-    close: [['spex session close <SEL>', 'spex session close --ssh <address> <FULL-SESSION-ID>'], `Close ANOTHER session — one you dispatched — after an exact cold stop. Dirty work is committed to refs/spex-archive/<id>; only the worktree leaves the board. The branch, record, transcript, and conversation remain available to resume.
+    close: [['spex session close <SEL>', 'spex session close --ssh <address> <FULL-SESSION-ID>'], `Close ANOTHER session — one you dispatched — after an exact cold stop. Dirty work is committed to refs/spex-archive/<id>; only the worktree is removed. The branch, record, transcript, and conversation remain available to resume.
 <SEL> names that session; it is never \`.\` and never your own id. Closing yourself deletes the worktree
 you are running in, mid-turn. A live turn is refused; stop it first. Your own ending is a declaration: \`done --propose close\`. --ssh uses an existing
 gateway-to-gateway communication tunnel and requires a full session id.`, ['selector', 'project-bound']],

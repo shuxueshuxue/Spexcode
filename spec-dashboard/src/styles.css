@@ -1591,7 +1591,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
   flex: 0 0 204px; max-width: calc(100% - 280px); min-height: 0; display: flex; flex-direction: column;
   overflow: hidden; border-right: 1px solid var(--line); background: var(--panel);
 }
-.si-board-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.si-session-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-selcount { flex: 1; color: var(--ink2); font-size: var(--type-meta); }
 .si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }

@@ -43,7 +43,7 @@ function resolveInside(base: string, name: string): string {
   if (!rel || rel.startsWith('..') || rel.split(sep).some((s) => s === '..'))
     throw new SourceReadError(`attachment must stay inside the node's own folder: ${name}`, 400)
   if (OWN_SURFACE.has(rel.split(sep)[rel.split(sep).length - 1]) && !rel.includes(sep))
-    throw new SourceReadError(`${rel} has its own surface on the board, not an attachment`, 400)
+    throw new SourceReadError(`${rel} has its own surface in the dashboard, not an attachment`, 400)
   return full
 }
 

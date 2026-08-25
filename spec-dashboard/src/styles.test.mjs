@@ -421,14 +421,14 @@ test('session forest uses a short colour bar and a dedicated fold column', () =>
 
 test('sessions document mounts its complete forest sidebar and scrollport', () => {
   assert.match(css, /\.si-page\s*\{[^}]*min-height:\s*0;/s)
-  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-session-scroll\s*\{/)
   assert.match(css, /\.dock-session-list\s*\{[^}]*overflow:\s*auto;/s)
   // the archive door moved into the dock's ONE header row rather than keeping a strip under the list
   assert.match(css, /\.dock-head-acts\s*\{[^}]*margin-left:\s*auto;/s)
 })
 
 test('sessions dock keeps the tree list geometry', () => {
-  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-session-scroll\s*\{/)
   assert.match(css, /\.dock-session-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s)
   assert.match(sessionInterface, /archiveRequested = false/)
   assert.match(resizable, /localStorage\.removeItem\(key\)/)

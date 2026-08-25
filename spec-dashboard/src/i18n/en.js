@@ -264,8 +264,8 @@ export default {
     nodes: ({ n }) => `${n} spec nodes — merged · active · drift · pending. Open the graph`,
     evals: ({ pass, fail, stalePass, staleFail, empty }) =>
       `eval scenarios: ${pass} fresh pass, ${fail} fresh fail, ${stalePass} stale pass, ${staleFail} stale fail, ${empty} unmeasured`,
-    openEvals: 'open the Evals board',
-    issues: ({ n }) => `${n} open issues — open the issues board`,
+    openEvals: 'open the Evals view',
+    issues: ({ n }) => `${n} open issues — open the issues view`,
     sessions: 'sessions by launcher — open the sessions console',
     launcher: ({ name }) => `${name}: running / needs-you / other — open the sessions console`,
     launcherSummary: ({ n }) => `${n} launchers: running / needs-you / other — open the sessions console`,

@@ -8,7 +8,7 @@
 // replaces the slot and the count never moves. That distinction is why the slot is established first —
 // a deep link into an empty workspace also mints a tab, and would read as a false pass.
 import assert from 'node:assert/strict'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -48,6 +48,11 @@ const context = await browser.newContext({ viewport: { width: 1500, height: 940 
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (error) => errors.push(String(error)))
+// The step ruler rides the video's own axis and is stamped BY THIS RUN, one entry per probe, from the
+// same clock the recording started on — never read off the finished clip afterwards.
+const started = Date.now()
+const steps = []
+const mark = (step) => steps.push({ at: Date.now() - started, step })
 
 // The workspace strip is drawn once per SHOWING document host; pooled hidden documents keep their own
 // copy mounted. Only the visible strip is the workspace the reader sees, so only it is measured.
@@ -75,6 +80,7 @@ const sessionsOnScreen = async () => {
 
 const results = []
 const probe = async (surface, gesture, run) => {
+  mark(`${surface} — ${gesture}`)
   try {
     const before = await run()
     results.push({ surface, gesture, ...before })
@@ -166,6 +172,7 @@ try {
   })
 
   const kept = results.filter((r) => r.held)
+  mark('settled workspace')
   await page.screenshot({ path: join(out, 'tab-hold-final.png'), fullPage: true })
   const report = {
     population: `${kept.length} of ${results.length} row surfaces keep the hold gesture`,
@@ -174,6 +181,8 @@ try {
     screenshot: join(out, 'tab-hold-final.png'),
     video: await page.video()?.path(),
   }
+  writeFileSync(join(out, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events: steps }, null, 2))
+  writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
   assert.equal(errors.length, 0, `browser errors: ${errors.join(' | ')}`)
   assert.equal(kept.length, results.length, report.population)

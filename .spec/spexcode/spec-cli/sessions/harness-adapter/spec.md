@@ -46,75 +46,14 @@ learning which harness answered. A harness with no non-interactive mode declares
 launcher by name; substituting a different harness would run the work under credentials and a model the user
 did not choose.
 
-## acceptance — the live-behavior matrix
+## acceptance
 
-An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with
-every mechanical proof green (shim written, manifest compiled, unit tests passing) while a real session
-silently dropped every stop-gate rejection and hung `active` forever. So a new or reworked adapter with a
-resident or controller-backed runtime merges only with per-behavior eval readings, each measured through a
-REAL dispatched session of that harness, covering eight lifecycle behaviors: (1) **undeclared stop** — the gate's rejection reaches the
-session and the record flows out of `active`; (2) **PreToolUse block** — a blocking hook genuinely stops
-the tool and the handler's own reason reaches the agent; (3) **ask** — `spex session ask --note` flips the
-record to `asking` with the note on the board. Its worker-facing declaration handler is
-`session-declarations.ts#runSessionDeclaration`, while the shared record writer remains lower-level state
-mechanics; (4) **deliver + steer** — an idle send lands exactly once
-(exit 0) and a mid-turn send reaches the live turn; (5) **resume** — stop → resume continues the SAME
-conversation; (6) **liveness** — a killed agent reads `offline` within seconds (even with a stale socket
-file on disk) and a relaunch reads `online`; (7) **commit gate** — a dirty-tree merge proposal is rejected
-at settle with the reason delivered into the session; (8) **close** — zero residue (tmux window, process
-tree, worktree/branch, sockets, session record). The matrix is a parameterized test asset in [[live-matrix]],
-while each harness node's `eval.md` owns the scenario declarations. The test file drives a real dispatched
-session of any registered launcher through the declared behaviors and files per-scenario readings with
-evidence transcripts; it never mutates the CLI or rewrites the declarations. A new harness is covered by its
-launcher + scenario data, with no new runner route. A harness whose evidence is only artifacts has not been
-measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
-semantic difference is measured by a replacement scenario rather than forced into a false common shape.
-[[claude-headless]] replaces the matrix's TUI rows with its own session-home idle-resume, cold-retirement, and
-hard-interrupt readings. [[codex-headless]] replaces
-the matrix's process-resident stop/resume and kill/offline rows with its no-TUI idle-turn and record-liveness
-readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
-the TUI rows with session-home liveness plus pi's text-mode rendezvous-steer/cold-resume and cold-retirement readings.
-[[zcode-harness]] is a deliberate one-shot exception: its `--prompt` launcher has no reusable control
-channel, so its replacement scenario measures launch prompt receipt, hook gates, declaration, and process
-liveness. `deliver` and `resume` explicitly reject rather than impersonating a control transport; no false
-combination cell is filed for an operation that harness does not offer.
-
-Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered adapter that
-declares a delivery path (currently four interactive and four controller-backed headless adapters, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
-`replyVia:"note"`, and plain `spex session send`) x delivery timing (idle wake and in-turn steer/queue). Each
-runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
-the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default
-land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
-truthful, and the authored declaration lands. A pane reading includes its real tmux scrollback: stop-gate
-guidance may scroll a valid answer above the current viewport, which is still user-readable pane output, not
-a missing response. Declaration landing is proven by the live board's observed `active -> settled` transition;
-it does not require a matching history row because the debounced timeline observer can legitimately fold a fast
-turn that returns to the same status between samples. That board proof never substitutes for a required timeline
-ANSWER: a note-routed cell still waits for the marker in `/timeline`. The launch prompt has no second in-turn invocation, so
-`launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
-The note insert treats the declaration command as reply TRANSPORT, not as part of the requested work: even a raw prompt that
-says "use no tools" or "only print the answer" must still finish by placing the complete reply in the truthful declaration's
-`--note`. Normal final output is invisible on this route, and the stop-gate's generic auto-declaration is lifecycle recovery,
-never an answer substitute.
-BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
-reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner
-still invokes later cells through the real adapter instead of converting one failure into skipped coverage.
-Every cell files its own transcript-backed reading on the most specific adapter node available; the aggregate
-table files on this node. The campaign reuses one session per launcher to keep model spend bounded while still
-preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.
-
-Claude interactive delivery has one measured transport handoff: a session moved to a Claude background job is a
-fork. When the successor's hook has persisted its exact Claude session id as `moved`, the adapter resolves the
-roster worker by that exact `worker.sessionId`; without a readable matching stamp, it falls back to the roster's
-`dispatch.launch.mode=resume`, `dispatch.launch.fork=true`, and source transcript path. In either case the roster
-supplies the live rendezvous socket and current `rvAuth`, so the adapter sends the `role`/`auth` handshake before
-the ordinary `reply` frame. A roster entry whose socket cannot accept the handoff is stale transport, not an
-override forever: retry the source session's stamped launch-time socket before leaving the durable message owed.
-The roster root is the launched source process's own `CLAUDE_CONFIG_DIR` field when
-that still-live process exposes it, then the backend environment/default fallback: a backend must not silently
-assume its own Claude home is the launcher's. It reads no other process environment fields. The adapter never
-guesses a token, prints one, or changes the pane/raw-key transport. A missing or unreadable fork entry preserves
-the normal launch-time socket path; the durable queue remains the acceptance boundary in either case.
+An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with every
+mechanical proof green while a real session silently dropped every stop-gate rejection and hung `active` forever.
+A new or reworked adapter with a resident or controller-backed runtime merges only with per-behavior eval readings,
+each measured through a REAL dispatched session of that harness. The eight lifecycle behaviors, the replacement rows
+for adapters whose runtime shape removes a premise, and the prompt-delivery combination campaign are
+[[live-matrix]]'s contract; each harness node's `eval.md` declares its scenarios and this node files the aggregate.
 
 ## expanded spec
 
@@ -153,39 +92,9 @@ surface:
   shim runtime ([[shim-runtime]], embedded verbatim): the generator declares only its event-name mapping
   and host API bindings, while the payload synthesis, the single block-verdict contract (exit 2 + stdout
   decision:block JSON), and the multi-connection rendezvous server live in that one source — never
-  rewritten per harness. The shim's LOCATION is a divergence point too:
-  Claude reads `.claude/settings.json` from the worktree, but Codex discovers a LINKED worktree's PROJECT hooks
-  from the **ROOT CHECKOUT** — codex-rs rewrites the hooks-config folder of any linked worktree to
-  `<repo_root>/<rel-from-checkout-root>/.codex` (`root_checkout_hooks_folder_for_dir`), so a thread whose cwd is
-  the worktree root reads `<mainCheckout>/.codex/hooks.json`, NEVER the worktree's own. So the Codex shim + its
-  trust materialize at the MAIN checkout (one shared `.codex/hooks.json` for the main checkout and every
-  worktree — a per-PROJECT artifact, mirroring the per-project runtime tier); `dispatch.sh` resolves its `proj`
-  from the thread cwd, so the one shared shim still gates each worktree correctly. But that rewrite has a
-  LAYER-ANCHOR precondition: codex-rs builds a project config layer only for a dir (in cwd→project-root) that
-  itself contains a `.codex/` directory, THEN rewrites that layer's hooks-folder to the root checkout. A linked
-  worktree whose root has NO `.codex/` anchors NO layer, so the rewritten root hooks are never discovered and
-  ZERO hooks fire — silently (this bit a FRESH-INIT project with no skill nodes: the dogfood only worked by
-  accident, its materialized `.codex/skills` incidentally supplying the anchor). So the Codex adapter ALSO writes
-  its shim into the worktree's own `.codex/hooks.json` — a pure ANCHOR (the rewrite ignores its content, reading
-  the root's; `worktreeHookAnchor`), null for claude (its shim already lives in the worktree) and for the main
-  checkout (`shimFile` wrote it there). Codex lacks Notification + StopFailure: codex's
-  canonical hook event set (its `HookEventName` enum, codex 0.142.3) is preToolUse/permissionRequest/postToolUse/
-  preCompact/postCompact/sessionStart/userPromptSubmit/subagentStart/subagentStop/stop — there is no idle/
-  attention "notification" event and no failed-stop event, so those two claude-only events are genuinely absent,
-  not unimplemented. Failure detection therefore does not fabricate another hook: the Codex adapter's optional
-  `observeTurnFailures` capability subscribes to the app-server's native `turn/completed` notifications and
-  reports only structured `failed` outcomes to the shared session layer. Codex delivery must not read the native
-  conversation history to choose between `turn/start` and `turn/steer`: that history is an unbounded transcript
-  and can make a durable send wait past its confirmation budget. The adapter uses loaded/list only to prove the
-  target is resident, then uses the observer's native `turn/started`/`turn/completed` notifications as the
-  active-turn-id cache. A
-  cached id is the only basis for `turn/steer`; otherwise delivery uses `turn/start` and reports a native
-  rejection promptly, leaving the durable message pending rather than replaying history or hiding an unobserved
-  active turn. The failure observer gives native `thread/resume` subscription up to 30 seconds because the
-  measured app-server can take 15–17 seconds under load; a shorter timeout would turn a slow but valid response
-  into a retry storm and resource leak. While subscribed it filters unrelated progress notifications at the
-  WebSocket frame boundary, before UTF-8 decoding or JSON parsing; only the RPC handshake and native turn
-  start/completion messages are part of this adapter contract.
+  rewritten per harness. Where a harness discovers its shim, and what a linked worktree needs for the shim to be seen at all, is that
+  adapter's own fact — Codex's root-checkout discovery, its layer anchor, and its native turn-failure observer are
+  [[codex-runtime]]'s.
 - **contract file(s)** — where the `surface: system` block is materialized ([[harness-delivery]]): Claude
   `./CLAUDE.md` or `./.claude/CLAUDE.md`; Codex ONLY the repo-root `./AGENTS.md`.
 - **artifact dirs** — the auto-discovered dirs the on-demand surfaces materialize into, or null when the harness
@@ -197,39 +106,11 @@ surface:
   `--dangerously-bypass-hook-trust` covers only ONE of THREE independent codex tiers a dispatched worker must
   satisfy — the other two the adapter establishes explicitly (bypass alone leaves a fresh-init codex worker
   firing ZERO hooks, runtime.json frozen, no Session trailer):
-  - **(a) layer BUILT** — the worktree needs a `.codex/` anchor (the events/shim point above); without it codex
-    builds no project layer and the hooks are never even seen.
-  - **(b) layer ENABLED** — codex-rs drops a DISABLED (untrusted) project layer BEFORE hook discovery runs
-    (`get_layers(include_disabled=false)`), and `bypass_hook_trust` is read only AFTER, per-handler — so it can
-    never ENABLE a layer. An untrusted project's WHOLE layer is disabled (`disabled_reason_for_decision`). The
-    dispatched-worker app-server does NOT auto-trust (only the interactive TUI / `codex exec` approval flow
-    does — the "auto-trust confound" that made a standalone `.codex` appear to work). So the adapter writes
-    PROJECT trust (`[projects."<mainCheckout>"] trust_level = "trusted"`) UNCONDITIONALLY — the main-checkout key
-    covers every worktree via codex's repo-root trust fallback. That write must be DUPLICATE-SAFE: codex refuses
-    to load a config.toml with a duplicate key, and codex AUTO-writes a bare `[projects."<proj>"]` the moment it
-    trusts a folder — so the writer STRIPS every prior definition of this project's trust (our sentinel block in
-    any past format, a bare table, and its `[hooks.state]` entries) before appending, self-healing a config that
-    already carries one instead of appending a second key that takes codex fully offline.
-  - **(c) hooks REVIEWED** — even trusted+enabled, an unhashed hook is "new or changed", and codex FORCES the
-    startup hook-review prompt on a PERSISTENT RESUME regardless of the bypass flag
-    (`bypass_hook_trust_for_startup_review = config.bypass_hook_trust && !is_persistent_resume`, tui/src/lib.rs).
-    Our visible TUI attaches via `codex … resume <tid>` (a persistent resume), so an unhashed hook WEDGES the
-    worker at an interactive "Hooks need review" menu. So the adapter ALSO writes the reverse-engineered
-    per-hook `trusted_hash` blocks (`codexHookHash`) UNCONDITIONALLY — matching hashes make `review_needed_count`
-    == 0 and codex skips the prompt. (The old belief that a flag-capable binary could SKIP the hash was wrong:
-    the flag does not suppress the resume review. The version-brittleness the bypass was meant to avoid is
-    inherent — codex offers no config to disable the review — so we accept it and keep bypass only as DEFENCE.)
-
-  A trust writer returns the path it asserted (or no paths for a harness whose trust mechanism writes
-  nothing), making the materialization receipt and user-facing init report derive from the adapter's real
-  side effect instead of a parallel capability claim. `bypass_hook_trust` still rides on BOTH thread paths as that defence (so the app-server thread runs the hooks
-  even if a version bump makes a hash mismatch): (1) the BACKEND-owned `thread/start` (codex-launch) carries
-  `config.bypass_hook_trust` — codex applies it **per thread** from the request's `config` override map, NOT from
-  the shared app-server's own `--dangerously-bypass-hook-trust` CLI flag (INERT for a thread); (2) the visible
-  `--remote … resume` TUI carries the flag. The capability probe (`<binary> --help`) MUST probe the SAME codex the
-  session runs, so the launch script EXPORTS `SPEXCODE_CODEX_CMD` for the codex-launch child (a fallback bare
-  `codex` picks the WRONG install on a multi-codex box and mis-decides). `SPEXCODE_CODEX_BYPASS_HOOK_TRUST` forces
-  the switch. Claude relies on folder-trust (often nothing).
+  Codex's three independent tiers — layer BUILT, layer ENABLED, hooks REVIEWED — and the duplicate-safe trust
+  writer that satisfies them are [[codex-runtime]]'s contract. A trust writer returns the path it asserted (or no
+  paths for a harness whose trust mechanism writes nothing), making the materialization receipt and user-facing
+  init report derive from the adapter's real side effect instead of a parallel capability claim. Claude relies on
+  folder-trust (often nothing).
 - **shimOwnership** — WHO owns `shimFile`. `exclusive`: a spexcode-named source file of our own
   (`.opencode/plugins/spexcode.ts`, `.pi/extensions/spexcode.ts`) — whole-file write, whole-file delete.
   `shared-json`: a config file the HOST AGENT shares with the user (`.claude/settings.json`,
@@ -271,22 +152,8 @@ surface:
   divergence is the only case that costs a store read: when the two ids agree, nothing is read.
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`
   (caller chooses the id); Codex `codex` under the launcher's configured approval/sandbox policy (id is codex-assigned — the backend
-  owns it via `thread/start` at launch and resumes by it). Because that backend-owned thread exists BEFORE the
-  visible remote TUI, the adapter translates Codex's documented launcher autonomy flags (`--yolo` /
-  `--dangerously-bypass-approvals-and-sandbox`, `-a` / `--ask-for-approval`, and `-s` / `--sandbox`) into the
-  typed `thread/start` approval/sandbox fields; a flag present only on the later `--remote resume` command is
-  not policy delivery. The agent-typed CLI resolves its own id via the
-  harness's env (`CLAUDE_CODE_SESSION_ID` / …). Codex's app-server is a per-PROJECT daemon shared across every
-  worktree's threads, so it is started in the STABLE per-project runtime dir — never a caller's transient
-  worktree: a daemon that inherited a worktree cwd is bricked when that worktree is later removed (its cwd goes
-  `(deleted)` and codex then fails EVERY new thread's config load with `No such file or directory`). For the SAME
-  reason it inherits no session IDENTITY: the spawn strips `SPEXCODE_SESSION_ID` and every adapter's
-  `sessionEnvVar` (the list is adapter-derived, so a new harness needs no edit), because a project-scoped daemon
-  started by whichever session launched first, serving every later thread, would otherwise hand that one
-  session's id to every thread's tool shell — a stale lie for everyone else, and for nobody at all once that
-  session closes and its record is swept (measured: daemons here still running for days under a long-gone
-  session's id). The id a thread actually needs — its OWN — codex injects per command, so stripping the
-  inherited ones removes a wrong answer without removing a right one. `launchEnv(id)`
+  owns it via `thread/start` at launch and resumes by it). The agent-typed CLI resolves its own id via the
+  harness's env (`CLAUDE_CODE_SESSION_ID` / …). [[codex-runtime]] owns the project-shared daemon's placement and identity hygiene. `launchEnv(id)`
   owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
   while a transport that needs neither returns no adapter env; the session launcher only composes those values
   with the governed session id and configured home variables. The same id model is exposed as one **exact native
@@ -307,73 +174,9 @@ surface:
   The detached-runtime receipt format is not reused because a session leaf is neither a detached process-group root
   nor required to satisfy `PGID == PID` / Linux `SID == PID`. PID/start identity and runtime liveness remain separate
   proofs. Product lifecycle code consumes native-target identity and leaf ownership independently and never
-  reconstructs an adapter's id model from record fields or harness names. A shared runtime also declares its
-  PID/isolation artifacts and a live control-plane probe through the adapter. The probe reports the runtime's loaded-thread
-  set and whether each reference is active; active is a state of one loaded reference, not another reference.
-  Record-only and queued sessions cannot invent a reference, while a loaded thread with no matching record stays
-  in the set as unowned. Ownership joins only governed records belonging to adapters that declare that same
-  shared-runtime descriptor; a coincidentally equal id from another adapter or a non-governed record is not a
-  reference owner. An unhealthy/unknown probe returns an unknown refcount rather than a record-derived fallback;
-  product mutation treats that uncertainty as a separate fail-closed blocker. The adapter exposes full projection
-  and mutation proof as separate capabilities: resource reporting may read every loaded reference to describe turn
-  presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections, and
-  the whole-collection census — whose rows already carry each thread's live turn state, so presence for every member
-  is answered by the reads the proof performs anyway. A gate asks whether a turn is in flight at the tip, so its cost
-  must track how many threads exist, never how much history any one of them holds; a per-thread transcript read makes
-  a long-lived session unmutatable against any fixed budget, and raising the budget only moves the threshold. Turn
-  IDENTITY is the separate question: only interrupt needs to name the turn it interrupts, so only interrupt pays a
-  transcript read, against a target that is by definition active. Presence the app-server did not report — including
-  two native sources contradicting each other — never becomes an `active` verdict. For Codex cold teardown alone, an
-  otherwise uniquely-owned member with that unknown presence may consult the final record in its durable rollout tail:
-  a terminal native event proves its turn settled, while a missing, unreadable, incomplete, or non-terminal tail stays
-  fail-closed and names both the live Codex client and rollout evidence in the refusal. A live `active` report remains
-  the unchanged immediate refusal; the durable tail cannot override it. The periodic report keeps its short bounded
-  probe budget; a lifecycle mutation's explicit target census has its own longer bounded budget so a busy shared
-  app-server does not turn a safe target proof into a false refusal. A transport-local census refusal is retried
-  a small bounded number of times with the same generation fence; semantic ownership refusals return immediately.
-  Ordinary stop reads the target and refuses
-  descendants. Cold archive treats the adapter's native `ancestorThreadId` result as an ownership closure (all depths,
-  excluding the ancestor), verifies every member's direct-parent chain against the active/archived collections,
-  establishes every loaded member's turn presence from those same collections, and archives the initially-active
-  closure deepest-first with the ancestor last;
-  already-archived members are proof, not mutation.
-  Unreadable-record quarantine is a separate, narrower adapter operation because it has no record-shaped ownership
-  claim to pass into cold archive. It receives one exact native thread id plus the exact unreadable record id
-  excluded from the owner census; that exclusion leaves the incident record opaque without blindfolding the census,
-  so any other unreadable governed record remains an unknown-control refusal. Before archiving, the adapter proves
-  the one materialized target occurrence across every non-reclaimed generation; no occurrence, a duplicate occurrence,
-  or an unproven generation refuses rather than falling back to current or legacy. It then proves that exact stable
-  generation, zero other governed owners, an exact one-thread closure, no descendants, and an idle known turn. It may
-  accept an already-archived target only after proving that exact target is unloaded. Otherwise it
-  archives only that target, then re-censuses the same generation and target while preserving every loaded sibling
-  reference. It returns public audit facts and an in-memory compensation closure; if the outer opaque-byte move
-  does not commit, compensation can restore only the thread it just archived and only on the original generation.
-  Live, active, owned, ambiguous, descendant-bearing, changed-generation, or unknown native state always refuses
-  before the record layer moves bytes.
-  The mutation proof fences the shared PID/start/detached-receipt/
-  socket generation across those reads; an unrelated slow sibling remains a protective loaded ID but cannot block
-  an isolated target subtree. Post-mutation it re-censuses the identical closure, requires the whole subtree unloaded
-  and uniquely archived, and keeps unrelated loaded siblings intact. Duplicate active/archived membership, a member
-  absent from both collections, changed ancestry, or a late replacement fails closed; compensation restores only
-  originally-active members and only on the unchanged generation. That generation exists only for one verifier-owned
-  version-4 detached launch receipt whose live PID/start and process group agree, whose Linux `/proc` session also
-  agrees when running on Linux, and whose socket inode is unchanged. Darwin never consumes `ps sess` as evidence.
-  During the one-way v3 receipt migration, a **mutation guard only** may atomically promote the retired
-  `detached-v3 PID start PGID SID` scope to that v4 receipt, and only when every stored field equals the exact
-  live Linux identity; reporting and all other reads never mint or repair a receipt. Missing, malformed, or
-  mismatched legacy evidence remains an unproven generation and refuses the mutation before any session teardown.
-  Unknown/active subtree state, ambiguous ancestry, or a generation change fails closed, and compensating mutation
-  is permitted only on the unchanged original generation.
-  The adapter receipt also owns post-cold compensation outside the native RPC boundary: until the product commits
-  the archive record and final offline proof, a failure returns the same receipt to `restoreRuntime`, which restores
-  all and only its originally-active subtree members. A receipt-free resume remains the normal parent-only restore.
-  The Codex app-server is spawned
-  as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
-  (`nohup` did not survive the real Codex Node launcher resetting signal behavior). The process adapter writes a
-  private receipt only after proving PID/start and `PGID == PID`, plus Linux `SID == PID`; every later consumer
-  re-verifies it through that adapter, while Darwin deliberately asks no `ps sess` question. A receipt alone never
-  proves the live boundary.
-  Killing the pane that happened to launch the daemon therefore cannot HUP unrelated turns.
+  reconstructs an adapter's id model from record fields or harness names. A shared runtime's ownership proofs — its live control-plane probe, target census, cold archive closure,
+  unreadable-record quarantine, generation fence, detached receipt, and post-cold compensation — are declared
+  through the adapter and consumed independently by product lifecycle code ([[codex-runtime]]).
   Launch acceptance and launch readiness are separate adapter facts. The
   optional `launchReady` seam returns an adapter-owned readiness fence, not a boolean: its immutable proof names
   the runtime/reference facts that made the launched session addressable, and its validator re-proves those same
@@ -381,14 +184,7 @@ surface:
   pre-resume stopped/offline record throughout that validation; only a successful recheck clears pending and
   publishes `stopped:false`. Adapters without it retain the existing
   bounded liveness proof and recheck. A missing, timed-out, or invalidated fence is a launch failure, never a
-  successful handoff. Codex-headless readiness freezes one exact live detached shared-root receipt/socket
-  generation, the loaded target thread, and its unique governed record owner.
-  Ownership is joined from every governed record whose adapter declares that shared-runtime descriptor; exactly
-  one record may claim the target thread and it must be the session being resumed. The loaded-ID set establishes
-  reference state but cannot establish record ownership. The post-pending validator repeats the full generation,
-  loaded-reference, and owner join: an unload, restart, owner collision, or reassignment retains/restores the
-  original stopped/offline projection without a false transition. This launch fence does not replace Codex's
-  steady-state shared-record liveness: once committed, its sleeping thread remains addressable through the app-server.
+  successful handoff. Codex-headless's readiness fence is stated in [[codex-runtime]].
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's
@@ -408,63 +204,9 @@ surface:
   answers "is this session's agent ready?" — from the caller's ONE runtime snapshot, which carries the window
   presence, a per-pane probe (the pane's root pid + one whole-box process table from a single `ps`), AND
   `socketLive` (whether a CONNECT to this session's rendezvous socket found a live listener, probed once for the
-  whole list). **claude** = the tmux window is up AND a live LISTENER is on its reclaude rendezvous socket
-  (`socketLive`) — a listener the OS accepts, **not** the mere existence of the socket FILE. This matters
-  because a crashed/killed claude does **not** unlink its unix-socket path, so the old `existsSync(rvSock)` read
-  a DEAD pane as `online` for as long as that stale file lingered — the incident's "dead pane stuck `working`
-  for 30+ minutes". A `connect()` is the honest test: a live claude accepts it, a stale file refuses it
-  (ECONNREFUSED, instant), an absent file ENOENTs (instant) — so a dead claude reads `offline` within seconds.
-  The rendezvous pathname is a launch-time fact, stamped beside the session record so future derivations cannot
-  strand an existing worker. A NEW rendezvous owner gets its socket under SpexCode's own durable home — normally
-  `<home>/.spexcode/s/<16hex>/c` (or that user's `SPEXCODE_HOME`) — never an OS temporary-cleanup namespace.
-  The 16 hex digits are one fixed digest of runtime scope + session identity; the leaf is the constant `c`, so
-  neither raw session id nor project name becomes pathname text, while two worlds holding the same session id
-  still cannot share a listener. The directory is created `0700`. This satisfies BOTH constraints at once:
-  the home-owned store survives host temporary cleanup, and the fixed 31-byte suffix leaves a known byte budget
-  below macOS's ~104-byte `sun_path` cap. The owner calculates its UTF-8 path bytes during session creation and
-  refuses loudly before a worktree/window/bind when the result is not `< 104`; it also checks before stamping.
-  That prevents the deceptive `EINVAL` state where an inode exists but every `connect()` fails and a healthy
-  worker reads `unknown`. An old stamped `/tmp/...` value remains that worker's address forever: readers use the
-  stamp unchanged, with no flag day. This rule belongs ONLY to `ownsRendezvous` adapters, whose endpoint is the
-  session's identity; it does not change Codex's deliberately project-shared app-server, whose endpoint routes
-  many threads and intentionally carries no session identity.
-  (The pane command is always the wrapper/shell while claude runs as its child, so claude still IGNORES the pane
-  probe.) **codex** = the tmux window is up AND a
-  **codex process is live in the pane's DESCENDANT process tree**. The pane's FOREGROUND name is NOT the signal:
-  a healthy, rendering codex TUI's `pane_current_command` is **`bash`** (the launch wrapper) for its whole life —
-  the codex processes live BELOW the pane pid (`bash launch.sh` → `bash -lc` → `node` (the codex CLI) → the
-  vendored `codex` binary) — so the earlier foreground==codex probe FALSE-read every live codex as offline
-  (field-confirmed), the strictly worse direction: the board showed working codex sessions as dead and a
-  supervisor could wrongly reopen/kill them. Nor is the app-server socket the signal: it is **per-PROJECT and
-  SHARED** by every worktree's thread, so it stays bound even when THIS session's visible
-  `codex --remote … resume <tid>` TUI FAILED and its launch pane, after the bounded resume retries, dropped back
-  to the shell prompt — sock-presence read a dead launch as online (the first field-confirmed false-positive).
-  The honest per-session discriminator is the pane's process TREE: HEALTHY = a codex-ish process (matched by
-  basename `codex*` or `node*` — the CLI runs as node before/alongside the vendored binary) exists among the
-  pane pid's descendants; FAILED = the retries exhausted, everything under the pane exited, the pane sits at a
-  bare idle shell with no codex/node anywhere below it. A probe tmux/ps couldn't report is not-live. The
-  'starting' boot grace stays in the
-  CALLER (sessions.ts liveness), so a still-booting codex pane — whose tree may not yet contain codex while
-  bash bootstraps the shared app-server — reads 'starting', not 'offline', for the legitimate startup window.
-  The app-server socket
-  is still the DELIVERY channel (per project, keyed on `runtimeRoot()`, ONE app-server shared by every worktree's
-  thread), just not the liveness gate. The session's thread id is NOT discovered at all — the BACKEND OWNS it: at launch it
-  `thread/start { cwd: <this worktree> }`s on the shared server (codex resolves that worktree's per-cwd
-  context — `AGENTS.md` + skills + project config — by walking the thread cwd, so one project-scoped server
-  behaves analogously to a per-worktree claude launch; its PROJECT HOOKS are the one exception, read from the
-  root checkout per the events/shim point above), proves its first durable turn, then stages the returned
-  `thread.id` for the lifecycle owner to store as `harness_session_id` — no capture hook,
-  no rollout-file scan, no cwd guess. The server may register that thread before the first user message materializes
-  it. In that window `thread/turns/list` returns the exact protocol refusal `is not materialized yet;
-  thread/turns/list is unavailable before first user message` (or, after native cleanup, `thread not loaded: <id>`);
-  the lifecycle adapter treats only those exact responses as a
-  proven no-turn interrupt result. During cold proof, the same response can prove an otherwise absent,
-  descendant-free target is in the startup-only shape: an existing loaded reference is removed by the exact native
-  delete request, while an already-unloaded target needs no mutation. Ordinary absent/unowned targets, timeouts,
-  and all other transport, ownership, or turn-state errors remain refusal paths. The
-  app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
-  TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
-  proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
+  whole list). **claude**'s rendezvous transport — socket name and home, connect-probe liveness, delivery protocol — is
+  [[claude-rendezvous]]; **codex**'s app-server transport — descendant-tree liveness, backend-owned thread identity, JSON-RPC delivery — is
+  [[codex-runtime]].
   Before a NEW prompt becomes debt, an adapter may report its native input transport as **reachable**,
   **unproven**, or **unreachable**. These are transport facts, not lifecycle verdicts: an unproven probe keeps
   ordinary queue-and-retry behavior, while sessions-core joins a proven-unreachable result with its independent
@@ -475,48 +217,11 @@ surface:
   never permission to call the agent dead. No product path classifies `/tmp`; each adapter proves its own
   native transport. `deliver(rec, text)` after acceptance remains the immediate handover attempt, never a
   second acceptance decision. The log append already made an admissible message durable ([[dispatch]]), so a
-  failed handover leaves the same `mid` OWED for the delivery queue to retry. **claude** writes one atomic
-  chunk containing `{type:reply,text,mid}` followed by `{type:repaint}`. Its rendezvous daemon owns one
-  connection at a time; a concurrent liveness probe can destroy a connection before parsing. `repaint-done`
-  proves the preceding reply was parsed, while a close/ECONNRESET/EPIPE before it proves the whole chunk was
-  discarded and is safe to retry with the same `mid` (bounded attempts with jitter). An open connection that
-  reaches the generous wall without a response is treated as busy, not lost, so active turns do not become
-  false failures; explicit rejection or shutdown remains loud. Claude's
-  **`deliveryBlockedBy(paneText)`** predicate recognizes the sessions panel ("← for agents"), which swallows
-  injected replies. It merely suppresses that known-useless poke: the line is already delivered and the reader
-  shows it at the next boundary. Codex has no such predicate (its poke is app-server JSON-RPC; pane state is
-  irrelevant). **codex** reaches its same-turn poke through the
-  per-PROJECT Codex app-server JSON-RPC control plane the visible TUI uses, addressing the **owned** thread id
-  (the one stored at launch). The handshake is `initialize → initialized → thread/loaded/list` (PROVE our
-  thread is loaded) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the
-  thread has an `inProgress` turn), `turn/steer` injects the message INTO that live turn — the model reacts
-  mid-turn ("inserted right after the running tool call completes"), it is NOT queued for after the turn ends;
-if the thread is **idle**, `turn/start` opens a new turn. `turn/steer` REQUIRES the active turn id as its
-`expectedTurnId` precondition (read from the thread, never from SpexCode's possibly-stale session status); a
-turn that ends in the read→steer window fails that precondition and is retried as a `turn/start`. Either way
-the app-server response confirms it landed. There is NO tmux prompt typing fallback for Codex: typed keys can
-truncate and can only prove tmux accepted input, not that Codex accepted a
-turn. Its hard interrupt follows the same exact-native rule: read the newest `inProgress` turn through the
-owned generation, send `turn/interrupt {threadId, turnId}`, then re-read until it has settled; an idle thread is
-already interrupted, while a generation change, unreadable turn, or still-active turn refuses loudly. The adapter uses one independent `thread/resume` connection to atomically subscribe to that owned
-  thread's outcome notifications. A live `turn/completed` with status `failed` carries the native error message
-  and `completedAt`; `completed` and `interrupted` are controls and produce no lifecycle write. When a backend
-  replacement joins a thread already in `systemError`, the same resume response's `initialTurnsPage` supplies
-  the latest turn id and completion time. A concurrent native `turn/started` cancels that historical projection,
-  so an old failure cannot overwrite the new turn's active lifecycle.
-  `resumeArg(rec, pendingLaunchPayload)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
-  tail differently and the codex side MUST honour that: **claude** `--resume <id>` is appended straight to the
-  `claude` command (the SAME conversation, the id we pinned). **codex** has no bare `codex` to append to — its
-  `launchCmd` is a bootstrap script that feeds the tail (`"$@"`) to `spex internal codex-launch`, which mints a NEW
-  thread and fires the tail AS the first-turn prompt. So the codex resume tail is a `--resume <thread-id>`
-  **marker** the script branches on: it resumes the owned thread DIRECTLY (skip `codex-launch`, no new thread,
-  no prompt turn — `tid=<thread-id>`), then its final `codex … resume "$tid"` performs codex's own resume on the
-  owned id — its rollout persists on disk, the SAME conversation. With no captured id, Codex requires the
-  authoritative pending resolved launch payload and returns those exact bytes as the new thread's first prompt;
-  absence is a loud adapter refusal, never an empty fresh thread and never reconstruction from the raw
-  originating prompt. The discriminator is sound because a new launch's tail is always ONE
-  single-quoted prompt arg, never the literal `--resume` — so a resume can never be mistaken for a prompt and
-  fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
+  failed handover leaves the same `mid` OWED for the delivery queue to retry. How each transport hands the accepted message over is its own contract: [[claude-rendezvous]] (one atomic reply+repaint chunk, retry-safe by `mid`) and [[codex-runtime]] (`turn/steer`
+  into a live turn or `turn/start` on an idle thread, and the exact-native hard interrupt).
+  `resumeArg(rec, pendingLaunchPayload)` is the relaunch tail `reopen()` hands `launch()`; each adapter consumes
+  that tail its own way — Claude appends `--resume <id>` to its command, Codex branches its bootstrap script on a
+  `--resume <thread-id>` marker ([[codex-runtime]]) — and either way it is the SAME conversation.
   An adapter that mints native identity during launch declares `launchPayloadProof`. Product lifecycle then
   retains the authoritative `launch` artifact after transport submission and gates later delivery behind it.
   The adapter stages a narrow shared launch receipt only after it has established the native id plus first prompt
@@ -603,194 +308,9 @@ The adapter-neutral identity face is one ordered `HarnessIdentity` registry: eac
 leave a stale session-id env list behind, and a consumer that only needs identity data never loads launcher,
 transport, or materialization machinery.
 
-Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
-scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
-`slash-commands.ts`. They now live in `harness.ts` (eight adapters gathered in `HARNESSES`),
-which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
-`if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
-same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.
+Because the hook handlers are pure shell, they cannot import `harness.ts`; `hooks/harness.sh` is its shell
+mirror and owns the harness-divergent payload parse ([[hook-shell-mirror]]).
 
-Because the hook handlers are pure shell, they cannot import `harness.ts`; `hooks/harness.sh` is its **shell
-mirror** (sourced by every handler, exported by `dispatch.sh`). It owns the harness-divergent payload parse.
-Codex has NO `file_path`; the touched file lives inside `tool_input.command`, and the tool that carries it
-differs by operation: an **edit is its own first-class tool `tool_name:"apply_patch"`** whose command is the
-**bare patch envelope** (`*** Update File: <path>` lines, with NO literal `apply_patch` token), while a **read/
-shell is `tool_name:"Bash"`** + `tool_input.command`. So `hp_code_path` accepts BOTH tools and `_hp_codex_cmd_path`
-detects a mutation by the `*** … File:` markers themselves (not by an `apply_patch` token), else takes the last
-path-like token (`sed -n 1p f.ts` → `f.ts`). A patch can bundle SEVERAL `*** … File:` markers (a multi-file
-edit), so `hp_code_path` emits ALL touched paths — one per line — and every consuming hook iterates them.
-Its operation mode is the semantic matcher shared by every harness: `read` accepts only read-shaped payloads,
-`mutate` only edits, and `access` their union. The native shims still bind the common `PreToolUse` event
-broadly; a non-matching payload simply resolves to no path. [[inject-spec-first]] uses `read`, then advances
-only if the spec graph resolves a real governor; [[inject-spec-of-file]] uses `mutate`. Neither hook branches
-on a harness or on special filenames. The shared
-`hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
-so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
-quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture. `hp_is_subagent`
-reads the acting-agent discriminator: a Claude IN-PROCESS subagent (Task tool) fires the parent's hooks with the
-PARENT's `session_id`/`transcript_path` but a top-level `agent_id` (+ `agent_type`) stamp the parent's own calls never
-carry (measured live, claude 2.1.207 — the payload-id rule above cannot separate them, this stamp can). The scan is
-structural: only the pre-`tool_input` payload prefix is searched for the `"agent_id":` key shape — every string value's
-quotes arrive JSON-escaped and an agent_id-NAMED tool parameter sits inside `tool_input`, past the truncation — so the
-answer is deterministic, never a content heuristic. Codex payloads carry no such field (its verified field set below), so
-the probe never matches there; mark-active consumes it to keep a supervising parent's declared state out of its
-subagents' reach (the stop-gate race).
-So [[inject-spec-first]], [[inject-spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
-the main checkout, but its commands run `dispatch.sh` with the thread cwd as `proj`, so each worktree gates
-against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +
-global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
-There is NO codex thread-id capture hook: the backend OWNS the thread id (it `thread/start`s the thread at
-launch and stages the proven id for the lifecycle owner to store as `harness_session_id` — see above), so no dispatcher or lifecycle hook branches on
-Codex and Claude needs nothing here either (its pinned id already is the record id). But design C's hooks fire
-from the SHARED per-project app-server process, whose env can inherit the FIRST session's baked
-`SPEXCODE_SESSION_ID`, so a governed codex hook must NOT trust that env var. On codex, `hp_session_id` resolves
-from the hook payload's `session_id` — the acting codex THREAD id — and id→record resolution carries an ALIAS
-step: when no record sits at the id directly, find the one record that captured this id as `harness_session_id`
-(a `grep` over the few runtime.json files on the shell hot path — no jq; the typed TS read mirrors it in
-`readAliasedRawRecord`). This is what lets the pure-shell `mark-active` re-flip and the ask-capture, plus every
-shell hook lifecycle write, reach the right record from a thread id even when the app-server env is contaminated.
-The alias needs no cleanup artifact — it lives in the record's own `harness_session_id`, swept with the record on
-close. Claude is unaffected on this path: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and
-the record key, so the direct hit always wins and the alias step never runs.
-
-**Identity is INJECTED where it is known, never inferred later.** `SPEXCODE_SESSION_ID` names the governed
-record of the context it sits in, and it earns that meaning from ONE invariant: every process we create is
-given its own identity, and a process that belongs to no single session is given none.
-
-- A **session launch** bakes `SPEXCODE_SESSION_ID=<record id>` into the agent — after STRIPPING every
-  session-identity variable it inherited (`sessionIdentityEnvVars()`, adapter-derived: the launch-injected id
-  plus each adapter's `sessionEnvVar`). The strip is not decoration: a session's pane inherits the tmux
-  SERVER's environment, so without it whichever session started that server rides along into every later
-  worker.
-- A **codex thread** cannot be handed identity that way — its tool shells are children of the SHARED
-  app-server, not of its own agent — so the backend injects the same variable per THREAD, through codex's own
-  `shell_environment_policy.set` in `thread/start`'s config override map (`codexStartThreadParams`), and the
-  visible `--remote … resume` TUI re-establishes it with the same `-c` override, because that client is the
-  other entry point creating a context for this session. Verified live: the thread's own tool shell reports
-  exactly the injected record id and nothing of the launcher's environment.
-- The **shared app-server** — and any other process we own that serves every session rather than one — is
-  spawned with those variables stripped. This is the same invariant read from the other side, and it is where
-  github#76 came from: a daemon started by one session outlived it and kept handing that session's id to every
-  later thread's `git commit`, so commits carried a stranger's session and, once it closed and its record was
-  swept, an id that named nothing.
-
-So identity is not something later code re-derives, checks, or guesses at. `prepare-commit-msg` READS
-`SPEXCODE_SESSION_ID` and stamps it: no store lookup, no per-harness ladder, no ancestry test, and nothing
-taken from the current directory — where a process stands says nothing about who it is, and a trailer written
-from a guess is worse than an absent one. No id → no trailer. The same invariant is what lets `envSessionId`
-([[portable-layout]]) and `hp_session_id` keep the alias step as a NARROW concern (a hook payload carries the
-acting codex THREAD id, which is a harness identifier rather than a record key) instead of a defence against a
-contaminated environment.
-
-A missing id is the ORDINARY case — most repos on the box are nobody's session — so the hook no-ops cleanly
-under `set -euo pipefail` rather than aborting the hook and the commit with it; the fail-loud stance is
-reserved for genuine errors past that point. The stamp lands via `git
-interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an appended
-`Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex ack`'s
-`Spec-OK:`) to body prose; interpret-trailers joins the existing block instead.
-
-## verified codex facts (live round-trip, real codex 0.142.3)
-
-The Codex impl of the adapter must encode these (measured against a real self-launched codex):
-- **payload fields**: `session_id`(uuid), `turn_id`, `transcript_path`, `cwd`, `hook_event_name` (CamelCase,
-  e.g. `PreToolUse`), `model`, `permission_mode`, `tool_name`, `tool_input`, `tool_use_id`, `prompt`. No `file_path`.
-- **`.codex/hooks.json` event keys are CamelCase** (codex fired all 5: SessionStart/UserPromptSubmit/PreToolUse/
-  PostToolUse/Stop) — the shim is correct as-is; snake_case is ONLY the trust-hash key format.
-- **codex tool model** (corrected against a LIVE apply_patch round-trip — the earlier "everything is Bash"
-  reading was wrong for edits): a **read/shell** is `tool_name:"Bash"` + `tool_input.command` (e.g. `sed -n 1p
-  f`); an **edit is a distinct tool `tool_name:"apply_patch"`** whose `tool_input.command` is the **bare patch
-  envelope** — `*** Begin Patch` / `*** Update File: <path>` / … — carrying NO literal `apply_patch` token and
-  NO `file_path`. So the adapter keys the mutation off the `*** … File:` markers (NOT an `apply_patch` token)
-  and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[inject-spec-of-file]] and an edit-first
-  [[inject-spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
-  layer itself is sound (mark-active flip, declare/commit gate, silent non-governed Stop all work once hooks
-  fire) — but that was first "proven" on a STANDALONE `.codex` in the cwd, which the interactive/`exec` flow
-  AUTO-TRUSTS, masking the dispatched-worker gap: a linked-worktree thread on the shared app-server needs the
-  layer BUILT + ENABLED + hooks HASHED (the trust point above) before dispatch.sh ever runs. Verified on a real
-  FRESH-INIT dispatched codex worker: with the anchor + project trust + per-hook hashes in place, SessionStart…
-  Stop fire through dispatch.sh, runtime.json advances past launch, and the commit carries the Session trailer.
-- **session-id model** (codex-rs source-verified): codex MINTS its own thread id internally (`Uuid::new_v4`/
-  `ThreadId::new`) — there is NO flag/env to pin a NEW session's id (`CODEX_THREAD_ID` is an OUTPUT codex
-  injects, not an input; resume takes an existing rollout id). So a dashboard-launched codex session can't have
-  its governed record keyed by the harness id the way claude's `--session-id` allows. The adapter's resolution:
-  the launcher keys the record by a SpexCode id, stores the codex thread id on it as `harness_session_id`, and a
-  codex hook resolves from the payload THREAD id first because the shared app-server env may carry another
-  session's `SPEXCODE_SESSION_ID`. id→record resolution then ALIASES that thread id onto the record carrying it as
-  `harness_session_id`. Claude needs neither step: its exported id equals its payload id equals the record key, so
-  the direct hit always wins.
-- **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
-  own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
-  (started once, reused). The app-server and the visible `codex --remote unix://<sock> resume <tid>` TUI **share
-  that one socket, so they MUST be the SAME codex install** — a version split across the socket breaks the
-  handoff. The remote TUI also receives `--cd <worktree-cwd>` explicitly: with `tui.resume_cwd = "current"`,
-  Codex refuses a remote workspace that has no `--cd`, so the generated command must quote the pane's `$PWD`
-  as one argument (including worktree paths containing spaces).
-  `thread/start`→resume handoff (the app-server on one version creates a thread a differently-versioned resume
-  can't find, and an old-enough app-server can't serve `--remote unix://` at all). So the app-server command is
-  **DERIVED from the in-effect launcher `codexCmd`'s binary** (its first shell token, dropping args like
-  `--yolo`): `<bin> app-server` runs the exact install `<bin> --remote … resume` will. It is NOT a bare `codex`
-  off PATH — on a multi-install host (e.g. a homebrew codex shadowing an nvm codex) a bare `codex` resolves to a
-  DIFFERENT binary than the launcher's, which was the macOS-only version-skew failure. `SPEXCODE_CODEX_SERVER_CMD`
-  stays the explicit escape hatch (highest precedence, overriding the derivation); a `codexCmd` whose first token
-  is a wrapper script forwards `app-server` through the wrapper. That socket lives on a **short, `sun_path`-safe,
-  per-project-unique path** —
-  `<socketBase>/spexcode-cx-<hash>.sock`, where `<hash>` is a stable digest of the project identity (the
-  runtime dir) and `<socketBase>` is an **owned per-uid subdirectory of the platform tmpdir**
-  (`spexcode-cx-<uid>`, created 0700 by the derivation itself; the `SPEXCODE_CODEX_SOCKET_DIR` env override
-  still replaces it) — NEVER bare tmpdir, and NOT
-  nested under the project runtime dir. Bare `/tmp` is not merely untidy, it is BROKEN out of the box: on a
-  normally-hardened Linux host (`fs.protected_regular=2`, root-owned sticky `/tmp` — stock Ubuntu) codex
-  refuses to bind a unix socket directly in the shared sticky `/tmp` (EPERM), so the server never comes up,
-  the client connect ENOENTs, and every codex-launcher session dies through launch.sh's retries while claude
-  launchers work — yet the same codex binds fine in any owned subdirectory (github#30). Per-uid, not one
-  shared dir, so a second user on the box never lands in the first user's 0700 dir; the launch script
-  re-`mkdir -p -m 700`s the base at run time in case a tmp cleaner wiped it after the bake.
-  The path MUST also stay short because a Unix socket path is capped at `sun_path`
-  (~104 bytes on macOS, 108 on Linux) and `runtimeRoot()` flattens the entire project path into one long
-  dash-segment (`encodeProject`), so the naive `<runtimeRoot>/codex-app-server.sock` overran the cap on a deep
-  macOS project (`path must be shorter than SUN_LEN` + connect EINVAL — the app-server never bound; Linux's
-  larger limit + shorter `/root` paths happened to fit). The hash is derived from the SAME project identity the
-  launch, liveness, and delivery seams all pass, so they compute the IDENTICAL sock with no coordination — the
-  one-app-server-per-project invariant. The short-path derivation is unconditional on every platform (no darwin
-  branch — a platform difference handled at the path seam, not a product `if`). The `.pid`/`.log`/`.lock`
-  sidecar files carry no `sun_path` limit and stay under the project runtime dir. The check-and-start of
-  that shared server is serialized by a **POSIX-portable lock** — an atomic `mkdir` mutex with a bounded wait,
-  NOT util-linux `flock` (absent on macOS, where the flock path failed the whole bootstrap and left the pane at
-  the shell). The lock is held only across the check-and-start and released immediately; a stale dir left by a
-  dead launcher is cleared after a bounded wait so it can never deadlock a launch. Because a mkdir lock has no
-  inherited-fd hazard (unlike flock, held until every fd on its open file description closes), the long-lived
-  daemon can't pin it — no fd-inheritance guard on the spawn. Each
-  worktree session = ONE thread on that server, created by the BACKEND: the launch script runs `spex
-  codex-launch <sock> <worktree-cwd> <prompt>`, which `thread/start { cwd }`s (codex loads that worktree's
-  per-cwd context — AGENTS.md, skills, project config — from the thread cwd; PROJECT HOOKS are the exception,
-  read from the main checkout's `.codex` — VERIFIED both by codex-rs source and a live round-trip: with the
-  shim at `<mainCheckout>/.codex/hooks.json` all five events fire for a worktree thread, and removing that file
-  while the worktree's own `.codex/hooks.json` stays in place makes EVERY hook go silent — so a per-project
-  server behaves like a per-worktree launch for everything except the hooks, which are genuinely per-project),
-  fires the prompt as the FIRST turn — materializing the thread's rollout on disk — then stages the returned
-  `thread.id` plus payload proof for the governed record (`harness_session_id`, keyed by `SPEXCODE_SESSION_ID`),
-  which the visible `codex --remote unix://<sock> resume <tid>` TUI then renders natively (VERIFIED: the TUI
-  resumes a backend-created thread once it has ≥1 turn, and a later `turn/steer`/`turn/start` also renders live
-  in the pane). That resume reads the thread's ROLLOUT FILE
-  (`<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<ts>-<tid>.jsonl`), so a resumable thread is exactly one whose
-  rollout exists — and that file has a **WARM-UP RACE** the launch must wait out (VERIFIED live, codex 0.142.5):
-  `thread/start` ALONE writes no rollout (only a fired turn does), and a **freshly-spawned** app-server acks
-  thread/start+turn but persists the rollout ~2-4s LATE — the SAME thread's file lands a few seconds after, it is
-  not lost. A launch that hands the id to `resume` immediately dies with "no rollout found for thread id", and the
-  launch retry loop then misreads that fast failure as a daemon race, sprays fresh threads, and stores the last
-  (non-resumable) id — wedging every future reopen. The guard is ONE waypoint: `codex-launch` fires the first turn
-  then WAITS (`waitForCodexRollout`, 20s) for the rollout to land BEFORE it stages `harness_session_id` proof or prints
-  the id — so the id it returns is always resume-ready, and a genuine miss FAILS LOUD (non-zero, stages nothing;
-  launch.sh aborts rather than `resume ""`). The 20s budget deliberately exceeds launch.sh's fast-fail threshold,
-  so a real failure exits PAST it and the retry loop treats it as a true end, never a duplicate-prompt respray —
-  turning a silent permanent wedge into an honest, non-duplicating retry. The rollout scan walks day-dirs
-  newest-first but EXHAUSTIVELY — never capped at "the newest few" — because future-dated junk under
-  `sessions/` (a test once planted `2099/12/*` in the real CODEX_HOME) sorts above every real day-dir, and a
-  cap let three such dirs mask ALL real rollouts: every launch then died "persisted no rollout" with the
-  rollout sitting on disk. No cold-branch pre-warm is needed: the
-  wait absorbs the warm-up on the first launch after a server boot (a few extra seconds in `starting`). Follow-up delivery opens a WebSocket to the same socket's `/rpc` and `turn/steer`/`turn/start`s
-  the OWNED thread id. The app-server is a shared control plane, not a session identity; session routing is
-  solely the owned Codex thread id, so several `spexcode serve` processes never cross-send. Delivery falls back
-  to reading the one loaded thread (`thread/loaded/list`) only for a pre-existing session whose id was never
-  stored. Explicit `--remote` is the default because it deterministically binds the pane and backend control to
-  the project app-server.
+**Identity is INJECTED where it is known, never inferred later** ([[identity-injection]]): every process we create
+is given its own `SPEXCODE_SESSION_ID`, a process that belongs to no single session is given none, and the commit
+trailer reads that variable and nothing else.

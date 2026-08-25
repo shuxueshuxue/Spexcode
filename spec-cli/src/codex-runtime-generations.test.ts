@@ -60,7 +60,7 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     for (const id of governed) {
       const session = join(root, 'sessions', id)
       mkdirSync(session)
-      writeFileSync(join(session, 'session.json'), `${JSON.stringify({
+      writeFileSync(join(session, 'runtime.json'), `${JSON.stringify({
         session_id: id, governed: true, harness: 'codex', harness_session_id: `thread-${id}`,
       })}\n`)
     }
@@ -84,12 +84,12 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     const recoveredRegistration = 'registration-recovered'
     const recoveredThread = 'thread-registration-recovered'
     mkdirSync(join(root, 'sessions', recoveredRegistration))
-    writeFileSync(join(root, 'sessions', recoveredRegistration, 'session.json'), `${JSON.stringify({
+    writeFileSync(join(root, 'sessions', recoveredRegistration, 'runtime.json'), `${JSON.stringify({
       session_id: recoveredRegistration, governed: true, harness: 'codex', harness_session_id: recoveredThread,
     })}\n`)
     prepareCodexGenerationRegistration(root, recoveredRegistration, recoveredThread, current.id)
     assert.equal(resolveCodexGenerationForSession(root, recoveredRegistration, recoveredThread)?.id, current.id,
-      'a crash after session.json but before the binding commit recovers its exact route')
+      'a crash after runtime.json but before the binding commit recovers its exact route')
     commitCodexGenerationRegistration(root, recoveredRegistration, recoveredThread, current.id)
     assert.equal(readCodexGenerationLedger(root).bindings[recoveredRegistration]?.phase, undefined)
     prepareCodexGenerationClose(root, recoveredRegistration, recoveredThread)
@@ -139,7 +139,7 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     writeFileSync(legacy.receiptFile, legacyReceipt)
     prepareCodexGenerationRegistration(root, 'crashed-before-record', 'thread-crashed-before-record', legacy.id)
     assert.equal(resolveCodexGenerationForSession(root, 'crashed-before-record', 'thread-crashed-before-record'), null,
-      'a crash before session.json does not manufacture a route from a pending registration')
+      'a crash before runtime.json does not manufacture a route from a pending registration')
     bindCodexGeneration(root, 'crashed-after-record-removal', 'thread-crashed-after-record-removal', legacy.id)
     prepareCodexGenerationClose(root, 'crashed-after-record-removal', 'thread-crashed-after-record-removal')
     assert.equal(resolveCodexGenerationForSession(root, 'crashed-after-record-removal', 'thread-crashed-after-record-removal'), null,
@@ -161,7 +161,7 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
 function recordSession(root: string, sessionId: string, threadId: string): void {
   const dir = join(root, 'sessions', sessionId)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
+  writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify({
     session_id: sessionId, governed: true, harness: 'codex', harness_session_id: threadId,
   })}\n`)
 }
@@ -175,7 +175,7 @@ test('archived historical bindings do not pin a zero-reference draining generati
     const before = await ensureCodexCurrentGeneration(root, start)
     const archived = join(root, 'sessions', 'archived-history')
     mkdirSync(archived)
-    writeFileSync(join(archived, 'session.json'), `${JSON.stringify({
+    writeFileSync(join(archived, 'runtime.json'), `${JSON.stringify({
       session_id: 'archived-history', governed: true, harness: 'codex', harness_session_id: 'thread-archived', archived: true,
     })}\n`)
     bindCodexGeneration(root, 'archived-history', 'thread-archived', before.id)

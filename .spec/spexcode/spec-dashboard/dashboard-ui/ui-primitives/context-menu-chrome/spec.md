@@ -39,3 +39,15 @@ activation and accessible menu roles while [[esc-layers]] continues to own dismi
 so whichever input surface owned typing before the right-click still owns it after the pick.
 Ordinary actions close before they run. A copy action may keep its own row visible briefly only to report
 copied/failed, then dismisses through the same menu close path; it never grows a separate toast vocabulary.
+
+**One shell, two openings.** A menu the POINTER opened stays inert chrome exactly as above. A menu the
+KEYBOARD opened must be walkable by the keyboard, so it takes focus on its first command and owns
+↑/↓/Home/End while it is open — the walk cannot leak to the surface underneath and move the very subject the
+menu is aimed at. Enter/Space remain native button activation and [[esc-layers]] still owns dismissal; the
+opener returns focus to whatever it borrowed it from. The two openings differ only in who owns focus, never
+in which commands exist.
+
+A command row may print the binding it also answers to, in a trailing quiet column. That cap is READ from
+the key registry ([[keyboard-nav]]'s hint reader), never typed into the label, so a rebind moves the printed
+cap with the finger and a menu can never name a key the keyboard no longer fires. The hint is decoration for
+assistive technology (`aria-hidden`): the command's word is the accessible name.

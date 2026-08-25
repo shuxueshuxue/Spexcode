@@ -68,3 +68,25 @@ the content always: while a full-bleed board (Evals, Issues) is the routed docum
 at all ([[workspace-shell]]) — the preference stays on and the rail entry stays lit, because what the reader
 chose is not what the board is doing. Its width is the shared resizable-pane primitive, persisted per pane
 like every other.
+
+## the row menu, and the one seam that serves both projections
+
+A tree row's verbs were reachable only by gestures a reader had to already know: ⌘/ctrl-click and
+double-click hold a row in its own tab, and nothing announced either. A right-click is where a workspace is
+asked what it can do with the thing under the cursor, so every explorer row answers one: a spec node offers
+the same vocabulary it offers on the graph ([[node-graph]]'s node menu) — open in a new tab, reveal on the
+graph, copy its link, copy its id — and a file offers open in a new tab, copy its link, copy its path, and
+**reveal owning node** only when some node's `code:` actually claims that path. A directory offers the one
+verb it has, because a folder is not a document ([[disk-tree]]).
+
+The menu is wired ONCE, on the shared body both projections mount into. A row declares WHAT IT IS on its own
+element (`data-menu-kind` with a node id or a path); the body's single right-click and keyboard handler reads
+the subject off whichever row the event came from. So neither tree owns a menu, no row kind owns a handler,
+and a row added later joins by naming its subject. The owning-node lookup needs no route either: the board
+the tree is already built from carries every `code:` claim.
+
+Both verbs are registry actions ([[keyboard-nav]]), never a second spelling here: `explorer.menu`
+(⇧F10 / the context-menu key, the OS-universal gesture) opens the focused row's menu anchored to that row,
+and `explorer.openInNewTab` holds the focused row in its own tab — the keyboard equal of the click gesture
+that was previously unnamed. A keyboard opening borrows focus into the menu and gives it back to the row on
+close; a pointer opening leaves focus exactly where it was ([[context-menu-chrome]]).

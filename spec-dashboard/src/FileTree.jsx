@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from './icons.jsx'
+import { firesEvent } from './bindings.js'
+import ExplorerContextMenu from './ExplorerContextMenu.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
 import { isHoldGesture, pinTab } from './tabs.js'
@@ -26,10 +28,14 @@ const kidsOf = (specs) => {
   return kids
 }
 
-function Row({ depth, onClick, onDoubleClick, open, hasKids, dot, label, kind, active }) {
+// A row declares WHAT IT IS on the element itself (`data-menu-*`). The explorer then needs exactly one
+// right-click/keyboard seam for every projection instead of a handler per row kind, and a row that grows
+// later joins the menu by naming its subject rather than by wiring anything.
+function Row({ depth, onClick, onDoubleClick, open, hasKids, dot, label, kind, active, subject = null }) {
   return (
     <button type="button" className={`ft-row ft-${kind}${active ? ' on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} onDoubleClick={onDoubleClick} data-tip={label}>
+      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} onDoubleClick={onDoubleClick} data-tip={label}
+      data-menu-kind={subject?.kind} data-menu-id={subject?.id} data-menu-path={subject?.path}>
       <span className="ft-caret">{hasKids ? (open ? '▾' : '▸') : ''}</span>
       {dot ? <i className="ft-dot" style={{ background: dot }} /> : <span className="ft-dot ft-none" />}
       <span className="ft-label">{label}</span>
@@ -57,6 +63,7 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
   return (
     <>
       <Row depth={depth} kind="node" label={node.title || node.id} active={focusId === node.id}
+        subject={{ kind: 'node', id: node.id }}
         dot={STATUS[node.status]?.color} hasKids={hasKids} open={open}
         // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
         // discloses its contents. Splitting them into two hit targets would make the common move — look
@@ -72,12 +79,13 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
       {open && (
         <>
           {governed.map((f) => (
-            <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()}
+            <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()} subject={{ kind: 'file', path: f }}
               onClick={(e) => (isHoldGesture(e) ? pinTab : navigate)('file', f)}
               onDoubleClick={() => pinTab('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
+              subject={{ kind: 'file', path: `.spec/${node.id}/${f.name}` }}
               onClick={(e) => (isHoldGesture(e) ? pinTab : navigate)('file', `.spec/${node.id}/${f.name}`)}
               onDoubleClick={() => pinTab('file', `.spec/${node.id}/${f.name}`)} />
           ))}
@@ -132,6 +140,56 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
   const kids = useMemo(() => kidsOf(specs || []), [specs])
   const roots = kids.get('') || []
   const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
+  const [menu, setMenu] = useState(null)
+  // A path's owner is already in the board the tree is built from, so "reveal owning node" needs no lookup
+  // route: the first node whose `code:` claims the path IS the answer [[one-govern]] guarantees is single.
+  const ownerByPath = useMemo(() => {
+    const owners = new Map()
+    for (const s of specs || []) {
+      for (const claim of s.code || []) {
+        const path = claim.split('#')[0]
+        if (!owners.has(path)) owners.set(path, s.id)
+      }
+    }
+    return owners
+  }, [specs])
+  const owningNodeOf = useCallback((path) => ownerByPath.get(path) || null, [ownerByPath])
+  // ONE SEAM FOR EVERY PROJECTION. Both trees mount inside this body, so the right-click and the keyboard
+  // opener are read here off whichever row the event came from; neither tree grows a menu of its own and a
+  // new row kind joins by declaring `data-menu-*`.
+  const subjectAt = (target) => {
+    const row = target?.closest?.('[data-menu-kind]')
+    if (!row) return null
+    const { menuKind: kind, menuId: id, menuPath: path } = row.dataset
+    return { kind, id: id || null, path: path || null, key: `${kind}:${id || path}`, row }
+  }
+  const closeMenu = useCallback(() => {
+    // A keyboard opening borrowed focus from its row; closing gives it back, so the walk resumes where it
+    // was interrupted instead of dropping to the top of the document.
+    if (menu?.keyboard) menu.row?.focus?.()
+    setMenu(null)
+  }, [menu])
+  const onRowContextMenu = (event) => {
+    const subject = subjectAt(event.target)
+    if (!subject) return
+    event.preventDefault()
+    setMenu({ ...subject, x: event.clientX, y: event.clientY, keyboard: false })
+  }
+  const onRowKeyDown = (event) => {
+    const menuKey = firesEvent('explorer.menu', event)
+    if (!menuKey && !firesEvent('explorer.openInNewTab', event)) return
+    const subject = subjectAt(event.target)
+    if (!subject) return
+    event.preventDefault()
+    if (menuKey) {
+      // anchored to the row, not to a stale pointer: a keyboard menu must appear where the finger is.
+      const rect = subject.row.getBoundingClientRect()
+      setMenu({ ...subject, x: rect.left + 12, y: rect.bottom, keyboard: true })
+      return
+    }
+    if (subject.kind === 'node') pinTab('spec', subject.id)
+    else if (subject.kind === 'file') pinTab('file', subject.path)
+  }
   const toggle = (key) => setSections((prev) => {
     const next = { ...prev, [key]: !prev[key] }
     try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)) } catch { /* private mode */ }
@@ -146,7 +204,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
   if (!specs?.length) return null
   return (
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
-      <div className="ft-body">
+      <div className="ft-body" onContextMenu={onRowContextMenu} onKeyDown={onRowKeyDown}>
         <Section name={t('fileTree.specs')} open={sections.specs} onToggle={() => toggle('specs')}>
           {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
         </Section>
@@ -155,6 +213,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
           <DiskTree />
         </Section>
       </div>
+      <ExplorerContextMenu menu={menu} onClose={closeMenu} owningNodeOf={owningNodeOf} />
       <button type="button" className="ft-graph-entry" data-tip={t('fileTree.graph')} aria-label={t('fileTree.graph')}
         onClick={openSpecGraph}>
         <Icon name="graph" size={14} />

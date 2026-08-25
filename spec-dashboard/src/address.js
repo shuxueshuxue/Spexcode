@@ -72,8 +72,10 @@ function copyFallback(text) {
   return copied
 }
 
-export async function copyAddress(address) {
-  const text = addressUrl(address)
+// One clipboard path for everything this vocabulary hands a reader. An address copies as its URL; a plain
+// subject (a repository path) copies as itself. Both take the same Clipboard-API-then-textarea route, so a
+// denied or insecure clipboard degrades identically wherever a copy is offered.
+export async function copyText(text) {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
@@ -82,6 +84,8 @@ export async function copyAddress(address) {
   } catch { /* insecure or denied Clipboard API falls through to the browser copy path */ }
   return copyFallback(text)
 }
+
+export const copyAddress = (address) => copyText(addressUrl(address))
 
 // The review details' RETURN GATE ([[review-chrome]]'s compact back anchor): the href derives ONLY from
 // the detail's own canonical address — never history.back, a referrer sniff, or originator presence —

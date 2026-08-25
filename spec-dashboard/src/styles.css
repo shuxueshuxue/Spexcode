@@ -1346,13 +1346,15 @@ a.scenario-count:hover { background: var(--wash-hover); }
 }
 .sess-menu-group { display: grid; gap: 1px; }
 .sess-menu-item {
-  display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: center; gap: 7px;
+  display: grid; grid-template-columns: 17px minmax(0, 1fr) auto; align-items: center; gap: 7px;
   width: 100%; min-height: 28px; text-align: left; background: none; border: none;
   border-radius: var(--radius); padding: 4px 7px; cursor: pointer;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-tight); color: var(--ink);
 }
 .sess-menu-icon { width: 17px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .sess-menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the binding a command also answers to — quiet, never competing with the word it belongs to. */
+.sess-menu-hint { flex: none; color: var(--muted); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); }
 .sess-menu-item:hover, .sess-menu-item:focus { outline: none; background: var(--wash-hover); color: var(--ink2); }
 .sess-menu-item:hover .sess-menu-icon, .sess-menu-item:focus .sess-menu-icon { color: currentColor; }
 /* close/delete are destructive — orange text + icon, isolated by a separator rather than a loud fill. */

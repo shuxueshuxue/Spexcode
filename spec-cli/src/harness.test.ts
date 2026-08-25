@@ -299,7 +299,7 @@ const stopCodexOwner = async (owner: ReturnType<typeof startCodexOwner> | null) 
 const writeCodexReadinessRecord = (root: string, sessionId: string, threadId: string) => {
   const dir = join(root, 'sessions', sessionId)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
+  writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify({
     session_id: sessionId,
     governed: true,
     worktree_path: root,
@@ -490,7 +490,7 @@ test('Codex corrupt-record quarantine archives only an exact orphan native threa
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     mkdirSync(join(root, 'sessions', corruptId), { recursive: true })
-    writeFileSync(join(root, 'sessions', corruptId, 'session.json'), '{ unreadable incident bytes')
+    writeFileSync(join(root, 'sessions', corruptId, 'runtime.json'), '{ unreadable incident bytes')
     owner = startCodexOwner(root)
 
     const quarantined = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })
@@ -502,7 +502,7 @@ test('Codex corrupt-record quarantine archives only an exact orphan native threa
 
     archived = false; loaded = true
     mkdirSync(join(root, 'sessions', 'readable-owner'), { recursive: true })
-    writeFileSync(join(root, 'sessions', 'readable-owner', 'session.json'), JSON.stringify({
+    writeFileSync(join(root, 'sessions', 'readable-owner', 'runtime.json'), JSON.stringify({
       session_id: 'readable-owner', governed: true, harness: 'codex', harness_session_id: target,
     }))
     const owned = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })
@@ -575,7 +575,7 @@ test('Codex corrupt-record quarantine locates an orphan on its detached generati
     }, null, 2)}\n`)
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     mkdirSync(join(root, 'sessions', corruptId), { recursive: true })
-    writeFileSync(join(root, 'sessions', corruptId, 'session.json'), '{ unreadable incident bytes')
+    writeFileSync(join(root, 'sessions', corruptId, 'runtime.json'), '{ unreadable incident bytes')
     owner = startCodexOwner(root)
 
     const quarantined = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })

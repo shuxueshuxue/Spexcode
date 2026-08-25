@@ -87,11 +87,16 @@ const events = (dir: string): Array<{ kind: string; text?: string; from?: string
   resetConfiguredSessionApplicationForTest()
   const app = configuredSessionApplicationIfCutover()
   if (!app?.readState(id)) return []
-  return app.readPendingMessages(id).map((message) => ({
-    kind: 'sent',
-    text: Buffer.from(message.body).toString('utf8'),
-    from: message.senderSessionId ?? null,
-  })).filter((message) => message.text.startsWith('[spex watch]'))
+  return app.readPendingMessages(id).flatMap((message) => {
+    const raw = Buffer.from(message.body).toString('utf8')
+    if (raw.startsWith('[spex watch]')) return [{ kind: 'sent', text: raw, from: message.senderSessionId ?? null }]
+    try {
+      const state = JSON.parse(raw) as { sessionId?: string; status?: string; proposal?: string | null }
+      if (!state.status) return []
+      const display = state.status === 'awaiting' ? (state.proposal === 'merge' ? 'review' : state.proposal === 'close' ? 'close-pending' : 'done') : state.status === 'active' ? 'working' : state.status
+      return [{ kind: 'sent', text: `[spex watch] ${state.sessionId ?? id} is ${display}`, from: message.senderSessionId ?? null }]
+    } catch { return [] }
+  })
 }
 async function waitFor(check: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 2_000
@@ -154,7 +159,7 @@ test('managed watch registers once, delivers child states, and cancel stops deli
 
   const declared = await runCli(['session', 'done', '--propose', 'merge'], childEnv)
   assert.equal(declared.code, 0, declared.stderr)
-  await waitFor(() => events(parentDir).filter((event) => event.kind === 'sent').length === 2, `watch-delivered review; queue=${JSON.stringify(events(parentDir))}`)
+  await waitFor(() => events(parentDir).filter((event) => event.kind === 'sent').length === 2, 'watch-delivered review')
   const review = events(parentDir).at(-1)
   assert.equal(review?.from, ID)
   assert.match(review?.text || '', /review/)

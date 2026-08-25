@@ -69,8 +69,9 @@ A reader can click a changed line to author a comment. Comments live in the sess
 lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending
 un-sent comments formats them as one review message and uses the existing session input/send path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
-Sent comments remain inline in the diff with their delivery marker, and a reload keeps the reader on the file they
-commented on, because that marker appears where the comment was filed.
+Sent comments remain inline in the diff with their delivery marker. A reload after saving or sending a comment is
+not a navigation: the open file stays selected while it still exists, so the reader lands beside the comment they
+just filed rather than back on the first file.
 
 A row can also be RETRACTED. A review conversation that only ever appends is not one: a comment landed on the
 wrong line, or left behind by a measurement, would otherwise stay on the record forever. Retract removes that one

@@ -14,7 +14,7 @@ scenarios:
     code: scripts/adopter-integration-yatu.mjs
     related:
       - .spec/spexcode/session-runtime/runtime-bindings/eval.md
-      - .spec/spexcode/session-runtime/zswarm-adopter/eval.md
+      - .spec/spexcode/session-runtime/zswarm-cutover/zswarm-adopter/eval.md
 ---
 # adopter integration proof
 

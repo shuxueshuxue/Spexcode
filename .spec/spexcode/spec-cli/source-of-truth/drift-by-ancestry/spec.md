@@ -99,3 +99,19 @@ histories, its revisions on stdin so argv cannot grow with the roster — and ap
 a projection is never grafted into the HEAD index: the `null` answer above is load-bearing for every caller
 that distinguishes "ancestry cannot testify" from "nothing changed", and making off-history tips reachable
 there would silently retire that distinction.
+
+## acknowledgement cover and merge-authored lines
+
+Drift is
+netted against **acknowledgement**: a one-parent `spex ack` commit whose tree equals its sole parent's tree
+checkpoints the named node valid at its tip, quieting drift reachable from that checkpoint back to the
+version. Every other `Spec-OK` commit acknowledges only itself, never older debt; a merge is therefore
+self-only even when an `ours` strategy leaves its first-parent tree unchanged, because it introduces new
+reachable history.
+
+Git's default history presentation suppresses merge diffs, but a merge can author content or rename a lineage
+while resolving conflicts. Dense combined (`--cc`) lines different from every parent are that merge's own
+writes: a cc change to `spec.md` is a version, and one in governed code enters drift/anchor judgment. Combined
+raw paths separately carry merge-authored rename identity into projection without charging the rename as a
+code hit. A merge with neither stays transport. First-parent diff is not a substitute: it would duplicate
+side-branch writes at the project's normal `--no-ff` landing step.

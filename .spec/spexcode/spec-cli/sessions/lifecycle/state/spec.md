@@ -26,26 +26,9 @@ reversible, and nothing auto-disappears.
 
 The session **state** is the source of truth (never an in-memory map). After the SQLite cutover it lives in the
 canonical session application. The sibling JSON file is only the runtime/worktree envelope and migration evidence;
-it is not a second lifecycle authority. The state lives NOT in the worktree but in a per-user GLOBAL store, keyed by the governed **SpexCode session id**. For Claude this is also the harness
-`session_id`; for Codex, whose thread id is minted internally and cannot be pinned, the governed record keeps
-SpexCode's id as `session_id` and stores the real Codex thread id separately as `harness_session_id` once
-the backend's `codex-launch` has completed `thread/start` for that worktree. The layout mirrors Claude's own `~/.claude/projects/<enc>/`: `<SPEXCODE_HOME or
-~/.spexcode>/projects/<enc>/sessions/<session_id>/`, where `<enc>` encodes the **project root** (path separators
-→ `-`). The project root is the MAIN
-checkout (`dirname` of the shared git **common** dir), which resolves identically from main or any linked
-worktree — so the board (running at main) and a hook (running in a worktree) compute the **same** dir; resolving
-it from `git rev-parse --show-toplevel` would not (in a worktree that is the worktree). The runtime envelope is
-written by the shared metadata writer; lifecycle writes, including the hook's own, go through the canonical
-application. The hook never inspects JSON as a cache, because that would reintroduce a second fact. Keying by
-session_id, not worktree path, is deliberate: it keeps the worktree **completely clean** (zero SpexCode files —
-the launcher products live in the store too, see [[runtime]]) AND gives EACH agent its own record, so a user may
-run several claude/codex in one folder without their states clobbering (a path key could not). The board
-ENUMERATES this store (`projects/<this-project>/sessions/*`), filtered to `governed:true` and ordered by the
-record's stored `createdAt` — it no longer scans `git worktree list`; each row's `worktree_path` (in the record)
-is what opens its terminal / diff / live-view. Each record carries a **`governed`** flag: the dashboard launcher
-([[sessions-core]]) sets it true; a user-self-launched agent has no governed record (a non-board session). The
-`governed` flag is the explicit boundary that the old "is there a `.session/` dir" presence implied — see the
-Hooks split below. The statuses: `active` (working / undeclared this turn), `awaiting`
+it is not a second lifecycle authority. It lives in the per-user global store keyed by the governed session id ([[runtime]]), so each agent has its own
+record and the worktree stays pristine; a record's `governed` flag is the explicit board boundary a self-launched
+agent lacks (see Hooks below). The statuses: `active` (working / undeclared this turn), `awaiting`
 (a proposal — review or close-pending; historical `nothing` records remain readable as done), `parked` (waiting on a managed watch delivery or background task;
 **self-resumes** — nothing for a human to do), `error` (a turn died), `asking` (stopped and **needs the
 human** — a question, a reported finding/recommendation awaiting a decision, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
@@ -57,12 +40,6 @@ background wait (leave it alone) versus a dead stop that won't move until a huma
 They carry distinct faces, so the board never reads "stuck, needs me" as "fine, self-resuming," or the
 reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
 
-For adapters whose native id is minted at launch, absence of `harness_session_id` while the authoritative
-resolved `launch` payload remains is a recoverable pre-identity launch, not permission to create an empty
-conversation. Resume replays that payload through the adapter; only the adapter's proof that identity and the
-first durable turn both landed may bind `harness_session_id` and consume it. A missing payload leaves the record
-unchanged and refuses loudly.
-
 **Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
 independent facts, computed independently (the human's `archived` close projection is orthogonal to BOTH and
 owned by [[archive]] — it never reads as a status and never rewrites one):
@@ -73,47 +50,8 @@ owned by [[archive]] — it never reads as a status and never rewrites one):
   session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
   signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
   still booting — see [[launch]]), `unknown` (the liveness PROBE ITSELF failed — see below), else `online`.
-  Most interactive adapters derive that answer from process/transport probes. Headless adapters deliberately
-  derive it from the intact, non-stopped session record instead: turn children are ephemeral, so no resident
-  process is an idle state rather than death; controller faults fail loudly at delivery. A human `stop` is
-  authoritative rather than a probe: it stamps the retained record's `stopped` liveness metadata after tearing
-  down the runtime, so even a failed tmux probe cannot turn that known stop into `unknown`. For the process-probed adapters,
-  detection runs in **two tiers, never the pane's foreground command**. The **hot 100ms tier** is a zero-spawn
-  death detector: launch registers the agent's real pid (`agent.pid`, stamped pre-`exec` so it IS the agent's
-  own pid), and one `kill(pid,0)` syscall reads it — an ESRCH death is **latched per (pid, mtime)** (the
-  pid-reuse guard; only a relaunch's fresh write resets it), so a thrashed loop can't hang it. The **warm 1s
-  tier** is one bounded tmux snapshot plus the rendezvous probe: Claude requires a **live
-  LISTENER on its rendezvous socket** — a `connect()` the running agent accepts, **not** the socket FILE merely
-  existing (a crashed claude leaves its socket path on disk; a file check read a DEAD pane `online` indefinitely
-  — it must read `offline` within seconds). Codex reads the hot tier's `agent.pid`; its old whole-box `ps`
-  descendant walk is **demoted to a self-extinguishing legacy fallback** for a pre-registration session with no
-  `agent.pid`. For every interactive adapter, the session-owned pane/leaf remains a necessary online witness:
-  stale record fields or a thread still addressable through a project-shared control plane cannot make a row
-  with no target pane and no target leaf read `online`/`working`; it converges to `offline`.
-
-  **Board honesty under load — the probe can fail, and a failed probe is not a death.** The tmux snapshot is
-  one bounded call; under heavy load it can time out — a timed-out probe means we **cannot tell** who is alive,
-  categorically different from "tmux is up and this session is gone," so those rows yield `unknown`, rendered
-  **probe-failed**, never `offline`/`closed`, and the row **never vanishes** (enumerated from the durable
-  store). Its three pane fields are separated by a **printable** boundary that the format asks for and the parser
-  splits on as ONE constant, because tmux itself rewrites control characters in a format string on the way out
-  (a tab and a raw `0x1f` both become `_` on 3.6a; a raw `0x1f` becomes the printable escape `\037` on 3.4). A
-  separator that survives one version and not the next is worse than a wrong reading on one row: no session is
-  seen to own a window at all, so every live agent's row degrades to `unknown` at once.
-  The **listener probe is tri-state for the same reason**:
-  only a completed connect (`live`) or an instant refusal/absence (`ECONNREFUSED` off a stale socket file /
-  `ENOENT` — proven `dead`) settle the question; a connect **timeout** (a thrashed loop fires the timer before
-  the pending connect) or **EAGAIN** (a full backlog — a listener alive-but-busy) are `unproven`, read
-  `unknown`, never `offline`. The board bounds concurrent listener connects so its own probe burst does not fill
-  healthy listeners' backlogs. This is the honesty rule the mass-restore incident violated (a slow box read as a
-  graveyard, live workers relaunched to death) and the false-`offline` wait verdict (issue #40) too. Fail loud
-  (`unknown`), never guess (`offline`). The same rule reaches one layer further down, because a settled `dead`
-  answers only about the TRANSPORT: a socket path can be unlinked out from under its own live listener — by a
-  stray `rm`, or by any teardown that believes it owns the path — after which every connect `ENOENT`s (proven
-  dead) while the agent keeps working, merely unreachable. So the transport is not the only witness:
-  the launch-registered `agent.pid` is a second, independent one, and while it still answers, death stays
-  UNPROVEN → `unknown`. Only a corpse both witnesses agree on is `offline`, because `offline` is the reading
-  a supervisor ACTS on — it is what disarms the relaunch guard, and relaunching a working agent kills it.
+  How each adapter derives it — the two probe tiers, the tri-state listener test, the second witness, and the
+  honesty rule under load (a failed probe is `unknown`, never a death) — is [[liveness]]'s.
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 exposes resume through both the relaunch panel and the console toolbar's compact relaunch tool whatever the
@@ -128,62 +66,8 @@ review+`online` (process alive, rendezvous socket open, the terminal mounts); do
 review+`offline` (the relaunch panel). A stable review+`online` session genuinely exists — a doer
 proposes, then idles awaiting the merge — not just a test artifact.
 
-Offline is reachable on purpose, not only by a crash. **`stop`** is the human-only *soft stop* — the inverse
-of `resume`: it kills only the adapter-registered **session-owned leaf** plus that session's tmux + rendezvous
-socket, but **leaves every project-shared control plane untouched** ([[host-resource-budget]]) and leaves the
-worktree, branch, transcript, and global record, then writes only that record's `stopped` liveness marker, so the session reads `offline`
-and the relaunch panel offers to `--resume` the same conversation. That durable marker also fences launch
-admission: no automatic queue drain, supervisor restart, or idempotent replay may launch a stopped row, including
-a prepared row whose lifecycle is still `queued`. The lifecycle fields the agent last authored
-survive the stop untouched — whereas a proven-owner `close` removes the worktree AND sweeps the global record dir. **`resume`**
-is the inverse
-of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
-conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action) and
-clears `stopped` as it restores the runtime and settles the **resting** lifecycle under the SAME active-only
-guard `idle` uses — a resumed agent that was `active` (working), or was prepared as `queued` before this explicit
-launch, is now just sitting at its prompt → `idle`; a successful readiness publication can never retain `queued`
-alongside a live runtime. Every deliberate declaration survives the
-resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). resume deliberately does NOT
-touch the proposal: resuming a session that is proposing a merge must not silently withdraw it — proposals are
-reversible only by MESSAGING the session (mark-active clears them), never as a hidden side-effect of a relaunch.
-So resume never itself makes the agent work; the `merge` dispatch, which resumes ONLY to relaunch a dead agent
-so the dispatch hits a live one, then sends the merge prompt — and THAT prompt is what flips the lifecycle to
-`active` (and clears the now-obsolete proposal) through mark-active.
-
-Launch handoff is not proof that resume restored liveness. The resolved harness adapter supplies a bounded
-readiness fence. Resume persists an internal launch-readiness-pending fence while every public record, list,
-API, graph, resources, settings, and timeline projection remains the exact pre-resume stopped/offline state. After the adapter
-revalidates the same runtime, target reference, and unique governed owner across that durable boundary, one
-final record write clears the pending fence and publishes `stopped:false` plus the real resting lifecycle
-transition exactly once. False, throw, timeout, or stale-pending recovery retains/restores the exact original
-lifecycle, proposal, and note with no transition event, leaving an offline session that can be retried. Thus
-no stale readiness sample or transient `active` to `idle` candidate can become public online state. The frozen
-lifecycle and proposal must be members of their closed semantic enums before any public projection accepts the
-fence; an unknown string is corrupt/unknown on every surface. A valid pending row always carries offline
-liveness and an offline compact display without running live reconciliation, including defensive readings of
-an `active`/`idle`, `stopped:false` original while candidate runtime is already live.
-
-**The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
-a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:
-the board lied (a live worker read `offline`), the human hit relaunch, and live claude processes died mid-task.
-So resume re-derives the agent's liveness **freshly** (the same listener-verified probe above, not a possibly-
-stale board reading) and **REFUSES LOUD** rather than relaunch a live agent — the API answers `409` and the
-dashboard's relaunch panel shows the refusal, never a silent no-op. You steer a live agent by **messaging** it,
-not by restoring it. Death must be **proven**: an `unknown` probe (the tmux timeout that starts under load)
-also refuses, since a live worker can't be ruled out. A **`force`** escape exists for a genuinely wedged-but-
-alive process (the one case where a deliberate kill is the repair). Only a **confirmed `offline`** agent (or
-`force`) is relaunched. The `merge` dispatch is the sole non-guarded caller: it merely needs a *live* agent to
-send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
-confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
-Contrast **`close`**, the other human-only terminal verb: it proves the same exact cold stop, commits the complete
-worktree (including untracked files) into `refs/spex-archive/<id>`, then removes only the worktree while retaining
-branch, record, transcript, and conversation identity. An unreadable record proves no owner, so close quarantines
-only as evidence and fails before signaling or deletion. A native turn in flight is refused; close has no interrupt
-escape. `resume` recreates a missing worktree from the retained branch and reapplies the archive-ref delta before
-the normal `starting -> online` path. Both are human-only and direct (not agent proposals); stop is reversible
-without removing the worktree, while close is reversible through resume. Their public CLI commands exit nonzero
-whenever the backend commits no target transition; printing “no such session” while returning success is a false
-state-machine result. A stopped session
+Offline is reachable on purpose: the human-only `stop`/`resume` pair, resume's readiness fence, and the guard
+that makes restore-on-alive impossible are [[stop-resume]]'s; `close` is [[archive]]'s. A stopped session
 occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
 idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers
@@ -192,18 +76,9 @@ composing both axes** for one-glyph surfaces — a convenience, never a third so
 
 ### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
 
-Every hook reads the **effective session id** through the harness resolver. For Claude the PAYLOAD's
-session_id is the acting identity (env `SPEXCODE_SESSION_ID` is only the fallback for payload-less events):
-a nested subagent inherits the parent's env, so env-first let every child tool call clobber the PARENT's
-declared state (measured: a park erased within seconds, the session reading `working` forever). Codex cannot:
-hooks run inside the shared per-project app-server, whose env can carry another session's
-`SPEXCODE_SESSION_ID`, so Codex hook state starts from the payload `session_id` (the acting thread id) and aliases
-that through `harness_session_id` to the governed SpexCode record. That alias is created by the backend launch
-path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, fires and persists the
-first prompt, then stages the returned thread id for the lifecycle owner to bind on the governed record. The runtime
-envelope path is project key from the git common dir → `<store>/projects/<enc>/sessions/<id>/runtime.json`; lifecycle
-state is read and written through the canonical application. Hook shells pass native event identity directly to the
-canonical writer; they do not read `runtime.json` as a second governed/lifecycle authority.
+Every hook resolves the acting session id through the harness resolver — payload first, launched id as fallback,
+Codex thread ids aliased through `harness_session_id` ([[hook-shell-mirror]], [[identity-injection]]) — and
+writes lifecycle only through the canonical application, never through the runtime envelope.
 The hooks split on the canonical application's session address, not on an envelope grep. The **board-lifecycle**
 hooks below (mark-active, the Stop gate, StopFailure→error, idle) ask the canonical writer whether the session is
 governed; a non-governed (user-self-launched) record — or none at all — no-ops (the Stop gate exits 0 SILENTLY),
@@ -216,12 +91,6 @@ says so instead of silently repairing it. The **spec-discipline** hooks ([[injec
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `runtime.json`). So board state is a managed-
 session concern; spec-awareness is universal.
-
-For the two known pre-structured `mark-active` source blobs still tracked by existing projects, dispatch performs
-a bounded migration at the adapter boundary: it executes the current package-owned structured implementation,
-and the next materialize replaces the old tracked handler with that implementation. This is a migration of a
-legacy source identity, not a second lifecycle protocol or a permanent backward-compatibility path. The old
-handler's envelope writes are never allowed to author current lifecycle state.
 
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips
@@ -270,44 +139,5 @@ handler's envelope writes are never allowed to author current lifecycle state.
 a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-follow]]). The lifecycle
 writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is the `spex session`
 declaration commands and the `spex ls` table — a sibling verb's churn there, like the `eval` usage line
-rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for
-the dashboard, after which the next tool call (via mark-active) flips the record back to `active`, so an agent never reads
-that re-flip as a lost proposal. Every note-carrying declaration (`done`/`ask`/`park`/`state`, all of which
-accept `--note` — done included, its note reaches the record like the others') stores the note **in full**;
-the CLI table may cap it, but that cut must be **transparent to the author**. The table's explicit NOTE column
-keeps the first `NOTE_BOARD_LIMIT` **display columns**; dashboard titles do not display notes at all
-([[session-label]]). The rule is taught **once per session**: the first time a declared note is cut by the table,
-the confirmation states the note's length, what the table leaves, and where the full text is readable (`spex
-review <id>` / `spex ls --json`), then drops a sentinel beside the record so later cut notes in the same session
-repeat none of it (the rule was taught; a verbatim repeat on every park/ask is noise — a field-reported
-irritation). Trimming stays the author's informed choice — never a silent loss — and like every echo addendum
-the notice is a nudge riding the confirmation, not a gate.
-
-A record that EXISTS but cannot carry state is a different answer from a missing one, and the writer must not
-blur them: an unreadable `runtime.json` or a retired session (worktree gone) is refused with that reason and
-its repair — never the wrong-cwd diagnosis below, which would send the author hunting a directory that is fine
-([[sessions-core]]). A declaration that genuinely cannot find its record **diagnoses itself** instead of
-answering a bare "no session record". The store resolves from the **current directory** (the cwd's git common dir), so the classic failure
-is declaring from outside the session's project — and the message must say so: it names the cwd, distinguishes
-the actual situations (cwd not a git repository at all — which must never surface as a raw git stack trace —
-cwd in a project with no sessions, a store found here that lacks the id, or no session id resolvable from env
-at all), and routes the fix for each — cd back into the session's worktree and re-declare, or pass/correct
-`--session <id>`. The diagnosis changes only the message; nothing is written either way. A **propose-close** declaration additionally carries a plain reminder to reclaim
-the ephemeral things the agent started to test this change — a stray process, a dev/preview server, a bound port,
-a throwaway session it spawned — before the worktree is discarded and they orphan (the leak the shared tmux socket made
-visible: a torn-down worktree's own backend outliving it). It is **advisory, a nudge and never a gate** (the agent
-checks, then carries on; the next tool call re-flips it to `active`), and **project-agnostic**: the criterion is
-whether a resource should outlive the task, never who started it — a deliberately long-running service or a
-production build is started-by-you yet left alone, and anything you are unsure about is left running.
-The sweep's scope is **stated, not implied**, and it **excludes THIS session by name**. `close` is human-only
-(above), so the declaration has proposed a close, not performed one — while `spex session close` accepts `.` and a
-bare own id like any other selector, so a session reading "shut down a session you started" at the exact moment it
-is contemplating its own close can read it as permission to close itself, which deletes the worktree it is running
-in mid-turn. Every surface that teaches `close` therefore says which side of the manager/worker split it is on:
-`session close <SEL>` retires ANOTHER session and its selector is never `.` nor the caller's own id, while
-`done --propose close` only proposes and names the human as the one who performs it. Beside that
-resource reminder the same declaration appends a **data-driven issue closeout** line, owned by [[local-issues]]
-(the store owns the query and the wording): the still-open local threads this session opened or replied to,
-listed by id, with the ask to resolve each or say why it outlives the session — silent when the session owes
-nothing or the issues feature is off, and equally a nudge, never a gate (a failure in the store check is
-reported loud but the declaration still lands).
+rewritten in the measure-and-score reframe, moves the file but is not state's drift.  What a declaration echoes, how its note is kept and
+taught, how a lost record diagnoses itself, and the reminders a propose-close carries are [[declaration]]'s.

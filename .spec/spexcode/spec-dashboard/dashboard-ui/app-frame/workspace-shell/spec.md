@@ -7,7 +7,7 @@ code:
   - spec-dashboard/src/Shell.jsx
 related:
   - spec-dashboard/src/WorkspaceSurface.jsx
-related:
+  - spec-dashboard/src/EmptyView.jsx
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/test/keep-alive.e2e.mjs
   - spec-dashboard/src/budgetContracts.test.mjs
@@ -65,11 +65,14 @@ whole shell hangs off, re-derived from what the product is rather than from what
   mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
-  **The dock is a property of the focused tab** — both its projection and its existence. A session document
-  brings the session list, a node or a governed file brings the explorer. Evals, Issues, and Settings use the
-  shared workspace/tab strip; Issues omits the activity rail while retaining the strip. A bare
-  sessions route is not a session document, so a cold workspace defaults to explorer; only a session object
-  route derives sessions. Spec/file routes keep the Spec rail selection and derive the explorer projection. Thus the sidebar describes the working set rather than being a setting maintained
+  **The dock is a property of the focused tab** — both its projection and its existence. A node or a governed
+  file brings the explorer. The Sessions surface brings no shell dock at all: it is a complete document that owns
+  its own forest and console ([[session-console]]), so a finding dock beside it would only repeat the same list
+  under an empty header. Review surfaces and Settings have no dock anywhere in their address family — a detail
+  route never inherits the previous Spec/Explorer projection from workspace state, which belongs to document
+  routes only. Evals, Issues, and Settings use the shared workspace/tab strip; Issues omits the
+  activity rail while retaining the strip. Spec/file routes keep the Spec rail selection and derive the explorer
+  projection. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
@@ -109,9 +112,10 @@ A control belongs to the region whose question it answers, and to exactly one ow
 
 **Each region gets ONE band, and a band is a row that earns its place.** [[ui-state-model]] states the
 budget and measures it; the shell's obligation is to have no spacer that stands in for a band it does not
-draw. The tab strip is the top band itself, not a wrapper holding it: the strip renders unconditionally and
-names the routed place when no document is held, so the row is either a working set or an answer to where
-the reader is, and never 29 empty pixels. A control that belongs to the current DOCUMENT — the context
+draw. The tab strip is the top band itself, not a wrapper holding it: on every surface but Sessions the strip
+renders unconditionally and names the routed place when no document is held, so the row is either a working
+set or an answer to where the reader is, and never 29 empty pixels; the Sessions document lays the same strip
+out inside the surface it owns, beside its forest ([[session-console]]). A control that belongs to the current DOCUMENT — the context
 dock's toggle — rides the strip's trailing cluster beside the document actions rather than opening a
 region of its own.
 
@@ -163,7 +167,8 @@ for one screen and still no way to read a spec beside its code. Chrome around th
 model, and building three pieces of it before noticing is the mistake this node exists to have corrected.
 
 **The shell is the only component that reads the global address.** A palette pick hands the shell one app
-address, which it executes through [[address-routing]]; the shell does not inspect node/session data or mint
+address and whether the reader held it — a held pick pins that address as its own tab ([[tab-strip]]), a plain
+pick executes it through [[address-routing]]; the shell does not inspect node/session data or mint
 another route. A view receives `{param, query}` as
 props ([[view-registry]]). That one rule is the hinge: it is what makes rendering two views at once a
 layout change rather than a rewrite, and what stops a view from silently coupling to whichever address

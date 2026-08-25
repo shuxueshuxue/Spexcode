@@ -58,3 +58,13 @@ is the [[merge]] plugin preset: the box sends its resolved workflow to the agent
 landing with the same on-demand skill available to self-launched sessions. It has no toolbar twin.
 There is no `/type`: direct TUI input is already the default. File paste, drop, and pick reuse [[file-attach]],
 uploading bytes to the worker machine and inserting the returned local path at the caret.
+
+## delivery deadline and menu precedence
+
+The HTTP request has one named transport deadline; if the response is not confirmed by then, the
+draft and delivery key stay in place and the outcome says delivery is unconfirmed and retry is safe. This deadline
+does not write or infer lifecycle state.
+
+Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
+tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
+that precedence.

@@ -1,7 +1,7 @@
 ---
 title: light-entry
 hue: 200
-desc: A route-first review entry that renders Evals and the top-level Issues list before the graph, session, and terminal dashboard runtime exists.
+desc: The dashboard's root — frame-wide providers, the backend-health frame, and ONE resident App runtime for every address, review routes included.
 code:
   - spec-dashboard/src/Root.jsx#Root
 related:
@@ -10,47 +10,27 @@ related:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/route.js
-  - spec-dashboard/test/evals-light-entry.e2e.mjs
+  - spec-dashboard/src/reviewWorkspaceContract.test.mjs
 ---
 
 # light-entry
 
-An external Evals LIST or DETAIL link, or an Issues route, is a review page before it is a dashboard visit.
-The root route selector resolves `surfaceFor(page)` from [[view-registry]] before importing the board runtime,
-and hands the route DOWN to the same review surface component tree used after in-app navigation — the boards
-take `{ param, query }` as props and never read the global address.
-A canonical `#/evals` or
-`#/evals/<node>/<scenario>` address and its legacy session-scoped spelling both mount the SAME
-[[evals-view]] components behind a small responsive shell; canonical `#/issues` mounts the SAME
-[[issues-view]] list there. There is no second renderer, data projection, or URL vocabulary.
+The root is where the frame-wide providers are mounted, so every face — the board, the phone, the sealed
+public graph — is inside them without asking which face it is. [[status-bar]]'s registry is one of these: a
+contributor anywhere below can register an item without knowing which face is showing, and the hook is inert
+outside a provider, so the sealed public build pays nothing for it. [[transient-notices]] is another: a
+surface can acknowledge its own completed write through the provider alone. The same root wraps every face in
+the shared backend-health frame, so an unreachable backend shows one global retry banner before any runtime is
+asked to boot.
 
-The root is also where the frame-wide providers are mounted, so every face — the cold review shell, the
-board, the phone — is inside them without asking whether it is. [[status-bar]]'s registry is one of these:
-the cold shell draws the same bottom strip the board does, as a full-window flow row after the app row, and
-a contributor anywhere below can register an item without knowing which face is showing. The registry hook
-is inert outside a provider, so this costs the sealed public build nothing. The same root wraps every face in
-the shared backend-health frame, so an unreachable review request can show one global retry banner without
-booting the board runtime.
+**There is one runtime.** Every address — a canonical `#/evals` or `#/evals/<node>/<scenario>` link, its
+legacy session-scoped spelling, `#/issues`, a session, a node — mounts the same resident App, and review
+routes are ordinary resident workspace documents inside it ([[workspace-shell]], [[view-registry]]). The root
+no longer selects a lighter surface for a cold review URL: that fast path gave review routes a second host to
+drift in and made the tab strip vanish on cold review navigation, so it was withdrawn in favour of one host
+with one chrome. A legacy Evals address still normalizes to the canonical route and still mounts the SAME
+[[evals-view]] components; there is no second renderer, data projection, or URL vocabulary.
 
-The cold review boundary may request one bounded [[paged-review]] page or detail response, its evidence, and
-route-local review resources. It does not fetch `/api/graph`, open [[graph-stream]], read a session
-collection/timeline/detail, open a session terminal socket, or import graph/terminal chunks. Desktop keeps
-the ordinary [[side-nav]] rail. Phone width reuses [[mobile-ui]]'s review face and bottom navigation over an
-empty board projection, so responsive chrome does not become a reason to boot the board.
-
-Navigation owns initialization. Following a real anchor from the review shell to the graph, session, or
-settings route swaps in [[dashboard-shell]]'s ordinary App runtime; only then do graph freshness,
-session summaries, and any visited terminal transport begin. A node reference preserves its intended graph
-focus through the existing tab-scoped focus key. Once started in a tab, App stays mounted across later route changes exactly as before: graph camera and visited
-terminal warmth survive a return to Evals, and the lightweight entry is not re-entered until a genuinely new
-cold tab/reload starts at a detail address. This node changes no route shape and weakens no detail
-loading/error/evidence behavior; it only decides which runtime is allowed to exist for that address.
-
-The root still mounts [[transient-notices]] around both runtime choices. That provider is chrome only: a
-lightweight review entry can acknowledge its own completed write without importing the board, while mounting it
-does not fetch graph data, open a transport, or change the cold-route boundary above.
-
-The static [[public-spec-graph]] face is a separate compile-time exception: with
-`VITE_PUBLIC_GRAPH_ONLY=1`, the root bypasses this review fast-path even when a copied URL names Evals or
-Issues, delegates to the sealed App graph, and lets that face normalize the hash to `#/graph`. The live
-dashboard keeps the review-first behavior above.
+The static [[public-spec-graph]] face is a compile-time exception: with `VITE_PUBLIC_GRAPH_ONLY=1`, the root
+hands even a copied review URL to the sealed App, which normalizes the hash to `#/graph`. The live dashboard
+keeps the one-runtime rule above.

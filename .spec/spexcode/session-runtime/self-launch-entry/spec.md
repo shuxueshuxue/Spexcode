@@ -10,10 +10,12 @@ related:
 ---
 # self-launch package entry
 
-The package entry exposes only adopter-owned database path and locality resolution. Protocol operations remain on
-`@spexcode/session-protocol`; runtime and materialization adapters remain outside this package. The executable is a
-thin shell over the compiled CLI and the packed artifact contains only `dist`, `bin`, and package metadata.
+The package entry exposes adopter-owned database path and locality resolution plus one runtime seam: the explicit
+native-identity binding ([[self-launch-bindings]] — bind, resolve, unbind for a protocol address). Protocol
+operations remain on `@spexcode/session-protocol`; launching, probing, and materialization adapters remain outside
+this package. The executable is a thin shell over the compiled CLI and the packed artifact contains only `dist`,
+`bin`, and package metadata.
 
-The package is private at this milestone even though `npm pack` is used for installation proof. Publication scope
-and release automation remain later roadmap decisions, so this node does not add the package to repository release
-scripts or root workspace metadata.
+The package is published as `@spexcode/session-selflaunch`, version-locked with the rest of the public package set
+and released through the same ordered publisher ([[release-publish]]); `npm pack` remains the input of the
+installed-consumer proof.

@@ -65,7 +65,9 @@ receipt names the registry entry, its add/remove events are held rather than sta
 unpublished worktree. The create route flushes the held event after publication or bounded cleanup, so final full
 convergence is preserved without competing with Git's checkout. A bounded fallback releases a held event if the
 request dies. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
-are ignored; generated project paths are not guessed away, because an adopter may govern them. A
+are ignored; generated project paths are not guessed away, because an adopter may govern them — with one
+named exception: generated BUILD output (`dist`, and the `.dist-next-*`/`.dist-previous-*` staging dirs the
+launcher rotates) is never governed source, so its thousands of writes are ignored rather than invalidating the board. A
 pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. For the eval
 projection specifically, losing either the refs observer or a worktree observer places a keyed hold before the
 graph rebuild: the affected summary remains updating with last-known and cannot compute current while the source

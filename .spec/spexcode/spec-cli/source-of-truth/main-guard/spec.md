@@ -58,6 +58,10 @@ their managed header or a known exact legacy digest; custom hooks remain untouch
 is checked by static bytes rather than executing a hook with probe arguments. The hook is advisory and
 bypassable; the non-bypassable backstop is [[ci-gate]].
 
+The hook runs the CLI of the checkout it guards: the repository's own `spec-cli/bin/spex.mjs` when the checkout
+ships one, else a local `node_modules` install, else `spex` on PATH, else the main checkout's launcher. A worktree
+is therefore judged by the code it carries, never by whichever stale global install happens to be first on PATH.
+
 This node owns **only** the main-authoring guard. The same `pre-commit` file also carries the
 [[commit-surgery]] footprint station (unconditional materialize + staged-index repair, after this gate)
 and the [[spec-lint]] shim (it runs `spex lint` last), but those blocks are those nodes' contracts, not

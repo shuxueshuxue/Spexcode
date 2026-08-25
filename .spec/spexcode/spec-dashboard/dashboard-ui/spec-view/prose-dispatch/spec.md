@@ -27,7 +27,8 @@ session and does not touch the spec. All of it floats; none of it is a strip.
 
 The same four-action group is reachable from a selected governed source file and from the spec pane in the
 node information popup. A source selection keeps its path and inclusive line range as the ordinary
-`[[code-selection]]` attachment; its manual-edit verb is visibly unavailable because source files remain
+`[[code-selection]]` attachment — drawn by the one shared attachment primitive, and removable from the send
+card, which clears the selection; its manual-edit verb is visibly unavailable because source files remain
 read-only on the board and are changed through a session. The source viewer hands its host to this action
 layer so a native right-click on a CodeMirror selection opens the same group at the pointer even when the
 browser Selection API is empty; it uses the already-captured path, text, and inclusive range rather than

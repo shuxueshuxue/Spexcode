@@ -6,7 +6,7 @@ desc: Real backend proof for the configured Spex session runtime composition.
 code:
   - spec-cli/src/session-runtime-production.yatu.test.ts
 related:
-  - .spec/spexcode/session-runtime/production-cutin/spec.md
+  - .spec/spexcode/session-runtime/application-service/production-cutin/spec.md
   - scripts/session-production-cutover-yatu.mjs
 ---
 # session runtime production cut-in yatu

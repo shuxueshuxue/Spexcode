@@ -56,3 +56,23 @@ own; it took putting them side by side.
 moves, with no sharing between roots — and is deliberately NOT forced onto this policy. Unifying unlike
 things is how a shared layer becomes a second special-case pile; the test for belonging here is that the
 caller wants the reference-counted immutable-key rule, not merely that it wants a bound.
+
+## the spec index under this policy
+
+Both indices are read for **several checkouts at once** — the backend's own root plus every session
+  worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
+  in-flight promise for equal checkout heads in one common Git store while its ownership is keyed by the
+  current checkout. Its immutable content key is the checkout HEAD plus the project-namespaced persistent
+  ledger path: that path binds the common repository store and Git interpretation identity, so linked
+  worktrees share but independent same-HEAD clones never do. The root path is an LRU owner only, never a
+  second content dimension. When a root advances to a new HEAD, its old index is released immediately unless another live root still
+  references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
+  retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
+  in-flight build.
+
+  
+
+**Candidates stay transient.** An explicit pending commit is not a checkout's current HEAD and may remain
+  dangling after rejection. Its history/drift indices are shared only within the invoking lint call and are
+  never registered in the root-owned HEAD cache, so it neither evicts that root's hot board index nor leaks
+  one cache entry per rejected commit.

@@ -10,9 +10,9 @@ related:
 code:
   - packages/session-application/src/index.ts
 related:
-  - .spec/spexcode/session-runtime/application-state-schema/spec.md
-  - .spec/spexcode/session-runtime/application-composition/spec.md
-  - .spec/spexcode/session-runtime/application-consumer-yatu/spec.md
+  - .spec/spexcode/session-runtime/application-service/application-state-schema/spec.md
+  - .spec/spexcode/session-runtime/application-service/application-composition/spec.md
+  - .spec/spexcode/session-runtime/application-service/application-consumer-yatu/spec.md
 ---
 # session application service
 

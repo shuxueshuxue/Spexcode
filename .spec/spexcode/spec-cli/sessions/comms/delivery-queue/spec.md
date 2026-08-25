@@ -3,9 +3,8 @@ title: delivery-queue
 status: active
 hue: 280
 desc: What a session is still OWED — a small ordered queue of messages not yet handed to its agent, drained by adapter insert, empty when nothing is owed.
-code:
-  - packages/session-protocol/src/engine.ts
 related:
+  - packages/session-protocol/src/engine.ts
   - spec-cli/src/delivery-lock.ts
   - spec-cli/src/sessions.ts
   - packages/session-events/src/schema.ts

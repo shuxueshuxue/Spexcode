@@ -113,7 +113,9 @@ All eight theme presets plus the default carry all three tones as resolved value
 theme's own deepest surface where its palette has one, and a derived step below `--panel` where it does not.
 A theme that resolved only two of the three would silently collapse the ladder for its readers. Each row
 also declares its `color-scheme`, so the browser's own chrome — scrollbars, native pickers — sits on the
-preset's side of the light/dark line instead of the platform's guess.
+preset's side of the light/dark line instead of the platform's guess. The theme picker's swatches are read
+from those same rows — each preset's ground, paper, ink and accent as the sheet resolves them — never
+hand-copied, so a swatch cannot show a palette nobody gets.
 
 ## geometry
 

@@ -47,59 +47,24 @@ polling is exactly the probe pressure the delivery path must survive, so the mea
 adversarial one. A new harness is covered by registering its launcher and adding its scenario data — zero new
 CLI code.
 
-## the acceptance contract this suite measures
+## the eight behaviours
 
-An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with
-every mechanical proof green (shim written, manifest compiled, unit tests passing) while a real session
-silently dropped every stop-gate rejection and hung `active` forever. So a new or reworked adapter with a
-resident or controller-backed runtime merges only with per-behavior eval readings, each measured through a
-REAL dispatched session of that harness, covering eight lifecycle behaviors: (1) **undeclared stop** — the gate's rejection reaches the
-session and the record flows out of `active`; (2) **PreToolUse block** — a blocking hook genuinely stops
-the tool and the handler's own reason reaches the agent; (3) **ask** — `spex session ask --note` flips the
-record to `asking` with the note on the board. Its worker-facing declaration handler is
-`session-declarations.ts#runSessionDeclaration`, while the shared record writer remains lower-level state
-mechanics; (4) **deliver + steer** — an idle send lands exactly once
-(exit 0) and a mid-turn send reaches the live turn; (5) **resume** — stop → resume continues the SAME
-conversation; (6) **liveness** — a killed agent reads `offline` within seconds (even with a stale socket
-file on disk) and a relaunch reads `online`; (7) **commit gate** — a dirty-tree merge proposal is rejected
-at settle with the reason delivered into the session; (8) **close** — zero residue (tmux window, process
-tree, worktree/branch, sockets, session record). The matrix is a parameterized test asset in [[live-matrix]],
-while each harness node's `eval.md` owns the scenario declarations. The test file drives a real dispatched
-session of any registered launcher through the declared behaviors and files per-scenario readings with
-evidence transcripts; it never mutates the CLI or rewrites the declarations. A new harness is covered by its
-launcher + scenario data, with no new runner route. A harness whose evidence is only artifacts has not been
-measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
-semantic difference is measured by a replacement scenario rather than forced into a false common shape.
-[[claude-headless]] replaces the matrix's TUI rows with its own session-home idle-resume, cold-retirement, and
-hard-interrupt readings. [[codex-headless]] replaces
-the matrix's process-resident stop/resume and kill/offline rows with its no-TUI idle-turn and record-liveness
-readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
-the TUI rows with session-home liveness plus pi's text-mode rendezvous-steer/cold-resume and cold-retirement readings.
-[[zcode-harness]] is a deliberate one-shot exception: its `--prompt` launcher has no reusable control
-channel, so its replacement scenario measures launch prompt receipt, hook gates, declaration, and process
-liveness. `deliver` and `resume` explicitly reject rather than impersonating a control transport; no false
-combination cell is filed for an operation that harness does not offer.
+[[harness-adapter]] states the acceptance rule this suite exists to measure; these are the rows it parameterizes,
+each measured through a REAL dispatched session:
 
-Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered adapter that
-declares a delivery path (currently four interactive and four controller-backed headless adapters, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
-`replyVia:"note"`, and plain `spex session send`) x delivery timing (idle wake and in-turn steer/queue). Each
-runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
-the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default
-land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
-truthful, and the authored declaration lands. A pane reading includes its real tmux scrollback: stop-gate
-guidance may scroll a valid answer above the current viewport, which is still user-readable pane output, not
-a missing response. Declaration landing is proven by the live board's observed `active -> settled` transition;
-it does not require a matching history row because the debounced timeline observer can legitimately fold a fast
-turn that returns to the same status between samples. That board proof never substitutes for a required timeline
-ANSWER: a note-routed cell still waits for the marker in `/timeline`. The launch prompt has no second in-turn invocation, so
-`launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
-The note insert treats the declaration command as reply TRANSPORT, not as part of the requested work: even a raw prompt that
-says "use no tools" or "only print the answer" must still finish by placing the complete reply in the truthful declaration's
-`--note`. Normal final output is invisible on this route, and the stop-gate's generic auto-declaration is lifecycle recovery,
-never an answer substitute.
-BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
-reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner
-still invokes later cells through the real adapter instead of converting one failure into skipped coverage.
-Every cell files its own transcript-backed reading on the most specific adapter node available; the aggregate
-table files on this node. The campaign reuses one session per launcher to keep model spend bounded while still
-preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.
+1. **undeclared stop** — the gate's rejection reaches the session and the record flows out of `active`.
+2. **PreToolUse block** — a blocking hook genuinely stops the tool and the handler's own reason reaches the agent.
+3. **ask** — `spex session ask --note` flips the record to `asking` with the note on the board.
+4. **deliver + steer** — an idle send lands exactly once (exit 0) and a mid-turn send reaches the live turn.
+5. **resume** — stop → resume continues the SAME conversation.
+6. **liveness** — a killed agent reads `offline` within seconds, even with a stale socket file on disk, and a
+   relaunch reads `online`.
+7. **commit gate** — a dirty-tree merge proposal is rejected at settle with the reason delivered into the session.
+8. **close** — zero residue: tmux window, process tree, worktree/branch, sockets, session record.
+
+A harness whose runtime shape removes a row's premise supplies a replacement scenario rather than a false cell,
+and each harness node's `eval.md` owns those declarations while [[harness-adapter]] files the aggregate. Prompt
+delivery additionally carries the rerunnable combination campaign — harness form × prompt origin × delivery
+timing — whose cells prove native delivery, a readable answer at the requested surface, truthful liveness, and a
+landed declaration together; a structural non-cell is BLOCKED, while a runnable cell that cannot start, exits
+without a reply, or leaves a stale lifecycle is a FAIL rather than skipped coverage.

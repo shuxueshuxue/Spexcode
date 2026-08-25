@@ -17,10 +17,9 @@ This node owns the record of turning self-launch from a harness that merely runs
 adopter with a complete, backend-free message loop. The loop is fixed: adopt the new path, inventory what the old
 one owned, prove the new path with the old facilities sabotaged, and delete what was actually replaced.
 
-The fourth step is the one that has to be stated before construction rather than after it, and it is settled by
-measurement rather than by wording. A facility belongs to this milestone's removal set only when it is both
-consumed by self-launch and already replaced by what this milestone built. Every facility that qualifies is
-removed. Here none qualifies: self-launch never had a message facility to cut over from, because the governed send
+The fourth step has to be settled before construction rather than after it, and by measurement rather than by
+wording. [[construction-roadmap]] defines the removal set; applied here it is empty, and the emptiness is the
+claim this node must defend. Self-launch never had a message facility to cut over from, because the governed send
 path refuses a session with no record, and the facilities it does consume — a storage root derived from the
 repository, the materialized manifest, and the sentinels the retained governance hooks write — are ones this
 milestone replaces nothing of.

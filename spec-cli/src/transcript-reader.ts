@@ -142,7 +142,7 @@ function codexEvent(value: unknown): ParsedEvent | null {
 function sourcePath(harness: string, threadId: string): string | null {
   if (harness === 'claude' || harness === 'claude-headless') return claudeTranscriptPath(threadId)
   if (harness === 'codex' || harness === 'codex-headless') return codexRolloutPath(threadId)
-  throw new TranscriptReadError('unsupported', `${harness} does not support transcript reading`)
+  throw new TranscriptReadError('unsupported', `${harness} does not support transcript access`)
 }
 
 export async function readTranscript(harness: string, threadId: string, range: TranscriptRange): Promise<TranscriptRead> {
@@ -236,5 +236,5 @@ export async function readCodexTranscript(threadId: string, range: TranscriptRan
 }
 
 export async function unsupportedTranscriptReader(harness: string, _threadId: string, _range: TranscriptRange): Promise<TranscriptRead> {
-  throw new TranscriptReadError('unsupported', `${harness} does not support transcript reading`)
+  throw new TranscriptReadError('unsupported', `${harness} does not support transcript access`)
 }

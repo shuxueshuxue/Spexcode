@@ -381,7 +381,7 @@ function BoardStatus({ specs, sessions, page }) {
     : null)
 
   useStatusItem({
-    id: 'board-nodes', side: 'right', priority: 41,
+    id: 'ledger-nodes', side: 'right', priority: 41,
     tooltip: t('statusBar.nodes', { n: tally.total }),
     node: (
       <span className="sb-tally">
@@ -404,7 +404,7 @@ function BoardStatus({ specs, sessions, page }) {
     ),
   })
   useStatusItem({
-    id: 'board-evals', side: 'right', priority: 42,
+    id: 'ledger-evals', side: 'right', priority: 42,
     kind: fail > 0 ? 'error' : undefined,
     tooltip: t('statusBar.evals', tally.scoreCount),
     node: (
@@ -427,7 +427,7 @@ function BoardStatus({ specs, sessions, page }) {
     ),
   })
   useStatusItem({
-    id: 'board-issues', side: 'right', priority: 43,
+    id: 'ledger-issues', side: 'right', priority: 43,
     tooltip: t('statusBar.issues', { n: tally.issueCount }),
     node: <span className="sb-tally"><BoardStat name="issues" count={tally.issueCount}
       onClick={graphOrBoard(tally.issueIds, 'issues')}
@@ -436,7 +436,7 @@ function BoardStatus({ specs, sessions, page }) {
         : t('statusBar.issues', { n: tally.issueCount })}><Icon name="issue-opened" size={13} /></BoardStat>{stale}</span>,
   })
   useStatusItem({
-    id: 'board-sessions', side: 'right', priority: 44,
+    id: 'ledger-sessions', side: 'right', priority: 44,
     kind: needsYou > 0 ? 'warning' : undefined,
     tooltip: t('statusBar.sessions'),
     node: (

@@ -144,7 +144,7 @@ export default function SessionForestPanel({ sessions = [], activeId, onSelect, 
           </button>
         </div>
       )}
-      <div className="si-board-scroll" data-session-board-scroll>
+      <div className="si-session-scroll" data-session-scroll>
         {rootDrop && <div className={`si-root-drop${drag.target === null ? ' on' : ''}`} data-session-root-drop data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
           <Icon name="corner-up-left" size={14} />
           <span>{t('session.rootDrop')}</span>

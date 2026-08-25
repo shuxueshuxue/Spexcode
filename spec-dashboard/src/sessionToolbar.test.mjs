@@ -293,7 +293,7 @@ test('document-actions slot is compact and owns no identity track', () => {
   assert.match(css, /\.document-action-menu\s*\{[^}]*position:\s*absolute;/s)
   assert.doesNotMatch(css, /\.si-identity|\.si-th-name|\.si-session-status|\.si-session-live/)
   assert.doesNotMatch(css, /\.si-tabbar\s*\{|\.si-tool\s*\{/)
-  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-session-scroll\s*\{/)
 })
 
 assert.ok(here.endsWith('/src/'))

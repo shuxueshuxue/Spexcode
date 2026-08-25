@@ -123,7 +123,7 @@ export async function editSpecBody(id: string, patch: SpecBodyEdit): Promise<Spe
   }
 
   const message = [
-    `spec: ${id} — edited at the board`,
+    `spec: ${id} — edited in the dashboard`,
     '',
     `Body lines ${patch.startLine}-${patch.endLine} replaced through the dashboard's spec editor ([[spec-body-edit]]).`,
     ...(patch.reason ? ['', patch.reason] : []),

@@ -67,7 +67,7 @@ export function startWorktreeTrashReaper(): void {
   readdirAsync(dir, { withFileTypes: true }).then((entries) => {
     for (const entry of entries) queueWorktreeTrash(join(dir, entry.name))
   }).catch((error: NodeJS.ErrnoException) => {
-    if (error?.code !== 'ENOENT') console.error(`spex: deferred worktree trash scan failed for ${dir}; retrying next startup: ${error instanceof Error ? error.message : error}`)
+    if (error?.code !== 'ENOENT') console.error(`spex: deferred worktree trash cleanup failed for ${dir}; retrying next startup: ${error instanceof Error ? error.message : error}`)
   })
 }
 

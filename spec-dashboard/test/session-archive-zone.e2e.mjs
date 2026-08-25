@@ -247,7 +247,7 @@ try {
     }
   })
   assert.ok(drawerMeasure.rows <= 8, `archive zone exposed too many rows: ${JSON.stringify(drawerMeasure)}`)
-  assert.deepEqual(drawerMeasure.scrollables, ['si-board-scroll'], 'the sidebar has more than one scroll container')
+  assert.deepEqual(drawerMeasure.scrollables, ['si-session-scroll'], 'the sidebar has more than one scroll container')
   const viewAll = page.locator('.si-zone-all')
   assert.equal(await viewAll.count(), 1, 'archive zone omitted the View all row')
   assert.equal(await viewAll.locator('.si-zone-all-lead svg').count(), 1, 'View all row omitted its search glyph')

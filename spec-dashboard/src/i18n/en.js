@@ -719,6 +719,7 @@ export default {
     newSession: 'New Session',
     newSessionTitle: 'New Session',
     searchTitle: 'Search',
+    resizeList: 'Resize sessions list',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
     issuesOff: 'The issues workflow is off.',
     issuesEmpty: 'No issues yet.',

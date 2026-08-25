@@ -72,7 +72,7 @@ test('resident review tabs share the workspace strip and every board keeps the a
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
   assert.match(shell, /<SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
   assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
-  assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
+  assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
 })
 
 test('resident tabs and the activity rail share view-owned page icons', () => {

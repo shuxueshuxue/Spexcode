@@ -708,6 +708,7 @@ export default {
     newSession: '新建会话',
     newSessionTitle: '新建会话',
     searchTitle: '搜索',
+    resizeList: '调整会话列表宽度',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
     issuesOff: 'issues 工作流已关闭。',
     issuesEmpty: '暂无 issue。',

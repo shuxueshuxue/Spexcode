@@ -36,17 +36,33 @@ scenarios:
       select a file, inspect the default split view, switch to unified view, toggle wrapping, and move through the
       hunk controls. Measure the settled desktop geometry of the split editor against its own scroll container.
     expected: >-
-      The file panel names every changed file with its status and counts. Split mode renders two read-only
-      CodeMirror panes with old/new line numbers and visible changed text, and both panes sit inside the editor's
-      own width — the new side is never pushed outside the scroll container, so the split editor's scrollWidth does
-      not exceed its clientWidth at desktop width. Unified mode renders one pane with original content above new
-      content, syntax-highlights deletions, and keeps the same selected file. Changed lines carry a tint that reads
-      against the surface in both modes. Controls change only the editor presentation and never the session route;
-      no accept/reject control or second transport appears.
+      The panel names every changed file under its directory, with counts. Exactly one file's diff is mounted — the
+      selected one — under a header naming it. Split mode renders two read-only CodeMirror panes with old/new line
+      numbers and visible changed text, and both panes sit inside the editor's own width — the new side is never
+      pushed outside the scroll container, so the split editor's scrollWidth does not exceed its clientWidth at
+      desktop width. Unified mode renders one pane with original content above new content, syntax-highlights
+      deletions, and keeps the same selected file. Changed lines carry a tint that reads against the surface in both
+      modes, and unchanged context around a change is shown rather than folded to a hairline. Controls change only
+      the editor presentation and never the session route; no accept/reject control or second transport appears.
     code:
       - spec-dashboard/src/DiffDocument.jsx
       - spec-dashboard/src/styles.css
       - spec-dashboard/package.json
+  - name: changed-file-labels-stay-distinguishable
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the diff of a session whose changed files are deep spec-graph paths that share a long prefix and repeat
+      the same leaf name. Read every row the changed-file panel renders, and read the open file's header at a
+      desktop width and at a width narrow enough to force the header to truncate.
+    expected: >-
+      No row's label is the shared prefix with its distinguishing tail cut off, and a single-child directory chain
+      appears as one row carrying the whole chain. A row is identified by its label under its visible ancestors, so
+      the measurable claim is that SIBLINGS never share a label — a repeated leaf name like `spec.md` under
+      different directories is correct, a repeated one under the same directory is not. Every row carries its
+      untruncated path as a tooltip. Where the header has to truncate it drops the FRONT of the path, keeps the
+      file name whole at any width, and marks that it truncated.
+    code:
+      - spec-dashboard/src/diffTree.js
   - name: uncommitted-work-is-visible
     tags: [frontend-e2e, desktop, backend-api]
     description: >-

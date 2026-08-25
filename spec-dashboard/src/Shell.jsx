@@ -45,13 +45,13 @@ import { createViewScope } from './viewScope.js'
 // happens to be current.
 
 // THE SIDEBAR IS A PROPERTY OF THE FOCUSED TAB ([[dock-modes]]) — which projection it shows, and whether
-// it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Bare
-// review/settings boards have no sidebar, while object details retain one. `keep` is the third answer — graph,
+// it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Review and
+// settings surfaces have no sidebar, including their detail routes. `keep` is the third answer — graph,
 // empty, and the bare sessions board have no opinion and preserve the current projection.
 const dockFor = (page, param) => {
-  // Bare review/settings boards are full-width. Their object detail is a document and keeps the dock, so the
-  // rail's explorer projection remains truthful beside it (C2/C4).
-  if (page === 'issues' || (page === 'evals' && param == null)) return 'none'
+  // Review surfaces are full-width throughout their address family. A detail route must not inherit the
+  // previous Spec/Explorer projection from workspace state; that state belongs only to document routes.
+  if (page === 'issues' || page === 'evals') return 'none'
   if (page === 'settings') return 'none'
   // Sessions is a complete document surface: SessionInterface owns its forest/list and console. Keeping a
   // finding dock here (even with rows suppressed) leaves an empty dock header beside the same list.

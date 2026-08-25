@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { putBlob, MISS_BLOB } from './cache.js'
 import { driftIndex, historyIndex } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
-import { evalContext, evalTimeline, readBlobByHash } from './evaltab.js'
+import { evalContext, evalTimeline, evalTimelines, readBlobByHash } from './evaltab.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'evaltab-test-'))
 
@@ -87,7 +87,11 @@ test('evalTimeline primes off-history content fallback without probing reachable
     commit('current change')
 
     const sidecarPath = join(root, '.spec/n/evals.ndjson')
-    writeFileSync(sidecarPath, JSON.stringify({ scenario: 's', codeSha: anchor, blob: null, ts: '2026-07-26T00:00:00Z' }) + '\n')
+    writeFileSync(sidecarPath, [
+      JSON.stringify({ scenario: 's', codeSha: anchor, blob: null, ts: '2026-07-27T00:00:00Z' }),
+      JSON.stringify({ scenario: 's', codeSha: base, blob: null, ts: '2026-07-26T00:00:00Z' }),
+      '',
+    ].join('\n'))
     const idx = {
       ord: new Map([['current', 0]]), parents: new Map([['current', []]]),
       fileEvents: new Map(), lineageEvents: new Map(), lineageKeys: (path: string) => [path],
@@ -97,7 +101,7 @@ test('evalTimeline primes off-history content fallback without probing reachable
       id: 'n', dir: join(root, '.spec/n'), evalPath: '.spec/n/eval.md', sidecarPath,
       scenarios: [{ name: 's', description: 'measure', expected: 'stable', tags: ['cli'] }],
     }
-    const timeline = await evalTimeline('n', {
+    const context = {
       root,
       specs: [{ path: '.spec/n/spec.md', code: ['src/x.ts'], codeEntries: [{ path: 'src/x.ts', selectors: [] }] }],
       idx,
@@ -105,7 +109,10 @@ test('evalTimeline primes off-history content fallback without probing reachable
       scidx: new Map(),
       ynodes: [node],
       remarks: new Map(),
-    } as any)
+    } as any
+    const latest = await evalTimelines(['n'], context, { order: true, latestOnly: true })
+    assert.equal(latest[0].readings.length, 1)
+    const timeline = await evalTimeline('n', context)
     assert.deepEqual(timeline.readings[0].staleAxes, ['code'])
   } finally {
     rmSync(root, { recursive: true, force: true })

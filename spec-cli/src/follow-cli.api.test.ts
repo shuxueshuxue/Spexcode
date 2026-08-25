@@ -154,7 +154,7 @@ test('managed watch registers once, delivers child states, and cancel stops deli
 
   const declared = await runCli(['session', 'done', '--propose', 'merge'], childEnv)
   assert.equal(declared.code, 0, declared.stderr)
-  await waitFor(() => events(parentDir).filter((event) => event.kind === 'sent').length === 2, 'watch-delivered review')
+  await waitFor(() => events(parentDir).filter((event) => event.kind === 'sent').length === 2, `watch-delivered review; queue=${JSON.stringify(events(parentDir))}`)
   const review = events(parentDir).at(-1)
   assert.equal(review?.from, ID)
   assert.match(review?.text || '', /review/)

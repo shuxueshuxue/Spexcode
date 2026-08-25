@@ -74,6 +74,7 @@ test('session new keeps name and base values out of positional prompt intake', (
     const r = spawnSync('tsx', [cli, 'session', 'new', '--prompt-file', promptFile, flag, value], {
       cwd: pkgRoot,
       encoding: 'utf8',
+      env: { ...process.env, NODE_NO_WARNINGS: '1' },
     })
     assert.equal(r.status, 2)
     assert.equal(r.stdout, '')
@@ -107,7 +108,7 @@ function timelineText(dir: string): string {
 async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) {
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', ...(api ? ['--api', api] : [])], {
     cwd: project,
-    env,
+    env: { ...env, NODE_NO_WARNINGS: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let stdout = '', stderr = ''
@@ -123,7 +124,7 @@ async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) 
 test('session new rejects stale mode flags through the generic unknown-flag path', () => {
   for (const args of [['--mode', 'headless'], ['--headless']]) {
     const flag = args[0]
-    const r = spawnSync('tsx', [cli, 'session', 'new', 'probe', ...args], { cwd: pkgRoot, encoding: 'utf8' })
+    const r = spawnSync('tsx', [cli, 'session', 'new', 'probe', ...args], { cwd: pkgRoot, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } })
     assert.equal(r.status, 2)
     assert.equal(r.stdout, '')
     assert.equal(r.stderr, `spex session new: unknown flag ${flag}\n`)
@@ -134,6 +135,7 @@ test('session new retires the out-of-band --node binding before launch', () => {
   const r = spawnSync('tsx', [cli, 'session', 'new', 'probe', '--node', 'launch'], {
     cwd: pkgRoot,
     encoding: 'utf8',
+    env: { ...process.env, NODE_NO_WARNINGS: '1' },
   })
   assert.equal(r.status, 2)
   assert.equal(r.stdout, '')
@@ -160,7 +162,7 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
   await once(server, 'listening')
   const address = server.address()
   assert.ok(address && typeof address === 'object')
-  const env = { ...process.env }
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: '1' }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   env.SPEXCODE_API_URL = ''
 
@@ -206,7 +208,7 @@ test('session new from a governed parent establishes its child watch before prin
   })
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
   const address = server.address(); assert.ok(address && typeof address === 'object')
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: WATCH_PARENT, SPEXCODE_API_URL: '' }
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: '1', SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: WATCH_PARENT, SPEXCODE_API_URL: '' }
   for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'watch me', '--api', `http://127.0.0.1:${address.port}`], {
     cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'],

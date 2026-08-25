@@ -31,18 +31,26 @@ test('live terminals are writable by default and only suspended input asks for c
   assert.doesNotMatch(term, /resumeInputConfirm[^\n]*autoFocus/)
 })
 
-test('an empty diff distinguishes merged work and prints complete git identities', () => {
+test('an empty diff names which of the three branch states is true and prints complete git identities', () => {
   const backend = source('../../spec-cli/src/sessions.ts')
   const diff = source('./DiffDocument.jsx')
 
   assert.match(backend, /branch: wt\.branch, baseRef/)
   assert.match(backend, /merge-base', '--is-ancestor'/)
-  assert.match(backend, /mergedIntoBase/)
   assert.match(backend, /commitUrl/)
+  // a branch that never authored a commit is ALSO an ancestor of its base, so the state is decided from the
+  // fork commit first — ancestry alone cannot tell "landed" from "never committed"
+  assert.match(backend, /function forkCommitOf/)
+  assert.match(backend, /reflog', 'show'/)
+  assert.match(backend, /const authoredNothing = forkCommit \? head === forkCommit : head === resolvedBase/)
+  assert.match(backend, /branchState: authoredNothing \? 'no-commits' : ancestor\.ok \? 'merged' : 'open'/)
+  // the browser renders the backend's verdict; it never re-derives one from a list length
   assert.match(diff, /data\.branch/)
   assert.match(diff, /data\.baseRef/)
-  assert.match(diff, /data\.mergedIntoBase/)
+  assert.match(diff, /state\.data\.branchState === 'no-commits'/)
+  assert.match(diff, /state\.data\.branchState === 'merged'/)
   assert.match(diff, /data\.commitUrl/)
+  assert.doesNotMatch(diff, /mergedIntoBase/)
   assert.match(diff, /@codemirror\/merge/)
   assert.match(diff, /new MergeView/)
   assert.match(diff, /unifiedMergeView/)
@@ -52,6 +60,29 @@ test('an empty diff distinguishes merged work and prints complete git identities
   assert.match(diff, /data-diff-file/)
   assert.doesNotMatch(diff, /base\.slice\(0, 8\)/)
   assert.doesNotMatch(diff, /head\.slice\(0, 8\)/)
+})
+
+test('the uncommitted half is read from the session\'s own worktree, or honestly marked unreadable', () => {
+  const backend = source('../../spec-cli/src/sessions.ts')
+  const diff = source('./DiffDocument.jsx')
+  const en = source('./i18n/en.js')
+  const zh = source('./i18n/zh.js')
+
+  // `root` falls back to the shared main checkout once the worktree is gone; the working tree must NOT,
+  // or a landed session would show whoever is working in main as its own uncommitted changes.
+  assert.match(backend, /const liveRoot = wt\.path && existsSync\(wt\.path\) \? wt\.path : null/)
+  assert.match(backend, /working: \{ readable: !!liveRoot, files: working \}/)
+  assert.match(backend, /function workingFiles/)
+  // one status + one numstat however dirty the tree is, both read-only: the index a live agent is using
+  // must not be touched, which is why untracked files are counted rather than staged
+  assert.match(backend, /'status', '--porcelain', '--untracked-files=all'/)
+  assert.match(backend, /function untrackedCounts/)
+  // an untracked file is invisible to `git diff HEAD` and needs the --no-index rendering
+  assert.match(backend, /'--no-index', '--', '\/dev\/null'/)
+  assert.match(diff, /scope=\$\{scope\}/)
+  assert.match(diff, /data\?\.working\?\.files\?\.\[0\]\?\.patch/)
+  assert.match(en, /diffGroupUncommitted:/)
+  assert.match(zh, /diffGroupUncommitted:/)
 })
 
 test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {

@@ -19,6 +19,7 @@ const governedSessionFiles = [
 
 test('Sessions keeps multi-select and tree movement on the real row surface', () => {
   const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
+  const selectBar = readFileSync(join(srcDir, 'SessionSelectBar.jsx'), 'utf8')
   const context = readFileSync(join(srcDir, 'SessionContextMenu.jsx'), 'utf8')
   assert.match(panel, /SessionSelectBar/)
   assert.match(panel, /startDrag/)
@@ -26,10 +27,26 @@ test('Sessions keeps multi-select and tree movement on the real row surface', ()
   assert.match(panel, /sessionAncestorIds/)
   assert.match(context, /startSelect/)
   assert.match(context, /onDetach/)
+  assert.match(selectBar, /<IconButton icon="trash"[^>]*className="si-selaction danger"[^>]*label=\{t\('sessionSelect\.close'\)\}/s)
+  assert.match(selectBar, /<IconButton icon="x"[^>]*className="si-selaction"[^>]*label=\{t\('common\.cancel'\)\}/s)
+  assert.match(css, /\.si-selbar\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*gap:\s*var\(--space-1\);[^}]*min-width:\s*0;/s)
+  assert.match(css, /\.si-selcount\s*\{[^}]*min-width:\s*0;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s)
+  assert.match(css, /\.si-selaction\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/s)
   for (const locale of ['en.js', 'zh.js']) {
     const source = readFileSync(join(srcDir, 'i18n', locale), 'utf8')
     assert.match(source, /sessionSelect\s*:/)
   }
+})
+
+test('Sessions archive pill opens the existing routed archive overlay', () => {
+  const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
+  const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
+  const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
+  assert.match(panel, /className=\{`si-pill archive\$\{archiveActive \? ' on' : ''\}`\}/)
+  assert.match(panel, /aria-label=\{t\('session\.archiveTitle'\)\}/)
+  assert.match(sessionsView, /onOpenArchive=\{\(\) => scope\.open\(\{[\s\S]{0,160}query: \{ archive: '1' \}/)
+  assert.match(sessionInterface, /archiveActive=\{archiveRequested\}/)
+  assert.match(sessionInterface, /onArchive=\{onOpenArchive\}/)
 })
 
 test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {

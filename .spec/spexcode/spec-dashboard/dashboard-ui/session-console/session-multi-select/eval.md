@@ -19,7 +19,9 @@ scenarios:
       parent and to the top-level drop zone while observing the rendered ghost and target feedback.
     expected: >-
       Sessions owns explicit row multi-select independently of graph marquee selection. The selection bar
-      reports both checked rows and cancel exits selection. A full-row drag renders a 75% inert row ghost,
+      stays on one line at the narrow forest width: the count truncates rather than wrapping, the danger trash
+      icon and × icon remain fully inside the bar, and each is keyboard reachable by its localized accessible
+      name. The bar reports both checked rows and cancel exits selection. A full-row drag renders a 75% inert row ghost,
       highlights valid hierarchy targets, sends the reparent request on release, and sends parent: null at
       the top-level zone; self/descendant/current-parent releases are no-ops.
 ---

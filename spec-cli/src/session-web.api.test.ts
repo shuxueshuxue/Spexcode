@@ -95,7 +95,7 @@ test('session web CLI records a live loopback URL and the host gateway authorize
     })
     await new Promise<void>((done, fail) => { service!.once('error', fail); service!.listen(servicePort, '127.0.0.1', done) })
 
-    const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id }
+    const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: '1', SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id }
     const postedUrl = `http://127.0.0.1:${servicePort}/base/`
     const postedDocumentUrl = `http://127.0.0.1:${servicePort}/a/b/page.html`
     const add = await runCli(project, env, 'session', 'web', 'add', postedUrl)

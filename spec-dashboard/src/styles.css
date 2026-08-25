@@ -1592,9 +1592,18 @@ a.scenario-count:hover { background: var(--wash-hover); }
   overflow: hidden; border-right: 1px solid var(--line); background: var(--panel);
 }
 .si-session-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.si-selcount { flex: 1; color: var(--ink2); font-size: var(--type-meta); }
-.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
+.si-selbar {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1); min-width: 0;
+  padding: var(--space-4) var(--space-4) var(--space-2); border-bottom: 1px solid var(--line);
+}
+.si-selcount { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink2); font-size: var(--type-meta); text-overflow: ellipsis; white-space: nowrap; }
+.si-selaction {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  color: var(--muted); background: none; border: 0; border-radius: var(--radius); cursor: pointer;
+}
+.si-selaction:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+.si-selaction.danger { color: var(--red); }
+.si-selaction:disabled { opacity: .45; cursor: default; }
 .si-check { flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: var(--radius); box-sizing: border-box; }
 .si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
 .si-check.on::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px; border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
@@ -1683,8 +1692,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {
   --zh: var(--muted);
-  display: flex; align-items: center; gap: 8px; padding: var(--space-5) var(--space-6) var(--space-2);
-  font-size: var(--type-caption); font-weight: var(--weight-medium); letter-spacing: var(--tracking-normal); user-select: none;
+  display: flex; align-items: center; gap: var(--space-4); padding: calc(var(--space-4) + var(--space-1)) var(--space-5) var(--space-2);
+  font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); user-select: none;
   color: var(--zh);
 }
 /* The offline/archive header stays one visual row; the count is a marker and the whole header toggles history. */
@@ -1693,8 +1702,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-zone-fold:hover { background: var(--wash-hover); }
 .si-zone-count {
-  flex: none; padding: 0 6px; border: 1px solid transparent; border-radius: var(--radius);
-  background: color-mix(in srgb, currentColor 12%, transparent); color: inherit; font: inherit;
+  flex: none; padding: 0 var(--space-3); border: 1px solid currentColor; border-radius: var(--radius);
+  background: transparent; color: inherit; font: inherit; opacity: .8;
   font-size: var(--type-caption); line-height: var(--line-badge);
 }
 .si-zone-label { flex: none; }
@@ -1708,8 +1717,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-zone-all-lead { color: var(--muted); align-items: center; }
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the sidebar's two doors are rows in the same grammar as the sessions under them: New carries its word and
-   wears the selection wash while the launch face is open; Search is one quiet glyph at the row's end. */
+/* the sidebar's three doors are rows in the same grammar as the sessions under them: New carries its word;
+   Archive and Search are quiet glyphs at the row's end. */
 .si-toprow { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-4) var(--space-4) var(--space-2); }
 .si-pill {
   display: inline-flex; align-items: center; gap: var(--space-3); height: 28px; padding: 0 var(--space-4);
@@ -1720,10 +1729,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-pill-label { white-space: nowrap; }
 .si-pill.new { flex: 1; min-width: 0; color: var(--ink2); font-weight: var(--weight-medium); }
 .si-pill:hover { background: var(--wash-hover); color: var(--ink2); }
-.si-pill.new.on { background: var(--wash-selected); color: var(--blue); }
-/* the Search pill is the click twin of ⌥+/ ([[session-search]]): a secondary action beside New —
-   muted at rest. Momentary (opens the palette), so it never wears an .on state. */
-.si-pill.search { flex: none; width: 28px; padding: 0; justify-content: center; color: var(--muted); }
+.si-pill.new.on, .si-pill.archive.on { background: var(--wash-selected); color: var(--blue); }
+/* Archive is routed overlay state; Search is the momentary click twin of ⌥+/ ([[session-search]]). */
+.si-pill.archive, .si-pill.search { flex: none; width: 28px; padding: 0; justify-content: center; color: var(--muted); }
 
 
 /* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page
@@ -3421,6 +3429,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-file-panel button:hover, .diff-file-panel button[aria-current="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); }
 .diff-file-panel button strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .diff-file-panel button span { color:var(--muted); font-size:var(--type-meta); }
+.diff-file-group { padding:7px 10px 4px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--type-meta); }
+.diff-file-panel button span.diff-file-status { color:var(--muted); }
+.diff-scope-note { padding:8px 12px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 18%, var(--paper)); color:var(--muted); font-size:var(--type-meta); }
+.diff-file-head .diff-file-scope { color:var(--muted); }
 .diff-files { min-width:0; }
 .diff-file { min-width:0; }
 .diff-hunk-tools { display:flex; justify-content:flex-end; gap:4px; padding:3px 8px; border-bottom:1px solid var(--line); background:var(--paper); }
@@ -3430,16 +3442,25 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-mode button + button { border-left:0; border-radius:0 var(--radius) var(--radius) 0; }
 .diff-mode button:first-child { border-radius:var(--radius) 0 0 var(--radius); }
 .diff-editor-split { max-height:58vh; overflow:auto; }
-.diff-editor-split .cm-mergeView { display:flex; min-width:max-content; }
-.diff-editor-split .cm-mergeView > .cm-editor { min-width:0; flex:1 1 50%; }
-.diff-editor-split .cm-mergeView > .cm-editor + .cm-editor { border-left:1px solid var(--line); }
+/* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each
+   .cm-mergeViewEditor is an equal, overflow-hidden column. Only the divider is ours. Do NOT make
+   .cm-mergeView a flex container or give it an intrinsic min-width — either one sizes the row to its widest
+   line and pushes the new side outside this scroll container, which reads as "the diff did not render". */
+.diff-editor-split .cm-mergeViewEditor + .cm-mergeViewEditor { border-left:1px solid var(--line); }
 .diff-editor-unified { max-height:58vh; overflow:auto; }
 .diff-editor-unified.is-wrap .cm-line { white-space:pre-wrap; overflow-wrap:anywhere; }
+/* the package tints a changed line at 8% alpha, which does not survive this paper — restate it in the
+   dashboard's own red/green so the reader sees WHICH lines moved without hunting for the underline. */
+.diff-editor .cm-merge-a .cm-changedLine, .diff-editor .cm-deletedChunk { background:color-mix(in srgb, var(--red) 16%, transparent); }
+.diff-editor .cm-merge-b .cm-changedLine, .diff-editor .cm-inlineChangedLine { background:color-mix(in srgb, var(--green) 16%, transparent); }
+.diff-editor .cm-insertedLine { background:color-mix(in srgb, var(--green) 22%, transparent); }
+.diff-editor .cm-deletedLine, .diff-editor .cm-deletedChunk .cm-deletedText { background:color-mix(in srgb, var(--red) 22%, transparent); }
+.diff-editor .cm-line:hover { background:color-mix(in srgb, var(--blue) 14%, transparent); }
 @media (max-width: 720px) {
   .diff-review-body { grid-template-columns:1fr; }
   .diff-file-panel { display:flex; border-right:0; border-bottom:1px solid var(--line); overflow-x:auto; }
   .diff-file-panel button { min-width:180px; border-bottom:0; border-right:1px solid var(--line); }
-  .diff-editor-split .cm-mergeView { min-width:760px; }
+  .diff-editor-split .cm-mergeViewEditors { min-width:760px; }
 }
 .diff-comment { display:flex; align-items:flex-start; gap:10px; padding:7px 14px 7px 58px; border-top:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
 .diff-comment.sent { opacity:.7; }

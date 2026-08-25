@@ -15,6 +15,7 @@ scenarios:
   - name: child-folds-under-its-spawner
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
+    code: [spec-dashboard/src/SessionWindow.jsx, spec-dashboard/src/styles.css]
     description: >
       Through the running dashboard in a real browser, drive the actual product: from one live session (call
       it PARENT), run `spex new "<a small task>"` in its terminal so the backend launches a CHILD from inside
@@ -34,6 +35,9 @@ scenarios:
       and the child row appears indented directly
       beneath PARENT (recursively — a child that itself spawned would carry its own pod). After PARENT is closed and the board reloads, the child AUTO-PROMOTES to a
       top-level row (its dangling parent pointer is dropped at read time) — no orphan is lost, no migration ran.
+      In the expanded forest, the fold/count pod occupies its own lead column and the child's ancestry rail
+      starts after that column, so the rail never crosses the count. Each row's overlay colour is a short
+      centered vertical bar, not a rounded bracket around the row edge.
   - name: pod-click-keeps-current-surface-focus
     tags: [frontend-e2e, desktop]
     description: >

@@ -846,7 +846,6 @@ export default {
     relaunchTitle: 'relaunch and resume this session',
     offlineReadOnly: '⏻ agent offline · read only',
     archivedReadOnly: '▤ archived · read only',
-    merge: 'merge',
     relaunchResume: '⏵ relaunch & resume',
     merges: ({ n }) => `merged ×${n}`,
     mergesTitle: 'times merged to main',
@@ -880,18 +879,10 @@ export default {
     attachDismiss: 'dismiss attachment status',
     codeSelectionAttachments: 'code selection attachments',
     removeCodeSelection: 'remove code selection',
-    // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
-    // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
+    // board commands — the `/` commands Command Box runs HERE (not in the agent). Agent workflows such as
+    // /merge are plugin presets and deliberately have no dashboard-local label or availability copy.
     cmd: {
       evalDesc: "open this session's Evals page — affected scenarios and measured evidence",
-      mergeTitle: 'merge this review proposal to main',
-      mergeDesc: 'merge this review proposal to main',
-      mergeUnavailableArchived: 'merge unavailable — this session is archived',
-      mergeUnavailableNoProposal: 'merge unavailable — this session has not proposed a merge; only done --propose merge makes it available',
-      mergeUnavailableNothing: 'merge unavailable — done --propose nothing is done without proposing a merge',
-      mergeUnavailableClose: 'merge unavailable — done --propose close is awaiting close, not merge',
-      mergeUnavailableLifecycle: 'merge unavailable — the merge proposal is no longer awaiting review',
-      mergeUnavailableLiveness: 'merge unavailable — the session is not online',
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',
       stopDesc: 'stop — kill the agent + tmux but KEEP the worktree, so it can be resumed',
       closeTitle: 'close this session (removes the worktree)',

@@ -74,6 +74,12 @@ test('init success message reports the governedRoots the template ACTUALLY ships
   const projectSpec = readFileSync(join(proj, '.spec', 'project', 'spec.md'), 'utf8')
   assert.match(projectSpec, /`system` contracts[\s\S]*`hook` handlers[\s\S]*`command` presets[\s\S]*`skill`/, 'starter project spec names the initialized plugin surfaces')
   assert.doesNotMatch(projectSpec, /seed ships `core`|seed ships `tidy`/, 'obsolete core-plus-tidy inventory is gone')
+  const mergeNode = readFileSync(join(proj, '.spec', 'project', '.plugins', 'skills', 'merge', 'spec.md'), 'utf8')
+  assert.match(mergeNode, /^surface: skill, command$/m, 'merge is one present-plugin node with skill and command surfaces')
+  for (const skill of [join(proj, '.claude', 'skills', 'merge', 'SKILL.md'), join(proj, '.codex', 'skills', 'merge', 'SKILL.md')]) {
+    assert.match(readFileSync(skill, 'utf8'), /^name: merge$/m, `${skill} materializes the merge skill`)
+    assert.match(readFileSync(skill, 'utf8'), /do not call `spex session merge \.` recursively/i, `${skill} prevents recursive self-dispatch`)
+  }
 })
 
 test('init adoption data cannot masquerade as a clean untracked project', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -190,9 +196,9 @@ test('--harness seeds hook nodes only when a selected native adapter can emit th
   const pluginNodeCount = (proj: string) => readdirSync(join(proj, '.spec', 'project', '.plugins'), { recursive: true })
     .filter((path) => path === 'spec.md' || String(path).endsWith('/spec.md')).length
   const cases: ReadonlyArray<readonly [string, number]> = [
-    ['zcode', 21],
-    ['claude', 23],
-    ['zcode,claude', 23],
+    ['zcode', 22],
+    ['claude', 24],
+    ['zcode,claude', 24],
   ]
   for (const [selected, expectedNodes] of cases) {
     const { proj, spex } = freshRepo()
@@ -210,6 +216,7 @@ test('--harness seeds hook nodes only when a selected native adapter can emit th
   spex('init', '.', '--harness', 'zcode')
   assert.ok(existsSync(join(proj, 'AGENTS.md')), 'zcode contract remains materialized')
   assert.ok(existsSync(join(proj, '.zcode', 'skills', 'distill', 'SKILL.md')), 'zcode skill remains materialized')
+  assert.ok(existsSync(join(proj, '.zcode', 'skills', 'merge', 'SKILL.md')), 'zcode receives the merge skill from the same present-plugin node')
   const settings = JSON.parse(readFileSync(join(proj, '.zcode', 'settings.json'), 'utf8'))
   assert.deepEqual(Object.keys(settings.hooks), ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'], 'zcode shim binds exactly its declared events')
   assert.ok(!('Notification' in settings.hooks) && !('StopFailure' in settings.hooks), 'unreachable events never enter zcode settings')

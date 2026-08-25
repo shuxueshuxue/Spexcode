@@ -1356,8 +1356,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return ok
   }
 
-  const mergeSession = (owner) => act('merge', undefined, owner)
-
   const resumeAndReturnToWorking = async () => {
     const ok = await act('resume')
     if (ok) {
@@ -1366,8 +1364,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return ok
   }
 
-  // `runners` binds each board-command name to the closure that DOES it — the SAME closure the document-action
-  // tool and Command Box row call; `uiCmds` narrows the registry to current session state.
+  // `runners` binds each dashboard-owned command to the closure that does it. Agent workflows such as
+  // `/merge` arrive through the plugin preset/skill path and never acquire a second dashboard runner.
   const runners = {
     command: () => { if (commandOpen) closeCommandBox(); else setCommandOpen(true) },
     // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
@@ -1375,7 +1373,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
     // address as a REAL anchor.
     eval: () => { if (sessionActive) scope.open(routeAddress(sessionEvalAddress(active))) },
-    merge: mergeSession,
     relaunch: resumeAndReturnToWorking,
     stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → read-only Conversation
     close: (owner) => act('close', undefined, owner),

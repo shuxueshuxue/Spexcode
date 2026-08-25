@@ -167,10 +167,10 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       state.delete(id)
       emit(`${tag}[spex] closed · removed  [id ${id}]`)
     }
-    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own canonical cursor row. It is
-    // a WATCH, not a delivery: a message reaches the agent as a prompt through the adapter ([[delivery-queue]]),
-    // so this position only decides what THIS process has already reported and can never make an agent miss
-    // mail. Never advanced here in take mode — the waiter stops on the event and the next wait resumes on it.
+    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own canonical cursor row. In take
+    // mode the returned message is this wait's consumed result, so advance past it before returning; otherwise
+    // an empty cursor returns the same oldest inbox message forever. A turn-boundary delivery may still present
+    // the message through the adapter, but it does not own this read cursor.
     if (self && application?.readState(self)) {
       const ownEvents = timelineEvents(self)
       const ownStart = readCursor(self) ?? 0
@@ -182,7 +182,10 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       for (let k = 0; k < mine.events.length; k++) {
         const e = mine.events[k]
         if (e.kind !== 'sent') continue
-        if (take) return { mail: { from: e.from, text: e.text } }
+        if (take) {
+          writeCursor(self, mine.at[k] + 1)
+          return { mail: { from: e.from, text: e.text } }
+        }
         // a stream has no turn boundary to advance that cursor, so its own high-water mark — process-local,
         // never written — is what keeps an unread line from being re-printed on every tick.
         if (mine.at[k] <= shown) continue

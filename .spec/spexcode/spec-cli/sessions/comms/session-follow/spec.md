@@ -79,11 +79,12 @@ that wants to decide locally when an event is actionable rather than receive eve
 - **`spex session wait [SEL…]`** — *take the next event and exit*, an agent's event-loop primitive. It
   follows the selected sessions' logs **and its own inbox**, and returns on the first event past the cursor
   that its filter accepts: a followed session reaching an actionable state, or a message arriving for the
-  caller. It prints the observed path on stdout, advances the follow cursor to exactly the event it stopped
-  on — never past it, so a second move inside the same tick is still waiting for the next call — and exits;
-  the exit is the wake-up. The **inbox** cursor is the one it does not touch: the turn-boundary hook is the
-  reader that actually shows a message ([[session-timeline]]), and a wait that advanced it would wake the
-  agent for mail the agent is then never given. Exit codes: `0` an event was reached, `1` the deadline
+  caller. It prints the observed path on stdout, advances the followed-session cursor to exactly the event it
+  stopped on — never past it, so a second move inside the same tick is still waiting for the next call — and
+  exits; the exit is the wake-up. When take mode returns a message from the caller's own inbox, it advances the
+  inbox cursor past that message before exiting, so an empty cursor cannot return the same oldest mail forever.
+  The turn-boundary hook may also show a message through the adapter ([[session-timeline]]), but it does not own
+  this follow cursor. Exit codes: `0` an event was reached, `1` the deadline
   passed with nothing, `2` a followed session's store is gone. There is no transport outcome, because there
   is no transport: the failure mode that needed its own vocabulary — a backend that could not be reached,
   misread as a session verdict — no longer exists.

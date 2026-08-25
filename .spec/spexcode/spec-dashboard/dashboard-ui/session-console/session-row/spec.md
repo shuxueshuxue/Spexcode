@@ -64,9 +64,11 @@ the rail columns while preserving one predictable indentation step per depth. Th
 positioned in that reserved column, and remains a sibling of the row button because a nested button
 inside the row button would invalidate the row's own activation.
 
-The row's overlay colour is a short, centered vertical bar on the leading edge. It is an independent mark
-rather than an inset border or shadow, so the rounded row wash cannot turn it into a bracket or make it
-touch the fold/count column.
+The row's overlay colour is a continuous 2px status thread on the leading edge: a top-level row's spans the
+complete row height at the same leading offset so adjacent rows touch and only a group heading breaks the
+thread, and a nested row paints it over its deepest tree-rail column so the rail carries one line. It is an
+independent mark rather than an inset border or shadow, so the rounded row wash cannot turn it into a bracket
+or make it touch the fold/count column.
 
 **The fold.** `FoldPod` is the only disclosure a parent gets. It carries its own expanded state, shows
 the subtree count, and is pointer-only — `tabIndex={-1}` and a suppressed mousedown focus, so

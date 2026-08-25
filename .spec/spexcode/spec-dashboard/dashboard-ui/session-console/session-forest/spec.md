@@ -26,7 +26,10 @@ with them — grouping, disclosure, the archive's fourth zone and its index, the
 doors at the top — `＋ New Session` carrying its word, then quiet archive and search glyphs — are rows
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
-rows and the session's own overlay colour kept as a hairline on its leading edge. 
+rows. Its overlay colour is a **continuous 2px status thread**: on top-level rows it spans the complete row
+height at the same leading offset, so adjacent rows touch; group headings naturally break the thread. A nested
+row paints that colour over its deepest tree-rail column, so the tree rail carries one line rather than leaving
+two parallel marks.
 
 The console renders the row in its **compact, avatar-less** variant
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with

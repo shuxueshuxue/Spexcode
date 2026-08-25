@@ -111,28 +111,6 @@ function retireLegacyCodexAnchors(checkout: string): void {
   }
 }
 
-function spexGeneratedHooksFile(file: string): boolean {
-  if (!existsSync(file)) return false
-  let parsed: unknown
-  try { parsed = JSON.parse(readFileSync(file, 'utf8')) } catch { return false }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
-  const root = parsed as { hooks?: unknown }
-  const keys = Object.keys(parsed as Record<string, unknown>)
-  if (keys.some((key) => key !== 'hooks') || !root.hooks || typeof root.hooks !== 'object' || Array.isArray(root.hooks)) return false
-  const commands: string[] = []
-  for (const groups of Object.values(root.hooks as Record<string, unknown>)) {
-    if (!Array.isArray(groups)) continue
-    for (const group of groups) {
-      if (!group || typeof group !== 'object') continue
-      for (const hook of ((group as { hooks?: unknown }).hooks as unknown[] | undefined) ?? []) {
-        if (hook && typeof hook === 'object' && typeof (hook as { command?: unknown }).command === 'string')
-          commands.push((hook as { command: string }).command)
-      }
-    }
-  }
-  return commands.length > 0 && commands.every((command) => command.includes('dispatch.sh'))
-}
-
 function infoExcludePath(proj: string): string {
   return join(gitCommonDirOf(proj), 'info', 'exclude')
 }

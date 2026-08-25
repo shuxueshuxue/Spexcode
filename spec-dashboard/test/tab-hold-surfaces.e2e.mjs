@@ -33,9 +33,6 @@ rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true 
 const board = await fetch(`${apiUrl}/api/graph`).then((r) => { assert.equal(r.ok, true, 'backend /api/graph'); return r.json() })
 const liveSessions = (board.sessions || []).filter((s) => s.id && !s.archived)
 assert.ok(liveSessions.length >= 3, `three live sessions required, have ${liveSessions.length}`)
-const governedFile = (board.nodes || []).flatMap((n) => (n.code || []).map((c) => String(c).split('#')[0])).find(Boolean)
-assert.ok(governedFile, 'the board must expose one governed file')
-const firstFile = governedFile
 
 let anchorSession = null
 
@@ -65,9 +62,15 @@ const tabState = () => page.locator('[role="tab"][data-tab-key]:visible')
 
 // A probe always starts from a known workspace: no persisted tabs, then one plain navigation that mints
 // exactly one slot of the kind the gesture will be measured on.
+// A hash-only `goto` is a client-side navigation, so the app is NOT re-created and anything read once at
+// boot (the persisted working set, the dock projection) would survive a probe's reset. Every settle
+// therefore reloads for real.
 const settle = async (hash, ready) => {
-  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  // Order matters: the working set is cleared while the app is ALREADY on the target address, then reloaded.
+  // Clearing first lets the still-running app write its old list straight back on the way to the address.
   await page.goto(`${base}/${hash}`, { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator(ready).first().waitFor({ state: 'visible', timeout: 60_000 })
   await page.waitForTimeout(600)
 }
@@ -116,20 +119,23 @@ try {
   assert.ok(shownFirst.length >= 2, `the forest must show two session rows, showed ${shownFirst.length}`)
   anchorSession = liveSessions.find((s) => s.id === shownFirst[0]) || { id: shownFirst[0] }
 
-  // 1 — the Explorer tree's governed-file row. It already keeps the law, and stays in the census as the
-  // regression guard: a shared gesture helper must not cost the surfaces that were already right.
-  await probe('explorer governed-file row', 'ctrl/⌘-click', async () => {
-    await settle(`#/file/${firstFile}`, '.ft-row')
+  // 1 — the finding dock's session row. It already keeps the law, and stays in the census as the
+  // regression guard: routing every surface through one gesture helper must not cost the surfaces that
+  // were already right. The dock owns session rows only where the route has no opinion about the
+  // projection — the Sessions page owns its own forest, and spec/file routes force the explorer.
+  await probe('dock session row', 'ctrl/⌘-click', async () => {
+    const [anchor] = await sessionsOnScreen()
+    await page.evaluate(() => { localStorage.setItem('spexcode.dock', '1'); localStorage.setItem('spexcode.dockMode', 'sessions') })
+    await page.goto(`${base}/#/graph`, { waitUntil: 'domcontentloaded' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.locator('.dock-session-list .si-item[data-sid]').first().waitFor({ state: 'visible', timeout: 30_000 })
+    const shown = await page.locator('.dock-session-list .si-item[data-sid]:visible').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+    const other = shown.find((id) => id !== anchor)
+    assert.ok(other, 'the dock must show a second session row')
     const before = await tabState()
-    await page.locator('.ft-row.ft-node').first().click()
-    const fileRow = page.locator('.ft-row.ft-code').first()
-    await fileRow.waitFor({ state: 'visible', timeout: 20_000 })
-    const label = await fileRow.getAttribute('data-tip')
-    await fileRow.click({ modifiers: [HOLD] })
+    await page.locator(`.dock-session-list .si-item[data-sid="${other}"]`).click({ modifiers: [HOLD] })
     await page.waitForTimeout(700)
-    const after = await tabState()
-    const arrived = after.find((tab) => tab.key.startsWith('#/file/') && !before.some((b) => b.key === tab.key))
-    return { held: !!arrived?.held && after.length === before.length + 1, target: label, before: before.map((t) => t.key), after: after.map((t) => `${t.key}${t.held ? '' : ' (slot)'}`) }
+    return verdict(before, await tabState(), `#/sessions/${other}`)
   })
 
   // 2 — the Sessions page's own forest row, ctrl/⌘-click.

@@ -56,8 +56,8 @@ const bandProbe = () => page.evaluate(() => {
 })
 const sessionState = await bandProbe()
 check('session document has one shell action slot and no internal chrome', !sessionState.hasRetiredToolbar && sessionState.hasSlot, sessionState)
-check('merge remains in the slot while session lifecycle actions leave the slot', sessionState.actions.some((item) => item.action === 'merge') && !sessionState.actions.some((item) => item.action === 'session-menu'), sessionState.actions)
-check('disabled merge keeps its reason in the accessible label', sessionState.actions.some((item) => item.action === 'merge' && item.disabled && item.label?.includes('merge unavailable')), sessionState.actions.find((item) => item.action === 'merge'))
+check('merge and lifecycle actions stay out of the document slot', !sessionState.actions.some((item) => item.action === 'merge' || item.action === 'session-menu'), sessionState.actions)
+check('the slot carries no disabled merge witness', !sessionState.actions.some((item) => item.action === 'merge'), sessionState.actions)
 check('the Eval door is a real anchor on the scoped address, carrying its glance', Boolean(
   sessionState.door && sessionState.door.tag === 'A'
   && sessionState.door.href === `#/evals?q=${encodeURIComponent(`is:eval scope:${session}`)}`

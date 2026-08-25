@@ -155,9 +155,11 @@ async function fireHook(cwd: string, event: string, payload: unknown): Promise<v
 // the shared git common dir), encoded with the store's separator scheme. Derived here rather than passed in, so
 // the fixture reads the same file the backend and the hooks write.
 async function recordPath(home: string, worktree: string, id: string): Promise<string> {
-  const { stdout } = await pexec('git', ['-C', worktree, 'rev-parse', '--path-format=absolute', '--git-common-dir'])
-  const enc = dirname(stdout.trim()).replace(/[/.]/g, '-')
-  return join(home, 'projects', enc, 'sessions', id, 'session.json')
+  return join(runtimeRoot(worktree), 'sessions', id, 'runtime.json')
+}
+
+async function legacyRecordPath(home: string, worktree: string, id: string): Promise<string> {
+  return join(dirname(await recordPath(home, worktree, id)), 'session.json')
 }
 
 async function readSession(id: string): Promise<any> {
@@ -249,7 +251,7 @@ async function corruptRecordIsDiagnosable(home: string, worktree: string): Promi
   const row = rows.find((s) => s.id === cid)
   assert.ok(row, 'a corrupt record still occupies its row — it never silently vanishes from the list')
   assert.equal(row.status, 'corrupt', 'the row carries a distinct corrupt state, not a guessed lifecycle')
-  assert.match(String(row.note ?? ''), /session\.json/, 'the row names the unreadable record so it can be diagnosed')
+  assert.match(String(row.note ?? ''), /runtime\.json/, 'the row names the unreadable record so it can be diagnosed')
 
   const single = await jsonRequest(`/api/sessions/${cid}`)
   assert.equal(single.status, 200, 'the per-session read reports the corrupt row rather than 404 "no such session"')
@@ -338,10 +340,16 @@ async function duplicateLoadedThreadIsBlocked(home: string, project: string): Pr
   })
   for (const id of [first, second]) {
     await pexec('git', ['-C', project, 'worktree', 'add', '-q', '-b', branches.get(id)!, worktrees.get(id)!])
-    const path = await recordPath(home, project, id)
+    const path = await legacyRecordPath(home, project, id)
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, `${JSON.stringify(record(id), null, 2)}\n`)
   }
+  const { migrateJsonSessionRecords } = await import('@spexcode/session-application')
+  migrateJsonSessionRecords({
+    databasePath: join(home, 'sessions.sqlite'),
+    recordsRoot: join(runtimeRoot(project), 'sessions'),
+    locality: () => {},
+  })
   const tmux = process.env.SPEXCODE_TMUX!
   await pexec('tmux', ['-L', tmux, 'new-session', '-d', '-s', first, 'sleep 300'])
   const pane = (await pexec('tmux', ['-L', tmux, 'display-message', '-p', '-t', first, '#{pane_pid}'])).stdout.trim()
@@ -622,10 +630,10 @@ async function main(): Promise<void> {
   assert.equal((await fetch(`${BASE}/health`)).status, 200, 'backend health')
   const project = process.cwd()
 
+  if (runs('corrupt')) await duplicateLoadedThreadIsBlocked(home!, project)
   if (runs('notes')) await notesRoundTrip(home!)
   if (runs('corrupt')) {
     await corruptRecordIsDiagnosable(home!, project)
-    await duplicateLoadedThreadIsBlocked(home!, project)
   }
   if (runs('quarantine')) await corruptRecordCanBeQuarantined(home!, project)
   if (runs('retired')) await retiredSessionNeverRevives(home!, project)

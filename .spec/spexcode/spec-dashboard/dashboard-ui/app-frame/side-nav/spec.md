@@ -45,8 +45,9 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   projection and focuses the most recently held session document when one exists; with no held session it
   lands on the bare sessions launch face. The selection is idempotent: clicking the current
   sessions anchor again navigates only and never folds the dock. Document routes select their related
-  projection through the shell's derivation. Review and settings surfaces render full width; review detail
-  addresses remain on that surface and never acquire the workspace dock. Because review addresses are not
+  projection through the shell's derivation. Review and settings boards keep the rail — the top-level board
+  switch is present on every desktop route — and mount no workspace dock, so their content takes the whole
+  remaining width; review detail addresses remain on that surface and never acquire the dock. Because review addresses are not
   tabs, the rail remembers the last evals/issues address and returns to it when the matching rail entry is
   pressed after leaving the surface.
 - **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted mirrored panel
@@ -55,7 +56,9 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   is a smaller 14px muted control with a restrained separator and spacing from the navigation group, so it
   reads as frame chrome rather than an independent tab. The dock header has no collapse control. Folding
   removes only the dock panel; the same rail DOM control remains at the same position and reopens it immediately.
-  Review and settings surfaces omit this control because they have no workspace dock to fold.
+  The control is mounted wherever a sidebar exists to fold: the shell's dock, or the Sessions document's own
+  forest ([[session-console]]), which follows the same open/closed boolean so Spec and Sessions fold from one
+  control. Bare review and settings boards omit it because they have neither sidebar.
 - **Projection styling is secondary.** Explorer and sessions are projections, not rail destinations. Their
   names and tallies live in the dock header; neither projection may reuse `.rail-btn.on` or `aria-current`.
   If a route selection changes a projection, that state must remain visually distinct from the route light.

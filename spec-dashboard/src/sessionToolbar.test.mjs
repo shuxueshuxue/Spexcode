@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { inboxCommands, mergeAvailability, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
+import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
@@ -18,6 +18,8 @@ const tabStrip = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8'
 const icons = readFileSync(new URL('./icons.jsx', import.meta.url), 'utf8')
 const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
+const mergePlugin = readFileSync(new URL('../../.spec/spexcode/.plugins/skills/merge/spec.md', import.meta.url), 'utf8')
+const mergeTemplate = readFileSync(new URL('../../spec-cli/templates/spec/project/.plugins/skills/merge/spec.md', import.meta.url), 'utf8')
 
 test('session faces are routed and the console has no second tab rail', () => {
   assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"|className="si-eval-tab"/)
@@ -206,34 +208,27 @@ test('session eval glance reuses the graph summary projection and review-state v
 })
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {
-  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'close'].map((name) => [name, () => name]))
+  const runners = Object.fromEntries(['command', 'eval', 'relaunch', 'stop', 'close'].map((name) => [name, () => name]))
   const session = (status, liveness = 'online', proposal = null, archived = false, lifecycle = status === 'review' || status === 'done' || status === 'close-pending' ? 'awaiting' : 'active') => ({ status, liveness, proposal, archived, lifecycle })
   const names = (...args) => uiCommandsFor(session(...args), runners).map((command) => command.name)
   const typed = (...args) => uiCommandsFor(session(...args), runners).filter((command) => command.typed !== false && command.enabled).map((command) => command.name)
   const tools = (...args) => uiCommandsFor(session(...args), runners).filter((command) => command.button).map(({ name, icon, enabled }) => [name, icon, enabled])
 
-  assert.deepEqual(names('working'), ['command', 'eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(names('review', 'online', 'merge'), ['command', 'eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(names('done', 'online', 'nothing'), ['command', 'eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(names('queued', 'offline'), ['eval', 'merge', 'close'])
-  assert.deepEqual(names('asking', 'offline'), ['eval', 'merge', 'relaunch', 'close'])
-  assert.deepEqual(names('retired', 'offline'), ['eval', 'merge', 'close'])
-  assert.deepEqual(names('review', 'offline', 'merge'), ['eval', 'merge', 'relaunch', 'close'])
+  assert.deepEqual(names('working'), ['command', 'eval', 'stop', 'close'])
+  assert.deepEqual(names('review', 'online', 'merge'), ['command', 'eval', 'stop', 'close'])
+  assert.deepEqual(names('done', 'online', 'nothing'), ['command', 'eval', 'stop', 'close'])
+  assert.deepEqual(names('queued', 'offline'), ['eval', 'close'])
+  assert.deepEqual(names('asking', 'offline'), ['eval', 'relaunch', 'close'])
+  assert.deepEqual(names('retired', 'offline'), ['eval', 'close'])
+  assert.deepEqual(names('review', 'offline', 'merge'), ['eval', 'relaunch', 'close'])
   assert.deepEqual(typed('asking', 'offline'), ['eval', 'close'])
-  assert.deepEqual(typed('review', 'online', 'merge'), ['eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(tools('review', 'online', 'merge'), [['command', 'command', true], ['merge', 'git-merge', true]])
-  assert.deepEqual(tools('done', 'online', 'nothing'), [['command', 'command', true], ['merge', 'git-merge', false]])
-  assert.deepEqual(tools('asking', 'offline'), [['merge', 'git-merge', false], ['relaunch', 'rotate-ccw', true]])
-  assert.equal(mergeAvailability(session('review', 'online', 'merge')).enabled, true)
-  assert.equal(mergeAvailability(session('done', 'online', 'nothing')).disabledTitleKey, 'session.cmd.mergeUnavailableNothing')
-  assert.equal(mergeAvailability(session('close-pending', 'online', 'close')).disabledTitleKey, 'session.cmd.mergeUnavailableClose')
-  assert.equal(mergeAvailability(session('working')).disabledTitleKey, 'session.cmd.mergeUnavailableNoProposal')
-  assert.equal(mergeAvailability(session('review', 'offline', 'merge')).disabledTitleKey, 'session.cmd.mergeUnavailableLiveness')
-  // A closed session is always offline and exposes no running-session actions. Its one disabled merge witness
-  // keeps the selected-session toolbar slot stable; recovery remains the only actionable archive control.
-  assert.deepEqual(names('working', 'online', null, true), ['merge'])
-  assert.deepEqual(names('asking', 'offline', null, true), ['merge'])
-  assert.equal(mergeAvailability(session('review', 'online', 'merge', true)).disabledTitleKey, 'session.cmd.mergeUnavailableArchived')
+  assert.deepEqual(typed('review', 'online', 'merge'), ['eval', 'stop', 'close'])
+  assert.deepEqual(tools('review', 'online', 'merge'), [['command', 'command', true]])
+  assert.deepEqual(tools('done', 'online', 'nothing'), [['command', 'command', true]])
+  assert.deepEqual(tools('asking', 'offline'), [['relaunch', 'rotate-ccw', true]])
+  assert.deepEqual(names('working', 'online', null, true), [])
+  assert.deepEqual(names('asking', 'offline', null, true), [])
+  assert.equal(UI_COMMANDS.some((command) => command.name === 'merge'), false)
   assert.equal(UI_COMMANDS.some((command) => command.name === 'archive' || command.name === 'unarchive'), false)
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
@@ -242,10 +237,21 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.match(source, /uiCmds\.filter\(\(command\) => command\.button[\s\S]*?\.map/)
   assert.match(source, /disabledReason: command\.enabled \? undefined : t\(command\.disabledTitleKey\)/)
   assert.match(source, /<SessionDocumentActions document=\{documentKey\} actions=\{documentActions\} \/>/)
-  assert.match(css, /\.document-action-button:disabled\s*\{[^}]*cursor:\s*not-allowed;/)
-  assert.match(en, /mergeUnavailableNothing:.*done --propose nothing/)
-  assert.match(zh, /mergeUnavailableNoProposal:.*done --propose merge/)
-  assert.match(icons, /command:\s*\{[\s\S]*keyboard:\s*\{[\s\S]*'git-merge':\s*\{[\s\S]*'rotate-ccw':\s*\{/)
+  assert.doesNotMatch(source, /const mergeSession|merge:\s*mergeSession/)
+  assert.doesNotMatch(en, /mergeUnavailable/)
+  assert.doesNotMatch(zh, /mergeUnavailable/)
+  assert.match(icons, /command:\s*\{[\s\S]*keyboard:\s*\{[\s\S]*'rotate-ccw':\s*\{/)
+})
+
+test('merge is one present plugin on both the command and skill surfaces', () => {
+  for (const body of [mergePlugin, mergeTemplate]) {
+    assert.match(body, /surface: skill, command/)
+    assert.match(body, /git merge-base --is-ancestor/)
+    assert.match(body, /--no-ff/)
+    assert.match(body, /Push the source-of-truth branch only after/)
+    assert.match(body, /do not call `spex session merge \.` recursively/)
+  }
+  assert.equal(mergePlugin, mergeTemplate)
 })
 
 // THE SESSION'S ONE MEASUREMENT DOOR. The console mounts no eval surface of its own ([[session-console]]),
@@ -271,11 +277,11 @@ test('the session eval door is a registered document action, a real anchor, and 
 
 test('Command Box orders board, preset, then harness commands and deduplicates by precedence', () => {
   const board = [{ name: 'close', ui: true }]
-  const presets = [{ name: 'rename', desc: 'Rename this session' }, { name: 'close', desc: 'Wrong twin' }]
+  const presets = [{ name: 'merge', desc: 'Land this session' }, { name: 'rename', desc: 'Rename this session' }, { name: 'close', desc: 'Wrong twin' }]
   const harness = [{ name: 'rename', description: 'Harness rename' }, { name: 'help', source: 'built-in' }]
   const commands = inboxCommands(board, presets, harness)
 
-  assert.deepEqual(commands.map((command) => command.name), ['close', 'rename', 'help'])
+  assert.deepEqual(commands.map((command) => command.name), ['close', 'merge', 'rename', 'help'])
   assert.equal(commands[1].source, 'preset')
   assert.match(source, /inboxCommands\(ui, commandPresets, slashCmds\)/)
 })
@@ -287,7 +293,7 @@ test('document-actions slot is compact and owns no identity track', () => {
   assert.match(css, /\.document-action-menu\s*\{[^}]*position:\s*absolute;/s)
   assert.doesNotMatch(css, /\.si-identity|\.si-th-name|\.si-session-status|\.si-session-live/)
   assert.doesNotMatch(css, /\.si-tabbar\s*\{|\.si-tool\s*\{/)
-  assert.match(css, /\.si-list\s*\{|\.si-board-scroll\s*\{/)
+  assert.match(css, /\.si-list\s*\{|\.si-session-scroll\s*\{/)
 })
 
 assert.ok(here.endsWith('/src/'))

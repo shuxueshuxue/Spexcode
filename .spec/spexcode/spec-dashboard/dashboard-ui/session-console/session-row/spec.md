@@ -58,9 +58,15 @@ owns the reparent operation.
 
 **The rails.** `RowLead` draws the tree connectors to the left of a row. A guide array describes the
 ancestry: each entry says whether that column continues below, so the last entry becomes a tee or an
-elbow and the earlier ones become rails or gaps. `RowLead` also reserves the fold control's slot even
-when there is nothing to fold, because a nested button inside the row button would invalidate the
-row's own activation.
+elbow and the earlier ones become rails or gaps. The lead always reserves one fixed fold/count column
+before those ancestry rails whenever the row is nested or expandable. That keeps a subtree count out of
+the rail columns while preserving one predictable indentation step per depth. The fold control is
+positioned in that reserved column, and remains a sibling of the row button because a nested button
+inside the row button would invalidate the row's own activation.
+
+The row's overlay colour is a short, centered vertical bar on the leading edge. It is an independent mark
+rather than an inset border or shadow, so the rounded row wash cannot turn it into a bracket or make it
+touch the fold/count column.
 
 **The fold.** `FoldPod` is the only disclosure a parent gets. It carries its own expanded state, shows
 the subtree count, and is pointer-only — `tabIndex={-1}` and a suppressed mousedown focus, so

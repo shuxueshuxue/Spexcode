@@ -90,8 +90,10 @@ receipt, the record is terminalized as `error`/offline with the complete `queued
 reason and its normal parent-watch transition. Once that receipt exists, a later liveness timeout is only an
 adapter warning: the record keeps its lifecycle, proposal, and native identity, retains the diagnostic for a
 retry or operator inspection, and does not emit a parent-watch transition. On backend restart, an existing
-launch residue is either reattached to a live runtime's readiness observer (without replaying the first turn) or
-handled by the same receipt/deadline distinction.
+launch residue is reattached to a live runtime's readiness observer only while that launch/resume transaction still
+has a durable readiness marker and its witness is not yet online. A row that is already online with a bound identity
+or a live pane is settled: reload clears only the stale marker (and any old readiness diagnostic) and never starts a
+new timer, calls the readiness observer, or writes a warning note.
 
 **A queued launch carries a stable public-backend authority lease.** Its identity is the normalized
 `SPEXCODE_API_URL` the supervisor injects — the stable loopback proxy URL agents use, stripped of credentials,

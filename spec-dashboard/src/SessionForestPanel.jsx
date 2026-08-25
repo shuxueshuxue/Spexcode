@@ -7,6 +7,7 @@ import { expandSessionFolds, setSessionOfflineOpen, toggleSessionFold, useSessio
 import SessionSelectBar from './SessionSelectBar.jsx'
 import { useT } from './i18n/index.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
+import { isHoldGesture } from './tabs.js'
 
 const GHOST_SCALE = 0.75
 
@@ -132,15 +133,18 @@ export default function SessionForestPanel({ sessions = [], activeId, onSelect, 
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
       ) : (
         <div className="si-toprow">
+          {/* the two doors read as sidebar rows, not as boxed buttons: New carries its word, Search is one
+              quiet glyph at the end; both keep their class names for the surfaces that reach them */}
           <button type="button" className={`si-pill new${activeId === 'new' ? ' on' : ''}`} aria-label={t('session.newSessionTitle')} onClick={() => onSelect?.('new')}>
-            <span className="si-pill-glyph"><Icon name="plus" size={15} /></span>
+            <span className="si-pill-glyph"><Icon name="plus" size={14} /></span>
+            <span className="si-pill-label">{t('session.newSessionTitle')}</span>
           </button>
-          <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} onClick={onSearch}>
-            <span className="si-pill-glyph"><Icon name="search" size={15} /></span>
+          <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} data-tip={t('session.searchTitle')} onClick={onSearch}>
+            <span className="si-pill-glyph"><Icon name="search" size={14} /></span>
           </button>
         </div>
       )}
-      <div className="si-board-scroll" data-session-board-scroll>
+      <div className="si-session-scroll" data-session-scroll>
         {rootDrop && <div className={`si-root-drop${drag.target === null ? ' on' : ''}`} data-session-root-drop data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
           <Icon name="corner-up-left" size={14} />
           <span>{t('session.rootDrop')}</span>
@@ -157,7 +161,12 @@ export default function SessionForestPanel({ sessions = [], activeId, onSelect, 
               'data-sid': session.id,
               'aria-grabbed': drag?.id === session.id || undefined,
               onMouseDown: (event) => startRowDrag(event, session),
-              onClick: () => selecting ? togglePick(session.id) : onSelect?.(session.id),
+              // The row owes [[tab-strip]] its two claimed gestures like every other surface that lists a
+              // workspace object: a plain click reads the session in the current slot, ctrl/⌘ or a
+              // double-click holds it as its own tab. Selection mode claims the click for picking instead,
+              // so neither gesture fires while the reader is choosing rows.
+              onClick: (event) => selecting ? togglePick(session.id) : onSelect?.(session.id, { hold: isHoldGesture(event) }),
+              onDoubleClick: () => { if (!selecting) onSelect?.(session.id, { hold: true }) },
               onContextMenu: (event) => {
                 event.preventDefault()
                 event.stopPropagation()

@@ -85,7 +85,9 @@ test('resource faces are URL values, never persisted base preferences', () => {
 test('Settings exposes the default surface as a segmented preference', () => {
   assert.match(settings, /getDefaultSessionSurface/)
   assert.match(settings, /setDefaultSessionSurface/)
-  assert.match(settings, /className="set-terminal-surface"/)
+  // the preference is one of the page's segmented controls, named by its row label
+  assert.match(settings, /<Segmented label=\{t\('settings\.defaultSessionSurface'\)\} value=\{defaultSessionSurface\}/)
+  assert.match(settings, /className="set-seg" role="group"/)
   assert.match(settings, /SESSION_SURFACE_TERMINAL/)
   assert.match(settings, /SESSION_SURFACE_CONVERSATION/)
 })

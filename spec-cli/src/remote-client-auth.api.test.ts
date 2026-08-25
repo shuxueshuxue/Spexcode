@@ -36,14 +36,18 @@ function writeTarget(home: string): string {
   return dir
 }
 
-function timelineText(dir: string): string {
+async function timelineText(dir: string, home: string): Promise<string> {
   const legacy = join(dir, 'timeline.ndjson')
   const segments = join(dir, 'timeline')
   const files = [
     ...(existsSync(legacy) ? [legacy] : []),
     ...(existsSync(segments) ? readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)) : []),
   ]
-  return files.map((path) => readFileSync(path, 'utf8')).join('')
+  if (files.length) return files.map((path) => readFileSync(path, 'utf8')).join('')
+  const { openProjectSessionApplication } = await import('@spexcode/session-application')
+  const application = openProjectSessionApplication({ databasePath: join(home, 'sessions.sqlite'), locality: () => {} })
+  try { return application.readMessageHistory(TARGET).map((message) => Buffer.from(message.body).toString('utf8')).join('\n') }
+  finally { application.close() }
 }
 
 async function freePort(): Promise<number> {
@@ -112,10 +116,16 @@ function startPasswordGateway(port: number, upstream: number, distDir: string, t
 test('credentialed remote CLI logs into a password-gated self-signed gateway and sends once', { timeout: 60_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-remote-auth-'))
   const targetDir = writeTarget(home)
+  const { migrateJsonSessionRecords } = await import('@spexcode/session-application')
+  migrateJsonSessionRecords({
+    databasePath: join(home, 'sessions.sqlite'),
+    recordsRoot: dirname(targetDir),
+    locality: () => {},
+  })
   const port = await freePort()
   const upstream = await freePort()
   const password = 'gate-pass'
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await freePort()) }
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'), SPEXCODE_API_URL: '', PORT: String(await freePort()) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID', 'SPEXCODE_PASSWORD']) delete env[key]
   const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(upstream)], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let log = ''
@@ -156,7 +166,7 @@ test('credentialed remote CLI logs into a password-gated self-signed gateway and
     const sent = await runCli(['session', 'send', TARGET, 'credentialed remote message', '--api', api, '--insecure', '--password', password], env)
     assert.equal(sent.code, 0, sent.err)
     assert.equal(sent.out, 'sent\n')
-    assert.match(timelineText(targetDir), /credentialed remote message/)
+    assert.match(await timelineText(targetDir, home), /credentialed remote message/)
 
     const viaEnvironment = await runCli(['session', 'ls', '--api', api, '--insecure', '--json'], { ...env, SPEXCODE_PASSWORD: password })
     assert.equal(viaEnvironment.code, 0, viaEnvironment.err)

@@ -68,7 +68,7 @@ const optionsOf = (pageData, key, allLabel, labelValue = (value) => value) => (p
   label: option.value === '' ? allLabel : labelValue(option.value),
 }))
 
-export default function EvalsGroup({ pageData, loading = false, sessions = [], queryText = '', onQueryText, hrefFor, notice = null, leading = null, error = null, empty = null, pagination = null }) {
+export default function EvalsGroup({ pageData, loading = false, sessions = [], queryText = '', onQueryText, hrefFor, leading = null, error = null, empty = null, pagination = null }) {
   const t = useT()
   const text = String(queryText ?? '').trim() || EVAL_QUERY_DEFAULT
   // every control is a BUILDER over the committed text: token surgery, then one history PUSH.
@@ -134,7 +134,6 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
 
   return (
     <ListPage
-      notice={notice}
       leading={leading}
       error={error}
       loading={loading}

@@ -63,8 +63,6 @@ export function useDocumentActions() {
   return useContext(DocumentActionState)?.actions || new Map()
 }
 
-export const documentActionKey = actionKey
-
 // ---------------------------------------------------------------------------------------------------
 
 // THE DOCUMENT'S OWN NAME, for chrome that has to draw a document it is not rendering. [[tab-strip]] labels

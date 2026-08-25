@@ -28,10 +28,11 @@ disclosure control and scrolls with its list, so the dock is still exactly one b
 open, both, or neither.
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
-projection it shows and whether it exists at all. A session document belongs with the session list; a node
-or a governed file belongs with the explorer. **Bare evals, issues and settings boards have no sidebar,
-while their object details retain the dock.** A bare sessions route is not a session document and starts
-with explorer on a cold workspace. Projection selection is secondary state: graph and sessions route links
+projection it shows and whether it exists at all. A node or a governed file belongs with the explorer.
+**Bare evals, issues and settings boards have no sidebar, while their object details retain the dock.** The
+Sessions route mounts no finding dock: the Sessions document draws its own forest sidebar
+([[session-console]]), and that forest folds from the same rail control through the same open/closed state,
+so the reader has one fold rather than two. Projection selection is secondary state: graph and sessions route links
 may select explorer or sessions, but the rail light remains route-only. The dedicated mirrored rail panel
 control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:

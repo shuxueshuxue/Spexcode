@@ -8,6 +8,16 @@ const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 const views = readFileSync(new URL('./views.jsx', import.meta.url), 'utf8')
 const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
+const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
+const fileTree = readFileSync(new URL('./FileTree.jsx', import.meta.url), 'utf8')
+const forest = readFileSync(new URL('./SessionForestPanel.jsx', import.meta.url), 'utf8')
+const sessionsView = readFileSync(new URL('./SessionsView.jsx', import.meta.url), 'utf8')
+const sessionMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
+const palette = readFileSync(new URL('./SpecSearch.jsx', import.meta.url), 'utf8')
+const keymap = readFileSync(new URL('./keymap.js', import.meta.url), 'utf8')
+const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
+const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
@@ -55,12 +65,13 @@ test('resource tabs name the resource only, without leaking the owning session t
   assert.doesNotMatch(source, /return `\$\{title\} · \$\{resource\?\.label \|\| key\}`/)
 })
 
-test('resident review tabs share the workspace strip while Issues removes the activity rail', () => {
-  // Evals, Issues, and Settings are resident tabs. Issues is the focused full-width reading surface; its
-  // detail still has the shared strip, while the activity rail is intentionally omitted.
+test('resident review tabs share the workspace strip and every board keeps the activity rail', () => {
+  // Evals, Issues, and Settings are resident tabs. Issues is the focused reading surface with no workspace
+  // dock, but the rail — the top-level board switch — never disappears under any board.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /page !== 'issues' && <SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{page === 'sessions'\} \/>/)
+  assert.match(shell, /<SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
+  assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
   assert.match(shell, /if \(page === 'issues' \|\| \(page === 'evals' && param == null\)\) return 'none'/)
 })
 
@@ -90,7 +101,60 @@ test('left dock and right context controls use distinct semantic glyphs', () => 
 test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {
   const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
   assert.match(dock, /<IconButton icon="plus" size=\{15\}[\s\S]*className="dock-head-act dock-head-act-new"/)
-  assert.match(css, /\.dock-head-act:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--blue\)/)
+  // keyboard focus is the one shared ring ([[typography]]); the door hand-writes no outline of its own
+  assert.match(css, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/)
+  assert.doesNotMatch(css, /\.dock-head-act(?:-new)?:focus-visible\s*\{[^}]*outline:/)
   assert.match(css, /\.dock-head-act-new\s*\{[\s\S]*width:\s*24px; height:\s*24px;[\s\S]*background:\s*transparent;[\s\S]*border:\s*1px solid color-mix\(in srgb, var\(--blue\) 72%, var\(--line\)\);[\s\S]*border-radius:\s*var\(--radius\)/)
-  assert.match(css, /\.dock-head-act-new:focus-visible\s*\{[^}]*outline-offset:\s*2px;/)
+})
+
+// The strip's law says a tab is born from ctrl/⌘-click, a double-click, or a document's own explicit
+// "open in a new tab" action. A law each surface re-implements is a law each surface can quietly drop —
+// which is what happened: the finding dock held, the Sessions page it was projecting replaced instead.
+
+test('the hold gesture is ONE predicate every pointer row surface asks', () => {
+  assert.match(tabs, /export const isHoldGesture = \(event\) => event\.button === 0 && !event\.shiftKey && !event\.altKey/)
+  assert.match(tabs, /export function holdAnchor\(event, href\) \{\n  if \(!isHoldGesture\(event\)\) return false/)
+  for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest], ['SpecSearch', palette]]) {
+    assert.match(src, /isHoldGesture\(/, `${name} does not ask the shared hold predicate`)
+  }
+  for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest]]) {
+    assert.doesNotMatch(src, /ctrlKey \|\| \w+\.metaKey/, `${name} still hand-rolls a pointer modifier test`)
+  }
+})
+
+test('holding an address and writing its route are separable halves', () => {
+  assert.match(tabs, /export function markTabHold\(page, param = null, query = null\)/)
+  assert.match(tabs, /export function pinTab\(page, param = null, query = null\) \{\n  markTabHold\(page, param, query\)\n  navigate\(page, param, \{ query \}\)/)
+  // both hold branches record the same pair, so a reload's normalization cannot demote an explicit hold
+  assert.match(tabs, /\{ \.\.\.tab, pinned: true, held: true \}/)
+})
+
+test('a Sessions-page session row keeps both claimed pointer gestures', () => {
+  assert.match(forest, /onClick: \(event\) => selecting \? togglePick\(session\.id\) : onSelect\?\.\(session\.id, \{ hold: isHoldGesture\(event\) \}\)/)
+  assert.match(forest, /onDoubleClick: \(\) => \{ if \(!selecting\) onSelect\?\.\(session\.id, \{ hold: true \}\) \}/)
+  // the hold is marked on the workspace, while the address itself is still written through the view's scope
+  assert.match(sessionsView, /markTabHold\(route\.page, route\.param, route\.query\)/)
+  assert.match(sessionsView, /scope\.open\(route\)/)
+})
+
+test('the session row menu carries the explicit open-in-a-new-tab action', () => {
+  assert.match(sessionMenu, /pinTab\('sessions', id\)/)
+  assert.match(sessionMenu, /ContextMenuItem icon="plus" onClick=\{openInNewTab\}>\{t\('tabs\.openInNewTab'\)\}/)
+})
+
+test('the palette holds by pointer and by its keyboard twin', () => {
+  assert.match(palette, /const pick = \(e, hold = false\) => \{ if \(e\) \{ onPick\(e, \{ hold \}\); onClose\(\) \} \}/)
+  assert.match(palette, /pick\(results\[sel\], e\.ctrlKey \|\| e\.metaKey\)/)
+  assert.match(palette, /onClick=\{\(event\) => pick\(e, isHoldGesture\(event\)\)\}/)
+  assert.match(shell, /if \(!options\?\.hold\) return navigateAddress\(hit\?\.address\)/)
+  assert.match(shell, /pinTab\(held\.page, held\.param, held\.query\)/)
+})
+
+test('holding is reachable without a pointer, from the one binding registry', () => {
+  assert.match(keymap, /id: 'shell\.tabHold',\s+keys: \['Alt\+Shift\+KeyP'\]/)
+  assert.match(shell, /firesEvent\('shell\.tabHold', event\)\) \{ event\.preventDefault\(\); runTabCommand\('hold'\)/)
+  assert.match(tabs, /hold: \(\) => \{/)
+  for (const [name, dict] of [['en', en], ['zh', zh]]) {
+    assert.match(dict, /tabHold: '/, `${name} has no legend line for the hold chord`)
+  }
 })

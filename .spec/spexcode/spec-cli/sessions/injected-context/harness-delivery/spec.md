@@ -74,11 +74,14 @@ plugin node. This replaces the launch-time
   (never a checkout root), since a harness may nest its shim a level below its home. For a linked Codex
   worktree, the root checkout owns the executable `.codex/hooks.json` dispatcher. The worktree's
   `.codex/hooks.json` is an empty `{ "hooks": {} }` anchor only: Codex needs the project layer anchor, but
-  parsing a second dispatcher there would execute every PreToolUse handler twice. Claude uses the same
-  single-owner rule when the worktree is nested under the main checkout: the root `.claude/settings.json`
-  is inherited by that path, so a generated sibling settings file is retired and not recreated. A worktree
-  outside the checkout keeps its own Claude settings. A settings file with user keys or hooks is never
-  removed; only an exact SpexCode-only dispatcher file is eligible for this one-time migration. The shared
+  parsing a second dispatcher there would execute every PreToolUse handler twice. Claude is the opposite
+  case: it loads project settings from the session's cwd only (measured on Claude Code 2.1.241 — a hook
+  configured solely in the main checkout never fires inside a nested linked worktree, and a worktree's
+  generated settings file is picked up by a running session without a restart), so every worktree carries
+  its own generated `.claude/settings.json`, and a session launched at the root fires the root's, never both.
+  Retiring the nested shim in favour of the root silently disabled every Claude lifecycle hook (mark-active,
+  stop-gate, the SessionStart runtime binding) for nested sessions. A settings file with user keys or hooks
+  is merged, never replaced. The shared
   Codex project shim always points at the main checkout's `dispatch.sh` and `spex.mjs`, even when materialize
   is invoked from a linked worktree; a worktree's CLI may only write its empty anchor and tree-local artifacts,
   never replace the shared root hook owner. In a throwaway or package-installed project where the main checkout

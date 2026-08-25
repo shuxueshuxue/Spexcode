@@ -13,6 +13,11 @@ related:
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
+  - spec-dashboard/src/SessionForestPanel.jsx
+  - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-dashboard/src/SessionsView.jsx
+  - spec-dashboard/src/SpecSearch.jsx
+  - spec-dashboard/src/keymap.js
   - spec-dashboard/src/route.js
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
@@ -111,14 +116,47 @@ why the old fence was buying safety that was never at risk.
 | plain click / plain navigation | that page kind's slot takes the address (or one is opened if none exists) |
 | ctrl/⌘-click | a new pinned tab |
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
+| ⌘/ctrl+Enter (the palette) | the highlighted row opens already held — the pointer gesture's keyboard twin |
+| `shell.tabHold` | hold the tab already showing; the pointer names an address, a keyboard has only the current one |
 | close | that tab only; the slot is nothing special to close |
 
-**Closing hands the workspace over by ONE rule, not per-kind branches** (`closeDestination`): the nearest
-remaining tab of the same kind (`tabKind`) inherits — right beating left at equal distance — then the
-nearest remaining tab of any kind; a closed file can no longer conjure the graph while other tabs remain,
-and a closed session no longer skips surviving non-session tabs. Only an emptied strip leaves the
-workspace, each kind to its standing no-tab destination: spec/file documents to the graph, a published
-resource to the session launch page, everything else to the explicit `#/empty` workspace.
+**THE LAW IS ONE MECHANISM, NOT A HABIT EACH SURFACE KEEPS.** `isHoldGesture` is the single predicate every
+row surface asks of a pointer event, and `markTabHold`/`pinTab` are the single way an address becomes held.
+This is not tidiness: while each surface hand-rolled `ctrlKey || metaKey`, the law held wherever someone had
+remembered it and was silently absent everywhere else — the finding dock held a session while the Sessions
+page projecting the same forest replaced its slot, and the palette, which is where a reader arrives without a
+pointer at all, had no hold in either hand. A surface may still decide the gesture does not apply (a session
+row in select mode claims the click for picking); it may not decide what the gesture MEANS.
+
+**Every surface that lists a workspace object owes the law both halves**: the pointer gestures, and the
+explicit action in whatever menu that surface opens over a row. The finding dock's session rows, the Sessions
+page's own forest rows, the Explorer tree's node and file rows, the review lists' anchor rows, and the search
+palette's rows all carry the gestures; the session row menu and the review row menu carry the explicit
+"open in a new tab" item. A pointer gesture is invisible until someone already knows it, so a surface with a
+row menu and no such item is a surface where the capability exists and cannot be found.
+
+**Holding needs a keyboard hand too.** The pointer gestures each name the address under the cursor; a
+keyboard has no such target, so `shell.tabHold` holds the document already showing — the reader who navigated
+by address or by chord can stop ordinary browsing from replacing what they are reading, without reaching for
+a double-click. Its chord lives in the one binding registry, so the legend and the settings editor render it
+without a second copy. Both hold branches record the same `pinned`/`held` pair, so an explicit hold survives
+the next reload's normalization rather than being demoted back to a slot.
+
+**A resident board address has no second tab to hold.** Spec, Evals, Issues and Settings details canonicalize
+to one top-level tab identity, so ctrl/⌘-click on a spec row holds that ONE Spec tab at that node's address —
+it cannot, and must not claim to, open a second spec document beside the first. Surfaces that act on those
+addresses therefore offer an open action, never an "open in a new tab" that would promise a tab the model
+does not mint. Sessions and files are the object kinds a second tab is real for.
+
+**Closing hands the workspace over by ONE rule, not per-kind branches** (`closeDestination`): the reader
+goes back where they came from, same kind first. The strip keeps a focus history — the active tab's key,
+most recent first, in memory for the life of the page — and the most recently focused surviving tab of the
+closed tab's kind (`tabKind`) inherits; a kind whose survivors were never focused since load falls back to
+position, the nearest by distance from the closed slot with right beating left at a tie. With no same-kind
+survivor the same two steps run over every kind, so a closed file can no longer conjure the graph while
+other tabs remain, and a closed session no longer skips surviving non-session tabs. Only an emptied strip
+leaves the workspace, each kind to its standing no-tab destination: spec/file documents to the graph, a
+published resource to the session launch page, everything else to the explicit `#/empty` workspace.
 
 **A row that is a real anchor gets the gesture, not a rewrite.** Finding surfaces increasingly render their
 rows as real `<a href>` — the review lists, the spec context panels, the file tree — because that is what
@@ -222,15 +260,9 @@ of drifting to the middle of a band that grew.
 open documents as chrome. The budget gate enters every state with a working set deep enough to wrap and
 prints the row count beside the band count, so the claim is measured rather than asserted.
 
-**Closing hands focus to the right-hand neighbour, else the left, within the tab's kind.** That is the rule every
-editor uses, for the reason every editor uses it: the reader's eye is already where the closed tab was. Session
-tabs additionally classify their fallback so a session can never hand focus to the graph.
-
-**Closing hands focus back by document kind.** A spec or file tab closes to the graph backdrop, preserving the
-existing reading path. A session tab never falls to graph: the nearest remaining session tab on its right wins,
-then the nearest session on its left; when none remains, close lands on the explicit empty workspace `#/empty`.
-This is the regression guard for the human's report: "我关掉一个 session 的 tab…直接 focus 到了 node
-graph 上面…太诡异了". Other document kinds keep the ordinary neighbour rule. `empty` is an ADDRESS so the state can be landed on,
+**Closing never hands a session to the graph.** The one closing rule above is also the regression guard for the
+human's report: "我关掉一个 session 的 tab…直接 focus 到了 node graph 上面…太诡异了" — a session tab's
+heirs are the surviving tabs, and its no-tab destination is the empty workspace. `empty` is an ADDRESS so the state can be landed on,
 reloaded and left, but it is not a document ([[view-registry]]): a tab for it would be the one address that
 contradicts the strip it sits in. A fresh load with no tabs opens `#/sessions`, because starting with nothing held
 is not the same event as putting your last document down.

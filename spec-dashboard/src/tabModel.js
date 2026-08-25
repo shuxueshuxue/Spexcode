@@ -117,14 +117,24 @@ export function moveTab(tabs, key, before = null) {
   return [...rest.slice(0, to), tabs[from], ...rest.slice(to)]
 }
 
-// WHERE CLOSING LANDS — one selector, no per-kind branches while tabs remain. From the closed position
-// (remaining[index] is the old right neighbor), the nearest remaining tab of the SAME kind (`tabKind`)
-// inherits, right beating left at equal distance; with no same-kind survivor the nearest remaining tab of
-// any kind inherits by the same walk. Only an emptied strip returns an explicit no-tab destination, and
-// that fallback keeps each kind's standing contract: spec/file documents return to the graph, a published
-// resource returns to the session launch page, everything else lands on the explicit #/empty workspace.
-export function closeDestination(tab, remaining, index) {
+// WHERE CLOSING LANDS — one selector, no per-kind branches while tabs remain. `recent` is the strip's focus
+// history, most recent first, as tab keys. Same kind first: the most recently focused surviving tab of the
+// closed tab's kind (`tabKind`) inherits — the reader is returned to where they came from — and a kind
+// whose survivors were never focused since load falls back to position, the nearest by distance from the
+// closed slot with right beating left at a tie (remaining[index] is the old right neighbor). With no
+// same-kind survivor the same two steps run over every kind. Only an emptied strip returns an explicit
+// no-tab destination, and that fallback keeps each kind's standing contract: spec/file documents return to
+// the graph, a published resource returns to the session launch page, everything else lands on the
+// explicit #/empty workspace.
+export function closeDestination(tab, remaining, index, recent = []) {
   const kind = tabKind(tabRoute(tab))
+  const latest = (match) => {
+    for (const key of recent) {
+      const hit = remaining.find((t) => tabKey(t) === key)
+      if (hit && match(hit)) return hit
+    }
+    return null
+  }
   const nearest = (match) => {
     for (let step = 0; step < remaining.length; step += 1) {
       const right = remaining[index + step]
@@ -134,7 +144,9 @@ export function closeDestination(tab, remaining, index) {
     }
     return null
   }
-  const heir = nearest((t) => tabKind(t) === kind) || nearest(() => true)
+  const sameKind = (t) => tabKind(t) === kind
+  const anyKind = () => true
+  const heir = latest(sameKind) || nearest(sameKind) || latest(anyKind) || nearest(anyKind)
   if (heir) return heir
   if (isResourceRoute(tab)) return { page: 'sessions', param: 'new', query: null }
   if (tab?.page === 'spec' || tab?.page === 'file') return { page: 'graph', param: null, query: null }

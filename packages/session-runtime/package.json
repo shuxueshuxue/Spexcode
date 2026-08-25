@@ -1,7 +1,7 @@
 {
   "name": "@spexcode/session-runtime",
   "version": "0.6.7",
-  "private": true,
+  "publishConfig": { "access": "public" },
   "type": "module",
   "description": "Adopter-owned bindings between protocol addresses and native runtime identities.",
   "files": ["dist"],
@@ -12,6 +12,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "node ../../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../../scripts/release-publish.mjs --from-package-publish",
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": { "@spexcode/session-protocol": "0.6.7" },

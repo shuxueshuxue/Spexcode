@@ -69,7 +69,7 @@ export default {
   dockSessions: {
     new: '新建会话',
     archive: '已归档会话',
-    rowTip: '打开 · ctrl+点击固定为标签 · alt+点击把图锁定到该会话',
+    rowTip: '打开 · ctrl+点击或双击固定为标签 · alt+点击把图锁定到该会话',
   },
   sessionPicker: {
     label: '选择会话',
@@ -473,6 +473,7 @@ export default {
       tabClose: '关闭当前页签',
       tabNext: '选择下一个页签',
       tabPrevious: '选择上一个页签',
+      tabHold: '固定当前页签，普通跳转不再替换它',
       tabSplit: '将当前页签送入分屏',
       commandBox: '开关会话 Command Box',
     },
@@ -576,8 +577,8 @@ export default {
     statusLabel: '状态：',
     versionLabel: '版本：',
     lastEditedBy: '最后编辑者：',
-    governs: '// 管辖',
-    proseNode: '// 无管辖文件 · 纯文档节点',
+    governs: '管辖',
+    proseNode: '无管辖文件 · 纯文档节点',
     rawTitle: '原始来源',
     rawOwner: '人工',
     rawNote: '极少改动 · 需要审批',
@@ -702,8 +703,8 @@ export default {
   session: {
     // 会话文档上的省略号：这个面上只有它能走到重命名 / tmux attach / 锁定到图谱，所以直接把内容写出来。
     menuLabel: '会话操作 —— 重命名、attach、锁定到图谱、关闭',
-    opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
-    lockTitle: '右键打开会话操作，包括锁定到图谱',
+    opsTitle: '此会话正在改动的节点 —— ctrl+点击或双击固定为标签 · 右键打开会话操作',
+    lockTitle: 'ctrl+点击或双击固定为标签 · 右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话',
     searchTitle: '搜索',
@@ -835,7 +836,6 @@ export default {
     relaunchTitle: '重新启动并恢复此会话',
     offlineReadOnly: '⏻ agent 已离线 · 内容只读',
     archivedReadOnly: '▤ 已归档 · 内容只读',
-    merge: '合并',
     relaunchResume: '⏵ 重新启动并恢复',
     merges: ({ n }) => `已合并 ×${n}`,
     mergesTitle: '合并到 main 的次数',
@@ -869,18 +869,10 @@ export default {
     attachDismiss: '隐藏此附件状态',
     codeSelectionAttachments: '代码选区附件',
     removeCodeSelection: '移除代码选区',
-    // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。
-    // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
+    // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。/merge 等智能体工作流
+    // 来自 plugin preset，不在 Dashboard 内维护第二份标签或可用性文案。
     cmd: {
       evalDesc: '切换到此会话的 Evals 页 —— 受影响场景与实测证据',
-      mergeTitle: '将此待审查提案合并到 main',
-      mergeDesc: '将此待审查提案合并到 main',
-      mergeUnavailableArchived: '不能合并：该会话已归档',
-      mergeUnavailableNoProposal: '不能合并：此会话尚未提出合并；只有 done --propose merge 才会提出可点击的合并',
-      mergeUnavailableNothing: '不能合并：done --propose nothing 表示已完成但未提出合并',
-      mergeUnavailableClose: '不能合并：done --propose close 表示等待关闭，不是合并',
-      mergeUnavailableLifecycle: '不能合并：该合并提案已不处于待审查状态',
-      mergeUnavailableLiveness: '不能合并：该会话未在线',
       stopTitle: '停止此会话（结束智能体，保留工作树 —— 可恢复）',
       stopDesc: '停止 —— 结束智能体与 tmux，但保留工作树，之后可恢复',
       closeTitle: '关闭此会话（移除工作树）',
@@ -892,6 +884,7 @@ export default {
     title: '设置',
     close: '关闭（esc）',
     secLanguage: '语言',
+    uiLanguage: '界面语言',
     secTheme: '主题',
     secTerminal: '终端',
     defaultSessionSurface: '默认会话界面',

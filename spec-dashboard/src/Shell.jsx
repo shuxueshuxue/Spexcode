@@ -7,10 +7,10 @@ import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate, routeHash } from './route.js'
-import { navigateAddress } from './address.js'
+import { navigateAddress, routeAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { preloadView, viewFor, viewRouteContract } from './views.jsx'
+import { viewFor, viewRouteContract } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
@@ -23,7 +23,7 @@ import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { useEscLayer } from './escStack.js'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { runTabCommand } from './tabs.js'
+import { pinTab, runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -381,7 +381,7 @@ function BoardStatus({ specs, sessions, page }) {
     : null)
 
   useStatusItem({
-    id: 'board-nodes', side: 'right', priority: 41,
+    id: 'ledger-nodes', side: 'right', priority: 41,
     tooltip: t('statusBar.nodes', { n: tally.total }),
     node: (
       <span className="sb-tally">
@@ -404,7 +404,7 @@ function BoardStatus({ specs, sessions, page }) {
     ),
   })
   useStatusItem({
-    id: 'board-evals', side: 'right', priority: 42,
+    id: 'ledger-evals', side: 'right', priority: 42,
     kind: fail > 0 ? 'error' : undefined,
     tooltip: t('statusBar.evals', tally.scoreCount),
     node: (
@@ -427,7 +427,7 @@ function BoardStatus({ specs, sessions, page }) {
     ),
   })
   useStatusItem({
-    id: 'board-issues', side: 'right', priority: 43,
+    id: 'ledger-issues', side: 'right', priority: 43,
     tooltip: t('statusBar.issues', { n: tally.issueCount }),
     node: <span className="sb-tally"><BoardStat name="issues" count={tally.issueCount}
       onClick={graphOrBoard(tally.issueIds, 'issues')}
@@ -436,7 +436,7 @@ function BoardStatus({ specs, sessions, page }) {
         : t('statusBar.issues', { n: tally.issueCount })}><Icon name="issue-opened" size={13} /></BoardStat>{stale}</span>,
   })
   useStatusItem({
-    id: 'board-sessions', side: 'right', priority: 44,
+    id: 'ledger-sessions', side: 'right', priority: 44,
     kind: needsYou > 0 ? 'warning' : undefined,
     tooltip: t('statusBar.sessions'),
     node: (
@@ -494,9 +494,6 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const route = useRoute()
   const { page, param, query } = routeOverride || route
   const { specs, sessions, identity, graphOnly } = useBoard()
-  useEffect(() => {
-    if (page === 'graph' && !graphOnly) void preloadView('sessions')
-  }, [page, graphOnly])
   const { notify } = useTransientNotice()
   const previousSessionStatus = useRef(null)
   const needsYou = useMemo(() => (sessions || []).filter((session) => sessionZone(session) === 'need').length, [sessions])
@@ -540,6 +537,10 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // which is what makes it an override rather than a second setting. The effect is keyed on the document,
   // not the address, so switching a session's own face is not a focus change.
   const dockKind = dockFor(page, param)
+  // THE RAIL'S FOLD CONTROL EXISTS WHEREVER THERE IS A SIDEBAR TO FOLD ([[side-nav]]). The shell's dock is
+  // one such sidebar; the Sessions document's own forest is the other and follows the same open/closed
+  // state — so the bare review and settings boards, which have neither, are the only frames without it.
+  const foldable = dockKind !== 'none' || page === 'sessions'
   const documentKey = `${page}/${param ?? ''}`
   // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
   // slides out ([[dock-modes]]). One timer, cleared on reopen; the reader can never end up with a ghost
@@ -604,6 +605,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     if (!graphOnly && firesEvent('shell.tabClose', event)) { event.preventDefault(); runTabCommand('closeActive'); return true }
     if (!graphOnly && firesEvent('shell.tabNext', event)) { event.preventDefault(); runTabCommand('move', 1); return true }
     if (!graphOnly && firesEvent('shell.tabPrevious', event)) { event.preventDefault(); runTabCommand('move', -1); return true }
+    if (!graphOnly && firesEvent('shell.tabHold', event)) { event.preventDefault(); runTabCommand('hold'); return true }
     if (!graphOnly && firesEvent('shell.tabSplit', event)) {
       event.preventDefault(); const active = runTabCommand('active'); if (active) splitTo(active); return true
     }
@@ -662,7 +664,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       <div className="app">
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
-        {page !== 'issues' && <SideBar page={page} needsYou={needsYou} hideDockToggle={page === 'sessions'} />}
+        <SideBar page={page} needsYou={needsYou} hideDockToggle={!foldable} />
         {(dock || closingDock) && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
@@ -692,7 +694,12 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       {palette && (
         <SpecSearch specs={specs} sessions={sessions} boost={palette === 'sessions' ? 'session' : null}
           onClose={closePalette}
-          onPick={(hit) => { closePalette(); navigateAddress(hit?.address) }} />
+          onPick={(hit, options) => {
+            closePalette()
+            if (!options?.hold) return navigateAddress(hit?.address)
+            const held = routeAddress(hit?.address)
+            pinTab(held.page, held.param, held.query)
+          }} />
       )}
       <span className="sr-only">{t('nav.railLabel')}</span>
     </div>

@@ -7,7 +7,7 @@ import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
-import { focusSessionTab, pinTab } from './tabs.js'
+import { focusSessionTab, isHoldGesture, pinTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
 import { Icon, IconButton } from './icons.jsx'
@@ -180,7 +180,7 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
               onMouseDown: (event) => { event.preventDefault(); startRowDrag(event, item.s) },
               onClick: (event) => {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
-                if (event.ctrlKey || event.metaKey) pinTab('sessions', item.s.id)
+                if (isHoldGesture(event)) pinTab('sessions', item.s.id)
                 else focusSessionTab(item.s.id, (route) => navigate(route.page, route.param, { query: route.query }))
               },
               onDoubleClick: () => pinTab('sessions', item.s.id),

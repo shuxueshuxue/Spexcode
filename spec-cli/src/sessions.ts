@@ -67,7 +67,7 @@ export function startWorktreeTrashReaper(): void {
   readdirAsync(dir, { withFileTypes: true }).then((entries) => {
     for (const entry of entries) queueWorktreeTrash(join(dir, entry.name))
   }).catch((error: NodeJS.ErrnoException) => {
-    if (error?.code !== 'ENOENT') console.error(`spex: deferred worktree trash scan failed for ${dir}; retrying next startup: ${error instanceof Error ? error.message : error}`)
+    if (error?.code !== 'ENOENT') console.error(`spex: deferred worktree trash cleanup failed for ${dir}; retrying next startup: ${error instanceof Error ? error.message : error}`)
   })
 }
 
@@ -750,7 +750,7 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       }
       for (const [id, record] of current) {
         if (record.parent === parent) continue
-        application.transitionSession(id, { parentSessionId: parent, reason: 'reparent' })
+        const change = application.transitionSession(id, { parentSessionId: parent, reason: 'reparent' })
         if (record.parent) {
           try { application.detachWatcher(record.parent, id, 'watch:parent') }
           catch (error) {
@@ -765,7 +765,16 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
           catch (error) {
             if (!(error instanceof Error) || !/already exists|duplicate|active topology edge/i.test(error.message)) throw error
           }
-          notify.push({ ...record, parent })
+          // The transition above published to the OLD watcher set. The new supervisor learns the child's current
+          // state here, keyed by that transition's own event so a retried rewrite never sends it twice.
+          const moved = { ...record, parent }
+          application.enqueueMessage(parent, {
+            kind: 'session.prompt.v1',
+            body: Buffer.from(watchMessage(moved), 'utf8'),
+            senderSessionId: id,
+            idempotencyKey: digest(`reparent-snapshot\0${change.event.eventId}`),
+          })
+          notify.push(moved)
         }
       }
     }))
@@ -1673,6 +1682,27 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
   }
 }
 
+function clearReadinessResidueUnlocked(rec: SessRec, clearDiagnostic: boolean): void {
+  const application = configuredSessionApplicationIfCutover()
+  const next = {
+    ...rec,
+    status: 'active' as const,
+    stopped: false,
+    note: clearDiagnostic ? null : rec.note,
+    launchReadinessStartedAt: null,
+  }
+  if (application?.readState(rec.session) && (clearDiagnostic || rec.status !== 'active' || rec.stopped)) {
+    application.transitionSession(rec.session, {
+      status: 'active',
+      proposal: rec.proposal,
+      note: next.note,
+      parentSessionId: rec.parent,
+      recipientSessionIds: [],
+    })
+  }
+  writeRecord(next)
+}
+
 export function canonicalWatchRecipients(
   application: Pick<ProductionSessionApplication, 'topology'>,
   sessionId: string,
@@ -1926,6 +1956,13 @@ async function drainQueueUnlocked(): Promise<void> {
           const priorReason = (rec.note || '').replace(/^queued launch readiness failed:\s*/, '') || 'launch readiness timed out'
           const harness = harnessById(rec.harness || defaultHarness.id)
           const live = await launchReadinessWitnessAlive(session.id, harness, rec)
+          if (live) {
+            await withRecordLock(session.id, async () => {
+              const current = readRecord(session.id)
+              if (current && !current.archived && !current.stopped) clearReadinessResidueUnlocked(current, true)
+            })
+            continue
+          }
           await withRecordLock(session.id, async () => noteQueuedLaunchFailureUnlocked(
             session.id,
             priorReason,
@@ -1939,23 +1976,33 @@ async function drainQueueUnlocked(): Promise<void> {
         // mtime is the only durable age witness available; seed the new field so the same bounded recovery
         // rule applies on this and later restarts.
         if (rec.status === 'active' && !rec.stopped && existsSync(sessionArtifactPath(session.id, 'launch')) && rec.launchReadinessStartedAt == null) {
-          let startedAt = Date.now()
-          try { startedAt = statSync(sessionArtifactPath(session.id, 'launch')).mtimeMs } catch { /* race: observer below will fail loud */ }
-          writeRecord({ ...rec, launchReadinessStartedAt: startedAt })
+          const harness = harnessById(rec.harness || defaultHarness.id)
+          const live = await launchReadinessWitnessAlive(session.id, harness, rec)
+          if (!live) {
+            let startedAt = Date.now()
+            try { startedAt = statSync(sessionArtifactPath(session.id, 'launch')).mtimeMs } catch { /* race: observer below will fail loud */ }
+            writeRecord({ ...rec, launchReadinessStartedAt: startedAt })
+          }
         }
         const refreshed = readRecord(session.id) || rec
         if (refreshed.launchReadinessStartedAt && !refreshed.stopped && !refreshed.archived) {
+          const harness = harnessById(refreshed.harness || defaultHarness.id)
+          const live = await launchReadinessWitnessAlive(session.id, harness, refreshed)
+          if (live) {
+            await withRecordLock(session.id, async () => {
+              const current = readRecord(session.id)
+              if (current && !current.archived && !current.stopped) {
+                clearReadinessResidueUnlocked(current, /^launch readiness warning:/.test(current.note || ''))
+              }
+            })
+            continue
+          }
           launching.add(session.id)
           const remaining = Math.max(0, SOCKET_READY_TIMEOUT_MS - (Date.now() - refreshed.launchReadinessStartedAt))
-          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id), remaining)
+          observeQueuedLaunchReadiness(session.id, harness, remaining)
           continue
         }
         if (rec.status === 'queued') continue
-        if (rec.status === 'active' && !rec.stopped && !rec.archived) {
-          launching.add(session.id)
-          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id))
-          continue
-        }
       }
       // if the liveness probe FAILED (tmux timing out — the overload condition), occupancy is UNKNOWABLE: every
       // session would read window-less and isOccupying would undercount, so the drainer would OVER-launch and pile
@@ -4753,13 +4800,16 @@ export async function drainSession(id: string): Promise<void> {
     // An empty canonical queue is a successful no-op. Do not turn a resume with no owed prompt into a
     // runtime-binding error; require a bound adapter only when there is a message that must be handed over.
     if (application.readPendingMessages(id).length === 0) return
+    const h = harnessById(rec.harness || defaultHarness.id)
     const binding = application.resolveRuntime(id, 'spex-governed')
     if (!binding || binding.status !== 'bound') {
-      // Claude's TUI has no native conversation id to bind. Preserve the legacy rendezvous identity (the
-      // governed tmux session) while the record is missing a harness session id, then acknowledge the same
-      // canonical queue directly. Codex and records with a binding problem remain fail-closed.
-      if (rec.harness === 'claude' && !rec.harnessSessionId) {
-        const h = harnessById(rec.harness || defaultHarness.id)
+      // Leaf adapters own their per-session controller and can deliver without a shared native identity.
+      // Preserve the governed transport while that identity is absent, then acknowledge the same canonical
+      // queue directly. Shared adapter runtimes (Codex) remain fail-closed until their exact binding exists.
+      const leafWithoutNativeIdentity = !rec.harnessSessionId && (
+        rec.harness === 'claude' || h.runtimeOwnership === 'leaf'
+      )
+      if (leafWithoutNativeIdentity) {
         await withDeliveryLocks([id], async () => {
           for (;;) {
             const pending = application.readPendingMessages(id)
@@ -4781,7 +4831,6 @@ export async function drainSession(id: string): Promise<void> {
       }
       throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
     }
-    const h = harnessById(rec.harness || defaultHarness.id)
     await withDeliveryLocks([id], async () => {
       for (;;) {
         const pending = application.readPendingMessages(id)
@@ -4804,13 +4853,19 @@ export async function drainSession(id: string): Promise<void> {
   throw new ResourceConflict('session application is unavailable; refusing the legacy delivery path')
 }
 
-function canonicalMessageText(message: { kind: string; body: Uint8Array }, target: SessRec): string {
+// `recipient` is the session this text is delivered TO; a state message speaks about its `sessionId`, the
+// watched subject, and the notice must name that subject — never the reader of the notice.
+export function canonicalMessageText(message: { kind: string; body: Uint8Array }, recipient: SessRec): string {
   if (message.kind === 'session.prompt.v1') return Buffer.from(message.body).toString('utf8')
   if (message.kind === 'session.state.changed.v1') {
     try {
-      const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as Partial<SessRec> & { status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }
-      return watchMessage({ ...target, status: (change.status ?? target.status) as Lifecycle, proposal: change.proposal ?? null, note: change.note ?? null, parent: change.parentSessionId ?? target.parent })
-    } catch { throw new ResourceConflict(`canonical state message for ${target.session} is not valid JSON`) }
+      const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as { sessionId?: string; status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }
+      if (typeof change.sessionId !== 'string' || !change.sessionId) throw new ResourceConflict(`canonical state message delivered to ${recipient.session} names no subject session`)
+      return watchMessage({ ...recipient, session: change.sessionId, status: (change.status ?? recipient.status) as Lifecycle, proposal: change.proposal ?? null, note: change.note ?? null, parent: change.parentSessionId ?? null })
+    } catch (error) {
+      if (error instanceof ResourceConflict) throw error
+      throw new ResourceConflict(`canonical state message for ${recipient.session} is not valid JSON`)
+    }
   }
   throw new ResourceConflict(`canonical message kind ${message.kind} cannot be delivered as session text`)
 }

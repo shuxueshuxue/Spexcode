@@ -35,11 +35,13 @@ Two tokens, and the split between them is by **role**, not by taste.
 It is the one token in the vocabulary a reader may retune, and it can be retuned only because every
 language surface spends the token instead of naming a family — 116 declarations, one line to flip.
 
-**Today `--ui-font` resolves to `var(--mono)`, and that is the default on purpose.** The board was
-converted to a sans stack and the owner judged the result uglier than what it replaced: the terminal
-voice is what the product is supposed to feel like, and numbers and the `Running`/node labels are where
-the loss showed worst. So the default went back. `--ui-font-sans` keeps the sans stack declared and
-ready — it is the value a per-user **Settings** toggle will offer, not a stack in use.
+**`--ui-font` resolves to `var(--mono)` by default, and that default is on purpose.** The board was
+once converted wholesale to a sans stack and the owner judged the result uglier than what it replaced:
+the terminal voice is what the product is supposed to feel like, and numbers and the `Running`/node
+labels are where the loss showed worst. So the default went back. **The voice is a preset's to choose.**
+`--ui-font-sans` is the declared sans stack, and a theme row may resolve `--ui-font` to it — the Notion
+preset does, because a Notion-feel board is a sans board — while every other preset inherits the mono
+default. Choosing a theme is therefore also choosing a voice; no separate font setting exists.
 
 Both are system stacks; no webfont is fetched, so the vocabulary costs nothing to load and degrades to
 whatever the reader's platform has.
@@ -107,9 +109,11 @@ the one surface that is legitimately dark in every theme — and a small `--pape
 leading edge so the plane it sits on is visible beside it. Leading edge only: its other three sides already
 meet chrome that steps for them.
 
-All seven theme presets plus the default carry all three tones as resolved values; `--ground` is each
+All eight theme presets plus the default carry all three tones as resolved values; `--ground` is each
 theme's own deepest surface where its palette has one, and a derived step below `--panel` where it does not.
-A theme that resolved only two of the three would silently collapse the ladder for its readers.
+A theme that resolved only two of the three would silently collapse the ladder for its readers. Each row
+also declares its `color-scheme`, so the browser's own chrome — scrollbars, native pickers — sits on the
+preset's side of the light/dark line instead of the platform's guess.
 
 ## geometry
 
@@ -127,14 +131,41 @@ menus, the floating composer. Everything else sits flat on its ground. Rings dra
 Before it there were a dozen hand-rolled drops between 8px and 64px of blur, three of them in raw `rgba`
 the themes could not re-skin — a dozen different ideas of "above" on one screen.
 
+## interaction
+
+How the board **responds** is vocabulary too, and it is spent through tokens for the same reason colour is:
+a preset should be able to retune the feel of a hover or a selection across every surface at once, and a
+component that hand-writes its own answer takes itself out of that decision.
+
+- **`--wash-hover`** and **`--wash-active`** are the washes a row, a menu item, a quiet button, or a rail
+  entry wears under the pointer and under the press: translucent ink over whatever plane the control sits
+  on, so one token reads correctly on paper, panel, and ground alike. Hover is a wash, never a coloured
+  border — a border that turns blue on hover says "selected" in a vocabulary where blue is the selection.
+- **`--wash-selected`** is the one selection tint: the lit rail entry, the explorer's current row, the
+  list's cursor row, a chosen segment. Selection and hover are different facts and wear different washes.
+- **`--focus-ring`** is the ONE keyboard focus indication, drawn by a single `:focus-visible` rule as an
+  inset shadow so it follows the corner and survives every clipping container. No control writes an
+  outline of its own; the only exceptions are the bare inputs whose container draws the focus state (the
+  query bar, the archive search, the composer), which decline the ring so the reader never sees two.
+- **`--field-bg`** is the bed a text field sits in — paper by default, a soft tint where a preset wants
+  fields to read as recessed.
+
+`:root` derives all of them from the palette, so every preset responds coherently without declaring them;
+a preset with its own idea of feel sets the tokens, never a component rule. The Notion preset is the
+worked example: sans voice, a 4px corner, flat grey washes, a layered popover shadow, and an inset blue
+ring — all of it expressed as token values in one row, and none of it a special mechanism.
+
 ## the gate
 
 `styles.test.mjs` is this body in executable form: it asserts both role tokens exist, that `--ui-font`
-defaults to the mono stack and `--ui-font-sans` stays declared for the future setting, that every
-`font-family` in the sheet names a role token rather than a family and that both roles are still spent
-(collapsing language onto `--mono` would weld the board to one family and leave the toggle nothing to
-flip), that no all-caps or tracked label survives, that exactly three
-weight tokens are in use, that the radius and elevation tokens own their properties, that all eight palettes
-resolve the full ground ladder and the chrome surfaces spend it — and that the chrome rows
-[[ui-state-model]]'s budget refused stay retired at the source. It runs with the unit suite, off the sheet's
-text, so a rule that drifts from this vocabulary fails before a browser is involved.
+defaults to the mono stack and `--ui-font-sans` stays declared for a preset to resolve (the Notion row
+does), that every `font-family` in the sheet names a role token rather than a family and that both roles
+are still spent (collapsing language onto `--mono` would weld the board to one family and leave a preset
+nothing to flip), that no all-caps or tracked label survives, that exactly three weight tokens are in
+use, that the radius and elevation tokens own their properties (a ring drawn as `var(--focus-ring)` is a
+border, not a drop), that all nine palettes resolve the full ground ladder and the chrome surfaces spend
+it, that the interaction tokens are declared on `:root` with the one `:focus-visible` ring rule and no
+hand-written focus outline left in the sheet, that every `var()` the sheet consumes is declared somewhere
+the browser can resolve it — and that the chrome rows [[ui-state-model]]'s budget refused stay retired at
+the source. It runs with the unit suite, off the sheet's text, so a rule that drifts from this vocabulary
+fails before a browser is involved.

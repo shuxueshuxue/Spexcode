@@ -31,14 +31,29 @@ type Run = { code: number | null; stdout: string; stderr: string }
 // `onStderr` fires as the child narrates, so a test can wait for the follow to be REALLY running before it
 // appends the transition it must observe. A timer instead makes the test race its own subject: a follower that
 // starts late sees an already-actionable arrival and correctly refuses to return.
-function startCli(args: string[], env: NodeJS.ProcessEnv, onStderr?: (all: string) => void): Promise<Run> {
-  const child = spawn(process.execPath, [tsxCli, cli, ...args], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
+function startCli(args: string[], env: NodeJS.ProcessEnv, onStderr?: (all: string) => void, cwd = pkgRoot): Promise<Run> {
+  const child = spawn(process.execPath, [tsxCli, cli, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = '', stderr = ''
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; onStderr?.(stderr) })
   return once(child, 'close').then(([code]) => ({ code: code as number | null, stdout, stderr }))
 }
-const runCli = (args: string[], env: NodeJS.ProcessEnv): Promise<Run> => startCli(args, env)
+const runCli = (args: string[], env: NodeJS.ProcessEnv, cwd = pkgRoot): Promise<Run> => startCli(args, env, undefined, cwd)
+
+function reviewFixture(): string {
+  const root = mkdtempSync(join(tmpdir(), 'spex-follow-review-repo-'))
+  execFileSync('git', ['init', '-b', 'main'], { cwd: root, stdio: 'ignore' })
+  execFileSync('git', ['config', 'user.name', 'spex fixture'], { cwd: root })
+  execFileSync('git', ['config', 'user.email', 'spex-fixture@example.invalid'], { cwd: root })
+  writeFileSync(join(root, 'README.md'), 'fixture\n')
+  execFileSync('git', ['add', 'README.md'], { cwd: root })
+  execFileSync('git', ['commit', '-m', 'fixture base'], { cwd: root, stdio: 'ignore' })
+  execFileSync('git', ['switch', '-c', 'node/follow-cli'], { cwd: root, stdio: 'ignore' })
+  writeFileSync(join(root, 'work.txt'), 'ahead\n')
+  execFileSync('git', ['add', 'work.txt'], { cwd: root })
+  execFileSync('git', ['commit', '-m', 'fixture work'], { cwd: root, stdio: 'ignore' })
+  return root
+}
 
 async function refusedPort(): Promise<number> {
   const s = createServer()
@@ -50,9 +65,9 @@ async function refusedPort(): Promise<number> {
 }
 
 // the store dir the CLI resolves for this project, so the test can BE the followed session's log writer
-function seedSession(home: string, id = ID, parent: string | null = null): string {
-  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: pkgRoot, encoding: 'utf8' }).trim()
-  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
+function seedSession(home: string, id = ID, parent: string | null = null, root = pkgRoot): string {
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: root, encoding: 'utf8' }).trim()
+  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim())
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
   mkdirSync(dir, { recursive: true })
   process.env.SPEXCODE_HOME = home
@@ -140,8 +155,9 @@ test('spex session wait returns on a declaration with no backend running at all'
 
 test('managed watch registers once, delivers child states, and cancel stops delivery', { timeout: 60_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-watch-cli-'))
-  const parentDir = seedSession(home, WATCHER)
-  const childDir = seedSession(home, ID)
+  const repo = reviewFixture()
+  const parentDir = seedSession(home, WATCHER, null, repo)
+  const childDir = seedSession(home, ID, null, repo)
   append(parentDir, { kind: 'status', status: 'active', proposal: null, note: null })
   append(childDir, { kind: 'status', status: 'active', proposal: null, note: null })
   const base: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await refusedPort()) }
@@ -149,31 +165,31 @@ test('managed watch registers once, delivers child states, and cancel stops deli
   const parentEnv = { ...base, SPEXCODE_SESSION_ID: WATCHER }
   const childEnv = { ...base, SPEXCODE_SESSION_ID: ID }
 
-  const installed = await runCli(['session', 'watch', ID], parentEnv)
+  const installed = await runCli(['session', 'watch', ID], parentEnv, repo)
   assert.equal(installed.code, 0, installed.stderr)
   assert.equal(installed.stdout.trim(), `watching ${ID}`)
   assert.equal(events(parentDir).filter((event) => event.kind === 'sent').length, 1, 'installation enqueues the current state')
 
-  const listed = await runCli(['session', 'watch', 'list'], parentEnv)
+  const listed = await runCli(['session', 'watch', 'list'], parentEnv, repo)
   assert.equal(listed.code, 0, listed.stderr)
   assert.match(listed.stdout, new RegExp(`^${ID}\\t`, 'm'))
 
-  const declared = await runCli(['session', 'done', '--propose', 'merge'], childEnv)
+  const declared = await runCli(['session', 'done', '--propose', 'merge'], childEnv, repo)
   assert.equal(declared.code, 0, declared.stderr)
   await waitFor(() => events(parentDir).filter((event) => event.kind === 'sent').length === 2, 'watch-delivered review')
   const review = events(parentDir).at(-1)
   assert.equal(review?.from, ID)
   assert.match(review?.text || '', /review/)
 
-  const cancelled = await runCli(['session', 'watch', 'cancel', ID], parentEnv)
+  const cancelled = await runCli(['session', 'watch', 'cancel', ID], parentEnv, repo)
   assert.equal(cancelled.code, 0, cancelled.stderr)
   assert.equal(cancelled.stdout.trim(), 'cancelled 1 watch')
-  const asked = await runCli(['session', 'ask', '--note', 'need input'], childEnv)
+  const asked = await runCli(['session', 'ask', '--note', 'need input'], childEnv, repo)
   assert.equal(asked.code, 0, asked.stderr)
   await new Promise((resolve) => setTimeout(resolve, 50))
   assert.equal(events(parentDir).filter((event) => event.kind === 'sent').length, 2, 'cancel prevents later child delivery')
 
-  const unmanaged = await runCli(['session', 'watch', ID], base)
+  const unmanaged = await runCli(['session', 'watch', ID], base, repo)
   assert.equal(unmanaged.code, 0, unmanaged.stderr)
   assert.match(unmanaged.stderr, new RegExp(`spex session wait ${ID}`))
   assert.equal(configuredSessionApplicationIfCutover()!.readState(ID)?.status, 'asking')

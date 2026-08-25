@@ -26,7 +26,9 @@ function fixture(extraCode = '') {
   writeFileSync(join(root, 'src/a/uncovered.ts'), 'export const uncovered = true\n')
   git('add', '-A')
   git('commit', '-qm', 'seed')
-  const result = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint', '--json'], { cwd: root, encoding: 'utf8' })
+  const result = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint', '--json'], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  })
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr }
 }
 

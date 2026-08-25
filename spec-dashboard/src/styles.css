@@ -3429,6 +3429,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-file-panel button:hover, .diff-file-panel button[aria-current="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); }
 .diff-file-panel button strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .diff-file-panel button span { color:var(--muted); font-size:var(--type-meta); }
+.diff-file-group { padding:7px 10px 4px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--type-meta); }
+.diff-file-panel button span.diff-file-status { color:var(--muted); }
+.diff-scope-note { padding:8px 12px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 18%, var(--paper)); color:var(--muted); font-size:var(--type-meta); }
+.diff-file-head .diff-file-scope { color:var(--muted); }
 .diff-files { min-width:0; }
 .diff-file { min-width:0; }
 .diff-hunk-tools { display:flex; justify-content:flex-end; gap:4px; padding:3px 8px; border-bottom:1px solid var(--line); background:var(--paper); }
@@ -3438,16 +3442,25 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-mode button + button { border-left:0; border-radius:0 var(--radius) var(--radius) 0; }
 .diff-mode button:first-child { border-radius:var(--radius) 0 0 var(--radius); }
 .diff-editor-split { max-height:58vh; overflow:auto; }
-.diff-editor-split .cm-mergeView { display:flex; min-width:max-content; }
-.diff-editor-split .cm-mergeView > .cm-editor { min-width:0; flex:1 1 50%; }
-.diff-editor-split .cm-mergeView > .cm-editor + .cm-editor { border-left:1px solid var(--line); }
+/* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each
+   .cm-mergeViewEditor is an equal, overflow-hidden column. Only the divider is ours. Do NOT make
+   .cm-mergeView a flex container or give it an intrinsic min-width — either one sizes the row to its widest
+   line and pushes the new side outside this scroll container, which reads as "the diff did not render". */
+.diff-editor-split .cm-mergeViewEditor + .cm-mergeViewEditor { border-left:1px solid var(--line); }
 .diff-editor-unified { max-height:58vh; overflow:auto; }
 .diff-editor-unified.is-wrap .cm-line { white-space:pre-wrap; overflow-wrap:anywhere; }
+/* the package tints a changed line at 8% alpha, which does not survive this paper — restate it in the
+   dashboard's own red/green so the reader sees WHICH lines moved without hunting for the underline. */
+.diff-editor .cm-merge-a .cm-changedLine, .diff-editor .cm-deletedChunk { background:color-mix(in srgb, var(--red) 16%, transparent); }
+.diff-editor .cm-merge-b .cm-changedLine, .diff-editor .cm-inlineChangedLine { background:color-mix(in srgb, var(--green) 16%, transparent); }
+.diff-editor .cm-insertedLine { background:color-mix(in srgb, var(--green) 22%, transparent); }
+.diff-editor .cm-deletedLine, .diff-editor .cm-deletedChunk .cm-deletedText { background:color-mix(in srgb, var(--red) 22%, transparent); }
+.diff-editor .cm-line:hover { background:color-mix(in srgb, var(--blue) 14%, transparent); }
 @media (max-width: 720px) {
   .diff-review-body { grid-template-columns:1fr; }
   .diff-file-panel { display:flex; border-right:0; border-bottom:1px solid var(--line); overflow-x:auto; }
   .diff-file-panel button { min-width:180px; border-bottom:0; border-right:1px solid var(--line); }
-  .diff-editor-split .cm-mergeView { min-width:760px; }
+  .diff-editor-split .cm-mergeViewEditors { min-width:760px; }
 }
 .diff-comment { display:flex; align-items:flex-start; gap:10px; padding:7px 14px 7px 58px; border-top:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
 .diff-comment.sent { opacity:.7; }

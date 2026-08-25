@@ -51,6 +51,7 @@ test('session ask keeps its receipt and attributes a shared Codex worker to its 
       // The shared Codex app-server inherited this from another worker. CODEX_THREAD_ID is the acting worker.
       SPEXCODE_SESSION_ID: STALE,
       CODEX_THREAD_ID: THREAD,
+      NODE_NO_WARNINGS: '1',
     }
     for (const key of ['CLAUDE_CODE_SESSION_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
 

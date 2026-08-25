@@ -122,6 +122,11 @@ The graph is built **once per change, not once per poll — and only as much of 
   rebuilds, while the just-finished build still answers its own waiters. The stream and
   the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
 
+Generated workspace build output is not a graph input. The project-root watcher excludes package `dist/` trees
+and the atomic `.dist-next-*`/`.dist-previous-*` staging trees used by the compiler. A build must not invalidate
+the board that is only serving the source tree, otherwise every artifact swap can start another full graph build
+and turn a normal reload into backend event-loop and memory pressure.
+
 - **Truthful stale-while-revalidate.** The cache has one explicit consistency seam with two policies. A
   first-cold read with no last-good board waits for the current build and fails or times out honestly; it
   never invents a snapshot. Once a last-good board exists, a dirty ordinary HTTP read returns that exact
@@ -141,6 +146,11 @@ entries. A summary completion invalidates the board at `sessions` scope, so the 
 new stable projection without rebuilding node/eval/issue units. Lifecycle-only splices reuse unchanged summary
 entries; a relevant refs/worktree/remark event first advances their own generations, then invalidates the board.
 The graph cache therefore never fans out a full session-eval build, and a quiet cache hit starts zero eval work.
+
+The board's eval timeline input is latest-only: one reading per scenario is enough for the graph's state counts and
+review snapshot. Historical readings remain owned by the detail/session-eval paths. A cold board must not send the
+entire sidecar history through freshness probes when the overview cannot render those rows; this keeps graph latency
+bounded by the current verdict population rather than the retained reading count.
 
 Projection warmup is subscriber-gated and bounded: an ordinary HTTP/CLI graph read never starts historical
 session-eval work merely because session records exist. The delta stream enables warmup for the current era;

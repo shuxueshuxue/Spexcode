@@ -109,7 +109,7 @@ export async function evalContext(
 // 415-node scope the freshness pass is 25s and 1476 git children, the rows themselves are milliseconds.
 // Rows returned this way carry `freshnessDeferred` INSTEAD of `fresh`/`staleAxes`, and evalReviewState
 // refuses them loudly — an order row can never be mistaken for a measured verdict.
-export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, opts: { order?: boolean } = {}): Promise<EvalTimeline[]> {
+export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, opts: { order?: boolean; latestOnly?: boolean } = {}): Promise<EvalTimeline[]> {
   const root = ctx?.root ?? repoRoot()
   const ynodes = ctx?.ynodes ?? evalNodes(root)
   const specs = ctx?.specs ?? await loadSpecs()
@@ -128,9 +128,14 @@ export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, o
     const codeEntries = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.codeEntries ?? []
     const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
     const { readings, retractions, oks } = readSidecar(ynode.sidecarPath)
-    const rows = applyRetractions(readings, retractions).map((reading) => ({
+    const allRows = applyRetractions(readings, retractions).map((reading) => ({
       reading, axis: scenarioCodeAxis(byName.get(reading.scenario)?.code, codeEntries),
     }))
+    // The board only renders the latest state per scenario. Historical rows remain available to the
+    // session/eval detail paths, but sending them through freshness here multiplies immutable Git probes.
+    const rows = opts.latestOnly
+      ? [...allRows.reduce((latest, row) => latest.set(row.reading.scenario, row), new Map<string, (typeof allRows)[number]>()).values()]
+      : allRows
     return { id, ynode, codeEntries, rows, retractions, oks }
   })
 

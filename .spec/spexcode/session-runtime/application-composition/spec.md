@@ -22,7 +22,8 @@ messages remain opaque and do not become conversation history. The composition n
 an opt-in compatibility switch.
 Duplicate checks use the event store's scoped message lookup rather than replaying the session history. Generic protocol
 messages remain opaque and do not become conversation history. The composition never reads JSON records or exposes an
-opt-in compatibility switch.
+opt-in compatibility switch. State replay folds `session.state.changed.v1` and passes over the conversation message
+fact recorded beside it; migrated legacy history carries its own ignorable types and is skipped by the same fold.
 
 Lifecycle transitions resolve watcher recipients by their durable channel: a `watch:parent` relation suppresses the
 routine `active`/working transition, while `watch:manual` (and the legacy `watch` channel) opts into the complete

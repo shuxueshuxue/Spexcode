@@ -32,10 +32,31 @@ visible and repeatable rather than silently detaching the child. This policy is 
 reads the JSON root or fabricates missing application state.
 
 Import creates protocol addresses, application state, parent/watch topology edges, and one deterministic state event per
-record (plus one deterministic archived event per explicit tombstone). Re-running the exact source is a no-op after
-marker verification; a changed source or a missing marked database is an error. After the marker is written, only
-the renamed `runtime.json` envelope remains as operational worktree metadata; the legacy JSON names are retired and
-never become a runtime source for state, events, topology, or watchers.
+record (plus one deterministic archived event per explicit tombstone). The legacy conversation is replayed as
+history: each timeline `status`/`sent` line becomes a `session.state.migrated.v1` / `session.message.migrated.v1`
+event carrying the live payload shape, marked ignorable, so a timeline projection shows it where it happened while
+state replay (which folds only live state events) passes over it. Pending debt re-enters the canonical queue under a
+`legacy:<mid>` idempotency key. After the marker is written, only the renamed `runtime.json` envelope remains as
+operational worktree metadata; the legacy JSON names are retired and never become a runtime source for state, events,
+topology, or watchers. A missing marked database is an error.
+
+A marked store is not assumed clean. The same entry point, run against a marker that already exists, reads whatever
+legacy residue the tree still holds — envelopes a fenced-out writer left, or the history, watcher, pending, and cursor
+files an earlier importer copied state from but never replayed — and absorbs it into the live store before retiring
+it. Canonical state stays authoritative: a legacy envelope for a session that already has a row contributes only its
+artifacts; only an envelope with no row creates one (the parent and watcher checks and the orphan policy apply as on
+first import). A retired `runtime.json` with no canonical row is refused. A directory nothing claims (no envelope, no
+row) is not a session: its files are backed up, reported by name, and retired, never imported. Each session's history
+lands in one transaction keyed by its first deterministic event id, so an interrupted run resumes without appending a
+line twice, and every stored follow cursor on that subject advances by the number of history lines that now precede
+its position — a consumed event never becomes unread again. Before retiring the residue tree, the importer rechecks
+the complete file set and digest; a writer that ignored the migration fence therefore fails the cutover loudly.
+Cursor files themselves are positions in the retired
+projection and are backed up, not imported. Residue is backed up under the marker's backup root before anything is
+removed, and the report names what was absorbed. A tree with no residue is a no-op, so the entry point is idempotent.
+When residue creates a previously unseen application row, its validated canonical `parentSessionId` is also attached to
+the `parent` topology; when the row already exists, the canonical row's parent repairs a missing edge and stale
+envelope fields cannot rewrite it.
 
 The importer owns a durable `.json-migration.lock` fence in the legacy sessions root. Legacy writers reject a fenced
 store before touching legacy `session.json` or `watchers.json`; after the SQLite marker is published, canonical application

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   openProjectSessionApplication,
+  legacyResidueExists,
   migrateJsonSessionRecords,
   type CommittedSessionChange,
   type ProductionSessionApplication,
@@ -48,13 +49,24 @@ export function configuredSessionApplication(): ProductionSessionApplication {
   return cached
 }
 
-export type SessionApplicationCutoverState = 'ready' | 'fresh' | 'migration-required' | 'fenced' | 'ambiguous'
+export type SessionApplicationCutoverState = 'ready' | 'residue' | 'fresh' | 'migration-required' | 'fenced' | 'ambiguous'
+
+// A marked store is `ready` only once its legacy tree holds nothing left to absorb. The scan runs once per process
+// per store: after residue is migrated (or none was found) no legacy writer exists to create more, so later calls
+// answer from memory instead of walking every session directory on the hot path.
+const settledResidueStores = new Set<string>()
 
 /** Inspect cutover state without initializing a fresh database as a side effect of a rejected request. */
 export function sessionApplicationCutoverState(): SessionApplicationCutoverState {
   const databasePath = resolveDatabasePath()
-  if (existsSync(`${databasePath}.json-migration.json`)) return 'ready'
   const recordsRoot = join(runtimeRoot(), 'sessions')
+  const storeKey = `${databasePath}\0${recordsRoot}`
+  if (existsSync(`${databasePath}.json-migration.json`)) {
+    if (settledResidueStores.has(storeKey)) return 'ready'
+    if (legacyResidueExists(recordsRoot)) return 'residue'
+    settledResidueStores.add(storeKey)
+    return 'ready'
+  }
   if (existsSync(jsonMigrationFencePath(recordsRoot))) return 'fenced'
   if (existsSync(recordsRoot) && readdirSync(recordsRoot, { withFileTypes: true }).some(entry => entry.isDirectory())) return 'migration-required'
   if (existsSync(databasePath)) return 'ambiguous'
@@ -66,7 +78,7 @@ export function sessionApplicationCutoverState(): SessionApplicationCutoverState
 export function configuredSessionApplicationIfCutover(): ProductionSessionApplication | undefined {
   const state = sessionApplicationCutoverState()
   if (state === 'ready') return configuredSessionApplication()
-  if (state === 'migration-required') return initializeMigratedSessionApplication()
+  if (state === 'migration-required' || state === 'residue') return initializeMigratedSessionApplication(state)
   if (state === 'fresh') return initializeFreshSessionApplication()
   if (state === 'fenced' || state === 'ambiguous') {
     throw new Error(`session application cutover is ${state}; refusing a legacy/runtime split`)
@@ -74,17 +86,32 @@ export function configuredSessionApplicationIfCutover(): ProductionSessionApplic
   return undefined
 }
 
-function initializeMigratedSessionApplication(): ProductionSessionApplication {
+// One importer for both shapes of legacy tree. Before the marker it installs the canonical store; after the
+// marker it absorbs whatever residue the tree still holds into the store this process already owns, then
+// retires the tree. Either way the tree is gone when this returns, so the cutover state settles to `ready`.
+function initializeMigratedSessionApplication(state: 'migration-required' | 'residue'): ProductionSessionApplication {
   const databasePath = resolveDatabasePath()
   const recordsRoot = join(runtimeRoot(), 'sessions')
-  migrateJsonSessionRecords({ databasePath, recordsRoot, locality: path => { requireLocalDatabasePath(path) } })
-  return configuredSessionApplication()
+  const locality = (path: string) => { requireLocalDatabasePath(path) }
+  if (state === 'migration-required') {
+    migrateJsonSessionRecords({ databasePath, recordsRoot, locality })
+    return configuredSessionApplication()
+  }
+  const application = configuredSessionApplication()
+  const report = migrateJsonSessionRecords({ databasePath, recordsRoot, locality, application })
+  settledResidueStores.add(`${databasePath}\0${recordsRoot}`)
+  const residue = report.residue
+  if (residue) {
+    console.log(`[session-application] migrated legacy residue from ${recordsRoot}: ${residue.records} record(s), ${residue.events} event(s), ${residue.parentEdges} parent edge(s), ${residue.watchEdges} watch edge(s), ${residue.pending} pending; ${residue.unclaimed.length} unclaimed dir(s)${residue.unclaimed.length ? ` (${residue.unclaimed.join(', ')})` : ''}; backup ${residue.backupRoot}`)
+  }
+  return application
 }
 
 /** Initialize a fresh canonical store only after an accepted create has crossed its no-side-effect boundary. */
 export function initializeFreshSessionApplication(): ProductionSessionApplication {
   const state = sessionApplicationCutoverState()
   if (state === 'ready') return configuredSessionApplication()
+  if (state === 'residue') return initializeMigratedSessionApplication(state)
   if (state !== 'fresh') throw new Error(`cannot initialize a fresh session store from cutover state: ${state}`)
   const databasePath = resolveDatabasePath()
   const recordsRoot = join(runtimeRoot(), 'sessions')
@@ -105,6 +132,7 @@ export function acquireFreshSessionApplicationForCreate(): { application: Produc
     freshStoreLeases++
     return { application: configuredSessionApplication(), owned: true }
   }
+  if (state === 'residue') return { application: initializeMigratedSessionApplication(state), owned: false }
   if (state !== 'ready') throw new Error(`cannot initialize a session store from cutover state: ${state}`)
   return { application: configuredSessionApplication(), owned: false }
 }
@@ -139,6 +167,7 @@ export function releaseFreshSessionApplicationForCreate(owned: boolean, committe
 export function resetConfiguredSessionApplicationForTest(): void {
   cached?.close()
   cached = undefined
+  settledResidueStores.clear()
   freshStoreOwned = false
   freshStoreCommitted = false
   freshStoreLeases = 0

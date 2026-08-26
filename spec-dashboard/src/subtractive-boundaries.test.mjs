@@ -105,6 +105,15 @@ test('session row clicks focus an existing workspace tab before replacing the cu
   assert.match(sessionInterface, /onSelect=\{\(id, options\) => onPickSession \? onPickSession\(id, options\)/)
 })
 
+test('Sessions selection is the routed address, never a mirrored local state', () => {
+  const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
+  assert.match(sessionsView, /const selection = param && param !== 'new' \? param : 'new'/)
+  assert.match(sessionsView, /sel=\{selection\}/)
+  assert.match(sessionsView, /setSel=\{pickSession\}/)
+  assert.doesNotMatch(sessionsView, /\[sel, setSel\]/)
+  assert.doesNotMatch(sessionsView, /setSel\(param/)
+})
+
 test('retired generic pane-resizer CSS stays absent', () => {
   assert.doesNotMatch(css, /\.pane-resizer\b/, 'dead generic pane-resizer CSS returned')
   assert.match(css, /\.content-divider\b/, 'live split resize seam disappeared with the dead generic rule')
@@ -138,4 +147,26 @@ test('board details focus one dynamic top-level tab without evicting documents',
   ])
   assert.deepEqual(tabRoute(evalDetail), { page: 'evals', param: null, query: null })
   assert.deepEqual(tabRoute(issueDetail), { page: 'issues', param: null, query: null })
+})
+
+// THE TREE IS A VIEW OF THE ADDRESS. Each row used to own its `open` flag in local state, which broke two
+// things at once: a row unmounts when an ancestor collapses or the dock folds, so `useState` discarded the
+// reader's arrangement; and nothing outside a row could reach that state, so routing to a spec left the
+// explorer sitting on a closed root while that spec's document was open beside it.
+test('the spec tree remembers its disclosure and opens the branch the address names', () => {
+  const tree = readFileSync(join(srcDir, 'FileTree.jsx'), 'utf8')
+  const store = readFileSync(join(srcDir, 'specTreeState.js'), 'utf8')
+  // no row-local disclosure state survives
+  assert.doesNotMatch(tree, /const \[open, setOpen\] = useState\(false\)/)
+  assert.match(tree, /const \{ open: openIds \} = useSpecTreeState\(\)/)
+  assert.match(tree, /toggleSpecNode\(node\.id\)/)
+  // the reveal walks ANCESTORS only — disclosure means "show me what is inside", and forcing the focused
+  // node open would answer a question the reader never asked and fight their own collapse of it
+  assert.match(tree, /revealSpecPath\(path\)/)
+  assert.match(tree, /for \(let id = parentOf\.get\(focusId\)/)
+  // the arrangement outlives the session, and a blocked storage read still yields a correct empty tree
+  assert.match(store, /localStorage\.setItem\(KEY/)
+  assert.match(store, /catch \{ return new Set\(\) \}/)
+  // a route onto an already-visible node must cost no render
+  assert.match(store, /if \(!wanted\.length \|\| wanted\.every\(\(id\) => snapshot\.open\.has\(id\)\)\) return/)
 })

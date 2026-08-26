@@ -209,7 +209,9 @@ test('launcher session tallies keep the status line geometry and semantic slash 
   const rightRule = css.match(/\.sb-right\s*\{([^}]*)\}/)?.[1] || ''
   assert.doesNotMatch(rightRule, /max-width|overflow:\s*hidden/)
   assert.match(css, /\.sb-launcher-group\s*\{[^}]*flex:\s*0\s*0\s*auto;[^}]*min-width:\s*max-content;/s)
-  assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*padding-inline:\s*0;[^}]*border-left:\s*var\(--divider-rule\)/)
+  // the group keeps its own inset, but the SEAM beside it is the line's one shared short rule, not a
+  // full-height border this group owns ([[status-bar]])
+  assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*padding-inline:\s*0;[^}]*padding-left:\s*var\(--space-3\)/)
   assert.match(css, /\.sb-launcher-glyph\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s)
   assert.match(css, /\.sb-launcher-glyph \.si-agent-glyph\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s)
   assert.match(css, /\.sb-launcher-running\s*\{\s*color:\s*var\(--green\)/)

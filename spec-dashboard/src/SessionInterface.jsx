@@ -40,14 +40,13 @@ import { useTransientNotice } from './TransientNotice.jsx'
 import { decodePrompt, encodePrompt } from './codeSelection.js'
 import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
-import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
 import TabStrip from './TabStrip.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
 import { usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
-import { expandSessionFolds, toggleSessionFold, useSessionListState } from './sessionListState.js'
+import { useSessionListState } from './sessionListState.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -605,9 +604,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const sessionOrder = useMemo(() => ['new', ...sessionForestRows
     .filter((item) => item.type === 'row')
     .map((item) => item.s.id)], [sessionForestRows])
-  const foldableSessionIds = useMemo(() => new Set(sessionForestRows
-    .filter((item) => item.type === 'row' && item.expandable)
-    .map((item) => item.s.id)), [sessionForestRows])
   // A removed session can be a successful close: the working board drops it while the retained archive record
   // is still arriving. Probe the id-addressed record before declaring the tab dead. Only a real 404 (or an
   // unreadable response) lands on New; a retained row is rendered by the same read-only Conversation path.
@@ -1529,7 +1525,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const stateRef = useRef({})
   stateRef.current = {
     active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-    commandAvailable, setCommandOpen, closeCommandBox, sessionOrder, expanded, foldableSessionIds,
+    commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
   }
   // The console's whole keyboard contract, registered as ONE service scope (priority 10 — above the
   // shell's globals, below any modal). Consumption is signalled the way the branches always did — via
@@ -1539,7 +1535,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const onKey = (e) => {
       const {
         active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-        commandAvailable, setCommandOpen, closeCommandBox, sessionOrder, expanded, foldableSessionIds,
+        commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       if (e.target?.closest?.('[data-focus-overlay]')) return // a transient modal owns its focused control's native keys
@@ -1563,22 +1559,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // The ⌥-digit row left the reserve with the bindings it protected: the shell claims no digit now, so
       // holding one back would only make ⌥1 a key that does nothing anywhere.
       if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF'].includes(e.code)) return
-      // Option+Shift is the disclosure grammar for the selected session. Consume it even for a leaf or an
-      // already-matching state: otherwise the ordinary Option+Arrow session move would run immediately after
-      // a no-op and the key would appear to change selection. The Dock observes the same shared fold store.
-      const sessionShortcut = resolveSessionShortcut(sessionForestRows, active, e)
-      if (sessionShortcut) {
-        e.preventDefault(); e.stopPropagation()
-        if (sessionShortcut.type === 'move' && sessionShortcut.id !== active) {
-          if (onPickSession) onPickSession(sessionShortcut.id)
-          else setSel(sessionShortcut.id)
-        } else if (sessionShortcut.type === 'expand' && foldableSessionIds.has(active) && !expanded.has(active)) {
-          expandSessionFolds([active])
-        } else if (sessionShortcut.type === 'collapse' && foldableSessionIds.has(active) && expanded.has(active)) {
-          toggleSessionFold(active)
-        }
-        return
-      }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
       if (menu) {

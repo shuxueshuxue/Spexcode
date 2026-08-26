@@ -6,6 +6,7 @@ import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const forest = readFileSync(new URL('./SessionForestPanel.jsx', import.meta.url), 'utf8')
 const contextMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
 const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
@@ -141,6 +142,15 @@ test('offline and archive headers own the disclosure target without nested contr
   assert.match(source, /Native buttons own Enter\/Space activation/)
   assert.match(source, /e\.target\?\.closest\?\.\('button, a\[href\]'\)/)
   assert.doesNotMatch(source, /si-zone-need[^\n]*onClick|si-zone-run[^\n]*onClick/)
+})
+
+test('the forest owns the shared keyboard walk and inert chrome boundary', () => {
+  assert.match(forest, /import \{ useKeyboardScope \} from '\.\/KeyboardService\.jsx'/)
+  assert.match(forest, /import \{ resolveSessionShortcut \} from '\.\/sessionShortcuts\.js'/)
+  assert.match(forest, /useKeyboardScope\(\(event\) => \{[\s\S]*?resolveSessionShortcut\(forest, activeId, event\)/)
+  assert.match(forest, /<aside[\s\S]*?onMouseDownCapture=\{inertChromePress\}/)
+  assert.match(forest, /className="si-resizer" onMouseDownCapture=\{inertChromePress\}/)
+  assert.doesNotMatch(source, /resolveSessionShortcut/)
 })
 
 test('close refusals remain visible instead of being swallowed by the background action', () => {

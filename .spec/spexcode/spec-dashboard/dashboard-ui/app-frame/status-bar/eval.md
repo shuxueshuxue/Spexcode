@@ -68,6 +68,21 @@ scenarios:
       tab switch would be describing a document nobody has open. Zero loss = one door, on the line, for
       exactly as long as its session is the document being read.
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/statusOwnership.js]
+  - name: the-line-s-seams-are-short-and-shared
+    tags: [frontend-e2e, desktop]
+    description: >-
+      On a session document in a real browser, measure the status row's height, then for every PAINTED item
+      in the right group read its `::after` height and its computed `border-left-width`, and sort the items
+      by their left edge to recover the visual order. Label each item by what it CONTAINS, not by position —
+      a labeller written as `a || b ? x : y` binds the ternary after the `||` and silently names everything
+      the same thing, which makes an ordering assertion pass while proving nothing (measured).
+    expected: >-
+      No seam reaches the row height and no item keeps a full-height `border-left`: every boundary carries
+      one centred rule of the SAME short height, so the line has one voice. The painted left-to-right order
+      on a session tab is session-eval, spec nodes, evals, issues, sessions, and the outermost item — first
+      in the DOM, last visually, with no sibling beyond it — carries no seam at all. Zero loss = a seam that
+      separates two readouts without claiming to divide the window.
+    code: [spec-dashboard/src/styles.css]
 ---
 # measuring the status bar
 

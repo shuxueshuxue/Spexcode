@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/useResizable.js
+  - spec-dashboard/src/specTreeState.js
   - spec-dashboard/src/styles.css
 ---
 # file-tree
@@ -22,6 +23,19 @@ same shape on disk, on the board, and here.
 would have been a second projection of the same data, free to disagree with the board about what exists.
 Only a node's attachments are fetched, and only on the expand that reveals them, so a reader who never opens
 a branch never pays for its folder listing.
+
+**THE TREE IS A VIEW OF THE ADDRESS, so routing to a node opens the branch that holds it.** Its ANCESTORS
+open, never the node itself: disclosure means "show me what is inside", and forcing that on arrival would
+answer a question the reader did not ask and fight their own collapse of it. A route onto an already-visible
+node changes nothing and costs no render.
+
+**Disclosure is held OUTSIDE the rows that draw it, and it is remembered.** A row unmounts whenever an
+ancestor collapses or the whole dock folds, so a row-local flag is erased by gestures that have nothing to
+do with it — and, being unreachable from outside, it also left the tree unable to open the branch its own
+address named: the explorer could sit on a closed root while that spec's document was open beside it. One
+store outside the rows fixes both, and it is the same shape [[session-forest]]'s fold store already uses,
+because it is the same problem twice. It persists, so the arrangement a reader made is still there on the
+next boot; storage that refuses to answer yields an empty tree, which is a correct tree.
 
 **A row does both things.** Clicking a node focuses it on the board *and* discloses its contents. Splitting
 those into two hit targets would make the common move — look inside this node — cost two clicks in a list

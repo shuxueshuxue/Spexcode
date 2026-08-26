@@ -723,7 +723,18 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--line-status); color: inherit;
   background: none; border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sb-item:has(.sb-launcher-groups) { padding-inline: 0; border-left: var(--divider-rule); padding-left: var(--space-3); }
+.sb-item:has(.sb-launcher-groups) { padding-inline: 0; padding-left: var(--space-3); }
+/* THE LINE'S ONE SEAM, and it is SHORT. A hairline running the strip's full height reads as a structural
+   division of the window; all it actually separates is two readouts sharing one row, so it is a centred
+   rule about half the row tall. Every boundary in the right group gets the same one — no item has to know
+   which neighbour it sits beside, and no group can grow a second seam style. It is drawn on the item's
+   RIGHT edge because this group is `row-reverse`: the DOM-next item renders to the LEFT, so an item's
+   right edge is precisely the boundary with the sibling before it. */
+.sb-right .sb-item { position: relative; }
+.sb-right .sb-item + .sb-item::after {
+  content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 1px; height: 11px; background: var(--edge); pointer-events: none;
+}
 button.sb-item { cursor: pointer; }
 button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transparent); }
 /* `kind` is the ONLY colour a contributor may spend — a raw hex cannot re-theme, which is the mistake the

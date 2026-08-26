@@ -16,7 +16,11 @@ test('the status bar carries no document source path, and launcher identity stay
   assert.equal(existsSync(new URL('./fileStatusPath.js', import.meta.url)), false, 'the path filter died with the path item')
   assert.doesNotMatch(shell, /sb-launcher-badge/)
   assert.match(css, /\.sb-right\s*\{[^}]*padding-right:\s*var\(--space-3\)/)
-  assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*border-left:\s*var\(--divider-rule\)/)
+  // The seam is SHORT and shared, not a full-height border on one group. A rule that runs the strip's whole
+  // height reads as a structural division of the window when all it separates is two readouts on one row.
+  assert.doesNotMatch(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*border-left/)
+  assert.match(css, /\.sb-right \.sb-item \+ \.sb-item::after\s*\{[^}]*height:\s*11px;[^}]*background:\s*var\(--edge\)/s)
+  assert.match(css, /\.sb-right \.sb-item \+ \.sb-item::after\s*\{[^}]*right:\s*0;[^}]*top:\s*50%/s)
   // ONE divider voice on the bar: the group border-left is now its only seam. The node ledger's own
   // separator went with the drift door it separated, and no replacement seam style may appear beside it.
   assert.doesNotMatch(css, /\.sb-tally-sep/)

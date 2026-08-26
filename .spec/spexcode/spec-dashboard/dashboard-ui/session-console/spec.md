@@ -71,6 +71,8 @@ still use the shared `routeHash` projection, but imperative writes dispatch one 
 Selecting a session row first resolves its canonical session document through the shared workspace tab identity:
 when that session is already held, the view focuses that existing tab; otherwise the current session slot receives
 the new address. A row click never rewrites the active session A slot to session B while B is already held elsewhere.
+The routed adapter holds no mirrored selection state: its current `param` is the selection passed to the console,
+and every console selection intent returns through that adapter's one `ViewScope` route writer.
 Leaving the page keeps the console document, its selection, and every visited pane-backed terminal mounted;
 switching tabs changes visibility rather than rebuilding xterm or its browser WebSocket, so the cached screen and
 focus return without a cold start. The active transition claims `visible:false` on the bridge; the bounded native
@@ -90,7 +92,10 @@ dark terminal, whatever the app theme. The document has one right area that
 **morphs** by what's focused. Search remains available through the shell palette and the existing ⌥+/ binding;
 the sessions dock owns the list's `＋` New Session door. The forest sidebar's row grammar — its three doors (New,
 archive, search), zone heads, the archive zone and its routed `archive=1` index overlay, drag, and the keyboard
-walk — is [[session-forest]]'s. The document is bounded by
+walk — is [[session-forest]]'s. The forest registers that walk with the shared window keyboard service beside
+the rows it owns; the document keeps the input, menu, and plain-arrow portions of the console scope. It keeps
+no BOOKKEEPING for the walk either — no second index of which rows are foldable — because a derived set kept
+beside a mechanism it no longer drives is how the two drift back apart. The document is bounded by
 the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
 
 **New Session** is the console's launch tab — the [[launch-hero]] wordmark over the launch composer and the launcher

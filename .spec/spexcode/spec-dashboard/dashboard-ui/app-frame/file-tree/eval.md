@@ -28,6 +28,19 @@ scenarios:
       - spec-dashboard/src/FileTree.jsx
       - spec-dashboard/src/Shell.jsx
       - spec-dashboard/src/styles.css
+  - name: the-tree-opens-the-branch-the-address-names-and-remembers-it
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Route to a NESTED spec node in a real browser and read the explorer: is that node's row present and
+      painted, is it marked as the focused one, and is its ancestry disclosed? Then fold the whole dock away
+      with the rail control and back, and count the rendered node rows again.
+    expected: >-
+      The row is present, painted, and marked; the root above it shows an open caret. Its ANCESTORS opened,
+      not the node itself — disclosure means "show me what is inside", and forcing that on arrival would
+      answer a question the reader never asked. After folding away and back the tree renders exactly the same
+      rows: the arrangement is held outside the rows that draw it, so unmounting a branch cannot erase it.
+      Zero loss = a tree that is genuinely a view of the address rather than one that merely claims to be.
+    code: [spec-dashboard/src/FileTree.jsx, spec-dashboard/src/specTreeState.js]
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Capture the settled Explorer

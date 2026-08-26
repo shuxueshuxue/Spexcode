@@ -101,7 +101,9 @@ first paint. This overlay is the only archive-search entry; the global palette n
 hints at hidden archive matches. Esc/backdrop closes it, and choosing a row returns to that session's ordinary
 Conversation in the right pane.
 
-The console list is the mutable home of its session forest ([[session-nesting]]). Dragging a row moves a
+The console list is the mutable home of its session forest ([[session-nesting]]). The forest panel attaches the
+same `inertChromePress` capture boundary as the rest of the console chrome, and registers the shared window
+keyboard service walk for its visible rows; the finding dock uses that same resolver for its projection. Dragging a row moves a
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
 a top-level drop zone. The ghost is the same console tree-row presentation as its source, derived again from
 the current forest item rather than from a hand-copied appearance record: selection reveal, headline line boxes,

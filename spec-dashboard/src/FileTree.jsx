@@ -9,6 +9,7 @@ import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
+import { revealSpecPath, toggleSpecNode, useSpecTreeState } from './specTreeState.js'
 
 // [[file-tree]]: the left dock. A spec node is a FOLDER, so the tree that navigates the project is the
 // folder tree — the same shape on disk, on the board, and here.
@@ -47,7 +48,14 @@ function Row({ depth, onClick, onDoubleClick, open, hasKids, dot, label, kind, a
 // children. Attachments are fetched on first expand and kept, so re-opening a branch is instant and a
 // reader who never expands a node never pays for its folder listing.
 function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
-  const [open, setOpen] = useState(false)
+  // disclosure lives in the shared store, not here: a row unmounts whenever an ancestor collapses or the
+  // dock folds, and a local flag would be erased by a gesture that had nothing to do with it.
+  const { open: openIds } = useSpecTreeState()
+  const open = openIds.has(node.id)
+  const setOpen = (next) => {
+    const value = typeof next === 'function' ? next(open) : next
+    if (value !== open) toggleSpecNode(node.id)
+  }
   const [files, setFiles] = useState(null)
   useEffect(() => {
     if (!open || files) return undefined
@@ -139,6 +147,22 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
   const [sections, setSections] = useState(readSections)
   const kids = useMemo(() => kidsOf(specs || []), [specs])
   const roots = kids.get('') || []
+  // THE TREE IS A VIEW OF THE ADDRESS, so routing to a node opens the branch that holds it. Without this
+  // the explorer could sit on a closed root while a spec document was open beside it — claiming to show
+  // where the reader is while showing nothing of the sort. The ANCESTORS open, never the node itself:
+  // disclosure means "show me what is inside", and forcing that on arrival would answer a question the
+  // reader did not ask and would fight their own collapse of it.
+  const parentOf = useMemo(() => {
+    const parents = new Map()
+    for (const s of specs || []) parents.set(s.id, s.parent || null)
+    return parents
+  }, [specs])
+  useEffect(() => {
+    if (!focusId || !parentOf.has(focusId)) return
+    const path = []
+    for (let id = parentOf.get(focusId), guard = 0; id && guard < 64; id = parentOf.get(id), guard++) path.push(id)
+    revealSpecPath(path)
+  }, [focusId, parentOf])
   const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
   const [menu, setMenu] = useState(null)
   // A path's owner is already in the board the tree is built from, so "reveal owning node" needs no lookup

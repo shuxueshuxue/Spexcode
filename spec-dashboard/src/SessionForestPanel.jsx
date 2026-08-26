@@ -9,6 +9,9 @@ import { useT } from './i18n/index.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { isHoldGesture } from './tabs.js'
 import { useResizable } from './useResizable.js'
+import { inertChromePress } from './focus.js'
+import { useKeyboardScope } from './KeyboardService.jsx'
+import { resolveSessionShortcut } from './sessionShortcuts.js'
 
 const GHOST_SCALE = 0.75
 
@@ -28,6 +31,25 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
     keepVisible: (session) => session.id === activeId,
   }), [sessions, expanded, offlineOpen, activeId])
+
+  // The forest owns the session-walk scope because it owns the rows. This is the same resolver used by
+  // the finding dock; keeping the registration beside the rendered forest prevents a detached console
+  // scope from silently losing Option-arrow events when the sidebar is extracted.
+  useKeyboardScope((event) => {
+    const action = resolveSessionShortcut(forest, activeId, event)
+    if (!action) return false
+    event.preventDefault()
+    event.stopPropagation()
+    if (action.type === 'move') onSelect?.(action.id)
+    else if (action.type === 'expand') {
+      const item = forest.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
+      if (item && !item.expanded) toggleSessionFold(action.id)
+    } else if (action.type === 'collapse') {
+      const item = forest.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
+      if (item?.expanded) toggleSessionFold(action.id)
+    }
+    return true
+  }, 30)
 
   const changeParent = useCallback(async (childId, parent) => {
     const child = sessions.find((session) => session.id === childId)
@@ -132,6 +154,7 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
   return (
     <>
       <aside className={closing ? 'si-list dock-closing' : 'si-list'} ref={listRef} style={{ width }}
+        onMouseDownCapture={inertChromePress}
         aria-hidden={closing ? 'true' : undefined}>
       {selecting ? (
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
@@ -186,7 +209,7 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
       {draggedItem && <SessionConsoleTreeRow item={draggedItem} activeId={activeId} selecting={selecting} picked={picked} inert
         style={{ width: drag.width, '--si-session-drag-ghost-scale': GHOST_SCALE, left: drag.x - drag.offsetX * GHOST_SCALE, top: drag.y - drag.offsetY * GHOST_SCALE }} />}
       </aside>
-      <div className="si-resizer" onMouseDown={onDrag} onDoubleClick={reset}
+      <div className="si-resizer" onMouseDownCapture={inertChromePress} onMouseDown={onDrag} onDoubleClick={reset}
         role="separator" aria-orientation="vertical" aria-label={t('session.resizeList')} />
     </>
   )

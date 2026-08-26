@@ -11,7 +11,23 @@ rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(PW).href)
-const graph = await fetch(`${BASE}/api/graph`).then((response) => response.json())
+const graph = await (async () => {
+  const deadline = Date.now() + 45_000
+  while (Date.now() < deadline) {
+    const response = await fetch(`${BASE}/api/graph`)
+    if (response.ok && !response.headers.get('x-spexcode-graph')?.includes('stale')) {
+      const board = await response.json()
+      const rows = board.sessions || []
+      const byId = new Map(rows.map((row) => [row.id, row]))
+      const hasLiveParentChild = rows.some((row) => row.liveness !== 'offline' && row.parent && byId.get(row.parent)?.liveness !== 'offline')
+      const hasOfflineRoot = rows.some((row) => row.liveness === 'offline' && !row.parent)
+      const liveRoots = rows.filter((row) => row.liveness !== 'offline' && !row.parent)
+      if (hasLiveParentChild && hasOfflineRoot && liveRoots.length >= 2) return board
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 250))
+  }
+  throw new Error('timed out waiting for an authoritative parent/child, offline root, and live target fixture')
+})()
 const sessions = graph.sessions || []
 const childrenOf = new Map()
 for (const session of sessions) {
@@ -66,6 +82,7 @@ let videoStartedAt = 0
 const mark = (step) => timeline.push({ at: Date.now() - videoStartedAt, step })
 const expanded = (locator) => locator.getAttribute('aria-expanded')
 const visibleRows = (page, selector) => page.locator(selector).count()
+const painted = (locator) => locator.filter({ visible: true })
 
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 const context = await browser.newContext({
@@ -92,39 +109,45 @@ await page.route('**/api/sessions/reparent', async (route) => {
 })
 
 try {
-  await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.si-panel').waitFor({ state: 'visible' })
+  // Deep-link the selected parent so the Sessions document is the active routed pane. The sidebar still
+  // renders the complete forest, while a bare `#/sessions` URL can leave a mounted but inactive document
+  // when the shell restores another top-level slot.
+  await page.goto(`${BASE}/#/sessions/${parent.id}`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.si-list').waitFor({ state: 'visible', timeout: 20_000 })
+  if (process.env.DEBUG) console.log(await page.locator('.tab[role="tab"]').evaluateAll((tabs) => tabs.map((tab) => ({ key: tab.dataset.tabKey, selected: tab.getAttribute('aria-selected'), rect: tab.getBoundingClientRect().toJSON() }))))
   mark('open sessions')
 
-  const interfaceParent = page.locator(`.si-tree-row:has(> .si-item[data-sid="${parent.id}"])`)
+  const interfaceParent = painted(page.locator(`.si-tree-row:has(> .si-item[data-sid="${parent.id}"])`)).first()
   const interfaceBody = interfaceParent.locator('> .si-item')
   const interfacePod = interfaceParent.locator('> .sess-fold-control')
   assert.equal(await interfaceBody.getAttribute('aria-expanded'), null)
   assert.equal(await expanded(interfacePod), 'false')
-  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 0)
+  assert.equal(await painted(page.locator(`.si-item[data-sid="${child.id}"]`)).count(), 0)
 
   await interfaceBody.click()
+  await interfaceBody.focus()
   assert.equal(await interfaceBody.evaluate((node) => node.classList.contains('on')), true)
   assert.equal(await expanded(interfacePod), 'false', 'selecting a SessionInterface parent must not unfold it')
-  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 0)
+  assert.equal(await painted(page.locator(`.si-item[data-sid="${child.id}"]`)).count(), 0)
   record('SessionInterface', 'row click leaves fold', await expanded(interfacePod))
 
-  const visibleSessionIds = await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+  const visibleSessionIds = await painted(page.locator('.si-item[data-sid]')).evaluateAll((rows) => rows.map((row) => row.dataset.sid))
   const parentIndex = visibleSessionIds.indexOf(parent.id)
   const tabDirection = parentIndex < visibleSessionIds.length - 1 ? 'ArrowDown' : 'ArrowUp'
   const tabReturn = tabDirection === 'ArrowDown' ? 'ArrowUp' : 'ArrowDown'
   const expectedMovedSession = visibleSessionIds[parentIndex + (tabDirection === 'ArrowDown' ? 1 : -1)]
+  await page.evaluate(() => document.body.focus())
   await page.keyboard.press(`Alt+${tabDirection}`)
-  const movedSession = await page.locator('.si-item.on').getAttribute('data-sid')
+  const movedSession = await painted(page.locator('.si-item.on')).first().getAttribute('data-sid')
   assert.equal(movedSession, expectedMovedSession, 'plain Alt arrows must keep moving the selected session tab')
   await page.keyboard.press(`Alt+${tabReturn}`)
-  assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), parent.id, 'plain Alt+ArrowUp must return to the selected parent')
+  assert.equal(await painted(page.locator('.si-item.on')).first().getAttribute('data-sid'), parent.id, 'plain Alt+ArrowUp must return to the selected parent')
   record('SessionInterface', 'plain Alt arrows move tabs', true)
 
   await page.evaluate(() => { document.activeElement.dataset.sessionTreeFocusProbe = 'before-fold' })
   await interfacePod.click()
   assert.equal(await expanded(interfacePod), 'true')
-  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 1)
+  assert.equal(await painted(page.locator(`.si-item[data-sid="${child.id}"]`)).count(), 1)
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.sessionTreeFocusProbe), 'before-fold')
   record('SessionInterface', 'header click opens fold without taking focus', await expanded(interfacePod))
   record('SessionInterface', 'header click keeps focus owner', true)
@@ -134,10 +157,10 @@ try {
   mark('expand current parent with Alt+Shift+ArrowDown')
   await page.keyboard.press('Alt+Shift+ArrowDown')
   assert.equal(await expanded(interfacePod), 'true', 'Alt+Shift+ArrowDown must expand the selected parent')
-  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 1)
+  assert.equal(await painted(page.locator(`.si-item[data-sid="${child.id}"]`)).count(), 1)
   await page.keyboard.press('Alt+Shift+ArrowUp')
   assert.equal(await expanded(interfacePod), 'false', 'Alt+Shift+ArrowUp must collapse the selected parent')
-  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 0)
+  assert.equal(await painted(page.locator(`.si-item[data-sid="${child.id}"]`)).count(), 0)
   record('SessionInterface', 'Alt+Shift arrows disclose current parent', 'false→true→false')
 
   await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, leaf.id)
@@ -153,7 +176,7 @@ try {
   await page.keyboard.press('ArrowRight')
   assert.ok(await leafCommand.evaluate((input) => input.selectionStart) > 0, 'ArrowRight must keep native input navigation')
   await page.keyboard.press('Alt+Shift+ArrowDown')
-  assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), leaf.id, 'leaf shortcut must not move the selected tab')
+  assert.equal(await painted(page.locator('.si-item.on')).first().getAttribute('data-sid'), leaf.id, 'leaf shortcut must not move the selected tab')
   assert.equal(await leafCommand.inputValue(), 'alpha beta', 'leaf shortcut must leave the composer draft intact')
   record('SessionInterface', 'leaf Alt+Shift shortcut is a no-op', true)
   await page.keyboard.press('Escape')
@@ -174,12 +197,12 @@ try {
   assert.equal(await expanded(interfaceOffline), 'false', 'Space must toggle the whole header')
   assert.equal(await interfaceOffline.locator('.si-zone-count').getAttribute('aria-expanded'), null)
   assert.equal(await interfaceOffline.locator('button').count(), 0, 'zone header must not nest a second button')
-  const unchangedSelection = await page.locator('.si-item.on').getAttribute('data-sid')
+  const unchangedSelection = await painted(page.locator('.si-item.on')).first().getAttribute('data-sid')
   for (const zone of ['need', 'run']) {
     const header = page.locator(`.si-zone-${zone}`)
     if (await header.count()) {
       await header.click()
-      assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), unchangedSelection, `${zone} header click changed selection`)
+      assert.equal(await painted(page.locator('.si-item.on')).first().getAttribute('data-sid'), unchangedSelection, `${zone} header click changed selection`)
     }
   }
   assert.ok(await visibleRows(page, '.si-item') > 1)
@@ -197,8 +220,8 @@ try {
   // Reparent uses the actual session row as the drag subject: its fixed ghost carries the row's visible
   // headline/status, the valid receiver is highlighted, and the request remains an intercepted fixture write.
   await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, child.id)
-  const dragChild = page.locator(`.si-item[data-sid="${child.id}"]`)
-  const dragTarget = page.locator(`.si-tree-row:has(> .si-item[data-sid="${reparentTarget.id}"])`)
+  const dragChild = painted(page.locator(`.si-item[data-sid="${child.id}"]`)).first()
+  const dragTarget = painted(page.locator(`.si-tree-row:has(> .si-item[data-sid="${reparentTarget.id}"])`)).first()
   await dragChild.waitFor({ state: 'visible' })
   await dragTarget.waitFor({ state: 'visible' })
   await page.waitForFunction((id) => document.querySelector(`.si-item[data-sid="${id}"]`)?.classList.contains('on'), child.id)
@@ -254,7 +277,7 @@ try {
   mark('whole-row drag reparent')
   record('SessionInterface', 'whole-row drag reparent', reparentTarget.id)
 
-  const rootSource = page.locator(`.si-item[data-sid="${child.id}"]`)
+  const rootSource = painted(page.locator(`.si-item[data-sid="${child.id}"]`)).first()
   const rootSourceBox = await rootSource.boundingBox()
   assert.ok(rootSourceBox, 'nested row must still be draggable to the root zone')
   await page.mouse.move(rootSourceBox.x + 16, rootSourceBox.y + rootSourceBox.height / 2)
@@ -290,7 +313,7 @@ try {
   while (await page.locator('.si-list .sess-fold-control[aria-expanded="false"]').count()) {
     await page.locator('.si-list .sess-fold-control[aria-expanded="false"]').first().click()
   }
-  const dashboardSessionOrder = await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+  const dashboardSessionOrder = await painted(page.locator('.si-item[data-sid]')).evaluateAll((rows) => rows.map((row) => row.dataset.sid))
   mark('open empty session search')
   await page.keyboard.press('Control+/')
   assert.equal(await page.locator('.search-panel').count(), 0, 'Control+/ must remain native and not open app search')

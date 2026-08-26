@@ -50,8 +50,9 @@ scenarios:
       mis-aim and the worktree removal is destructive). Cancelling does nothing — the row stays. Confirming
       **dismisses the confirm dialog instantly** — it never sits open, frozen and disabled, while the
       removal runs — and fires the human-only worktree removal in the background; the board reload when it
-      lands drops the closed row off every surface. This is the same removal the (now-absent) header close
-      once did, behind a guard.
+      lands drops the closed row from the working forest while the selected routed document remains open as
+      the archived/offline read-only Conversation. This is the same removal the (now-absent) header close once
+      did, behind a guard.
       The confirm action has focus on open, so plain Enter is that same confirmation rather than an inert key
       or an activation behind the dialog.
   - name: archive-confirm-with-enter

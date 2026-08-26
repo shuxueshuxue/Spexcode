@@ -325,10 +325,11 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       Launch several sessions quickly from New Session, then close the active and a background session while
-      observing prompt focus, URL selection, and list updates.
+      observing prompt focus, URL selection, list updates, and the selected Conversation footer.
     expected: >-
-      Launch clears immediately, stays focused on New, and never waits or auto-switches. Removing the active
-      session falls back to New; removing a background session preserves the current valid selection.
+      Launch clears immediately, stays focused on New, and never waits or auto-switches. Closing the active
+      session removes its working row but keeps its routed id selected and shows the archived/offline read-only
+      Conversation; closing a background session preserves the current valid selection.
   - name: launcher-picker-is-config-shaped
     tags: [frontend-e2e, desktop]
     description: >-

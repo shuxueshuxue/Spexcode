@@ -569,13 +569,30 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (pendingSession && !byId.has(pendingSession.id)) byId.set(pendingSession.id, pendingSession)
     return [...byId.values()]
   }, [sessions, archiveRows, pendingSession])
+  // A close removes the session from the working projection before the archive index refresh reaches this
+  // document. Keep ids that this mounted console has already rendered addressable during that short gap;
+  // otherwise the validity effect below turns a successful close into an unrelated New Session navigation.
+  // The id-addressed record is the authority for deciding whether the selection can remain.
+  const knownSessionIdsRef = useRef(new Set())
+  for (const session of allSessions) knownSessionIdsRef.current.add(session.id)
+  const [retainedSession, setRetainedSession] = useState(null)
+  useEffect(() => {
+    if (retainedSession && sessions.some((session) => session.id === retainedSession.id)) setRetainedSession(null)
+  }, [sessions, retainedSession])
+  useEffect(() => {
+    if (retainedSession && archiveRows?.some((session) => session.id === retainedSession.id)) setRetainedSession(null)
+  }, [archiveRows, retainedSession])
+  const sessionsWithRetention = useMemo(() => {
+    if (!retainedSession || allSessions.some((session) => session.id === retainedSession.id)) return allSessions
+    return [...allSessions, retainedSession]
+  }, [allSessions, retainedSession])
   useEffect(() => {
     if (pendingSession && sessions.some((session) => session.id === pendingSession.id)) setPendingSession(null)
   }, [sessions, pendingSession])
-  const archivedSessions = useMemo(() => archiveOrder(allSessions.filter((session) => session.archived)), [allSessions])
-  const validIds = useMemo(() => new Set(['new', ...allSessions.map((s) => s.id)]), [allSessions])
+  const archivedSessions = useMemo(() => archiveOrder(sessionsWithRetention.filter((session) => session.archived)), [sessionsWithRetention])
+  const validIds = useMemo(() => new Set(['new', ...sessionsWithRetention.map((s) => s.id)]), [sessionsWithRetention])
   // content mode: 'new' or a session id. The archive index is a transient overlay.
-  const active = validIds.has(sel) ? sel : 'new'
+  const active = validIds.has(sel) || (sel !== 'new' && knownSessionIdsRef.current.has(sel)) ? sel : 'new'
   const sessionActive = active !== 'new'
   // The console stays mounted when the dock is hidden, so its keyboard router needs the same visible
   // forest the dock renders. The disclosure store is shared with Dock; pointer and keyboard paths therefore
@@ -591,16 +608,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const foldableSessionIds = useMemo(() => new Set(sessionForestRows
     .filter((item) => item.type === 'row' && item.expandable)
     .map((item) => item.s.id)), [sessionForestRows])
-  // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
-  // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. App gates Dashboard on
-  // a loaded board, so `sessions` here is the REAL set — an id absent from it is genuinely gone (a dead deep
-  // link, or a loaded-empty project), not still loading; resetting it to New is correct, and Dashboard drops
-  // the matching dead seed so nothing waits forever.
+  // A removed session can be a successful close: the working board drops it while the retained archive record
+  // is still arriving. Probe the id-addressed record before declaring the tab dead. Only a real 404 (or an
+  // unreadable response) lands on New; a retained row is rendered by the same read-only Conversation path.
+  const missingProbeRef = useRef(new Set())
   useEffect(() => {
-    if (open && archiveRows !== null && !validIds.has(sel)) setSel('new')
-  }, [open, archiveRows, validIds, sel, setSel])
+    if (!open || sel === 'new' || validIds.has(sel) || !knownSessionIdsRef.current.has(sel)) return
+    if (missingProbeRef.current.has(sel)) return
+    missingProbeRef.current.add(sel)
+    fetch(apiUrl(`/api/sessions/${encodeURIComponent(sel)}`)).then(async (response) => {
+      if (!response.ok) {
+        setSel('new')
+        return
+      }
+      const row = await response.json()
+      setRetainedSession({ ...row, archived: row.archived === true, liveness: row.archived === true ? 'offline' : row.liveness })
+    }).catch((error) => {
+      setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
+      setSel('new')
+    })
+  }, [open, sel, validIds, setSel])
   const focusId = focusNode?.id || null
-  const selSession = allSessions.find((s) => s.id === active)
+  const selSession = sessionsWithRetention.find((s) => s.id === active)
   const [archiveIndexOpen, setArchiveIndexOpen] = useState(false)
   useEffect(() => { if (archiveRequested) setArchiveIndexOpen(true) }, [archiveRequested])
   const terminalFree = isHeadlessSession(selSession)
@@ -613,7 +642,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
   const diffSurface = activeBaseSurface === SESSION_SURFACE_DIFF
   const baseSurfaceForSession = (id) => {
-    const session = allSessions.find((candidate) => candidate.id === id)
+    const session = sessionsWithRetention.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
   }
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
@@ -813,10 +842,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // archived, remove its id here so SessionTerm cleanup closes the browser socket and native client. The
       // separate conversation set retains readable timeline history without retaining an xterm/WS pair.
       const next = new Set([...prev].filter((id) => {
-        const session = allSessions.find((candidate) => candidate.id === id)
+        const session = sessionsWithRetention.find((candidate) => candidate.id === id)
         return session && !isHeadlessSession(session) && hasLivePane(session)
       }))
-      for (const s of allSessions) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
+      for (const s of sessionsWithRetention) if (!isHeadlessSession(s) && hasLivePane(s)) next.add(s.id)
       if (active !== 'new') {
         const selected = sessions.find((s) => s.id === active)
         if (selected && isHeadlessSession(selected)) next.add(active)
@@ -824,7 +853,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
       return next
     })
-  }, [allSessions, active])
+  }, [sessionsWithRetention, active])
 
   // What gets MOUNTED must follow what is SHOWN. This gate used to consult the stored base preference
   // (`getSessionBaseSurface`) while the visible face is `activeBaseSurface`, which already folds in the
@@ -833,9 +862,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // mounted the conversation one: an empty pane with no composer, which is the human's send channel gone.
   useEffect(() => {
     setOpenedConversations((prev) => {
-      const valid = new Set(allSessions.map((s) => s.id))
+      const valid = new Set(sessionsWithRetention.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
-      const selected = active === 'new' ? null : allSessions.find((s) => s.id === active)
+      const selected = active === 'new' ? null : sessionsWithRetention.find((s) => s.id === active)
       // the other half of the same rule: whatever has no live pane to show is shown as a Conversation, so
       // no selection can land on a session with neither layer mounted (a corrupt row's `unknown` liveness
       // used to fall through both when the terminal gate stopped naming dead states one by one).
@@ -844,7 +873,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
       return next
     })
-  }, [allSessions, active, conversationSurface, surfaceVersion])
+  }, [sessionsWithRetention, active, conversationSurface, surfaceVersion])
 
   // a board chord (nn/dd) seeds this surface with an @-directive. Apply ONCE to the New draft, then clear it
   // upstream so a later reopen restores the user's own draft. Clobbering the draft is intended here.
@@ -917,7 +946,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const buildMenu = (value, caret) => {
     const mm = nodeMentionAt(value, caret, specs, focusId)
     if (mm) return mm
-    const am = sessionMentionAt(value, caret, allSessions, launchers)
+    const am = sessionMentionAt(value, caret, sessionsWithRetention, launchers)
     if (am) return am
     if (active === 'new') {
       const cm = slashTokenAt(value, caret, commandPresets)
@@ -975,7 +1004,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const next = before + '@new:' + cur.slice(menu.end)
       const caret = before.length + '@new:'.length
       setCur(next)
-      setMenu(sessionMentionAt(next, caret, allSessions, launchers))
+      setMenu(sessionMentionAt(next, caret, sessionsWithRetention, launchers))
       requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
@@ -1709,7 +1738,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               >
                 {/* Live terminals stay warm; every lifecycle state uses the same Conversation DOM. */}
                 {[...new Set([...opened, ...openedConversations])].map((id) => {
-                  const session = allSessions.find((candidate) => candidate.id === id)
+                  const session = sessionsWithRetention.find((candidate) => candidate.id === id)
                   if (!session) return null
                   const headless = isHeadlessSession(session)
                   const baseShown = id === active && !activeResource
@@ -1737,7 +1766,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           visibility: conversationShown ? 'visible' : 'hidden',
                           pointerEvents: conversationShown ? 'auto' : 'none',
                         }}>
-                          <TimelineChat s={session} sessions={allSessions} active={open && conversationShown}
+                          <TimelineChat s={session} sessions={sessionsWithRetention} active={open && conversationShown}
                             footerState={sessionFooterState(session)}
                             onRestore={id === active && session.status !== 'retired' ? resumeAndReturnToWorking : undefined}
                             actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />

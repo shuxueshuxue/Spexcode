@@ -209,10 +209,12 @@ consumed but inert for offline/queued sessions, using the same registry judgment
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed
 `/stop`·`/close` commands above.
-**Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you
-land. Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
-fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
-board no longer has.
+**Closing is record-preserving**: a successful close removes the row from the working forest, but the selected
+session address stays in place and its right pane becomes the archived/offline Conversation. The retained
+id-addressed record is read while the working projection and archive index converge, so closing from the current
+tab never throws the reader into New Session. If the selected id is genuinely unreadable (a 404 or an invalid
+deep link), the console falls back to New Session; a reader already moved to another valid tab keeps that switch.
+The same rule covers a session that ends or is closed elsewhere.
 
 The finding dock's session projection is [[dock-modes]]'s read-only glance over the same rows. Every row surface reads name, status colour, and glyph from one projection ([[session-row]]).
 

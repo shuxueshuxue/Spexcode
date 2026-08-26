@@ -26,6 +26,7 @@ test('mobile session detail retains the aligned TimelineChat composer', () => {
 
 test('both mobile-authored composers use the shared auto-growing textarea', () => {
   assert.match(mobileApp, /<ComposerTextarea[\s\S]*className="m-input m-new-input"/)
+  assert.match(mobileApp, /className="m-input m-new-input"[\s\S]*?onKeyDown=\{\(event\) => \{[\s\S]*?event\.key !== 'Enter' \|\| event\.shiftKey \|\| composingKey\(event\)[\s\S]*?launch\(\)/)
   // the field is borderless inside the composer card — one frame, not a bordered input in a bordered bar —
   // so its resting height is the line box, and the declared growth cap is unchanged.
   assert.match(styles, /\.m-input\s*\{[^}]*min-height:\s*26px;[^}]*max-height:\s*min\(28cqh, 240px\);/s)

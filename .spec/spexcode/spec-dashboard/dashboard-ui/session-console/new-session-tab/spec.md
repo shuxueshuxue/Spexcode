@@ -23,8 +23,8 @@ input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerT
 declared cap. Composer keyboard meaning is deliberately split by product action: a **message** composer
 (TimelineChat conversation or Command Box) sends on plain Enter, inserts a line on Shift+Enter, and never
 sends the Enter that commits an IME composition; a **launch** composer (this New tab or the phone's Create
-screen) is a long-form prompt, so Enter always remains native editing and only the explicit launch button
-submits. Nothing is prefilled; typing **`[[`** opens the
+screen) follows the same plain-Enter submit and Shift+Enter newline grammar, while its explicit launch button
+remains available as the pointer path. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
 caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
 contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.

@@ -12,6 +12,7 @@ import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
 import { Icon, IconButton } from './icons.jsx'
 import { useResizable } from './useResizable.js'
+import { DOCK_BAND } from './dockBand.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
@@ -252,14 +253,18 @@ function DockHead({ mode, specs, sessions }) {
   )
 }
 
-export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false }) {
+export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false, opening = false }) {
   // 200px is the resting width: wide enough for a session headline or a file name to read before it
   // ellipses, narrow enough that the finding dock stays a margin beside the document rather than a second
   // column competing with it. A reader who wants more drags it, and that choice is what persists — the
   // default only decides what an unopinionated window looks like.
-  const [width, onDrag, reset] = useResizable('spex.ftWidth', 200, { min: 160, max: 460 })
+  const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
+  // `data-fold` says WHY this panel appeared. A fold is a width movement; a route handover is the same band
+  // changing what it shows, and animating the second as the first is what made switching documents look
+  // like a teardown. Only a fold gets the width animation.
   return (
-    <aside className={closing ? 'dock dock-closing' : 'dock'} style={{ width }} aria-hidden={closing ? 'true' : undefined}>
+    <aside className={closing ? 'dock dock-closing' : 'dock'} data-fold={opening ? 'in' : undefined}
+      style={{ width }} aria-hidden={closing ? 'true' : undefined}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />
       {mode === 'sessions'
         ? <SessionDock sessions={sessions} activeId={activeSessionId} suppressRows={suppressSessionRows} />

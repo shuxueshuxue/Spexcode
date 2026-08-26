@@ -14,6 +14,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/useFold.js
+  - spec-dashboard/src/dockBand.js
   - spec-dashboard/src/ContextDock.jsx
   - spec-dashboard/src/SessionForestPanel.jsx
   - spec-dashboard/src/styles.css
@@ -52,6 +53,24 @@ hides it by exactly that long so the reverse is visible too. The animated proper
 width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
 inside a keyframe is ignored by the spec, which is how the first version of this animated nothing at all.
 Reduced-motion drops the animation and keeps both doors.
+
+**A FOLD IS NOT A HANDOVER, and only one of them is a width movement.** A panel can appear for two
+unrelated reasons: the reader unfolded it, or the route changed and this component is now the one drawing a
+band that was already on screen. The left band is the second case every time a reader moves between a
+Sessions document and a spec, because Sessions draws its own forest while document routes get the shell
+dock — the band persists, only its projection changes hands. Animating that as a fold is a lie about what
+happened, and it looked like one: the band collapsed to nothing and grew back, so switching documents read
+as the sidebar being torn down and rebuilt. A handover therefore dissolves in place — same width, same
+edge, new contents — and the fold keeps the width animation that actually means something. `useFold`
+reports which arrival this is; the panel carries it as an attribute, so neither CSS nor a component has to
+guess from context.
+
+**THE BAND HAS ONE WIDTH, because it is one band.** Two components draw it, which is a layout fact, not a
+product one: a reader who widens the sidebar means the sidebar, not the sidebar-while-reading-specs. Two
+persisted widths for one region is the same defect shape as a mirrored selection or a second fold index —
+whichever copy was touched last silently disagrees with the other — and here the disagreement was visible,
+moving the document column sideways at every switch. The legacy per-component keys are adopted ONCE and
+removed; a permanent read fallback would keep three sources of truth alive and let a stale one win.
 
 **THE FOLD IS ONE MECHANISM, AND EVERY FOLDABLE PANEL IN THE FRAME RUNS IT** — this dock, the Sessions
 document's own forest sidebar, and the spec document's right [[context-dock]]. They are the same gesture on

@@ -34,3 +34,12 @@ allowlist exits before any input handling. An absent allowlist means this tree i
 
 A missing manifest is an error because silently dropping lifecycle hooks hides a broken installation. All matching handlers preserve the
 existing deterministic order, stdout concatenation, blocking declaration, and Codex stderr reason translation.
+
+**A HANDLER THAT FAILS SAYS SO, whether or not it may block.** A non-blocking handler's exit code was dropped
+and its captured stderr was overwritten by the next handler and deleted on exit, so a lifecycle hook that could
+not do its job left no trace anywhere: the board simply kept whatever state it last held, and nobody could tell a
+hook that ran and declined from a hook that never ran. That silence is the same class of failure as a missing
+manifest, and it gets the same answer — the dispatcher names the event, the handler, and the exit code on its own
+stderr and forwards whatever the handler wrote there. Reporting is the whole of it: the dispatch VERDICT stays the
+blocking handlers', so a hook declared non-blocking can never become a gate by failing, and a noisy handler cannot
+acquire the power to stop a turn.

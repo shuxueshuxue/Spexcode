@@ -81,10 +81,19 @@ plugin node. This replaces the launch-time
   its own generated `.claude/settings.json`, and a session launched at the root fires the root's, never both.
   Retiring the nested shim in favour of the root silently disabled every Claude lifecycle hook (mark-active,
   stop-gate, the SessionStart runtime binding) for nested sessions. A settings file with user keys or hooks
-  is merged, never replaced. The shared
-  Codex project shim always points at the main checkout's `dispatch.sh` and `spex.mjs`, even when materialize
-  is invoked from a linked worktree; a worktree's CLI may only write its empty anchor and tree-local artifacts,
-  never replace the shared root hook owner. In a throwaway or package-installed project where the main checkout
+  is merged, never replaced. **WHERE a shim lives and WHICH toolchain it names are two questions, and only the
+  first is per-tree.** Every shim — the shared Codex project one and every tree-scoped Claude one — points at
+  the main checkout's `dispatch.sh` and `spex.mjs`, even when materialize is invoked from a linked worktree; a
+  worktree's CLI may only write its empty anchor and tree-local artifacts, never replace the shared hook owner.
+  The second question used to be answered per scope, and the consequence was invisible and constant: a session's
+  worktree is materialized by the BACKEND's install, so its shim named the checkout, and then the first commit
+  inside that worktree ran pre-commit → materialize with the WORKTREE's install and rewrote the same shim to
+  name the branch. Every session ran its opening turns on one toolchain and silently switched to another
+  mid-flight, with no receipt anywhere. Neither half was wrong alone; having two answers was. The checkout is
+  the right answer for the reason the project shim already gave, generalised: a session worktree is a DESK, not
+  a toolchain install — it carries no dependencies of its own, so a tree-pointing shim makes a fresh session's
+  very first hook try to build its branch, and a branch mid-edit on the hook path would be enforcing its own
+  governance. In a throwaway or package-installed project where the main checkout
   has no local `spec-cli` tree, the renderer falls back to the invoking package's executable rather than
   emitting a path that cannot run;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex

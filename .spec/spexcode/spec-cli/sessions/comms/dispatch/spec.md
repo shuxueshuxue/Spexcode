@@ -123,3 +123,12 @@ the **last resort** everywhere it is taught (`spex session send <SEL> --keys`):
 unstable by nature and able to confirm dangerous dialogs, so callers try a plain text send first.
 Command Box acceptance may defer the native handoff, but its lifecycle re-entry is published only after that
 request's queued message is actually dequeued; an empty or raced drain never invents `working`.
+
+**A DEFERRED HANDOVER REPORTS THE DEFERRAL, never a transport verdict.** The delivery field says what the call
+MEASURED: `accepted` when the adapter took the message, `queued` when the adapter was asked and still owes it,
+and `deferred` when the response is answered before the handover is attempted. Deriving `queued` from the queue
+read that follows a skipped drain is not a weaker measurement, it is a different question — "did I skip the
+handover", whose answer is unconditionally yes — and it made every first Command Box send claim the transport
+was still owed while the prompt reached the agent's pane milliseconds later. No transport state, harness, or
+runtime binding could change that answer, which is the tell that the field had lost its referent. A caller that
+does not measure the handover may not describe it.

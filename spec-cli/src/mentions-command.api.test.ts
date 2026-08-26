@@ -100,6 +100,11 @@ test('a Command Box @session stays in the selected session instead of prompting 
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text }),
     })
     assert.equal(result.status, 200, result.text)
+    // THE OUTCOME IS A MEASUREMENT, and this route deliberately measures nothing: it answers before starting
+    // the handover, so it must say `deferred` and never `queued`. Reporting `queued` here was unconditional —
+    // no transport state could change it — and the console turned that into "waiting for the terminal
+    // transport" on every send while the pane received the prompt milliseconds later, as the next line proves.
+    assert.equal((result.body as { delivery?: string }).delivery, 'deferred', result.text)
     await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes(text), 'source prompt')
     await new Promise((resolve) => setTimeout(resolve, 350))
     const targetPane = (await request(base, `/api/sessions/${referenced}/capture`)).text

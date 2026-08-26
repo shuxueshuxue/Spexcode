@@ -43,9 +43,12 @@ in-flight action state; settled success and failure messages publish through the
 surface, so a child receipt remains inspectable after the box closes. A refused delivery retains the complete
 draft and returned HTTP/body error, and therefore stays ready for retry. Each authored draft carries one opaque
 delivery key while it is pending; a retry with that key addresses the existing durable queue entry and cannot
-append a duplicate. A response that only confirms durable acceptance while the adapter is still queued keeps the
-draft and reports a retry-safe queued warning. Only adapter handover clears the draft and closes after publishing
-its success notice; disappearing is never the only success signal. A close, session switch, or the next send owns clearing the in-flight state; the session list
+append a duplicate. A response that reports a MEASURED unfinished handover — the adapter was asked and still
+owes the prompt — keeps the draft and reports a retry-safe queued warning. **Durable acceptance is itself a
+success and clears the draft**, including the ordinary deferred-handover path where the backend answers before
+starting the handoff: the durable queue is the delivery guarantee, and the supervisor owns the retry, so holding
+a second copy of an accepted prompt in this textarea protects nothing while costing a false transport warning on
+every send. The box always publishes a success notice; disappearing is never the only success signal. A close, session switch, or the next send owns clearing the in-flight state; the session list
 never mirrors it. Enter sends only when it is not
 committing an IME composition; Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used
 by Issues and Evals.

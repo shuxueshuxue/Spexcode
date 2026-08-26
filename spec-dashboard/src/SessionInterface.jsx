@@ -1057,13 +1057,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         return
       }
+      // `queued` is a MEASUREMENT — the adapter was asked and still owes the prompt — so it keeps the draft.
+      // `deferred` is the ordinary Command Box path: the backend accepted the message durably and starts the
+      // handover after answering, so it measured nothing about the transport and must not be read as one.
+      // The queue is the delivery guarantee here, not this textarea; holding a second copy of an accepted
+      // prompt bought nothing and cost a false transport warning on every single send.
       if (outcome?.delivery === 'queued') {
         setActionOutcome({ owner: 'command', phase: 'queued', message: t('session.outcomeQueued') })
         return
       }
       setMsg((current) => current === raw ? '' : current)
       delete commandDeliveryKeysRef.current[active]
-      setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
+      const settled = outcome?.mentionSummary
+        || (outcome?.delivery === 'deferred' ? t('session.outcomeAccepted') : t('session.outcomeDelivered'))
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: settled })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
       if (controller.signal.aborted) {

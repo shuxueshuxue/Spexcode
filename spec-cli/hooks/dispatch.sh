@@ -79,5 +79,15 @@ while IFS=$'\t' read -r ev order block script; do
     fi
     rc=2
   fi
+  # FAIL LOUD. A non-blocking handler's failure used to vanish completely: its exit code was dropped and its
+  # stderr was overwritten by the next handler and deleted on exit, so a lifecycle hook that could not write
+  # left NO trace anywhere — the board kept whatever state it last held and the reader had to guess whether
+  # the hook had run at all. That silence is what let a whole fleet's mark-active and stop-gate die unnoticed.
+  # Reporting is all this does: a non-blocking hook must not change the dispatch verdict, so `rc` stays the
+  # blocking handlers' to set, and a noisy hook can never turn into a gate.
+  if [ "$code" != 0 ] && [ "$block" != "true" ]; then
+    printf 'dispatch.sh: %s handler %s exited %s\n' "$event" "$script" "$code" >&2
+    [ -s "$err" ] && cat "$err" >&2
+  fi
 done < "$manifest"
 exit "$rc"

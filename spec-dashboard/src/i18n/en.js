@@ -886,6 +886,7 @@ export default {
     rootDrop: 'move to top level',
     outcomeWorking: 'working...',
     outcomeSending: 'sending...',
+    outcomeAccepted: 'accepted — handing it to the agent',
     outcomeDelivered: 'delivered',
     outcomeQueued: 'accepted, waiting for the terminal transport — retry is safe',
     outcomeUnconfirmed: 'delivery not confirmed — retry is safe',

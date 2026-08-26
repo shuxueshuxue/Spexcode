@@ -317,13 +317,26 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
 
   const wt = join(proj, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
-  spex(wt, 'materialize')                                  // per-worktree materialize (as sessions.ts does at launch)
+  spex(wt, 'materialize')                                  // an in-worktree materialize (what pre-commit runs)
 
   assert.ok(existsSync(join(wt, '.codex', 'hooks.json')), 'worktree has a .codex/hooks.json anchor')
   assert.deepEqual(JSON.parse(readFileSync(join(wt, '.codex', 'hooks.json'), 'utf8')), { hooks: {} }, 'anchor is empty so the root checkout is the sole hook owner')
   // Claude loads project settings from the session cwd only, so the nested worktree needs its own dispatcher shim
   const nestedClaude = JSON.parse(readFileSync(join(wt, '.claude', 'settings.json'), 'utf8')) as { hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>> }
   assert.ok(nestedClaude.hooks.PreToolUse?.some((entry) => entry.hooks.some((hook) => hook.command.includes('dispatch.sh claude PreToolUse'))), 'nested worktree carries its own Claude dispatcher shim')
+  // RESIDENCE is per-tree; the TOOLCHAIN is the main checkout's, exactly as the shared Codex shim's is.
+  // Answering the second question per-scope is what made a session run its opening turns on the backend's
+  // install and silently switch to the branch's at its first commit — this materialize IS that first commit's,
+  // and it must not rewrite the shim to point inside the worktree.
+  const preToolCommand = (file: string) => {
+    const settings = JSON.parse(readFileSync(file, 'utf8')) as { hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>> }
+    return settings.hooks.PreToolUse.flatMap((entry) => entry.hooks.map((hook) => hook.command))
+      .find((command) => command.includes('dispatch.sh claude PreToolUse')) as string
+  }
+  const nestedCommand = preToolCommand(join(wt, '.claude', 'settings.json'))
+  assert.equal(nestedCommand, preToolCommand(join(proj, '.claude', 'settings.json')),
+    `the tree shim names the same toolchain the checkout's does: ${nestedCommand}`)
+  assert.ok(!nestedCommand.includes(join(wt, 'spec-cli')), `no worktree-local toolchain path: ${nestedCommand}`)
   writeFileSync(join(wt, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash(git:*)'] }, hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'user-owned-hook' }] }] } }))
   spex(wt, 'materialize')
   const userClaude = JSON.parse(readFileSync(join(wt, '.claude', 'settings.json'), 'utf8'))

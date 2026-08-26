@@ -874,6 +874,7 @@ export default {
     rootDrop: '移到顶层',
     outcomeWorking: '正在处理...',
     outcomeSending: '正在发送...',
+    outcomeAccepted: '已接收 —— 正在交给 agent',
     outcomeDelivered: '已送达',
     outcomeQueued: '已接收，正在等待终端传输 — 可安全重试',
     outcomeUnconfirmed: '尚未确认送达 — 可安全重试',

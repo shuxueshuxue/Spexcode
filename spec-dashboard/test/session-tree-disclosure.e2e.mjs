@@ -11,7 +11,23 @@ rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(PW).href)
-const graph = await fetch(`${BASE}/api/graph`).then((response) => response.json())
+const graph = await (async () => {
+  const deadline = Date.now() + 45_000
+  while (Date.now() < deadline) {
+    const response = await fetch(`${BASE}/api/graph`)
+    if (response.ok && !response.headers.get('x-spexcode-graph')?.includes('stale')) {
+      const board = await response.json()
+      const rows = board.sessions || []
+      const byId = new Map(rows.map((row) => [row.id, row]))
+      const hasLiveParentChild = rows.some((row) => row.liveness !== 'offline' && row.parent && byId.get(row.parent)?.liveness !== 'offline')
+      const hasOfflineRoot = rows.some((row) => row.liveness === 'offline' && !row.parent)
+      const liveRoots = rows.filter((row) => row.liveness !== 'offline' && !row.parent)
+      if (hasLiveParentChild && hasOfflineRoot && liveRoots.length >= 2) return board
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 250))
+  }
+  throw new Error('timed out waiting for an authoritative parent/child, offline root, and live target fixture')
+})()
 const sessions = graph.sessions || []
 const childrenOf = new Map()
 for (const session of sessions) {
@@ -93,7 +109,7 @@ await page.route('**/api/sessions/reparent', async (route) => {
 
 try {
   await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.si-panel').waitFor({ state: 'visible' })
+  await page.locator('.si-list').waitFor({ state: 'visible', timeout: 20_000 })
   mark('open sessions')
 
   const interfaceParent = page.locator(`.si-tree-row:has(> .si-item[data-sid="${parent.id}"])`)

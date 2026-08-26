@@ -2750,6 +2750,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   padding: 10px 14px calc(var(--space-7) * 4);
   user-select: text; -webkit-user-select: text;
 }
+/* THE CONVERSATION HAS A MEASURE, and the scroller is not it. Without this the flow ran the full pane: at
+   1440 the person's bubble sat hard against the right edge while the agent's prose began at the far left,
+   nearly 1200px away, and the two read as columns of a table rather than as turns of one conversation. The
+   column is centred so the exchange has a middle to happen in; the scroller keeps its own full width so the
+   scrollbar stays on the pane's edge where a reader expects it. */
+.m-timeline > * { max-width: 896px; margin-inline: auto; }
 /* TimelineChat keeps the real composer caret focused while this browser-owned highlight paints a
    conversation Range. It deliberately never creates a document Selection. */
 ::highlight(timeline-sel) { background-color: #264f78; color: #f0f6fc; }
@@ -2758,20 +2764,74 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--ui-font); font-size: var(--type-control); }
 .m-ev-glyph { flex: none; }
 .m-ev-word { font-weight: var(--weight-semibold); }
+.m-ev-span { flex: none; color: var(--muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
 .m-ev-time { margin-left: auto; flex: none; font-size: var(--type-caption); color: var(--muted); }
 .m-transcript-toggle { display: flex; justify-content: flex-end; width: 100%; margin: 3px 0 0; padding: 0 2px; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; }
 .m-transcript-toggle:hover { color: var(--blue); }
 .m-transcript-state, .m-transcript-empty, .m-transcript-truncated { margin: 5px 0 0 14px; padding: 6px 8px; color: var(--muted); background: var(--panel); border-left: 2px solid var(--line); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
-.m-transcript-flow { margin: 5px 0 0 14px; padding: 7px 9px; background: var(--panel); border-left: 2px solid var(--blue); }
-.m-transcript-turn { padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
-.m-transcript-turn:last-child { border-bottom: 0; }
-.m-transcript-role { margin-bottom: 2px; color: var(--muted); font-size: var(--type-caption); }
-.m-transcript-text { color: var(--ink2); overflow-wrap: anywhere; }
-.m-transcript-tool { margin-top: 5px; border: 1px solid var(--line); }
-.m-transcript-tool summary { display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; color: var(--ink2); cursor: pointer; font-size: var(--type-meta); }
-.m-transcript-tool summary span:last-child { color: var(--muted); white-space: nowrap; }
-.m-transcript-tool pre { max-height: 220px; overflow: auto; margin: 0; padding: 6px; color: var(--ink); background: var(--term-bg); font: inherit; font-size: var(--type-meta); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------
+   The old transcript was a nested log: a tinted well, a rule under every turn, a role word above each one,
+   and a bordered box per tool. Every level of nesting drew another line, so reading it meant reading the
+   containers. A chat has almost no chrome — the turns' own shapes carry the structure, and whitespace does
+   the separating. What is left here is the smallest set of marks that still says who spoke.               */
+.tc-flow { display: flex; flex-direction: column; gap: 18px; margin: 10px 0 0; }
+/* the person is QUOTED: a narrow bubble, one corner squared into a tail, sitting off the measure. The agent
+   IS the page — full width, no bubble, no tint. Boxing both would make a conversation read as a table. */
+.tc-ask {
+  align-self: flex-end; max-width: min(576px, 82%);
+  padding: 8px 12px; color: var(--ink2); background: var(--panel);
+  /* the sheet spends ONE radius token; a bubble does not get to invent a rounder one. The squared tail
+     corner is a sub-pixel mark, which is the one exception the geometry contract allows. */
+  border: 1px solid var(--edge); border-radius: var(--radius); border-top-right-radius: 2px;
+  overflow-wrap: anywhere;
+}
+.tc-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* prose keeps a readable measure even when the pane is wide; only the tool blocks below may run long. */
+.tc-say-text { max-width: 74ch; color: var(--ink); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
+/* the work segment's one line. It is a full-width rule rather than a sentence because it is a SEAM in the
+   conversation — everything that produced the answer, closed. The caret leads so the row reads as a
+   disclosure and not as another thing that happened. */
+.tc-work { display: flex; flex-direction: column; gap: 8px; }
+.tc-work-row {
+  display: flex; align-items: baseline; gap: 7px; width: 100%; padding: 3px 0;
+  color: var(--muted); background: none; border: 0; border-bottom: 1px solid var(--edge);
+  font-family: var(--ui-font); font-size: var(--type-meta); text-align: left; cursor: pointer;
+}
+.tc-work-row:hover { color: var(--ink2); }
+.tc-work-caret { flex: none; }
+.tc-work-lead { flex: none; color: var(--ink2); font-weight: var(--weight-medium); }
+.tc-work-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-work-body { display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--edge); }
+.tc-tools { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0; max-width: 100%; }
+.tc-tool { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 100%; }
+/* a SENTENCE, not a card: inline-flex so it is exactly as wide as what it says. A dozen of these read as a
+   list of things that happened; a dozen full-width bars read as a stack of boxes. */
+.tc-tool-row {
+  /* a sentence has a length; a long shell command must not stretch the row into a full-width bar. Measured:
+     36 of 39 rows filled their container before this cap, which is the difference between reading a list of
+     things that happened and reading a stack of boxes. */
+  display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: min(100%, 56ch);
+  padding: 2px 0; color: var(--muted); background: none; border: 0;
+  font-family: var(--ui-font); font-size: var(--type-meta); text-align: left;
+}
+.tc-tool-row.is-openable { cursor: pointer; }
+.tc-tool-row.is-openable:hover { color: var(--ink2); }
+/* the verb IS the status: there is no per-tool success or failure in the record, so no tick and no badge
+   is invented here. */
+.tc-tool-verb { flex: none; color: var(--ink2); font-weight: var(--weight-medium); }
+.tc-tool-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.tc-tool-trail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.tc-tool-size { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-tool-caret { flex: none; color: var(--muted); }
+.tc-tool-row.is-run .tc-tool-verb { color: var(--muted); font-weight: var(--weight-regular); }
+.tc-tool-kids { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--edge); }
+.tc-tool-out {
+  max-width: 100%; max-height: 220px; overflow: auto; margin: 0 0 2px; padding: 7px 9px;
+  color: var(--ink); background: var(--term-bg); border-radius: var(--radius);
+  font: inherit; font-family: var(--mono); font-size: var(--type-meta);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .m-ev-note {
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
   overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0;

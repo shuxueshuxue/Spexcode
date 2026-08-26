@@ -940,6 +940,7 @@ export default {
   // the touch-first phone interface (MobileApp) — the desktop graph is a mouse/keyboard instrument, so a
   // phone gets a drill-down list + a sessions tab instead.
   mobile: {
+    conversation: 'conversation',
     specsTab: 'specs',
     sessionsTab: 'sessions',
     evalsTab: 'evals',

@@ -37,7 +37,35 @@ be switched to Terminal. `queued` and `archive` are the two legislated exception
 projection: queued has intentionally not launched and self-starts as a slot frees, while archive is closed and
 restored explicitly.
 
-Conversation status rows expose one keyboard-reachable disclosure button (`aria-expanded`) for each `▸ N turns · M tools` transcript entry. Every entry starts folded on first load, after a timeline/status refresh, and when a different session is selected; no data arrival or remount may open it. The disclosure choice is keyed to the status event, not to the current transcript interval, so a later status that closes the interval keeps an already-open entry open and keeps an untouched entry closed. The timeline body is selectable text: Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an accidental editable surface.
+**THE TRANSCRIPT IS A CONVERSATION, NOT A LOG.** It used to render as nested containers — a tinted well, a
+rule under every turn, a role word above each, a bordered box per tool — so reading it meant reading the
+chrome. A chat carries its structure in the shapes of the turns themselves. The person is QUOTED: a narrow
+bubble, capped well under the measure, one corner squared into a tail, sitting off to its own side. The
+agent IS the page: full measure, no bubble, no tint. Boxing both would make an exchange read as a table of
+two columns. The whole flow is held to a centred measure — without one, at a wide pane the bubble sat
+against the right edge while the prose began at the far left, a thousand pixels away, and the two stopped
+reading as one conversation.
+
+**Collapse the process, keep the result.** Everything that produced an answer folds the moment the answer
+exists; the answer itself, and anything durable, stays. The unit is the work SEGMENT — a consecutive run of
+agent turns ending at the last one that actually says something — not a single turn's tool calls. That
+distinction is measured, not assumed: a real session put 39 calls across 21 turns, one or two each, so a
+fold scoped to one turn never fired and the reader still scrolled 21 blocks of work to reach one answer.
+A folded segment states the count and the KINDS that ran and nothing else; naming the kinds is what lets a
+reader decide whether to open, while repeating the count they just read is noise.
+
+**A tool call is a SENTENCE, not a card**: a past-tense verb, its target, and the size of what came back,
+`inline-flex` and bounded so a long shell command cannot stretch it into a full-width bar. Twelve of them
+read as a list of things that happened; twelve boxes read as boxes. The verb is the whole status claim,
+because the record carries no per-tool success, failure, or duration — a tick or a badge here would be
+invented, and nothing is shown that was not measured. A tool whose name has no verb keeps its name; a row
+that says nothing is worse than one naming a tool we have no word for. Grouping never infers what a call
+DID: a shell command parsed as harmless could hide a write inside a fold, so runs gather by position and
+are labelled by what is on the record.
+
+Conversation status rows carry how long the session stayed in that state — the question scrollback actually
+raises, with the status word beside it already saying which state — and expose one keyboard-reachable
+disclosure button (`aria-expanded`) for each transcript entry. Every entry starts folded on first load, after a timeline/status refresh, and when a different session is selected; no data arrival or remount may open it. The disclosure choice is keyed to the status event, not to the current transcript interval, so a later status that closes the interval keeps an already-open entry open and keeps an untouched entry closed. The timeline body is selectable text: Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an accidental editable surface.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. 
 

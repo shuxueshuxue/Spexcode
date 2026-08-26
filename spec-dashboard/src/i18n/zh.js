@@ -927,6 +927,7 @@ export default {
 
   // 触控优先的手机界面（MobileApp）—— 桌面图谱是鼠标/键盘的操作方式，手机改用下钻列表 + 会话页。
   mobile: {
+    conversation: '对话',
     specsTab: '规格',
     sessionsTab: '会话',
     evalsTab: '评测',

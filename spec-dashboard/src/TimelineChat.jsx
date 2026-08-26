@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { elapsed, RUN_MIN, runKinds, splitTarget, toolTarget, toolVerb } from './toolVocabulary.js'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
 import { useT } from './i18n/index.jsx'
@@ -37,20 +38,132 @@ function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}
 // The interval end moves when a later status arrives; expansion belongs to the status event itself.
 function transcriptStatusKey(sessionId, from) { return `${sessionId}:${from}` }
 
-function TranscriptPayload({ data }) {
-  if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
-  return <div className="m-transcript-flow">
-    {data.turns.map((turn, index) => (
-      <div className={`m-transcript-turn is-${turn.role}`} key={`${turn.id || turn.at}-${index}`}>
-        <div className="m-transcript-role">{turn.role}</div>
-        {turn.text && <div className="m-transcript-text"><TimelineRichText>{turn.text}</TimelineRichText></div>}
-        {turn.tools?.map((tool) => (
-          <details className="m-transcript-tool" key={tool.id}>
-            <summary><span>{tool.name}</span><span>▸ 输出 {tool.outputLines || 0} 行</span></summary>
-            <pre>{tool.output || '无输出'}</pre>
-          </details>
-        ))}
+// One tool call as a SENTENCE, not a card: verb, target, and the size of what came back. It is
+// `inline-flex` so a dozen of them read as a list of things that happened rather than a dozen boxes.
+// There is no success mark, because the transcript carries no per-tool status — the past-tense verb is the
+// whole claim, and it is one we can actually make.
+function ToolLine({ tool, open, onToggle }) {
+  const target = toolTarget(tool.input)
+  const { lead, trail } = splitTarget(target)
+  const lines = tool.outputLines || 0
+  const canOpen = !!tool.output
+  const Row = canOpen ? 'button' : 'div'
+  return (
+    <div className="tc-tool">
+      <Row {...(canOpen ? { type: 'button', onClick: onToggle, 'aria-expanded': open } : {})}
+        className={`tc-tool-row${canOpen ? ' is-openable' : ''}`}>
+        <span className="tc-tool-verb">{toolVerb(tool.name)}</span>
+        {lead && <span className="tc-tool-target">{lead}</span>}
+        {trail && <span className="tc-tool-trail">{trail}</span>}
+        {lines > 0 && <span className="tc-tool-size">{lines} lines</span>}
+        {canOpen && <span className="tc-tool-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>}
+      </Row>
+      {open && canOpen && <pre className="tc-tool-out">{tool.output}</pre>}
+    </div>
+  )
+}
+
+// A turn's tool calls are consecutive by construction, so "a run" is just "this turn's calls". Three or
+// more fold to one row; one or two stay sentences, where the verb and target are worth reading on sight.
+// Measured against a real transcript — 39 calls in one turn, all the same tool — the noise a reader wants
+// gone is repetition, not any particular tool, and nothing here judges what a call DID.
+function ToolRun({ tools, openIds, onToggle }) {
+  if (!tools?.length) return null
+  const line = (tool) => (
+    <ToolLine key={tool.id} tool={tool} open={openIds.has(tool.id)} onToggle={() => onToggle(tool.id)} />
+  )
+  if (tools.length < RUN_MIN) return <div className="tc-tools">{tools.map(line)}</div>
+  const id = `run:${tools[0].id}`
+  const open = openIds.has(id)
+  return <div className="tc-tools">
+    <div className="tc-tool">
+      <button type="button" className="tc-tool-row is-openable is-run" aria-expanded={open}
+        onClick={() => onToggle(id)}>
+        <span className="tc-tool-verb">{tools.length} tool uses</span>
+        <span className="tc-tool-trail">{runKinds(tools)}</span>
+        <span className="tc-tool-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="tc-tool-kids">{tools.map(line)}</div>}
+    </div>
+  </div>
+}
+
+// WHERE THE FOLD BELONGS, decided by what a real transcript looks like rather than by what seemed likely.
+//
+// The first attempt folded a run of tool calls inside ONE assistant turn. Measured against a real session:
+// 39 calls spread across 21 assistant turns, one or two each — so that fold never fired and the reader
+// still scrolled 21 blocks of work to reach one answer. The repetition is BETWEEN turns, not within them.
+//
+// So the unit is the work SEGMENT: a consecutive run of assistant turns, ending at the last one that
+// actually says something. Everything before that is how the answer was produced; the last turn is the
+// answer. Collapse the process, keep the result — a finished segment is one line plus what it concluded.
+function segments(turns) {
+  const out = []
+  let run = []
+  const flush = () => {
+    if (!run.length) return
+    const calls = run.reduce((n, turn) => n + (turn.tools?.length || 0), 0)
+    let lead = run.length - 1
+    while (lead > 0 && !run[lead].text) lead -= 1
+    const answer = run[lead]?.text ? run[lead] : null
+    const work = answer ? run.slice(0, lead) : run
+    out.push({ kind: 'work', work, answer, calls, folded: calls >= RUN_MIN && work.length > 0 })
+    run = []
+  }
+  for (const turn of turns) {
+    if (turn.role === 'user') { flush(); out.push({ kind: 'ask', turn }); continue }
+    run.push(turn)
+  }
+  flush()
+  return out
+}
+
+function TurnBody({ turn, openIds, onToggle }) {
+  return <div className="tc-say">
+    {turn.text && <div className="tc-say-text"><TimelineRichText>{turn.text}</TimelineRichText></div>}
+    <ToolRun tools={turn.tools} openIds={openIds} onToggle={onToggle} />
+  </div>
+}
+
+function WorkSegment({ segment, openIds, onToggle }) {
+  const id = `seg:${segment.work[0]?.id || segment.work[0]?.at || segment.answer?.at}`
+  const open = openIds.has(id)
+  const kinds = runKinds(segment.work.flatMap((turn) => turn.tools || []))
+  return <>
+    {segment.folded ? (
+      <div className="tc-work">
+        <button type="button" className="tc-work-row" aria-expanded={open} onClick={() => onToggle(id)}>
+          <span className="tc-work-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <span className="tc-work-lead">{segment.calls} tool uses</span>
+          {kinds && <span className="tc-work-detail">{kinds}</span>}
+        </button>
+        {open && <div className="tc-work-body">
+          {segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} />)}
+        </div>}
       </div>
+    ) : segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} />)}
+    {segment.answer && <TurnBody turn={segment.answer} openIds={openIds} onToggle={onToggle} />}
+  </>
+}
+
+// THE CONVERSATION, SHAPED AS ONE. A person's turn is quoted — a narrow bubble with one corner squared off
+// — and the agent's turn IS the page: full measure, no bubble, no tint. The asymmetry is the design; giving
+// both a box makes a chat read as a table of two columns.
+function TranscriptPayload({ data }) {
+  const [openIds, setOpenIds] = useState(() => new Set())
+  const toggle = (id) => setOpenIds((prev) => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+  if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
+  return <div className="tc-flow">
+    {segments(data.turns).map((segment, index) => (
+      segment.kind === 'ask'
+        ? <div className="tc-ask" key={`a${index}`}>
+            {segment.turn.text && <TimelineRichText>{segment.turn.text}</TimelineRichText>}
+          </div>
+        : <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={toggle} />
     ))}
     {data.truncated && <div className="m-transcript-truncated">transcript 已截断：省略 {data.omittedTurns || 0} turns、{data.omittedBytes || 0} bytes{data.outOfOrderEvents ? `，检测到 ${data.outOfOrderEvents} 条乱序记录` : ''}</div>}
   </div>
@@ -466,14 +579,20 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       const transcriptId = transcriptStatusKey(s.id, transcriptFrom)
       const transcript = transcripts.get(transcriptId)
       const expanded = expandedStatuses.has(transcriptId)
+      // WHAT THE COLLAPSED PHASE SAYS. How LONG it stayed in this state is the question scrollback actually
+      // raises, and the status word beside it already says which state — so the head carries the span and
+      // the disclosure says only what opening it costs. Tool counts move down into the turns that ran them,
+      // where they can name what KIND ran instead of totalling everything into one number nobody can act on.
+      const span = elapsed(transcriptTo - transcriptFrom)
       const scale = transcript?.state === 'ready'
-        ? `${transcript.data.turns.length} turns · ${transcript.data.turns.reduce((count, turn) => count + (turn.tools?.length || 0), 0)} tools`
-        : 'transcript'
+        ? `${transcript.data.turns.length} turns`
+        : t('mobile.conversation')
       rows.push(
         <div className="m-ev" key={i}>
           <div className="m-ev-head">
             <span className="m-ev-glyph" style={{ color: STATUS_COLOR[d] }}>{STATUS_GLYPH[d] || '·'}</span>
             <span className="m-ev-word" style={{ color: STATUS_COLOR[d] }}>{t(`status.${d}`)}</span>
+            {span && <span className="m-ev-span">{span}</span>}
             <span className="m-ev-time">{timeOf(e.ts)}</span>
           </div>
           <button type="button" className="m-transcript-toggle" aria-expanded={expanded} onClick={() => toggleTranscript(e, transcriptTo)}>

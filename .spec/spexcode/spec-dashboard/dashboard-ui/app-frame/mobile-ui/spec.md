@@ -161,8 +161,8 @@ The two planes, made native to touch:
   compatibility row, or placeholder. Only the chrome is phone-shaped — shared `ComposerTextarea`, native launcher
   `<select>`, one launch button.
   This is a **launch** composer rather than a message composer: it shares the same auto-growth mechanism,
-  but Enter remains native long-prompt editing and never launches; only the explicit button submits. This
-  matches the desktop New tab and is an intentional boundary, not a missing keyboard handler.
+  and follows the shared plain-Enter submit / Shift+Enter newline grammar; the explicit button remains the
+  pointer twin. IME composition Enter is still native composition input and never launches.
   The row's leading mark is the shared `Icon` plus glyph (never a Unicode plus), and its focus/pressed
   states use the same restrained blue action treatment as the desktop dock door.
   Where the desktop box fires in the

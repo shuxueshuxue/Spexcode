@@ -26,8 +26,8 @@ part of the shell's geometry, so growth adds lines **above** it instead of movin
 
 The shared primitive owns layout, textarea measurement, focus styling, disabled state, and the IME guard
 that distinguishes a composition commit from an ordinary Enter. It deliberately does **not** own domain
-meaning. Message homes decide that plain Enter sends and Shift+Enter adds a line; launch homes keep Enter as
-native long-form editing and submit only from their explicit action. Each home still supplies its placeholder,
+meaning. Message homes decide that plain Enter sends and Shift+Enter adds a line; launch homes use the same
+plain-Enter submit and Shift+Enter newline grammar, while still supplying an explicit pointer action. Each home still supplies its placeholder,
 menus, triggers, attachment controls, send behavior,
 error copy, and draft lifetime. Issues and Evals keep the one `ReplyComposer` behavior in `Thread.jsx`;
 Command Box keeps its session control grammar in [[command-box]]; the Issues compose page ([[issues-view]])

@@ -101,8 +101,13 @@ existing `sb-warning` yellow semantic token. Beside them ride the document's own
 console's unread-resource signal, the session's [[eval-door]] measurement glance, the public-graph disclosure. A routed file's source path is NOT one of
 them — the owner withdrew it (2026-08-24): the workspace tab and the address already carry the document's
 identity, and an ambient path item read as noise. `status-bar-contract.test.mjs` keeps that withdrawal
-executable. The bar's vertical separators speak one voice: every seam on the line is the same full-height
-`--edge` hairline, whether drawn as a group's `border-left` (`--divider-rule`) or as the tally separator.
+executable. The bar's vertical separators speak one voice, and it is a SHORT one: every boundary in the right group
+carries the same centred `--edge` rule, about half the row tall, and nothing on the line draws a full-height
+hairline. A rule spanning the strip's whole height reads as a structural division of the WINDOW, which is a
+claim the bar is not making — all it separates is two readouts sharing one row. The seam is a property of
+the group rather than of any item in it, so no item has to know which neighbour it sits beside and no group
+can grow a second seam style; because the right group is laid out in reverse, it is drawn on an item's right
+edge, which is the boundary with the sibling before it.
 
 **The tallies are the workspace's, and the shell registers them.** They are true of the window on every
 route, so they cannot belong to a view — hanging them off the graph is exactly what emptied this bar the

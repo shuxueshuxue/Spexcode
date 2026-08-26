@@ -93,8 +93,8 @@ async function verifyMobileLaunchComposer(page) {
     `mobile launch prompt did not grow above its floor: ${JSON.stringify(lines)}`)
   assert.ok(lines.every((entry) => entry.overflowY === 'hidden'), 'mobile launch prompt scrolled before its cap')
   assert.ok(lines.every((entry) => entry.scrollHeight <= entry.clientHeight), 'mobile launch prompt overflowed its client box')
-  assert.equal(result.enterValue, 'long launch prompt\n', 'mobile launch Enter did not remain native editing')
-  assert.equal(result.launchRequests, 0, 'mobile launch Enter created a session')
+  assert.equal(result.enterValue, '', 'mobile launch Enter did not clear the submitted draft')
+  assert.equal(result.launchRequests, 1, 'mobile launch Enter did not create a session')
   return result
 }
 
@@ -183,7 +183,7 @@ async function runViewport(name, viewport) {
     mark('send unique token with plain Enter')
     if (phase === 'B' && name === 'mobile') {
       result.launchComposer = await verifyMobileLaunchComposer(page)
-      mark('verify phone Create growth and native Enter')
+      mark('verify phone Create growth and plain Enter launch')
     }
 
     const heights = result.lines.map((entry) => entry.offsetHeight)

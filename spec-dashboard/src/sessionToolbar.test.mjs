@@ -92,7 +92,7 @@ test('pane-backed and headless consoles share one warm TimelineChat Conversation
   assert.match(source, /const isHeadlessSession = \(session\) => session\?\.capabilities\?\.headless === true/)
   assert.match(source, /const next = new Set\(\[\.\.\.prev\]\.filter\(\(id\) => \{[\s\S]*?return session && !isHeadlessSession\(session\) && hasLivePane\(session\)[\s\S]*?\}\)\)/)
   assert.match(source, /\(headless \|\| openedConversations\.has\(id\)\) && \(/)
-  assert.match(source, /<TimelineChat s=\{session\} sessions=\{allSessions\} active=\{open && conversationShown\}/)
+  assert.match(source, /<TimelineChat s=\{session\} sessions=\{sessionsWithRetention\} active=\{open && conversationShown\}/)
   assert.match(source, /setOpenedConversations\(\(prev\) => \(prev\.has\(id\) \? prev : new Set\(prev\)\.add\(id\)\)\)/)
   assert.match(timelineChat, /sendSessionText\(s\.id, text, \{ replyVia: 'note' \}\)/)
   assert.equal((timelineChat.match(/className="tl-chat"/g) || []).length, 1)

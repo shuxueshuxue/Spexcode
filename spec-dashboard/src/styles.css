@@ -1308,13 +1308,13 @@ a.scenario-count:hover { background: var(--wash-hover); }
      face — so on a selected console row it can float onto the headline's first line ([[session-activity]]). */
   order: 1;
   flex: 0 0 100%; width: 100%; min-width: 0; margin-top: 1px;
-  display: flex; align-items: center; column-gap: 7px;
+  display: flex; align-items: center; justify-content: flex-end; column-gap: 7px;
   font-size: var(--type-caption); line-height: var(--leading-tight); opacity: .9; overflow: hidden;
 }
-.sess-ops { color: var(--ov, var(--blue)); font-weight: var(--weight-semibold); flex: none; }
+.sess-ops { color: var(--ov, var(--blue)); font-weight: var(--weight-semibold); flex: none; order: 1; }
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
-.sess-glyph { flex: none; width: 12px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); }
+.sess-glyph { flex: none; width: 12px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); order: 2; }
 .sess-tree-row { position: relative; --sess-fold-indent: 0px; --sess-fold-pad-x: 0px; }
 .sess-lead { flex: none; align-self: stretch; display: inline-flex; align-items: stretch; --rail: color-mix(in srgb, var(--muted) 42%, transparent); }
 /* a connector column. `.rail` = a full-height vertical (an ancestor whose branch continues below this row);

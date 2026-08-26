@@ -91,11 +91,15 @@ dark terminal, whatever the app theme. The document has one right area that
 the sessions dock owns the list's `＋` New Session door. The forest sidebar's row grammar — its three doors (New,
 archive, search), zone heads, the archive zone and its routed `archive=1` index overlay, drag, and the keyboard
 walk — is [[session-forest]]'s. The forest registers that walk with the shared window keyboard service beside
-the rows it owns; the document keeps the input, menu, and plain-arrow portions of the console scope. The document is bounded by
+the rows it owns; the document keeps the input, menu, and plain-arrow portions of the console scope. It keeps
+no BOOKKEEPING for the walk either — no second index of which rows are foldable — because a derived set kept
+beside a mechanism it no longer drives is how the two drift back apart. The document is bounded by
 the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
 
 **New Session** is the console's launch tab — the [[launch-hero]] wordmark over the launch composer and the launcher
-picker; its grammar, background fire, and picker are [[new-session-tab]]'s.
+picker; its grammar, background fire, and picker are [[new-session-tab]]'s. Its focused composer submits on plain
+Enter, inserts a newline on Shift+Enter, and leaves IME composition Enter to the browser; the visible launch control
+is the pointer twin, while an open completion menu consumes Enter for its highlighted choice first.
 
 An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
 published resource faces selected by the one session object address:
@@ -208,10 +212,12 @@ consumed but inert for offline/queued sessions, using the same registry judgment
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed
 `/stop`·`/close` commands above.
-**Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you
-land. Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
-fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
-board no longer has.
+**Closing is record-preserving**: a successful close removes the row from the working forest, but the selected
+session address stays in place and its right pane becomes the archived/offline Conversation. The retained
+id-addressed record is read while the working projection and archive index converge, so closing from the current
+tab never throws the reader into New Session. If the selected id is genuinely unreadable (a 404 or an invalid
+deep link), the console falls back to New Session; a reader already moved to another valid tab keeps that switch.
+The same rule covers a session that ends or is closed elsewhere.
 
 The finding dock's session projection is [[dock-modes]]'s read-only glance over the same rows. Every row surface reads name, status colour, and glyph from one projection ([[session-row]]).
 

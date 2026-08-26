@@ -28,3 +28,18 @@ Two things want separating before a fix: whether the duplicate is the fs watcher
 delivering two events for one git commit (coalescing window too short), or the graph
 invalidation publishing twice for one watcher event. The census line the test already
 captures (`graph watchers — sources=1 registrations=1`) is the place to start.
+
+<!-- reply: 06de0e08-421e-4e1b-8632-512bd2d15f0e @ 2026-08-26T11:02:00.753Z -->
+Stays open: unfinished, and deliberately not folded into any of this session's merges.
+
+Nothing here fixed it. It was found while gating an unrelated branch, reproduced on the
+dead-words commit's tree as well as after it, and measured at roughly one failure in
+three when the single test runs ALONE — so it is neither load-sensitive nor
+suite-order-dependent. The failing run is a real product event: after one commit the
+backend emits a second graph-changed inside the assertion's 80ms quiet window, so the
+plateau the test exists to prove did not hold.
+
+The two candidates named in the body are still unseparated — fs watcher delivering two
+events for one commit, versus graph invalidation publishing twice for one watcher event.
+An intermittently red gate trains readers to re-run until green, so this wants a real
+fix rather than a quarantine.

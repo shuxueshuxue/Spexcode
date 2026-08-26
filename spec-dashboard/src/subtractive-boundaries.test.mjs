@@ -105,6 +105,15 @@ test('session row clicks focus an existing workspace tab before replacing the cu
   assert.match(sessionInterface, /onSelect=\{\(id, options\) => onPickSession \? onPickSession\(id, options\)/)
 })
 
+test('Sessions selection is the routed address, never a mirrored local state', () => {
+  const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
+  assert.match(sessionsView, /const selection = param && param !== 'new' \? param : 'new'/)
+  assert.match(sessionsView, /sel=\{selection\}/)
+  assert.match(sessionsView, /setSel=\{pickSession\}/)
+  assert.doesNotMatch(sessionsView, /\[sel, setSel\]/)
+  assert.doesNotMatch(sessionsView, /setSel\(param/)
+})
+
 test('retired generic pane-resizer CSS stays absent', () => {
   assert.doesNotMatch(css, /\.pane-resizer\b/, 'dead generic pane-resizer CSS returned')
   assert.match(css, /\.content-divider\b/, 'live split resize seam disappeared with the dead generic rule')

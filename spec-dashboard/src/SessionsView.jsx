@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import SessionInterface from './SessionInterface.jsx'
 import { useBoard, useBoardApi, usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
@@ -16,14 +16,14 @@ export default function SessionsView({ param, query }) {
   // A hold and a plain read differ only in what the workspace is told BEFORE the address is written: the
   // mark is [[tab-strip]]'s, the route write stays this view's ([[workspace-shell]] owns every address a
   // view lands on). The launch page names no session, so it is never held.
-  const pickSession = (id, { hold = false } = {}) => {
+  const pickSession = useCallback((id, { hold = false } = {}) => {
     if (id === 'new') return scope.open({ page: 'sessions', param: id, query: null })
     const route = { page: 'sessions', param: id, query: null }
     if (hold) markTabHold(route.page, route.param, route.query)
     else return focusSessionTab(id, (held) => scope.open(held))
     return scope.open(route)
-  }
-  const [sel, setSel] = useState(() => param || 'new')
+  }, [scope])
+  const selection = param && param !== 'new' ? param : 'new'
   // a board chord may have composed text for this view before it existed; collect it on arrival — in an
   // EFFECT, never a state initializer. The take is a one-shot, and StrictMode double-invokes initializers
   // to expose exactly that: the first invocation consumed the payload and the second's null won. The
@@ -46,12 +46,6 @@ export default function SessionsView({ param, query }) {
     collect()
     return watchCompose(collect)
   }, [showing, takeCompose, watchCompose])
-  // The console is ONE mounted document for every session ([[workspace-shell]]'s pool keys it by page), so
-  // the selection has to follow the route in both directions: an id selects that session, and the bare or
-  // `new` address selects the launch face. Only the first was needed while every session switch remounted
-  // this view — and that remount is exactly what made a switch cost a cold boot.
-  useEffect(() => { setSel(param && param !== 'new' ? param : 'new') }, [param])
-
   return (
     <SessionInterface
       sessions={sessions}
@@ -59,9 +53,9 @@ export default function SessionsView({ param, query }) {
       focusNode={null}
       open={showing}
       searchOpen={!!palette}
-      sel={sel}
+      sel={selection}
       surface={query?.surface}
-      setSel={setSel}
+      setSel={pickSession}
       seed={seed}
       onSeedConsumed={() => setSeed(null)}
       onClose={() => scope.open({ page: 'graph', param: null, query: null })}

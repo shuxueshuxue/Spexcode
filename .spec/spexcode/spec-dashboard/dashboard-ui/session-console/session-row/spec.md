@@ -42,8 +42,10 @@ family's root status**.
 (`STATUS_COLOR` / `STATUS_GLYPH`), its visible name from the shared `sessionHeadline` (the same door used by
 @-mentions), and its stable handle only in secondary identity reveals, and its
 activity from `opSummary`, which folds an op list into per-op counts using the shared `GLYPH` map.
-Colour is never invented here — it is read from the shared vocabulary so a status means the same
-thing on every surface.
+The compact metadata group is pinned to the row's trailing edge, with operation marks before the status
+glyph so the lifecycle marker has one stable rightmost position even when a `~`/`+` tally is present.
+Colour is never invented here — it is read from the shared vocabulary so a status means the same thing on
+every surface.
 
 The governing human ruling is: “我们的显示模式一直都只看 parent session 是不是 running。就算你这个是 needs you 状态,
 它也应该放在那个 running 的 parent session 底下,而不是自己跳到上面去、再加一个回到 parent 的链接。我们本来完全没有这套机制的…给我狠狠的删!”

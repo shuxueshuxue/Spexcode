@@ -45,6 +45,21 @@ scenarios:
       the context dock carries its own inner scroller, because a folding panel must clip its width and
       clipping without a scroller makes a long list unreachable rather than scrollable.
     code: [spec-dashboard/src/useFold.js, spec-dashboard/src/styles.css]
+  - name: the-band-hands-over-without-being-torn-down
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real browser, sample the left band per animation frame across a route switch from a Sessions
+      document to a spec and back, reading the painted width of whichever component draws it. Measure the
+      band's RIGHT EDGE, not a container: on Sessions the forest lives inside the content column and on Spec
+      the dock sits outside it, so a container probe reports two different elements and invents a lurch the
+      size of the whole band (measured — it claimed 204px of movement that was entirely its own confusion).
+    expected: >-
+      The band's width never dips across the switch: the same number before, during, and after, because the
+      band did not leave — only the component drawing it changed hands. The one movement left is the small
+      slide the dissolve is made of, an order of magnitude under the band's width. A run where the band
+      collapses toward zero and grows back is the defect this scenario exists to catch: it is the fold
+      animation, a width movement, being run for something that was never a fold.
+    code: [spec-dashboard/src/useFold.js, spec-dashboard/src/dockBand.js, spec-dashboard/src/styles.css]
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Use settled screenshots for the dock

@@ -254,25 +254,35 @@ test('merge is one present plugin on both the command and skill surfaces', () =>
   assert.equal(mergePlugin, mergeTemplate)
 })
 
-// THE SESSION'S ONE MEASUREMENT DOOR. The console mounts no eval surface of its own ([[session-console]]),
-// so this is navigation and nothing else: a REAL anchor on the canonical `scope:<id>` address, the same one
-// the typed `/eval` opens. It is a REGISTERED DOCUMENT ACTION rather than a console-local tab rail — the
-// frame owns the band ([[document-actions]]) — and it draws itself because the glance is content the frame
-// cannot compute, which is why it must also state its own `nodeKey`: without one the slot would keep the
-// first element it was handed while the summary moved on.
-test('the session eval door is a registered document action, a real anchor, and states its glance state', () => {
-  assert.match(source, /id: 'eval', icon: 'evals', label: evalDoorTitle/)
+// THE SESSION'S ONE MEASUREMENT DOOR, on the AMBIENT LINE. The console mounts no eval surface of its own
+// ([[session-console]]), so this is navigation and nothing else: a REAL anchor on the canonical `scope:<id>`
+// address, the same one the typed `/eval` opens. It is a registered STATUS item rather than a document
+// action — the band holds verbs that act on the document, the line holds persistent readouts, and a glance
+// over how the measurement is doing is the second kind ([[status-bar]]).
+test('the session eval door is a status-line readout and a real anchor', () => {
+  assert.match(source, /id: 'session-eval', side: 'right', priority: 25/)
   assert.match(source, /href=\{addressHash\(sessionEvalAddress\(active\)\)\}/)
   assert.match(source, /className="si-eval-door"/)
-  assert.match(source, /nodeKey: `\$\{evalSummary\.phase\}/)
   assert.match(source, /uiCmds\.some\(\(command\) => command\.name === 'eval'\)/)
   // the registry keeps the typed twin and the door on one availability judgement
   assert.equal(UI_COMMANDS.find((command) => command.name === 'eval').button, false)
-  // `nodeKey` is the slot's own contract, beside the `menuKey` it already had for a popup
-  assert.match(documentActions, /action\.nodeKey \|\| \(action\.node \? 'node' : ''\)/)
-  assert.match(tabStrip, /\{action\.node \|\| <IconButton/)
+  // it left the band completely: no eval entry, and no leftover glance markup in the toolbar contract
+  assert.doesNotMatch(source, /id: 'eval', icon: 'evals'/)
   assert.match(css, /\.si-eval-door \{/)
   assert.doesNotMatch(css, /\.si-eval-tab\b/)
+  // the band's own `node`/`nodeKey` capability is untouched — the door stopped using it, it did not die
+  assert.match(documentActions, /action\.nodeKey \|\| \(action\.node \? 'node' : ''\)/)
+  assert.match(tabStrip, /\{action\.node \|\| <IconButton/)
+})
+
+// IT MUST NOT LEAK ONTO A NEIGHBOUR. The workspace keeps documents mounted while hidden, so mounting is not
+// focus: without the pane's own active flag a session's eval glance would sit on the line while the reader
+// reads a spec. Passing null disposes in the same effect that registered, so it leaves on the tab switch.
+test('the eval door leaves the line the moment the session stops being the read document', () => {
+  assert.match(source, /const paneShowing = usePaneActive\(\)/)
+  assert.match(source, /const evalDoorShowing = paneShowing && sessionActive && uiCmds\.some/)
+  assert.match(source, /useStatusItem\(evalDoorShowing \? \{/)
+  assert.match(source, /\} : null\)/)
 })
 
 test('Command Box orders board, preset, then harness commands and deduplicates by precedence', () => {

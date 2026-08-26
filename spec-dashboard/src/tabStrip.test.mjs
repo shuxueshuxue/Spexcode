@@ -88,14 +88,17 @@ test('resident tabs and the activity rail share view-owned page icons', () => {
   assert.match(css, /@container \(max-width:\s*100px\)\s*\{[^}]*\.tab-kind-icon, \.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
 })
 
-test('left dock and right context controls use distinct semantic glyphs', () => {
-  // The rail controls the left finding dock. The document control answers the right context question;
-  // reusing panel-right made two different owners look like one duplicated door when both were closed.
+test('both dock switches speak the panel vocabulary, and each names the dock it owns', () => {
+  // The rail owns the LEFT dock and flips the mirrored pair as that dock's layout state. The document
+  // control owns the RIGHT dock and holds `panel-right` fixed: the pair has no empty-frame member, so a
+  // flipping right-dock switch would draw `panel-left` — a panel on the wrong side — to say "closed".
+  // Its state is `aria-pressed` plus the `.on` tint, never a glyph that pictures the other region.
   assert.match(sideBar, /<Icon name=\{dock \? 'panel-left' : 'panel-right'\} size=\{18\} \/>/)
   const contextToggle = shell.match(/function ContextToggle\([\s\S]*?\n}\n\nexport default function Shell/)
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
-  assert.match(contextToggle[0], /<Icon name="list-checks" size=\{14\} \/>/)
-  assert.doesNotMatch(contextToggle[0], /panel-right/)
+  assert.match(contextToggle[0], /<Icon name="panel-right" size=\{14\} \/>/)
+  assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
+  assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
 })
 
 test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {

@@ -633,9 +633,7 @@ export default {
 
   // The shell ledger's graph walk: per-node badges count distinct things; coverage counts scenarios.
   stats: {
-    totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
-    driftTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} whose code is ahead of its spec — click to walk them`,
     issueTitle: ({ n }) => `${n} distinct open issue${n === 1 ? '' : 's'} linked to the tree — click to walk the nodes carrying them`,
     scorePass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} measured fresh & passing — click to walk the nodes carrying them`,
     scoreFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} measured fresh & failing — click to walk the nodes carrying them`,

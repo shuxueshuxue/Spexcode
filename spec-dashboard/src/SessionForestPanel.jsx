@@ -14,7 +14,7 @@ const GHOST_SCALE = 0.75
 
 // The Sessions page owns the full mutable forest. The dock remains a compact finding projection; this panel
 // is the product surface where row selection, bulk close, and parent movement have one coherent owner.
-export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
+export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
   const t = useT()
   const { expanded, offlineOpen } = useSessionListState()
   const [selecting, setSelecting] = useState(false)
@@ -131,7 +131,8 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
 
   return (
     <>
-      <aside className="si-list" ref={listRef} style={{ width }}>
+      <aside className={closing ? 'si-list dock-closing' : 'si-list'} ref={listRef} style={{ width }}
+        aria-hidden={closing ? 'true' : undefined}>
       {selecting ? (
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
       ) : (

@@ -86,8 +86,8 @@ the dock may fold or be absent on bare boards: this placement keeps the icon, na
 complete and stationary on every desktop route while remaining immediately adjacent to the sidebar. When
 opened, its catalog menu is anchored to that button's own slot, opening upward from the button's top edge,
 sharing its left edge, and shrinking to the viewport when the window is narrow.
-On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec-node total with
-its four-state breakdown and drift-node count; all five eval scenario states (fresh pass/fail, stale
+On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec nodes by state — the four
+state counts and nothing beside them; all five eval scenario states (fresh pass/fail, stale
 pass/fail, unmeasured); the deduped open-issue total; and live sessions grouped by the configured
 `sessions.launchers` names. Each launcher group leads with the harness mark from the shared icon vocabulary
 and renders a compact `running/needs-you/other` slash tally using the existing green/yellow/muted status
@@ -98,7 +98,7 @@ KDA badge takes its place, so the slash tally can never be clipped between digit
 that share a harness mark carry a small profile-initial badge (for example `R` and `C`) so icon-only mode
 still distinguishes them. When any session needs the human, the sessions ledger item also carries the
 existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the session
-console's unread-resource signal, the public-graph disclosure. A routed file's source path is NOT one of
+console's unread-resource signal, the session's [[eval-door]] measurement glance, the public-graph disclosure. A routed file's source path is NOT one of
 them — the owner withdrew it (2026-08-24): the workspace tab and the address already carry the document's
 identity, and an ambient path item read as noise. `status-bar-contract.test.mjs` keeps that withdrawal
 executable. The bar's vertical separators speak one voice: every seam on the line is the same full-height
@@ -138,18 +138,40 @@ A count that is merely large stays quiet. Per-chip items would give the user fin
 already supports it; that is an unclaimed improvement, not a hidden limitation.
 
 **A document contributing a fact about itself is the registry working as designed** — the session console's
-unread-resource signal and the public-graph disclosure are such facts, and the bar is where a persistent
-readout goes precisely so that no surface has to grow one. The boundary the file path's withdrawal drew:
-a fact earns the bar only when no existing chrome already states it. A path the tab and the address both
-carry was a third copy, so it left; a signal nothing else shows stays.
+unread-resource signal, its [[eval-door]] glance, and the public-graph disclosure are such facts, and the bar
+is where a persistent readout goes precisely so that no surface has to grow one. The boundary the file path's
+withdrawal drew: a fact earns the bar only when no existing chrome already states it. A path the tab and the
+address both carry was a third copy, so it left; a signal nothing else shows stays.
+
+**A contributed fact may be MARKUP, and the rule is the same one [[document-actions]] already runs.** The
+ownership guard bounds a view's contribution to the focused-document group and nothing more. It once also
+banned markup with one page allowed through by name, which is not a rule but a record of the then-current
+usage: the frame already renders a document-supplied element inside its own chrome in the action registry,
+and the same properties bound it here — the frame owns the wrapper, the position, the lifetime, and the
+reader's power to hide it. Two frame registries therefore state one rule, and a second document needing a
+glance does not need a second name on an allow-list.
+
+**Whether a document is MOUNTED is not whether it is being READ.** The workspace pool keeps hidden documents
+mounted, so a contributor gates its registration on its own pane being active and passes nothing when it is
+not; disposal happens in the effect that registered, so a fact leaves the line on the tab switch rather than
+lingering over a document nobody has open.
 
 Session lifecycle attention reuses the same transient-notice provider as every other acknowledged action. A transition
 into `asking` emits one clickable notice that opens that session document; no session-specific notification channel exists.
 
-Board tally actions use the shared [[icon-system]] registry for their semantic marks: drift uses the
-`triangle-alert` glyph and issue totals use the official `issue-opened` glyph. Statusbar markup does not
-introduce Unicode warning/diamond stand-ins or a second local icon vocabulary; the tally's count and
-accessible label remain unchanged.
+Board tally actions use the shared [[icon-system]] registry for their semantic marks: issue totals use the
+official `issue-opened` glyph. Statusbar markup does not introduce Unicode warning/diamond stand-ins or a
+second local icon vocabulary; the tally's count and accessible label remain unchanged.
+
+**Two node readouts were WITHDRAWN (2026-08-25, human ruling), and the reason generalises.** The bare
+grand total was the sum of the four state counts standing immediately beside it, and the drift door was a
+second face for a warning [[spec-lint]] already raises and the node's own chip already carries. Neither was
+wrong; both were a number that restated something already on screen, and the resting state of this line is
+supposed to be quiet. The node ledger is therefore the four state counts alone. Drift keeps no status-bar
+door: walking drifted nodes is an authoring task the lint output names, not an ambient window fact. The
+`sb-tally-sep` seam went with the door it separated, leaving the group `border-left` as the line's ONE
+divider voice. `status-bar-contract.test.mjs` keeps both withdrawals executable, exactly as it keeps the
+file-path item's.
 
 ## executable mount guard
 

@@ -23,12 +23,20 @@ copy-link/middle-click work for free), so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the console width is stable and a warm pane is never reflowed;
-see [[live-view]]). **It lives in the FRAME's document-action band** ([[document-actions]]), registered by the
-session document like every other action there, and not in a console-local tab rail — the console has no tab
-rail to hold it, and a door drawn inside the pane would be a second toolbar competing with the one the frame
-already owns. It keeps that band's button geometry and widens only for the glance it carries; because the
-glance is content the frame cannot compute, the door draws itself and states its own render state, exactly as
-an action owning a popup states its menu's. The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
+see [[live-view]]). **It lives on the FRAME's AMBIENT LINE** ([[status-bar]]), registered by the session document as a fact about
+itself, and not in a console-local tab rail — the console has no tab rail to hold it, and a door drawn inside
+the pane would be a second toolbar competing with the one the frame already owns. It is not in the
+document-action band either, and the difference is what each region answers: the band is a row of VERBS that
+act on the document, while this is one persistent READOUT of how the document's measurement is doing, which
+is the fact an ambient line exists to hold. It therefore takes the LINE's geometry — the `--line-status` row
+height, no box of its own, the frame's `sb-item` owning the padding and the reader's hide gesture — and
+widens only for the glance it carries.
+
+**A mounted document is not the read document.** The workspace keeps recent documents mounted while hidden
+([[workspace-shell]]'s pool), so registering on mount alone would leave a session's eval glance sitting on the
+line while the reader is reading a spec — a readout claiming to be about a document nobody is looking at.
+The door registers only while the console's own pane is the ACTIVE one, and the un-registration is the same
+effect's disposal, so it leaves the line on the tab switch itself rather than one paint later. The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
 already bounded by [[session-eval]] to scenarios this worktree affected or measured. Its four mutually exclusive
 scenario tallies are the complete visible accounting: reliable current pass/fail counts use [[review-chrome]]'s
 `ReviewState` vocabulary, measured stale or legacy/unscored scenarios carry a visible clock tally as work still

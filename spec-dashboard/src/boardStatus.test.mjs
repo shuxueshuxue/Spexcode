@@ -18,9 +18,9 @@ test('the shell owns one complete board ledger on every route', () => {
 })
 
 test('board tally actions use the shared icon registry', () => {
-  assert.match(shell, /name="triangle-alert" size=\{13\}/)
   assert.match(shell, /name="issue-opened" size=\{13\}/)
-  assert.doesNotMatch(shell, /title=\{t\('stats\.driftTitle',[\s\S]*?>⚠<\/BoardStat>/)
+  // no Unicode stand-in may return in place of a withdrawn glyph door
+  assert.doesNotMatch(shell, />⚠<\/BoardStat>/)
   assert.doesNotMatch(shell, /title=\{page === 'graph'[\s\S]*?>◆<\/BoardStat>/)
 })
 

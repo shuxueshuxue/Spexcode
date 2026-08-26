@@ -41,6 +41,33 @@ scenarios:
       the click opens the sessions console without an unrelated archive-index error notice.
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/styles.css]
     test: spec-dashboard/test/identity-chain.e2e.mjs
+  - name: node-ledger-is-the-four-state-counts
+    tags: [frontend-e2e, desktop]
+    description: >-
+      On any route in the running dashboard, enumerate the node ledger's controls on the settled status bar:
+      count `[data-board-stat="drift"]`, `[data-board-stat="nodes-total"]`, `[data-board-stat^="status-"]`,
+      and any `.sb-tally-sep` / `.sb-tally-lead` seam or lead element.
+    expected: >-
+      Exactly four state counts and nothing else: no drift door, no grand total, no tally separator. The
+      total restated the sum of the four counts standing beside it and drift restated a warning the lint
+      gate raises and the node's own chip carries, so both are withdrawn; the seam went with the door it
+      separated, leaving the group border as the line's one divider voice. Zero loss = a quiet resting line
+      whose every remaining number says something nothing else on screen already says.
+    code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/specMeta.js]
+  - name: session-eval-door-rides-the-line-and-leaves-with-the-document
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open a live session document in a real browser and locate `.si-eval-door`: inside `.statusbar` or
+      inside `.tabstrip-actions`? Compare its rendered height with the status row's, and confirm the frame's
+      own `.sb-item` wraps it. Then route to a spec document and count the door again — the Sessions view
+      stays MOUNTED and display-hidden, so the count must come from the painted line.
+    expected: >-
+      The door is on the ambient line, absent from the action band, wrapped by the frame's sb-item, and no
+      taller than one `--line-status` row; its href is still the canonical `scope:<id>` Evals address. On a
+      non-session document the line carries no door at all — not a hidden one. A readout that survived the
+      tab switch would be describing a document nobody has open. Zero loss = one door, on the line, for
+      exactly as long as its session is the document being read.
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/statusOwnership.js]
 ---
 # measuring the status bar
 

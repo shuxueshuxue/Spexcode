@@ -1,5 +1,5 @@
 ---
-title: reading-sidecar
+title: measurement-sidecar
 status: active
 hue: 140
 desc: The append-only measurement log beside a spec — one JSON line per event, readings and their retractions, verdicts, and a content-addressed evidence list; nothing is ever deleted or rewritten.
@@ -12,7 +12,7 @@ related:
   - packages/spec-core/src/layout.ts
 ---
 
-# reading-sidecar
+# measurement-sidecar
 
 A measurement is an EVENT, not a field, so [[eval-core]] keeps its scoreboard in a flat append-only sidecar
 rather than in the spec. This node owns that log: what a line may be, how the effective view is folded, and how

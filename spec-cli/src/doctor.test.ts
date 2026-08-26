@@ -81,8 +81,8 @@ test('bare doctor diagnoses an adopted repository before its first commit withou
 })
 
 // A TREE CAN PASS EVERY CHECK ABOVE THIS AND STILL BE UNGOVERNED. A shim wired, a manifest present, every
-// handler readable — and no turn-end event bound, so the record keeps whatever state it last held and the
-// board paints a stopped agent as running. A deployment whose `.config` predated the stop-gate node hit
+// handler readable — and no turn-end event bound, so the record keeps whatever state it last held and a
+// stopped agent still shows as running. A deployment whose `.config` predated the stop-gate node hit
 // exactly that, and nothing in the diagnosis said so. The empty manifest is the same silence one layer
 // down: the dispatcher answers a MISSING manifest with a loud exit 78 and an EMPTY one by dispatching
 // nothing and exiting 0, so the two must not read the same here either.
@@ -111,7 +111,7 @@ test('doctor separates an unmaterialized tree, an empty manifest, and an unbound
     writeFileSync(manifest, full.split('\n').filter((l) => !/^(Stop|StopFailure)\t/.test(l)).join('\n'))
     const unbound = cli('doctor')
     assert.match(unbound.stdout, /lifecycle events\s*:\s*Stop, StopFailure NOT bound/)
-    assert.match(unbound.stdout, /paints a stopped agent as running/)
+    assert.match(unbound.stdout, /a stopped agent still shows as running/)
 
     // an empty manifest is not a missing one
     writeFileSync(manifest, '')

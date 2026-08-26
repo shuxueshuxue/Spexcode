@@ -12,6 +12,6 @@ scenarios:
       returns to `eval-missing`, and the withdrawn readings' blobs fall out of the referenced set. A retraction
       matching no reading is inert and a retract with nothing to withdraw fails loud.
 ---
-# measuring reading-sidecar
+# measuring measurement-sidecar
 
 The append-only claim is measured on the bytes, and the effective-view claim on every surface that folds them.

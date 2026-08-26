@@ -36,7 +36,7 @@ prune the evidence — works end to end through the real `spex` surface, with no
 
 A scenario's declaration format, its tag vocabulary, its code axis and the anchors that narrow it are
 [[scenario-declaration]]'s. The append-only readings sidecar, its retraction event and its evidence list are
-[[reading-sidecar]]'s. Deciding whether a stored reading still testifies — the three axes, the contract-hash
+[[measurement-sidecar]]'s. Deciding whether a stored reading still testifies — the three axes, the contract-hash
 compare, the legacy git track, and the off-history content fallback — is [[eval-freshness]]'s. What stays here is
 the loop those three serve: a scenario is a target the agent measures however it likes, eval records the result
 and flags it stale, and nothing in this layer executes anything.

@@ -20,7 +20,7 @@ related:
 A reading is a claim about code at a commit, so the question this node answers is whether that claim still
 stands. It is DERIVED at read time and never stored as a verdict, it is decided per SCENARIO because the
 scenario is the unit of measurement, and it may over-report but must never silently stop testifying.
-[[scenario-declaration]] owns what a scenario declared; [[reading-sidecar]] owns what was filed.
+[[scenario-declaration]] owns what a scenario declared; [[measurement-sidecar]] owns what was filed.
 
 A scenario is the unit of measurement, so its **freshness is its own**: its optional `code` subset is its
 code freshness axis (a `code`/`related` path that doesn't exist is flagged, never silently immortal); absent,

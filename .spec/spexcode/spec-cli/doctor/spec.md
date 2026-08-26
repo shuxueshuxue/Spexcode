@@ -70,8 +70,8 @@ reads the same [[harness-adapter]] registry [[harness-delivery]] materializes th
   actually bound. A shim without its handler is under-delivery even when the visible wiring looks complete;
   so is a manifest that binds handlers but no turn-end event. That last one is the failure this layer exists
   to catch and the one every other check passes: with `Stop` / `StopFailure` / `PostToolUse` unbound the tree
-  cannot report its own turn ending, so the record keeps whatever state it last held and the board paints a
-  stopped agent as running — the shape of a real deployment whose `.config` predated the stop-gate node.
+  cannot report its own turn ending, so the record keeps whatever state it last held and a stopped agent
+  still shows as running — the shape of a real deployment whose `.config` predated the stop-gate node.
   An EMPTY manifest is reported as its own state, never as a missing one: the dispatcher answers a MISSING
   manifest with a loud refusal and an EMPTY one by dispatching nothing and exiting 0, so a tree that
   materialized with no hook nodes is otherwise indistinguishable from a healthy one. Naming it here is why

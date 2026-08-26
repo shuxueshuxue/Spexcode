@@ -233,7 +233,7 @@ function manifestEvents(text: string): Set<string> {
 // THE LIFECYCLE EVENTS, and why they are named here rather than derived from an adapter's full event list.
 // A tree that binds no turn-end event has a shim, a manifest, and readable handlers — every check above it
 // passes — and still cannot report that its agent stopped: the record keeps whatever state it last held and
-// the board paints a dead turn as running. That is not hypothetical; a deployment whose `.config` predated
+// a dead turn still shows as running. That is not hypothetical; a deployment whose `.config` predated
 // the stop-gate node hit exactly this, and nothing in the diagnosis said so. Stop is the gate; StopFailure
 // is the failed-turn writer; PostToolUse is the freshness mark. Missing any of them is a distinct break
 // from "no manifest", and it is the one a passing installation can hide.
@@ -463,7 +463,7 @@ async function doctor(): Promise<number> {
     const unbound = LIFECYCLE_EVENTS.filter((event) => !events.has(event))
     line('lifecycle events', unbound.length === 0
       ? `${LIFECYCLE_EVENTS.join(', ')} all bound`
-      : `${unbound.join(', ')} NOT bound → this tree cannot report its own turn ending; the board keeps the last state and paints a stopped agent as running`)
+      : `${unbound.join(', ')} NOT bound → this tree cannot report its own turn ending; the record keeps its last state and a stopped agent still shows as running`)
   }
   // codex trust
   const trustPresent = codexCfg.includes(`# spexcode:trust:${base}`)

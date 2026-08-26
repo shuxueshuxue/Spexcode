@@ -2442,6 +2442,16 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-action-outcome.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
 .si-command-tools .si-action-outcome { margin-left: auto; }
 .si-action-outcome-float { position: absolute; top: 12px; right: 12px; z-index: 2; max-width: min(360px, calc(100% - 24px)); pointer-events: none; }
+/* the New tab's explicit launch control ([[new-session-tab]]): the ONLY submit on a launch composer, so it
+   reads as the primary action rather than a muted composer tool. Same send glyph and blue fill the Command
+   Box's send carries, at the composer row's end. */
+.si-launch {
+  flex: none; align-self: flex-end; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0; margin-left: 2px; border-radius: var(--radius); cursor: pointer;
+  color: var(--paper); background: var(--blue); border: 1px solid var(--blue);
+}
+.si-launch:disabled { opacity: .45; cursor: default; }
+.si-launch:not(:disabled):hover { filter: brightness(1.08); }
 .si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }

@@ -20,7 +20,7 @@ related:
 Half of [[eval-core]]'s loop is the DECLARATION: what a node says it will be measured on, before anyone measures
 it. This node owns that half — the file format, its closed schema and tag library, the code axis a scenario may
 narrow, and the projection an outside measuring hand reads it through. What a stored reading then proves, and
-whether it still testifies, are [[reading-sidecar]]'s and [[eval-freshness]]'s.
+whether it still testifies, are [[measurement-sidecar]]'s and [[eval-freshness]]'s.
 
 A node declares its scenarios in a **eval.md** beside its spec.md (a frontmatter `scenarios:` list, each a
 **name** + **description** + **expected** zero-loss result + **tags**, plus OPTIONAL **test** (either a

@@ -10,7 +10,7 @@ import { navigate } from './route.js'
 import { addressHash, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
-import { ComposerTextarea } from './Composer.jsx'
+import { ComposerTextarea, composingKey } from './Composer.jsx'
 import { Icon } from './icons.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
@@ -161,6 +161,12 @@ function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
           rows={5}
           placeholder={t('mobile.newPlaceholder')}
           value={draft}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.shiftKey || composingKey(event)) return
+            event.preventDefault()
+            event.stopPropagation()
+            launch()
+          }}
           onChange={(e) => setDraft(e.target.value)}
         />
         {launchers.length > 0 && (

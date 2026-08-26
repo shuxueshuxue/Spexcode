@@ -1604,11 +1604,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         }
         return
       }
-      // NO plain-Enter launch. A conversation composer sends on Enter; a LAUNCH composer holds a long-form
-      // prompt — `/preset [[node]]` plus free text, often several lines — so Enter has to stay native editing
-      // and the explicit control is the only submit ([[new-session-tab]]). It used to fire the launch, which
-      // made a paragraph unwritable without Shift+Enter on every line and, with no launch button rendered at
-      // all, left the contract's stated submit path missing from the product entirely.
+      // The New Session textarea owns the launch action's plain-Enter path below. This scope deliberately
+      // stays out of that branch so a completion menu can consume Enter first and Shift+Enter remains native
+      // multiline editing ([[new-session-tab]]).
     }
     onKey(event)
     return event.cancelBubble
@@ -1676,6 +1674,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   data-focus-sink
                   rows={1}
                   value={prompt}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.shiftKey || composingKey(event)) return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    submit()
+                  }}
                   onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
                   onSelect={(e) => syncMenu(e.target)}
                   onPaste={(e) => onPasteFiles(e, 'new')}
@@ -1690,10 +1694,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onClick={() => pickFiles('new')}
                   disabled={uploadingAt('new')}
                 >{uploadingAt('new') ? <BusyGlyph /> : <AttachGlyph />}</button>
-                {/* THE EXPLICIT LAUNCH CONTROL. A launch composer holds a long-form prompt, so Enter stays
-                    native editing here and this button is the only thing that submits ([[new-session-tab]]).
-                    The press is inert chrome: the draft box must keep focus through the launch, because the
-                    whole point of firing in the background is that the reader can keep typing. */}
+                {/* THE EXPLICIT LAUNCH CONTROL remains the pointer twin of plain Enter. The press is inert
+                    chrome: the draft box must keep focus through the launch, because the whole point of
+                    firing in the background is that the reader can keep typing. */}
                 <IconButton icon="send" size={14} className="si-launch" label={t('session.launchSend')}
                   disabled={!prompt.trim()} onMouseDown={inertChromePress} onClick={submit} />
                 {menu && (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && mentionMenuEl(false)}

@@ -26,15 +26,17 @@ test('ordinary interactive launch posts only the prompt and named launcher', asy
   }
 })
 
-// THE LAUNCH COMPOSER'S SUBMIT. [[new-session-tab]]: a launch prompt is long-form, so Enter stays native
-// editing and an explicit control is the only submit. The product had it exactly backwards — plain Enter
-// fired the launch and no launch control was rendered at all, so the contract's stated submit path did not
-// exist in the shipped UI. A blind spot found it: the scenario could not be measured for want of the button.
-test('the New tab submits from its own control, never from a bare Enter', () => {
+// THE LAUNCH COMPOSER'S SUBMIT. [[new-session-tab]]: plain Enter launches, Shift+Enter inserts a line,
+// and the explicit control remains the pointer twin. Completion menus consume Enter before this textarea
+// handler, so choosing a dropdown item cannot launch accidentally.
+test('the New tab launches on plain Enter and keeps Shift+Enter for multiline drafts', () => {
   const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
   assert.match(source, /className="si-launch" label=\{t\('session\.launchSend'\)\}/)
   assert.match(source, /disabled=\{!prompt\.trim\(\)\} onMouseDown=\{inertChromePress\} onClick=\{submit\}/)
-  assert.doesNotMatch(source, /e\.key === 'Enter'[^\n]*active === 'new'[^\n]*submit\(\)/)
+  assert.match(source, /className="si-input"[\s\S]*?onKeyDown=\{\(event\) => \{[\s\S]*?event\.key !== 'Enter' \|\| event\.shiftKey \|\| composingKey\(event\)[\s\S]*?submit\(\)/)
+  assert.match(source, /if \(menu\) \{[\s\S]*?accept\(menu\.items\[menu\.index\]\)/)
   const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
   assert.match(css, /\.si-launch\s*\{[^}]*background:\s*var\(--blue\)/s)
+  assert.match(css, /\.sess-ops\s*\{[^}]*order:\s*1;/s)
+  assert.match(css, /\.sess-glyph\s*\{[^}]*order:\s*2;/s)
 })

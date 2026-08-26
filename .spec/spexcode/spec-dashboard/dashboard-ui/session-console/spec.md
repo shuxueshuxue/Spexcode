@@ -94,7 +94,9 @@ walk — is [[session-forest]]'s. The document is bounded by
 the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
 
 **New Session** is the console's launch tab — the [[launch-hero]] wordmark over the launch composer and the launcher
-picker; its grammar, background fire, and picker are [[new-session-tab]]'s.
+picker; its grammar, background fire, and picker are [[new-session-tab]]'s. Its focused composer submits on plain
+Enter, inserts a newline on Shift+Enter, and leaves IME composition Enter to the browser; the visible launch control
+is the pointer twin, while an open completion menu consumes Enter for its highlighted choice first.
 
 An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
 published resource faces selected by the one session object address:

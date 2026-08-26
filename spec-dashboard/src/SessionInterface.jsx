@@ -1575,7 +1575,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         }
         return
       }
-      if (e.key === 'Enter' && !e.shiftKey && !composingKey(e) && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
+      // NO plain-Enter launch. A conversation composer sends on Enter; a LAUNCH composer holds a long-form
+      // prompt — `/preset [[node]]` plus free text, often several lines — so Enter has to stay native editing
+      // and the explicit control is the only submit ([[new-session-tab]]). It used to fire the launch, which
+      // made a paragraph unwritable without Shift+Enter on every line and, with no launch button rendered at
+      // all, left the contract's stated submit path missing from the product entirely.
     }
     onKey(event)
     return event.cancelBubble
@@ -1657,6 +1661,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onClick={() => pickFiles('new')}
                   disabled={uploadingAt('new')}
                 >{uploadingAt('new') ? <BusyGlyph /> : <AttachGlyph />}</button>
+                {/* THE EXPLICIT LAUNCH CONTROL. A launch composer holds a long-form prompt, so Enter stays
+                    native editing here and this button is the only thing that submits ([[new-session-tab]]).
+                    The press is inert chrome: the draft box must keep focus through the launch, because the
+                    whole point of firing in the background is that the reader can keep typing. */}
+                <IconButton icon="send" size={14} className="si-launch" label={t('session.launchSend')}
+                  disabled={!prompt.trim()} onMouseDown={inertChromePress} onClick={submit} />
                 {menu && (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && mentionMenuEl(false)}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}

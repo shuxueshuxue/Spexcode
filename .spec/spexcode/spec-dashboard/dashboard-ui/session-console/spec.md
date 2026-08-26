@@ -90,7 +90,8 @@ dark terminal, whatever the app theme. The document has one right area that
 **morphs** by what's focused. Search remains available through the shell palette and the existing ⌥+/ binding;
 the sessions dock owns the list's `＋` New Session door. The forest sidebar's row grammar — its three doors (New,
 archive, search), zone heads, the archive zone and its routed `archive=1` index overlay, drag, and the keyboard
-walk — is [[session-forest]]'s. The document is bounded by
+walk — is [[session-forest]]'s. The forest registers that walk with the shared window keyboard service beside
+the rows it owns; the document keeps the input, menu, and plain-arrow portions of the console scope. The document is bounded by
 the routed page's viewport and owns the terminal/timeline surface without a second navigation scrollbar.
 
 **New Session** is the console's launch tab — the [[launch-hero]] wordmark over the launch composer and the launcher

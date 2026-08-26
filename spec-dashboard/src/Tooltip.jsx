@@ -7,6 +7,7 @@ import { useEscLayer } from './escStack.js'
 // already warm), keyboard :focus-visible shows immediately, Esc/scroll/press dismiss. The bubble
 // portals to <body>, positions above the anchor and flips below when the viewport clips it, and
 // styles entirely through the palette CSS vars so both themes come for free (styles.css .ui-tip).
+// It POPS: the bubble grows from the arrow's edge on show, so the motion points back at its anchor.
 // While shown it stamps aria-describedby on the anchor so the copy is exposed, not hover-only.
 
 const SHOW_DELAY = 400   // cold hover → visible
@@ -104,15 +105,19 @@ export default function TooltipLayer() {
     if (!tip || !el) return
     if (!tip.anchor.isConnected) { setTip(null); return }
     const a = tip.anchor.getBoundingClientRect()
-    const b = el.getBoundingClientRect()
-    const place = a.top - b.height - GAP >= PAD ? 'top' : 'bottom'
-    const top = place === 'top' ? a.top - b.height - GAP : a.bottom + GAP
-    const left = Math.min(Math.max(a.left + a.width / 2 - b.width / 2, PAD), window.innerWidth - b.width - PAD)
+    // the LAYOUT box, not the painted rect: the bubble enters scaled down (styles.css .ui-tip), and
+    // getBoundingClientRect would report that transform — placing the bubble off its anchor and then
+    // visibly sliding as it grows. offsetWidth/Height are transform-free, so placement is decided once.
+    const width = el.offsetWidth
+    const height = el.offsetHeight
+    const place = a.top - height - GAP >= PAD ? 'top' : 'bottom'
+    const top = place === 'top' ? a.top - height - GAP : a.bottom + GAP
+    const left = Math.min(Math.max(a.left + a.width / 2 - width / 2, PAD), window.innerWidth - width - PAD)
     el.dataset.place = place
     el.style.top = `${Math.round(top)}px`
     el.style.left = `${Math.round(left)}px`
     const arrow = el.querySelector('.ui-tip-arrow')
-    if (arrow) arrow.style.left = `${Math.round(Math.min(Math.max(a.left + a.width / 2 - left, 10), b.width - 10)) - 4}px`
+    if (arrow) arrow.style.left = `${Math.round(Math.min(Math.max(a.left + a.width / 2 - left, 10), width - 10)) - 4}px`
     const raf = requestAnimationFrame(() => el.classList.add('show'))
     return () => cancelAnimationFrame(raf)
   }, [tip])

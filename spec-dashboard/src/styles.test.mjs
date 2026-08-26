@@ -352,6 +352,28 @@ test('scoped Evals gates are an opaque sticky strip inside that scroll owner', (
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;/s)
 })
 
+// [[tooltip]]: the bubble grows OUT OF its anchor. The origin must follow the flip, or a bottom-placed tip
+// would expand away from the control it describes. Reduced motion keeps the fade and drops the growth.
+test('the tooltip pops from the arrow side and honours reduced motion', () => {
+  // the START STATE must be on the BASE rule: the bubble mounts a frame before the placement pass stamps
+  // `data-place`, so a start state that only existed under that attribute was never painted and the pop
+  // silently degraded to a fade. Measured in Chromium before this line existed.
+  assert.match(css, /\.ui-tip\s*\{[^}]*transform-origin:\s*bottom center;\s*transform:\s*translateY\(3px\) scale\(\.94\);/s)
+  assert.match(css, /\.ui-tip\s*\{[^}]*transition:\s*opacity [^;]+, transform [^;]*cubic-bezier/s)
+  assert.match(css, /\.ui-tip\[data-place='bottom'\]\s*\{[^}]*transform-origin:\s*top center;[^}]*scale\(\.94\)/s)
+  assert.match(css, /\.ui-tip\.show\s*\{[^}]*transform:\s*translateY\(0\) scale\(1\);/s)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.ui-tip[^}]*transform:\s*none;/s)
+})
+
+// A scaled bubble reports a scaled getBoundingClientRect, so placement must read the layout box instead —
+// otherwise the tip lands off its anchor and slides into place as it grows.
+test('tooltip placement measures the layout box, never the painted rect', () => {
+  const tip = readFileSync(new URL('./Tooltip.jsx', import.meta.url), 'utf8')
+  assert.match(tip, /const width = el\.offsetWidth/)
+  assert.match(tip, /const height = el\.offsetHeight/)
+  assert.doesNotMatch(tip, /const b = el\.getBoundingClientRect\(\)/)
+})
+
 test('Command Box floats lower-middle and grows above a fixed footer', () => {
   assert.match(css, /\.si-term-body\s*\{[^}]*container-type:\s*size;[^}]*background:\s*var\(--term-bg\);/s)
   assert.doesNotMatch(css, /\.si-term-body\s*\{[^}]*margin-bottom:/s)

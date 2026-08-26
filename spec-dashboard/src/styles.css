@@ -3110,11 +3110,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   padding: 4px 9px; font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-relaxed);
   max-width: 320px; white-space: pre-line; overflow-wrap: break-word;
   box-shadow: var(--shadow);
-  opacity: 0; transition: opacity .14s ease, transform .14s ease;
+  /* the bubble POPS out of its anchor rather than fading in place: it grows from the arrow's edge, so the
+     motion points back at the control the tip is about. Scale is why the placement pass measures
+     offsetWidth/offsetHeight (Tooltip.jsx) — a transformed box reports its transformed rect.
+     THE HIDDEN STATE IS ON THE BASE RULE, not only on the placement variants. The bubble mounts before the
+     placement pass has run, so it exists for a frame with no `data-place` at all; a start state that lived
+     only under `[data-place=…]` was therefore never painted, and the pop degraded into a plain fade with
+     nothing red to show for it. The variants adjust the ORIGIN and the slide direction, never whether there
+     is a start state. */
+  opacity: 0; transform-origin: bottom center; transform: translateY(3px) scale(.94);
+  transition: opacity .1s ease-out, transform .16s cubic-bezier(.16, 1, .3, 1);
 }
-.ui-tip[data-place='top'] { transform: translateY(3px); }
-.ui-tip[data-place='bottom'] { transform: translateY(-3px); }
-.ui-tip.show { opacity: 1; transform: translateY(0); }
+.ui-tip[data-place='bottom'] { transform-origin: top center; transform: translateY(-3px) scale(.94); }
+.ui-tip.show { opacity: 1; transform: translateY(0) scale(1); }
+@media (prefers-reduced-motion: reduce) {
+  .ui-tip, .ui-tip[data-place='bottom'], .ui-tip.show { transform: none; transition: opacity .1s ease-out; }
+}
 .ui-tip-arrow {
   position: absolute; width: 8px; height: 8px;
   background: var(--panel2);

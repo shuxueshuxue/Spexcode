@@ -547,7 +547,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
   // slides out ([[dock-modes]]). The linger is the shared fold, not this panel's own timer — the context
   // dock and the session forest fold identically, and three copies of one timer is how they drift apart.
-  const [dockMounted, closingDock] = useFold(dock)
+  const [dockMounted, closingDock, openingDock] = useFold(dock)
   useEffect(() => {
     if (dockKind === 'sessions' || dockKind === 'explorer') setDockMode(dockKind)
   }, [documentKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -660,7 +660,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
         <SideBar page={page} needsYou={needsYou} hideDockToggle={!foldable} />
         {dockMounted && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
-            <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
+            <Dock closing={closingDock} opening={openingDock} mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null}
               suppressSessionRows={page === 'sessions'} />
           </ViewErrorBoundary>

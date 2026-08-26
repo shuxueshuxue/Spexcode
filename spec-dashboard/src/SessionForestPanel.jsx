@@ -9,6 +9,7 @@ import { useT } from './i18n/index.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { isHoldGesture } from './tabs.js'
 import { useResizable } from './useResizable.js'
+import { DOCK_BAND } from './dockBand.js'
 import { inertChromePress } from './focus.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { resolveSessionShortcut } from './sessionShortcuts.js'
@@ -17,7 +18,7 @@ const GHOST_SCALE = 0.75
 
 // The Sessions page owns the full mutable forest. The dock remains a compact finding projection; this panel
 // is the product surface where row selection, bulk close, and parent movement have one coherent owner.
-export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
+export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, opening = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
   const t = useT()
   const { expanded, offlineOpen } = useSessionListState()
   const [selecting, setSelecting] = useState(false)
@@ -25,7 +26,7 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
   const [drag, setDrag] = useState(null)
   const dragAbort = useRef(null)
   const listRef = useRef(null)
-  const [width, onDrag, reset] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
+  const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
 
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
@@ -153,7 +154,8 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
 
   return (
     <>
-      <aside className={closing ? 'si-list dock-closing' : 'si-list'} ref={listRef} style={{ width }}
+      <aside className={closing ? 'si-list dock-closing' : 'si-list'} data-fold={opening ? 'in' : undefined}
+        ref={listRef} style={{ width }}
         onMouseDownCapture={inertChromePress}
         aria-hidden={closing ? 'true' : undefined}>
       {selecting ? (

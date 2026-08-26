@@ -482,7 +482,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    every one of these panels carries the reader's own resize as an inline style, and a keyframe cannot
    outrank one — `!important` inside a keyframe is ignored by the spec, so the first version of this
    animated nothing at all. Children keep their laid-out size so the tree slides instead of reflowing. */
-.dock, .si-list, .context-dock { animation: dock-in var(--dur-panel) ease; }
+/* A FOLD is a width movement; a HANDOVER is the same band changing what it shows. Only the first animates
+   width. The left band is drawn by the shell dock on document routes and by the Sessions document's own
+   forest on Sessions, so a route switch swaps which COMPONENT draws it — and running the fold there made
+   the band collapse to nothing and grow back, dragging the whole document column 200px sideways and back
+   (measured). The arriving panel now dissolves in place instead: same width, same edge, new contents. */
+.dock[data-fold='in'], .si-list[data-fold='in'], .context-dock[data-fold='in'] { animation: dock-in var(--dur-panel) ease; }
+.dock, .si-list { animation: dock-swap var(--dur-panel) ease; }
+@keyframes dock-swap { from { opacity: 0; transform: translateX(-6px); } }
 .dock.dock-closing, .si-list.dock-closing, .context-dock.dock-closing {
   animation: dock-out var(--dur-panel) ease forwards; pointer-events: none;
 }
@@ -491,6 +498,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 @keyframes dock-out { to { max-width: 0; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .dock, .si-list, .context-dock,
+  .dock[data-fold='in'], .si-list[data-fold='in'], .context-dock[data-fold='in'],
   .dock.dock-closing, .si-list.dock-closing, .context-dock.dock-closing { animation: none; }
 }
 .dock-session-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }

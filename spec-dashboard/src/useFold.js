@@ -13,17 +13,30 @@ import { useEffect, useRef, useState } from 'react'
 // They are the same number, and DOCK_FOLD_MS is the one place the JS half says it.
 export const DOCK_FOLD_MS = 170
 
-// → [mounted, closing]. Render while `mounted`; put the closing class on while `closing`.
+// → [mounted, closing, opening]. Render while `mounted`; put the closing class on while `closing`.
+//
+// `opening` is the half that keeps a FOLD from being confused with a HANDOVER. A panel can appear for two
+// unrelated reasons: the reader unfolded it, or the route changed and this component is now the one drawing
+// a band that was already there. Only the first is a width movement. Animating both as a fold is what made
+// switching between a session and a spec look like the sidebar was torn down and rebuilt — the band
+// collapsed to nothing and grew back while the document column slid 200px and back with it.
 export function useFold(open, ms = DOCK_FOLD_MS) {
   const [closing, setClosing] = useState(false)
+  const [opening, setOpening] = useState(false)
   const was = useRef(open)
   useEffect(() => {
     if (was.current === open) return undefined
     was.current = open
-    if (open) { setClosing(false); return undefined }
+    if (open) {
+      setClosing(false)
+      setOpening(true)
+      const timer = setTimeout(() => setOpening(false), ms)
+      return () => clearTimeout(timer)
+    }
+    setOpening(false)
     setClosing(true)
     const timer = setTimeout(() => setClosing(false), ms)
     return () => clearTimeout(timer)
   }, [open, ms])
-  return [open || closing, closing]
+  return [open || closing, closing, opening]
 }

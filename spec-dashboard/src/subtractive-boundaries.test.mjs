@@ -81,7 +81,7 @@ test('the rail panel control folds the Sessions forest and is absent only where 
   assert.match(sessionInterface, /const \{ dock: forestOpen \} = useWorkspace\(\)/)
   // it is still ONE boolean; the forest just folds on it through the shared fold, so the mount outlives
   // the flag by one panel duration instead of blinking out ([[dock-modes]]).
-  assert.match(sessionInterface, /const \[forestMounted, forestClosing\] = useFold\(forestOpen\)/)
+  assert.match(sessionInterface, /const \[forestMounted, forestClosing, forestOpening\] = useFold\(forestOpen\)/)
   assert.match(sessionInterface, /\{forestMounted && <SessionForestPanel/)
 })
 
@@ -169,4 +169,36 @@ test('the spec tree remembers its disclosure and opens the branch the address na
   assert.match(store, /catch \{ return new Set\(\) \}/)
   // a route onto an already-visible node must cost no render
   assert.match(store, /if \(!wanted\.length \|\| wanted\.every\(\(id\) => snapshot\.open\.has\(id\)\)\) return/)
+})
+
+// A FOLD is a width movement; a HANDOVER is the same band changing what it shows. The left band is drawn by
+// the shell dock on document routes and by the Sessions document's forest on Sessions, so a route switch
+// swaps which COMPONENT draws it — and running the fold there collapsed the band to nothing and grew it
+// back, which is what "the sidebar is torn down and rebuilt" looked like. Measured before the fix: the band
+// went 1px -> 204px across the swap; after, it holds 204px and only the contents dissolve.
+test('the left band folds on a fold and dissolves on a route handover', () => {
+  const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
+  const fold = readFileSync(join(srcDir, 'useFold.js'), 'utf8')
+  const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  // the width animation is gated on the arrival being a real fold
+  assert.match(css, /\.dock\[data-fold='in'\][^{]*\{[^}]*animation: dock-in/)
+  assert.match(css, /\.dock, \.si-list \{ animation: dock-swap/)
+  assert.match(css, /@keyframes dock-swap \{ from \{ opacity: 0; transform: translateX\(-6px\); \} \}/)
+  assert.doesNotMatch(css, /^\.dock, \.si-list, \.context-dock \{ animation: dock-in/m)
+  assert.match(fold, /return \[open \|\| closing, closing, opening\]/)
+  assert.match(dock, /data-fold=\{opening \? 'in' : undefined\}/)
+})
+
+// ONE BAND, ONE WIDTH. The shell dock persisted spex.ftWidth and the Sessions forest persisted
+// spex.siListWidth for the same region, so whichever the reader last dragged silently disagreed with the
+// other — and the mismatch moved the document column at every route switch.
+test('the left band has a single persisted width', () => {
+  const band = readFileSync(join(srcDir, 'dockBand.js'), 'utf8')
+  for (const f of ['Dock.jsx', 'FileTree.jsx', 'SessionForestPanel.jsx']) {
+    const source = readFileSync(join(srcDir, f), 'utf8')
+    assert.match(source, /useResizable\(DOCK_BAND\.key, DOCK_BAND\.initial, DOCK_BAND\)/, f)
+    assert.doesNotMatch(source, /spex\.ftWidth|spex\.siListWidth/, f)
+  }
+  // a one-time migration, never a permanent read fallback: the legacy keys are adopted once and removed
+  assert.match(band, /LEGACY\.forEach\(\(key\) => localStorage\.removeItem\(key\)\)/)
 })

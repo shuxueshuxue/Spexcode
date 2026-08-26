@@ -9,6 +9,7 @@ import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
+import { DOCK_BAND } from './dockBand.js'
 import { revealSpecPath, toggleSpecNode, useSpecTreeState } from './specTreeState.js'
 
 // [[file-tree]]: the left dock. A spec node is a FOLDER, so the tree that navigates the project is the
@@ -143,7 +144,7 @@ function Section({ name, open, onToggle, children }) {
 // SECTION heads below are a different thing: they name a disclosure inside the list, not the list.
 export default function FileTree({ specs, focusId, onOpenFile, embedded = false }) {
   const t = useT()
-  const [width, onDrag, reset] = useResizable('spex.ftWidth', 232, { min: 180, max: 460 })
+  const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
   const [sections, setSections] = useState(readSections)
   const kids = useMemo(() => kidsOf(specs || []), [specs])
   const roots = kids.get('') || []

@@ -66,8 +66,17 @@ reads the same [[harness-adapter]] registry [[harness-delivery]] materializes th
 - **contract** — the `surface:system` block is present in each harness's contract file (CLAUDE.md / AGENTS.md);
   `spex doctor --contract` prints that exact text for any agent.
 - **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the current tree slot
-  ([[runtime]]), and EVERY manifest handler script is readable in the worktree. A shim without its handler
-  is under-delivery even when the visible wiring looks complete.
+  ([[runtime]]), EVERY manifest handler script is readable in the worktree, and the LIFECYCLE EVENTS are
+  actually bound. A shim without its handler is under-delivery even when the visible wiring looks complete;
+  so is a manifest that binds handlers but no turn-end event. That last one is the failure this layer exists
+  to catch and the one every other check passes: with `Stop` / `StopFailure` / `PostToolUse` unbound the tree
+  cannot report its own turn ending, so the record keeps whatever state it last held and the board paints a
+  stopped agent as running — the shape of a real deployment whose `.config` predated the stop-gate node.
+  An EMPTY manifest is reported as its own state, never as a missing one: the dispatcher answers a MISSING
+  manifest with a loud refusal and an EMPTY one by dispatching nothing and exiting 0, so a tree that
+  materialized with no hook nodes is otherwise indistinguishable from a healthy one. Naming it here is why
+  the dispatcher does not have to warn on its hot path, where a project legitimately carrying no hook nodes
+  would be told on every event.
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.
 - **backend** — orchestration reachability; absent is NORMAL for a bring-your-own-agent.

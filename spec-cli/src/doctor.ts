@@ -219,6 +219,26 @@ function manifestScripts(text: string): string[] {
   return [...out]
 }
 
+// which EVENTS the manifest actually binds. A tree can carry handlers and still be ungoverned in the way
+// that matters, because a handler answers an event and the lifecycle rides on specific ones.
+function manifestEvents(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const line of text.split('\n')) {
+    const f = line.split('\t')
+    if (f.length >= 4 && f[0]) out.add(f[0])
+  }
+  return out
+}
+
+// THE LIFECYCLE EVENTS, and why they are named here rather than derived from an adapter's full event list.
+// A tree that binds no turn-end event has a shim, a manifest, and readable handlers — every check above it
+// passes — and still cannot report that its agent stopped: the record keeps whatever state it last held and
+// the board paints a dead turn as running. That is not hypothetical; a deployment whose `.config` predated
+// the stop-gate node hit exactly this, and nothing in the diagnosis said so. Stop is the gate; StopFailure
+// is the failed-turn writer; PostToolUse is the freshness mark. Missing any of them is a distinct break
+// from "no manifest", and it is the one a passing installation can hide.
+const LIFECYCLE_EVENTS = ['Stop', 'StopFailure', 'PostToolUse'] as const
+
 // a plugin bundle dir found under a harness's plugins root, carrying a spexcode stamp.
 type Bundle = { dir: string; name: string; scope: string; hooksToDispatch: boolean; skillsDir: string }
 
@@ -425,14 +445,25 @@ async function doctor(): Promise<number> {
   let manifestText = ''
   let manifestHome = 'tree slot'
   try { manifestText = read(join(treeSlotDir(base), 'hooks-manifest')) } catch { /* non-git / no store */ }
+  const manifestFile = (() => { try { return join(treeSlotDir(base), 'hooks-manifest') } catch { return null } })()
+  const manifestPresent = !!manifestFile && existsSync(manifestFile)
   if (!manifestText) {
-    line('manifest', 'MISSING from the current tree slot — materialize must run before hooks can execute')
+    // ABSENT and EMPTY are different breaks and want different repairs, and the dispatcher cannot tell them
+    // apart at all: a missing file is a loud exit 78, an empty one dispatches nothing and exits 0 in silence.
+    line('manifest', manifestPresent
+      ? 'EMPTY in the current tree slot — materialize ran and bound ZERO handlers: this tree has no hook nodes, so every event dispatches nothing and exits 0 in silence'
+      : 'MISSING from the current tree slot — materialize must run before hooks can execute')
   } else {
     const scripts = manifestScripts(manifestText)
     const missing = scripts.filter((s) => !existsSync(join(base, s)))
+    const events = manifestEvents(manifestText)
     line('manifest', `${scripts.length} handler(s) in the ${manifestHome}`)
     line('handlers', missing.length === 0 ? 'all readable in the worktree' : `${missing.length} MISSING in the worktree → those hooks SILENTLY NO-OP:`)
     for (const m of missing) L.push(`      ✗ ${m}`)
+    const unbound = LIFECYCLE_EVENTS.filter((event) => !events.has(event))
+    line('lifecycle events', unbound.length === 0
+      ? `${LIFECYCLE_EVENTS.join(', ')} all bound`
+      : `${unbound.join(', ')} NOT bound → this tree cannot report its own turn ending; the board keeps the last state and paints a stopped agent as running`)
   }
   // codex trust
   const trustPresent = codexCfg.includes(`# spexcode:trust:${base}`)

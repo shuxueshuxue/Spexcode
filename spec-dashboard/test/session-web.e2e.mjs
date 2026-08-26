@@ -11,6 +11,8 @@ const here = dirname(fileURLToPath(import.meta.url))
 const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
 const BASE = process.env.BASE || 'http://127.0.0.1:5177'
+const API = process.env.API || process.env.SPEXCODE_API_URL || 'http://127.0.0.1:8787'
+const PROJECT = process.env.PROJECT || process.cwd()
 const SESSION = process.env.SESSION
 const SECOND_SESSION = process.env.SECOND_SESSION
 const SECOND_FILE = process.env.SECOND_FILE
@@ -22,7 +24,11 @@ const FILE = resolve(process.env.FILE || join(OUT, 'posted-preview.md'))
 if (!process.env.FILE) writeFileSync(FILE, '# Preview starts here\n\nWarm resource line\n')
 
 const command = (sessionId, ...args) => execFileSync(process.execPath, [CLI, 'session', ...args], {
-  cwd: process.cwd(), env: { ...process.env, SPEXCODE_SESSION_ID: sessionId }, encoding: 'utf8',
+  cwd: PROJECT, env: {
+    ...process.env,
+    SPEXCODE_SESSION_ID: sessionId,
+    SPEXCODE_API_URL: API,
+  }, encoding: 'utf8',
 }).trim()
 const waitFor = async (read, label, timeout = 45_000) => {
   const deadline = Date.now() + timeout

@@ -4862,7 +4862,10 @@ export const EMPTY_PROMPT_ERROR = 'empty prompt — nothing to dispatch'
 type AcceptedDispatch = DispatchResult & {
   replayed?: boolean
   code?: DispatchAcceptCode
-  delivery?: 'accepted' | 'queued'
+  // What this call MEASURED about the handover, never what it assumes. `accepted` = the adapter took the
+  // message. `queued` = the adapter was asked and still owes it. `deferred` = the caller asked for the
+  // handover to happen after the response, so NOTHING was measured and no transport claim may be made.
+  delivery?: 'accepted' | 'queued' | 'deferred'
 }
 type SendTextOptions = {
   replyVia?: 'note'
@@ -4928,9 +4931,17 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     // restarting, or refusing the insert; only the handoff that removes this exact message may re-enter
     // a waiting session as active. This keeps a queued command from painting a dead pane as working.
     if (!from && !pending) markHumanPromptActive(id)
+    // @@@ a deferred drain measured NOTHING, and must not be reported as a refusal.
+    // `pending` is read microseconds after the enqueue with no await in between, so when the drain was
+    // deferred it is answering "did I skip the handover" — always yes — rather than "did the adapter refuse".
+    // Reporting that as `queued` made every first Command Box send claim the transport was still owed while
+    // the prompt was in fact in the agent's pane milliseconds later, and the claim was UNCONDITIONAL: no
+    // transport state, harness, or runtime binding could change it. Name the deferral instead, so the one
+    // caller that defers can say "accepted, handover in flight" and the callers that DO drain keep a
+    // `queued` that still means what it says.
     return {
       ok: true,
-      delivery: pending ? 'queued' : 'accepted',
+      delivery: opts.deferDrain ? 'deferred' : pending ? 'queued' : 'accepted',
       ...(opts.idempotency || opts.deliveryKey ? { replayed } : {}),
     }
   }

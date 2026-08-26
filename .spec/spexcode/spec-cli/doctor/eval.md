@@ -48,6 +48,21 @@ scenarios:
       - spec-cli/src/doctor.ts#doctor
       - spec-cli/src/doctor.ts#specHealthDiagnosis
       - spec-cli/src/doctor.ts#doubleDeliveryReport
+  - name: an-ungoverned-tree-is-distinguishable-from-a-healthy-one
+    tags: [cli]
+    description: >-
+      Adopt a fresh project, then run `spex doctor` against its tree slot four times: healthy; with the
+      turn-end lines removed from the manifest but every handler left in place; with the manifest emptied;
+      and with the manifest deleted. Read Layer 3's manifest and lifecycle lines each time.
+    expected: >-
+      Four distinct readings. Healthy names Stop, StopFailure and PostToolUse as bound. Dropping only the
+      turn-end lines — every other check still passing — is called out as a tree that cannot report its own
+      turn ending, with the consequence named: the board keeps painting a stopped agent as running. An EMPTY
+      manifest reads as EMPTY and explicitly not as MISSING, because the dispatcher refuses a missing one
+      loudly and dispatches nothing for an empty one in silence. A deleted manifest still reads MISSING.
+      Zero loss = the two silences a healthy-looking hook layer can hide each have their own words.
+    code: [spec-cli/src/doctor.ts]
+    test: spec-cli/src/doctor.test.ts
 ---
 # eval.md — self
 

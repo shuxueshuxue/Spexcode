@@ -307,9 +307,23 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const targets = resolveHarnessTargets(cfg.harnesses)
   retiredAxisNotice(cfg)                                                  // [[residence]] — the vote axis is retired
   const { selected, plugins } = partitionHarnesses(targets)
-  // Codex's project shim is shared by every linked worktree. Its command paths therefore belong to the
-  // main checkout, while tree-scoped shims may use this checkout's toolchain. Otherwise the last worktree
-  // to materialize silently steals the root hook owner from every other session.
+  // WHERE a shim lives and WHICH toolchain it names are two questions, and only the first is per-tree.
+  //
+  // Residence is forced by the adapter: Codex reads one project shim shared by every linked worktree, while
+  // Claude reads project settings from the session's cwd only, so every tree carries its own copy.
+  //
+  // The toolchain is the SAME answer for both: the main checkout owns the hook path. It used to be answered
+  // per scope — the project shim took the checkout, tree-scoped shims took whichever install happened to be
+  // running materialize — and the consequence was invisible and constant. A session's worktree is created by
+  // the BACKEND's install, so its shim named the checkout; the first commit inside that worktree runs
+  // pre-commit → materialize with the WORKTREE's install, which rewrote the same shim to name the branch.
+  // Every session therefore ran its opening turns on one toolchain and silently switched to another mid-flight,
+  // with no receipt anywhere. Neither half was wrong on its own; having two answers was.
+  //
+  // The main checkout is the right one, and for the reason the project shim already gave: a worktree's CLI may
+  // write its own tree-local artifacts but may never replace the shared hook owner. A session worktree is a
+  // DESK, not a toolchain install — it has no node_modules of its own, so a tree-pointing shim makes the very
+  // first hook of a fresh session try to build the branch. Governance is the product's, not the branch's.
   const checkout = mainCheckout(proj)
   retireLegacyCodexAnchors(checkout)
   const projectDispatch = existsSync(join(checkout, 'spec-cli', 'hooks', 'dispatch.sh'))
@@ -318,9 +332,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const projectSpex = existsSync(join(checkout, 'spec-cli', 'bin', 'spex.mjs'))
     ? join(checkout, 'spec-cli', 'bin', 'spex.mjs')
     : SPEX
-  const shimFor = (h: typeof HARNESSES[number]) => h.shimScope === 'project'
-    ? h.shim(projectDispatch, projectSpex)
-    : h.shim(DISPATCH, SPEX)
+  const shimFor = (h: typeof HARNESSES[number]) => h.shim(projectDispatch, projectSpex)
   const skillNodes = loadSkillConfig()
   const agentNodes = loadAgentConfig()
   const commandNodes = loadConfig()
@@ -369,7 +381,8 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     // the sole executable hook owner.
     // Claude reads project settings from the session's cwd only (measured on Claude Code 2.1.241: a hook
     // configured solely in the main checkout never fires inside a nested linked worktree), so every tree
-    // carries its own tree-scoped shim; a session launched at the root fires the root's, never both.
+    // carries its own tree-scoped shim; a session launched at the root fires the root's, never both. Its
+    // RESIDENCE is per-tree; its command paths are the main checkout's, exactly like the project shim's.
     const target: ShimTarget = { ownership: h.shimOwnership, content: shim.content, hooks: shim.hooks }
     if (h.shimScope === 'tree') addShimTarget(treeShimTargets, h.shimFile(proj), target)
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main

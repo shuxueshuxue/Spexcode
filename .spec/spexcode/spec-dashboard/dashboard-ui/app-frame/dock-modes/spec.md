@@ -13,6 +13,9 @@ related:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/sessionListState.js
+  - spec-dashboard/src/useFold.js
+  - spec-dashboard/src/ContextDock.jsx
+  - spec-dashboard/src/SessionForestPanel.jsx
   - spec-dashboard/src/styles.css
 ---
 # dock-modes
@@ -49,6 +52,18 @@ hides it by exactly that long so the reverse is visible too. The animated proper
 width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
 inside a keyframe is ignored by the spec, which is how the first version of this animated nothing at all.
 Reduced-motion drops the animation and keeps both doors.
+
+**THE FOLD IS ONE MECHANISM, AND EVERY FOLDABLE PANEL IN THE FRAME RUNS IT** — this dock, the Sessions
+document's own forest sidebar, and the spec document's right [[context-dock]]. They are the same gesture on
+the same `--dur-panel` token, so they are one `useFold` and one pair of keyframes, not three panels that each
+grew their own. The hard half is the LINGER: the mount has to outlive the state that hides it, and it must
+never be able to outlive its own timeout — a flag that could survive would strand a ghost panel the reader
+cannot dismiss — so the timer is cleared on reopen and on unmount and is only ever armed by the transition
+that sets it. At rest a closed panel is still UNMOUNTED, which is what keeps a closed dock costing nothing.
+Folding is a width movement, so a folding panel must clip its own overflow; a panel with no inner scroller
+grows one in the same move, because clipping without one would make a long list unreachable rather than
+scrollable. The duration necessarily lives in both layers — the keyframe is CSS, the unmount is JS — and
+`DOCK_FOLD_MS` is the one place the JS half states it.
 
 **THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
 its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how

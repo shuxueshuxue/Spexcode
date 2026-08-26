@@ -2,6 +2,7 @@ import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
+import { useFold } from './useFold.js'
 import TabStrip, { placeLabel } from './TabStrip.jsx'
 import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
@@ -73,7 +74,6 @@ const poolKey = (page, param) => (POOL_PAGES.has(page) ? page : `${page}/${param
 const POOL_LIMIT = 6
 // mirrors --dur-panel in the stylesheet: the shell has to outlive the CSS animation by the same amount it
 // lasts, and one of the two has to name the number.
-const DOCK_ANIMATION_MS = 170
 
 // Every mounted view gets one route scope. The shell is the only dispatcher: views can request an address,
 // explicitly hold one in the second pane, or update their own query, but they cannot receive the raw navigate
@@ -383,11 +383,12 @@ function BoardStatus({ specs, sessions, page }) {
   useStatusItem({
     id: 'ledger-nodes', side: 'right', priority: 41,
     tooltip: t('statusBar.nodes', { n: tally.total }),
+    // The four STATE counts are the whole node ledger. The bare grand total and the drift door that used to
+    // flank them are withdrawn (2026-08-25, human ruling): the total is the sum of the four dots already
+    // beside it, and drift is an authoring warning the lint gate and the node's own chip already carry —
+    // neither earns a permanent digit on a line whose resting state is supposed to be quiet.
     node: (
       <span className="sb-tally">
-        <button type="button" className="sb-tally-button sb-tally-lead" data-board-stat="nodes-total"
-          data-tip={t('stats.totalTitle', { n: tally.total })} aria-label={t('stats.totalTitle', { n: tally.total })}
-          onClick={() => navigate('graph')}>{tally.total}</button>
         {STATUS_ORDER.map((k) => (
           <BoardStat key={k} name={`status-${k}`} count={tally.status[k].length}
             onClick={tally.status[k].length ? () => walkGraph(tally.status[k]) : null}
@@ -395,10 +396,6 @@ function BoardStatus({ specs, sessions, page }) {
             <i className="sb-status-dot" style={{ background: STATUS[k].color }} />
           </BoardStat>
         ))}
-        <span className="sb-tally-sep" />
-        <BoardStat name="drift" count={tally.driftIds.length}
-          onClick={tally.driftIds.length ? () => walkGraph(tally.driftIds) : null}
-          title={t('stats.driftTitle', { n: tally.driftIds.length })}><Icon name="triangle-alert" size={13} /></BoardStat>
         {stale}
       </span>
     ),
@@ -480,12 +477,17 @@ function Content({ page, param, query, inactive = false }) {
   )
 }
 
+// The right dock's own switch. It draws `panel-right` and keeps drawing it: the glyph NAMES the dock this
+// control owns, it is not a readout of that dock's state. The mirrored pair has no empty-frame member, so a
+// state-flipping context toggle would have to draw `panel-left` — a panel on the LEFT — to mean "the right
+// dock is closed", which is a picture of the wrong region. State is `aria-pressed` plus the `.on` tint,
+// exactly as the rail's switch already carries it.
 function ContextToggle({ visible, onToggle }) {
   const t = useT()
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
   return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
-    aria-label={label} data-tip={label}>
-    <Icon name="list-checks" size={14} />
+    aria-pressed={visible} aria-label={label} data-tip={label}>
+    <Icon name="panel-right" size={14} />
   </button>
 }
 
@@ -543,18 +545,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   const foldable = dockKind !== 'none' || page === 'sessions'
   const documentKey = `${page}/${param ?? ''}`
   // Closing is a MOVEMENT, so the dock outlives the state that hides it by exactly one panel duration and
-  // slides out ([[dock-modes]]). One timer, cleared on reopen; the reader can never end up with a ghost
-  // panel, because the flag only ever survives its own timeout.
-  const [closingDock, setClosingDock] = useState(false)
-  const wasDocked = useRef(dock)
-  useEffect(() => {
-    if (wasDocked.current === dock) return undefined
-    wasDocked.current = dock
-    if (dock) { setClosingDock(false); return undefined }
-    setClosingDock(true)
-    const timer = setTimeout(() => setClosingDock(false), DOCK_ANIMATION_MS)
-    return () => clearTimeout(timer)
-  }, [dock])
+  // slides out ([[dock-modes]]). The linger is the shared fold, not this panel's own timer — the context
+  // dock and the session forest fold identically, and three copies of one timer is how they drift apart.
+  const [dockMounted, closingDock] = useFold(dock)
   useEffect(() => {
     if (dockKind === 'sessions' || dockKind === 'explorer') setDockMode(dockKind)
   }, [documentKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -665,7 +658,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
         <SideBar page={page} needsYou={needsYou} hideDockToggle={!foldable} />
-        {(dock || closingDock) && dockKind !== 'none' && (
+        {dockMounted && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} mode={dockMode} specs={specs} sessions={sessions}
               focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null}

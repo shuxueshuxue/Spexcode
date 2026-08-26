@@ -951,9 +951,9 @@ app.post('/api/sessions/:id/input', async (c) => {
     // A deferred drain is an asynchronous handoff, not proof that a prompt was delivered. Only the
     // accepted queue state for this request may reopen a waiting lifecycle; an empty/raced drain must
     // never turn a focus-only or retry-only path into `working`.
-    const handoffWasQueued = r.delivery === 'queued'
+    const handoffDeferred = r.delivery === 'deferred'
     void drainSession(id).then(() => {
-      if (!handoffWasQueued) return
+      if (!handoffDeferred) return
       const application = configuredSessionApplicationIfCutover()
       if (application ? !application.readPendingMessages(id).length : true) markHumanPromptActive(id)
     }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))

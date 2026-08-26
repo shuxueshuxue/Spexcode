@@ -71,12 +71,21 @@ localStorage persistence as the other shell panes. Panel disclosure and the dock
 preferences in localStorage; the dock defaults CLOSED and each section defaults expanded, so asking for
 context once gets the reader everything rather than a second round of clicks. A closed dock renders nothing
 — no rail, no collapsed spine — so it adds no band to [[ui-state-model]]'s budget when it is not showing.
+Getting there is a MOVEMENT, on the frame's one shared fold ([[dock-modes]]): the dock outlives the closed
+state by exactly one `--dur-panel` and slides out, then unmounts, so the resting cost is still nothing while
+the gesture is still visible. Because the fold animates width, the dock clips its own overflow, and its two
+panels therefore scroll together inside it — the alternative to that scroller is not "no scroller", it is a
+long issue list clipped out of reach. The resize grip stays outside the scroller so it cannot scroll away
+from the edge it drags.
 The open/close control lives in the document-area top bar beside the tabs: the workspace-shell rule says a
 control belongs to the region whose question it answers, and context is neither the left finding rail nor
 ambient status, so a document-level context control is the least surprising owner while still remaining
-reachable when the dock is closed. It uses the shared `list-checks` context mark, while the rail's
-`panel-left`/`panel-right` pair remains reserved for the left dock's layout state; the two controls therefore
-keep distinct owners and meanings even when both docks are closed.
+reachable when the dock is closed. Both dock switches speak ONE vocabulary — the shared mirrored panel pair — because they are the same kind of
+control: a dock's open/closed state. The rail's switch flips the pair as the LEFT dock's layout state; this
+one holds `panel-right` fixed and carries its state in `aria-pressed` and the active tint. The asymmetry is
+forced by the glyphs themselves: the pair has no empty-frame member, so a flipping right-dock switch would
+have to draw `panel-left` — a panel on the region it does not own — to mean "closed". A glyph that names the
+dock is readable in every combination; a glyph that pictures the wrong side is not.
 
 The component receives `{page, param}` from `Shell`; it never reads the global address. Its API context and
 state context remain separate by using the existing board/workspace hooks rather than introducing a mixed

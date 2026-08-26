@@ -118,7 +118,10 @@ Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval door — a real anchor to the canonical session-scoped Evals address, carrying a bounded glance over the
-session's `evalSummary` — is [[eval-door]]'s.
+session's `evalSummary` — is [[eval-door]]'s, and it rides the frame's AMBIENT LINE rather than this document's
+action slot: the slot holds verbs that act on the session, while the door is a persistent readout of how the
+session's measurement is doing. The console registers it only while its own pane is the READ document, because
+the workspace keeps hidden documents mounted and a readout left behind would describe a document nobody has open.
 
 The session document renders no internal toolbar. Its menu, resource picker, diff door, Command Box,
 relaunch, and selected-resource actions register with the shell's [[document-actions]] slot at the tab row's
@@ -197,8 +200,8 @@ label, or document-local icon/action mapping. The registry remains the single ro
 colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution for dashboard-owned commands. Command Box exposes
 `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) also exposes the same
 primitive's relaunch action, and review is **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
-permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the document-action entry
-or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
+permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the
+ambient-line door or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
 consumed but inert for offline/queued sessions, using the same registry judgment as the button. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
@@ -219,6 +222,9 @@ column, and that column contains the shared workspace TabStrip above the console
 outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
 than allowing the strip to span above a list. The forest folds from the rail's panel control ([[side-nav]])
 through the workspace's one dock open/closed state — the console keeps no fold state of its own — and while
-folded the document column takes the full width. A session tab's right-click enters the same session context menu
+folded the document column takes the full width. Folding is the frame's one shared movement ([[dock-modes]]):
+the sidebar outlives the closed state by a single panel duration and slides out before it unmounts, the same
+way the left dock and the right context dock do. It is the same gesture on the same panel, so it cannot be a
+second timer with its own idea of how long a fold takes. A session tab's right-click enters the same session context menu
 as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
 `session-menu` document-action button is absent.

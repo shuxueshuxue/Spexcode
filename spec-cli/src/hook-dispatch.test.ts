@@ -157,6 +157,55 @@ test('session-fail hook delegates governance to the canonical writer instead of 
   assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-fail --session ${sid}`)
 })
 
+// An in-process subagent fires the PARENT's hooks with the PARENT's session_id, so without the agent_id
+// discriminator a helper's dead turn would mark the session that spawned it `error`. mark-active carries the
+// same guard for the same payload shape; this is one defect class with one answer.
+test('session-fail ignores an in-process subagent turn failure', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-fail-hook-subagent-'))
+  const sid = 'fail-hook-parent'
+  const calls = join(dir, 'calls')
+  const fake = join(dir, 'fake-spex')
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'session-fail', 'fail.sh')
+  writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\n`)
+  chmodSync(fake, 0o755)
+  const run = (payload: unknown) => spawnSync('bash', [source], {
+    cwd: dir,
+    env: { ...process.env, SPEX: fake, SPEXCODE_HARNESS: 'claude', SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh') },
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+  })
+  const sub = run({ session_id: sid, agent_id: 'agent_01', hook_event_name: 'StopFailure', error: 'api_error' })
+  assert.equal(sub.status, 0, sub.stderr)
+  assert.equal(existsSync(calls), false, 'a subagent failure must not reach the lifecycle writer')
+  const own = run({ session_id: sid, hook_event_name: 'StopFailure', error: 'api_error' })
+  assert.equal(own.status, 0, own.stderr)
+  assert.equal(readFileSync(calls, 'utf8').trim(), `internal session-fail --session ${sid}`)
+})
+
+// A non-blocking handler that fails used to vanish twice over: its exit code was dropped and its stderr was
+// overwritten by the next handler, so a lifecycle hook that could not write left NO trace and the board simply
+// held its last state. Reporting must not promote it into a gate, so the verdict stays exit 0.
+test('a non-blocking handler failure is reported without becoming a gate', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-loud-'))
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, '.spec', 'x', '.plugins'), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(dir, 'rt'), { recursive: true })
+  writeFileSync(join(dir, 'hooks', 'boom.sh'), '#!/usr/bin/env bash\nprintf \'database is locked\\n\' >&2\nexit 5\n')
+  writeFileSync(join(dir, 'hooks', 'after.sh'), '#!/usr/bin/env bash\nprintf ok\n')
+  writeFileSync(join(dir, 'rt', 'hooks-manifest'), 'Stop\t10\tfalse\thooks/boom.sh\nStop\t20\tfalse\thooks/after.sh\n')
+  const r = spawnSync('bash', [dispatch, 'claude', 'Stop'], {
+    cwd: dir,
+    env: { ...process.env, SPEX_HOOK_MANIFEST: join(dir, 'rt', 'hooks-manifest') },
+    input: '{}',
+    encoding: 'utf8',
+  })
+  assert.equal(r.status, 0, 'a non-blocking failure must not change the dispatch verdict')
+  assert.match(r.stderr, /handler hooks\/boom\.sh exited 5/)
+  assert.match(r.stderr, /database is locked/, "the handler's own stderr survives the next handler")
+  assert.equal(r.stdout, 'ok', 'later handlers still run')
+})
+
 test('dispatch migrates the historical stop-gate source before it can call porcelain delivery', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-legacy-migration-'))
   const home = join(dir, 'home')

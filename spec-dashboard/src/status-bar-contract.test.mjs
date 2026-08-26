@@ -17,7 +17,17 @@ test('the status bar carries no document source path, and launcher identity stay
   assert.doesNotMatch(shell, /sb-launcher-badge/)
   assert.match(css, /\.sb-right\s*\{[^}]*padding-right:\s*var\(--space-3\)/)
   assert.match(css, /\.sb-item:has\(\.sb-launcher-groups\)\s*\{[^}]*border-left:\s*var\(--divider-rule\)/)
-  // ONE divider voice on the bar: the tally separator stretches to the same full-height --edge hairline
-  // the launcher group's border-left draws, so the line cannot carry two different seam styles.
-  assert.match(css, /\.sb-tally-sep\s*\{[^}]*align-self:\s*stretch;[^}]*background:\s*var\(--edge\);/)
+  // ONE divider voice on the bar: the group border-left is now its only seam. The node ledger's own
+  // separator went with the drift door it separated, and no replacement seam style may appear beside it.
+  assert.doesNotMatch(css, /\.sb-tally-sep/)
+  assert.doesNotMatch(shell, /sb-tally-sep|sb-tally-lead/)
+})
+
+// The node ledger is the four STATE counts and nothing else (2026-08-25 ruling). The grand total restated
+// their sum and the drift door restated a lint warning; a quiet resting line keeps neither.
+test('the node ledger carries the four state counts alone', () => {
+  const shell = read('Shell.jsx')
+  assert.doesNotMatch(shell, /nodes-total|stats\.totalTitle/)
+  assert.doesNotMatch(shell, /data-board-stat="drift"|name="drift"|stats\.driftTitle/)
+  assert.match(shell, /STATUS_ORDER\.map\(\(k\) => \(\s*<BoardStat key=\{k\} name=\{`status-\$\{k\}`\}/)
 })

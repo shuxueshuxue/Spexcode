@@ -98,7 +98,7 @@ whole shell hangs off, re-derived from what the product is rather than from what
   its own `--line-status` height and never covers a view; a terminal's final xterm row fits above it. One-pixel
   `--line` borders own the vertical and horizontal seams, meeting as a T at the lower-left rail junction.
   The frame itself is what fills it: the workspace identity
-  and the ONE BOARD LEDGER — spec nodes by state plus drift, every eval scenario state, open issues, live
+  and the ONE BOARD LEDGER — spec nodes by state, every eval scenario state, open issues, live
   sessions — is true of the window on every route, so no view may own a duplicate and each group is
   registered here. The identity is one compact project-mark/name button that owns the catalog switcher
   and `/projects` door; the route rail contains no duplicate chip. On a graph address the same buttons acquire graph focus-walk behavior; their visual

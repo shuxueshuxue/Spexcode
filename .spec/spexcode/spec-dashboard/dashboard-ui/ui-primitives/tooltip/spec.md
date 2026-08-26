@@ -31,7 +31,14 @@ Behaviour, the modern contract:
   registered through the shared `escStack`/`KeyboardService` path so the tooltip cannot race another overlay.
 - **Above by default, flips when clipped.** The bubble centres over the anchor with a small arrow; when
   the viewport would clip it above, it flips below, and it clamps horizontally with the arrow still
-  pointing at the anchor. Fade/slide transition in and out.
+  pointing at the anchor.
+- **It pops out of its anchor.** The bubble enters scaled down and grows from the arrow's own edge —
+  `transform-origin` is the flipped placement's anchor side — so the motion points back at the control the
+  tip is about instead of appearing beside it. Opacity leads and the growth eases out behind it. Because the
+  entering bubble is transformed, the placement pass measures the LAYOUT box (`offsetWidth`/`offsetHeight`)
+  and never the painted rect: a transformed rect would place the bubble off its anchor and then visibly slide
+  as it grew, which is the one thing a pop must not do. `prefers-reduced-motion` keeps the fade and drops the
+  movement entirely.
 - **Theme-adaptive is a hard requirement.** The bubble styles only through the palette CSS variables
   (`--panel2 --ink2 --line`) under [[dashboard-shell]]'s `:root` / `:root[data-theme=<code>]` scheme, so
   every theme preset renders a native-feeling bubble and a theme flip restyles it with zero component

@@ -27,6 +27,21 @@ scenarios:
       never wakes the referenced session. Completion rows preserve their control-versus-authoring behavior; a successful append-backed send
       clears and closes, while a failed send remains open with its draft and visible error. Closing returns TUI
       focus. No docked second input or type-mode indicator exists.
+  - name: an-ordinary-send-makes-no-transport-claim
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Against a backend built from this tree, POST one Command Box message and read the route's `delivery`
+      field. Then do it again through the real browser: open the box on a live session, type a prompt, press
+      Enter, and RECORD every outcome state the box paints (install the recorder before the keypress — a
+      sampler awaited afterwards races the keystroke through the same channel and reports "never appeared"
+      for an outcome that came and went). Read the draft afterwards and the session's own timeline.
+    expected: >-
+      The route answers `deferred` — it returns before attempting the handover, so it measured nothing and
+      must not describe the transport. The box paints `sending` then an ACCEPTANCE, never the retry-safe
+      queued warning, and releases the draft; the prompt appears on the session's timeline. Zero loss = an
+      ordinary send says only what was measured. The warning is not deleted: it still belongs to a measured
+      unfinished handover, where the adapter was asked and still owes the prompt.
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-cli/src/sessions.ts]
 ---
 
 Record the real keyboard flow in the running dashboard because focus transfer and growth are dynamic behavior.

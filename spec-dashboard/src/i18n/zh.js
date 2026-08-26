@@ -623,9 +623,7 @@ export default {
 
   // shell 账本的 graph 走查：节点徽章按不同对象计数，覆盖度按场景计数。
   stats: {
-    totalTitle: ({ n }) => `树中共有 ${n} 个规格节点`,
     statusTitle: ({ n, status }) => `${n} 个${status} —— 点击逐个走查`,
-    driftTitle: ({ n }) => `${n} 个节点的代码领先于其规格 —— 点击逐个走查`,
     issueTitle: ({ n }) => `链接到树上的不同未关闭议题共 ${n} 个 —— 点击逐个走查承载它们的节点`,
     scorePass: ({ n }) => `${n} 个场景测量为最新且通过 —— 点击逐个走查承载它们的节点`,
     scoreFail: ({ n }) => `${n} 个场景测量为最新且未通过 —— 点击逐个走查承载它们的节点`,
@@ -876,6 +874,7 @@ export default {
     rootDrop: '移到顶层',
     outcomeWorking: '正在处理...',
     outcomeSending: '正在发送...',
+    outcomeAccepted: '已接收 —— 正在交给 agent',
     outcomeDelivered: '已送达',
     outcomeQueued: '已接收，正在等待终端传输 — 可安全重试',
     outcomeUnconfirmed: '尚未确认送达 — 可安全重试',

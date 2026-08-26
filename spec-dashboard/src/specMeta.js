@@ -30,14 +30,12 @@ export const STATUS_ORDER = ['merged', 'active', 'drift', 'pending']
 // (declared but never measured) folds into empty.
 export function summarizeBoard(specs) {
   const status = { merged: [], active: [], drift: [], pending: [] }
-  const driftIds = []
   const issueIds = []
   const issueNumbers = new Set()
   const scoreCount = { pass: 0, fail: 0, stalePass: 0, staleFail: 0, empty: 0 }     // scenarios per state (the shown number)
   const scoreNodes = { pass: [], fail: [], stalePass: [], staleFail: [], empty: [] } // nodes owning ≥1 such scenario (the walk ring)
   for (const n of specs) {
     if (status[n.status]) status[n.status].push(n.id)
-    if (n.drift > 0) driftIds.push(n.id)                          // node whose code is ahead of spec
     const issueSummary = n.reviewSummary?.issues
     if (issueSummary?.open) {
       issueIds.push(n.id)
@@ -52,7 +50,7 @@ export function summarizeBoard(specs) {
       }
     }
   }
-  return { total: specs.length, status, driftIds, issueIds, issueCount: issueNumbers.size, scoreCount, scoreNodes }
+  return { total: specs.length, status, issueIds, issueCount: issueNumbers.size, scoreCount, scoreNodes }
 }
 // Keep both ends of long identities visible. Bias the fixed budget toward the suffix because sibling
 // labels commonly share a long path-like prefix.

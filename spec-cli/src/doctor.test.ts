@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -73,6 +73,57 @@ test('bare doctor diagnoses an adopted repository before its first commit withou
     for (const layer of ['Layer 1', 'Layer 2', 'Layer 3', 'Layer 4', 'Layer 5'])
       assert.match(diagnosis.stdout, new RegExp(layer))
     assert.equal(status(), before, 'doctor must not create, stage, or change adoption files')
+  } finally {
+    rmSync(project, { recursive: true, force: true })
+    rmSync(runtime, { recursive: true, force: true })
+    rmSync(codexHome, { recursive: true, force: true })
+  }
+})
+
+// A TREE CAN PASS EVERY CHECK ABOVE THIS AND STILL BE UNGOVERNED. A shim wired, a manifest present, every
+// handler readable — and no turn-end event bound, so the record keeps whatever state it last held and the
+// board paints a stopped agent as running. A deployment whose `.config` predated the stop-gate node hit
+// exactly that, and nothing in the diagnosis said so. The empty manifest is the same silence one layer
+// down: the dispatcher answers a MISSING manifest with a loud exit 78 and an EMPTY one by dispatching
+// nothing and exiting 0, so the two must not read the same here either.
+test('doctor separates an unmaterialized tree, an empty manifest, and an unbound lifecycle', () => {
+  const project = mkdtempSync(join(tmpdir(), 'spex-doctor-manifest-project-'))
+  const runtime = mkdtempSync(join(tmpdir(), 'spex-doctor-manifest-runtime-'))
+  const codexHome = mkdtempSync(join(tmpdir(), 'spex-doctor-manifest-codex-'))
+  const env = { ...process.env, SPEXCODE_HOME: runtime, CODEX_HOME: codexHome }
+  const cli = (...args: string[]) => spawnSync(process.execPath, [TSX, CLI, ...args], { cwd: project, env, encoding: 'utf8' })
+  try {
+    execFileSync('git', ['-C', project, 'init', '-q', '-b', 'main'], { env })
+    execFileSync('git', ['-C', project, 'config', 'user.email', 'doctor-test@example.invalid'], { env })
+    execFileSync('git', ['-C', project, 'config', 'user.name', 'Doctor Test'], { env })
+    assert.equal(cli('init', '--harness', 'claude').status, 0)
+
+    const healthy = cli('doctor')
+    assert.equal(healthy.status, 0, healthy.stderr)
+    assert.match(healthy.stdout, /lifecycle events\s*:\s*Stop, StopFailure, PostToolUse all bound/)
+
+    const manifest = execFileSync('bash', ['-c',
+      `find ${JSON.stringify(runtime)} -name hooks-manifest | head -1`], { encoding: 'utf8' }).trim()
+    assert.ok(manifest, 'materialize published a manifest for this tree')
+    const full = readFileSync(manifest, 'utf8')
+
+    // an unbound lifecycle: keep the handlers, drop only the turn-end lines
+    writeFileSync(manifest, full.split('\n').filter((l) => !/^(Stop|StopFailure)\t/.test(l)).join('\n'))
+    const unbound = cli('doctor')
+    assert.match(unbound.stdout, /lifecycle events\s*:\s*Stop, StopFailure NOT bound/)
+    assert.match(unbound.stdout, /paints a stopped agent as running/)
+
+    // an empty manifest is not a missing one
+    writeFileSync(manifest, '')
+    const empty = cli('doctor')
+    assert.match(empty.stdout, /manifest\s*:\s*EMPTY in the current tree slot/)
+    assert.match(empty.stdout, /bound ZERO handlers/)
+    assert.doesNotMatch(empty.stdout, /manifest\s*:\s*MISSING/)
+
+    // and a tree that never materialized still reads MISSING
+    rmSync(manifest)
+    const gone = cli('doctor')
+    assert.match(gone.stdout, /manifest\s*:\s*MISSING from the current tree slot/)
   } finally {
     rmSync(project, { recursive: true, force: true })
     rmSync(runtime, { recursive: true, force: true })

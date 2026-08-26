@@ -79,7 +79,10 @@ test('the rail panel control folds the Sessions forest and is absent only where 
   assert.match(shell, /hideDockToggle=\{!foldable\}/)
   assert.doesNotMatch(shell, /hideDockToggle=\{page === 'sessions'\}/)
   assert.match(sessionInterface, /const \{ dock: forestOpen \} = useWorkspace\(\)/)
-  assert.match(sessionInterface, /\{forestOpen && <SessionForestPanel/)
+  // it is still ONE boolean; the forest just folds on it through the shared fold, so the mount outlives
+  // the flag by one panel duration instead of blinking out ([[dock-modes]]).
+  assert.match(sessionInterface, /const \[forestMounted, forestClosing\] = useFold\(forestOpen\)/)
+  assert.match(sessionInterface, /\{forestMounted && <SessionForestPanel/)
 })
 
 test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {

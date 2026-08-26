@@ -44,7 +44,8 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 import { useDocumentAction } from './documentActions.jsx'
 import TabStrip from './TabStrip.jsx'
 import { useStatusItem } from './StatusBar.jsx'
-import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useFold } from './useFold.js'
+import { usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 import { expandSessionFolds, toggleSessionFold, useSessionListState } from './sessionListState.js'
 
@@ -468,6 +469,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // does ([[side-nav]]): the same workspace open/closed boolean, read here rather than a second fold state
   // the console would have to keep in step.
   const { dock: forestOpen } = useWorkspace()
+  // the Sessions document's own left sidebar. It folds on the SAME workspace flag the shell's dock does, so
+  // it folds the same way ([[dock-modes]]) — it used to be the one panel in the frame that blinked out.
+  const [forestMounted, forestClosing] = useFold(forestOpen)
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -1053,13 +1057,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         return
       }
+      // `queued` is a MEASUREMENT — the adapter was asked and still owes the prompt — so it keeps the draft.
+      // `deferred` is the ordinary Command Box path: the backend accepted the message durably and starts the
+      // handover after answering, so it measured nothing about the transport and must not be read as one.
+      // The queue is the delivery guarantee here, not this textarea; holding a second copy of an accepted
+      // prompt bought nothing and cost a false transport warning on every single send.
       if (outcome?.delivery === 'queued') {
         setActionOutcome({ owner: 'command', phase: 'queued', message: t('session.outcomeQueued') })
         return
       }
       setMsg((current) => current === raw ? '' : current)
       delete commandDeliveryKeysRef.current[active]
-      setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
+      const settled = outcome?.mentionSummary
+        || (outcome?.delivery === 'deferred' ? t('session.outcomeAccepted') : t('session.outcomeDelivered'))
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: settled })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
       if (controller.signal.aborted) {
@@ -1397,6 +1408,30 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             : evalKnownTitle
               ? t('session.evalFailedKnown', { summary: evalKnownTitle })
               : t('session.evalUnavailable')
+  // THE SESSION'S EVAL DOOR lives on the AMBIENT LINE ([[status-bar]]), not in the document-action band.
+  // The band is a row of verbs that act on the document; this is one persistent readout of how the
+  // document's measurement is doing, which is the fact a status line exists to hold. It rides the right
+  // group beside the console's other document fact (unread resources) and outside the workspace ledger.
+  //
+  // IT MUST NOT LEAK ONTO A NEIGHBOUR. The workspace keeps documents MOUNTED while hidden ([[workspace-shell]]'s
+  // pool), so "am I rendered" is not "am I the document being read" — registering on mount alone would leave
+  // a session's eval glance sitting on the line while the reader is looking at a spec. The pane's own active
+  // flag is that distinction, and passing null disposes the registration in the same effect that made it, so
+  // the door leaves the line on the tab switch itself rather than one paint later.
+  const paneShowing = usePaneActive()
+  const evalDoorShowing = paneShowing && sessionActive && uiCmds.some((command) => command.name === 'eval')
+  useStatusItem(evalDoorShowing ? {
+    id: 'session-eval', side: 'right', priority: 25,
+    tooltip: evalDoorTitle,
+    node: (
+      <a className="si-eval-door" data-action="eval" href={addressHash(sessionEvalAddress(active))}
+        data-tip={evalDoorTitle} aria-label={evalDoorTitle}>
+        <Icon name="evals" size={14} />
+        <SessionEvalStats summary={evalSummary} />
+      </a>
+    ),
+  } : null)
+
   const documentKey = sessionActive
     ? routeHash('sessions', active, requestedSurface ? { surface: requestedSurface } : null)
     : null
@@ -1414,26 +1449,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
       menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
     },
-    // THE SESSION'S EVAL DOOR, back in the frame's toolbar where the routed refactor dropped it. The
-    // session console has no measurement surface of its own: a session's evals ARE the Evals page read
-    // through the `scope:<id>` token ([[evals-view]]), so this is navigation and nothing else — a REAL
-    // anchor on the one canonical scoped address, the same one the typed `/eval` opens and the same one
-    // an MR note pastes. The destination names the session in its own query token, so no returning
-    // banner has to be pinned above the list to say where the reader came from.
-    ...(uiCmds.some((command) => command.name === 'eval') ? [
-      {
-        id: 'eval', icon: 'evals', label: evalDoorTitle, priority: 90,
-        // The glance is content the frame cannot compute, so the door draws itself and names its own state.
-        nodeKey: `${evalSummary.phase}|${evalSummary.pass ?? ''}|${evalSummary.fail ?? ''}|${evalSummary.review ?? ''}|${evalSummary.blind ?? ''}|${evalSummary.unknown ?? ''}`,
-        node: (
-          <a className="si-eval-door" data-action="eval" href={addressHash(sessionEvalAddress(active))}
-            data-tip={evalDoorTitle} aria-label={evalDoorTitle}>
-            <Icon name="evals" size={14} />
-            <SessionEvalStats summary={evalSummary} />
-          </a>
-        ),
-      },
-    ] : []),
     ...(!activeResource && surfaceChoices.length > 1 ? [
       {
         id: 'surface-switcher', icon: baseSurface === SESSION_SURFACE_TERMINAL ? 'message-square' : 'terminal',
@@ -1578,7 +1593,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
-      {forestOpen && <SessionForestPanel
+      {forestMounted && <SessionForestPanel
+        closing={forestClosing}
         sessions={sessions}
         activeId={active}
         // The Sessions document owns both its forest and its document chrome. Keeping these siblings

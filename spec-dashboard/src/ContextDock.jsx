@@ -6,6 +6,7 @@ import { scenarioStates } from './score.jsx'
 import { addressHash, evalAddress, issueAddress } from './address.js'
 import { holdAnchor } from './tabs.js'
 import { useResizable } from './useResizable.js'
+import { useFold } from './useFold.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
@@ -77,7 +78,11 @@ export default function ContextDock({ page, param, open = true, onToggle }) {
   const { specs } = useBoard()
   const [width, onDrag, reset] = useResizable('spex.ctxWidth', 276, { min: 220, max: 460, dir: -1 })
   const [panels, setPanels] = useState(readPanels)
-  if (page !== 'spec' || !param || !open) return null
+  // the same fold every panel in the frame uses ([[dock-modes]]): the dock outlives `open` by one panel
+  // duration so closing is a movement, not a blink. At rest it is still unmounted, which is what keeps a
+  // closed dock costing nothing.
+  const [mounted, closing] = useFold(open)
+  if (page !== 'spec' || !param || !mounted) return null
   const node = specs?.find((item) => item.id === param)
   if (!node) return null
   const togglePanel = (key) => setPanels((prev) => {
@@ -85,14 +90,21 @@ export default function ContextDock({ page, param, open = true, onToggle }) {
     try { localStorage.setItem(PANEL_KEY, JSON.stringify(next)) } catch {}
     return next
   })
-  return <aside className="context-dock" style={{ width }} aria-label={t('contextDock.title')}>
+  return <aside className={closing ? 'context-dock dock-closing' : 'context-dock'} style={{ width }}
+    aria-hidden={closing ? 'true' : undefined} aria-label={t('contextDock.title')}>
     <div className="ctx-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
     <div className="ctx-head"><span>{t('contextDock.title')}</span><span className="ctx-node-id">{node.id}</span></div>
-    <Panel title={t('contextDock.scenarios')} open={panels.scenarios} onToggle={() => togglePanel('scenarios')}>
-      <Scenarios id={param} />
-    </Panel>
-    <Panel title={t('contextDock.issues')} open={panels.issues} onToggle={() => togglePanel('issues')}>
-      <Issues id={param} />
-    </Panel>
+    {/* the two panels scroll TOGETHER inside the dock, and that scroller is what lets the dock clip its own
+        width. Folding is a width movement, so the dock has to be `overflow: hidden` like the other two
+        sidebars; without an inner scroller that clipping would make a long issue list unreachable instead
+        of scrollable. The resize grip stays outside it so it cannot scroll away from its own edge. */}
+    <div className="ctx-body">
+      <Panel title={t('contextDock.scenarios')} open={panels.scenarios} onToggle={() => togglePanel('scenarios')}>
+        <Scenarios id={param} />
+      </Panel>
+      <Panel title={t('contextDock.issues')} open={panels.issues} onToggle={() => togglePanel('issues')}>
+        <Issues id={param} />
+      </Panel>
+    </div>
   </aside>
 }

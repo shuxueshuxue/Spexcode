@@ -38,6 +38,22 @@ scenarios:
       it is up and keeps its aria-label; Esc hides it. Zero loss = the tip is keyboard-reachable and
       exposed to AT through both channels, not a hover-only visual.
     code: [spec-dashboard/src/Tooltip.jsx]
+  - name: pop-grows-from-the-anchor
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In the running dashboard, hover a real data-tip control and sample the bubble's computed transform
+      FROM INSIDE THE PAGE, starting on the frame it is inserted — a driver round-trip is longer than the
+      whole transition, so an out-of-process "hover then look" can only ever observe the settled state. Read
+      the first frame's scale and opacity, the settled scale, and the computed transform-origin against the
+      resolved placement. Then hover a control near the top edge so the bubble flips below.
+    expected: >-
+      The first sampled frame is already scaled DOWN (≈.94) at opacity 0 and grows to scale 1 — a bubble
+      whose first frame is scale 1 has degraded to a plain fade, which is exactly what happens when the
+      start state lives only under `[data-place=…]`: the element mounts a frame before the placement pass
+      stamps that attribute, so the start state is never painted. The origin sits on the ARROW side of the
+      resolved placement (y=0 when it hangs below, y=height when it sits above) and x at the bubble's
+      mid-width, so the growth points back at the anchor. Zero loss = a measured pop, not an asserted one.
+    code: [spec-dashboard/src/Tooltip.jsx, spec-dashboard/src/styles.css]
 ---
 # tooltip — measurement
 

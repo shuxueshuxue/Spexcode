@@ -91,8 +91,9 @@ exactly those three:
   interval (the transcript API already reads by interval; nothing server-side changes), opened directly
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
-  `● working · 4m 12s` and is the page's only moving thing; the tail seam of a dead session says `working`
-  — the record's last word — with no duration invented for a stretch nothing closed.
+  `working · 4m 12s` in the live green and is the page's only moving thing — no dot in the gutter, nothing
+  beside the sentence, the words themselves say it; the tail seam of a dead session says `working` — the
+  record's last word — with no duration invented for a stretch nothing closed.
 - An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
   rather than lasted.
 

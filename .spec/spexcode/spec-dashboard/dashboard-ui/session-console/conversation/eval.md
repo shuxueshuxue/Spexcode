@@ -47,7 +47,7 @@ scenarios:
       `working 1s / 11s / 4m 30s` stacks. Every message row's time is in the left gutter, left of the
       content cell, and nothing textual touches the right edge. Agent notes run the 720px measure; quotes cap
       at 80% of it, flush right. Zero envelope phrases render although the API text carries them. Every closed
-      seam reads `worked <span>`; the error line carries no duration. The opened seam shows its transcript
+      seam reads `worked <span>` behind a thin chevron, with no dot in its gutter; the error line carries no duration. The opened seam shows its transcript
       inset with tool rows beneath it. At 390px no gutter is visible and every message row carries an inline
       time. The light preset changes only colour, not shape.
   - name: the-conversation-reads-as-paper

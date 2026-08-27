@@ -10,7 +10,7 @@ import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import 'katex/dist/katex.min.css'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
-import { IconButton } from './icons.jsx'
+import { Caret, IconButton } from './icons.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
@@ -119,7 +119,7 @@ function ToolLine({ tool, open, onToggle }) {
         {lead && <span className="tc-tool-target">{lead}</span>}
         {trail && <span className="tc-tool-trail">{trail}</span>}
         {lines > 0 && <span className="tc-tool-size">{lines} lines</span>}
-        {canOpen && <span className="tc-tool-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>}
+        {canOpen && <Caret open={open} className="tc-tool-caret" />}
       </Row>
       {open && canOpen && <pre className="tc-tool-out">{tool.output}</pre>}
     </div>
@@ -144,7 +144,7 @@ function ToolRun({ tools, openIds, onToggle }) {
         onClick={() => onToggle(id)}>
         <span className="tc-tool-verb">{tools.length} tool uses</span>
         <span className="tc-tool-trail">{runKinds(tools)}</span>
-        <span className="tc-tool-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <Caret open={open} className="tc-tool-caret" />
       </button>
       {open && <div className="tc-tool-kids">{tools.map(line)}</div>}
     </div>
@@ -196,7 +196,7 @@ function WorkSegment({ segment, openIds, onToggle }) {
     {segment.folded ? (
       <div className="tc-work">
         <button type="button" className="tc-work-row" aria-expanded={open} onClick={() => onToggle(id)}>
-          <span className="tc-work-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <Caret open={open} className="tc-work-caret" />
           <span className="tc-work-lead">{segment.calls} tool uses</span>
           {kinds && <span className="tc-work-detail">{kinds}</span>}
         </button>
@@ -747,10 +747,10 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
         ? transcript.data.turns.reduce((n, turn) => n + (turn.tools?.length || 0), 0) : 0
       rows.push(
         <div className="m-ev m-ev-seam" key={i}>
-          <div className="m-gut"><span className={`m-seam-dot${ticking ? ' is-live' : ''}`} aria-hidden="true">●</span></div>
+          <div className="m-gut" />
           <div className="m-seam">
-            <button type="button" className="m-seam-row" aria-expanded={expanded} onClick={() => toggleSeam(item)}>
-              <span className="m-seam-caret" aria-hidden="true" />
+            <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
+              <Caret open={expanded} className="m-seam-caret" />
               <span className="m-seam-lead">{lead}</span>
               {transcript?.state === 'ready' && (
                 <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>

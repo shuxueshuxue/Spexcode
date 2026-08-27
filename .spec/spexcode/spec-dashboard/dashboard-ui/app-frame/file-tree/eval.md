@@ -60,6 +60,23 @@ scenarios:
       - spec-dashboard/src/DiskTree.jsx
       - spec-dashboard/src/Dock.jsx
       - spec-dashboard/test/explorer-collapse-folders.e2e.mjs
+  - name: disclosure-is-a-chevron-and-nesting-is-a-line
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real desktop browser open a nested branch in the Specs section and a directory in the Files
+      section. Read the disclosure mark of an open row and a closed row (element kind, rotation), the marks of
+      the section heads, and whether any row still prints a triangle character; then read, for a row three
+      levels deep, how many hairline guides run through its left margin and where they sit against the
+      ancestors' caret slots. LOOK at the screenshot.
+    expected: >-
+      Every collapsible row carries one stroke chevron (an svg, no ▸/▾ text), rotated 90° when open and 0°
+      when closed, section heads included; a row at depth N shows exactly N one-pixel guides, each aligned
+      to the caret centre of the ancestor at that level, joining into continuous lines down the branch.
+    code:
+      - spec-dashboard/src/FileTree.jsx
+      - spec-dashboard/src/DiskTree.jsx
+      - spec-dashboard/src/icons.jsx
+      - spec-dashboard/test/explorer-collapse-folders.e2e.mjs
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Capture the settled Explorer

@@ -7,7 +7,7 @@ import { scanQuery, suggestAt } from '@spexcode/spec-core/review'
 import { PageScroll } from './PageScroll.jsx'
 import { paginationTokens } from './reviewPage.js'
 import { ContextMenu, ContextMenuItem } from './ContextMenu.jsx'
-import { holdAnchor, pinTab, routeOfHash } from './tabs.js'
+import { newTabAnchor, openNewTab, routeOfHash } from './tabs.js'
 import { copyAddress, hashAddress } from './address.js'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
@@ -468,7 +468,7 @@ function RowMenu({ menu, onClose }) {
     <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.href} label={t('reviewList.rowMenu')}>
       <ContextMenuItem icon="plus" onClick={pick(() => {
         const route = routeOfHash(menu.href)
-        pinTab(route.page, route.param, route.query)
+        openNewTab(route.page, route.param, route.query)
       })}>{t('tabs.openInNewTab')}</ContextMenuItem>
       <ContextMenuItem icon="copy" onClick={pick(() => copyAddress(hashAddress(menu.href)))}>
         {t('reviewList.copyAddress')}
@@ -563,7 +563,7 @@ export function ListPage({ leading, error, loading = false, title, action, searc
             {rows.map((row) => (
               <div key={row.key} className={`lp-row ${row.href ? '' : 'inert'} ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`}>
                 {row.href && <a className="lp-row-link" href={row.href}
-                  onClick={(event) => holdAnchor(event, row.href)}
+                  onClick={(event) => newTabAnchor(event, row.href)}
                   onContextMenu={(event) => { event.preventDefault(); setRowMenu({ x: event.clientX, y: event.clientY, href: row.href }) }}>
                   <span className="sr-only">{row.label || row.key}</span></a>}
                 {row.content}

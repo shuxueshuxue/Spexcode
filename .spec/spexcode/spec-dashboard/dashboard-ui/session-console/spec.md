@@ -70,9 +70,9 @@ The console and its `SessionInterface` descendant never write the global route d
 transition. Resource and base-surface changes keep their exact `surface` query, while diff/base exits retain
 replacement semantics; moving the write behind the scope does not flatten those address axes. Plain hrefs may
 still use the shared `routeHash` projection, but imperative writes dispatch one checked `open` intent to the shell.
-Selecting a session row first resolves its canonical session document through the shared workspace tab identity:
-when that session is already held, the view focuses that existing tab; otherwise the current session slot receives
-the new address. A row click never rewrites the active session A slot to session B while B is already held elsewhere.
+Selecting a session row is one plain navigation to its canonical session address; [[tab-strip]] decides whether
+that focuses an already-open tab or replaces the focused session tab. A row click never rewrites the active
+session A tab to session B while B is already open elsewhere.
 The routed adapter holds no mirrored selection state: its current `param` is the selection passed to the console,
 and every console selection intent returns through that adapter's one `ViewScope` route writer.
 Leaving the page keeps the console document, its selection, and every visited pane-backed terminal mounted;
@@ -104,8 +104,8 @@ the routed page's viewport and owns the terminal/timeline surface without a seco
 picker; its grammar, background fire, and picker are [[new-session-tab]]'s. Its focused composer submits on plain
 Enter, inserts a newline on Shift+Enter, and leaves IME composition Enter to the browser; the visible launch control
 is the pointer twin, while an open completion menu consumes Enter for its highlighted choice first.
-When its create response publishes a session id, the address is held before routing so creation appends a fresh
-workspace tab and cannot replace an inactive session tab.
+When its create response publishes a session id, the address is marked for a new tab before routing so creation
+appends a fresh workspace tab and cannot replace the session tab the reader was on.
 
 An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
 published resource faces selected by the one session object address:

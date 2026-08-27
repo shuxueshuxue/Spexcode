@@ -589,9 +589,9 @@ test('one side-rail value primitive renders every detail metadata row on both pa
 test('list metadata keeps native controls beside the real detail anchor', () => {
   assert.match(shell, /<a className="lp-row-link" href=\{row\.href\}/)
   // it stays a REAL anchor — plain click, middle-click, shift and a copied address are all still the
-  // browser's — and gains only the two gestures the workspace itself owns ([[tab-strip]]): ctrl/⌘ holds
-  // the address as its own tab, right-click offers the same hold plus copy.
-  assert.match(shell, /onClick=\{\(event\) => holdAnchor\(event, row\.href\)\}/)
+  // browser's — and gains only the two gestures the workspace itself owns ([[tab-strip]]): ctrl/⌘ opens
+  // the address in a new tab, right-click offers the same action plus copy.
+  assert.match(shell, /onClick=\{\(event\) => newTabAnchor\(event, row\.href\)\}/)
   assert.match(shell, /setRowMenu\(\{ x: event\.clientX, y: event\.clientY, href: row\.href \}\)/)
   assert.match(css, /\.lp-row-link \{ position: absolute; inset: 0; z-index: 0;/)
   assert.match(css, /\.rl-row-grid \{ position: relative; z-index: 1;[\s\S]*pointer-events: none;/)

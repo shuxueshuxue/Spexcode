@@ -25,9 +25,9 @@ test('every explorer row declares its menu subject, and one seam reads them all'
 })
 
 test('the row menu offers a spec node and a file their own verbs, and reveals only a claimed owner', () => {
-  assert.match(menu, /pinTab\('spec', menu\.id\)/)
+  assert.match(menu, /openNewTab\('spec', menu\.id\)/)
   assert.match(menu, /navigateAddress\(graphNodeAddress\(menu\.id\)\)/)
-  assert.match(menu, /pinTab\('file', menu\.path\)/)
+  assert.match(menu, /openNewTab\('file', menu\.path\)/)
   assert.match(menu, /copyText\(menu\.path\)/)
   assert.match(menu, /owner && \(/, 'reveal-owner appears only for a path some node claims')
   assert.match(tree, /if \(!owners\.has\(path\)\) owners\.set\(path, s\.id\)/)

@@ -22,7 +22,8 @@ the shared drag gesture owns threshold, cancellation, and swallowed-click behavi
 when minimum widths cannot fit, never scrolls sideways, and remains one budget band. Labels and status marks come
 from the document's existing projections; unresolved selectors show their raw address rather than blank chrome.
 
-All tab faces share compact geometry, close affordance space, top-corner treatment, and the inactive unpinned
-visual. Resource tabs remain pinned holds, and resident pages keep their registry icon. The strip context menu
+All tab faces share compact geometry, close affordance space, and top-corner treatment; there is no second
+face for a replaceable tab, because every tab is replaceable. Resident pages keep their registry icon. The
+strip context menu
 provides close, close-others, and split through the workspace APIs; session-specific lifecycle verbs belong to
 the session menu, not a second strip surface.

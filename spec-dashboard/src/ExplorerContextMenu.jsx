@@ -4,14 +4,14 @@ import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 import { copyAddress, copyText, graphNodeAddress, hashAddress, navigateAddress, specAddress } from './address.js'
 import { routeHash } from './route.js'
-import { pinTab } from './tabs.js'
+import { openNewTab } from './tabs.js'
 import { shortcutHint } from './bindings.js'
 
 // [[file-tree]]'s row menu — one menu for every SUBJECT the explorer lists, not one per projection. A spec
 // node offers the same verbs whether you right-click it on the graph ([[node-graph]]'s node menu) or in the
 // tree; a file offers the same verbs whether the spec tree revealed it as governed/attached or the disk tree
-// listed it. The gestures that already existed — ⌘/ctrl-click and double-click to hold a tab — were
-// discoverable only to a reader who already knew them, which is exactly what a right-click is for.
+// listed it. The gesture that already existed — ⌘/ctrl-click to open a row in a new tab — was
+// discoverable only to a reader who already knew it, which is exactly what a right-click is for.
 //
 // The menu prints each command's CURRENT binding beside it ([[keyboard-nav]]'s hint reader), so the menu is
 // where the keyboard is learned rather than a substitute for it.
@@ -49,7 +49,7 @@ export default function ExplorerContextMenu({ menu, onClose, owningNodeOf }) {
     setCopyState((await make()) ? 'copied' : 'failed')
   }
   const copyLabel = (fallback) => (copyState ? t(`explorerMenu.${copyState}`) : t(fallback))
-  const holdHint = shortcutHint('explorer.openInNewTab')
+  const newTabHint = shortcutHint('explorer.openInNewTab')
   const owner = menu.kind === 'file' ? owningNodeOf?.(menu.path) : null
 
   return (
@@ -58,7 +58,7 @@ export default function ExplorerContextMenu({ menu, onClose, owningNodeOf }) {
       {menu.kind === 'node' && (
         <>
           <ContextMenuGroup>
-            <ContextMenuItem icon="plus" hint={holdHint} onClick={act(() => pinTab('spec', menu.id))}>
+            <ContextMenuItem icon="plus" hint={newTabHint} onClick={act(() => openNewTab('spec', menu.id))}>
               {t('tabs.openInNewTab')}
             </ContextMenuItem>
             <ContextMenuItem icon="graph" onClick={act(() => navigateAddress(graphNodeAddress(menu.id)))}>
@@ -79,7 +79,7 @@ export default function ExplorerContextMenu({ menu, onClose, owningNodeOf }) {
       {menu.kind === 'file' && (
         <>
           <ContextMenuGroup>
-            <ContextMenuItem icon="plus" hint={holdHint} onClick={act(() => pinTab('file', menu.path))}>
+            <ContextMenuItem icon="plus" hint={newTabHint} onClick={act(() => openNewTab('file', menu.path))}>
               {t('tabs.openInNewTab')}
             </ContextMenuItem>
             {/* Only a path some node actually claims can be revealed; an unclaimed file has no node to open. */}

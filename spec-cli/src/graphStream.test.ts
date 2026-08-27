@@ -16,6 +16,8 @@ import {
   watchSessionEvalRefs,
   watchSessionEvalRegistry,
   watchSessionEvalWorktree,
+  watchSessionDatabase,
+  sessionDatabaseWatchIgnore,
   evalTargetForRef,
 } from './graphStream.js'
 
@@ -471,4 +473,33 @@ test('the project-root sweep skips linked worktrees but still sees the served tr
   } finally {
     registry.close()
   }
+})
+
+test('the canonical session database is one non-recursive leaf that delivers only its own names', () => {
+  const databasePath = '/fixture/home/sessions.sqlite'
+  const { opened, factory } = fakeFactory()
+  let inputs = 0
+  const registry = watchSessionDatabase(databasePath, () => { inputs++ }, () => {}, factory)
+  try {
+    assert.equal(registry.refresh(), true)
+    assert.deepEqual(registry.paths(), ['/fixture/home'], 'one registration on the database directory, nothing recursive')
+    assert.equal(opened.length, 1)
+    assert.equal(opened[0].recursive, false)
+    const watcher = opened[0].watcher
+    watcher.emit('change', 'change', 'sessions.sqlite')            // a commit rewriting the file in place
+    watcher.emit('change', 'rename', 'sessions.sqlite-journal')    // its rollback journal appearing / vanishing
+    assert.equal(inputs, 2, 'the database and its journal are the session input')
+    watcher.emit('change', 'change', 'projects.json')
+    watcher.emit('change', 'rename', 'sessions.sqlite.json-migration.json')
+    watcher.emit('change', 'change', 'session-application.sqlite')
+    assert.equal(inputs, 2, 'a neighbour in the same directory is not a session input')
+  } finally {
+    registry.close()
+  }
+  const ignore = sessionDatabaseWatchIgnore('/x/store.db')
+  assert.equal(ignore('store.db'), false)
+  assert.equal(ignore('store.db-journal'), false)
+  assert.equal(ignore('store.db-wal'), false)
+  assert.equal(ignore('store.dbx'), true)
+  assert.equal(ignore('other.db'), true)
 })

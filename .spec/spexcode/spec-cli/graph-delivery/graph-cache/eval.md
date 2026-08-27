@@ -22,6 +22,19 @@ scenarios:
       and real governed spec and eval-reading changes each advance the affected graph semantics through a full
       rebuild. Concurrent patrol, HTTP and stream callers share the same operation, and no real graph/session/eval
       change is hidden or delayed beyond the existing patrol/watch cadence.
+  - name: canonical-store-patrol-repair
+    tags: [backend-api]
+    code: spec-cli/src/graphCache.ts
+    related: [spec-cli/src/graphStream.ts]
+    description: >-
+      The same isolated-home backend and hook-process writer as graph-stream's hook-authored-state-push, but
+      with the database leaf deliberately blinded (`SPEXCODE_DISABLE_WATCHERS=session-db`) and a delta subscriber
+      attached so the cold tick runs. Commit a lifecycle transition from the other process and watch the stream,
+      `/api/graph`, and the server log.
+    expected: >-
+      The transition still lands within one ~15s patrol tick — the canonical database's file identity is part of
+      the session input revision, so the patrol's comparison selects the sessions splice — and the server logs a
+      `PATROL-REPAIR` naming that session unit. The same commit with the leaf attached logs zero repairs.
   - name: poll-storm-doesnt-wedge-health
     tags: [backend-api]
     description: >-

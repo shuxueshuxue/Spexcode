@@ -1231,3 +1231,208 @@ test('disabling the worktree leaf blinds it from every entry point', { timeout: 
     rmSync(fixture, { recursive: true, force: true })
   }
 })
+
+// A lifecycle transition is a canonical SQLite commit made by whichever process authored it — most often a
+// hook's own `spex internal session-state` (mark-active, the stop-gate's declarations). The fixture below IS
+// that writer as a separate process; the backend must see the commit through its own leaf, with no tmux,
+// route, envelope or ref activity riding along, and never through the patrol.
+function fixtureProject(prefix: string): { fixture: string; project: string; spexHome: string } {
+  const fixture = mkdtempSync(join(tmpdir(), prefix))
+  const project = join(fixture, 'project')
+  const spexHome = join(fixture, 'home')
+  const spec = join(project, '.spec', 'project', 'spec.md')
+  mkdirSync(dirname(spec), { recursive: true })
+  writeFileSync(spec, [
+    '---', 'title: project', 'status: active', 'hue: 180', 'desc: hook-authored state fixture', '---',
+    '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
+  ].join('\n'))
+  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  git(project, 'init', '-q', '-b', 'main')
+  git(project, 'config', 'user.email', 'fixture@example.test')
+  git(project, 'config', 'user.name', 'fixture')
+  git(project, 'add', '.')
+  git(project, 'commit', '-qm', 'seed')
+  return { fixture, project, spexHome }
+}
+
+function commitStateFromAnotherProcess(project: string, env: NodeJS.ProcessEnv, sessionId: string, state: string): void {
+  const writer = spawnSync(process.execPath,
+    ['--import', import.meta.resolve('tsx'), join(here, 'cli.ts'), 'internal', 'session-state', state, '--session', sessionId],
+    { cwd: project, env, encoding: 'utf8' })
+  assert.equal(writer.status, 0, `the hook writer failed:\n${writer.stdout}\n${writer.stderr}`)
+  assert.match(writer.stdout, new RegExp(`state -> ${state}`), `the hook writer did not commit ${state}:\n${writer.stdout}\n${writer.stderr}`)
+}
+
+async function sessionRow(base: string, sessionId: string): Promise<{ status?: string; freshness: string | null }> {
+  const response = await fetch(`${base}/api/graph`)
+  assert.equal(response.status, 200)
+  const board = await response.json() as { sessions?: Array<{ id: string; status?: string }> }
+  return { status: board.sessions?.find((session) => session.id === sessionId)?.status, freshness: response.headers.get('x-spexcode-graph') }
+}
+
+test('a lifecycle commit from another process reaches the stream without tmux, routes or patrol', { timeout: 60_000 }, async () => {
+  const { fixture, project, spexHome } = fixtureProject('spex-graph-stream-hook-state-')
+  const sessionId = '88888888-8888-4888-8888-888888888888'
+  writeSessionRecord(spexHome, project, sessionId, project, 'main', 'idle')
+
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_TMUX: `spex-graph-stream-hook-state-${port}`,
+  }
+  delete env.SPEXCODE_API_URL
+  delete env.SPEXCODE_DISABLE_WATCHERS
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  const base = `http://127.0.0.1:${port}`
+  const abort = new AbortController()
+  let streamRead: Promise<void> | null = null
+  const events: string[] = []
+
+  try {
+    await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    await waitFor(async () => {
+      const response = await fetch(`${base}/api/sessions`)
+      return (await response.text()).includes(sessionId)
+    }, `the fixture session never listed:\n${serverLog}`)
+    await (await fetch(`${base}/api/graph`)).arrayBuffer()
+
+    const response = await fetch(`${base}/api/graph/stream`, { signal: abort.signal })
+    assert.equal(response.status, 200)
+    streamRead = (async () => {
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffered = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffered += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffered.indexOf('\n\n')) >= 0) {
+          const block = buffered.slice(0, boundary)
+          buffered = buffered.slice(boundary + 2)
+          const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+          if (event) events.push(event)
+        }
+      }
+    })().catch((error) => { if (!abort.signal.aborted) throw error })
+    await waitFor(() => events.includes('ready'), 'plain SSE did not become ready')
+    await waitForQuiet(events, 1_500)
+
+    const before = events.filter((event) => event === 'graph-changed').length
+    const committedAt = Date.now()
+    commitStateFromAnotherProcess(project, env, sessionId, 'parked')
+    await waitFor(() => events.filter((event) => event === 'graph-changed').length > before,
+      `the other process's commit never reached the plain stream:\n${serverLog}`, 2_000)
+    const pushedAfterMs = Date.now() - committedAt
+    await waitFor(async () => {
+      const row = await sessionRow(base, sessionId)
+      return row.status === 'parked' && row.freshness === 'fresh'
+    }, `the fresh graph never carried the hook-authored state:\n${serverLog}`, 3_000)
+    assert.ok(pushedAfterMs < 2_000, `push took ${pushedAfterMs}ms — that is a poll cadence, not a leaf`)
+    assert.doesNotMatch(serverLog, /PATROL-REPAIR/, `a hook-authored commit must be a leaf's push, never a patrol repair:\n${serverLog}`)
+    assert.match(serverLog, /graph watchers — .*\(session-db: exact-directory 1\)/,
+      `the canonical database is one registration on its directory:\n${serverLog}`)
+  } catch (error) {
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nevents: ${events.join(', ')}\nserver log:\n${serverLog}`)
+  } finally {
+    abort.abort()
+    await streamRead?.catch(() => {})
+    await stopChild(child)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('a blinded database leaf is repaired by the patrol through the sessions splice', { timeout: 90_000 }, async () => {
+  const { fixture, project, spexHome } = fixtureProject('spex-graph-stream-hook-patrol-')
+  const sessionId = '99999999-9999-4999-8999-999999999999'
+  writeSessionRecord(spexHome, project, sessionId, project, 'main', 'idle')
+
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_TMUX: `spex-graph-stream-hook-patrol-${port}`,
+    SPEXCODE_DISABLE_WATCHERS: 'session-db',
+  }
+  delete env.SPEXCODE_API_URL
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  const base = `http://127.0.0.1:${port}`
+  const abort = new AbortController()
+  let streamRead: Promise<void> | null = null
+  const eventNames: string[] = []
+  const frames: Array<{ event: string; data: string }> = []
+  // the writer must not inherit the blind: it commits, the BACKEND is what cannot see
+  const writerEnv = { ...env }
+  delete writerEnv.SPEXCODE_DISABLE_WATCHERS
+
+  try {
+    await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    await waitFor(async () => {
+      const response = await fetch(`${base}/api/sessions`)
+      return (await response.text()).includes(sessionId)
+    }, `the fixture session never listed:\n${serverLog}`)
+    await (await fetch(`${base}/api/graph`)).arrayBuffer()
+
+    const response = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: abort.signal })
+    assert.equal(response.status, 200)
+    streamRead = (async () => {
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffered = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffered += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffered.indexOf('\n\n')) >= 0) {
+          const block = buffered.slice(0, boundary)
+          buffered = buffered.slice(boundary + 2)
+          const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+          if (event === 'graph-full' || event === 'graph-delta') {
+            frames.push({ event, data: block.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n') })
+            eventNames.push(event)
+          }
+        }
+      }
+    })().catch((error) => { if (!abort.signal.aborted) throw error })
+    await waitFor(() => eventNames.includes('graph-full'), `the delta subscriber never anchored:\n${serverLog}`)
+    await waitForQuiet(eventNames, 2_000)
+
+    const framesBefore = frames.length
+    commitStateFromAnotherProcess(project, writerEnv, sessionId, 'parked')
+    await waitFor(() => new RegExp(`PATROL-REPAIR .*sess:${sessionId}`).test(serverLog),
+      `the patrol never repaired the blinded database commit:\n${serverLog}`, 40_000)
+    await waitFor(() => frames.slice(framesBefore).some((frame) => {
+      const payload = JSON.parse(frame.data) as { graph?: { sessions?: Array<{ id: string; status?: string }> }; set?: Record<string, { status?: string }> }
+      const row = payload.graph?.sessions?.find((session) => session.id === sessionId) ?? payload.set?.[`sess:${sessionId}`]
+      return row?.status === 'parked'
+    }), `no patrol frame carried the hook-authored state:\n${serverLog}`, 5_000)
+    const row = await sessionRow(base, sessionId)
+    assert.equal(row.status, 'parked', 'the repaired board must serve the committed state')
+    assert.match(serverLog, /graph watcher 'session-db' disabled/, 'the injection must announce itself')
+  } catch (error) {
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes: ${JSON.stringify(frames.map((frame) => frame.event))}\nserver log:\n${serverLog}`)
+  } finally {
+    abort.abort()
+    await streamRead?.catch(() => {})
+    await stopChild(child)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})

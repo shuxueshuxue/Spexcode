@@ -3,6 +3,7 @@ import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, type Dirent, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
+import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from '@spexcode/spec-core'
@@ -491,6 +492,72 @@ function ensureWatcher(root: string): void {
   noteSourceHealthy('store')
 }
 
+// ---- event source 1b: the canonical session database (lifecycle commits from ANY process) → 'sessions' ----
+// Since the JSON cutover ([[production-cutin]]) a lifecycle transition is a SQLite commit, not a write inside the
+// store above: that watch still sees the runtime envelope and the prompt, but the state a HOOK authors — mark-active
+// on every prompt and tool call, the stop-gate's declarations, idle — is committed by the hook's OWN process through
+// `spex internal session-state`. The backend's in-process commit observer (index.ts) bridges only its own commits,
+// so without this leaf a hook-authored flip reached the board only when some unrelated signal happened to re-splice:
+// a message sent from the dashboard left the row idle for minutes (measured on the dogfood board: 150s of nothing
+// but pings after the commit). One NON-recursive watch on the database's directory, delivering only the database's
+// own names — the file and its `-journal` (journal_mode=delete writes both on every commit); every other file in
+// that directory is filtered out at delivery. Attach failure is held and repaired like every other source, and
+// [[graph-cache]] folds the same file into its session revision so the patrol covers a held or disabled leaf.
+let sessionDatabaseWatcher: TreeWatcherRegistry | null = null
+let activeDatabasePath: string | null = null
+const SESSION_DB_SOURCE = 'session-db'
+export const sessionDatabaseWatchIgnore = (databasePath: string): ((relativePath: string) => boolean) => {
+  const name = basename(databasePath)
+  return (relativePath) => relativePath !== name && !relativePath.startsWith(`${name}-`)
+}
+export function watchSessionDatabase(
+  databasePath: string,
+  onInput: () => void,
+  onFailure: (error: Error) => void,
+  watchFactory?: WatchFactory,
+): TreeWatcherRegistry {
+  return new TreeWatcherRegistry({
+    root: dirname(databasePath),
+    source: SESSION_DB_SOURCE,
+    scope: 'sessions',
+    recursive: false,
+    ignore: sessionDatabaseWatchIgnore(databasePath),
+    watchFactory,
+    onInput: () => onInput(),
+    onFailure,
+  })
+}
+function closeSessionDatabaseWatcher(): void {
+  sessionDatabaseWatcher?.close()
+  sessionDatabaseWatcher = null
+  activeDatabasePath = null
+}
+function ensureSessionDatabaseWatcher(): void {
+  if (isDisabled(SESSION_DB_SOURCE)) { closeSessionDatabaseWatcher(); return }
+  let databasePath: string
+  try { databasePath = resolveDatabasePath() }
+  catch (error) { noteSourceFailure(SESSION_DB_SOURCE, error); return }
+  if (sessionDatabaseWatcher && activeDatabasePath === databasePath) return
+  closeSessionDatabaseWatcher()
+  activeDatabasePath = databasePath
+  if (!mayAttach(SESSION_DB_SOURCE)) return
+  try { mkdirSync(dirname(databasePath), { recursive: true }) }
+  catch (error) {
+    console.error(`spec-cli: graph watcher '${SESSION_DB_SOURCE}' could not create ${dirname(databasePath)}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  const registry = watchSessionDatabase(databasePath, () => fireChanged('sessions'), (error) => {
+    if (sessionDatabaseWatcher === registry) sessionDatabaseWatcher = null
+    noteSourceFailure(SESSION_DB_SOURCE, error)
+    fireChanged('sessions')
+  })
+  sessionDatabaseWatcher = registry
+  if (!registry.refresh()) {
+    if (sessionDatabaseWatcher === registry) sessionDatabaseWatcher = null
+    return
+  }
+  noteSourceHealthy(SESSION_DB_SOURCE)
+}
+
 // ---- event source 2: git refs (a commit/merge reshapes the tree the moment the ref moves) → 'full' ----
 // refs/ recursively for loose refs (heads, worktree branches), plus the common dir itself non-recursively
 // for packed-refs rewrites and HEAD flips. Ordinary graph units still have the patrol; eval projections are
@@ -952,6 +1019,7 @@ export async function ensureBoardFileWatchers(forceSessionId?: string): Promise<
   activeStoreRoot = storeRoot
   activeCommonRoot = commonRoot
   ensureWatcher(storeRoot)
+  ensureSessionDatabaseWatcher()
   ensureRefsWatcher(commonRoot)
   await ensureWorktreeRegistry(forceSessionId)
   ensureProjectRootWatcher()
@@ -970,6 +1038,7 @@ export function closeBoardFileWatchers(): void {
 
   storeWatcher?.close()
   storeWatcher = null
+  closeSessionDatabaseWatcher()
   refsWatchers?.close()
   refsWatchers = null
   registryWatcher?.close()

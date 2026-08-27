@@ -44,11 +44,15 @@ The graph is built **once per change, not once per poll — and only as much of 
 - **Verification is cache-owned, and it is the FIRST step of every refresh.** A change signal names the leaf a
   watcher saw; that is not evidence the board moved. So every refresh — graph-stream's ~15s patrol, an HTTP
   read, a watcher-driven rebuild alike — first compares one compact board-input revision: the served checkout's
-  HEAD, `.spec` tree and config; the main branch tip; exact session records and originating prompt artifacts;
-  each non-archived governed worktree's HEAD and `.spec` tree; the whole issue/remark-store stamp; and the
+  HEAD, `.spec` tree and config; the main branch tip; exact session records and originating prompt artifacts
+  together with the canonical session database's file identity (mtime, ctime, size — the lifecycle those
+  envelopes no longer carry lives there, any process may commit to it, and journal_mode=delete rewrites the file
+  in place on every commit; it is folded while any session record exists, because with none no row derives from
+  the store and the store's own birth — the first canonical access inside a build initializes it — is not an
+  input that moved during that build); each non-archived governed worktree's HEAD and `.spec` tree; the whole issue/remark-store stamp; and the
   current session-eval projection states. That list IS this cache's answer to "is this a board input?", and a
   producer's domain is DERIVED from what it says moved rather than assigned by whoever signalled. An equal
-  revision returns the cached board and starts no assembly, whoever asked. A moved session record or projection
+  revision returns the cached board and starts no assembly, whoever asked. A moved session record, database or projection
   revision takes the `sessions` splice; a moved graph/config/worktree/issue revision takes the `full` producer,
   so a blinded observer is still repaired and reported by [[graph-stream]]. This is validation, not a second
   poller or TTL.

@@ -44,6 +44,23 @@ scenarios:
       carries its DOMAIN (a store write dirties only the session units), so the push pays a sessions-only
       splice — never a full board rebuild — plus a burst-collapse debounce sized to the measured fs-event
       burst width (tens of ms), not a flat 150ms wait.
+  - name: hook-authored-state-push
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    related: [spec-cli/src/graphCache.ts, spec-cli/src/session-application.ts, .spec/spexcode/.plugins/core/mark-active/mark-active.sh]
+    description: >-
+      Against an isolated-home backend serving a real spec corpus with one governed session, hold BOTH a plain
+      `/api/graph/stream` and a delta subscriber, then commit lifecycle transitions from ANOTHER PROCESS through
+      the hook's own writer — `spex internal session-state <state> --session <id>`, exactly what mark-active runs
+      on UserPromptSubmit/PreToolUse and what the stop-gate's declarations run — with zero tmux, route, or
+      envelope activity riding along. Time the first non-ping stream event after each commit and poll
+      `/api/graph` for the row's status.
+    expected: >-
+      Each hook-authored commit reaches both subscribers on the debounce scale (sub-second) and the next
+      `/api/graph` read carries the new status: the canonical session database is a watched leaf feeding the
+      sessions splice, so a flip written by the hook's process shows exactly like one the backend committed
+      itself — never waiting for an unrelated tmux/ref/worktree signal, and never for the patrol (zero
+      `PATROL-REPAIR` for these commits).
   - name: uncommitted-spec-edit-visibility
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts

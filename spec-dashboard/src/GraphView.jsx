@@ -7,7 +7,6 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { pinTab } from './tabs.js'
 import { routeAddress } from './address.js'
 import {
   graphTitles, layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
@@ -581,8 +580,8 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     // The sealed public face has no document area — the popup IS its reading surface, so the gesture
     // keeps its old meaning there.
     if (graphOnly) setOverlay(true)
-    else pinTab('spec', n.id)
-  }, [focusNode, graphOnly])
+    else scope.open({ page: 'spec', param: n.id, query: null })
+  }, [focusNode, graphOnly, scope])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
   // focusing the node first with the same camera target as every other focus move.

@@ -48,9 +48,9 @@ The verb a reader picks is a seed, never a mode: the same box opens for all of t
 ordinary prompt and travels the one input route every other surface uses ([[dispatch]]). [[code-selection]]
 already rules that "no API route, session field, or alternate dispatch path belongs here", and none is
 added: an existing target receives the prompt through the session input route. Choosing a new session uses
-the existing `createSession(prompt)` API in the same click, holds the returned session as a fresh workspace tab
+the existing `createSession(prompt)` API in the same click, marks the returned session as a fresh workspace tab
 and opens it — [[tab-routing]] treats creation as a gesture, so the new session appends beside the document the
-passage came from and never replaces a slot — and there is no second launch-face send. The target list uses the shared `sessionFooterState(session) === 'live'` predicate;
+passage came from and never replaces its tab — and there is no second launch-face send. The target list uses the shared `sessionFooterState(session) === 'live'` predicate;
 idle sessions remain dispatch targets while offline, archived, and other non-live records do not.
 
 **The verbs seed the box; they are not modes.** Each action opens the same popover, differing only in what

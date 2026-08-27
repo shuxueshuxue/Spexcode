@@ -7,7 +7,7 @@ import { useIsMobile } from './useIsMobile.js'
 import RichText, { richTextFromRange } from './RichText.js'
 import { BlobMedia } from './Evidence.jsx'
 import { routeHash } from './route.js'
-import { holdAnchor } from './tabs.js'
+import { newTabAnchor } from './tabs.js'
 import 'katex/dist/katex.min.css'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
@@ -27,7 +27,7 @@ function TimelineRichText({ children, className = '' }) {
   return <RichText className={className} softBreak="break"
     renderSpecRef={(id, token, provenance) => {
       const href = routeHash('spec', id)
-      return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+      return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>
     }}
     renderEvidence={(meta, token, provenance) => <span className="rich-evidence" {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
     {children}

@@ -328,7 +328,7 @@ scenarios:
       observing prompt focus, URL selection, the workspace strip, list updates, and the selected Conversation footer.
     expected: >-
       Launch clears the box immediately and never waits: each create response moves the reader into the new
-      session's document as a HELD workspace tab (`#/sessions/<id>`) without evicting any other tab, and returning
+      session's document as a new workspace tab (`#/sessions/<id>`) without evicting any other tab, and returning
       to New Session for the next launch is one plain click. Closing the active session removes its working row
       but keeps its routed id selected and shows the archived/offline read-only Conversation; closing a background
       session preserves the current valid selection.

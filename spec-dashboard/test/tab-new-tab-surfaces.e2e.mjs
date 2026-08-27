@@ -1,16 +1,15 @@
-// YATU proof for [[tab-strip]]'s hold whitelist across every row surface that lists an object a second tab
-// can hold. One law, five surfaces: ctrl/⌘-click, a double-click, and a document's own explicit
-// "open in a new tab" action are the gestures that mint a tab. This run performs each of them through the
-// real dashboard against the running backend and reports how many surfaces kept it.
+// YATU proof for [[tab-strip]]'s new-tab gesture across every row surface that lists an object a second tab
+// can hold. One law, four surfaces: ctrl/⌘-click and a document's own explicit "open in a new tab" action
+// are the gestures that mint a tab — and the tab they mint is an ordinary tab. This run performs each of
+// them through the real dashboard against the running backend and reports how many surfaces kept it.
 //
-// Each probe establishes a same-kind SLOT first, then performs the gesture on a DIFFERENT object: a
-// surface that honours the law ends with one more tab, held (no `.slot` class); a surface that ignores it
-// replaces the slot and the count never moves. That distinction is why the slot is established first —
-// a deep link into an empty workspace also mints a tab, and would read as a false pass.
+// Each probe establishes a focused same-kind tab first, then performs the gesture on a DIFFERENT object: a
+// surface that honours the law ends with one more tab carrying that object's address. Then a PLAIN click on
+// a third object, while the arrived tab is focused, must replace it: the count does not move. That second
+// half is what distinguishes an ordinary tab from the pinned tab an older release minted here.
 //
 // RESIDENT BOARD ADDRESSES ARE OUT OF THE POPULATION ON PURPOSE. A spec, evals, issues, or settings detail
-// canonicalizes to one top-level tab identity, so there is no second tab for a hold to mint there; probing
-// one would measure the residency rule rather than the gesture.
+// canonicalizes to one top-level tab identity, so there is no second tab for the gesture to mint there.
 import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -23,7 +22,7 @@ const viteEntry = join(dependencyRoot, 'node_modules', 'vite', 'dist', 'node', '
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const apiUrl = process.env.API_URL || 'http://127.0.0.1:8787'
-const out = resolve(process.env.OUT || '/tmp/tab-hold-surfaces-e2e')
+const out = resolve(process.env.OUT || '/tmp/tab-new-tab-surfaces-e2e')
 const port = Number(process.env.PORT || 5293)
 const base = `http://127.0.0.1:${port}`
 const HOLD = process.platform === 'darwin' ? 'Meta' : 'Control'
@@ -58,7 +57,7 @@ const mark = (step) => steps.push({ at: Date.now() - started, step })
 // The workspace strip is drawn once per SHOWING document host; pooled hidden documents keep their own
 // copy mounted. Only the visible strip is the workspace the reader sees, so only it is measured.
 const tabState = () => page.locator('[role="tab"][data-tab-key]:visible')
-  .evaluateAll((tabs) => tabs.map((tab) => ({ key: tab.dataset.tabKey, held: !tab.classList.contains('slot') })))
+  .evaluateAll((tabs) => tabs.map((tab) => ({ key: tab.dataset.tabKey, slotFace: tab.classList.contains('slot'), active: tab.classList.contains('on') })))
 
 // A probe always starts from a known workspace: no persisted tabs, then one plain navigation that mints
 // exactly one slot of the kind the gesture will be measured on.
@@ -75,14 +74,14 @@ const settle = async (hash, ready) => {
   await page.waitForTimeout(600)
 }
 
-// One settled Sessions workspace: the anchor session holds the only session slot, and the returned list
-// starts with it so every probe acts on a DIFFERENT visible row.
+// One settled Sessions workspace: the anchor session is the only session tab, and the returned list starts
+// with it so every probe acts on DIFFERENT visible rows — one for the gesture, one for the plain click after.
 const sessionsOnScreen = async () => {
   await settle(`#/sessions/${anchorSession.id}`, sessionsReady)
   const shown = await visibleSessionIds()
   const others = shown.filter((id) => id !== anchorSession.id)
-  assert.ok(others.length, 'the forest must show a second session row')
-  return [anchorSession.id, others[0]]
+  assert.ok(others.length >= 2, 'the forest must show two more session rows')
+  return [anchorSession.id, others[0], others[1]]
 }
 
 const results = []
@@ -92,7 +91,7 @@ const probe = async (surface, gesture, run) => {
     const before = await run()
     results.push({ surface, gesture, ...before })
   } catch (error) {
-    results.push({ surface, gesture, held: false, error: String(error?.message || error) })
+    results.push({ surface, gesture, kept: false, error: String(error?.message || error) })
   }
 }
 
@@ -102,21 +101,29 @@ const sessionRow = (id) => page.locator(`.si-list .si-item[data-sid="${id}"]`)
 // surfaces, so the probes take their objects from what the product rendered rather than from the board.
 const visibleSessionIds = () => page.locator('.si-list .si-item[data-sid]:visible').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
 
-// A gesture's verdict: the tab list before, the tab list after, and whether the arriving tab is HELD.
-const verdict = (before, after, key) => {
-  const arrived = after.find((tab) => tab.key === key)
-  return {
-    held: !!arrived?.held && after.length === before.length + 1,
-    before: before.map((t) => t.key),
-    after: after.map((t) => `${t.key}${t.held ? '' : ' (slot)'}`),
-  }
+// A gesture's verdict in two halves: the gesture appended one tab carrying the object's address, and the
+// plain click that followed replaced that tab (same count, the arrived key gone, the clicked key focused).
+// No tab may carry the retired replaceable-slot face at any point.
+const show = (tabs) => tabs.map((t) => `${t.key}${t.slotFace ? ' (slot face)' : ''}${t.active ? ' *' : ''}`)
+const verdict = (before, after, key, afterPlain, plainKey) => {
+  const appended = after.some((tab) => tab.key === key && tab.active) && after.length === before.length + 1
+  const replaced = afterPlain.length === after.length && !afterPlain.some((tab) => tab.key === key)
+    && afterPlain.some((tab) => tab.key === plainKey && tab.active)
+  const noSlotFace = [...after, ...afterPlain].every((tab) => !tab.slotFace)
+  return { kept: appended && replaced && noSlotFace, appended, replaced, noSlotFace, before: show(before), after: show(after), afterPlain: show(afterPlain) }
+}
+const plainClick = async (row, id) => {
+  await row.click()
+  await page.waitForFunction((hash) => location.hash === hash, `#/sessions/${id}`, { timeout: 10_000 })
+  await page.waitForTimeout(700)
+  return tabState()
 }
 
 try {
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
   await page.locator(sessionsReady).first().waitFor({ state: 'visible', timeout: 60_000 })
   const shownFirst = await visibleSessionIds()
-  assert.ok(shownFirst.length >= 2, `the forest must show two session rows, showed ${shownFirst.length}`)
+  assert.ok(shownFirst.length >= 3, `the forest must show three session rows, showed ${shownFirst.length}`)
   anchorSession = liveSessions.find((s) => s.id === shownFirst[0]) || { id: shownFirst[0] }
 
   // 1 — the finding dock's session row. It already keeps the law, and stays in the census as the
@@ -130,48 +137,48 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('.dock-session-list .si-item[data-sid]').first().waitFor({ state: 'visible', timeout: 30_000 })
     const shown = await page.locator('.dock-session-list .si-item[data-sid]:visible').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
-    const other = shown.find((id) => id !== anchor)
-    assert.ok(other, 'the dock must show a second session row')
+    const [other, third] = shown.filter((id) => id !== anchor)
+    assert.ok(third, 'the dock must show two more session rows')
     const before = await tabState()
     await page.locator(`.dock-session-list .si-item[data-sid="${other}"]`).click({ modifiers: [HOLD] })
     await page.waitForTimeout(700)
-    return verdict(before, await tabState(), `#/sessions/${other}`)
+    const after = await tabState()
+    // The ctrl/⌘-click routed to the session document, and on a sessions route the page's own forest is the
+    // session list (the dock projection yields to it) — so the plain click that follows is a forest row.
+    await sessionRow(third).waitFor({ state: 'visible', timeout: 15_000 })
+    const afterPlain = await plainClick(sessionRow(third), third)
+    return verdict(before, after, `#/sessions/${other}`, afterPlain, `#/sessions/${third}`)
   })
 
   // 2 — the Sessions page's own forest row, ctrl/⌘-click.
   await probe('sessions-page forest row', 'ctrl/⌘-click', async () => {
-    const [, other] = await sessionsOnScreen()
+    const [, other, third] = await sessionsOnScreen()
     const before = await tabState()
     await sessionRow(other).click({ modifiers: [HOLD] })
     await page.waitForTimeout(700)
-    return verdict(before, await tabState(), `#/sessions/${other}`)
+    const after = await tabState()
+    const afterPlain = await plainClick(sessionRow(third), third)
+    return verdict(before, after, `#/sessions/${other}`, afterPlain, `#/sessions/${third}`)
   })
 
-  // 3 — the same row, double-click.
-  await probe('sessions-page forest row', 'double-click', async () => {
-    const [, other] = await sessionsOnScreen()
-    const before = await tabState()
-    await sessionRow(other).dblclick()
-    await page.waitForTimeout(700)
-    return verdict(before, await tabState(), `#/sessions/${other}`)
-  })
-
-  // 4 — the session row's own context menu action.
+  // 3 — the session row's own context menu action.
   await probe('session row context menu', 'open in a new tab', async () => {
-    const [, other] = await sessionsOnScreen()
+    const [, other, third] = await sessionsOnScreen()
     const before = await tabState()
     await sessionRow(other).click({ button: 'right' })
     const item = page.getByRole('menuitem', { name: 'open in a new tab' })
     await item.waitFor({ state: 'visible', timeout: 5_000 })
     await item.click()
     await page.waitForTimeout(700)
-    return verdict(before, await tabState(), `#/sessions/${other}`)
+    const after = await tabState()
+    const afterPlain = await plainClick(sessionRow(third), third)
+    return verdict(before, after, `#/sessions/${other}`, afterPlain, `#/sessions/${third}`)
   })
 
-  // 5 — the search palette's session row. The palette is the workspace's keyboard finding surface, so the
-  // hold has to be reachable from it with the same modifier the pointer surfaces use.
+  // 4 — the search palette's session row. The palette is the workspace's keyboard finding surface, so the
+  // gesture has to be reachable from it with the same modifier the pointer surfaces use.
   await probe('search palette session row', 'ctrl/⌘-click', async () => {
-    const [anchor, other] = await sessionsOnScreen()
+    const [anchor, other, third] = await sessionsOnScreen()
     const before = await tabState()
     await page.keyboard.press('Alt+Slash')
     await page.locator('.search-panel').waitFor({ state: 'visible', timeout: 10_000 })
@@ -179,17 +186,19 @@ try {
     await row.waitFor({ state: 'visible', timeout: 10_000 })
     await row.click({ modifiers: [HOLD] })
     await page.waitForTimeout(800)
-    return { anchor, ...verdict(before, await tabState(), `#/sessions/${other}`) }
+    const after = await tabState()
+    const afterPlain = await plainClick(sessionRow(third), third)
+    return { anchor, ...verdict(before, after, `#/sessions/${other}`, afterPlain, `#/sessions/${third}`) }
   })
 
-  const kept = results.filter((r) => r.held)
+  const kept = results.filter((r) => r.kept)
   mark('settled workspace')
-  await page.screenshot({ path: join(out, 'tab-hold-final.png'), fullPage: true })
+  await page.screenshot({ path: join(out, 'tab-new-tab-final.png'), fullPage: true })
   const report = {
-    population: `${kept.length} of ${results.length} row surfaces keep the hold gesture`,
+    population: `${kept.length} of ${results.length} row surfaces keep the new-tab gesture and yield an ordinary tab`,
     results,
     browserErrors: errors,
-    screenshot: join(out, 'tab-hold-final.png'),
+    screenshot: join(out, 'tab-new-tab-final.png'),
     video: await page.video()?.path(),
   }
   writeFileSync(join(out, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events: steps }, null, 2))

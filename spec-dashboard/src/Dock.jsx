@@ -7,7 +7,7 @@ import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
-import { focusSessionTab, isHoldGesture, pinTab } from './tabs.js'
+import { isNewTabGesture, openNewTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
 import { Icon, IconButton } from './icons.jsx'
@@ -65,7 +65,7 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
     const action = resolveSessionShortcut(rows, activeId, event)
     if (!action) return false
     event.preventDefault()
-    if (action.type === 'move') focusSessionTab(action.id, (route) => navigate(route.page, route.param, { query: route.query }))
+    if (action.type === 'move') navigate('sessions', action.id)
     else if (action.type === 'expand') {
       const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
       if (item && !item.expanded) toggleSessionFold(action.id)
@@ -162,10 +162,10 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
               <span>{label}</span><span className="dock-session-count">{item.count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
             </button>
           }
-          // This row is the one place a session is claimed. Plain click reads it IN THE CURRENT SLOT — a
+          // This row is the one place a session is claimed. Plain click reads it IN THE FOCUSED TAB — a
           // session is a document like any other, and tmux holds the terminal state, so nothing is lost
-          // when the slot moves on. Ctrl/⌘ or a double-click holds it as its own tab, and ⌥ scopes the
-          // graph to its worktree — the gesture the retired map-side glance used to own.
+          // when the tab moves on. Ctrl/⌘ opens it in a new tab, and ⌥ scopes the graph to its worktree —
+          // the gesture the retired map-side glance used to own.
           const locked = !!item.s.source && item.s.source === lockedSource
           return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId}
             dragging={drag?.id === item.s.id}
@@ -181,10 +181,9 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
               onMouseDown: (event) => { event.preventDefault(); startRowDrag(event, item.s) },
               onClick: (event) => {
                 if (event.altKey) { event.preventDefault(); lockGraphTo(item.s.source); return }
-                if (isHoldGesture(event)) pinTab('sessions', item.s.id)
-                else focusSessionTab(item.s.id, (route) => navigate(route.page, route.param, { query: route.query }))
+                if (isNewTabGesture(event)) openNewTab('sessions', item.s.id)
+                else navigate('sessions', item.s.id)
               },
-              onDoubleClick: () => pinTab('sessions', item.s.id),
               onContextMenu: (event) => {
                 event.preventDefault()
                 setMenu({ x: event.clientX, y: event.clientY, session: item.s })

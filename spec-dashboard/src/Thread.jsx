@@ -10,7 +10,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { useLaunchers } from './launch.js'
 import { routeHash } from './route.js'
-import { holdAnchor } from './tabs.js'
+import { newTabAnchor } from './tabs.js'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
@@ -146,7 +146,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
           <Prose className="doc-body"
             renderSpecRef={(id, token, provenance) => {
               const href = routeHash('spec', id)
-              return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+              return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>
             }}
             renderTimeAnchor={(meta, token, provenance) => {
               const resolved = resolveAnchor({ tMs: meta.tMs, step: meta.step, label: meta.label }, events)

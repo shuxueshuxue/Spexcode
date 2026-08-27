@@ -44,6 +44,11 @@ export const toggleSpecNode = (id) => {
   publish(open)
 }
 
+export const collapseSpecTree = () => {
+  if (!snapshot.open.size) return
+  publish(new Set())
+}
+
 // Open a whole path at once — the reveal a routed address asks for. It publishes only on a real change,
 // so a route that lands on an already-visible node costs no render.
 export const revealSpecPath = (ids = []) => {

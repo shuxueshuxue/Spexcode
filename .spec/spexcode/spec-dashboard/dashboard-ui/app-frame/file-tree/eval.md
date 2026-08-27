@@ -41,6 +41,17 @@ scenarios:
       rows: the arrangement is held outside the rows that draw it, so unmounting a branch cannot erase it.
       Zero loss = a tree that is genuinely a view of the address rather than one that merely claims to be.
     code: [spec-dashboard/src/FileTree.jsx, spec-dashboard/src/specTreeState.js]
+  - name: collapse-all-spec-tree
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open several nested branches in the Specs section of the Explorer, hover or focus its section head,
+      and activate the Collapse All view action. Then reopen one node.
+    expected: >-
+      The Specs section head exposes one quiet VS Code-style collapse-all icon. Activating it hides every
+      disclosed spec branch while keeping the Specs section open, the selected route unchanged, and the Files
+      section untouched. The action is disabled when no spec node is open; reopening a node reveals only that
+      branch and its existing children.
+    code: [spec-dashboard/src/FileTree.jsx, spec-dashboard/src/specTreeState.js, spec-dashboard/src/icons.jsx]
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Capture the settled Explorer

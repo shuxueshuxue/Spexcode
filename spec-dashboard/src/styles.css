@@ -460,12 +460,20 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    spent on space, then colour, then weight. It is NOT a band either: it scrolls with the list it heads,
    inside `.ft-body`'s scrollport, and carries its own aria-expanded ([[ui-state-model]]). */
 .ft-section + .ft-section { border-top: var(--divider-rule); margin-top: var(--space-2); }
+.ft-section-head-row { display: flex; align-items: center; min-width: 0; }
 .ft-section-head {
-  display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
   background: none; border: 0; cursor: pointer; text-align: left;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--muted);
 }
 .ft-section-head:hover { background: var(--wash-hover); }
+.ft-section-action {
+  width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  margin-right: var(--space-2); padding: 0; border: 0; border-radius: var(--radius); color: var(--muted); background: transparent; cursor: pointer; opacity: 0;
+}
+.ft-section-head-row:hover .ft-section-action, .ft-section-action:focus-visible { opacity: 1; }
+.ft-section-action:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+.ft-section-action:disabled { cursor: default; }
 .ft-section-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); font-weight: var(--weight-medium); }
 .ft-note { padding: 3px 8px 3px 6px; color: var(--muted); font-size: var(--type-caption); }
 .ft-note-error { color: var(--red); }
@@ -3609,10 +3617,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-review-body { display:grid; grid-template-columns:minmax(220px, 300px) minmax(0, 1fr); flex:1; min-height:0; }
 .diff-file-panel { border-right:1px solid var(--line); overflow:auto; padding-bottom:8px; background:color-mix(in srgb, var(--line) 10%, var(--paper)); }
 .diff-file-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:30px; padding:0 8px 0 10px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--type-caption); }
-.diff-file-panel-action { width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; padding:0; border:0; border-radius:var(--radius); color:var(--muted); background:transparent; cursor:pointer; opacity:0; }
-.diff-file-panel-head:hover .diff-file-panel-action, .diff-file-panel-action:focus-visible { opacity:1; }
-.diff-file-panel-action:hover:not(:disabled) { color:var(--ink2); background:var(--wash-hover); }
-.diff-file-panel-action:disabled { cursor:default; }
 .diff-file-group { position:sticky; top:0; z-index:1; padding:6px 10px 4px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 22%, var(--paper)); color:var(--muted); font-size:var(--type-caption); }
 .diff-tree-file { justify-content:flex-start; }
 .diff-tree-file .ft-label { flex:1; }

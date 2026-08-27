@@ -292,8 +292,6 @@ export default function DiffDocument({ sessionId }) {
       <nav className="diff-file-panel" aria-label={t('session.diffFiles')}>
         <div className="diff-file-panel-head">
           <span>{t('session.diffFiles')}</span>
-          <IconButton icon="collapse-all" size={14} className="diff-file-panel-action" label={t('session.diffCollapseAll')}
-            disabled={!openDirs.size} onClick={() => setOpenDirs(new Set())} />
         </div>
         {[scopeSection('branch', committed), scopeSection('working', working)]}
       </nav>

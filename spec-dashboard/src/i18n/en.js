@@ -54,6 +54,7 @@ export default {
     specs: 'Specs',
     files: 'Files',
     graph: 'Spec graph',
+    collapseAll: 'collapse all spec folders',
   },
   diskTree: {
     loading: 'loading…',
@@ -809,7 +810,6 @@ export default {
     diffUnified: 'unified',
     diffWrap: 'wrap lines',
     diffFiles: 'changed files',
-    diffCollapseAll: 'collapse all folders',
     diffPrevious: 'previous change',
     diffNext: 'next change',
     diffSent: 'sent {n} comment(s)',

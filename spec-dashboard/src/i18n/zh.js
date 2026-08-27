@@ -53,6 +53,7 @@ export default {
     specs: '规格',
     files: '文件',
     graph: '规格图谱',
+    collapseAll: '收起所有规格文件夹',
   },
   diskTree: {
     loading: '正在加载…',
@@ -797,7 +798,6 @@ export default {
     diffUnified: '统一',
     diffWrap: '折行',
     diffFiles: '变更文件',
-    diffCollapseAll: '折叠所有文件夹',
     diffPrevious: '上一个改动',
     diffNext: '下一个改动',
     diffSent: '已发送 {n} 条评论',

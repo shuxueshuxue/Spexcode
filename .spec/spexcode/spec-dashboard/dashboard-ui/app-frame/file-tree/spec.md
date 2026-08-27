@@ -75,6 +75,11 @@ borrow [[dock-modes]]' header register — muted meta, the name in ink at medium
 because an all-caps tracked label is decoration wearing the costume of hierarchy ([[typography]]), and the
 collapsed state of each is a localStorage preference like every other pane's.
 
+The Specs head carries one quiet **Collapse All** view action at its right edge, using the shared VS Code
+`collapse-all` icon. It appears on hover or keyboard focus, clears every disclosed spec node in the shared
+tree store, and leaves the Specs section itself open so the reader can reopen one branch immediately. When
+the tree is already folded the action is disabled; it never changes the selected route or the Files section.
+
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
 workspace whose only entrance is a URL is a workspace nobody enters. Its explorer and sessions projections
 are selected from the rail's activity-bar buttons ([[side-nav]], [[dock-modes]]). On by default is not beside

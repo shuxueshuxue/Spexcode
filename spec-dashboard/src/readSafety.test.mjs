@@ -85,20 +85,22 @@ test('the uncommitted half is read from the session\'s own worktree, or honestly
   assert.match(zh, /diffGroupUncommitted:/)
 })
 
-test('the changed-file tree uses the VS Code collapse-all action shape', () => {
-  const diff = source('./DiffDocument.jsx')
+test('the Specs explorer uses the VS Code collapse-all action shape', () => {
+  const tree = source('./FileTree.jsx')
+  const state = source('./specTreeState.js')
   const icons = source('./icons.jsx')
   const en = source('./i18n/en.js')
   const zh = source('./i18n/zh.js')
 
-  assert.match(diff, /className="diff-file-panel-head"/)
-  assert.match(diff, /IconButton icon="collapse-all"/)
-  assert.match(diff, /session\.diffCollapseAll/)
-  assert.match(diff, /disabled=\{!openDirs\.size\}/)
-  assert.match(diff, /onClick=\{\(\) => setOpenDirs\(new Set\(\)\)\}/)
+  assert.match(tree, /Section name=\{t\('fileTree\.specs'\)\}[\s\S]*IconButton icon="collapse-all"/)
+  assert.match(tree, /label=\{t\('fileTree\.collapseAll'\)\}/)
+  assert.match(tree, /disabled=\{!openSpecIds\.size\}/)
+  assert.match(tree, /onClick=\{collapseSpecTree\}/)
+  assert.match(state, /export const collapseSpecTree = \(\) =>/)
+  assert.match(state, /publish\(new Set\(\)\)/)
   assert.match(icons, /'collapse-all':/)
-  assert.match(en, /diffCollapseAll:/)
-  assert.match(zh, /diffCollapseAll:/)
+  assert.match(en, /collapseAll: 'collapse all spec folders'/)
+  assert.match(zh, /collapseAll: '收起所有规格文件夹'/)
 })
 
 test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {

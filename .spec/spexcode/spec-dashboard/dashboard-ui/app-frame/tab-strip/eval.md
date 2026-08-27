@@ -129,6 +129,23 @@ scenarios:
       strip. Zero loss = closing returns the reader to the tab they actually came from.
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
     test: spec-dashboard/test/tab-close-focus-history.e2e.mjs
+  - name: inactive-tab-survives-navigation-and-creation
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real desktop Chromium against an isolated backend whose launcher exits at once, seed four sessions
+      and reach A by address so its tab is the session slot. Scene 1: ctrl/⌘-click B (held, focused), then
+      plain-click D's row. Scene 2: with D focused and unpinned, plain-click E's row. Scene 3: open New Session,
+      type a prompt, press Enter, and wait for the route to reach the published session. Read the VISIBLE strip
+      after each scene settles, capture one screenshot per scene, and record the run with its step ruler.
+    expected: >-
+      3 of 3 scenes keep the balance. Scene 1: A survives as an inactive slot, B stays held, D arrives as a
+      new focused slot (one more tab). Scene 2: D is replaced by E and the count does not move — the focused
+      unpinned tab is the only one a plain click may overwrite. Scene 3: the created session arrives HELD and
+      focused beside A, B and E (one more tab), the route reaches `#/sessions/<id>`, and the browser raises no
+      product error or unhandled rejection.
+    code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
+    related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/TabStrip.jsx]
+    test: spec-dashboard/test/tab-inactive-survives.e2e.mjs
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

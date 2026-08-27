@@ -35,6 +35,9 @@ test('the New tab launches on plain Enter and keeps Shift+Enter for multiline dr
   assert.match(source, /disabled=\{!prompt\.trim\(\)\} onMouseDown=\{inertChromePress\} onClick=\{submit\}/)
   assert.match(source, /className="si-input"[\s\S]*?onKeyDown=\{\(event\) => \{[\s\S]*?event\.key !== 'Enter' \|\| event\.shiftKey \|\| composingKey\(event\)[\s\S]*?submit\(\)/)
   assert.match(source, /if \(menu\) \{[\s\S]*?accept\(menu\.items\[menu\.index\]\)/)
+  // The hold must be IMPORTED, not only spelled: the call alone once shipped as a ReferenceError inside the
+  // create promise, so the composer created the session and then never left the launch page.
+  assert.match(source, /import \{[^}]*\bmarkTabHold\b[^}]*\} from '\.\/tabs\.js'/)
   assert.match(source, /markTabHold\('sessions', result\.id, null\)[\s\S]*?scope\.open\(\{ page: 'sessions', param: result\.id, query: null \}\)/)
   const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
   assert.match(css, /\.si-launch\s*\{[^}]*background:\s*var\(--blue\)/s)

@@ -13,6 +13,7 @@ import { sessionFooterState, sessionHeadline } from './session.js'
 import SessionPicker from './SessionPicker.jsx'
 import SelectionAttachment from './SelectionAttachment.jsx'
 import { navigate } from './route.js'
+import { markTabHold } from './tabs.js'
 
 // [[prose-dispatch]]: what a reader can DO with a passage of spec prose they just selected.
 //
@@ -186,7 +187,9 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       if (!res.ok) { setError(res.error || t('proseActions.sendFailed')); return }
       notify(t('proseActions.sentTo', { name: sessionHeadline(res.session) || res.id?.slice(0, 8) || t('proseActions.newSession') }), { kind: 'success' })
       clear()
-      if (res.id) navigate('sessions', res.id)
+      // Creation is a new-document gesture ([[tab-routing]]): hold the published id before the route write so the
+      // new session appends beside the document the passage came from instead of landing in a slot.
+      if (res.id) { markTabHold('sessions', res.id, null); navigate('sessions', res.id) }
       return
     }
     setBusy(true)

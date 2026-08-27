@@ -16,9 +16,10 @@ related:
 # selection-attachment
 
 Source selections have one visual and interaction contract wherever the ordinary prompt carries them. The
-prose-selection send card and the New Session seed queue both render `SelectionAttachment`: one file-diff
-mark, the address that names the source (node for prose, path for code), the inclusive line range, and one
-icon-only remove action. The row is a removable attachment, not a second editor or a new dispatch route.
+prose-selection send card (in its composer's preview slot) and the New Session seed queue both render
+`SelectionAttachment`: one file-diff mark, the address that names the source (node for prose, path for
+code), the inclusive line range, and one icon-only remove action wearing the board's shared quiet
+icon-button face — never a browser-default button box. The row is a removable attachment, not a second editor or a new dispatch route.
 
 The producers own only their delivery context. Prose dispatch removes the selection and closes its card;
 the New Session composer removes one decoded token from its local queue. Both still serialise through

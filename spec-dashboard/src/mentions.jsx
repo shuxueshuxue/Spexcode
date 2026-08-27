@@ -303,19 +303,32 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navBy(1); return true }
     if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); navBy(-1); return true }
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return true }
-    if (e.key === 'Escape') {
-      e.preventDefault(); e.stopPropagation()
-      if (inputRef.current) dismissed.current = caretKey(inputRef.current)
-      setMenu(null); setFixedStyle(null)
-      return true
-    }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); dismiss(); return true }
     return false
+  }
+  // `dismiss` is Escape's close — it remembers this exact draft+caret so the synthetic onSelect that follows
+  // cannot reopen the menu — for a host whose Escape arrives through the layer stack rather than the key.
+  const dismiss = () => {
+    if (inputRef.current) dismissed.current = caretKey(inputRef.current)
+    setMenu(null); setFixedStyle(null)
   }
   const close = () => { dismissed.current = null; setMenu(null); setFixedStyle(null) }
   const menuEl = menu
     ? <MentionMenu menu={menu} up={up} fixedStyle={fixedStyle} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
     : null
-  return { menu, sync, onKeyDown, close, menuEl }
+  return { menu, sync, onKeyDown, close, dismiss, menuEl }
+}
+
+// the keyboard contract of ANY open completion menu — ↑/↓ walk, Enter/Tab accept, Escape closes — for a
+// host that keeps its own menu state (the `/` palettes, which multiplex beside the mention hook). Returns
+// true when it consumed the key, so the caller falls through to its own bindings otherwise.
+export function menuKeyDown(e, menu, setMenu, accept) {
+  if (!menu) return false
+  if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setMenu((m) => (m ? { ...m, index: (m.index + 1) % m.items.length } : m)); return true }
+  if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setMenu((m) => (m ? { ...m, index: (m.index - 1 + m.items.length) % m.items.length } : m)); return true }
+  if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return true }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMenu(null); return true }
+  return false
 }
 
 // The grammar's DISCOVERABILITY DOOR, as ONE mechanism: type the EXACT trigger (`@` / `[[` / `/`) at the

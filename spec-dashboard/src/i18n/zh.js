@@ -690,7 +690,6 @@ export default {
       explain: '解释',
       manual: '手动编辑',
     },
-    preset: { edit: '编辑', polish: '润色', explain: '解释' },
     // 预置的是消息本身，不是按钮标签：点完落进输入框，人还能接着改。
     prompt: {
       edit: '改写这段 spec 正文，让它说该说的话。改完连同它的节点一起提交到你的分支。',
@@ -698,6 +697,10 @@ export default {
       explain: '解释这段正文：它在说什么、为什么在这里。只在会话里回答，不要改 spec。',
     },
     sendLabel: '把这段正文发给一个会话',
+    presets: '插入 / —— 预置意图',
+    addressTip: '发给谁 —— 一个在线会话，或新建一个',
+    newWith: '新建 · {launcher}',
+    jumpTip: '发送后打开这个会话',
     editLabel: '编辑这段正文',
     messagePlaceholder: '一起发过去的话（可以不写）',
     lines: '第 {a}–{b} 行',

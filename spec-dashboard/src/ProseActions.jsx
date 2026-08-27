@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Icon } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
+import { Avatar } from './avatar.jsx'
 import { useT } from './i18n/index.jsx'
 import { useBoard } from './workspace.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -9,8 +10,9 @@ import { proseSelection, PROSE_PRESETS, regionText, stampedRange } from './prose
 import { postSpecBody, sendSessionText } from './data.js'
 import { createSession, useLaunchers } from './launch.js'
 import { useSpecContent } from './specContent.js'
-import { sessionFooterState, sessionHeadline } from './session.js'
-import SessionPicker from './SessionPicker.jsx'
+import { sessionDisplayState, sessionFooterState, sessionHeadline } from './session.js'
+import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
+import { menuKeyDown, slashTokenAt, SlashMenu, TriggerButton, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import SelectionAttachment from './SelectionAttachment.jsx'
 import { navigate } from './route.js'
 import { markTabHold } from './tabs.js'
@@ -25,8 +27,14 @@ import { markTabHold } from './tabs.js'
 // The first two are the SAME send. There is no second dispatch path, no selection route, no session field:
 // the passage becomes an ordinary [[code-selection]] token inside an ordinary prompt, and it travels the
 // one input channel every other surface uses ([[dispatch]]). "Jump to Session" is a navigation that happens
-// after the send returns — the message is identical either way, which is why it can be a checkbox and not
-// a mode.
+// after the send returns — the message is identical either way, which is why it is a toggle and not a mode.
+//
+// The send card is the fifth home of the ONE composer ([[composer]]): the same surface, textarea, `@`/`[[`
+// autocomplete and `/` palette as Command Box, the New box and the thread reply. What is different here is
+// only that the RECIPIENT has to be chosen — every other composer already stands inside its target — so
+// the footer leads with an address chip: the `<id>` argument of `spex session send`, picked through the
+// same `@` rows every other box completes with ([[mentions]]), while an `@` typed in the message stays a
+// passive reference.
 //
 // Everything here FLOATS. An action group and a popover are z-layers over the document, never a strip
 // added to the chrome — the reading column keeps its full width whether or not anything is selected
@@ -60,19 +68,27 @@ const ACTIONS = [
   { key: 'manual', icon: 'pencil', preset: null, jump: false },
 ]
 
+// the default recipient: a live session already on this node, else the newest live session, else a new one.
+function defaultTarget(live, nodeId) {
+  const here = nodeId ? live.filter((s) => s.node === nodeId) : []
+  const pool = here.length ? here : live
+  return [...pool].sort((a, b) => (b.created || 0) - (a.created || 0))[0]?.id || 'new'
+}
+
 export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear }) {
   const t = useT()
-  const { sessions = [] } = useBoard()
-  const { launcher } = useLaunchers()
+  const { sessions = [], specs = [] } = useBoard()
+  const { launchers, launcher, pickLauncher } = useLaunchers()
   const { notify } = useTransientNotice()
   const content = useSpecContent(node?.id, node?.version)
   const body = node?.body ?? content?.body ?? ''
   const bodyReady = !!codeSelection || node?.body != null || content !== null
 
   const [hit, setHit] = useState(null)        // { lines, x, y } — a live selection and where to point at it
-  const [panel, setPanel] = useState(null)    // { kind:'send'|'manual', x, y, preset, jump }
-  const [draft, setDraft] = useState('')      // the popover's optional message / the editor's replacement
-  const [target, setTarget] = useState('')
+  const [panel, setPanel] = useState(null)    // { kind:'send'|'manual', x, y }
+  const [draft, setDraft] = useState('')      // the card's optional message / the editor's replacement
+  const [target, setTarget] = useState('')    // a live session id, or 'new' (its launcher is the remembered one)
+  const [jump, setJump] = useState(false)     // follow the passage to its session after the send
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -142,7 +158,8 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     return () => host.removeEventListener('contextmenu', onMenu)
   }, [hostRef, codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
 
-  useEscLayer(!!panel, dismiss)
+  // the send card layers its own Escape (menu → address → card); the editor and the bare group are one layer.
+  useEscLayer(panel?.kind === 'manual', dismiss)
   useEscLayer(!!(hit || codeSelection) && !panel, clear)
 
   // an outside press closes the open card. Bound while a card is open only, so ordinary reading never pays
@@ -169,11 +186,18 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       return
     }
     setDraft(action.preset ? t(`proseActions.prompt.${action.preset}`) : '')
-    if (!live.some((s) => s.id === target)) setTarget(live[0]?.id || 'new')
-    setPanel({ kind: 'send', x, y, jump: action.jump })
+    if (!live.some((s) => s.id === target)) setTarget(defaultTarget(live, node?.id))
+    setJump(action.jump)
+    setPanel({ kind: 'send', x, y })
+  }
+  // the address chip's pick: a session id, or a new session — with the launcher it named, remembered the
+  // way the New tab remembers its own pick, so the two launch doors never disagree.
+  const address = ({ id, launcher: name }) => {
+    setTarget(id)
+    if (id === 'new' && name && launchers.some((l) => l.name === name)) pickLauncher(name)
   }
 
-  const send = async (jump) => {
+  const send = async () => {
     if (!selection) return
     const to = target || 'new'
     const prompt = encodePrompt(draft, [selection])
@@ -237,7 +261,8 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       {!panel && selection && <ActionGroup t={t} hit={anchor} disabled={loading} manualEnabled={!codeSelection} onPick={open} />}
       {!panel && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
       {panel?.kind === 'send' && (
-        <SendPopover t={t} panel={panel} selection={selection} sessions={live} target={target} setTarget={setTarget}
+        <SendPopover t={t} panel={panel} node={node} selection={selection} specs={specs} sessions={sessions} live={live}
+          launchers={launchers} launcher={launcher} target={target} onAddress={address} jump={jump} setJump={setJump}
           draft={draft} setDraft={setDraft} busy={busy} error={error} onSend={send} onRemove={clear} onClose={dismiss} />
       )}
       {panel?.kind === 'manual' && (
@@ -267,36 +292,133 @@ function ActionGroup({ t, hit, onPick, disabled = false, manualEnabled = true })
   )
 }
 
-// The message box beside the pointer: an optional note, the three preset intents, who receives it, and the
-// two send modes. Nothing here is required — an empty message sends the passage alone, which is the whole
-// point of "here, look at this".
-function SendPopover({ t, panel, selection, sessions, target, setTarget, draft, setDraft, busy, error, onSend, onRemove, onClose }) {
+// The send card beside the pointer — the shared composer shell wearing this surface's one extra: an
+// address. Preview slot: the passage as the shared attachment row. Editor: the message, optional, with
+// the same `@` / `[[` autocomplete as every other box and the three preset intents as `/` commands (a
+// preset is text the human can still change, so it lands in the draft like any other completion).
+// Footer: the address chip, the three grammar doors, the follow toggle, and the icon-only Send. Nothing
+// here is required — an empty message sends the passage alone, which is the whole point of "look at this".
+function SendPopover({ t, panel, node, selection, specs, sessions, live, launchers, launcher, target, onAddress, jump, setJump,
+  draft, setDraft, busy, error, onSend, onRemove, onClose }) {
   const [ref, style] = useAnchored(panel.x, panel.y, [])
   const box = useRef(null)
+  // the card sits where the pointer was; a menu opens away from the nearer viewport edge.
+  const up = panel.y > window.innerHeight * 0.55
+  const [addressing, setAddressing] = useState(false)
   useEffect(() => { box.current?.focus() }, [])
+  const ac = useMentionAutocomplete({ inputRef: box, value: draft, setValue: setDraft, specs, sessions, launchers, focusId: node?.id, up })
+  const presets = PROSE_PRESETS.map((name) => ({ name, description: t(`proseActions.prompt.${name}`), kind: 'preset' }))
+  const [slash, setSlash] = useState(null)
+  const syncSlash = (el) => setSlash(el ? slashTokenAt(el.value, el.selectionStart, presets) : null)
+  const acceptSlash = (item) => {
+    if (!item || !slash) return
+    const text = t(`proseActions.prompt.${item.name}`)
+    setDraft(draft.slice(0, slash.start) + text + draft.slice(slash.end))
+    setSlash(null)
+    const caret = slash.start + text.length
+    requestAnimationFrame(() => { const el = box.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
+  }
+  const sync = (el) => { ac.sync(el); syncSlash(el) }
+  const insertTrigger = (trigger) => typeTrigger(box.current, trigger, setDraft, sync)
+  // Escape peels ONE layer: an open menu, then the address editor, then the card — never the document under it.
+  useEscLayer(true, () => {
+    if (slash) setSlash(null)
+    else if (ac.menu) ac.dismiss()
+    else if (addressing) setAddressing(false)
+    else onClose()
+  })
+  const pick = (to) => { onAddress(to); setAddressing(false); box.current?.focus() }
   return (
-    <div ref={ref} className="pa-card pa-send" role="dialog" aria-label={t('proseActions.sendLabel')} style={style}>
-      <SelectionAttachment selection={selection} onRemove={onRemove} />
-      <textarea ref={box} className="pa-input" rows={3} value={draft} placeholder={t('proseActions.messagePlaceholder')}
-        onChange={(event) => setDraft(event.target.value)} />
-      <div className="pa-presets">
-        {PROSE_PRESETS.map((preset) => (
-          <button key={preset} type="button" className="pa-preset" onClick={() => setDraft(t(`proseActions.prompt.${preset}`))}>
-            {t(`proseActions.preset.${preset}`)}
+    <ComposerSurface ref={ref} className="pa-card pa-send" role="dialog" aria-label={t('proseActions.sendLabel')} style={style}
+      preview={<SelectionAttachment selection={selection} onRemove={onRemove} />}
+      editor={(
+        <div className="fv-tawrap">
+          <ComposerTextarea ref={box} className="pa-message" rows={1} value={draft} placeholder={t('proseActions.messagePlaceholder')}
+            disabled={busy} spellCheck={false}
+            onChange={(e) => { setDraft(e.target.value); sync(e.target) }} onSelect={(e) => sync(e.target)}
+            onBlur={() => { ac.close(); setSlash(null) }}
+            onKeyDown={(e) => {
+              if (composingKey(e)) return
+              if (menuKeyDown(e, slash, setSlash, acceptSlash)) return
+              if (ac.onKeyDown(e)) return
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend() }
+            }} />
+          {ac.menuEl}
+          {slash && <SlashMenu menu={slash} up={up} head={slash.query ? `/${slash.query}` : t('session.menuPresets')}
+            onPick={acceptSlash} onHover={(i) => setSlash((m) => (m ? { ...m, index: i } : m))} />}
+          {error && <div className="pa-error" role="alert">{error}</div>}
+        </div>
+      )}
+      footer={(
+        <div className="pa-tools">
+          {addressing
+            ? <AddressInput t={t} live={live} launchers={launchers} launcher={launcher} up={up} onPick={pick} onCancel={() => { setAddressing(false); box.current?.focus() }} />
+            : <AddressChip t={t} live={live} launcher={launcher} target={target} onOpen={() => setAddressing(true)} />}
+          <TriggerButton label={t('thread.mentionActor')} disabled={busy} onClick={() => insertTrigger('@')}>@</TriggerButton>
+          <TriggerButton label={t('thread.mentionNode')} disabled={busy} onClick={() => insertTrigger('[[')}>[[</TriggerButton>
+          <TriggerButton label={t('proseActions.presets')} disabled={busy} onClick={() => insertTrigger('/')}>/</TriggerButton>
+          <button type="button" className="pa-jump" aria-pressed={jump} data-tip={t('proseActions.jumpTip')}
+            onMouseDown={(e) => e.preventDefault()} onClick={() => setJump(!jump)}>
+            <Icon name="check" size={11} className="pa-jump-mark" />{t('proseActions.sendJump')}
           </button>
-        ))}
-      </div>
-      <div className="pa-target">
-        <span className="pa-target-label">{t('proseActions.target')}</span>
-        <SessionPicker sessions={sessions} value={target} onChange={setTarget} includeNew filter compact className="pa-session-picker" ariaLabel={t('proseActions.target')} />
-      </div>
-      {error && <div className="pa-error" role="alert">{error}</div>}
-      <div className="pa-foot">
-        <button type="button" className="pa-btn" onClick={onClose}>{t('common.cancel')}</button>
-        <button type="button" className="pa-btn" disabled={busy} onClick={() => onSend(false)}>{t('proseActions.send')}</button>
-        <button type="button" className="pa-btn pa-go" disabled={busy} onClick={() => onSend(true)}>{t('proseActions.sendJump')}</button>
-      </div>
-    </div>
+          <IconButton icon="send" size={14} className="icon-btn primary pa-submit" label={t('proseActions.send')}
+            disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={onSend} />
+        </div>
+      )} />
+  )
+}
+
+// the recipient at rest: the shared session identity (avatar + headline + lifecycle glyph) for a live
+// target, or "new · <launcher>" — the launcher a new session would take, visible instead of implied.
+function AddressChip({ t, live, launcher, target, onOpen }) {
+  const session = live.find((s) => s.id === target)
+  const display = session ? sessionDisplayState(session) : null
+  return (
+    <button type="button" className="pa-address" aria-label={t('proseActions.target')} data-tip={t('proseActions.addressTip')}
+      onMouseDown={(e) => e.preventDefault()} onClick={onOpen}>
+      {session
+        ? <Avatar seed={session.id} status={display.status} size={13} />
+        : <Icon name="plus" size={12} className="pa-address-new" />}
+      <span className="pa-address-name">{session ? sessionHeadline(session) || session.id.slice(0, 8) : t('proseActions.newWith', { launcher: launcher || '' })}</span>
+      {session && <span className="pa-address-state" style={{ color: display.color }} aria-label={t(`status.${display.status}`)}>{display.glyph}</span>}
+      <Icon name="chevron-down" size={11} className="pa-address-caret" />
+    </button>
+  )
+}
+
+// the recipient being chosen: the `@` grammar in a one-line field — the same rows, ranking, `@new` and
+// `@new:<launcher>` doors as the shared autocomplete, over the LIVE sessions only (the dispatch targets).
+// An accepted row writes the token (`@<id> ` / `@new:<launcher> `) and that token IS the pick; Enter on
+// a bare `@new` takes the remembered launcher. Blur or Escape leaves the address as it was.
+function AddressInput({ t, live, launchers, launcher, up, onPick, onCancel }) {
+  const inputRef = useRef(null)
+  const [text, setText] = useState('@')
+  const ac = useMentionAutocomplete({ inputRef, value: text, setValue: setText, sessions: live, launchers, up })
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.focus(); el.setSelectionRange(1, 1); ac.sync(el)
+  }, [])
+  const commit = (value) => {
+    const m = /^@(?:new(?::(\S+))?|(\S+))\s*$/.exec(value)
+    if (!m) return false
+    if (m[2]) { if (!live.some((s) => s.id === m[2])) return false; onPick({ id: m[2] }); return true }
+    onPick({ id: 'new', launcher: m[1] || launcher })
+    return true
+  }
+  useEffect(() => { if (/\s$/.test(text)) commit(text) }, [text])
+  return (
+    <>
+      <input ref={inputRef} className="pa-address pa-address-input" value={text} aria-label={t('proseActions.target')} spellCheck={false}
+        onChange={(e) => { setText(e.target.value); ac.sync(e.target) }} onSelect={(e) => ac.sync(e.target)}
+        onBlur={onCancel}
+        onKeyDown={(e) => {
+          if (composingKey(e)) return
+          if (ac.onKeyDown(e)) return
+          if (e.key === 'Enter') { e.preventDefault(); if (!commit(text)) onCancel() }
+        }} />
+      {ac.menuEl}
+    </>
   )
 }
 

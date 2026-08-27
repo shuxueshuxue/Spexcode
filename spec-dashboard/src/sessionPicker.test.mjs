@@ -15,8 +15,11 @@ test('one session picker owns target selection and keyboard choice', () => {
   assert.match(picker, /event\.key === 'Enter'/)
   assert.match(picker, /<Avatar seed=\{session\.id\}/)
   assert.match(picker, /sessionDisplayState\(session\)/)
-  assert.match(prose, /<SessionPicker sessions=\{sessions\}/)
+  // the send card's recipient is chosen through the shared `@` rows (the mention autocomplete renders
+  // SessionPickerRow), never a page-local list or a native select.
+  assert.match(prose, /useMentionAutocomplete\(\{ inputRef, value: text, setValue: setText, sessions: live/)
   assert.doesNotMatch(prose, /className="pa-select"/)
+  assert.doesNotMatch(prose, /<SessionPicker /)
   assert.match(menu, /<SessionPicker sessions=\{sessions\}/)
   assert.match(mentions, /<SessionPickerRow key=\{it\.id\}/)
 })

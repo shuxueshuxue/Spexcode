@@ -19,12 +19,14 @@ export const ComposerTextarea = forwardRef(function ComposerTextarea({ value, cl
   return <textarea ref={innerRef} value={value} className={`composer-textarea ${className}`.trim()} {...props} />
 })
 
-export function ComposerSurface({ className = '', preview = null, editor, footer, ...props }) {
+// forwardRef so a host that FLOATS the shell (the prose send card) can measure and clamp it into the
+// viewport; a docked host simply ignores the ref.
+export const ComposerSurface = forwardRef(function ComposerSurface({ className = '', preview = null, editor, footer, ...props }, ref) {
   return (
-    <div className={`composer-surface ${className}`.trim()} {...props}>
+    <div ref={ref} className={`composer-surface ${className}`.trim()} {...props}>
       {preview}
       <div className="composer-editor">{editor}</div>
       <div className="composer-footer">{footer}</div>
     </div>
   )
-}
+})

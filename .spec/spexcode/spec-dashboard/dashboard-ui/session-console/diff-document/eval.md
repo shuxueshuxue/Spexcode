@@ -51,6 +51,19 @@ scenarios:
       - spec-dashboard/src/DiffDocument.jsx
       - spec-dashboard/src/styles.css
       - spec-dashboard/package.json
+  - name: collapse-all-file-tree
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open a multi-file session diff with its changed-file panel expanded, activate the panel's Collapse All
+      control, then reopen one directory and select a file.
+    expected: >-
+      The panel exposes one accessible Collapse All icon action above the committed and uncommitted scopes.
+      Activating it hides every directory child while leaving the selected file and diff document mounted; the
+      button becomes inert with no folders open. Reopening an individual directory reveals only that branch and
+      selecting its file changes the existing diff surface without a route or transport change.
+    code:
+      - spec-dashboard/src/DiffDocument.jsx
+      - spec-dashboard/src/styles.css
   - name: changed-file-labels-stay-distinguishable
     tags: [frontend-e2e, desktop]
     description: >-

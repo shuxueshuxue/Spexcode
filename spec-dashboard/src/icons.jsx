@@ -158,11 +158,6 @@ const ICONS = {
     vb: 16, sw: 1.4,
     node: <><path d="M2 6V2h4" /><path d="M14 6V2h-4" /><path d="M2 10v4h4" /><path d="M14 10v4h-4" /></>,
   },
-  // VS Code's `collapse-all` Codicon — stacked folders with the inner one folded into the outer one.
-  'collapse-all': {
-    vb: 16, fill: 'currentColor', stroke: 'none',
-    node: <><path d="M9 9H4v1h5V9z" /><path fillRule="evenodd" clipRule="evenodd" d="M5 3l1-1h7l1 1v7l-1 1h-2v2l-1 1H3l-1-1V6l1-1h2V3zm1 2h4l1 1v4h2V3H6v2zm4 1H3v7h7V6z" /></>,
-  },
   minimize: {
     vb: 16, sw: 1.4,
     node: <><path d="M6 2v4H2" /><path d="M10 2v4h4" /><path d="M6 14v-4H2" /><path d="M10 14v-4h4" /></>,

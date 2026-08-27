@@ -113,7 +113,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TabStrip.jsx, spec-dashboard/src/tabs.js, spec-dashboard/src/tabModel.js]
     test: spec-dashboard/test/tab-strip-drag.e2e.mjs
-  - name: close-returns-to-last-focused-same-kind-first
+  - name: close-returns-to-last-focused-tab
     tags: [frontend-e2e, desktop]
     description: >-
       In a real desktop Chromium against the running dashboard. Scene A: open `#/spec`, `#/evals`,
@@ -124,10 +124,9 @@ scenarios:
       `#/file/package.json` in that order, and close the active package.json tab; read `location.hash`.
     expected: >-
       Scene A lands on `#/spec` — the tab the reader was on before Evals — not on Issues, the positional
-      neighbour. Scene B lands on `#/file/README.md`: the most recently focused surviving tab of the same
-      kind wins over both the nearer file (CLAUDE.md) and the more recently focused tab of another kind
-      (the Spec node). Only the closed tab leaves the strip. Zero loss = closing returns the reader where
-      they came from, same kind first.
+      neighbour. Scene B lands on `#/spec/<node>`: the most recently focused surviving tab across kinds wins
+      over the nearer file (CLAUDE.md) and the file's unrelated neighbour. Only the closed tab leaves the
+      strip. Zero loss = closing returns the reader to the tab they actually came from.
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
     test: spec-dashboard/test/tab-close-focus-history.e2e.mjs
 ---

@@ -194,9 +194,10 @@ export function useTabs({ onCloseStart } = {}) {
 
   const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
 
-  // Closing hands the workspace to the last-focused same-kind tab (position when none was focused), then
-  // the same over any kind; only an emptied strip leaves for a kind's explicit no-tab destination
-  // (`closeDestination` is the one selector, and the focus history is its only extra input).
+  // Closing hands the workspace to the last-focused surviving tab across kinds (the document the reader
+  // actually came from). Resource tabs keep their owning session return contract. With no focus history,
+  // `closeDestination` falls back to nearest same-kind position, then nearest any-kind position; it is the one
+  // selector and the focus history is its only extra input.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
     const prev = getTabs()

@@ -142,14 +142,15 @@ addresses therefore offer an open action, never an "open in a new tab" that woul
 does not mint. Sessions and files are the object kinds a second tab is real for.
 
 **Closing hands the workspace over by ONE rule, not per-kind branches** (`closeDestination`): the reader
-goes back where they came from, same kind first. The strip keeps a focus history — the active tab's key,
-most recent first, in memory for the life of the page — and the most recently focused surviving tab of the
-closed tab's kind (`tabKind`) inherits; a kind whose survivors were never focused since load falls back to
-position, the nearest by distance from the closed slot with right beating left at a tie. With no same-kind
-survivor the same two steps run over every kind, so a closed file can no longer conjure the graph while
-other tabs remain, and a closed session no longer skips surviving non-session tabs. Only an emptied strip
-leaves the workspace, each kind to its standing no-tab destination: spec/file documents to the graph, a
-published resource to the session launch page, everything else to the explicit `#/empty` workspace.
+goes back where they came from. The strip keeps a focus history — the active tab's key, most recent first,
+in memory for the life of the page — and the most recently focused surviving tab inherits regardless of kind.
+That means a Spec tab opened immediately before a file can beat an unrelated session file when the file closes.
+When no focused survivor remains, position is deterministic: the nearest surviving tab of the closed tab's kind
+wins, right beating left at a tie, then the nearest tab of any kind. Only an emptied strip leaves the workspace,
+each kind to its standing no-tab destination: spec/file documents to the graph, a published resource to the
+session launch page, everything else to the explicit `#/empty` workspace. A published resource with its owning
+session still open is the deliberate exception: closing it returns to that session tab, as [[resource-tabs]]
+requires, even when another kind is newer in the general focus history.
 
 **A row that is a real anchor gets the gesture, not a rewrite.** Finding surfaces increasingly render their
 rows as real `<a href>` — the review lists, the spec context panels, the file tree — because that is what

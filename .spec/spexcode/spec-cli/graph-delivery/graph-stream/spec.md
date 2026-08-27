@@ -42,7 +42,20 @@ from before the gap, whose missing sessions would empty the client's warm-termin
 [[graph-cache]]'s scoped invalidation, so a session-only change is answered by the sessions SPLICE (fresh
 `listSessions`, every other unit reused) instead of a full assembly: measured, the store-write→push path
 dropped from ~420ms median to ~56ms on the dogfood corpus. The sources and their scopes: (1) recursive
-filesystem observation on the per-user session store ([[runtime]]) → 'sessions'. (2) the git dir's refs
+filesystem observation on the per-user session store ([[runtime]]) → 'sessions' — the runtime envelope and the
+originating prompt. (1b) ONE non-recursive observation of the canonical session database's directory
+([[production-cutin]]), delivering only the database's own names (the file and its rollback journal) → 'sessions'.
+Since the JSON cutover a lifecycle transition is a SQLite commit made by whichever process authored it: the
+backend's own routes, but far more often a HOOK's process — mark-active on every prompt and tool call, the
+stop-gate's declarations, idle — through `spex internal session-state`. The backend's in-process commit observer
+(the explicit nudge in (0)) bridges only the backend's own commits, and the envelope watch in (1) never sees a
+commit at all, so before this leaf existed a hook-authored flip reached the board only when some unrelated
+signal happened to re-splice — a message sent from the dashboard left the row idle for minutes (measured on the
+dogfood board: 150 seconds of nothing but pings after the commit, then a full patrol rebuild that still carried
+the old row, because a full build rebases the PUBLISHED session rows rather than re-listing them; only the
+sessions splice reads the store). The leaf is one registration whatever the store holds, is held and repaired
+like every other source, and its file identity is part of [[graph-cache]]'s session revision, so a held or
+disabled leaf degrades to the patrol's cadence rather than to silence. (2) the git dir's refs
 (loose refs recursively, `packed-refs`/`HEAD`) → 'full' — a commit legitimately reshapes nodes, drift, overlays and
 eval anchors at once, which is why refs stay full-scope rather than pretending to a narrower domain. (3)
 TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms HOT tier (`hotSignature`
@@ -93,8 +106,8 @@ time behind unrelated graph assembly.
 
 **One registry owns filesystem observation, and its cardinality follows the canonical roots.** Every source
 is one reusable `(root, scope)` registry which is the sole owner of every handle taken for it. What this
-module registers is the set of roots the graph actually has to observe: the session store, the git common
-dir's `refs` and its metadata files, the worktree registry, the served project's working tree, and — per LIVE
+module registers is the set of roots the graph actually has to observe: the session store, the canonical
+session database's directory, the git common dir's `refs` and its metadata files, the worktree registry, the served project's working tree, and — per LIVE
 worktree — its working tree plus git's metadata dir for it. That count grows with canonical roots and worktrees
 and with nothing else; 444 spec nodes
 inside a worktree are the same one registration as an empty one. Registration that instead multiplied per
@@ -171,7 +184,7 @@ well as its trigger tags, so a product latency reading can allocate route/store,
 transport, and browser time without treating a wall-clock gap as one opaque number. The trigger set is what
 caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
 tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
-exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees, project-root) deliberately blinds
+exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db, refs, worktrees, project-root) deliberately blinds
 a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
 generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains

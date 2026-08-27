@@ -11,6 +11,7 @@ import { residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
 import { readReviewSnapshot } from '@spexcode/spec-core'
 import { sessionEvalProjection } from '@spexcode/spec-eval/sessioneval'
+import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'
@@ -127,6 +128,28 @@ function strictSpecTreeRevision(wtPath: string): string {
   return parts.sort().join('\n')
 }
 
+// The canonical session database ([[production-cutin]]) is a board input exactly like the runtime envelope:
+// lifecycle status lives there, and ANY process may commit to it — a hook's `spex internal session-state`, a CLI
+// declaration, the backend's own routes. Its file identity folds into the session revision, so a commit no leaf
+// pushed (graph-stream's `session-db` leaf held or disabled) is still a moved revision that the patrol answers
+// with the sessions splice. journal_mode=delete rewrites the file in place on every commit, so this is the same
+// strict stat contract as the `.spec` walk: ctime catches a same-size rewrite, ENOENT is a legitimate fresh
+// store, and every other read failure is loud.
+function strictFileRevision(path: string): string {
+  try {
+    const stat = statSync(path)
+    return `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
+    throw error
+  }
+}
+
+function sessionDatabaseRevision(): [string, string] {
+  const databasePath = resolveDatabasePath()
+  return [databasePath, strictFileRevision(databasePath)]
+}
+
 function worktreeRevision(root: string): unknown {
   return {
     root,
@@ -154,12 +177,17 @@ function sessionInputRevision(): SessionInputRevision {
     textOrNull(sessionRecordPath(id)),
     textOrNull(sessionArtifactPath(id, 'prompt')),
   ] as const)
+  // The canonical database carries the lifecycle those envelopes no longer do, and a commit from ANY process
+  // moves it. It is an input only while a record exists to read it through: with no session records the board
+  // has no row that derives from the store, and the store's own birth — the first canonical access inside a
+  // build initializes it — must not read as an input that moved during that build.
+  const canonical = ids.length ? sessionDatabaseRevision() : null
   const projections = digest(ids.map((id) => [id, sessionEvalProjection(id)]))
   const activeRoots = [...new Set(ids.flatMap((id) => {
     const entry = readPublicRecordEntry(id)
     return entry.kind === 'ok' && entry.raw.governed && !entry.raw.archived ? [entry.raw.worktree_path] : []
   }))].sort()
-  return { sessions: digest(sessionInputs), projections, projectionIds: ids, activeRoots }
+  return { sessions: digest([canonical, sessionInputs]), projections, projectionIds: ids, activeRoots }
 }
 
 function boardInputRevision(board: Board | null): BoardInputRevision {

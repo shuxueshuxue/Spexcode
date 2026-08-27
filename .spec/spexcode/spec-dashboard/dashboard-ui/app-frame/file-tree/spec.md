@@ -52,8 +52,8 @@ wherever they are listed rather than teaching the reader two vocabularies for on
 [[file-view]], and an attachment row opens the same FileView through its `.spec/<node>/<name>` logical
 address. The dock used to open a layer over the frame, because the frame had no content area to open
 anything into — that limitation is gone with [[workspace-shell]], and with it the layer. Clicking here and
-clicking a tab now reach the same place by the same address. Plain, ctrl/⌘, and double-click placement are
-the shared [[tab-strip]] gestures; the tree does not carry a second tab policy.
+clicking a tab now reach the same place by the same address. Plain and ctrl/⌘ placement are the shared
+[[tab-strip]] gestures; the tree does not carry a second tab policy.
 
 **The tree names itself through the dock, not through a strip of its own.** "Explorer" and the node tally
 live in [[dock-modes]]' single header row, because they describe the dock that is currently projecting the
@@ -92,8 +92,8 @@ like every other.
 
 ## the row menu, and the one seam that serves both projections
 
-A tree row's verbs were reachable only by gestures a reader had to already know: ⌘/ctrl-click and
-double-click hold a row in its own tab, and nothing announced either. A right-click is where a workspace is
+A tree row's verbs were reachable only by a gesture a reader had to already know: ⌘/ctrl-click opens a row
+in its own tab, and nothing announced it. A right-click is where a workspace is
 asked what it can do with the thing under the cursor, so every explorer row answers one: a spec node offers
 the same vocabulary it offers on the graph ([[node-graph]]'s node menu) — open in a new tab, reveal on the
 graph, copy its link, copy its id — and a file offers open in a new tab, copy its link, copy its path, and

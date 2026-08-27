@@ -30,7 +30,7 @@ prose begins under them without a rule of its own.
 
 Inline `[[id]]` references in that shared renderer are real detail anchors: they use the canonical
 `#/spec/<id>` address, ordinary clicks focus the resident Spec tab, and Ctrl/Command-click uses [[tab-strip]]'s
-`holdAnchor` gesture to keep a second document. The popup and both document panes therefore expose the same
+`newTabAnchor` gesture to open a second document. The popup and both document panes therefore expose the same
 working link, not a styled but inert span.
 
 `code:` entries naming symbols resolve to file addresses — several entries can name the same file, but no

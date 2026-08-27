@@ -17,7 +17,7 @@ export default function SelectionAttachment({ selection, onRemove = null, classN
       <Icon name="file-diff" size={12} className="selection-attachment-icon" />
       <span className="selection-attachment-address" title={address}>{address}</span>
       <span className="selection-attachment-range">{range}</span>
-      {onRemove && <IconButton icon="x" size={12} className="selection-attachment-remove"
+      {onRemove && <IconButton icon="x" size={12} className="icon-btn selection-attachment-remove"
         label={t('session.removeCodeSelection')} onClick={onRemove} />}
     </div>
   )

@@ -24,7 +24,7 @@ import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { useEscLayer } from './escStack.js'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { pinTab, runTabCommand } from './tabs.js'
+import { openNewTab, runTabCommand } from './tabs.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -598,7 +598,6 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     if (!graphOnly && firesEvent('shell.tabClose', event)) { event.preventDefault(); runTabCommand('closeActive'); return true }
     if (!graphOnly && firesEvent('shell.tabNext', event)) { event.preventDefault(); runTabCommand('move', 1); return true }
     if (!graphOnly && firesEvent('shell.tabPrevious', event)) { event.preventDefault(); runTabCommand('move', -1); return true }
-    if (!graphOnly && firesEvent('shell.tabHold', event)) { event.preventDefault(); runTabCommand('hold'); return true }
     if (!graphOnly && firesEvent('shell.tabSplit', event)) {
       event.preventDefault(); const active = runTabCommand('active'); if (active) splitTo(active); return true
     }
@@ -689,9 +688,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
           onClose={closePalette}
           onPick={(hit, options) => {
             closePalette()
-            if (!options?.hold) return navigateAddress(hit?.address)
-            const held = routeAddress(hit?.address)
-            pinTab(held.page, held.param, held.query)
+            if (!options?.newTab) return navigateAddress(hit?.address)
+            const route = routeAddress(hit?.address)
+            openNewTab(route.page, route.param, route.query)
           }} />
       )}
       <span className="sr-only">{t('nav.railLabel')}</span>

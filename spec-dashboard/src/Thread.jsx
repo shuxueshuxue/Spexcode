@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Prose from './Prose.js'
 import { BlobMedia } from './Evidence.jsx'
-import { useMentionAutocomplete, matchSlash, SlashMenu, TriggerButton, typeTrigger } from './mentions.jsx'
+import { useMentionAutocomplete, matchSlash, menuKeyDown, SlashMenu, TriggerButton, typeTrigger } from './mentions.jsx'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
@@ -10,7 +10,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { useLaunchers } from './launch.js'
 import { routeHash } from './route.js'
-import { holdAnchor } from './tabs.js'
+import { newTabAnchor } from './tabs.js'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
@@ -146,7 +146,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
           <Prose className="doc-body"
             renderSpecRef={(id, token, provenance) => {
               const href = routeHash('spec', id)
-              return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+              return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>
             }}
             renderTimeAnchor={(meta, token, provenance) => {
               const resolved = resolveAnchor({ tMs: meta.tMs, step: meta.step, label: meta.label }, events)
@@ -228,14 +228,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     setBody(head + item.prefill())
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } })
   }
-  const onSlashKey = (e) => {
-    if (!slash) return false
-    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setSlash((m) => ({ ...m, index: (m.index + 1) % m.items.length })); return true }
-    if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setSlash((m) => ({ ...m, index: (m.index - 1 + m.items.length) % m.items.length })); return true }
-    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); acceptSlash(slash.items[slash.index]); return true }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSlash(null); return true }
-    return false
-  }
+  const onSlashKey = (e) => menuKeyDown(e, slash, setSlash, acceptSlash)
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
 
   // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for

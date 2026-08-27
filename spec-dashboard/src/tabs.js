@@ -8,12 +8,12 @@ export { closeDestination, moveTab, placeTab, tabKey }
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
 //
-// A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. The strip holds the documents the reader asked it to hold,
-// plus the documents the reader has explicitly held. Ordinary navigation replaces only the focused unpinned
-// tab; an unpinned tab of another kind (or an inactive tab of the same kind) is preserved and the new address
-// gets its own slot. Holding is explicit:
-// ctrl/⌘-click, a double-click, or a document's own "open in a new tab" action. That is the whole rule, and
-// it keeps the old anti-proliferation guarantee without allowing cross-kind eviction.
+// A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. Ordinary navigation replaces the focused tab when the new
+// address is of the same kind; a tab of another kind, or an inactive tab of the same kind, is preserved and
+// the new address is appended. A second tab of a kind is asked for explicitly — ctrl/⌘-click, a document's
+// own "open in a new tab" action, or creating a session — and the tab that arrives is an ordinary tab: the
+// next plain same-kind navigation replaces it like any other. There is no pinned or held tab. A tab that
+// could not be replaced was a tab the reader had to remember the history of, and nobody does.
 //
 // The split of truth is deliberate and follows what every workspace editor settled on: the OPEN LIST is a
 // local layout preference (it survives reloads, it is not worth putting in a link, and two people opening
@@ -45,7 +45,7 @@ const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) 
 // ONE working set, however many components read it. `useTabs` has more than one caller — the strip draws
 // it, the session console reads it to know which resource previews are still open — and per-component
 // state made those callers two copies of the same list that could disagree: a command routed through the
-// module (⌥⇧X, a double-click promotion) updated whichever copy had registered last, and the strip kept
+// module (⌥⇧X, a menu action) updated whichever copy had registered last, and the strip kept
 // drawing the other. The store is the list; every caller subscribes to it.
 let store = null
 const listeners = new Set()
@@ -65,6 +65,12 @@ const putTabs = (next) => {
 // left the strip (a replaced slot, a closed tab) are dropped on the next touch, so the list never outgrows
 // the strip.
 let recent = []
+// THE FOCUSED TAB, as the strip last saw it — the one address a plain navigation may replace. It is module
+// state rather than per-hook state because every `useTabs` caller observes the same route sequence: the
+// first subscriber to see a new route places it and moves this on, the rest find the address already open.
+// A non-document route (the graph, the launch page) moves it to a key no tab has, so the next document
+// navigation appends: nothing was focused, so nothing is replaced.
+let focusedKey = null
 const touch = (key) => {
   if (recent[0] === key) return
   const held = new Set(getTabs().map(tabKey))
@@ -72,11 +78,11 @@ const touch = (key) => {
 }
 export const recentTabKeys = () => recent
 
-// A finding surface cannot reach the strip's state directly: an explicit hold MARKS the next navigation and
-// the strip's route subscription reads the mark. The mark is an address, not a flag, so two subscribers
-// (the strip and the session console both call useTabs) read the same answer for the same navigation; it
-// is dropped when a different address arrives, which is the only way it can go stale.
-let pinKey = null
+// A row surface cannot reach the strip's state directly: an explicit "open in a new tab" MARKS the next
+// navigation and the strip's route subscription reads the mark. The mark is an address, not a flag, so two
+// subscribers (the strip and the session console both call useTabs) read the same answer for the same
+// navigation; it is dropped when a different address arrives, which is the only way it can go stale.
+let appendKey = null
 let tabCommands = null
 export function registerTabCommands(commands) {
   tabCommands = commands
@@ -85,61 +91,52 @@ export function registerTabCommands(commands) {
 export function runTabCommand(name, ...args) {
   return tabCommands?.[name]?.(...args)
 }
-// THE HOLD GESTURE, as ONE predicate. Every row surface asks the same question of the same event, so
-// "ctrl/⌘-click holds this" cannot mean one thing in the finding dock and another on the Sessions page —
-// which is exactly what it meant while each surface hand-rolled its own modifier test. Shift, alt and
-// middle-click are deliberately NOT ours: they are the window-level gestures a browser gives a real anchor
-// for free, and a reader asking for a second document beside the first is asking this workspace for a tab,
-// not the browser for a second copy of the app.
-export const isHoldGesture = (event) => event.button === 0 && !event.shiftKey && !event.altKey
+// THE NEW-TAB GESTURE, as ONE predicate. Every row surface asks the same question of the same event, so
+// "ctrl/⌘-click opens this beside the current tab" cannot mean one thing in the finding dock and another on
+// the Sessions page — which is exactly what it meant while each surface hand-rolled its own modifier test.
+// Shift, alt and middle-click are deliberately NOT ours: they are the window-level gestures a browser gives a
+// real anchor for free, and a reader asking for a second document beside the first is asking this workspace
+// for a tab, not the browser for a second copy of the app.
+export const isNewTabGesture = (event) => event.button === 0 && !event.shiftKey && !event.altKey
   && (event.ctrlKey || event.metaKey)
 
-// The explicit hold, split into its two halves. `markTabHold` records the intent WITHOUT writing the route,
-// so a surface whose route writes belong to its own view scope ([[workspace-shell]]) can hold without
-// reaching around that boundary; `pinTab` is the mark plus the navigation, for surfaces that own both.
-// Ordinary navigation needs neither — `navigate` lands in the slot,
-// which is what makes "a new tab is a gesture" true by default rather than by discipline at every call site.
+// The explicit new tab, split into its two halves. `markNewTab` records the intent WITHOUT writing the route,
+// so a surface whose route writes belong to its own view scope ([[workspace-shell]]) can ask for a new tab
+// without reaching around that boundary; `openNewTab` is the mark plus the navigation, for surfaces that own
+// both. Ordinary navigation needs neither — `navigate` lands in the focused tab, which is what makes "a new
+// tab is a gesture" true by default rather than by discipline at every call site.
 //
-// It pins the ADDRESS it was given, never "whatever is active". A double-click is two clicks and then the
-// dblclick event, and the first click has already navigated — so "active" is a race with React's own
-// processing of that navigation, and losing it pinned the document the reader had just left instead of the
-// one they were holding. Naming the address removes the race: if the tab is already in the list it is
-// pinned here, and if the navigation is still in flight the mark makes the placement itself pinned.
-export function markTabHold(page, param = null, query = null) {
+// It marks the ADDRESS it was given, never "whatever is active", so a surface that navigated a moment ago
+// cannot race React's processing of that navigation. An address already in the strip needs no mark: the
+// placement simply focuses it.
+export function markNewTab(page, param = null, query = null) {
   const key = tabKey(tabRoute({ page, param, query }))
-  pinKey = key
-  const held = getTabs()
-  if (held.some((tab) => tabKey(tab) === key)) {
-    // The same hold `placeTab` records when the address is NOT yet open. An explicit hold means the same
-    // thing whichever branch runs, so both write the same pair; marking only `pinned` here left a resident
-    // board tab held in memory and demoted back to a slot by the next reload's normalization.
-    putTabs(held.map((tab) => (tabKey(tab) === key ? { ...tab, pinned: true, held: true } : tab)))
-    pinKey = null
-  }
+  appendKey = getTabs().some((tab) => tabKey(tab) === key) ? null : key
 }
-export function pinTab(page, param = null, query = null) {
-  markTabHold(page, param, query)
+export function openNewTab(page, param = null, query = null) {
+  markNewTab(page, param, query)
   navigate(page, param, { query })
 }
 
-// The route an in-app hash href names, as `pinTab` wants it. A row that is a REAL anchor already holds its
-// address; nothing has to re-derive it from the data the row was built from.
+// The route an in-app hash href names, as `openNewTab` wants it. A row that is a REAL anchor already holds
+// its address; nothing has to re-derive it from the data the row was built from.
 export const routeOfHash = (href) => {
   const { page, param, query } = parseRoute(href)
   return { page, param, query: Object.keys(query || {}).length ? query : null }
 }
 
 // THE ROW GESTURE, for every finding surface whose rows are real anchors — the review lists, the spec
-// context panels, the file tree. A plain click stays the anchor's: the browser writes the hash and the slot
-// takes it, which is the default this workspace is built on. Ctrl/⌘ is the WORKSPACE's hold rather than the
-// browser's new-window, because the reader asking for a second document beside the one they have is asking
-// for a second tab in the strip, not a second copy of the app. Shift, alt and middle-click are left alone,
-// so every window-level gesture a real anchor gives for free still works. Returns whether it took the event.
-export function holdAnchor(event, href) {
-  if (!isHoldGesture(event)) return false
+// context panels, the file tree. A plain click stays the anchor's: the browser writes the hash and the
+// focused tab takes it, which is the default this workspace is built on. Ctrl/⌘ is the WORKSPACE's new tab
+// rather than the browser's new window, because the reader asking for a second document beside the one they
+// have is asking for a second tab in the strip, not a second copy of the app. Shift, alt and middle-click
+// are left alone, so every window-level gesture a real anchor gives for free still works. Returns whether it
+// took the event.
+export function newTabAnchor(event, href) {
+  if (!isNewTabGesture(event)) return false
   event.preventDefault()
   const route = routeOfHash(href)
-  pinTab(route.page, route.param, route.query)
+  openNewTab(route.page, route.param, route.query)
   return true
 }
 
@@ -154,22 +151,9 @@ export function focusLatestTab(match) {
   return true
 }
 
-// Session rows are allowed to replace the current session slot only when their document is not already
-// held. Resolve that identity in the one workspace store first, then let the caller's surface own the
-// actual route write (Dock uses shell navigation; Sessions uses its ViewScope). This prevents a click on B
-// from rewriting A's address while the reader is looking at A.
-export function focusSessionTab(id, open) {
-  if (!id) return false
-  const held = getTabs().find((tab) => tab.page === 'sessions' && tab.param === id)
-  const route = { page: 'sessions', param: id, query: null }
-  open?.(held ? { ...route } : route)
-  return !!held
-}
-
 export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)
-  const previousRouteKey = useRef(undefined)
   const onCloseStartRef = useRef(onCloseStart)
   useEffect(() => { onCloseStartRef.current = onCloseStart }, [onCloseStart])
   useEffect(() => {
@@ -183,16 +167,14 @@ export function useTabs({ onCloseStart } = {}) {
   // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
   useEffect(() => {
     const key = tabKey(route)
-    const priorKey = previousRouteKey.current
-    if (pinKey && pinKey !== key) pinKey = null
-    if (!isDocument(route.page, route.param)) {
-      previousRouteKey.current = key
-      return
-    }
-    const mode = pinKey === key ? 'pin' : 'slot'
+    const priorKey = focusedKey
+    focusedKey = key
+    if (appendKey && appendKey !== key) appendKey = null
+    if (!isDocument(route.page, route.param)) return
+    const mode = appendKey === key ? 'append' : 'slot'
+    appendKey = null
     putTabs(placeTab(getTabs(), route, mode, priorKey))
     touch(key)
-    previousRouteKey.current = key
   }, [route.page, route.param, route.query])
 
   // Resident view routes keep their detail address in the URL but focus the one top-level view tab.
@@ -242,14 +224,6 @@ export function useTabs({ onCloseStart } = {}) {
       const index = list.findIndex((tab) => tabKey(tab) === activeKey)
       if (index < 0 || list.length < 2) return
       open(list[(index + dir + list.length) % list.length])
-    },
-    // The keyboard's half of the hold. The pointer gestures all name an address the reader is pointing at;
-    // a keyboard has no such target, so the chord holds the document already showing — the tab a reader
-    // would otherwise have to reach for with a double-click to stop ordinary browsing from replacing it.
-    hold: () => {
-      const active = getTabs().find((tab) => tabKey(tab) === activeKey)
-      if (active && !active.pinned) pinTab(active.page, active.param, active.query)
-      return active || null
     },
     active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
   }), [activeKey, open, close])

@@ -50,11 +50,11 @@ scenarios:
   - name: ownership-audit-session-focus-and-document-names
     tags: [frontend-e2e, desktop]
     description: >-
-      In real Chromium, hold Sessions A and B, focus A, then click B in the routed Sessions forest. Also
-      inspect the rail labels and visit a Spec node and governed file route.
+      In real Chromium, open Sessions A and B as two tabs (ctrl/⌘-click B), focus A, then click B in the
+      routed Sessions forest. Also inspect the rail labels and visit a Spec node and governed file route.
     expected: >-
-      Clicking held B focuses B's existing workspace tab without rewriting A; active hash, tab, title, and
-      content all name B while A remains held. The routed Sessions document has no duplicate dock body.
+      Clicking open B focuses B's existing workspace tab without rewriting A; active hash, tab, title, and
+      content all name B while A remains open. The routed Sessions document has no duplicate dock body.
       The rail order is Spec, Sessions, Evals, Issues, Settings and Spec's label/tip are localized. The
       Spec detail keeps one Spec-icon tab while its face, tooltip, aria-label, and title use the node title;
       file focus uses its file title and creates no second Spec tab.

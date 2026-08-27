@@ -9,7 +9,7 @@ import { fetchNodeFiles, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
-import { holdAnchor } from './tabs.js'
+import { newTabAnchor } from './tabs.js'
 import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
 import { GLYPH } from './specMeta.js'
@@ -71,7 +71,7 @@ export function SpecBody({ body, lineBase = 0 }) {
   return <Prose className="doc-body" lineBase={base}
     renderSpecRef={(id, token, provenance) => {
       const href = routeHash('spec', id)
-      return <a className="doc-link" href={href} {...provenance} onClick={(event) => holdAnchor(event, href)}>{id}</a>
+      return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>
     }}
     renderEvidence={(meta, token, provenance) => <span className="rich-evidence" data-evidence-hash={meta.hash} {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt} /></span>}>
     {source}
@@ -112,7 +112,7 @@ function TwoPart({ parts, body }) {
 }
 
 // The `code:` list is a row of file doors. The claim stays in the spec prose, while the bytes live at the
-// file's own address. Plain clicks remain ordinary anchors so the workspace slot semantics stay in tabs.js;
+// file's own address. Plain clicks remain ordinary anchors so the workspace tab semantics stay in tabs.js;
 // ctrl/⌘ uses the same hold helper as the explorer.
 function GovernedFiles({ files, count }) {
   const t = useT()
@@ -127,7 +127,7 @@ function GovernedFiles({ files, count }) {
           const path = pathOf(f)
           const href = routeHash('file', path)
           return (
-            <a key={f} className="gov-f" href={href} onClick={(event) => holdAnchor(event, href)}>{f}</a>
+            <a key={f} className="gov-f" href={href} onClick={(event) => newTabAnchor(event, href)}>{f}</a>
           )
         })}
       </div>
@@ -158,7 +158,7 @@ function NodeAttachments({ nodeId, enabled }) {
         {files.map((f) => {
           const href = routeHash('file', attachmentPath(nodeId, f.name))
           return <a key={f.name} className="gov-f" href={href} data-tip={`${(f.size / 1024).toFixed(1)} KB`}
-            onClick={(event) => holdAnchor(event, href)}>{f.name}</a>
+            onClick={(event) => newTabAnchor(event, href)}>{f.name}</a>
         })}
       </div>
     </div>

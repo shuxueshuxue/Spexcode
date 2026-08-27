@@ -52,8 +52,8 @@ the first 500" is showing the reader a lie.
 
 **A directory only discloses; a file is a document.** There is no `#/dir/<path>` and there should not be
 one — a folder has nothing to show — so clicking a directory opens its branch and changes no address. A file
-row is a real anchor at `#/file/<path>` on the workspace's ordinary slot semantics ([[tab-strip]]): plain
-click reads it in the current slot, ctrl/⌘ holds it as its own tab, through the same helper every other
+row is a real anchor at `#/file/<path>` on the workspace's ordinary tab semantics ([[tab-strip]]): plain
+click reads it in the focused tab, ctrl/⌘ opens it as its own tab, through the same helper every other
 anchor-row surface calls. It is the same address the node tree's governed-file rows open, because one file
 has one address however the reader found it.
 

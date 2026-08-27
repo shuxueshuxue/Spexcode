@@ -1,14 +1,18 @@
-// YATU proof for [[tab-routing]]'s balance: ordinary navigation replaces ONLY the focused unpinned tab.
-// A same-kind slot the reader is not looking at survives, and creating a session appends a held tab.
+// YATU proof for [[tab-routing]]'s balance: ordinary navigation replaces ONLY the focused tab of the same
+// kind, an inactive same-kind tab survives, and every tab — however it arrived — is an ordinary tab.
 //
-// Three scenes, one browser, one isolated backend whose launcher is `true` (so a created session costs
+// Four scenes, one browser, one isolated backend whose launcher is `true` (so a created session costs
 // nothing and exits at once). Each scene reads the VISIBLE strip after the product settles:
-//   1. A is the session slot; ctrl/⌘-click B (held, now focused); plain-click D. A must survive; D arrives
-//      as a new slot beside it. The old rule replaced A — the one document the reader was NOT looking at.
-//   2. With D focused and unpinned, plain-click E. D is the focused slot, so it IS replaced; the count does
-//      not move. This is the other half of the balance: a plain click still does not mint a tab forever.
-//   3. Type a prompt into New Session. The published session must arrive as a HELD tab beside A, B and E;
+//   1. A is the only session tab; ctrl/⌘-click B (appended, now focused); plain-click D. A must survive,
+//      and D must REPLACE B: the tab ctrl-click appended is not protected by how it arrived. The old rule
+//      pinned B forever, so D was appended beside it and the strip grew on every plain click after that.
+//   2. With D focused, plain-click E. D is the focused same-kind tab, so it IS replaced; the count does not
+//      move. This is the other half of the balance: a plain click still does not mint a tab.
+//   3. Type a prompt into New Session. The published session must arrive as a new tab beside A and E;
 //      creation is a gesture, and the launch page has no focused document to replace.
+//   4. With the created session focused, plain-click B. The created tab is an ordinary tab: B replaces it
+//      and the count does not move. The old rule held the created tab, which is the tab a reader could never
+//      get rid of by clicking elsewhere.
 // The run writes a report, one screenshot per scene, the recorded clip and its step ruler, then asserts.
 // `SPEXCODE_DASHBOARD_ROOT` points Vite at another checkout of `spec-dashboard` (the A side of a repair
 // pair is measured against the old committed source; the backend stays current).
@@ -154,8 +158,8 @@ try {
 
   const sessionRow = (id) => page.locator(`.si-list .si-item[data-sid="${id}"]`)
   const tabState = () => page.locator('[role="tab"][data-tab-key]:visible')
-    .evaluateAll((tabs) => tabs.map((tab) => ({ key: tab.dataset.tabKey, held: !tab.classList.contains('slot'), active: tab.classList.contains('on') })))
-  const show = (tabs) => tabs.map((t) => `${t.key}${t.held ? '' : ' (slot)'}${t.active ? ' *' : ''}`)
+    .evaluateAll((tabs) => tabs.map((tab) => ({ key: tab.dataset.tabKey, slotFace: tab.classList.contains('slot'), active: tab.classList.contains('on') })))
+  const show = (tabs) => tabs.map((t) => `${t.key}${t.slotFace ? ' (slot face)' : ''}${t.active ? ' *' : ''}`)
   const sessionKey = (id) => `#/sessions/${id}`
   const settledTabs = async (predicate, label) => waitFor(async () => {
     const tabs = await tabState()
@@ -167,49 +171,50 @@ try {
   await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
   await page.reload({ waitUntil: 'domcontentloaded' })
   for (const id of [A, B, D, E]) await sessionRow(id).waitFor({ state: 'visible', timeout: 60_000 })
-  const seeded = await settledTabs((tabs) => tabs.length === 1 && tabs[0].key === sessionKey(A), 'A as the only slot')
-  assert.equal(seeded[0].held, false, 'A starts as the replaceable slot')
-  mark('A is the session slot')
+  const seeded = await settledTabs((tabs) => tabs.length === 1 && tabs[0].key === sessionKey(A), 'A as the only session tab')
+  mark('A is the only session tab')
 
   const scenes = []
+  const noSlotFace = (tabs) => tabs.every((t) => !t.slotFace)
 
-  // 1 — hold B, then plain-click D while B is focused. A is inactive and must survive.
+  // 1 — ctrl/⌘-click B (appended, focused), then plain-click D. A survives inactive; D replaces B.
   await sessionRow(B).click({ modifiers: [HOLD] })
-  const heldB = await settledTabs((tabs) => tabs.some((t) => t.key === sessionKey(B) && t.held && t.active), 'B held and focused')
-  mark('ctrl/⌘-click B: held, focused')
+  const afterB = await settledTabs((tabs) => tabs.some((t) => t.key === sessionKey(B) && t.active) && tabs.length === 2, 'B appended and focused')
+  mark('ctrl/⌘-click B: appended, focused')
   await sessionRow(D).click()
   await waitFor(() => page.evaluate(() => location.hash).then((hash) => hash === `#/sessions/${D}`), 'route on D')
   await page.waitForTimeout(600)
   const afterD = await tabState()
-  await page.screenshot({ path: join(out, '1-inactive-slot-survives.png') })
-  mark('plain-click D: A must survive')
+  await page.screenshot({ path: join(out, '1-inactive-tab-survives-appended-tab-replaced.png') })
+  mark('plain-click D: A survives, D replaces B')
   scenes.push({
-    scene: 'inactive same-kind slot survives a plain click',
-    before: show(heldB), after: show(afterD),
-    pass: afterD.some((t) => t.key === sessionKey(A) && !t.held)
-      && afterD.some((t) => t.key === sessionKey(B) && t.held)
-      && afterD.some((t) => t.key === sessionKey(D) && !t.held && t.active)
-      && afterD.length === heldB.length + 1,
+    scene: 'inactive same-kind tab survives a plain click; the ctrl-click-appended tab is replaced',
+    before: show(afterB), after: show(afterD),
+    pass: afterD.some((t) => t.key === sessionKey(A) && !t.active)
+      && !afterD.some((t) => t.key === sessionKey(B))
+      && afterD.some((t) => t.key === sessionKey(D) && t.active)
+      && afterD.length === afterB.length
+      && noSlotFace(afterD),
   })
 
-  // 2 — D is the focused unpinned slot; a plain click on E replaces it and the count holds.
+  // 2 — D is the focused session tab; a plain click on E replaces it and the count holds.
   await sessionRow(E).click()
   await waitFor(() => page.evaluate(() => location.hash).then((hash) => hash === `#/sessions/${E}`), 'route on E')
   await page.waitForTimeout(600)
   const afterE = await tabState()
-  await page.screenshot({ path: join(out, '2-focused-slot-replaced.png') })
-  mark('plain-click E: focused slot D is replaced')
+  await page.screenshot({ path: join(out, '2-focused-tab-replaced.png') })
+  mark('plain-click E: focused tab D is replaced')
   scenes.push({
-    scene: 'focused unpinned slot is still replaced',
+    scene: 'focused same-kind tab is replaced by a plain click',
     before: show(afterD), after: show(afterE),
     pass: afterE.length === afterD.length
       && !afterE.some((t) => t.key === sessionKey(D))
-      && afterE.some((t) => t.key === sessionKey(E) && !t.held && t.active)
-      && afterE.some((t) => t.key === sessionKey(A) && !t.held)
-      && afterE.some((t) => t.key === sessionKey(B) && t.held),
+      && afterE.some((t) => t.key === sessionKey(E) && t.active)
+      && afterE.some((t) => t.key === sessionKey(A) && !t.active)
+      && noSlotFace(afterE),
   })
 
-  // 3 — create from New Session; the published session must arrive HELD, evicting nothing.
+  // 3 — create from New Session; the published session must arrive as a new tab, evicting nothing.
   await page.goto(`${base}/#/sessions/new`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-input').waitFor({ state: 'visible', timeout: 15_000 })
   const beforeCreate = await tabState()
@@ -224,21 +229,40 @@ try {
   }, 'the composer-created session')
   await waitFor(() => page.evaluate(() => location.hash).then((hash) => hash === `#/sessions/${created.id}`), 'route on the created session')
     .catch(async (error) => {
-      await page.screenshot({ path: join(out, '3-created-session-held.png') })
+      await page.screenshot({ path: join(out, '3-created-session-appended.png') })
       const hash = await page.evaluate(() => location.hash)
       throw new Error(`${error.message}: hash=${hash} created=${created.id} tabs=${JSON.stringify(show(await tabState()))} errors=${JSON.stringify(await productErrors())}`)
     })
   await page.waitForTimeout(800)
   const afterCreate = await tabState()
-  await page.screenshot({ path: join(out, '3-created-session-held.png') })
-  mark('created session arrives held beside A, B, E')
+  await page.screenshot({ path: join(out, '3-created-session-appended.png') })
+  mark('created session arrives as a new tab beside A and E')
   scenes.push({
-    scene: 'creation appends a held tab and evicts nothing',
+    scene: 'creation appends a new tab and evicts nothing',
     before: show(beforeCreate), after: show(afterCreate),
     pass: afterCreate.length === beforeCreate.length + 1
-      && afterCreate.some((t) => t.key === sessionKey(created.id) && t.held && t.active)
-      && [A, E].every((id) => afterCreate.some((t) => t.key === sessionKey(id) && !t.held))
-      && afterCreate.some((t) => t.key === sessionKey(B) && t.held),
+      && afterCreate.some((t) => t.key === sessionKey(created.id) && t.active)
+      && [A, E].every((id) => afterCreate.some((t) => t.key === sessionKey(id) && !t.active))
+      && noSlotFace(afterCreate),
+  })
+
+  // 4 — the created tab is focused; a plain click on B must replace it. This is the reader's complaint:
+  // a tab that arrived by creation could never be replaced, only closed.
+  await sessionRow(B).waitFor({ state: 'visible', timeout: 15_000 })
+  await sessionRow(B).click()
+  await waitFor(() => page.evaluate(() => location.hash).then((hash) => hash === `#/sessions/${B}`), 'route on B')
+  await page.waitForTimeout(600)
+  const afterPlainB = await tabState()
+  await page.screenshot({ path: join(out, '4-created-tab-replaced.png') })
+  mark('plain-click B: the created tab is replaced')
+  scenes.push({
+    scene: 'the created tab is an ordinary tab: a plain click replaces it',
+    before: show(afterCreate), after: show(afterPlainB),
+    pass: afterPlainB.length === afterCreate.length
+      && !afterPlainB.some((t) => t.key === sessionKey(created.id))
+      && afterPlainB.some((t) => t.key === sessionKey(B) && t.active)
+      && [A, E].every((id) => afterPlainB.some((t) => t.key === sessionKey(id) && !t.active))
+      && noSlotFace(afterPlainB),
   })
 
   const kept = scenes.filter((s) => s.pass).length

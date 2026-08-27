@@ -35,11 +35,11 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /surface = null/)
   assert.match(source, /const requestedSurface = isSessionSurface\(surface\) \? surface : null/)
   assert.match(source, /const activeBaseSurface = terminalFree \|\| readOnlyPane \? SESSION_SURFACE_CONVERSATION : requestedSurface \|\| getSessionBaseSurface\(active\)/)
-  // Opening a resource is a ViewScope-owned address transition; tabModel turns that address into a pinned
-  // file-class hold while preserving the session tab ([[tab-strip]]).
+  // Opening a resource is a ViewScope-owned address transition; tabModel turns that address into a
+  // file-class tab beside the session tab ([[tab-strip]]).
   assert.match(source, /scope\.open\(\{ page: 'sessions', param: tab\.sessionId, query: \{ surface: resourceSurface\(tab\.id\) \} \}\)/)
   assert.doesNotMatch(source, /\bnavigate\s*\(/)
-  assert.doesNotMatch(source, /requestTab|pinTab/)
+  assert.doesNotMatch(source, /requestTab|openNewTab/)
   assert.match(source, /const activeResourceId = sessionActive \? requestedResourceId : null/)
   assert.doesNotMatch(source, /role=\{activeResource \? 'dialog'/)
   assert.match(source, /setUnreadResources\(\(unread\) => new Set\(\[\.\.\.unread, \.\.\.added\.map\(\(tab\) => tab\.id\)\]\)\)/)

@@ -7,7 +7,7 @@ import { expandSessionFolds, setSessionOfflineOpen, toggleSessionFold, useSessio
 import SessionSelectBar from './SessionSelectBar.jsx'
 import { useT } from './i18n/index.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
-import { isHoldGesture } from './tabs.js'
+import { isNewTabGesture } from './tabs.js'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
 import { inertChromePress } from './focus.js'
@@ -194,11 +194,10 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
               'aria-grabbed': drag?.id === session.id || undefined,
               onMouseDown: (event) => startRowDrag(event, session),
               // The row owes [[tab-strip]] its two claimed gestures like every other surface that lists a
-              // workspace object: a plain click reads the session in the current slot, ctrl/⌘ or a
-              // double-click holds it as its own tab. Selection mode claims the click for picking instead,
-              // so neither gesture fires while the reader is choosing rows.
-              onClick: (event) => selecting ? togglePick(session.id) : onSelect?.(session.id, { hold: isHoldGesture(event) }),
-              onDoubleClick: () => { if (!selecting) onSelect?.(session.id, { hold: true }) },
+              // workspace object: a plain click reads the session in the focused tab, ctrl/⌘ opens it in a
+              // new tab. Selection mode claims the click for picking instead, so neither gesture fires while
+              // the reader is choosing rows.
+              onClick: (event) => selecting ? togglePick(session.id) : onSelect?.(session.id, { newTab: isNewTabGesture(event) }),
               onContextMenu: (event) => {
                 event.preventDefault()
                 event.stopPropagation()

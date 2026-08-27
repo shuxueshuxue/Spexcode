@@ -71,7 +71,7 @@ export default {
   dockSessions: {
     new: '新建会话',
     archive: '已归档会话',
-    rowTip: '打开 · ctrl+点击或双击固定为标签 · alt+点击把图锁定到该会话',
+    rowTip: '打开 · ctrl+点击在新标签打开 · alt+点击把图锁定到该会话',
   },
   sessionPicker: {
     label: '选择会话',
@@ -475,7 +475,6 @@ export default {
       tabClose: '关闭当前页签',
       tabNext: '选择下一个页签',
       tabPrevious: '选择上一个页签',
-      tabHold: '固定当前页签，普通跳转不再替换它',
       tabSplit: '将当前页签送入分屏',
       commandBox: '开关会话 Command Box',
     },
@@ -692,7 +691,6 @@ export default {
       explain: '解释',
       manual: '手动编辑',
     },
-    preset: { edit: '编辑', polish: '润色', explain: '解释' },
     // 预置的是消息本身，不是按钮标签：点完落进输入框，人还能接着改。
     prompt: {
       edit: '改写这段 spec 正文，让它说该说的话。改完连同它的节点一起提交到你的分支。',
@@ -700,6 +698,10 @@ export default {
       explain: '解释这段正文：它在说什么、为什么在这里。只在会话里回答，不要改 spec。',
     },
     sendLabel: '把这段正文发给一个会话',
+    presets: '插入 / —— 预置意图',
+    addressTip: '发给谁 —— 一个在线会话，或新建一个',
+    newWith: '新建 · {launcher}',
+    jumpTip: '发送后打开这个会话',
     editLabel: '编辑这段正文',
     messagePlaceholder: '一起发过去的话（可以不写）',
     lines: '第 {a}–{b} 行',
@@ -719,8 +721,8 @@ export default {
   session: {
     // 会话文档上的省略号：这个面上只有它能走到重命名 / tmux attach / 锁定到图谱，所以直接把内容写出来。
     menuLabel: '会话操作 —— 重命名、attach、锁定到图谱、关闭',
-    opsTitle: '此会话正在改动的节点 —— ctrl+点击或双击固定为标签 · 右键打开会话操作',
-    lockTitle: 'ctrl+点击或双击固定为标签 · 右键打开会话操作，包括锁定到图谱',
+    opsTitle: '此会话正在改动的节点 —— ctrl+点击在新标签打开 · 右键打开会话操作',
+    lockTitle: 'ctrl+点击在新标签打开 · 右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话',
     searchTitle: '搜索',

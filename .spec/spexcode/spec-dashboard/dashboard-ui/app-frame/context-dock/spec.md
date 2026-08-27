@@ -49,8 +49,8 @@ has open, and mixing it in made the dock answer a third question nobody had aske
 reason to keep shipping the field on every node forever. The `bodyMentions` parser stays — its real job is
 [[spec-lint]]'s mention rule, which has to resolve a `[[name]]` whether or not anything draws the edge.
 
-**Every row is a detail door on the workspace's slot semantics.** A plain click reads the scenario or issue
-in the current slot; ctrl/⌘ holds it as its own tab ([[tab-strip]]). No row opens a second-level panel
+**Every row is a detail door on the workspace's tab semantics.** A plain click reads the scenario or issue
+in the focused tab; ctrl/⌘ opens it as its own tab ([[tab-strip]]). No row opens a second-level panel
 inside the dock: everything listed here has a real detail address, and a document with an address belongs in
 the strip rather than nested inside a sidebar.
 

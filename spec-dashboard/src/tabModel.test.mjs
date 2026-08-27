@@ -2,112 +2,133 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
-// [[tab-strip]]'s law, checked without a browser: **a new tab is a gesture, never a side effect.**
-// The regression this exists to catch is the one that shipped: browsing minted a tab per click, so a
-// reader who clicked five things was holding five documents they never decided to keep.
+// [[tab-strip]]'s law, checked without a browser: **a new tab is a gesture, never a side effect** — and the
+// tab a gesture mints is an ordinary tab. The two regressions this exists to catch both shipped: browsing
+// minted a tab per click, so a reader who clicked five things was holding five documents they never decided
+// to keep; then the cure over-corrected, and a tab that arrived by ctrl-click or by creating a session was
+// pinned forever, so a plain click on another session appended beside it for the rest of the reader's life.
 
-const spec = (id) => ({ page: 'file', param: id, query: null })
+const file = (id) => ({ page: 'file', param: id, query: null })
 const specDocument = (id) => ({ page: 'spec', param: id, query: null })
 const session = (id) => ({ page: 'sessions', param: id, query: null })
-const keys = (tabs) => tabs.map((t) => `${t.pinned ? '*' : '~'}${tabKey(t)}`)
+const keys = (tabs) => tabs.map(tabKey)
+// the strip as the hook drives it: every navigation names the tab that was focused before it
+const browse = (tabs, ...routes) => {
+  let focused = tabs.length ? tabKey(tabs[tabs.length - 1]) : null
+  for (const route of routes) {
+    const mode = route.append ? 'append' : 'slot'
+    tabs = placeTab(tabs, route, mode, focused)
+    focused = tabKey(route)
+  }
+  return tabs
+}
+const append = (route) => ({ ...route, append: true })
 
-test('plain navigation reuses one slot per document kind', () => {
+test('plain navigation replaces the focused tab of the same kind', () => {
   let tabs = []
-  for (const id of ['a', 'b', 'c', 'd', 'e']) tabs = placeTab(tabs, spec(id))
-  assert.deepEqual(keys(tabs), ['~#/file/e'])
-  // A different kind gets its own slot, so browsing sessions cannot evict the current spec.
-  for (const id of ['s1', 's2', 's3']) tabs = placeTab(tabs, session(id))
-  assert.deepEqual(keys(tabs), ['~#/file/e', '~#/sessions/s3'])
+  for (const id of ['a', 'b', 'c', 'd', 'e']) tabs = browse(tabs, file(id))
+  assert.deepEqual(keys(tabs), ['#/file/e'])
+  // A different kind gets its own tab, so browsing sessions cannot evict the current file.
+  for (const id of ['s1', 's2', 's3']) tabs = browse(tabs, session(id))
+  assert.deepEqual(keys(tabs), ['#/file/e', '#/sessions/s3'])
 })
 
-test('plain navigation never replaces an inactive slot of the same kind', () => {
-  let tabs = placeTab([], session('s1'))
-  tabs = placeTab(tabs, specDocument('node'))
-  // The session slot is no longer focused; opening another session preserves it and appends a new slot.
+test('plain navigation never replaces an inactive tab of the same kind', () => {
+  let tabs = browse([], session('s1'), specDocument('node'))
+  // The session tab is no longer focused; opening another session preserves it and appends a new tab.
   tabs = placeTab(tabs, session('s2'), 'slot', tabKey(specDocument('node')))
-  assert.deepEqual(tabs.map(tabKey), ['#/sessions/s1', '#/spec', '#/sessions/s2'])
-  assert.equal(tabs[0].param, 's1')
-  // Once the new session is focused, same-kind navigation can reuse that active slot.
+  assert.deepEqual(keys(tabs), ['#/sessions/s1', '#/spec', '#/sessions/s2'])
+  // Once the new session is focused, same-kind navigation replaces that focused tab.
   tabs = placeTab(tabs, session('s3'), 'slot', tabKey(session('s2')))
-  assert.deepEqual(tabs.map(tabKey), ['#/sessions/s1', '#/spec', '#/sessions/s3'])
+  assert.deepEqual(keys(tabs), ['#/sessions/s1', '#/spec', '#/sessions/s3'])
 })
 
-test('ctrl/⌘ pins a second tab and the pinned one is never replaced', () => {
-  let tabs = placeTab([], spec('a'))                 // slot
-  tabs = placeTab(tabs, session('s1'), 'pin')        // explicit hold
-  assert.deepEqual(keys(tabs), ['~#/file/a', '*#/sessions/s1'])
-  // the slot moves on; the pinned tab stays exactly where it is, address intact
-  tabs = placeTab(tabs, spec('b'))
-  assert.deepEqual(keys(tabs), ['~#/file/b', '*#/sessions/s1'])
-  // and a pinned tab is never the one a plain navigation lands in, even when it is first in the strip
-  let pinnedFirst = placeTab([], spec('a'), 'pin')
-  pinnedFirst = placeTab(pinnedFirst, spec('b'))
-  assert.deepEqual(keys(pinnedFirst), ['*#/file/a', '~#/file/b'])
+test('with no focused tab, a new address is appended — never a guess at which tab to evict', () => {
+  const tabs = [session('s1'), file('a')]
+  // a cold deep link, or a navigation from a non-document route (the graph, the launch page)
+  assert.deepEqual(keys(placeTab(tabs, session('s2'))), ['#/sessions/s1', '#/file/a', '#/sessions/s2'])
+  assert.deepEqual(keys(placeTab(tabs, session('s2'), 'slot', '#/graph')), ['#/sessions/s1', '#/file/a', '#/sessions/s2'])
 })
 
-test('the slot keeps its POSITION when its address changes', () => {
-  let tabs = placeTab([], spec('pin1'), 'pin')
-  tabs = placeTab(tabs, spec('slot'))
-  tabs = placeTab(tabs, spec('pin2'), 'pin')
-  assert.deepEqual(keys(tabs), ['*#/file/pin1', '~#/file/slot', '*#/file/pin2'])
-  tabs = placeTab(tabs, spec('slot2'))
-  assert.deepEqual(keys(tabs), ['*#/file/pin1', '~#/file/slot2', '*#/file/pin2'])
+test('ctrl/⌘ appends a second tab, and that tab is an ordinary tab', () => {
+  let tabs = browse([], file('a'), append(session('s1')))
+  assert.deepEqual(keys(tabs), ['#/file/a', '#/sessions/s1'])
+  // the appended session is focused and unprotected: the next plain session click replaces IT, not the file
+  tabs = browse(tabs, session('s2'))
+  assert.deepEqual(keys(tabs), ['#/file/a', '#/sessions/s2'])
+  // a same-kind append keeps the focused tab and adds beside it
+  tabs = browse(tabs, append(session('s3')))
+  assert.deepEqual(keys(tabs), ['#/file/a', '#/sessions/s2', '#/sessions/s3'])
+  // and nothing about the tab remembers how it arrived
+  assert.deepEqual(tabs[2], session('s3'))
 })
 
-test('re-opening an address activates it instead of stacking; pinning promotes it in place', () => {
-  let tabs = placeTab(placeTab([], spec('a'), 'pin'), spec('b'))
-  const before = tabs
-  assert.equal(placeTab(tabs, spec('a')), before)          // already open: nothing moves
-  tabs = placeTab(tabs, spec('b'), 'pin')                  // double-click on the slot
-  assert.deepEqual(keys(tabs), ['*#/file/a', '*#/file/b'])
-  // with every tab pinned, the next plain navigation has no slot to reuse and opens one
-  tabs = placeTab(tabs, spec('c'))
-  assert.deepEqual(keys(tabs), ['*#/file/a', '*#/file/b', '~#/file/c'])
+test('a created session is appended beside the tab the reader was on, then behaves like any tab', () => {
+  let tabs = browse([], session('a'))
+  tabs = browse(tabs, append(session('created')))           // the composer marks the published id
+  assert.deepEqual(keys(tabs), ['#/sessions/a', '#/sessions/created'])
+  tabs = browse(tabs, session('b'))                          // a plain click while the created one is focused
+  assert.deepEqual(keys(tabs), ['#/sessions/a', '#/sessions/b'])
+})
+
+test('the focused tab keeps its POSITION when its address changes', () => {
+  let tabs = browse([], file('left'), append(file('mid')), append(file('right')))
+  assert.deepEqual(keys(tabs), ['#/file/left', '#/file/mid', '#/file/right'])
+  tabs = placeTab(tabs, file('mid2'), 'slot', tabKey(file('mid')))
+  assert.deepEqual(keys(tabs), ['#/file/left', '#/file/mid2', '#/file/right'])
+})
+
+test('re-opening an address activates it instead of stacking', () => {
+  const tabs = browse([], file('a'), append(file('b')))
+  assert.equal(placeTab(tabs, file('a'), 'slot', tabKey(file('b'))), tabs)   // already open: nothing moves
+  assert.equal(placeTab(tabs, file('a'), 'append', tabKey(file('b'))), tabs) // an append of an open address is a focus
 })
 
 test('session surfaces share one tab identity and keep the base address in the strip', () => {
-  let tabs = placeTab([], { page: 'sessions', param: 's1', query: { surface: 'terminal' } }, 'pin')
-  tabs = placeTab(tabs, { page: 'sessions', param: 's1', query: { surface: 'conversation' } })
-  assert.deepEqual(keys(tabs), ['*#/sessions/s1'])
+  let tabs = placeTab([], { page: 'sessions', param: 's1', query: { surface: 'terminal' } })
+  tabs = placeTab(tabs, { page: 'sessions', param: 's1', query: { surface: 'conversation' } }, 'slot', '#/sessions/s1')
+  assert.deepEqual(keys(tabs), ['#/sessions/s1'])
   assert.deepEqual(tabs[0].query, { surface: 'conversation' })
 })
 
-test('base session surfaces share identity while resources remain separate file-class tabs', () => {
-  const base = { page: 'sessions', param: 's1', query: null }
+test('base session surfaces share identity while resources are separate file-class tabs', () => {
+  const base = session('s1')
   const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
   assert.notEqual(tabKey(base), tabKey(resource))
-  const tabs = placeTab([], base, 'pin')
-  const withResource = placeTab(tabs, resource)
-  assert.equal(withResource.length, 2)
-  assert.equal(withResource[0], tabs[0])
-  assert.equal(withResource[1].pinned, true)
+  // opened from the session document: the session tab is focused, the resource is a file-kind tab, so it
+  // lands beside the session rather than replacing it
+  const withResource = placeTab([base], resource, 'slot', tabKey(base))
+  assert.deepEqual(withResource, [base, resource])
+  // and like every tab it is replaced by the next same-kind plain navigation while it is focused
+  const next = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:CHANGELOG.md' } }
+  assert.deepEqual(placeTab(withResource, next, 'slot', tabKey(resource)), [base, next])
 })
 
-test('resource holds stay pinned after reload normalization and never compete for the file slot', () => {
-  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' }, pinned: false }
-  const normalized = normalizeTabs([resource, { page: 'file', param: 'old.md', query: null, pinned: false }])
-  assert.equal(normalized[0].pinned, true)
-  assert.equal(normalized[1].pinned, false)
-})
-
-test('persisted session face duplicates collapse to one tab and preserve an explicit hold', () => {
+test('persisted marks from older releases are dropped, and duplicates collapse to one tab', () => {
   const tabs = normalizeTabs([
     { page: 'sessions', param: 's1', query: { surface: 'terminal' }, pinned: false },
-    { page: 'sessions', param: 's1', query: { surface: 'diff' }, pinned: true },
+    { page: 'sessions', param: 's1', query: { surface: 'diff' }, pinned: true, held: true },
+    { page: 'file', param: 'a' },
+    { page: 'file', param: 'b', preview: true },
+    { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' }, pinned: true },
   ])
-  assert.deepEqual(tabs.map(tabKey), ['#/sessions/s1'])
-  assert.equal(tabs[0].pinned, true)
+  assert.deepEqual(tabs, [
+    { page: 'sessions', param: 's1', query: { surface: 'terminal' } },
+    { page: 'file', param: 'a', query: null },
+    { page: 'file', param: 'b', query: null },
+    { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } },
+  ])
+  assert.ok(tabs.every((tab) => !('pinned' in tab) && !('held' in tab) && !('preview' in tab)))
 })
 
-test('resource closing returns to its held session before the new-session page', () => {
-  const session = { page: 'sessions', param: 's1', query: null, pinned: true }
-  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' }, pinned: false }
-  assert.deepEqual(closeDestination(resource, [session], 0), session)
-  assert.deepEqual(closeDestination(resource, [session, { page: 'spec', param: 'node', query: null, pinned: true }], 0,
-    ['#/spec/node']), session)
+test('resource closing returns to its session before the new-session page', () => {
+  const owner = session('s1')
+  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
+  assert.deepEqual(closeDestination(resource, [owner], 0), owner)
+  assert.deepEqual(closeDestination(resource, [owner, specDocument('node')], 0, ['#/spec/node']), owner)
 })
 
-test('board details normalize to one top-level identity without becoming pinned', () => {
+test('board details normalize to one top-level identity', () => {
   const isDocument = () => true
   const raw = [
     { page: 'evals', param: null, query: { state: 'open' }, pinned: true },
@@ -118,156 +139,103 @@ test('board details normalize to one top-level identity without becoming pinned'
     { page: 'spec', param: 'node', pinned: false },
   ]
   const tabs = normalizeTabs(raw, isDocument)
-  assert.deepEqual(tabs.map(tabKey), ['#/evals', '#/issues', '#/settings', '#/spec'])
-  assert.deepEqual(tabs.map(({ page, pinned }) => ({ page, pinned })), [
-    { page: 'evals', pinned: false },
-    { page: 'issues', pinned: false },
-    { page: 'settings', pinned: false },
-    { page: 'spec', pinned: false },
-  ])
+  assert.deepEqual(keys(tabs), ['#/evals', '#/issues', '#/settings', '#/spec'])
 })
 
 test('cold workspace has no board tabs until a route is opened', () => {
   assert.deepEqual(normalizeTabs([]), [])
 })
 
-test('an explicit board hold survives reload while legacy pinned faces are demoted', () => {
-  const [held, legacy] = normalizeTabs([
-    { page: 'issues', param: null, pinned: true, held: true },
-    { page: 'evals', param: null, pinned: true },
-  ])
-  assert.equal(held.pinned, true)
-  assert.equal(held.held, true)
-  assert.equal(legacy.pinned, false)
-})
-
-test('opening a spec keeps its detail address while focusing the dynamic Spec tab', () => {
+test('opening a spec keeps its detail address while focusing the one Spec tab', () => {
   let tabs = placeTab([], specDocument('first'))
-  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
-  assert.deepEqual(tabs[0], { page: 'spec', param: 'first', query: null, pinned: false })
-  tabs = placeTab(tabs, specDocument('second'))
-  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
+  assert.deepEqual(keys(tabs), ['#/spec'])
+  assert.deepEqual(tabs[0], { page: 'spec', param: 'first', query: null })
+  tabs = placeTab(tabs, specDocument('second'), 'slot', '#/spec')
+  assert.deepEqual(keys(tabs), ['#/spec'])
   assert.equal(tabs[0].param, 'second')
 })
 
-test('opening a scenario or issue creates focused dynamic top-level tabs without pinning them', () => {
-  let tabs = placeTab(placeTab([], specDocument('node'), 'pin'), session('s1'), 'pin')
-  tabs = placeTab(tabs, { page: 'evals', param: 'node/scenario', query: null })
-  tabs = placeTab(tabs, { page: 'issues', param: '42', query: null })
-  assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
+test('opening a scenario or issue creates focused top-level tabs without evicting documents', () => {
+  let tabs = browse([], specDocument('node'), append(session('s1')))
+  tabs = browse(tabs, { page: 'evals', param: 'node/scenario', query: null }, { page: 'issues', param: '42', query: null })
+  assert.deepEqual(keys(tabs), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
   assert.deepEqual(tabs.slice(2).map(({ page, param }) => ({ page, param })), [
     { page: 'evals', param: 'node/scenario' },
     { page: 'issues', param: '42' },
   ])
-  assert.ok(tabs.slice(2).every((tab) => !tab.pinned))
-})
-
-test('opening a spec keeps its detail address while focusing one dynamic Spec tab', () => {
-  let tabs = placeTab([], specDocument('first'))
-  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
-  assert.equal(tabs[0].param, 'first')
-  tabs = placeTab(tabs, specDocument('second'))
-  assert.deepEqual(tabs.map(tabKey), ['#/spec'])
-  assert.equal(tabs[0].param, 'second')
 })
 
 // REORDERING IS A SPLICE, and the properties that matter are the ones a drag can violate: the set of open
-// documents never changes, the slot stays the slot wherever it lands, and a drag that goes nowhere writes
-// nothing (a new array here would wake every subscriber and rewrite storage for a click).
+// documents never changes, and a drag that goes nowhere writes nothing (a new array here would wake every
+// subscriber and rewrite storage for a click).
 test('a dragged tab is spliced to its landing place and nothing else moves', () => {
-  const strip = ['a', 'b', 'c', 'd'].map((id) => ({ page: 'file', param: id, query: null, pinned: true }))
-  assert.deepEqual(moveTab(strip, '#/file/d', '#/file/b').map(tabKey), ['#/file/a', '#/file/d', '#/file/b', '#/file/c'])
-  assert.deepEqual(moveTab(strip, '#/file/a', null).map(tabKey), ['#/file/b', '#/file/c', '#/file/d', '#/file/a'])
-  assert.deepEqual(moveTab(strip, '#/file/b', '#/file/a').map(tabKey), ['#/file/b', '#/file/a', '#/file/c', '#/file/d'])
-  // the working set is invariant under a move: same addresses, same count, same pinned flags
+  const strip = ['a', 'b', 'c', 'd'].map(file)
+  assert.deepEqual(keys(moveTab(strip, '#/file/d', '#/file/b')), ['#/file/a', '#/file/d', '#/file/b', '#/file/c'])
+  assert.deepEqual(keys(moveTab(strip, '#/file/a', null)), ['#/file/b', '#/file/c', '#/file/d', '#/file/a'])
+  assert.deepEqual(keys(moveTab(strip, '#/file/b', '#/file/a')), ['#/file/b', '#/file/a', '#/file/c', '#/file/d'])
+  // the working set is invariant under a move: same addresses, same count
   const moved = moveTab(strip, '#/file/c', '#/file/a')
-  assert.deepEqual([...moved.map(tabKey)].sort(), [...strip.map(tabKey)].sort())
-  assert.deepEqual(moved.map((t) => t.pinned), strip.map((t) => t.pinned))
+  assert.deepEqual([...keys(moved)].sort(), [...keys(strip)].sort())
 })
 
 test('a move that changes nothing returns the same array', () => {
-  const strip = ['a', 'b', 'c'].map((id) => ({ page: 'file', param: id, query: null, pinned: true }))
+  const strip = ['a', 'b', 'c'].map(file)
   assert.equal(moveTab(strip, '#/file/a', '#/file/b'), strip)   // already in front of b
   assert.equal(moveTab(strip, '#/file/c', null), strip)         // already last
   assert.equal(moveTab(strip, '#/file/zz', '#/file/a'), strip)  // not in the strip
   assert.equal(moveTab(strip, '#/file/a', '#/file/zz'), strip)  // landing on nothing
 })
 
-test('the slot survives a reorder as the slot, wherever it is dragged', () => {
-  let tabs = placeTab(placeTab([], spec('pin1'), 'pin'), spec('slotted'))
-  tabs = placeTab(tabs, spec('pin2'), 'pin')
-  assert.deepEqual(keys(tabs), ['*#/file/pin1', '~#/file/slotted', '*#/file/pin2'])
-  tabs = moveTab(tabs, '#/file/slotted', '#/file/pin1')
-  assert.deepEqual(keys(tabs), ['~#/file/slotted', '*#/file/pin1', '*#/file/pin2'])
-  // and ordinary navigation still lands in it, in its new place
-  tabs = placeTab(tabs, spec('next'))
-  assert.deepEqual(keys(tabs), ['~#/file/next', '*#/file/pin1', '*#/file/pin2'])
-})
-
-test('legacy storage migrates to one slot per document kind', () => {
-  // old entries: an unmarked one is held, a `preview` one is the slot
-  assert.deepEqual(normalizeTabs([{ page: 'file', param: 'a' }, { page: 'file', param: 'b', preview: true }]),
-    [{ page: 'file', param: 'a', query: null, pinned: true }, { page: 'file', param: 'b', query: null, pinned: false }])
-  // multiple unpinned entries are valid: reload must not silently promote an inactive document
-  const many = normalizeTabs([{ page: 'file', param: 'a', pinned: false }, { page: 'file', param: 'b', pinned: false }])
-  assert.deepEqual(many.map((t) => t.pinned), [false, false])
-  const kinds = normalizeTabs([
-    { page: 'file', param: 'a', pinned: false },
-    { page: 'sessions', param: 's1', pinned: false },
-  ])
-  assert.deepEqual(kinds.map((t) => t.pinned), [false, false])
+test('the focused tab is found by identity, not by position, so a reorder does not change what a click replaces', () => {
+  let tabs = browse([], file('one'), append(file('two')), append(file('three')))
+  tabs = moveTab(tabs, '#/file/three', '#/file/one')
+  assert.deepEqual(keys(tabs), ['#/file/three', '#/file/one', '#/file/two'])
+  // `three` is still the focused tab; ordinary navigation lands in it, in its new place
+  tabs = placeTab(tabs, file('next'), 'slot', '#/file/three')
+  assert.deepEqual(keys(tabs), ['#/file/next', '#/file/one', '#/file/two'])
 })
 
 test('closing a session stays in the session identity domain', () => {
-  const session = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
-  const remaining = [
-    { page: 'spec', param: 'node', query: null, pinned: true },
-    session('right'),
-    { page: 'file', param: 'README.md', query: null, pinned: true },
-  ]
+  const remaining = [specDocument('node'), session('right'), file('README.md')]
   assert.deepEqual(closeDestination(session('closed'), remaining, 0), session('right'))
   assert.deepEqual(closeDestination(session('closed'), [], 0), { page: 'empty', param: null, query: null })
   assert.deepEqual(closeDestination({ page: 'spec', param: 'node' }, [], 0), { page: 'graph', param: null, query: null })
 })
 
 test('closing returns to the last-focused tab across kinds before falling back to same-kind position', () => {
-  const sess = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
-  const file = (id) => ({ page: 'file', param: id, query: null, pinned: true })
-  const board = (page) => ({ page, param: null, query: null, pinned: true })
+  const board = (page) => ({ page, param: null, query: null })
   const recent = (...tabs) => tabs.map(tabKey)
 
   // SAME KIND, LAST FOCUSED: the file the reader came from wins over a nearer file they have not looked at
-  assert.deepEqual(closeDestination(file('x'), [file('L'), sess('s'), file('RR')], 1, recent(file('x'), file('RR'), file('L'))), file('RR'))
+  assert.deepEqual(closeDestination(file('x'), [file('L'), session('s'), file('RR')], 1, recent(file('x'), file('RR'), file('L'))), file('RR'))
   // CROSS KIND, LAST FOCUSED: the Spec the reader came from beats an unrelated session file survivor
-  assert.deepEqual(closeDestination(file('x'), [file('L'), sess('s')], 1, recent(file('x'), sess('s'))), sess('s'))
+  assert.deepEqual(closeDestination(file('x'), [file('L'), session('s')], 1, recent(file('x'), session('s'))), session('s'))
   // The same rule applies when the unrelated file is a published session resource.
-  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' }, pinned: true }
+  const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
   assert.deepEqual(closeDestination(file('eval.md'), [resource, specDocument('node')], 1,
     recent(file('eval.md'), specDocument('node'), resource)), specDocument('node'))
   // NO SAME-KIND SURVIVOR: the last-focused tab of any kind, not the positional neighbor
-  assert.deepEqual(closeDestination(file('x'), [sess('a'), board('evals'), sess('b')], 1, recent(file('x'), sess('b'), sess('a'))), sess('b'))
+  assert.deepEqual(closeDestination(file('x'), [session('a'), board('evals'), session('b')], 1, recent(file('x'), session('b'), session('a'))), session('b'))
   // history naming tabs that already left the strip is skipped, never trusted
   assert.deepEqual(closeDestination(file('x'), [file('L'), file('R')], 1, recent(file('x'), file('gone'), file('L'))), file('L'))
   // a closed non-focused key in the history does not resurrect it: only survivors inherit
-  assert.deepEqual(closeDestination(sess('x'), [board('issues')], 0, recent(sess('x'), sess('closed-earlier'))), board('issues'))
+  assert.deepEqual(closeDestination(session('x'), [board('issues')], 0, recent(session('x'), session('closed-earlier'))), board('issues'))
 })
 
 test('closing with no focus history lands on the nearest same-kind tab, then the nearest of any kind, and leaves only from an empty strip', () => {
-  const sess = (id) => ({ page: 'sessions', param: id, query: null, pinned: true })
-  const file = (id) => ({ page: 'file', param: id, query: null, pinned: true })
-  const board = (page) => ({ page, param: null, query: null, pinned: true })
+  const board = (page) => ({ page, param: null, query: null })
 
   // RIGHT wins the distance tie between two same-kind neighbors
   assert.deepEqual(closeDestination(file('x'), [file('L'), file('R')], 1), file('R'))
   // the nearer LEFT same-kind tab beats a farther right one — distance, not scan direction
-  assert.deepEqual(closeDestination(file('x'), [file('L'), sess('s'), file('RR')], 1), file('L'))
+  assert.deepEqual(closeDestination(file('x'), [file('L'), session('s'), file('RR')], 1), file('L'))
   // CROSS-KIND: no same-kind survivor → the nearest tab of any kind inherits (a file close no longer
   // conjures the graph while other tabs remain)
-  assert.deepEqual(closeDestination(file('x'), [sess('s'), board('evals')], 1), board('evals'))
-  assert.deepEqual(closeDestination(sess('x'), [board('issues')], 0), board('issues'))
+  assert.deepEqual(closeDestination(file('x'), [session('s'), board('evals')], 1), board('evals'))
+  assert.deepEqual(closeDestination(session('x'), [board('issues')], 0), board('issues'))
   // LAST TAB: only an emptied strip leaves the workspace, each kind to its standing no-tab destination
   assert.deepEqual(closeDestination(file('x'), [], 0), { page: 'graph', param: null, query: null })
-  assert.deepEqual(closeDestination(sess('x'), [], 0), { page: 'empty', param: null, query: null })
+  assert.deepEqual(closeDestination(session('x'), [], 0), { page: 'empty', param: null, query: null })
   const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
   assert.deepEqual(closeDestination(resource, [], 0), { page: 'sessions', param: 'new', query: null })
   assert.deepEqual(closeDestination(board('evals'), [], 0), { page: 'empty', param: null, query: null })

@@ -13,9 +13,9 @@ test('palette entries carry executable spec and session addresses', () => {
   assert.match(source, /address: sessionAddress\(s\.id\)/)
 })
 
-test('spec prose references are real held anchors', () => {
+test('spec prose references are real anchors with the new-tab gesture', () => {
   assert.match(nodeView, /const href = routeHash\('spec', id\)/)
-  assert.match(nodeView, /<a className="doc-link"[^>]+href=\{href\}[^>]+onClick=\{\(event\) => holdAnchor\(event, href\)\}/)
+  assert.match(nodeView, /<a className="doc-link"[^>]+href=\{href\}[^>]+onClick=\{\(event\) => newTabAnchor\(event, href\)\}/)
 })
 
 test('spec prose keeps standard Markdown blocks and links', () => {

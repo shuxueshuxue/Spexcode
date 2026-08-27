@@ -3,13 +3,13 @@ scenarios:
   - name: explorer-row-menu-and-shortcuts
     description: >-
       In a running desktop dashboard, right-click a spec-node row, a disk directory row, and a governed file
-      row in the Explorer; then, with a row focused, press the context-menu binding and the hold binding.
+      row in the Explorer; then, with a row focused, press the context-menu binding and the open-in-a-new-tab binding.
       Inspect the commands each subject is offered, where focus sits, and what the tab strip holds.
     expected: >-
       A spec node is offered open-in-a-new-tab, reveal-on-graph, copy-link and copy-node-id; a file is
       offered open-in-a-new-tab, its owning node, copy-link and copy-path; a directory is offered copy-path
       alone. The keyboard opening puts focus on the first command, arrow keys walk the rows, Escape closes it
-      and returns focus to the row, and the hold binding leaves that row held as its own tab. Open-in-a-new-tab
+      and returns focus to the row, and the open-in-a-new-tab binding opens that row as its own tab. Open-in-a-new-tab
       prints the live cap of its registered binding. No page errors.
     tags: [frontend-e2e, desktop]
     code:

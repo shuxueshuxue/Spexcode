@@ -40,8 +40,7 @@ so the reader has one fold rather than two. Projection selection is secondary st
 may select explorer or sessions, but the rail light remains route-only. The dedicated mirrored rail panel
 control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
-a plain click navigates to `sessions/<id>` in the current slot, while ctrl/⌘-click or a double-click holds it
-as its own tab. The row is chrome around the session document, so its pointer press suppresses the native
+a plain click navigates to `sessions/<id>` in the focused tab, while ctrl/⌘-click opens it in a new tab. The row is chrome around the session document, so its pointer press suppresses the native
 button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
 composition from the session currently being read.
 
@@ -123,7 +122,7 @@ the family's root status.** Each zone header counts every member of that zone (r
 the family changes visibility, never the count. The header's `+` navigates to `sessions/new` and its archive
 door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
 overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
-else: plain click replaces the current tab and ctrl/command-click holds a new one. The `+` door is a quiet
+else: plain click replaces the current tab and ctrl/command-click opens a new one. The `+` door is a quiet
 24px rounded-square primary action: a blue hairline and centered shared plus mark at rest, a blue fill only on
 hover, and a two-pixel keyboard ring. It remains icon-only and keyboard-focusable while keeping the search and
 archive doors visually secondary. Moving a row is a
@@ -194,7 +193,7 @@ drift. That a drag is a more deliberate gesture than a right-click does not make
 destructive.
 
 The pointer behaviour is the workspace's shared gesture ([[drag-gesture]]): six pixels of slack, so click,
-double-click-to-hold, alt-click-to-lock and the context menu are all untouched, and the click the browser
+ctrl/⌘-click-to-open-a-new-tab, alt-click-to-lock and the context menu are all untouched, and the click the browser
 emits after a real drag is eaten so a drop never also navigates. The move itself is the backend's existing
 reparent for both directions — the top level is the parent `null`, which is what it already was in the
 record, so there is no second notion of "detach" anywhere.

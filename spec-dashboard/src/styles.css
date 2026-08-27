@@ -74,6 +74,10 @@
      instead of each panel picking its own. */
   --dur-panel: 170ms;
   --dur-tab: 150ms;
+  /* Two words for anything that FLOATS in: `rise` (a menu, an action group, a notice — up 6px) and `pop`
+     (a card or dialog — scale from .96). Every overlay spends one of these; a third keyframe is a dialect. */
+  --dur-rise: 120ms;
+  --dur-pop: 160ms;
   /* GEOMETRY. One corner radius for every box that is not a circle, and one spacing ladder. New rules
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
@@ -311,7 +315,9 @@ html, body, #root { height: 100%; margin: 0; }
 .cred-input:focus:focus-visible,
 .identity-search input:focus-visible,
 .proj-remove-confirm input:focus:focus-visible,
-.pa-input:focus:focus-visible { box-shadow: none; }
+.pa-input:focus:focus-visible,
+.pa-message:focus-visible,
+.pa-address-input:focus-visible { box-shadow: none; }
 
 body {
   background: var(--paper);
@@ -654,7 +660,6 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* the CURRENT SLOT: the one tab ordinary navigation reuses. Italic and weakened says replaceable — the
    same treatment the narrower preview tab used to wear, now naming the one slot every document passes
    through unless the reader holds it ([[tab-strip]]). */
-.tab.slot { opacity: .72; font-style: italic; }
 .tab-face {
   flex: 1 1 auto; display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-5); height: 100%;
   background: none; border: 0; border-radius: var(--radius) 0 0 0; color: inherit; cursor: pointer;
@@ -1412,7 +1417,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .session-picker-empty { padding: 6px 7px; color: var(--muted); font-size: var(--type-caption); }
 .sess-menu-picker { min-width: 0; }
 .sess-menu-picker .session-picker-list { max-height: 180px; }
-.sess-menu-picker .session-picker-row, .pa-session-picker .session-picker-row { min-height: 27px; }
+.sess-menu-picker .session-picker-row { min-height: 27px; }
 .mention-menu .session-picker-row { margin: 0; }
 /* the rename prompt rides the shared Modal chrome, just narrower than the wide help/legend popup. */
 .sess-rename-modal { width: min(360px, 92vw); }
@@ -1471,11 +1476,6 @@ a.scenario-count:hover { background: var(--wash-hover); }
   padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line);
 }
 .legend-title { color: var(--muted); font-size: var(--type-meta); letter-spacing: var(--tracking-normal); }
-.legend-close {
-  background: none; border: none; color: var(--muted); cursor: pointer;
-  display: inline-flex; align-items: center; line-height: var(--leading-none); padding: 2px;
-}
-.legend-close:hover { color: var(--orange); }
 .legend-body { padding: 4px 10px 10px; }
 .legend-sec { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .legend-sec:last-child { border-bottom: none; }
@@ -2163,12 +2163,23 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   border: 1px solid var(--blue); padding: 4px 14px; border-radius: var(--radius); cursor: pointer;
 }
 .fv-post:disabled { opacity: 0.5; cursor: default; }
-/* the composer's icon-only Send — a small round affordance at the row's right edge. */
-.fv-send {
-  width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  padding: 0; color: var(--paper); background: var(--blue); border: 1px solid var(--blue); border-radius: 50%; cursor: pointer;
+/* THE ICON BUTTON, two faces ([[icon-system]] draws the glyph; this draws the box). Quiet: no border, muted,
+   ink on the shared hover wash — a close, a remove, an attachment tool. Primary: the one filled action in a
+   row — Send. One footprint, one radius, so the send button of every composer and the ✕ of every chip is this
+   rule under its own name rather than a per-surface redraw. */
+.icon-btn, .legend-close, .si-attach-action, .selection-attachment-remove {
+  width: 22px; height: 22px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
+  line-height: var(--leading-none);
 }
-.fv-send:disabled { opacity: 0.45; cursor: default; }
+.icon-btn:hover:not(:disabled), .legend-close:hover, .si-attach-action:hover:not(:disabled), .selection-attachment-remove:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+.icon-btn:disabled, .si-attach-action:disabled { opacity: .45; cursor: default; }
+.icon-btn.primary, .fv-send, .si-command-send, .si-launch {
+  width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; color: var(--paper); background: var(--blue); border: 1px solid var(--blue); border-radius: var(--radius); cursor: pointer;
+}
+.icon-btn.primary:not(:disabled):hover, .fv-send:not(:disabled):hover, .si-command-send:not(:disabled):hover, .si-launch:not(:disabled):hover { filter: brightness(1.08); }
+.icon-btn.primary:disabled, .fv-send:disabled, .si-command-send:disabled, .si-launch:disabled { opacity: .45; cursor: default; }
 
 /* THE TERMINAL IS A DARK CARD ON THE CONTENT PLANE, not a wall butted against the seam. A gutter of --paper
    down its leading edge is what makes it read that way, and it is the same step the rest of the window
@@ -2220,7 +2231,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
-.si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
+.si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: rise var(--dur-rise) ease; }
 .si-hero {
   margin: 0 0 2px; font-family: var(--mono); font-size: var(--type-hero); line-height: var(--leading-hero);
   white-space: pre; user-select: none; background: linear-gradient(180deg, var(--blue), var(--magenta));
@@ -2239,7 +2250,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;
   margin: 0; padding: 4px; list-style: none; max-height: 248px; overflow-y: auto;
   background: var(--paper); border: 1px solid var(--blue); border-radius: var(--radius);
-  box-shadow: var(--shadow); animation: si-rise .12s ease;
+  box-shadow: var(--shadow); animation: rise var(--dur-rise) ease;
 }
 /* the session ❯ inbox is docked at the bottom of the panel, so its slash menu opens UPWARD instead. */
 .mention-menu.up { top: auto; bottom: calc(100% + 4px); }
@@ -2447,13 +2458,13 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-command-input::placeholder { color: var(--muted); }
 .si-command-box .mention-menu.up { bottom: calc(100% + 10px); }
-.si-command-tools { min-width: 0; display: flex; align-items: center; gap: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+/* the composer's tool row — Command Box and the prose send card ([[prose-dispatch]]) are one rule, two names. */
+.pa-tools, .si-command-tools { min-width: 0; display: flex; align-items: center; gap: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .si-command-title { display: inline-flex; align-items: center; gap: 5px; flex: none; margin-right: 2px; color: var(--blue); font-family: var(--ui-font); font-size: var(--type-caption); font-weight: var(--weight-semibold); }
-.si-command-tool, .si-command-send { width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: var(--radius); cursor: pointer; }
-.si-command-tool { color: var(--muted); background: var(--panel2); border: 1px solid var(--line); }
+.si-command-tool { width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: var(--radius); cursor: pointer; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); }
 .si-command-tool:hover { color: var(--ink2); background: var(--wash-hover); }
-.si-command-send { margin-left: auto; color: var(--paper); background: var(--blue); border: 1px solid var(--blue); }
-.si-command-tool:disabled, .si-command-send:disabled { opacity: .45; cursor: default; }
+.si-command-send { margin-left: auto; }
+.si-command-tool:disabled { opacity: .45; cursor: default; }
 .si-action-outcome {
   flex: 0 1 auto; min-width: 0; max-width: 300px; padding: 2px 6px; border: 1px solid var(--line);
   border-radius: var(--radius); background: var(--panel2); color: var(--muted); font-size: var(--type-meta);
@@ -2467,13 +2478,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* the New tab's explicit launch control ([[new-session-tab]]): the ONLY submit on a launch composer, so it
    reads as the primary action rather than a muted composer tool. Same send glyph and blue fill the Command
    Box's send carries, at the composer row's end. */
-.si-launch {
-  flex: none; align-self: flex-end; display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; padding: 0; margin-left: 2px; border-radius: var(--radius); cursor: pointer;
-  color: var(--paper); background: var(--blue); border: 1px solid var(--blue);
-}
-.si-launch:disabled { opacity: .45; cursor: default; }
-.si-launch:not(:disabled):hover { filter: brightness(1.08); }
+.si-launch { align-self: flex-end; margin-left: 2px; }
 .si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
@@ -2497,8 +2502,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .selection-attachment-icon { color: var(--blue); flex: none; }
 .selection-attachment-address { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--blue); }
 .selection-attachment-range { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
-.selection-attachment-remove { width: 18px; height: 18px; padding: 0; color: var(--muted); }
-.selection-attachment-remove:hover { color: var(--red); }
+.selection-attachment-remove { width: 18px; height: 18px; color: var(--muted); }
 .si-attach-row { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(76px, 1.2fr) minmax(0, auto) auto; align-items: center; gap: 6px; min-width: 0; min-height: 23px; font-size: var(--type-meta); color: var(--muted); }
 .si-attach-row.complete { animation: si-attach-complete-out 1.4s ease forwards; }
 .si-attach-name { display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2507,16 +2511,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-attach-row.complete .si-attach-status { color: var(--green); }
 .si-attach-row.failed .si-attach-status { color: var(--red); }
 .si-attach-row.cancelled .si-attach-status { color: var(--orange); }
-.si-attach-action { width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border: 0; background: transparent; border-radius: var(--radius); cursor: pointer; }
-.si-attach-action:hover:not(:disabled) { color: var(--blue); background: var(--wash-hover); }
-.si-attach-action:disabled { opacity: .45; cursor: default; }
 
 @media (max-width: 620px) {
   .si-attach-row { grid-template-columns: minmax(74px, 1fr) minmax(64px, 1fr) auto auto; gap: 4px; }
   .si-attach-status { display: none; }
 }
 
-@keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 /* Live interactive tmux terminal: xterm owns keyboard/IME input while tmux owns render and history. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
 /* No alignment artifice: the xterm block sits in normal flow (top-aligned), so the fractional fit
@@ -3306,7 +3308,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   position: relative; overflow: hidden; padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--panel) 96%, transparent);
   border: 1px solid color-mix(in srgb, var(--tn-tone) 42%, var(--line)); border-left: 3px solid var(--tn-tone); border-radius: var(--radius);
   box-shadow: var(--shadow); font-family: var(--ui-font); font-size: var(--type-control);
-  line-height: var(--leading-relaxed); pointer-events: auto; animation: tn-arrive .16s ease-out both;
+  line-height: var(--leading-relaxed); pointer-events: auto; animation: rise var(--dur-rise) ease-out both;
 }
 .tn-notice.success { --tn-tone: var(--green); }
 .tn-notice.error { --tn-tone: var(--red); }
@@ -3323,7 +3325,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   pointer-events: none;
 }
 .tn-notice[data-paused='true'] .tn-progress { animation-play-state: paused; }
-@keyframes tn-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tn-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 640px) {
   .tn-viewport { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); bottom: auto; width: min(440px, calc(100vw - 20px)); }
@@ -3691,12 +3692,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
 .diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }
 
-/* prose selection layer ([[prose-dispatch]]) — an action group that follows the passage, a message popover
+/* prose selection layer ([[prose-dispatch]]) — an action group that follows the passage, the send card
    beside the pointer, and the in-place editor. All three are fixed z-layers: the reading column never
-   changes width and no chrome band appears, whether or not something is selected. */
+   changes width and no chrome band appears, whether or not something is selected. The group RISES, the
+   cards POP — the two motion words every overlay spends. */
 .pa-group {
   position: fixed; z-index: 60; display: flex; gap: var(--space-1); padding: var(--space-1);
   background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow);
+  animation: rise var(--dur-rise) ease;
 }
 .pa-act {
   display: inline-flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4);
@@ -3710,11 +3713,51 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .pa-loading { position: fixed; z-index: 60; display: inline-flex; padding: 4px; color: var(--muted); }
 
 .pa-card {
-  position: fixed; z-index: 61; display: grid; gap: var(--space-4); padding: var(--space-5);
-  background: var(--paper); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow);
+  position: fixed; z-index: 61; background: var(--paper); border: 1px solid var(--edge); border-radius: var(--radius);
+  box-shadow: var(--shadow); animation: pop var(--dur-pop) ease; transform-origin: top left;
 }
-.pa-send { width: min(360px, calc(100vw - 32px)); }
-.pa-edit { width: min(760px, calc(100vw - 32px)); }
+.pa-edit { display: grid; gap: var(--space-4); padding: var(--space-5); width: min(760px, calc(100vw - 32px)); }
+/* the send card IS the composer shell ([[composer]]) floated at the pointer — the shell's own padding and
+   border, no card nested inside a card; the passage rides in the preview slot as the shared attachment. */
+.pa-send { width: min(440px, calc(100vw - 32px)); padding: 8px 10px 7px; }
+.pa-send .selection-attachment { max-width: 100%; margin-bottom: 6px; }
+.pa-message {
+  min-height: 42px; max-height: 40vh; padding: 2px 2px 5px; resize: none;
+  border: 0; outline: 0; background: transparent; color: var(--ink2); font-family: var(--ui-font);
+  font-size: var(--type-control); line-height: var(--line-input);
+}
+.pa-message::placeholder { color: var(--muted); }
+.pa-send .mention-menu.up { bottom: calc(100% + 10px); }
+.pa-send .pa-error { margin-top: 6px; }
+/* the tool row is positioned so the address menu spans the whole row, not the chip that opened it. */
+.pa-tools { position: relative; }
+.pa-tools .mention-menu { left: 0; right: 0; }
+.pa-tools .mention-menu.up { bottom: calc(100% + 4px); }
+/* the address chip: the recipient in the shared session identity language, or "new · <launcher>". Editing
+   it swaps the chip for a one-line `@` field of the same footprint. */
+.pa-address {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 46%; height: 26px; box-sizing: border-box;
+  padding: 0 7px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius);
+  cursor: pointer; font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-none);
+}
+.pa-address:hover, .pa-address:focus-visible { outline: none; border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
+.pa-address-input { width: 46%; cursor: text; }
+.pa-address-input:focus { border-color: var(--blue); }
+.pa-address-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-address-new { color: var(--green); flex: none; }
+.pa-address-state { flex: none; font-size: var(--type-meta); }
+.pa-address-caret { flex: none; color: var(--muted); }
+/* follow the passage to its session after the send — a toggle, because the message is the same either way. */
+.pa-jump {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px; height: 26px; box-sizing: border-box; padding: 0 8px;
+  color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer;
+  font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-none); white-space: nowrap;
+}
+.pa-jump:hover { color: var(--ink2); background: var(--wash-hover); }
+.pa-jump[aria-pressed='true'] { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
+.pa-jump-mark { opacity: 0; }
+.pa-jump[aria-pressed='true'] .pa-jump-mark { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .pa-group, .pa-card, .mention-menu, .si-new-center { animation: none; } }
 .pa-input {
   width: 100%; resize: vertical; padding: var(--space-3) var(--space-4);
   background: var(--paper); color: var(--ink2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -3722,17 +3765,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .pa-edit-input { font-family: var(--mono); resize: vertical; }
 .pa-input:focus { outline: none; border-color: var(--blue); }
-.pa-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.pa-preset {
-  padding: var(--space-1) var(--space-4); border: 1px solid var(--edge); border-radius: var(--radius-full);
-  background: var(--panel); color: var(--muted); cursor: pointer;
-  font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-ui);
-}
-.pa-preset:hover { color: var(--ink2); border-color: var(--line); }
-.pa-target { display: grid; gap: var(--space-2); min-width: 0; }
-.pa-target-label { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
-.pa-session-picker { min-width: 0; }
-.pa-session-picker .session-picker-list { max-height: 150px; }
 .pa-edit-head {
   display: flex; align-items: center; gap: var(--space-3); min-width: 0;
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption);

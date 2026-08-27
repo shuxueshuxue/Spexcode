@@ -4,7 +4,7 @@ import { useBoard } from './workspace.jsx'
 import { useReviewPage } from './reviewPage.js'
 import { scenarioStates } from './score.jsx'
 import { addressHash, evalAddress, issueAddress } from './address.js'
-import { holdAnchor } from './tabs.js'
+import { newTabAnchor } from './tabs.js'
 import { useResizable } from './useResizable.js'
 import { useFold } from './useFold.js'
 import { useT } from './i18n/index.jsx'
@@ -20,11 +20,11 @@ function readPanels() {
   } catch { return { scenarios: true, issues: true } }
 }
 
-// EVERY ROW IS A DETAIL DOOR, on the workspace's own slot semantics: a real anchor, plain click into the
-// current slot, ctrl/⌘ into a tab of its own ([[tab-strip]]). The panels list objects that HAVE detail
+// EVERY ROW IS A DETAIL DOOR, on the workspace's own tab semantics: a real anchor, plain click into the
+// focused tab, ctrl/⌘ into a tab of its own ([[tab-strip]]). The panels list objects that HAVE detail
 // pages, so there is nothing here that opens a second-level panel inside the dock.
 function Row({ href, children }) {
-  return <a className="ctx-row" href={href} onClick={(event) => holdAnchor(event, href)}>{children}</a>
+  return <a className="ctx-row" href={href} onClick={(event) => newTabAnchor(event, href)}>{children}</a>
 }
 
 function Scenarios({ id }) {

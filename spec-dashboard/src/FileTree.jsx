@@ -4,7 +4,7 @@ import { firesEvent } from './bindings.js'
 import ExplorerContextMenu from './ExplorerContextMenu.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
-import { isHoldGesture, pinTab } from './tabs.js'
+import { isNewTabGesture, openNewTab } from './tabs.js'
 import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
@@ -33,10 +33,10 @@ const kidsOf = (specs) => {
 // A row declares WHAT IT IS on the element itself (`data-menu-*`). The explorer then needs exactly one
 // right-click/keyboard seam for every projection instead of a handler per row kind, and a row that grows
 // later joins the menu by naming its subject rather than by wiring anything.
-function Row({ depth, onClick, onDoubleClick, open, hasKids, dot, label, kind, active, subject = null }) {
+function Row({ depth, onClick, open, hasKids, dot, label, kind, active, subject = null }) {
   return (
     <button type="button" className={`ft-row ft-${kind}${active ? ' on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} onDoubleClick={onDoubleClick} data-tip={label}
+      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} data-tip={label}
       data-menu-kind={subject?.kind} data-menu-id={subject?.id} data-menu-path={subject?.path}>
       <span className="ft-caret">{hasKids ? (open ? '▾' : '▸') : ''}</span>
       {dot ? <i className="ft-dot" style={{ background: dot }} /> : <span className="ft-dot ft-none" />}
@@ -77,26 +77,24 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
         // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
         // discloses its contents. Splitting them into two hit targets would make the common move — look
         // inside this node — cost two clicks in a list built for scanning.
-        // A plain click opens the node in the current slot; ctrl/⌘ or a double-click holds it ([[tab-strip]]).
+        // A plain click opens the node in the focused tab; ctrl/⌘ opens it in a new tab ([[tab-strip]]).
         // Disclosure never opens the governed files it reveals: the node's own document already shows its
         // code, so a click that asked to read a node must not mint a file tab behind it.
         onClick={(e) => {
           setOpen((v) => !v)
-          if (isHoldGesture(e)) pinTab('spec', node.id)
+          if (isNewTabGesture(e)) openNewTab('spec', node.id)
           else navigate('spec', node.id)
-        }} onDoubleClick={() => pinTab('spec', node.id)} />
+        }} />
       {open && (
         <>
           {governed.map((f) => (
             <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()} subject={{ kind: 'file', path: f }}
-              onClick={(e) => (isHoldGesture(e) ? pinTab : navigate)('file', f)}
-              onDoubleClick={() => pinTab('file', f)} />
+              onClick={(e) => (isNewTabGesture(e) ? openNewTab : navigate)('file', f)} />
           ))}
           {(files || []).map((f) => (
             <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
               subject={{ kind: 'file', path: `.spec/${node.id}/${f.name}` }}
-              onClick={(e) => (isHoldGesture(e) ? pinTab : navigate)('file', `.spec/${node.id}/${f.name}`)}
-              onDoubleClick={() => pinTab('file', `.spec/${node.id}/${f.name}`)} />
+              onClick={(e) => (isNewTabGesture(e) ? openNewTab : navigate)('file', `.spec/${node.id}/${f.name}`)} />
           ))}
           {children.map((c) => (
             <NodeRow key={c.id} node={c} depth={depth + 1} kids={kids} focusId={focusId} onOpenFile={onOpenFile} />
@@ -212,8 +210,8 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
       setMenu({ ...subject, x: rect.left + 12, y: rect.bottom, keyboard: true })
       return
     }
-    if (subject.kind === 'node') pinTab('spec', subject.id)
-    else if (subject.kind === 'file') pinTab('file', subject.path)
+    if (subject.kind === 'node') openNewTab('spec', subject.id)
+    else if (subject.kind === 'file') openNewTab('file', subject.path)
   }
   const toggle = (key) => setSections((prev) => {
     const next = { ...prev, [key]: !prev[key] }
@@ -221,7 +219,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     return next
   })
   const openSpecGraph = () => {
-    // The Spec tab is resident: navigating to its bare address both focuses the held tab and clears any
+    // The Spec tab is resident: navigating to its bare address both focuses the open tab and clears any
     // node/file selector. `focusLatestTab` only restored the previous selector, so clicking this graph door
     // appeared inert while a concrete Spec document was already open.
     navigate('spec')

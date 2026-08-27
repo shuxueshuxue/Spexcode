@@ -22,8 +22,8 @@ related:
 
 ## raw source
 
-Select a passage of spec prose and a small group of actions appears next to it: **Send to Session**,
-**Edit & Send**, **Explain**, **Edit Manually**. Picking one opens a little card beside the pointer — the
+Select a passage of spec prose, then open the native context menu, and a small group of actions appears next
+to the pointer: **Send to Session**, **Edit & Send**, **Explain**, **Edit Manually**. Picking one opens a little card beside the pointer — the
 passage as an attachment, an optional message, and who receives it. The card is the same composer every
 other box on the board is: `@` and `[[` complete in it, `/` offers the three preset intents (edit / polish /
 explain), and its footer reads like Command Box's — except that its first control is an **address**, because
@@ -103,5 +103,7 @@ The reading column is exactly as wide with a selection as without one, and no ch
 be true. Pressing an action never steals the browser selection out from under itself, which is the one bug
 an affordance that acts on a selection cannot have.
 
-**The right-click menu is the same group.** Same items, same handlers, anchored at the pointer instead of
-at the passage — one component with two anchors rather than a menu that can drift from the bar it mirrors.
+**The right-click menu is the same group.** The primary-button selection gesture only records the passage;
+the native context-menu gesture is what reveals the actions. Same items, same handlers, anchored at the
+pointer instead of at the passage — one component with two anchors rather than a menu that can drift from
+the bar it mirrors.

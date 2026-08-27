@@ -10,7 +10,9 @@ test('file selection mounts the shared action host for source right-click dispat
   assert.match(file, /const sourceHostRef = useRef\(null\)/)
   assert.match(file, /<div className="fileview" ref=\{sourceHostRef\}>/)
   assert.match(file, /<ProseActions hostRef=\{sourceHostRef\} codeSelection=\{selection\}/)
-  assert.match(actions, /if \(codeSelection\) \{[\s\S]*event\.preventDefault\(\)[\s\S]*setHit\(\{ lines: \{ startLine: codeSelection\.startLine, endLine: codeSelection\.endLine \}/)
+  assert.match(actions, /const sourceSelection = codeSelection \|\| codeSelectionRef\.current[\s\S]*event\.preventDefault\(\)[\s\S]*const next = \{ lines: \{ startLine: sourceSelection\.startLine, endLine: sourceSelection\.endLine \}/)
+  assert.match(actions, /const \[menuOpen, setMenuOpen\] = useState\(false\)/)
+  assert.match(actions, /!panel && menuOpen && selection && <ActionGroup/)
 })
 
 test('source selection remains lossless and does not require DOM Selection for the right-click path', () => {

@@ -230,7 +230,10 @@ const measurePaper = async () => page.evaluate(() => {
     widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .m-quote'),
     rowPadding: parseFloat(getComputedStyle(rows[0]).paddingTop) * 2, minGap: Math.min(...gaps),
     timeOpacity: time ? parseFloat(getComputedStyle(time).opacity) : null,
-    seam: seam ? { fontSize: getComputedStyle(seam).fontSize, rule: !!seam.querySelector('.m-seam-line'), width: Math.round(seam.getBoundingClientRect().width) } : null,
+    seam: seam ? (() => { const caret = seam.querySelector('.caret'); const lead = seam.querySelector('.m-seam-lead')
+      return { fontSize: getComputedStyle(seam).fontSize, rule: !!seam.querySelector('.m-seam-line'), width: Math.round(seam.getBoundingClientRect().width),
+        caretLast: seam.lastElementChild === caret, caretTrails: !!caret && !!lead && caret.getBoundingClientRect().left >= lead.getBoundingClientRect().right } })() : null,
+    trailing: [...document.querySelectorAll('.tl-chat [aria-expanded]')].filter((row) => row.querySelector('.caret')).map((row) => row.lastElementChild.classList.contains('caret')),
     ground: getComputedStyle(document.querySelector('.tl-chat')).backgroundColor,
   }
 })
@@ -242,6 +245,8 @@ assert.ok(paper.widestNote >= paper.cell - 1, 'the agent runs the whole cell')
 assert.ok(paper.widestQuote <= Math.round(paper.cell * 0.8) + 1, 'the quote caps at 80% of the cell')
 assert.ok(paper.timeOpacity < 1, 'the minute rests quiet')
 assert.ok(paper.seam && !paper.seam.rule && paper.seam.fontSize === '11px' && paper.seam.width < paper.column, 'one caption line, no rule to the edge')
+assert.ok(paper.seam.caretLast && paper.seam.caretTrails, 'the seam chevron trails the words')
+assert.ok(paper.trailing.length > 0 && paper.trailing.every(Boolean), 'every disclosure in the conversation ends with its chevron')
 assert.ok(paper.rowPadding >= 24 && paper.minGap >= 0, 'air between rows')
 assert.ok(paper.sidePadding > 16, 'the margin grew with the pane')
 await page.locator('.tl-chat .m-ev.m-ev-say').first().hover()

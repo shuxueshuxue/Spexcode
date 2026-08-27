@@ -3,8 +3,6 @@ title: tab-layout
 status: active
 hue: 215
 desc: The tab strip's visible row, ordering, wrapping, labels, and document-action boundary.
-code:
-  - spec-dashboard/src/TabStrip.jsx
 related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/tabStrip.test.mjs

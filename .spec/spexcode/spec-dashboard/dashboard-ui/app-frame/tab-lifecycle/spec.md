@@ -3,8 +3,6 @@ title: tab-lifecycle
 status: active
 hue: 215
 desc: Workspace tab removal, focus history, and deterministic close destinations.
-code:
-  - spec-dashboard/src/tabModel.js
 related:
   - spec-dashboard/src/tabs.js
   - spec-dashboard/src/tabModel.test.mjs

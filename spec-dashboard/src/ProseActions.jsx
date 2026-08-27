@@ -98,7 +98,9 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   const activeCodeSelection = codeSelection || (menuOpen ? codeSelectionRef.current : null)
 
   const live = sessions.filter((s) => sessionFooterState(s) === 'live')
-  const dismiss = useCallback(() => { setPanel(null); setError(null); setBusy(false) }, [])
+  // Closing the card also retires the action group that opened it. Keeping menuOpen true would make the
+  // group paint for one frame when an outside press clears panel, before the selection listener catches up.
+  const dismiss = useCallback(() => { setPanel(null); setMenuOpen(false); setError(null); setBusy(false) }, [])
   const clear = useCallback(() => {
     setHit(null)
     setMenuOpen(false)

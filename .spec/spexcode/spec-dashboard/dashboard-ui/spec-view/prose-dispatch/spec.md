@@ -96,7 +96,8 @@ re-versions from it and drift re-derives; this surface writes nothing else and t
 **Everything floats, and floats in with one of two motions.** The action group and both cards are fixed
 z-layers over the reading column, dismissed by Escape (through the shared layer stack — one layer per
 press: an open completion menu, then the address field, then the card, never the document below) or by a
-press outside. The group *rises* (the menu/notice motion) and the cards *pop* (the card/dialog motion):
+press outside. Dismissing a card also retires the action group that opened it, so the group never flashes
+back for one paint while the outside press is being handled. The group *rises* (the menu/notice motion) and the cards *pop* (the card/dialog motion):
 the board's two overlay motion words, each a token duration and both silenced under reduced motion.
 The reading column is exactly as wide with a selection as without one, and no chrome band appears —
 [[ui-state-model]]'s budget counts overlays as layers, and this must stay true rather than merely happen to

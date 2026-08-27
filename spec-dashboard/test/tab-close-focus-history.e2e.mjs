@@ -1,6 +1,6 @@
-// YATU proof for [[tab-strip]]'s close heir rule: closing returns the reader where they came from, SAME
-// KIND FIRST. Scene A checks the focus history beats the positional neighbour across board kinds; Scene B
-// checks same-kind recency beats both a nearer same-kind tab and a more recently focused other-kind tab.
+// YATU proof for [[tab-strip]]'s close heir rule: closing returns the reader where they came from, across
+// tab kinds. Scene A checks focus history beats the positional neighbour; Scene B checks a recently focused
+// Spec tab beats a surviving file neighbour when the active file closes.
 import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -61,8 +61,8 @@ try {
   const sceneA = await closeActive()
   await page.screenshot({ path: join(out, 'scene-a.png'), fullPage: true })
 
-  // Scene B — same kind first, and same-kind recency over same-kind distance. README and CLAUDE.md are
-  // held by double-click; package.json takes the replaceable file slot.
+  // Scene B — the last focused tab wins across kinds. README and CLAUDE.md are held; package.json takes the
+  // replaceable file slot, then the reader returns to Spec before closing package.json.
   await fresh('#/file/README.md')
   await page.locator('[data-tab-key="#/file/README.md"]').dblclick()
   await page.waitForTimeout(350)
@@ -83,7 +83,7 @@ try {
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
   assert.equal(sceneA, '#/spec', 'Scene A must land on the tab the reader was on before Evals, not the positional neighbour')
-  assert.equal(sceneB, '#/file/README.md', 'Scene B must land on the most recently focused surviving tab of the SAME kind')
+  assert.equal(sceneB, `#/spec/${encodeURIComponent(node.id)}`, 'Scene B must land on the most recently focused surviving tab across kinds')
   assert.deepEqual(sceneBAfter, sceneBStrip.filter((key) => key !== '#/file/package.json'), 'only the closed tab leaves the strip')
   assert.ok(errors.length === 0, `browser errors: ${errors.join(' | ')}`)
 } finally { await page.close(); await browser.close(); await ui.close() }

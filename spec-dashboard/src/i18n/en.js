@@ -700,7 +700,6 @@ export default {
       explain: 'Explain',
       manual: 'Edit Manually',
     },
-    preset: { edit: 'edit', polish: 'polish', explain: 'explain' },
     // the presets are the message, not a label for one — they land in the box the human can still change.
     prompt: {
       edit: 'Rewrite this passage of the spec so it says what it should. Commit the change with its node on your branch.',
@@ -708,6 +707,10 @@ export default {
       explain: 'Explain this passage — what it means and why it is there. Answer here in the session; do not change the spec.',
     },
     sendLabel: 'send this passage to a session',
+    presets: 'insert / — preset intents',
+    addressTip: 'who receives it — a live session, or a new one',
+    newWith: 'new · {launcher}',
+    jumpTip: 'open the session after sending',
     editLabel: 'edit this passage',
     messagePlaceholder: 'a message to send with it (optional)',
     lines: 'lines {a}–{b}',

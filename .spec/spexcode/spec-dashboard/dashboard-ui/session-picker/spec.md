@@ -8,7 +8,6 @@ code:
 related:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/NodeContextMenu.jsx
-  - spec-dashboard/src/ProseActions.jsx
   - spec-dashboard/src/mentions.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/SelectionAttachment.jsx
@@ -28,6 +27,6 @@ remain owned by the caller.
 
 Mention autocomplete and the graph context menu may use the row primitive without taking ownership of the
 picker state. The dock keeps its tree and fold semantics, but its session face uses the same row identity.
-No surface renders a native `<select>` for session choice. A source-selection send card may carry a
-`SelectionAttachment` beside this picker; that attachment is the shared removable prompt-context row, not a
-second session selector or a page-local visual dialect.
+No surface renders a native `<select>` for session choice. The prose send card ([[prose-dispatch]]) does
+not mount the picker: it addresses its recipient through the shared mention autocomplete, whose session rows
+are this row primitive, so the card's session face and the `@` menu's are one and the same.

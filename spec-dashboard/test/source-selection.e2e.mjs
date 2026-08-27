@@ -163,16 +163,29 @@ try {
   await card.waitFor({ state: 'visible' })
   assert.match((await card.locator('.selection-attachment').textContent()) || '', /lines 2–5/)
   assert.match((await card.locator('.selection-attachment').textContent()) || '', /src\/fixture\.js/)
-  await card.locator('.pa-input').fill('Please inspect the selected implementation.')
-  const targetOptions = await card.locator('.pa-session-picker .session-picker-row').evaluateAll((rows) => rows.map((row) => ({ value: row.dataset.sessionPickerId, text: row.textContent })))
+  // the card is the shared composer: the message box grows in place and carries the `@` / `[[` / `/` doors.
+  assert.equal(await page.locator('.pa-send.composer-surface').count(), 1, 'the send card IS the composer shell, not a card nested inside one')
+  await card.locator('.pa-message').fill('Please inspect the selected implementation.')
+  assert.deepEqual(await card.locator('.fv-trigger-btn').allTextContents(), ['@', '[[', '/'], 'the send card wears the same three grammar doors as Command Box')
+  // the recipient defaults to the newest live session and is re-addressed through the shared `@` rows.
+  assert.match((await card.locator('.pa-address').textContent()) || '', /idle fixture/, 'the address chip defaults to the newest live session')
+  await card.locator('.pa-address').click()
+  const addressRows = card.locator('.pa-tools .mention-menu .mention-item')
+  await addressRows.first().waitFor({ state: 'visible', timeout: 10_000 })
+  const targetOptions = await addressRows.evaluateAll((rows) => rows.map((row) => ({ value: row.dataset.sessionPickerId || row.textContent, text: row.textContent })))
   assert.ok(targetOptions.some((option) => option.value === 'idle-fixture'), `idle session remains a dispatch target: ${JSON.stringify(targetOptions)}`)
   assert.equal(targetOptions.some((option) => option.value === 'offline-fixture'), false, 'offline session is not a dispatch target')
   await page.screenshot({ path: join(out, 'm4-selection-target-filter.png'), fullPage: true })
-  await card.locator('.pa-session-picker .session-picker-row[data-session-picker-id="new"]').click()
+  await addressRows.filter({ hasText: '@new' }).first().click()
+  // `@new` opens the launcher rows, so the launcher a new session takes is chosen in the open, not implied.
+  const launcherRow = card.locator('.pa-tools .mention-menu .mention-item').filter({ hasText: '@new:fake' })
+  await launcherRow.waitFor({ state: 'visible', timeout: 10_000 })
+  await launcherRow.click()
+  await waitFor(() => card.locator('.pa-address').textContent().then((text) => /new · fake/.test(text || '')), 'address chip names the new session and its launcher')
   await page.screenshot({ path: join(out, 'm4-selection-send-card.png'), fullPage: true })
   const createRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/sessions')
-  await card.locator('.pa-btn').filter({ hasText: 'Send' }).click()
-  assert.equal((await createRequest).postDataJSON()?.launcher, 'fake', 'direct create respects the remembered launcher')
+  await card.locator('.pa-submit').click()
+  assert.equal((await createRequest).postDataJSON()?.launcher, 'fake', 'direct create takes the launcher the address chip named')
   const created = await waitFor(async () => {
     const rows = await fetch(`http://127.0.0.1:${apiPort}/api/sessions?all=1`).then((r) => r.json())
     return rows.find((row) => row.promptPreview?.includes('Please inspect the selected implementation.')) || null
@@ -201,8 +214,11 @@ try {
   await popupActions.filter({ hasText: 'Edit & Send' }).click()
   const popupCard = page.locator('.pa-send')
   await popupCard.waitFor({ state: 'visible' })
-  await popupCard.locator('.pa-session-picker .session-picker-row[data-session-picker-id="new"]').click()
-  await popupCard.locator('.pa-btn').filter({ hasText: 'Send' }).click()
+  await popupCard.locator('.pa-address').click()
+  await popupCard.locator('.pa-tools .mention-menu .mention-item').filter({ hasText: '@new' }).first().click()
+  await popupCard.locator('.pa-tools .mention-menu .mention-item').filter({ hasText: '@new:fake' }).click()
+  await waitFor(() => popupCard.locator('.pa-address').textContent().then((text) => /new · fake/.test(text || '')), 'popup address chip names the new session')
+  await popupCard.locator('.pa-submit').click()
   const popupCreated = await waitFor(async () => {
     const rows = await fetch(`http://127.0.0.1:${apiPort}/api/sessions?all=1`).then((r) => r.json())
     return rows.find((row) => row.id !== created.id) || null

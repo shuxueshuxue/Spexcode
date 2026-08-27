@@ -26,11 +26,10 @@ export const tabKey = (t) => {
   return routeHash(route.page, route.param, route.query)
 }
 
-// At most ONE tab per page kind is unpinned — the current slot for that kind. Legacy entries carried a
-// `preview` marker with a narrower meaning (spec/file documents only); a legacy preview becomes the slot
-// for its kind and every other entry is pinned, because those tabs were minted under rules that kept them.
-// The document predicate is supplied by the view registry so persisted routes that no longer belong in the
-// workspace (bare boards, for example) are cleared at the same read boundary as new routes.
+// `preview` remains a legacy marker (spec/file documents only), while explicit `pinned: false` entries stay
+// unpinned so an inactive tab is not silently promoted or rewritten during reload. The document predicate is
+// supplied by the view registry so persisted routes that no longer belong in the workspace (bare boards, for
+// example) are cleared at the same read boundary as new routes.
 export function normalizeTabs(raw, isDocument = () => true) {
   const tabs = raw.filter((t) => isDocument(t.page, t.param ?? null)).map((t) => {
     const original = { page: t.page, param: t.param ?? null, query: t.query ?? null }
@@ -56,16 +55,15 @@ export function normalizeTabs(raw, isDocument = () => true) {
     byKey.set(key, tab)
     unique.push(tab)
   }
-  const slots = new Map()
-  unique.forEach((t, i) => { if (!t.pinned) slots.set(tabKind(t), i) })
-  return unique.map((t, i) => (t.pinned || slots.get(tabKind(t)) === i ? t : { ...t, pinned: true }))
+  return unique
 }
 
 // WHERE THE STRIP LANDS, given what it holds and what was asked for. Everything the strip decides is here:
-// an already-open address is activated (and pinned when that is what was asked); a new one takes its kind's
-// slot IN PLACE — keeping that slot's position, so the strip does not reshuffle under the reader — or is
-// appended when it is pinned, or when there is no slot for that kind yet.
-export function placeTab(tabs, route, mode = 'slot') {
+// an already-open address is activated (and pinned when that is what was asked); a new one replaces only the
+// previously focused unpinned slot. If that kind has an unpinned entry elsewhere, it is preserved and the new
+// address is appended instead of silently overwriting a document the reader is not looking at. `activeKey` is
+// optional for pure callers that do not have route history; the workspace hook always supplies it.
+export function placeTab(tabs, route, mode = 'slot', activeKey = undefined) {
   const original = { page: route.page, param: route.param ?? null, query: route.query ?? null }
   const normalized = tabRoute(original)
   const key = tabKey(normalized)
@@ -92,7 +90,8 @@ export function placeTab(tabs, route, mode = 'slot') {
   // A published resource is a file-class workspace tab. Opening one appends it, preserving the session tab
   // and its selected base face; a second click on the same resource was handled by the identity check above.
   if (isResourceRoute(normalized)) return [...tabs, entry]
-  const slot = tabs.findIndex((t) => !t.pinned && tabKind(t) === tabKind(normalized))
+  const slot = tabs.findIndex((t) => !t.pinned && tabKind(t) === tabKind(normalized)
+    && (activeKey === undefined || tabKey(t) === activeKey))
   if (mode === 'pin' || slot < 0) return [...tabs, entry]
   return tabs.map((t, i) => (i === slot ? entry : t))
 }

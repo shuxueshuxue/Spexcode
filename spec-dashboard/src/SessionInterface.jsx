@@ -926,8 +926,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           status: result.session?.status || 'queued', liveness: result.session?.liveness || 'offline',
           archived: false, capabilities: result.session?.capabilities || { headless: true },
         })
+        // Creation is an explicit new-document action, not ordinary session navigation. Hold the published
+        // address before routing so the new session is appended and cannot evict the current session slot.
         // The create response is the publication fence: move the reader into the new document immediately,
         // while its queued/starting row and live execution trace catch up through the board stream.
+        markTabHold('sessions', result.id, null)
         scope.open({ page: 'sessions', param: result.id, query: null })
         reload?.()
       } else if (!result.ok) {

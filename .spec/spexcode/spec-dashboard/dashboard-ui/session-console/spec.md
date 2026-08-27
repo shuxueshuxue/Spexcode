@@ -104,6 +104,8 @@ the routed page's viewport and owns the terminal/timeline surface without a seco
 picker; its grammar, background fire, and picker are [[new-session-tab]]'s. Its focused composer submits on plain
 Enter, inserts a newline on Shift+Enter, and leaves IME composition Enter to the browser; the visible launch control
 is the pointer twin, while an open completion menu consumes Enter for its highlighted choice first.
+When its create response publishes a session id, the address is held before routing so creation appends a fresh
+workspace tab and cannot replace an inactive session tab.
 
 An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
 published resource faces selected by the one session object address:

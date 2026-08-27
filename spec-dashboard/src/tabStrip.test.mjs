@@ -33,6 +33,11 @@ test('tab menu actions are explicit and use the existing workspace APIs', () => 
   assert.match(source, /useEscLayer\(!!menu/)
 })
 
+test('ordinary navigation supplies focus history so inactive slots cannot be replaced', () => {
+  assert.match(tabs, /const previousRouteKey = useRef\(undefined\)/)
+  assert.match(tabs, /placeTab\(getTabs\(\), route, mode, priorKey\)/)
+})
+
 test('the strip enters shrink-wrap mode only when its minimums exceed the row', () => {
   assert.match(source, /new ResizeObserver\(update\)/)
   assert.match(source, /tabs\.length \* 80 > host\.clientWidth/)

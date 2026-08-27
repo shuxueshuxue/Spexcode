@@ -20,6 +20,18 @@ test('plain navigation reuses one slot per document kind', () => {
   assert.deepEqual(keys(tabs), ['~#/file/e', '~#/sessions/s3'])
 })
 
+test('plain navigation never replaces an inactive slot of the same kind', () => {
+  let tabs = placeTab([], session('s1'))
+  tabs = placeTab(tabs, specDocument('node'))
+  // The session slot is no longer focused; opening another session preserves it and appends a new slot.
+  tabs = placeTab(tabs, session('s2'), 'slot', tabKey(specDocument('node')))
+  assert.deepEqual(tabs.map(tabKey), ['#/sessions/s1', '#/spec', '#/sessions/s2'])
+  assert.equal(tabs[0].param, 's1')
+  // Once the new session is focused, same-kind navigation can reuse that active slot.
+  tabs = placeTab(tabs, session('s3'), 'slot', tabKey(session('s2')))
+  assert.deepEqual(tabs.map(tabKey), ['#/sessions/s1', '#/spec', '#/sessions/s3'])
+})
+
 test('ctrl/⌘ pins a second tab and the pinned one is never replaced', () => {
   let tabs = placeTab([], spec('a'))                 // slot
   tabs = placeTab(tabs, session('s1'), 'pin')        // explicit hold
@@ -196,9 +208,9 @@ test('legacy storage migrates to one slot per document kind', () => {
   // old entries: an unmarked one is held, a `preview` one is the slot
   assert.deepEqual(normalizeTabs([{ page: 'file', param: 'a' }, { page: 'file', param: 'b', preview: true }]),
     [{ page: 'file', param: 'a', query: null, pinned: true }, { page: 'file', param: 'b', query: null, pinned: false }])
-  // more than one unpinned can only come from a hand-edited store; the last one wins the slot
+  // multiple unpinned entries are valid: reload must not silently promote an inactive document
   const many = normalizeTabs([{ page: 'file', param: 'a', pinned: false }, { page: 'file', param: 'b', pinned: false }])
-  assert.deepEqual(many.map((t) => t.pinned), [true, false])
+  assert.deepEqual(many.map((t) => t.pinned), [false, false])
   const kinds = normalizeTabs([
     { page: 'file', param: 'a', pinned: false },
     { page: 'sessions', param: 's1', pinned: false },

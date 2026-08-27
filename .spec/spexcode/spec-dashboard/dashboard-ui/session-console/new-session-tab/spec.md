@@ -39,7 +39,8 @@ finish. Disabling the box for the whole in-flight window was the bug: on a slow 
 greyed and unfocused until the POST *and* a board re-read returned. The pending document remains selected while the
 immediate board refresh (else the next poll) surfaces its full row. Creation is the one deliberate selection change;
 after that, only a tab's *removal* (below) moves your selection for you. Once the create response publishes an id, the
-current slot navigates to `#/sessions/<id>`; a `queued`/`starting` row keeps the stable
+new session is held as a fresh workspace tab before navigating to `#/sessions/<id>`; creation never evicts the
+current session slot. A `queued`/`starting` row keeps the stable
 session name and shows the shared tab spinner while creation readiness catches up.
 
 Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A

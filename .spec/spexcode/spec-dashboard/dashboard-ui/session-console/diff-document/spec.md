@@ -54,7 +54,8 @@ no information either, since the spec graph names every node's file `spec.md`. A
 and leaves each row the one segment it owns, and a directory holding nothing but one more directory collapses into
 its child so a leaf is never pushed a dozen indents to the right. Where a label still has to give — the sticky
 header's directories, a collapsed chain — it gives at the FRONT, never at the leaf, and the untruncated path stays
-on the row's tooltip. Two changed files never render the same label.
+on the row's tooltip. Two changed files never render the same label. Each directory row is the way to reopen one
+branch, and a fresh diff load still starts fully expanded so the review opens with every changed path in view.
 
 The second scope is the session's uncommitted work: the tracked edits and untracked additions its worktree holds
 but has not committed. It is enumerated from one porcelain status plus one numstat however dirty the tree is, and

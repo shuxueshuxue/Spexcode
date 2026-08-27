@@ -289,7 +289,12 @@ export default function DiffDocument({ sessionId }) {
     <code className="diff-oids">{state.data.head} → {state.data.base}</code>
     {!entries.length && branchNote}
     {entries.length > 0 && <div className="diff-review-body">
-      <nav className="diff-file-panel" aria-label={t('session.diffFiles')}>{[scopeSection('branch', committed), scopeSection('working', working)]}</nav>
+      <nav className="diff-file-panel" aria-label={t('session.diffFiles')}>
+        <div className="diff-file-panel-head">
+          <span>{t('session.diffFiles')}</span>
+        </div>
+        {[scopeSection('branch', committed), scopeSection('working', working)]}
+      </nav>
       <div className="diff-files">
         {!committed.length && <div className="diff-scope-note">{branchNote}</div>}
         {current && <DiffFile key={`${entryKey(current)}:${current.file.diffIdentity}`} sessionId={sessionId} file={current.file} scope={current.scope}

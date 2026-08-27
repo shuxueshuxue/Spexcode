@@ -728,7 +728,6 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               {transcript?.state === 'ready' && (
                 <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>
               )}
-              <span className="m-seam-line" aria-hidden="true" />
             </button>
             {expanded && (
               <div className="m-seam-inset">

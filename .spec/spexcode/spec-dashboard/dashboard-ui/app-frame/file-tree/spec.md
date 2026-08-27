@@ -75,6 +75,13 @@ borrow [[dock-modes]]' header register — muted meta, the name in ink at medium
 because an all-caps tracked label is decoration wearing the costume of hierarchy ([[typography]]), and the
 collapsed state of each is a localStorage preference like every other pane's.
 
+**Collapse folders is a door of the EXPLORER, not of a section.** One action folds every open folder in both
+projections — every disclosed spec node and every disclosed disk directory — through the one store, so it
+sits on the dock head the two sections share ([[dock-modes]]), beside search, and never on a section head.
+The official VS Code `collapse-all` icon is used as the shared action mark. Specs and Files section heads stay
+exactly as the reader left them, roots stay listed, and the route is untouched; a reader reopens one branch
+from its own row. While nothing is open the door is disabled rather than hidden, so the head keeps one shape.
+
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
 workspace whose only entrance is a URL is a workspace nobody enters. Its explorer and sessions projections
 are selected from the rail's activity-bar buttons ([[side-nav]], [[dock-modes]]). On by default is not beside

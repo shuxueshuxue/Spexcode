@@ -11,6 +11,7 @@ import { isNewTabGesture, openNewTab } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { withShortcut } from './bindings.js'
 import { Icon, IconButton } from './icons.jsx'
+import { collapseExplorerFolders, useExplorerFolded } from './specTreeState.js'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -222,12 +223,15 @@ function DockHead({ mode, specs, sessions }) {
   const sessionMode = mode === 'sessions'
   const count = sessionMode ? (sessions?.length || 0) : (specs?.length || 0)
   const searchLabel = t(sessionMode ? 'dockModes.searchSessions' : 'dockModes.searchNodes')
+  const folded = useExplorerFolded()
   return (
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
       <span className="dock-head-count">{count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
       {/* The header owns projection doors only; open/closed belongs to the dedicated rail panel switch. */}
       <span className="dock-head-acts">
+        {!sessionMode && <IconButton icon="collapse-all" size={13} className="dock-head-act"
+          label={t('dockModes.collapseFolders')} disabled={folded} onClick={collapseExplorerFolders} />}
         <button type="button" className="dock-head-act" data-tip={withShortcut(searchLabel, 'graph.search')}
           aria-label={searchLabel} onClick={() => openPalette(sessionMode ? 'sessions' : 'nodes')}>
           <Icon name="search" size={13} />

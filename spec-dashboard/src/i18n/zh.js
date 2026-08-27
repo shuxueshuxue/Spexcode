@@ -53,6 +53,7 @@ export default {
     specs: '规格',
     files: '文件',
     graph: '规格图谱',
+    collapseAll: '收起所有规格文件夹',
   },
   diskTree: {
     loading: '正在加载…',
@@ -65,6 +66,7 @@ export default {
     sessions: '会话',
     searchNodes: '搜索节点',
     searchSessions: '搜索会话',
+    collapseFolders: '收起所有文件夹',
   },
   dockSessions: {
     new: '新建会话',

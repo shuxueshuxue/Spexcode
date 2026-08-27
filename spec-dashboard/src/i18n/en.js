@@ -54,6 +54,7 @@ export default {
     specs: 'Specs',
     files: 'Files',
     graph: 'Spec graph',
+    collapseAll: 'collapse all spec folders',
   },
   diskTree: {
     loading: 'loading…',
@@ -68,6 +69,7 @@ export default {
     // this is, so the scope is a fact of where the button sits, not a choice the label has to defend.
     searchNodes: 'Search nodes',
     searchSessions: 'Search sessions',
+    collapseFolders: 'Collapse folders',
   },
   dockSessions: {
     new: 'New session',

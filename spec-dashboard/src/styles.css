@@ -2842,9 +2842,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-line-text.m-ev-note { min-width: 0; color: var(--ink); font-size: var(--type-control); line-height: var(--leading-relaxed); }
 
 /* THE SEAM: one line for everything that happened between two messages, saying only how long the agent
-   worked — the one duration scrollback asks for — and, once read, what that stretch cost. The caret leads
-   so the row reads as a disclosure; the rule runs to the edge so it reads as a seam and not as another thing
-   that was said. The transcript opens directly beneath it on a green inset line, so where it came from stays
+   worked — the one duration scrollback asks for — and, once read, what that stretch cost. The chevron TRAILS
+   the words, as it does on every disclosure in the conversation (tool rows, work folds, the live tail's
+   steps): content first, one shape says open. The transcript opens directly beneath it on a green inset line, so where it came from stays
    in view. The live dot in the gutter is the page's only moving thing. */
 .m-ev-seam { padding: var(--space-1) 0; }
 .m-seam { min-width: 0; }
@@ -2893,16 +2893,17 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* prose keeps a readable measure even when the pane is wide; only the tool blocks below may run long. */
 .tc-say-text { max-width: 100%; color: var(--ink); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
 /* the work segment's one line. It is a full-width rule rather than a sentence because it is a SEAM in the
-   conversation — everything that produced the answer, closed. The caret leads so the row reads as a
-   disclosure and not as another thing that happened. */
+   conversation — everything that produced the answer, closed. The chevron trails the count and the kinds,
+   the same bounded sentence shape the tool rows and the seam wear.
 .tc-work { display: flex; flex-direction: column; gap: 8px; }
 .tc-work-row {
-  display: flex; align-items: baseline; gap: 7px; width: 100%; padding: 3px 0;
-  color: var(--muted); background: none; border: 0; border-bottom: 1px solid var(--edge);
+  display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; padding: var(--space-2) var(--space-3); margin-left: calc(var(--space-3) * -1);
+  color: var(--muted); background: none; border: 0; border-radius: var(--radius);
   font-family: var(--ui-font); font-size: var(--type-meta); text-align: left; cursor: pointer;
 }
+.tc-work-row:hover { background: var(--wash-hover); }
 .tc-work-row:hover { color: var(--ink2); }
-.tc-work-caret { align-self: center; }
+.tc-work-caret, .m-seam-caret { align-self: center; margin-left: 1px; }
 .tc-work-lead { flex: none; color: var(--ink2); font-weight: var(--weight-medium); }
 .tc-work-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-work-body { display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--edge); }

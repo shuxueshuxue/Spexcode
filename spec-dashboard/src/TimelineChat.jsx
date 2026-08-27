@@ -196,9 +196,9 @@ function WorkSegment({ segment, openIds, onToggle }) {
     {segment.folded ? (
       <div className="tc-work">
         <button type="button" className="tc-work-row" aria-expanded={open} onClick={() => onToggle(id)}>
-          <Caret open={open} className="tc-work-caret" />
           <span className="tc-work-lead">{segment.calls} tool uses</span>
           {kinds && <span className="tc-work-detail">{kinds}</span>}
+          <Caret open={open} className="tc-work-caret" />
         </button>
         {open && <div className="tc-work-body">
           {segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} />)}
@@ -750,11 +750,12 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           <div className="m-gut" />
           <div className="m-seam">
             <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
-              <Caret open={expanded} className="m-seam-caret" />
               <span className="m-seam-lead">{lead}</span>
               {transcript?.state === 'ready' && (
                 <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>
               )}
+              {/* the chevron TRAILS, as on every disclosure in the conversation: content first, one shape says open */}
+              <Caret open={expanded} className="m-seam-caret" />
             </button>
             {expanded && (
               <div className="m-seam-inset">

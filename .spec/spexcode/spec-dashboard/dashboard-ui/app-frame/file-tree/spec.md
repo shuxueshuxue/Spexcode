@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/useResizable.js
   - spec-dashboard/src/specTreeState.js
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/explorer-collapse-folders.e2e.mjs
 ---
 # file-tree
 
@@ -35,7 +36,10 @@ do with it — and, being unreachable from outside, it also left the tree unable
 address named: the explorer could sit on a closed root while that spec's document was open beside it. One
 store outside the rows fixes both, and it is the same shape [[session-forest]]'s fold store already uses,
 because it is the same problem twice. It persists, so the arrangement a reader made is still there on the
-next boot; storage that refuses to answer yields an empty tree, which is a correct tree.
+next boot; storage that refuses to answer yields an empty tree, which is a correct tree. The store holds
+TWO ledgers — the open spec nodes and the open disk directories ([[disk-tree]]) — because the disk
+projection had the first defect for as long as its folders kept row-local flags: closing the Files
+section forgot every folder inside it.
 
 **A row does both things.** Clicking a node focuses it on the board *and* discloses its contents. Splitting
 those into two hit targets would make the common move — look inside this node — cost two clicks in a list
@@ -75,12 +79,15 @@ borrow [[dock-modes]]' header register — muted meta, the name in ink at medium
 because an all-caps tracked label is decoration wearing the costume of hierarchy ([[typography]]), and the
 collapsed state of each is a localStorage preference like every other pane's.
 
-**Collapse folders is a door of the EXPLORER, not of a section.** One action folds every open folder in both
-projections — every disclosed spec node and every disclosed disk directory — through the one store, so it
-sits on the dock head the two sections share ([[dock-modes]]), beside search, and never on a section head.
-The official VS Code `collapse-all` icon is used as the shared action mark. Specs and Files section heads stay
-exactly as the reader left them, roots stay listed, and the route is untouched; a reader reopens one branch
-from its own row. While nothing is open the door is disabled rather than hidden, so the head keeps one shape.
+**Collapse folders is a door of the EXPLORER, not of a section.** One action folds every open folder in
+both projections — every disclosed spec node and every disclosed disk directory — through the one store,
+so it sits on the dock head the two sections share ([[dock-modes]]), beside search, and never on a section
+head: a control nested beside "Specs" claims for that section an action that belongs to the list, and it
+put a second button inside a disclosure row that already is one. This is the shape an editor's explorer
+gives its collapse-all view action — on the view's title row, acting on folders and never on the view's
+own sections — so the Specs and Files heads stay exactly as the reader left them, the roots stay listed,
+and the route is untouched; a reader reopens one branch from its own row. While nothing is open the door
+is disabled rather than hidden, so the head keeps one shape and the icon keeps one place.
 
 The dock is ON by default — it is how a reader finds a document without already knowing its address, and a
 workspace whose only entrance is a URL is a workspace nobody enters. Its explorer and sessions projections

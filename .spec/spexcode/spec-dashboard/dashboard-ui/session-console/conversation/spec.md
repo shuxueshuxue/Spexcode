@@ -9,7 +9,6 @@ related:
   - spec-dashboard/src/RichText.js
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
-  - spec-dashboard/src/styles.css
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
 ---
@@ -43,8 +42,8 @@ rule under every turn, a role word above each, a bordered box per tool — so re
 chrome. A chat carries its structure in the shapes of the turns themselves. The person is QUOTED: a narrow
 bubble, capped well under the measure, one corner squared into a tail, sitting off to its own side. The
 agent IS the page: full measure, no bubble, no tint. Boxing both would make an exchange read as a table of
-two columns. The whole flow is held to ONE centred measure — `--conversation-measure`, 720px, the column the
-agent's prose, the person's quotes and the composer all share — without one, at a wide pane the bubble sat
+two columns. The whole flow is held to ONE centred measure — `--conversation-measure`, 720px, the column the agent's
+prose, the person's quotes and the composer all share — without one, at a wide pane the bubble sat
 against the right edge while the prose began at the far left, a thousand pixels away, and the two stopped
 reading as one conversation. The margins around that column grow with the pane (container units), so a
 wide window reads as a sheet with generous edges and a narrow one keeps every pixel for the words.
@@ -126,22 +125,39 @@ preset says, never a cream forced over the product — and it borrows from two p
 rather than imagined. From assistant-ui's open-source Claude example
 (<https://www.assistant-ui.com/examples/claude>): the person's turn is a right-aligned sheet capped near
 80% of the column, the assistant's turn is plain full-width text sitting directly on the ground with no
-bubble and no avatar, the composer is one thin-bordered card, and actions around a message stay out of sight
-until hover. From Anthropic's frontend-design guidance
+bubble and no avatar, the composer is one thin-bordered card with no shadow of its own, and the actions
+around a message stay out of sight until hover. From Anthropic's own frontend-design guidance
 (<https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md>):
-structure is information, boldness belongs in one place, and responsive layout, visible focus, and reduced
-motion are quality floors. The cream palette and serif face were deliberately not borrowed because theme and
-typography own those choices.
+"structure is information" — every structural device here (the day, the chip, the seam) encodes something
+true about the record and none decorates; "spend your boldness in one place, keep everything around it
+quiet" — the one bold thing is the exchange itself, so the time, the seam and the chip all step back; and a
+quality floor that is not announced — responsive to the pane, visible keyboard focus, reduced motion
+respected. What was deliberately NOT borrowed: the cream palette and the serif face, because the theme owns
+colour and [[typography]] owns the voice.
 
 **Both session surfaces frame their content identically.** The Conversation's composer FLOATS over its
 reading column, the same shape Command Box already has on the terminal surface, and the timeline pads its
 tail so the newest entry is never parked behind it. That is what makes the surface a property of the
 content and not of the frame: choosing Terminal or Conversation changes what fills the document area, never
 how many chrome rows sit around it, which is exactly the claim [[ui-state-model]]'s budget measures. The
-composer's card IS its field — one frame, not an input bordered inside a bordered bar. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+composer's card IS its field — one frame, not an input bordered inside a bordered bar — and the card is
+PAPER: the page's own ground with a hairline frame and the one elevation token, not a panel tint laid over
+the flow, so it reads as part of the sheet the conversation is printed on. Its one action is the shared
+send mark ([[icon-system]]'s `send`, the same accent square the thread's composer wears): icon-only, its
+word carried by the tooltip and the accessible name, filled while there is something to send and quiet
+while there is not, so every dashboard composer says "send" by one shape. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.
+
+**Stop lives in the composer, and only while there is something to stop.** While the session is `working`
+the composer shows one stop square beside send — the mark every chat reader knows as "stop generating" —
+and shows nothing otherwise, because a permanently visible disabled stop is chrome about a state the page is
+not in. It calls the one interrupt verb ([[dispatch]]); the backend decides between the adapter's native
+interrupt and, for a pane-backed TUI, the operator's own key into its pane, so this surface never learns
+which transport it is on. A refusal lands in the composer's error line like a failed send; a success asks the
+timeline to refresh. The current turn itself is drawn above as the live tail ([[message-stream]]), in this
+conversation's own grammar.
 
 TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /

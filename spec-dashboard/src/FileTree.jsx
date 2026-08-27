@@ -116,6 +116,11 @@ function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
 // [[ui-state-model]]'s classifier calls a collapsible payload rather than chrome: the dock stays one band
 // ([[dock-modes]]) however many projections it discloses, because these rows scroll with the content they
 // head instead of standing between the window edge and it.
+//
+// A section head carries NOTHING but its own disclosure. "Collapse folders" acts on both projections at
+// once, so it is a door of the explorer and lives on the dock head the two sections share ([[dock-modes]]),
+// clearing both ledgers of the one store ([[specTreeState]]); a button nested beside one section's head
+// would claim for that section an action that belongs to the list.
 const SECTION_KEY = 'spexcode.ftSections'
 const readSections = () => {
   try {

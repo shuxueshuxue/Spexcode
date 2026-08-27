@@ -5029,15 +5029,24 @@ export function canonicalMessageText(message: { kind: string; body: Uint8Array }
   throw new ResourceConflict(`canonical message kind ${message.kind} cannot be delivered as session text`)
 }
 
-// Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a
-// confirmed native primitive refuses loudly; there is no signal/PTY fallback that could target the wrong turn.
+// Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness with a native
+// primitive uses it. Without one the transport decides: a HEADLESS adapter has no keyboard, so it refuses
+// loudly rather than emulating an interrupt with a signal that could hit the wrong process; a PANE-BACKED
+// TUI has an operator's keyboard by definition, so its interrupt is the key that operator would press —
+// C-c into its own pane, through the raw-key channel below — and only while its lifecycle is actually
+// active, because the same key on an idle TUI is a second Ctrl-C away from quitting it.
 export async function interruptSession(id: string): Promise<DispatchResult> {
+  // The lifecycle read and the key send share ONE record lock: a declaration that lands between them would
+  // otherwise turn "interrupt the working turn" into "Ctrl-C an idle TUI", so there is no window.
   return withRecordLock(id, async () => {
     const rec = readRecord(id)
     if (!rec) return { ok: false, error: `no session record for ${id} - nothing to interrupt` }
     const h = harnessById(rec.harness || defaultHarness.id)
-    if (!h.interrupt) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
-    return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
+    if (h.interrupt) return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
+    if (h.headless) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
+    if (rec.status !== 'active') return { ok: false, error: `session ${id} is not working (lifecycle ${rec.status}) - nothing to interrupt` }
+    const sent = await sendRawKeysLocked(id, ['C-c'])
+    return sent ? { ok: true } : { ok: false, error: `session ${id} has no live pane to interrupt` }
   })
 }
 
@@ -5093,18 +5102,20 @@ function rawKeyArgs(id: string, key: string): string[] | null {
 // ORDER, so they reach the pane in exactly the order they were struck. Concurrent per-key POSTs used to race
 // (browser + server + send-keys all parallel) and scramble the sequence; a single serialised batch cannot.
 // An unknown token is skipped without dropping the rest; false only if the tmux session is gone or nothing sent.
+// the send itself, for a caller that already holds the record lock (rawKey below; interruptSession above)
+async function sendRawKeysLocked(id: string, keys: readonly string[]): Promise<boolean> {
+  const list = keys.filter((k) => typeof k === 'string' && k.length > 0)
+  if (list.length === 0 || !(await alive(id))) return false
+  let sent = false
+  for (const k of list) {
+    const args = rawKeyArgs(id, k)
+    if (!args) continue
+    await tmux(args); sent = true
+  }
+  return sent
+}
 export async function rawKey(id: string, key: string | string[]): Promise<boolean> {
-  const sent = await withRecordLock(id, async () => {
-    const list = (Array.isArray(key) ? key : [key]).filter((k) => typeof k === 'string' && k.length > 0)
-    if (list.length === 0 || !(await alive(id))) return false
-    let sent = false
-    for (const k of list) {
-      const args = rawKeyArgs(id, k)
-      if (!args) continue
-      await tmux(args); sent = true
-    }
-    return sent
-  })
+  const sent = await withRecordLock(id, () => sendRawKeysLocked(id, Array.isArray(key) ? key : [key]))
   // Raw-key remote control is transport fallback, not a lifecycle event. Freshness belongs to the
   // harness turn hooks or a successfully handed-over durable prompt; navigation keys cannot forge working.
   return sent

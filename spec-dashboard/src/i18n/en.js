@@ -54,7 +54,6 @@ export default {
     specs: 'Specs',
     files: 'Files',
     graph: 'Spec graph',
-    collapseAll: 'collapse all spec folders',
   },
   diskTree: {
     loading: 'loading…',
@@ -69,6 +68,7 @@ export default {
     // this is, so the scope is a fact of where the button sits, not a choice the label has to defend.
     searchNodes: 'Search nodes',
     searchSessions: 'Search sessions',
+    // the explorer head's fold door: it folds every open folder in BOTH sections, never the sections
     collapseFolders: 'Collapse folders',
   },
   dockSessions: {
@@ -823,12 +823,7 @@ export default {
     conversationToolbarLabel: 'session conversation toolbar',
     switchToConversation: 'switch to conversation',
     switchToTerminal: 'switch to terminal',
-    executionTitle: 'execution',
-    executionOpen: 'show current execution',
-    executionClose: 'close execution',
     executionRunning: 'running',
-    executionDone: 'done',
-    executionEmpty: 'waiting for a tool step',
     filesTitle: 'session files',
     filesEmptyTitle: 'no posted session files',
     filesListLabel: 'posted session files',
@@ -963,6 +958,8 @@ export default {
     you: 'you',
     inputPlaceholder: 'message the agent…',
     send: 'send',
+    stop: 'stop',
+    stopFailed: 'not stopped — the agent did not take the interrupt',
     copy: 'copy',
     copied: 'copied',
     copyFailed: 'copy failed — selection kept',

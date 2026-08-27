@@ -34,6 +34,9 @@ function useBranch(path, open) {
 
 function Dir({ entry, depth }) {
   const t = useT()
+  // disclosure lives in the explorer's shared ledger ([[file-tree]]'s store), not on the row: closing the
+  // Files section unmounts every row, and a row-local flag forgot each folder the reader had opened. The
+  // same ledger is what lets the dock head's collapse door fold this projection with the spec tree.
   const { open: openDirs } = useDiskTreeState()
   const open = openDirs.has(entry.path)
   const branch = useBranch(entry.path, open)

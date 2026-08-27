@@ -4,6 +4,7 @@ status: active
 hue: 280
 desc: Deliver a prompt through the resolved harness adapter's control channel — fail-loud, never PTY prompt typing — plus hard interrupt and the merge intent.
 related:
+  - spec-cli/src/session-interrupt.api.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/client.ts
@@ -80,10 +81,15 @@ refuses. Those still return a `DispatchResult {ok,error}` that propagates — `P
 one of them: its log still accepts the line, because a message that cannot be delivered must at least leave
 a trace ([[session-timeline]]).
 
-Hard interrupt is a sibling control operation, not a magic prompt. `spex session interrupt` calls the adapter's
-interrupt capability through the backend; [[claude-headless]] sends native `control_request/interrupt` and
-confirms the matching `control_response`. An adapter without that capability refuses loudly. Interrupt never
-falls back to a signal or raw key that could target the wrong process.
+Hard interrupt is a sibling control operation, not a magic prompt. `spex session interrupt` (and the
+Conversation's stop control, [[conversation]]) calls the adapter's interrupt capability through the backend;
+[[claude-headless]] sends native `control_request/interrupt` and confirms the matching `control_response`,
+[[codex-runtime]] interrupts the exact native turn. Without a native capability the TRANSPORT decides, once,
+in the backend: a headless adapter has no keyboard and refuses loudly — interrupt never falls back to a
+signal that could target the wrong process — while a pane-backed TUI has an operator's keyboard by
+definition, so its interrupt is the key that operator would press, `C-c` into its own pane through the
+raw-key channel, and only while the lifecycle is `active` (the same key on an idle TUI is one more Ctrl-C
+from quitting it). Callers never choose the branch; there is one route and one verb.
 
 Before a text prompt reaches that channel, the backend applies the SAME `surface: command` resolver [[launch]]
 uses. A recognized leading `/<preset>` expands to the live plugin body, target placeholders, and remaining

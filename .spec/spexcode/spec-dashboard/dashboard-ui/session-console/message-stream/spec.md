@@ -28,12 +28,32 @@ each read and never becomes transcript state. An adapter first maps its native u
 then considers only later native events: a later user boundary clears the projection. It exposes the last
 displayable assistant working prose in that slice, skips structured/private reasoning, and attaches only its
 following tool steps. TimelineChat renders the note after its durable conversation history, so the current work
-is the newest timeline entry. The click opens a transient execution pop-out whose rows retain the adapter's
-chronological order, with the newest tool action at the bottom. Its fixed dummy vocabulary is:
-`command`, `read`, `write`, `search`, or `tool`, plus `running`/`done`. A row can additionally show one
-backend-sanitized detail. Details start collapsed: a compact row shows only its tool, state, and disclosure
-control, while expanding that row reveals its own allowlisted detail without opening or changing any sibling. A
-same-turn live revision retains expanded rows; a changed displayed turn or working note starts disclosure closed.
+is the newest timeline entry — and it renders it AS CONVERSATION, the LIVE TAIL, never as a card with a door.
+The old entry was a dashed, tinted, one-line button that opened a pop-out: the one piece of chrome on a page
+whose whole grammar is that the turns carry their own structure ([[conversation]]), and it ellipsed the very
+sentence it existed to show. Now the working note is agent prose at the prose size, sitting on the page, and
+each tool step beneath it is the transcript's own tool sentence — the same `.tc-tool` row the folded history
+reads in — so the live tail and the history are one flow. Rows keep the adapter's chronological order with
+the newest action at the bottom. The fixed vocabulary is `command`, `read`, `write`, `search`, or `tool`,
+plus `running`/`done`: a running step wears a small spinner and the word, a done step wears nothing, because
+a finished sentence is its own mark. A row can additionally show one backend-sanitized detail. Details start
+collapsed: a compact row shows only its kind, its label, its state, and its disclosure caret, while expanding
+that row (`aria-expanded`) reveals its own allowlisted detail inline without opening or changing any sibling.
+A same-turn live revision retains expanded rows whatever it revised — a later note, a finished step; only a
+changed displayed turn (or a changed session) starts disclosure closed.
+
+**The tail says nothing the record already said.** The working note is the agent's newest prose in the turn;
+the moment the agent declares that same prose as its status note, the durable timeline draws it as a message
+one row above, and the same sentence twice — once as history, once as "now" — is the duplication a reader
+notices first. So the note is elided when the newest agent message on the record already carries it (either
+side may be the other's prefix, since the backend clips a note at 240 characters), and a tail whose note is
+elided and whose steps are all done draws nothing: the record has the words and the seam has the history.
+
+**What reads as live is a caret and a spinner, nothing more.** While the session is `working` the note ends in
+a blinking caret; a running step spins; a new revision fades in. Reduced motion stills all three. And the
+instant the trace empties — the turn settled — the timeline is asked to refresh at once rather than at its
+next poll, so the declared note lands where the live note just was, which is what makes a transcript-fed page
+feel like a streaming agent.
 The renderer never knows a harness id, transcript path, envelope schema, raw tool arguments, tool result, or
 reasoning text. Its only job is to paint the backend's small projection and choose a familiar icon for the given
 kind.

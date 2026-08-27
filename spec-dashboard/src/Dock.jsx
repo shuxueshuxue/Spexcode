@@ -230,8 +230,15 @@ function DockHead({ mode, specs, sessions }) {
       <span className="dock-head-count">{count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
       {/* The header owns projection doors only; open/closed belongs to the dedicated rail panel switch. */}
       <span className="dock-head-acts">
-        {!sessionMode && <IconButton icon="collapse-all" size={13} className="dock-head-act"
-          label={t('dockModes.collapseFolders')} disabled={folded} onClick={collapseExplorerFolders} />}
+        {/* COLLAPSE FOLDERS is a door of the EXPLORER, not of either section inside it: the Specs tree and
+            the Files tree are two projections of one list, so the one action that folds every open folder
+            sits on the row both share — the same place an editor's explorer keeps it — and clears both
+            ledgers at once ([[file-tree]]). Disabled rather than hidden when nothing is open, so the head
+            keeps one shape. Sections themselves stay as the reader left them; only folders fold. */}
+        {!sessionMode && (
+          <IconButton icon="collapse-all" size={13} className="dock-head-act" label={t('dockModes.collapseFolders')}
+            disabled={folded} onClick={collapseExplorerFolders} />
+        )}
         <button type="button" className="dock-head-act" data-tip={withShortcut(searchLabel, 'graph.search')}
           aria-label={searchLabel} onClick={() => openPalette(sessionMode ? 'sessions' : 'nodes')}>
           <Icon name="search" size={13} />

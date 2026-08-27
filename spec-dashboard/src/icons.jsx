@@ -30,6 +30,8 @@ const ICONS = {
   'circle-dashed': { vb: 16, sw: 1.5, node: <circle cx="8" cy="8" r="7.25" strokeDasharray="2 2" /> },
   ellipsis: { node: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></> },
   'message-square': { node: <><path d="M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3Z" /></> },
+  // the composer's Stop — a plain square (Lucide square): the mark every chat reader knows as "stop generating".
+  stop: { node: <rect x="5" y="5" width="14" height="14" rx="2" />, sw: 2 },
   // the composer's Send — a plain up arrow (Lucide arrow-up), the icon-only send affordance.
   send: { node: <><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>, sw: 2 },
   download: { node: <><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></> },
@@ -145,14 +147,16 @@ const ICONS = {
     vb: 16, sw: 1.5,
     node: <><circle cx="8" cy="8" r="5.5" opacity="0.3" /><path d="M8 2.5 a5.5 5.5 0 0 1 5.5 5.5" /></>,
   },
-  maximize: {
-    vb: 16, sw: 1.4,
-    node: <><path d="M2 6V2h4" /><path d="M14 6V2h-4" /><path d="M2 10v4h4" /><path d="M14 10v4h-4" /></>,
-  },
-  // VS Code's `collapse-all` Codicon — stacked folders with the inner one folded into the outer one.
+  // VS Code's official `collapse-all` Codicon — microsoft/vscode-codicons 0.0.35, src/icons/collapse-all.svg,
+  // CC BY 4.0 — worn by the explorer head's collapse-folders door ([[dock-modes]]): the mark every VS Code
+  // reader already knows, kept as its official fill geometry path for path, the way the Primer pair is.
   'collapse-all': {
     vb: 16, fill: 'currentColor', stroke: 'none',
     node: <><path d="M9 9H4v1h5V9z" /><path fillRule="evenodd" clipRule="evenodd" d="M5 3l1-1h7l1 1v7l-1 1h-2v2l-1 1H3l-1-1V6l1-1h2V3zm1 2h4l1 1v4h2V3H6v2zm4 1H3v7h7V6z" /></>,
+  },
+  maximize: {
+    vb: 16, sw: 1.4,
+    node: <><path d="M2 6V2h4" /><path d="M14 6V2h-4" /><path d="M2 10v4h4" /><path d="M14 10v4h-4" /></>,
   },
   minimize: {
     vb: 16, sw: 1.4,

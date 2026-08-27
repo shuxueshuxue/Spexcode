@@ -13,7 +13,7 @@ scenarios:
     code:
       - spec-dashboard/src/DiskTree.jsx
       - spec-dashboard/src/specTreeState.js
-      - spec-dashboard/src/Dock.jsx
+      - spec-dashboard/test/explorer-collapse-folders.e2e.mjs
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU); the section fold is the

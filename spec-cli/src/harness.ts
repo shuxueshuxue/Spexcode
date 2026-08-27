@@ -332,8 +332,9 @@ export interface Harness {
   // Observe native turn failures that this harness does not expose as a lifecycle hook. The adapter owns the
   // transport subscription; sessions owns observer reconciliation and the active-only lifecycle CAS.
   observeTurnFailures?(rec: HarnessDeliveryRecord, onFailure: (failure: TurnFailure) => void): FailureSubscription
-  // Hard-interrupt the current turn through the harness's native control plane. Optional because a harness
-  // without a confirmed native interrupt must refuse rather than emulate one with a signal or PTY key.
+  // Hard-interrupt the current turn through the harness's native control plane. Optional: a headless harness
+  // without a confirmed native interrupt refuses rather than emulating one with a signal; a pane-backed TUI
+  // without one receives the operator's own interrupt key in its pane (sessions.ts interruptSession).
   interrupt?(rec: HarnessDeliveryRecord): Promise<DispatchResult>
   // Remove this harness's ephemeral runtime transport after stop/close. This is the runtime inverse of
   // launch: rendezvous owners unlink rvSock, claude-headless unlinks its control socket, Codex owns no

@@ -82,6 +82,8 @@
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
   --radius-full: 999px;
+  /* THE CONVERSATION'S ONE MEASURE ([[conversation]]): the column the agent's prose, the person's quotes
+     and the composer all share. One number, so the exchange has a middle to happen in at every width. */
   --conversation-measure: 720px;
   --space-1: 2px;
   --space-2: 4px;
@@ -410,6 +412,7 @@ body {
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+/* a door with nothing behind it stays in place, quieter: the head keeps one shape ([[dock-modes]]) */
 .dock-head-act:disabled { opacity: .38; cursor: default; }
 .dock-head-act-new {
   width: 24px; height: 24px; color: var(--blue); background: transparent;
@@ -2751,6 +2754,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-term-layer .tl-chat { height: 100%; background: var(--paper); }
 .m-timeline {
   flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+  /* the margin grows with the pane (container units, since the pane is the page here), so a wide window
+     reads as a sheet with generous edges and a narrow one keeps every pixel for the words. */
   padding: 0 clamp(16px, 4cqi, 48px) calc(var(--space-7) * 4);
   user-select: text; -webkit-user-select: text;
 }
@@ -2773,10 +2778,13 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   text-align: right; padding-top: 3px; font-family: var(--ui-font); font-size: var(--type-caption);
   color: var(--muted); font-variant-numeric: tabular-nums;
 }
+/* THE MINUTE IS QUIET. A reader scans a conversation by what was said and asks for the time only when
+   they need it, so the per-row time rests at reduced opacity and comes up under the pointer or keyboard
+   focus; it never leaves the DOM. The DAY stays full — it is structure, not a stamp. */
 .m-gut time { opacity: .6; transition: opacity var(--dur-tab); }
 .m-ev:hover .m-gut time, .m-ev:focus-within .m-gut time { opacity: 1; }
-.m-day { position: sticky; top: 0; z-index: 2; align-items: center; padding: 6px 0 4px; background: var(--paper); }
-.m-day .m-gut { padding-top: 0; color: var(--ink2); font-weight: var(--weight-semibold); }
+.m-day { position: sticky; top: 0; z-index: 2; align-items: center; padding: var(--space-4) 0 var(--space-2); background: var(--paper); }
+.m-day .m-gut { padding-top: 0; color: var(--ink2); font-weight: var(--weight-medium); }
 .m-day-rule { border-top: 1px solid var(--edge); }
 .m-ev-glyph { flex: none; }
 /* the inline time a row keeps for itself when the gutter is gone (narrow pane, phone) */
@@ -2799,7 +2807,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   --quote-bg: color-mix(in srgb, var(--panel2) 72%, var(--paper));
   position: relative; justify-self: end; min-width: 0; max-width: 80%;
   padding: var(--space-4) var(--space-5); color: var(--ink2); background: var(--quote-bg);
-  /* the sheet spends ONE radius token; the squared tail corner is a sub-pixel mark, the one exception. */
+  /* the sheet spends the radius token twice over — a softer corner than a control's, because this is a
+     page element and not a button; the squared tail corner is a sub-pixel mark, the one exception. */
   border-radius: calc(var(--radius) * 2); border-top-right-radius: 2px;
 }
 .m-quote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--ui-font); }
@@ -2826,9 +2835,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-seam { min-width: 0; }
 .m-seam-dot { font-size: var(--type-caption); color: var(--muted); opacity: .6; }
 .m-seam-dot.is-live { color: var(--green); opacity: 1; }
+/* one quiet line, no rule across the page: the work between two messages is a footnote to the exchange,
+   said in the caption voice and lit only under the pointer, the way a reading surface folds its thinking. */
 .m-seam-row {
   display: inline-flex; align-items: center; gap: var(--space-3); max-width: 100%; padding: var(--space-2) var(--space-3); margin-left: calc(var(--space-3) * -1);
-  color: var(--muted); background: none; border: 0; border-radius: var(--radius); font-family: var(--ui-font); font-size: var(--type-caption); text-align: left; cursor: pointer;
+  color: var(--muted); background: none; border: 0; border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-caption); text-align: left; cursor: pointer;
 }
 .m-seam-row:hover { color: var(--ink2); background: var(--wash-hover); }
 .m-seam-lead { flex: none; font-variant-numeric: tabular-nums; }
@@ -2839,8 +2851,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-transcript-state, .m-transcript-empty, .m-transcript-truncated { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
 /* the harness execution entry sits in the cell like any message; an empty trace leaves no row behind */
-.m-ev-trace:not(:has(.m-execution-trace)) { display: none; }
-.m-ev-trace .m-execution-entry { width: 100%; margin: 0; }
+.m-ev-trace:not(:has(.m-execution)) { display: none; }
 
 /* A NARROW PANE HAS NO RULER: the gutter goes and each row keeps its own inline time; the day still leads
    its rule. The pane, not the viewport, decides — a side pane on a desktop is as narrow as a phone. */
@@ -2911,31 +2922,24 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font: inherit; font-family: var(--mono); font-size: var(--type-meta);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-/* Harness execution is a compact conversation entry, not a raw transcript view. */
-.m-execution-entry {
-  display: flex; align-items: center; gap: 8px; width: calc(100% - 14px); margin: 10px 0 0 14px; padding: 7px 9px;
-  overflow: hidden; color: var(--ink2); font: inherit; font-size: var(--type-control); text-align: left;
-  background: color-mix(in srgb, var(--blue) 5%, var(--paper)); border: 1px dashed color-mix(in srgb, var(--blue) 45%, var(--line)); border-radius: var(--radius); cursor: pointer;
+/* THE LIVE TAIL ([[message-stream]]): the current turn drawn as conversation, not as a card. The working note
+   is agent prose at the prose size; the steps are the transcript's own tool sentences (`.tc-tool*`), so the
+   live tail and the folded history are one grammar. Live is said by a caret at the note's end and a spinner
+   on the running step — nothing else moves, and reduced motion stills both. A revision fades in. */
+.m-execution { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.m-execution-note { color: var(--ink2); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; animation: rise var(--dur-rise) ease; }
+.m-execution.is-live .m-execution-note::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-execution-caret 1s steps(2, start) infinite; }
+@keyframes m-execution-caret { to { visibility: hidden; } }
+.m-execution-steps { list-style: none; margin: 0; padding: 0; }
+.m-execution-kind { flex: none; align-self: center; color: var(--muted); }
+.m-execution-step.is-running .tc-tool-verb { color: var(--ink2); }
+.m-execution-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
+.m-execution-spin { animation: m-execution-spin 1s linear infinite; }
+@keyframes m-execution-spin { to { transform: rotate(360deg); } }
+.m-execution-detail { margin: 2px 0 4px 18px; color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .m-execution-note, .m-execution.is-live .m-execution-note::after, .m-execution-spin { animation: none; }
 }
-.m-execution-entry:hover { background: color-mix(in srgb, var(--blue) 9%, var(--paper)); border-color: var(--blue); }
-.m-execution-entry span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-execution-entry svg { flex: none; color: var(--blue); }
-.m-execution-entry svg:last-child { color: var(--muted); }
-.execution-trace-modal { width: min(520px, calc(100vw - 28px)); }
-.execution-note { padding: 0 0 10px; color: var(--ink2); font-size: var(--type-body); line-height: var(--leading-relaxed); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.execution-steps { display: flex; flex-direction: column; gap: 2px; padding: 10px 0 0; margin: 0; list-style: none; }
-.execution-step { min-height: 32px; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); border-bottom: 1px solid var(--line); }
-.execution-step:last-child { border-bottom: 0; }
-.execution-step-toggle, .execution-step-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 7px; color: inherit; font: inherit; text-align: left; background: transparent; border: 0; }
-.execution-step-toggle { cursor: pointer; }
-.execution-step-toggle:hover { background: color-mix(in srgb, var(--blue) 5%, transparent); }
-.execution-step-toggle > svg:first-child, .execution-step-row > svg:first-child { color: var(--blue); }
-.execution-step-toggle > svg:last-child { color: var(--muted); }
-.execution-step-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.execution-step-detail { padding: 0 30px 8px; overflow-wrap: anywhere; color: var(--muted); font-size: var(--type-caption); line-height: var(--leading-relaxed); }
-.execution-step-state { color: var(--muted); font-size: var(--type-caption); }
-.execution-step.running .execution-step-state { color: var(--orange); }
-.execution-empty { padding: 8px 7px; color: var(--muted); font-size: var(--type-control); }
 
 /* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */
 .rich-text { min-width: 0; max-width: 100%; overflow-x: auto; white-space: normal; overflow-wrap: anywhere; }
@@ -2974,11 +2978,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-composer {
   position: absolute; left: 50%; bottom: var(--space-5); z-index: 4;
   width: min(var(--conversation-measure), calc(100% - var(--space-7))); transform: translateX(-50%);
-  padding: var(--space-4) var(--space-5); border: 1px solid var(--edge); border-radius: var(--radius);
-  background: color-mix(in srgb, var(--panel2) 90%, var(--paper));
+  padding: var(--space-4) var(--space-5); border: 1px solid var(--line); border-radius: var(--radius);
+  /* PAPER, NOT A PANEL: the card is the page's own ground with a hairline around it, so the composer reads
+     as part of the sheet the conversation is printed on rather than a control bar laid over it. The blur
+     keeps the flow legible as it scrolls under; the one elevation token says only that it floats. */
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
 }
-.m-composer:focus-within { border-color: var(--blue); }
+.m-composer:focus-within { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .m-composer > .m-senderr { padding: 0 0 var(--space-3); }
 .m-composer-line { display: flex; align-items: flex-end; gap: var(--space-4); }
 .m-input {
@@ -2988,13 +2995,25 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .m-input::placeholder { color: var(--muted); }
 .m-input:disabled { color: var(--muted); cursor: default; }
+/* the send is the ACCENT SQUARE every composer shares — a filled mark while there is something to send,
+   the same square gone quiet while there is not, so the field's one action is read by shape, not by a word. */
 .m-send {
-  flex: none; align-self: flex-end; height: 26px; padding: 0 var(--space-5);
-  font-family: var(--ui-font); font-size: var(--type-meta); font-weight: var(--weight-medium);
-  color: var(--blue); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
+  flex: none; align-self: flex-end; height: 26px; width: 26px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--paper); background: var(--blue); border: 0; border-radius: var(--radius); cursor: pointer;
+  transition: background var(--dur-tab), color var(--dur-tab);
 }
-.m-send:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 12%, transparent); }
-.m-send:disabled { opacity: .45; cursor: default; }
+.m-send:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 85%, var(--ink2)); }
+.m-send:disabled { color: var(--muted); background: var(--wash-active); cursor: default; }
+/* STOP wears the same square as send, in the quiet wash: present only while the agent works ([[conversation]]) */
+.m-stop {
+  flex: none; align-self: flex-end; height: 26px; width: 26px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink2); background: var(--wash-active); border: 0; border-radius: var(--radius); cursor: pointer;
+  transition: background var(--dur-tab), color var(--dur-tab);
+}
+.m-stop:hover:not(:disabled) { color: var(--paper); background: var(--orange); }
+.m-stop:disabled { opacity: .45; cursor: default; }
 .m-coldline {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control);
@@ -3614,7 +3633,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* two panes that both scroll on their own; only the editor inside gets to be tall */
 .diff-review-body { display:grid; grid-template-columns:minmax(220px, 300px) minmax(0, 1fr); flex:1; min-height:0; }
 .diff-file-panel { border-right:1px solid var(--line); overflow:auto; padding-bottom:8px; background:color-mix(in srgb, var(--line) 10%, var(--paper)); }
-.diff-file-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:30px; padding:0 8px 0 10px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--type-caption); }
 .diff-file-group { position:sticky; top:0; z-index:1; padding:6px 10px 4px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 22%, var(--paper)); color:var(--muted); font-size:var(--type-caption); }
 .diff-tree-file { justify-content:flex-start; }
 .diff-tree-file .ft-label { flex:1; }

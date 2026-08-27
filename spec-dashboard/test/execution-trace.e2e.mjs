@@ -111,6 +111,19 @@ try {
   assert.equal(await tail.locator('.m-execution-detail').textContent(), 'path: src/trace.ts · lines: 1-60')
   assert.equal(await rows.nth(1).locator('.m-execution-running').count(), 0, 'the finished step lost its running mark')
 
+  // ...even when the revision replaces the note itself: the turn is the same, so the reader's disclosure stays
+  await page.evaluate(() => window.executionSource.emit('execution', {
+    revision: 'fixture-1c', turnId: 'fixture-turn-1', workingNote: 'Inspecting the live execution trace, then testing',
+    steps: [
+      { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done' },
+      { id: 'run', kind: 'command', label: 'exec_command', detail: 'cmd: npm test', state: 'done' },
+    ],
+  }))
+  await page.waitForTimeout(100)
+  assert.equal(await tail.locator('.m-execution-note').textContent(), 'Inspecting the live execution trace, then testing')
+  assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true', 'a same-turn note change keeps the open row')
+  assert.equal(await tail.locator('.m-execution-detail').textContent(), 'path: src/trace.ts · lines: 1-60')
+
   await toggles.nth(1).click()
   assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true')
   assert.equal(await toggles.nth(1).getAttribute('aria-expanded'), 'true')

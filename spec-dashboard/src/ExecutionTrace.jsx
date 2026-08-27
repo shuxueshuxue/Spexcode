@@ -32,8 +32,10 @@ export default function ExecutionTrace({ sessionId, active, live = false, lastSa
     setExecution(null)
     return subscribeSessionExecution(sessionId, setExecution)
   }, [sessionId, active])
-  // a same-turn revision keeps what the reader opened; a new turn or a new note starts closed
-  useEffect(() => setExpanded(new Set()), [execution?.turnId, execution?.workingNote])
+  // a same-turn revision keeps what the reader opened, whatever it revised — a later note, a step that
+  // finished; only a changed turn (or a changed session) starts disclosure closed. Steps a new note brings
+  // carry new ids, so they start closed by construction without wiping what is still on screen.
+  useEffect(() => setExpanded(new Set()), [sessionId, execution?.turnId])
   // The instant the trace empties, the turn has settled and the durable record most likely just gained the
   // note that replaces it — so the timeline is asked to catch up now, not at its next poll.
   const hadNote = useRef(false)

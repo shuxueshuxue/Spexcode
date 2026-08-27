@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 
 // [[dispatch]]: `POST /api/sessions/:id/interrupt` is ONE verb whose transport branch is decided in the
 // backend. A pane-backed TUI without a native interrupt receives the operator's own key — C-c into its own
@@ -39,6 +40,15 @@ async function stop(child: ChildProcess): Promise<void> {
   await Promise.race([once(child, 'exit'), new Promise((resolve) => setTimeout(resolve, 5_000))])
 }
 const tmux = (socket: string, ...args: string[]) => spawnSync('tmux', ['-L', socket, ...args], { encoding: 'utf8' })
+
+// The live proof below cannot force a declaration between the lifecycle read and the send; this pins the
+// shape that makes such a window impossible: one record lock holds both, and no send happens outside it.
+test('interrupt reads the lifecycle and sends the pane key under one record lock', () => {
+  const source = readFileSync(join(here, 'sessions.ts'), 'utf8')
+  const body = source.match(/export async function interruptSession[\s\S]*?\n\}\n/)?.[0] || ''
+  assert.match(body, /return withRecordLock\(id, async \(\) => \{[\s\S]*rec\.status !== 'active'[\s\S]*sendRawKeysLocked\(id, \['C-c'\]\)[\s\S]*\}\)\n\}/)
+  assert.doesNotMatch(body, /await rawKey\(/)
+})
 
 test('YATU: interrupt reaches a pane-backed TUI as its own key, and refuses where no keyboard or turn exists', { timeout: 90_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-interrupt-api-'))

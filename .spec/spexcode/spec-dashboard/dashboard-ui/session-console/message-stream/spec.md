@@ -39,8 +39,8 @@ plus `running`/`done`: a running step wears a small spinner and the word, a done
 a finished sentence is its own mark. A row can additionally show one backend-sanitized detail. Details start
 collapsed: a compact row shows only its kind, its label, its state, and its disclosure caret, while expanding
 that row (`aria-expanded`) reveals its own allowlisted detail inline without opening or changing any sibling.
-A same-turn live revision retains expanded rows; a changed displayed turn or working note starts disclosure
-closed.
+A same-turn live revision retains expanded rows whatever it revised — a later note, a finished step; only a
+changed displayed turn (or a changed session) starts disclosure closed.
 
 **The tail says nothing the record already said.** The working note is the agent's newest prose in the turn;
 the moment the agent declares that same prose as its status note, the durable timeline draws it as a message

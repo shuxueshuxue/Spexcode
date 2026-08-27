@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/session-application",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "publishConfig": { "access": "public" },
   "type": "module",
   "description": "Adopter-owned composition of session protocol and topology transactions.",
@@ -16,10 +16,10 @@
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/session-events": "0.6.7",
-    "@spexcode/session-protocol": "0.6.7",
-    "@spexcode/session-runtime": "0.6.7",
-    "@spexcode/session-topology": "0.6.7"
+    "@spexcode/session-events": "0.6.8",
+    "@spexcode/session-protocol": "0.6.8",
+    "@spexcode/session-runtime": "0.6.8",
+    "@spexcode/session-topology": "0.6.8"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

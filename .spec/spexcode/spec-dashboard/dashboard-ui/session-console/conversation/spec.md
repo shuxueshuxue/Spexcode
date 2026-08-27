@@ -101,7 +101,11 @@ not to the current transcript interval, so a later event that closes the seam re
 keeping an already-open seam open and an untouched one closed. The timeline body is selectable text:
 Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and
 indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an
-accidental editable surface.
+accidental editable surface. The timeline's own selection is a browser-painted highlight over a Range, never a
+document Selection, so the composer caret survives it — and because the cancelled press that keeps that caret
+also cancels the browser's click-to-collapse, every press the timeline owns retires BOTH the highlight and any
+document Selection lying in the timeline (one the browser made on a fourth quick click, or on a drag begun on a
+control). No selection outlives the next click; a press outside selectable text still counts as the timeline's.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. 
 

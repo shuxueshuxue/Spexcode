@@ -463,12 +463,27 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const timelineRangeRef = useRef(null)
   const copyStatusTimerRef = useRef(null)
   const transcriptNowRef = useRef(Date.now())
+  const skewRef = useRef(0)   // server clock minus ours, re-read on every timeline response
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
-    setNow(Date.now())
+    if (Number.isFinite(d?.serverNow)) skewRef.current = d.serverNow - Date.now()
+    setNow(Date.now() + skewRef.current)
     if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
   }), [s.id])
+  // THE LIVE SEAM COUNTS EVERY SECOND. The record only moves on a poll, so between polls the tail seam
+  // used to sit on one number for eight seconds and then jump. The tick is the browser's, the clock is the
+  // server's (its Date header, re-read each poll), and each tick recomputes from the seam's own start — so
+  // the count never drifts, agrees with the durations the record will write, and stops the moment the
+  // status leaves `working` because the interval exists only while it is.
+  const ticking = active && footerState === 'live' && s.status === 'working'
+  useEffect(() => {
+    if (!ticking) return undefined
+    const tick = () => { if (document.visibilityState !== 'hidden') setNow(Date.now() + skewRef.current) }
+    tick()
+    const iv = setInterval(tick, 1000)
+    return () => clearInterval(iv)
+  }, [ticking])
   useEffect(() => {
     if (!active) return undefined
     setEvents(null); setDetail(null); setCopyStatus(null); setExpandedSeams(new Set()); setTranscripts(new Map()); transcriptNowRef.current = Date.now(); setNow(transcriptNowRef.current); pinnedRef.current = true
@@ -768,7 +783,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       const transcript = transcripts.get(seamId)
       const expanded = expandedSeams.has(seamId)
       const ticking = item.open && footerState === 'live'
-      const lead = ticking ? `${t('status.working')} · ${elapsed(now - item.from)}`
+      const lead = ticking ? `${t('status.working')} · ${elapsed(Math.max(0, now - item.from))}`
         : item.open ? t('status.working')
           : `${t('mobile.worked')} ${elapsed(item.to - item.from)}`
       const calls = transcript?.state === 'ready'

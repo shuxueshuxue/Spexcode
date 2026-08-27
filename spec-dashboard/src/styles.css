@@ -2849,8 +2849,20 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    in view. The live dot in the gutter is the page's only moving thing. */
 .m-ev-seam { padding: var(--space-1) 0; }
 .m-seam { min-width: 0; }
-/* a live seam is said by its own words turning green — no dot in the gutter, nothing beside the sentence */
-.m-seam-row.is-live .m-seam-lead { color: var(--green); }
+/* a live seam is said by its own words turning green — no dot in the gutter, nothing beside the sentence —
+   and by a slow sweep of light across them: the page's one moving thing while the agent works. The words
+   count up every second between polls (TimelineChat anchors the clock to the server's Date header), so the
+   number and the light agree that something is happening now. Reduced motion keeps the green and drops the sweep. */
+.m-seam-row.is-live .m-seam-lead {
+  color: var(--green);
+  background: linear-gradient(90deg, var(--green) 0 38%, color-mix(in srgb, var(--green) 40%, var(--ink2)) 50%, var(--green) 62% 100%);
+  background-size: 240% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: m-seam-shimmer 2.4s linear infinite;
+}
+@keyframes m-seam-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .m-seam-row.is-live .m-seam-lead { animation: none; background: none; -webkit-text-fill-color: currentColor; }
+}
 /* one quiet line, no rule across the page: the work between two messages is a footnote to the exchange,
    said in the caption voice and lit only under the pointer, the way a reading surface folds its thinking. */
 .m-seam-row {
@@ -2895,8 +2907,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .tc-say-text { max-width: 100%; color: var(--ink); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
 /* the work segment's one line. It is a full-width rule rather than a sentence because it is a SEAM in the
    conversation — everything that produced the answer, closed. The chevron trails the count and the kinds,
-   the same bounded sentence shape the tool rows and the seam wear.
-.tc-work { display: flex; flex-direction: column; gap: 8px; }
+   the same bounded sentence shape the tool rows and the seam wear. */
+/* the fold row is a bounded sentence, so the column does not stretch it; the body below keeps the width */
+.tc-work { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .tc-work-row {
   display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; padding: var(--space-2) var(--space-3); margin-left: calc(var(--space-3) * -1);
   color: var(--muted); background: none; border: 0; border-radius: var(--radius);
@@ -2907,7 +2920,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .tc-work-caret, .m-seam-caret { align-self: center; margin-left: 1px; }
 .tc-work-lead { flex: none; color: var(--ink2); font-weight: var(--weight-medium); }
 .tc-work-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-work-body { display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--edge); }
+.tc-work-body { align-self: stretch; display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--edge); }
 .tc-tools { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0; max-width: 100%; }
 .tc-tool { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 100%; }
 /* a SENTENCE, not a card: inline-flex so it is exactly as wide as what it says. A dozen of these read as a
@@ -2933,7 +2946,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .tc-tool-kids { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--edge); }
 .tc-tool-out {
   max-width: 100%; max-height: 220px; overflow: auto; margin: 0 0 2px; padding: 7px 9px;
-  color: var(--ink); background: var(--term-bg); border-radius: var(--radius);
+  /* a quiet well on the PAGE's ladder, not the terminal's fixed dark: this is quoted output on paper, and
+     --term-bg with a theme-following --ink read as dark-on-dark in every light preset. */
+  color: var(--ink); background: var(--panel2); border-radius: var(--radius);
   font: inherit; font-family: var(--mono); font-size: var(--type-meta);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }

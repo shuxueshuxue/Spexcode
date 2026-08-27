@@ -1,7 +1,7 @@
 // [[file-tree]] `the-tree-opens-the-branch-the-address-names-and-remembers-it` and
 // `collapse-folders-is-one-door-on-the-explorer-head`, [[disk-tree]] `a-folder-stays-open-across-the-files-fold`,
 // and [[conversation]] `the-composer-is-paper-with-one-send-mark` + `the-conversation-reads-as-paper` +
-// `stop-is-one-square-while-working`, measured
+// `stop-is-one-square-while-working` + `the-live-seam-counts-and-glows`, measured
 // through the running dashboard in a real browser.
 //
 //   BASE=http://127.0.0.1:5198 OUT=/path/to/evidence node spec-dashboard/test/explorer-collapse-folders.e2e.mjs
@@ -294,11 +294,62 @@ if (working) {
   record('stop.pressed', { interrupts })
   assert.equal(interrupts.length, 1)
   assert.ok(interrupts[0].includes(`/api/sessions/${working.id}/interrupt`))
+  // the live seam counts every second and glows — on whichever working session has an open tail seam now
+  let liveLead = page.locator('.tl-chat:visible .m-seam-row.is-live .m-seam-lead')
+  for (const candidate of (graph.sessions || []).filter((s) => s.liveness !== 'offline' && s.status === 'working' && s.id !== working.id)) {
+    if (await liveLead.count()) break
+    await page.goto(`${BASE}/#/sessions/${candidate.id}?surface=conversation`)
+    await settled('.m-composer:visible')
+    liveLead = page.locator('.tl-chat:visible .m-seam-row.is-live .m-seam-lead')
+  }
+  if (await liveLead.count()) {
+    const seconds = (text) => { const m = /(\d+)s\b/.exec(text); return m ? Number(m[1]) : null }
+    const first = await liveLead.textContent(); await page.waitForTimeout(2100); const second = await liveLead.textContent()
+    const anim = await liveLead.evaluate((el) => getComputedStyle(el).animationName)
+    record('seam.live', { first, second, anim })
+    assert.ok(first.startsWith('working') && seconds(first) !== null && seconds(second) !== null, 'the live seam reads working · Ns')
+    assert.ok(Math.abs((seconds(second) - seconds(first) + 60) % 60 - 2) <= 1, 'the count advanced ~2s without a poll')
+    assert.equal(anim, 'm-seam-shimmer')
+  } else record('seam.live', { skipped: 'no working session has an open tail seam right now' })
 } else record('stop.working', { skipped: 'no working pane-backed session on the board' })
 await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)
 await settled('.m-composer:visible')
-record('stop.asking', { session: live.id, status: live.status, stops: await page.locator('.m-stop:visible').count() })
+record('stop.asking', { session: live.id, status: live.status, stops: await page.locator('.m-stop:visible').count(), liveSeams: await page.locator('.tl-chat:visible .m-seam-row.is-live').count() })
 assert.equal(facts['stop.asking'].stops, 0, 'no stop control while nothing is working')
+assert.equal(facts['stop.asking'].liveSeams, 0, 'an asking session marks no seam live')
+
+// the work fold is a sentence and the tool output is a well on the theme's ladder, dark and light alike
+const foldFacts = {}
+for (const theme of ['minimal', 'things']) {
+  await page.evaluate((t) => { localStorage.setItem('spexcode.theme', t); document.documentElement.dataset.theme = t }, theme)
+  await page.waitForTimeout(150)
+  const seams = page.locator('.tl-chat:visible .m-seam-row')
+  for (let i = await seams.count() - 1; i >= 0 && !(await page.locator('.tl-chat:visible .tc-tool-row.is-openable').count()); i--) {
+    if ((await seams.nth(i).getAttribute('aria-expanded')) !== 'true') { await seams.nth(i).click(); await page.waitForTimeout(700) }
+  }
+  const fold = page.locator('.tl-chat:visible .tc-work-row').first()
+  if (await fold.count() && (await fold.getAttribute('aria-expanded')) !== 'true') { await fold.click(); await page.waitForTimeout(200) }
+  const tool = page.locator('.tl-chat:visible .tc-tool-row.is-openable').first()
+  if (await tool.count() && (await tool.getAttribute('aria-expanded')) !== 'true') { await tool.click(); await page.waitForTimeout(200) }
+  foldFacts[theme] = await page.evaluate(() => {
+    const probe = document.createElement('div'); probe.style.background = 'var(--panel2)'; document.body.append(probe)
+    const panel2 = getComputedStyle(probe).backgroundColor; probe.remove()
+    const fold = document.querySelector('.tl-chat .tc-work-row'); const out = document.querySelector('.tl-chat .tc-tool-out')
+    // a flex container blockifies an inline-flex child (computed `flex`), so the row is judged by what the UA
+    // default button would have painted instead: a grey fill, no radius, 1px 6px padding
+    const fs = fold ? getComputedStyle(fold) : null
+    return { fold: fs ? { background: fs.backgroundColor, radius: fs.borderRadius, padding: fs.padding, bounded: fold.getBoundingClientRect().width < fold.parentElement.getBoundingClientRect().width } : null,
+      outBackground: out ? getComputedStyle(out).backgroundColor : null, panel2 }
+  })
+}
+record('fold.themes', foldFacts)
+for (const [theme, f] of Object.entries(foldFacts)) {
+  if (f.fold) assert.ok(f.fold.background === 'rgba(0, 0, 0, 0)' && f.fold.radius === '6px' && f.fold.bounded, `${theme}: the work fold is a styled, bounded sentence, not a default button`)
+  if (f.outBackground !== null) assert.equal(f.outBackground, f.panel2, `${theme}: the tool output sits on the theme's --panel2`)
+}
+await page.evaluate(() => { localStorage.removeItem('spexcode.theme'); document.documentElement.dataset.theme = 'minimal' })
+await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)
+await settled('.m-composer:visible')
 
 await page.setViewportSize({ width: 760, height: 900 })
 await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .m-ev-text')

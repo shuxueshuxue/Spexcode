@@ -151,6 +151,19 @@ test('the theme picker paints each preset with the palette the sheet actually re
   }
 })
 
+// A block comment that forgets its `*/` swallows every rule up to the next comment and the browser says
+// nothing — the work-fold row once rendered as a bare grey <button> that way. Comments must close before
+// the next one opens.
+test('every block comment closes before the next opens', () => {
+  let depth = 0
+  for (const match of css.matchAll(/\/\*|\*\//g)) {
+    const line = css.slice(0, match.index).split('\n').length
+    if (match[0] === '/*') { assert.equal(depth, 0, `unterminated comment before line ${line}`); depth = 1 }
+    else { assert.equal(depth, 1, `stray */ at line ${line}`); depth = 0 }
+  }
+  assert.equal(depth, 0, 'the sheet ends inside a comment')
+})
+
 test('seams and group heads use one divider rule', () => {
   assert.match(css, /--divider-rule:\s*1px solid var\(--edge\);/)
   assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)

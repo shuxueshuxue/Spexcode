@@ -58,8 +58,10 @@ reader decide whether to open, while repeating the count they just read is noise
 
 **A tool call is a SENTENCE, not a card**: a past-tense verb, its target, and the size of what came back,
 `inline-flex` and bounded so a long shell command cannot stretch it into a full-width bar. Twelve of them
-read as a list of things that happened; twelve boxes read as boxes. The verb is the whole status claim,
-because the record carries no per-tool success, failure, or duration — a tick or a badge here would be
+read as a list of things that happened; twelve boxes read as boxes. Its output, when opened, sits in a quiet well
+on the page's own ladder (`--panel2`), never the terminal's fixed dark — that is quoted output on paper,
+and a fixed dark well under a theme-following ink read as dark-on-dark in every light preset. The verb is
+the whole status claim, because the record carries no per-tool success, failure, or duration — a tick or a badge here would be
 invented, and nothing is shown that was not measured. A tool whose name has no verb keeps its name; a row
 that says nothing is worse than one naming a tool we have no word for. Grouping never infers what a call
 DID: a shell command parsed as harmless could hide a write inside a fold, so runs gather by position and
@@ -94,8 +96,13 @@ exactly those three:
   interval (the transcript API already reads by interval; nothing server-side changes), opened directly
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
-  `working · 4m 12s` in the live green and is the page's only moving thing — no dot in the gutter, nothing
-  beside the sentence, the words themselves say it; the tail seam of a dead session says `working` — the
+  `working · 4m 12s` in the live green with a slow sweep of light across the words, and is the page's only
+  moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. Its number
+  COUNTS EVERY SECOND: the record only moves on a poll, so between polls the browser ticks, but the clock
+  is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
+  recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record
+  will write, and stops the instant the status leaves `working` because the ticker exists only while it
+  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep; the tail seam of a dead session says `working` — the
   record's last word — with no duration invented for a stretch nothing closed.
 - An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
   rather than lasted.

@@ -97,6 +97,20 @@ scenarios:
       aria-label, disabled while the draft is empty and enabled once it is not. Enter posts `kind:text` with
       `replyVia:note` and the typed text, and clears the draft on success. At 760px the gutter is gone and
       times are inline; at 390px the composer sits above the tab bar. No page errors.
+  - name: the-live-seam-counts-and-glows
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/data.js, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
+    description: >-
+      In a real browser open the Conversation of a `working` pane session and of an `asking` one. On the
+      working one read the tail seam's lead twice, two seconds apart, and its animation; on the asking one
+      read whether any seam is marked live. Open a work fold and a tool output on any session that has them,
+      in the dark and in a light preset, and read the fold row's display and the output well's background
+      against the theme's `--panel2`.
+    expected: >-
+      The working seam reads `working · Ns` and N advances by two between the reads without a poll; its lead
+      carries the shimmer animation; the asking session marks no seam live. The work-fold row is an
+      inline-flex sentence (not a default button) and the tool output's background is the theme's `--panel2`
+      in both presets. No page errors.
   - name: stop-is-one-square-while-working
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]

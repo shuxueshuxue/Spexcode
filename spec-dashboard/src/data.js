@@ -476,7 +476,11 @@ export const sessionUrl = (id, ...parts) =>
 export async function loadSessionTimeline(id) {
   const res = await apiFetch(sessionUrl(id, 'timeline'), { cache: 'no-store' })
   if (!res.ok) return null
-  return res.json()
+  const body = await res.json()
+  // the server's clock, from the response's own Date header (1s resolution): the live seam counts against
+  // it, so a dashboard on another machine never drifts from the record's timestamps.
+  const serverNow = Date.parse(res.headers?.get?.('date') || '')
+  return Number.isFinite(serverNow) ? { ...body, serverNow } : body
 }
 
 // A status row is the durable index; its explicit interval addresses the native payload lazily.

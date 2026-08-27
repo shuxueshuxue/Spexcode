@@ -27,6 +27,19 @@ const pageErrors = []
 page.on('pageerror', (error) => pageErrors.push(error.message))
 const facts = {}
 const record = (key, value) => { facts[key] = value; console.log(key, JSON.stringify(value)) }
+// A screenshot is evidence only of a SETTLED page: no spinner, no "loading…" placeholder anywhere visible,
+// and whatever the shot is about already in the DOM. Every capture below goes through this gate.
+const settled = async (selector = null) => {
+  if (selector) await page.waitForSelector(selector, { timeout: 20000 })
+  await page.waitForFunction(() => {
+    const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
+    const spinners = [...document.querySelectorAll('.spinner, .pane-loading')].filter(visible)
+    const placeholders = [...document.querySelectorAll('.m-empty, .ft-note, .m-transcript-state')]
+      .filter((el) => visible(el) && /loading|加载/i.test(el.textContent))
+    return spinners.length === 0 && placeholders.length === 0
+  }, null, { timeout: 20000 })
+  await page.waitForTimeout(400)
+}
 
 const graph = await (await fetch(`${BASE}/api/graph`)).json()
 const live = (graph.sessions || []).find((s) => s.liveness !== 'offline' && s.status === 'asking')
@@ -37,8 +50,7 @@ assert.ok(live, 'the live board needs one online session')
 // the tree is a view of the address: routing to a NESTED node opens its ancestors, marks the row, and
 // leaves the node itself closed; folding the dock away and back changes nothing.
 await page.goto(`${BASE}/#/spec/disk-tree`)
-await page.waitForSelector('.dock .ft-node.on', { timeout: 20000 })
-await page.waitForTimeout(500)
+await settled('.dock .ft-node.on')
 const readReveal = () => page.evaluate(() => {
   const rows = [...document.querySelectorAll('.dock .ft-node')]
   const on = document.querySelector('.dock .ft-node.on')
@@ -53,6 +65,7 @@ assert.equal(reveal.focused, 'disk-tree')
 assert.equal(reveal.painted, true)
 assert.equal(reveal.parentCaret, '▾', 'the ancestor opened')
 assert.equal(reveal.ownCaret, '▸', 'the node itself stays closed')
+await settled()
 await page.locator('.dock').screenshot({ path: `${OUT}/explorer-reveal.png` })
 const railFold = page.locator('button[aria-pressed][aria-label="Collapse sidebar"]')
 await railFold.click(); await page.waitForTimeout(450)
@@ -97,6 +110,7 @@ assert.equal(facts['explorer.door'].disabledBefore, false)
 assert.equal(facts['explorer.door'].onDockHead, true)
 assert.equal(facts['explorer.door'].leftOfSearch, true)
 assert.equal(inSectionHead, 0, 'no control is nested inside a section head')
+await settled('.dock .ft-dir[aria-expanded="true"] + *')
 await page.locator('.dock').screenshot({ path: `${OUT}/explorer-open.png` })
 
 await door.click()
@@ -113,6 +127,7 @@ assert.equal(facts['explorer.afterCollapse'].filesHead, 'true')
 assert.ok(facts['explorer.afterCollapse'].rootsVisible > 0, 'roots stay listed')
 assert.equal(facts['explorer.afterCollapse'].route, routeBefore)
 assert.equal(facts['explorer.afterCollapse'].doorDisabled, true)
+await settled()
 await page.locator('.dock').screenshot({ path: `${OUT}/explorer-collapsed.png` })
 await door.hover()
 await page.waitForTimeout(250)
@@ -161,8 +176,7 @@ const measureComposer = async () => page.evaluate(() => {
   }
 })
 await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)
-await page.waitForSelector('.tl-chat .m-ev', { timeout: 20000 })
-await page.waitForTimeout(1200)
+await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .m-ev-text')
 const desktop = await measureComposer()
 record('composer.desktop', desktop)
 assert.equal(desktop.send.tag, 'BUTTON')
@@ -190,7 +204,7 @@ assert.deepEqual(sent[0], { kind: 'text', text: 'YATU composer probe — first l
 assert.equal(facts['composer.sent'].draftAfter, '')
 
 await page.setViewportSize({ width: 760, height: 900 })
-await page.waitForTimeout(500)
+await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .m-ev-text')
 const narrow = await measureComposer()
 record('composer.narrow', narrow)
 assert.equal(narrow.gutters, 0, 'no ruler under the container threshold')
@@ -200,17 +214,18 @@ await page.screenshot({ path: `${OUT}/conversation-narrow.png` })
 
 await page.setViewportSize({ width: 390, height: 844 })
 await page.goto(`${BASE}/#/sessions/${live.id}`)
-await page.waitForSelector('.m-app .tl-chat .m-composer', { timeout: 20000 })
-await page.waitForTimeout(800)
+await settled('.m-app .tl-chat .m-ev .m-ev-note, .m-app .tl-chat .m-ev .m-ev-text')
 const phone = await page.evaluate(() => {
   const composer = document.querySelector('.m-app .tl-chat .m-composer').getBoundingClientRect()
   const tabbar = document.querySelector('.m-app .m-tabbar')?.getBoundingClientRect()
   const send = document.querySelector('.m-app .tl-chat .m-send')
-  return { composerBottom: Math.round(composer.bottom), tabbarTop: tabbar ? Math.round(tabbar.top) : null, width: Math.round(composer.width), sendSvg: !!send?.querySelector('svg') }
+  return { composerBottom: Math.round(composer.bottom), tabbarTop: tabbar ? Math.round(tabbar.top) : null, width: Math.round(composer.width), sendSvg: !!send?.querySelector('svg'),
+    messageRows: document.querySelectorAll('.m-app .tl-chat .m-ev').length, placeholder: document.querySelector('.m-app .tl-chat .m-empty')?.textContent || null }
 })
 record('composer.phone', phone)
 assert.ok(phone.tabbarTop === null || phone.composerBottom <= phone.tabbarTop, 'the composer sits above the tab bar')
 assert.equal(phone.sendSvg, true)
+assert.ok(phone.messageRows > 0 && phone.placeholder === null, 'the phone shot shows the conversation, not a placeholder')
 await page.screenshot({ path: `${OUT}/conversation-phone.png` })
 
 record('pageErrors', pageErrors)

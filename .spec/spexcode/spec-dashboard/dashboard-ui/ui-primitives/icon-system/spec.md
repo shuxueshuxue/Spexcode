@@ -40,9 +40,10 @@ the accessible name impossible to forget.
   the mark inherits `currentColor` (readable in both themes), a two-tone original keeping its second
   tone as an opacity step. The console's `corner-up-left` mark names the session-tree move back to top
   level, retaining the same stroke vocabulary rather than a component-local arrow. The explorer head's
-  `collapse-all` mark ([[dock-modes]]) — two stacked sheets, the front one folded to a minus, the shape
-  every editor's explorer already uses for that action — is drawn here on the 16-grid in this contract,
-  not copied from any editor's icon set.
+  `collapse-all` mark ([[dock-modes]]) is VS Code's official Codicon (`microsoft/vscode-codicons` 0.0.35,
+  `src/icons/collapse-all.svg`, CC BY 4.0), kept path for path as fill geometry the way the Primer pair is —
+  the mark every VS Code reader already knows, not a redrawn cousin of it; the icon test pins its paths so a
+  later tidy cannot drift it.
 - **Identity marks are a data adapter, not scattered glyphs.** [[project-identity]] renders the named
   [[icon-presets]] registry because the same data must serialize into browser favicons. That one renderer
   is the deliberate sibling to the chrome glyph vocabulary; pages still never hand-write SVG variants.

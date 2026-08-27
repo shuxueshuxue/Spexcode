@@ -45,3 +45,14 @@ test('the shared Icon and IconButton contracts stay mechanically enforced', () =
   assert.match(iconSource, /data-tip=\{label\} aria-label=\{label\}/)
   assert.match(iconSource, /console\.error\(`unknown icon: \$\{name\}`\)/)
 })
+
+// The explorer head's collapse door wears VS Code's OWN collapse-all Codicon (0.0.35, CC BY 4.0): the official
+// fill geometry, path for path, so the mark a VS Code reader already knows is exactly the one drawn here.
+test("the collapse-all mark is the official Codicon geometry, path for path", () => {
+  const def = iconSource.match(/'collapse-all':\s*\{[\s\S]*?\n  \},/)?.[0]
+  assert.ok(def, 'collapse-all is registered')
+  assert.match(def, /vb: 16, fill: 'currentColor', stroke: 'none'/)
+  assert.match(def, /<path d="M9 9H4v1h5V9z" \/>/)
+  assert.match(def, /<path fillRule="evenodd" clipRule="evenodd" d="M5 3l1-1h7l1 1v7l-1 1h-2v2l-1 1H3l-1-1V6l1-1h2V3zm1 2h4l1 1v4h2V3H6v2zm4 1H3v7h7V6z" \/>/)
+  assert.match(iconSource, /vscode-codicons 0\.0\.35, src\/icons\/collapse-all\.svg/)
+})

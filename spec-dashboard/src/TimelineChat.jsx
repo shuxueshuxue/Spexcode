@@ -10,6 +10,7 @@ import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import 'katex/dist/katex.min.css'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
+import { IconButton } from './icons.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
@@ -384,7 +385,10 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
             }
           }}
         />
-        <button className="m-send" disabled={readOnly || !draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
+        {/* one send mark across every composer ([[icon-system]]): the label lives in the tooltip and the
+            accessible name, the button is the accent square a reader already knows from the thread. */}
+        <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
+          disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={send} />
       </div>
       {readOnly && (
         <div className="m-coldline">

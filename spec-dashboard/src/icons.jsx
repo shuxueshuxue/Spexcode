@@ -145,6 +145,13 @@ const ICONS = {
     vb: 16, sw: 1.5,
     node: <><circle cx="8" cy="8" r="5.5" opacity="0.3" /><path d="M8 2.5 a5.5 5.5 0 0 1 5.5 5.5" /></>,
   },
+  // COLLAPSE FOLDERS — two stacked sheets, the front one folded to a minus. The shape every editor's
+  // explorer already uses for its collapse-all view action, redrawn here on the 16-grid in this
+  // registry's stroke contract rather than copied from any icon set.
+  'collapse-all': {
+    vb: 16, sw: 1.4,
+    node: <><path d="M5.5 5.5V3.6a1.1 1.1 0 0 1 1.1-1.1h5.8a1.1 1.1 0 0 1 1.1 1.1v5.8a1.1 1.1 0 0 1-1.1 1.1h-1.9" /><rect x="2.5" y="5.5" width="8" height="8" rx="1.1" /><path d="M4.6 9.5h3.8" /></>,
+  },
   maximize: {
     vb: 16, sw: 1.4,
     node: <><path d="M2 6V2h4" /><path d="M14 6V2h-4" /><path d="M2 10v4h4" /><path d="M14 10v4h-4" /></>,

@@ -35,6 +35,13 @@ spec graph, and nothing there re-derives the filesystem.
 a row that opens; the browser never re-implements a policy and never has to guess whether a file it can see
 is a file it can show.
 
+**Which folders are open is the explorer's memory, not the row's.** A directory's disclosure is held in
+the same store the spec tree keeps its own in ([[file-tree]]), persisted beside it: closing the Files
+section unmounts every row, and while each row owned its flag that fold forgot every folder the reader had
+opened. Held outside the rows, the arrangement survives the section fold and the dock fold alike, and the
+explorer head's one collapse door folds these directories together with the spec branches instead of
+knowing only half the list.
+
 **A level per expand.** A branch fetches once, on the expand that reveals it, and keeps what it got —
 re-opening is instant, and a reader who never opens a branch never pays for its listing. That is the same
 bargain [[file-tree]]'s attachments make, and it keeps the cost of the tree proportional to what the reader

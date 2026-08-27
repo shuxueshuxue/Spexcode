@@ -68,6 +68,8 @@ export default {
     // this is, so the scope is a fact of where the button sits, not a choice the label has to defend.
     searchNodes: 'Search nodes',
     searchSessions: 'Search sessions',
+    // the explorer head's fold door: it folds every open folder in BOTH sections, never the sections
+    collapseFolders: 'Collapse folders',
   },
   dockSessions: {
     new: 'New session',

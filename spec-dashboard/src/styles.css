@@ -408,7 +408,9 @@ body {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
   color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
-.dock-head-act:hover { color: var(--ink2); background: var(--wash-hover); }
+.dock-head-act:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+/* a door with nothing behind it stays in place, quieter: the head keeps one shape ([[dock-modes]]) */
+.dock-head-act:disabled { opacity: .38; cursor: default; }
 .dock-head-act-new {
   width: 24px; height: 24px; color: var(--blue); background: transparent;
   border: 1px solid color-mix(in srgb, var(--blue) 72%, var(--line)); border-radius: var(--radius);
@@ -2969,11 +2971,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-composer {
   position: absolute; left: 50%; bottom: var(--space-5); z-index: 4;
   width: min(760px, calc(100% - var(--space-7))); transform: translateX(-50%);
-  padding: var(--space-4) var(--space-5); border: 1px solid var(--edge); border-radius: var(--radius);
-  background: color-mix(in srgb, var(--panel2) 90%, var(--paper));
+  padding: var(--space-4) var(--space-5); border: 1px solid var(--line); border-radius: var(--radius);
+  /* PAPER, NOT A PANEL: the card is the page's own ground with a hairline around it, so the composer reads
+     as part of the sheet the conversation is printed on rather than a control bar laid over it. The blur
+     keeps the flow legible as it scrolls under; the one elevation token says only that it floats. */
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
 }
-.m-composer:focus-within { border-color: var(--blue); }
+.m-composer:focus-within { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .m-composer > .m-senderr { padding: 0 0 var(--space-3); }
 .m-composer-line { display: flex; align-items: flex-end; gap: var(--space-4); }
 .m-input {
@@ -2983,13 +2988,16 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .m-input::placeholder { color: var(--muted); }
 .m-input:disabled { color: var(--muted); cursor: default; }
+/* the send is the ACCENT SQUARE every composer shares — a filled mark while there is something to send,
+   the same square gone quiet while there is not, so the field's one action is read by shape, not by a word. */
 .m-send {
-  flex: none; align-self: flex-end; height: 26px; padding: 0 var(--space-5);
-  font-family: var(--ui-font); font-size: var(--type-meta); font-weight: var(--weight-medium);
-  color: var(--blue); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
+  flex: none; align-self: flex-end; height: 26px; width: 26px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--paper); background: var(--blue); border: 0; border-radius: var(--radius); cursor: pointer;
+  transition: background var(--dur-tab), color var(--dur-tab);
 }
-.m-send:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 12%, transparent); }
-.m-send:disabled { opacity: .45; cursor: default; }
+.m-send:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 85%, var(--ink2)); }
+.m-send:disabled { color: var(--muted); background: var(--wash-active); cursor: default; }
 .m-coldline {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control);

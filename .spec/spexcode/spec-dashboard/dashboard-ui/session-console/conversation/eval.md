@@ -66,6 +66,21 @@ scenarios:
       A press the timeline owns retires both kinds of selection, so no native selection that leaked in —
       from a fourth click, a drag begun on a control — can survive the next click. The drag control case is
       unchanged: custom highlight, no document Selection, cleared by one click.
+  - name: the-composer-is-paper-with-one-send-mark
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
+    description: >-
+      In a real browser open a live session's Conversation at 1440px, at a 760px window (the pane under the
+      560px container threshold), and in the 390px phone shell. Read the composer's frame, its width against
+      the reading column, and its send control: element kind, accessible name, size, enabled state before and
+      after typing. Intercept the send request at the network edge, send a two-line message with Enter, and
+      read the request body and the draft afterwards. LOOK at the screenshots.
+    expected: >-
+      One composer card on the page's own paper with a hairline frame, no wider than the 760px column and
+      centred on the pane at every width; its send is the shared icon-only mark with a tooltip and an
+      aria-label, disabled while the draft is empty and enabled once it is not. Enter posts `kind:text` with
+      `replyVia:note` and the typed text, and clears the draft on success. At 760px the gutter is gone and
+      times are inline; at 390px the composer sits above the tab bar. No page errors.
 ---
 # measuring conversation
 

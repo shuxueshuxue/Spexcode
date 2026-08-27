@@ -38,8 +38,9 @@ frame and the document-actions slot at its right edge; documents do not render a
 Three focused child contracts keep this node readable:
 
 - [[tab-routing]] owns canonical identity, focus, placement, and the explicit hold gestures. Ordinary navigation
-  replaces only the focused unpinned tab; an inactive tab is preserved and a new slot is appended. New Session
-  creation holds the published session before routing, since the launch page has no focused document to replace.
+  replaces only the focused unpinned tab; an inactive tab is preserved and a new slot is appended. Session creation
+  (the New Session composer, a prose-dispatch send to a new target) holds the published session before routing:
+  a created document is a gesture, never a slot write.
 - [[tab-lifecycle]] owns close behavior, focus history, nearest-neighbor fallback, and resource/session return.
 - [[tab-layout]] owns the strip's visible row, drag ordering, wrapping, labels, seams, and action-cluster geometry.
 

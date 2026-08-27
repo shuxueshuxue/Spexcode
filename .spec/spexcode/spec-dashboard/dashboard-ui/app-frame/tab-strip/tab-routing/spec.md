@@ -27,8 +27,9 @@ unpinned tab. If the requested kind has an unpinned tab elsewhere, that inactive
 new address is appended; pinned tabs are never passively replaced. This protects a document the reader is not
 looking at without making every plain click a permanent tab.
 
-Creating a session from the New Session composer is an explicit new-document action. The returned id is marked
-held before the route is written, so creation appends a fresh session tab and cannot evict the prior session.
+Creating a session — from the New Session composer or a [[prose-dispatch]] send to a new target — is an explicit
+new-document action. The creating surface marks the returned id held before the route is written, so creation
+appends a fresh session tab and cannot evict the prior session; every creation door applies the same hold.
 Resources are held at birth. A deep link creates an object tab when no matching tab exists.
 
 Every row surface uses the shared `isHoldGesture`, `markTabHold`, and `pinTab` mechanism. Plain anchors retain

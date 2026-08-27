@@ -21,7 +21,8 @@ scenarios:
       screenshots.
     expected: >-
       The selected body range is encoded as one code-selection attachment in the initial create request,
-      the returned session opens immediately, and no empty launch composer or second send is required.
+      the returned session opens immediately as a HELD workspace tab (never the replaceable slot), and no empty
+      launch composer or second send is required.
 ---
 # eval.md - prose-dispatch
 

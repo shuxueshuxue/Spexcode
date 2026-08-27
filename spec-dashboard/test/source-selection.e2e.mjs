@@ -179,6 +179,9 @@ try {
   }, 'direct session creation from source selection')
   assert.ok(created, 'source selection created a session through the ordinary create path')
   await waitFor(() => page.evaluate((id) => location.hash === `#/sessions/${id}`, created.id), 'created session route')
+  // [[tab-routing]]: creation is a gesture — the new session is a held tab, not the replaceable slot.
+  const heldTab = (id) => page.locator(`[role="tab"][data-tab-key="#/sessions/${id}"]:visible`).evaluate((tab) => !tab.classList.contains('slot'))
+  assert.equal(await heldTab(created.id), true, 'the source-selection created session arrives as a held tab')
   await page.screenshot({ path: join(out, 'm4-selection-session-timeline.png'), fullPage: true })
 
   await page.goto(`http://127.0.0.1:${uiPort}/#/graph/fixture`, { waitUntil: 'domcontentloaded' })
@@ -206,6 +209,7 @@ try {
   }, 'popup prose direct create')
   assert.ok(popupCreated, 'popup prose created a session with its selected body range')
   await waitFor(() => page.evaluate((id) => location.hash === `#/sessions/${id}`, popupCreated.id), 'popup created session route')
+  assert.equal(await heldTab(popupCreated.id), true, 'the popup created session arrives as a held tab')
   await page.screenshot({ path: join(out, 'm4-popup-selection-session.png'), fullPage: true })
   await context.close()
   console.log(JSON.stringify({ ok: true, out, session: created.id }))

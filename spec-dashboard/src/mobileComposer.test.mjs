@@ -12,6 +12,9 @@ const styles = readFileSync(join(here, 'styles.css'), 'utf8')
 
 test('mobile session detail retains the aligned TimelineChat composer', () => {
   assert.match(mobileApp, /<TimelineChat s=\{s\} sessions=\{sessions\} \/>/)
+  assert.match(timelineChat, /<ComposerSurface[\s\S]*as="footer"/)
+  assert.match(timelineChat, /className="si-command-tools m-composer-tools"/)
+  assert.match(timelineChat, /className="fv-trigger-btn"[\s\S]*onClick=\{\(\) => insertTrigger\('@'\)\}/)
   assert.match(timelineChat, /<ComposerTextarea[\s\S]*className="m-input"/)
   assert.match(timelineChat, /!e\.shiftKey && !composingKey\(e\)/)
   assert.match(timelineChat, /className="m-send"/)

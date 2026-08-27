@@ -9,8 +9,8 @@ import { BlobMedia } from './Evidence.jsx'
 import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import 'katex/dist/katex.min.css'
-import { ComposerTextarea, composingKey } from './Composer.jsx'
-import { Caret, IconButton } from './icons.jsx'
+import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
+import { Caret, Icon, IconButton } from './icons.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
@@ -359,6 +359,8 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
   return range
 }
 
+// The shared surface renders as the semantic footer (`<footer className=...>`); keeping that landmark on
+// the primitive means Conversation and Command Box still have one shell rather than nested card chrome.
 function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop }) {
   const t = useT()
   const readOnly = state !== 'live'
@@ -366,52 +368,78 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
   // beside send, shown while the agent is working and gone otherwise — a permanently visible disabled stop
   // would be chrome about a state the page is not in. One verb; the backend decides native vs the pane's key.
   const canStop = !readOnly && working
-  // The composer is a SURFACE the conversation floats, not a chrome band the shell stacks — the same shape
-  // the terminal surface already gives its command box, so both session surfaces frame their content
-  // identically and the reading column keeps its full height behind it.
+  const insertTrigger = (trigger) => {
+    const el = inputRef.current
+    const start = el?.selectionStart ?? draft.length
+    const end = el?.selectionEnd ?? start
+    const next = draft.slice(0, start) + trigger + draft.slice(end)
+    setDraft(next)
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      const caret = start + trigger.length
+      el.setSelectionRange(caret, caret)
+    })
+  }
+  // The conversation footer is the Command Box shell with a different host; the grammar and attachment
+  // controls remain usable against this draft. Only the separate terminal Command Box opener is disabled.
   return (
-    <footer className={`m-composer is-${state}`} data-footer-state={state}>
-      {sendErr && <div className="m-senderr">{sendErr}</div>}
-      <div className="m-composer-line">
-        <ComposerTextarea
-          ref={inputRef}
-          className="m-input"
-          data-focus-sink={active && !readOnly ? '' : undefined}
-          rows={1}
-          placeholder={t('mobile.inputPlaceholder')}
-          value={draft}
-          disabled={readOnly}
-          onMouseDownCapture={onComposerPress}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (!readOnly && e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
-              e.preventDefault(); e.stopPropagation(); send()
-            }
-          }}
-        />
-        {canStop && (
-          <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
-            onMouseDown={(e) => e.preventDefault()} onClick={stop} />
-        )}
-        {/* one send mark across every composer ([[icon-system]]): the label lives in the tooltip and the
-            accessible name, the button is the accent square a reader already knows from the thread. */}
-        <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
-          disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={send} />
-      </div>
-      {readOnly && (
-        <div className="m-coldline">
-          <span>{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>
-          {onRestore && <button type="button" className="m-coldline-action" disabled={actionOutcome?.phase === 'pending'} onClick={onRestore}>
-            {t(state === 'archived' ? 'session.shelfRestore' : 'session.relaunch')}
-          </button>}
+    <ComposerSurface
+      as="footer"
+      className={`m-composer is-${state}`}
+      data-footer-state={state}
+      preview={sendErr && <div className="m-senderr">{sendErr}</div>}
+      editor={(
+        <div className="m-composer-line fv-tawrap">
+          <ComposerTextarea
+            ref={inputRef}
+            className="m-input"
+            data-focus-sink={active && !readOnly ? '' : undefined}
+            rows={1}
+            placeholder={t('mobile.inputPlaceholder')}
+            value={draft}
+            disabled={readOnly}
+            onMouseDownCapture={onComposerPress}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (!readOnly && e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
+                e.preventDefault(); e.stopPropagation(); send()
+              }
+            }}
+          />
         </div>
       )}
-      {readOnly && actionOutcome && (
-        <div className={`si-action-outcome ${actionOutcome.phase}`} role={actionOutcome.phase === 'failed' ? 'alert' : 'status'}>
-          {actionOutcome.message}
-        </div>
+      footer={(
+        <>
+          <div className="si-command-tools m-composer-tools">
+            <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onClick={() => insertTrigger('@')}>@</button>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onClick={() => insertTrigger('[[')}>[[</button>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onClick={() => insertTrigger('/')}>/</button>
+            <IconButton icon="paperclip" size={14} className="si-command-tool" label={t('session.attachTitle')} disabled={readOnly} onClick={() => inputRef.current?.focus()} />
+            {canStop && (
+              <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
+                onMouseDown={(e) => e.preventDefault()} onClick={stop} />
+            )}
+            <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
+              disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={send} />
+          </div>
+          {readOnly && (
+            <div className="m-coldline">
+              <span>{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>
+              {onRestore && <button type="button" className="m-coldline-action" disabled={actionOutcome?.phase === 'pending'} onClick={onRestore}>
+                {t(state === 'archived' ? 'session.shelfRestore' : 'session.relaunch')}
+              </button>}
+            </div>
+          )}
+          {readOnly && actionOutcome && (
+            <div className={`si-action-outcome ${actionOutcome.phase}`} role={actionOutcome.phase === 'failed' ? 'alert' : 'status'}>
+              {actionOutcome.message}
+            </div>
+          )}
+        </>
       )}
-    </footer>
+    />
   )
 }
 

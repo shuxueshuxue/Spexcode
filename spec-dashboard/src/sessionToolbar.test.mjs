@@ -244,6 +244,8 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
   assert.match(source, /uiCommandsFor\(selSession, runners\)/)
   assert.match(source, /if \(commandAvailable\) \{ if \(commandOpen\) closeCommandBox\(\); else setCommandOpen\(true\) \}/)
+  assert.match(source, /const commandAvailable = !conversationSurface && uiCommandsFor\(selSession, \{\}\)/)
+  assert.match(source, /commandOpen && !noLivePane && !conversationSurface/)
   assert.match(source, /uiCmds\.filter\(\(command\) => command\.button[\s\S]*?\.map/)
   assert.match(source, /disabledReason: command\.enabled \? undefined : t\(command\.disabledTitleKey\)/)
   assert.match(source, /<SessionDocumentActions document=\{documentKey\} actions=\{documentActions\} \/>/)

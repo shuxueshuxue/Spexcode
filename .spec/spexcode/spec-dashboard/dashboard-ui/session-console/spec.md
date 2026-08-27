@@ -200,7 +200,9 @@ enters or leaves the diff URL with `aria-pressed`; it returns to the remembered 
 the diff action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
 right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
-delegating to the authorized backend route. **Command Box** is present whenever live. The
+delegating to the authorized backend route. **Command Box** is present whenever live on the terminal
+surface; Conversation owns the same command-shaped footer, so its toolbar opener remains visible but
+disabled and cannot create a second input overlay. The
 document-action set is surface-specific: every selected resource shows its one refresh tool; a selected web has
 no file download/copy actions. Merge has no document action, disabled witness, localized availability copy, or
 dashboard-local runner. `/merge` comes from the [[merge]] plugin and is sent to the agent as a resolved prompt;

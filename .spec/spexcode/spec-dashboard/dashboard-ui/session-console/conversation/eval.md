@@ -50,6 +50,20 @@ scenarios:
       seam reads `worked <span>`; the error line carries no duration. The opened seam shows its transcript
       inset with tool rows beneath it. At 390px no gutter is visible and every message row carries an inline
       time. The light preset changes only colour, not shape.
+  - name: the-conversation-reads-as-paper
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/styles.css]
+    description: >-
+      In a real browser open a live session's Conversation at 1440px, at a 760px window, and in the 390px
+      phone shell. Read the column's width and centring, the widest agent note against the column, the widest
+      quote against the column, the resting opacity of a row's gutter time and its opacity under hover, the
+      seam row's font size and whether any rule runs from it to the edge, the vertical air between rows, and
+      the timeline's side padding at each width. LOOK at settled screenshots beside the before images.
+    expected: >-
+      One 720px measure, centred, that notes fill and quotes cap at 80% of; gutter time rests below full
+      opacity and comes up on hover; the seam is one caption-sized line with no rule to the edge; rows sit at
+      least 12px apart; side margin grows with the pane and shrinks to 14px under the 560px threshold. The
+      ground is the theme's paper, dark preset included. No page errors.
   - name: a-native-selection-does-not-outlive-the-next-press
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]
@@ -81,20 +95,6 @@ scenarios:
       aria-label, disabled while the draft is empty and enabled once it is not. Enter posts `kind:text` with
       `replyVia:note` and the typed text, and clears the draft on success. At 760px the gutter is gone and
       times are inline; at 390px the composer sits above the tab bar. No page errors.
-  - name: the-conversation-reads-as-paper
-    tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
-    description: >-
-      In a real browser open a live session's Conversation at 1440px, at a 760px window, and in the 390px
-      phone shell. Read the column's width and centring, the widest agent note against the column, the widest
-      quote against the column, the resting opacity of a row's gutter time and its opacity under hover, the
-      seam row's font size and whether any rule runs from it to the edge, the vertical air between rows, and
-      the timeline's side padding at each width. LOOK at the screenshots beside the before images.
-    expected: >-
-      One 720px measure, centred, that the notes fill and the quotes cap at 80% of; the gutter time rests
-      below full opacity and comes up on hover; the seam is one caption-sized line with no rule to the edge;
-      rows sit at least 12px apart; the side margin grows with the pane and shrinks to 14px under the 560px
-      threshold. The ground is the theme's paper, dark preset included. No page errors.
   - name: stop-is-one-square-while-working
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]

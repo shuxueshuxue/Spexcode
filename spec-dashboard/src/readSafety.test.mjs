@@ -85,6 +85,27 @@ test('the uncommitted half is read from the session\'s own worktree, or honestly
   assert.match(zh, /diffGroupUncommitted:/)
 })
 
+test('the Explorer owns one official collapse-folders action for both trees', () => {
+  const tree = source('./FileTree.jsx')
+  const dock = source('./Dock.jsx')
+  const state = source('./specTreeState.js')
+  const icons = source('./icons.jsx')
+  const en = source('./i18n/en.js')
+  const zh = source('./i18n/zh.js')
+
+  assert.match(dock, /IconButton icon="collapse-all"[\s\S]*label=\{t\('dockModes\.collapseFolders'\)\}/)
+  assert.match(dock, /disabled=\{folded\}/)
+  assert.match(dock, /onClick=\{collapseExplorerFolders\}/)
+  assert.doesNotMatch(tree, /IconButton icon="collapse-all"/)
+  assert.match(state, /export const collapseExplorerFolders = \(\) =>/)
+  assert.match(state, /specs\.clear\(\); dirs\.clear\(\)/)
+  assert.match(state, /export const useDiskTreeState/)
+  assert.match(state, /export const toggleDiskDir/)
+  assert.match(icons, /'collapse-all':/)
+  assert.match(en, /collapseFolders: 'Collapse folders'/)
+  assert.match(zh, /collapseFolders: '收起所有文件夹'/)
+})
+
 test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {
   const backend = source('../../spec-cli/src/sessions.ts')
   const diff = source('./DiffDocument.jsx')

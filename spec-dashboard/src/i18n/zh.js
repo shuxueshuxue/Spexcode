@@ -53,6 +53,7 @@ export default {
     specs: '规格',
     files: '文件',
     graph: '规格图谱',
+    collapseAll: '收起所有规格文件夹',
   },
   diskTree: {
     loading: '正在加载…',

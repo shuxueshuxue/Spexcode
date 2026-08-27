@@ -83,6 +83,11 @@ the accessible name impossible to forget.
   The desktop terminal toolbar is the deliberate compact exception: familiar icon-only command tools preserve
   their localized prose in tooltip/`aria-label`, while the ONE session-command registry supplies their meaning.
 
+The `collapse-all` mark is the official VS Code Codicon from
+<https://app.unpkg.com/@vscode/codicons@0.0.35/files/src/icons/collapse-all.svg>, retained path-for-path
+under its CC BY 4.0 terms and rendered with `fill=currentColor` and no stroke. It remains a registry entry,
+not a component-local SVG.
+
 `spec-dashboard/src/iconConsistency.test.mjs` is the executable boundary for this rule. It rejects component-local
 SVGs (with the deliberate `IdentityIcon` favicon adapter exception), checks every literal `<Icon>`/`<IconButton>`
 name against the registry, and keeps the shared stroke/tooltip/accessibility contract visible in the test suite.

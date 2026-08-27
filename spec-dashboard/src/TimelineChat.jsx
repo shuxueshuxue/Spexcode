@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elapsed, RUN_MIN, runKinds, splitTarget, toolTarget, toolVerb } from './toolVocabulary.js'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
@@ -35,8 +35,70 @@ function TimelineRichText({ children, className = '' }) {
 }
 
 function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
-// The interval end moves when a later status arrives; expansion belongs to the status event itself.
-function transcriptStatusKey(sessionId, from) { return `${sessionId}:${from}` }
+// The interval end moves when a later event closes the seam; expansion belongs to the seam itself.
+function seamKey(sessionId, from) { return `${sessionId}:${from}` }
+
+// The envelope `spex session send` appends is addressing, not what the peer said. The server's one prompt
+// seam still ships it inside the text, so this surface strips it to render the message and keeps only the
+// sender name it carries; the record itself is untouched.
+const ENVELOPE = /\n*— from session (?:"(.*?)" \(([^\s)]+)\)|(\S+))(?: on machine \S+)?\. To reply: spex session send (?:--ssh \S+ )?\S+ "<your reply>"\s*$/
+function splitEnvelope(text) {
+  const m = ENVELOPE.exec(text || '')
+  if (!m) return { text, envelope: null }
+  return { text: text.slice(0, m.index), envelope: { label: m[1] || null, id: m[2] || m[3] } }
+}
+
+// MESSAGES, SEAMS, AND EVENTS — the three things on this page, in wire order. The status machine wrote the
+// timeline (`working` ↔ `asking` ↔ `working` …), but a reader is not reading the machine: a run of bare
+// `working` events is one stretch in which the agent said nothing and worked, so it becomes one SEAM that
+// carries the transcript for exactly that interval. Anything said — a note, a sent message — is a message;
+// `error` and `corrupt` are events that happened, not phases that lasted. The tail seam is still open: its
+// interval ends at the mount-time `now` so the transcript key stays stable across polls.
+function conversationItems(events, transcriptNow) {
+  const items = []
+  let seam = null
+  const close = (to, open = false) => {
+    if (seam) items.push({ ...seam, to, open })
+    seam = null
+  }
+  for (const event of events) {
+    const status = event.display || event.status
+    if (event.kind === 'status' && status === 'working' && !event.note) {
+      seam ??= { kind: 'seam', ts: event.ts, from: epochOf(event.ts) }
+      continue
+    }
+    close(epochOf(event.ts))
+    if (event.kind === 'sent') items.push({ kind: 'quote', ts: event.ts, from: event.from, ...splitEnvelope(event.text) })
+    else if (status === 'error' || status === 'corrupt') items.push({ kind: 'event', ts: event.ts, status, text: event.note })
+    else items.push({ kind: 'say', ts: event.ts, status, text: event.note })
+  }
+  if (seam) close(Math.max(seam.from + 1, transcriptNow), true)
+  return items
+}
+
+// A long quote is clamped at first sight — the conversation is about what came after it. The trigger is the
+// text itself rather than a measured height, so the row never reflows after paint.
+const isLongQuote = (text) => text.length > 700 || (text.match(/\n/g) || []).length > 10
+
+// The person is QUOTED: a bubble off to its own side, the one grammar this page shares with the transcript
+// inside a seam. The peer's name sits on the bubble; the human's has none, and the envelope never shows.
+function Quote({ who, ts, text, className = '' }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const clamped = !open && isLongQuote(text)
+  return (
+    <div className={`m-quote${clamped ? ' is-clamped' : ''}${className ? ` ${className}` : ''}`}>
+      {(who || ts) && (
+        <div className="m-quote-head">
+          {who && <span className="m-quote-who">{who}</span>}
+          {ts && <time className="m-tin">{timeOf(ts)}</time>}
+        </div>
+      )}
+      <div className="m-ev-text"><TimelineRichText>{text}</TimelineRichText></div>
+      {clamped && <button type="button" className="m-quote-more" onClick={() => setOpen(true)}>{t('mobile.more')}</button>}
+    </div>
+  )
+}
 
 // One tool call as a SENTENCE, not a card: verb, target, and the size of what came back. It is
 // `inline-flex` so a dozen of them read as a list of things that happened rather than a dozen boxes.
@@ -158,13 +220,11 @@ function TranscriptPayload({ data }) {
   })
   if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
   return <div className="tc-flow">
-    {segments(data.turns).map((segment, index) => (
-      segment.kind === 'ask'
-        ? <div className="tc-ask" key={`a${index}`}>
-            {segment.turn.text && <TimelineRichText>{segment.turn.text}</TimelineRichText>}
-          </div>
-        : <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={toggle} />
-    ))}
+    {segments(data.turns).map((segment, index) => {
+      if (segment.kind !== 'ask') return <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={toggle} />
+      const { text, envelope } = splitEnvelope(segment.turn.text || '')
+      return <Quote key={`a${index}`} className="tc-ask" who={envelope?.label || null} text={text} />
+    })}
     {data.truncated && <div className="m-transcript-truncated">transcript 已截断：省略 {data.omittedTurns || 0} turns、{data.omittedBytes || 0} bytes{data.outOfOrderEvents ? `，检测到 ${data.outOfOrderEvents} 条乱序记录` : ''}</div>}
   </div>
 }
@@ -339,8 +399,9 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const [copyStatus, setCopyStatus] = useState(null)
-  const [expandedStatuses, setExpandedStatuses] = useState(() => new Set())
+  const [expandedSeams, setExpandedSeams] = useState(() => new Set())
   const [transcripts, setTranscripts] = useState(() => new Map())
+  const [now, setNow] = useState(() => Date.now())   // advances with each timeline read; only an open live seam reads it
   const scrollRef = useRef(null)
   const timelineContentRef = useRef(null)
   const inputRef = useRef(null)
@@ -351,11 +412,12 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
+    setNow(Date.now())
     if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
   }), [s.id])
   useEffect(() => {
     if (!active) return undefined
-    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedStatuses(new Set()); setTranscripts(new Map()); transcriptNowRef.current = Date.now(); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedSeams(new Set()); setTranscripts(new Map()); transcriptNowRef.current = Date.now(); setNow(transcriptNowRef.current); pinnedRef.current = true
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
@@ -377,47 +439,45 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }, [load, active, footerState])
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
-  const fetchTranscript = useCallback(async (event, to, statusId) => {
-    const from = epochOf(event.ts)
-    const key = transcriptKey(s.id, from, to)
+  const items = useMemo(() => conversationItems(events || [], transcriptNowRef.current), [events])
+
+  const fetchTranscript = useCallback(async (seam, seamId) => {
+    const key = transcriptKey(s.id, seam.from, seam.to)
     const cached = transcriptCache.get(key)
     if (cached) {
-      setTranscripts((previous) => new Map(previous).set(statusId, { ...cached, transcriptKey: key }))
+      setTranscripts((previous) => new Map(previous).set(seamId, { ...cached, transcriptKey: key }))
       return
     }
     const pending = { state: 'loading', transcriptKey: key }
     transcriptCache.set(key, pending)
-    setTranscripts((previous) => new Map(previous).set(statusId, pending))
-    const result = await loadSessionTranscript(s.id, from, to)
+    setTranscripts((previous) => new Map(previous).set(seamId, pending))
+    const result = await loadSessionTranscript(s.id, seam.from, seam.to)
     const value = result.ok
       ? { state: 'ready', data: result.data, transcriptKey: key }
       : { state: 'error', error: result.error, transcriptKey: key }
     transcriptCache.set(key, value)
     setTranscripts((previous) => {
-      const current = previous.get(statusId)
-      // A newer poll may have moved this status to another interval while this request was in flight.
-      return current?.transcriptKey === key ? new Map(previous).set(statusId, value) : previous
+      const current = previous.get(seamId)
+      // A newer poll may have moved this seam to another interval while this request was in flight.
+      return current?.transcriptKey === key ? new Map(previous).set(seamId, value) : previous
     })
   }, [s.id])
 
-  // A later status changes only the transcript interval, never the user's disclosure choice. Refresh the
-  // expanded row against that new interval while keeping it open.
+  // A later event changes only the seam's interval, never the user's disclosure choice. Refresh the
+  // expanded seam against that new interval while keeping it open.
   useEffect(() => {
     if (!active || !events) return undefined
-    for (const [index, event] of events.entries()) {
-      if (event.kind !== 'status') continue
-      const from = epochOf(event.ts)
-      const statusId = transcriptStatusKey(s.id, from)
-      if (!expandedStatuses.has(statusId)) continue
-      const nextStatus = events.slice(index + 1).find((candidate) => candidate.kind === 'status')
-      const to = nextStatus ? epochOf(nextStatus.ts) : Math.max(from + 1, transcriptNowRef.current)
-      const key = transcriptKey(s.id, from, to)
-      const current = transcripts.get(statusId)
+    for (const seam of items) {
+      if (seam.kind !== 'seam') continue
+      const seamId = seamKey(s.id, seam.from)
+      if (!expandedSeams.has(seamId)) continue
+      const key = transcriptKey(s.id, seam.from, seam.to)
+      const current = transcripts.get(seamId)
       if (current?.transcriptKey === key || current?.state === 'loading') continue
-      void fetchTranscript(event, to, statusId)
+      void fetchTranscript(seam, seamId)
     }
     return undefined
-  }, [active, events, expandedStatuses, fetchTranscript, s.id, transcripts])
+  }, [active, events, items, expandedSeams, fetchTranscript, s.id, transcripts])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const followTimelineTail = useCallback(() => {
@@ -557,70 +617,113 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return peer ? sessionHeadline(peer) : from.slice(0, 8)
   }
 
-  const toggleTranscript = (event, to) => {
-    const from = epochOf(event.ts)
-    const statusId = transcriptStatusKey(s.id, from)
-    const next = new Set(expandedStatuses)
-    if (next.has(statusId)) { next.delete(statusId); setExpandedStatuses(next); return }
-    next.add(statusId); setExpandedStatuses(next)
-    void fetchTranscript(event, to, statusId)
+  const toggleSeam = (seam) => {
+    const seamId = seamKey(s.id, seam.from)
+    const next = new Set(expandedSeams)
+    if (next.has(seamId)) { next.delete(seamId); setExpandedSeams(next); return }
+    next.add(seamId); setExpandedSeams(next)
+    void fetchTranscript(seam, seamId)
   }
 
-  // day-separated render list, oldest first (the wire order)
+  // THE RULER. Time lives in a left gutter, tabular and the same for every row, and the day it belongs to
+  // sticks in that same gutter as the reader scrolls; the right edge carries nothing. At a narrow width the
+  // gutter goes and each row keeps its own inline time instead.
   const rows = []
   let lastDay = null
-  for (const [i, e] of (events || []).entries()) {
-    if (dayKey(e.ts) !== lastDay) { lastDay = dayKey(e.ts); rows.push(<div className="m-day" key={`d${i}`}>{dayOf(e.ts)}</div>) }
-    if (e.kind === 'status') {
-      const d = e.display || e.status
-      const nextStatus = (events || []).slice(i + 1).find((candidate) => candidate.kind === 'status')
-      const transcriptFrom = epochOf(e.ts)
-      const transcriptTo = nextStatus ? epochOf(nextStatus.ts) : Math.max(transcriptFrom + 1, transcriptNowRef.current)
-      const transcriptId = transcriptStatusKey(s.id, transcriptFrom)
-      const transcript = transcripts.get(transcriptId)
-      const expanded = expandedStatuses.has(transcriptId)
-      // WHAT THE COLLAPSED PHASE SAYS. How LONG it stayed in this state is the question scrollback actually
-      // raises, and the status word beside it already says which state — so the head carries the span and
-      // the disclosure says only what opening it costs. Tool counts move down into the turns that ran them,
-      // where they can name what KIND ran instead of totalling everything into one number nobody can act on.
-      const span = elapsed(transcriptTo - transcriptFrom)
-      const scale = transcript?.state === 'ready'
-        ? `${transcript.data.turns.length} turns`
-        : t('mobile.conversation')
+  const dayRow = (ts, key) => {
+    if (dayKey(ts) === lastDay) return
+    lastDay = dayKey(ts)
+    rows.push(<div className="m-day" key={`d${key}`}><div className="m-gut">{dayOf(ts)}</div><div className="m-day-rule" /></div>)
+  }
+  const gutter = (ts) => <div className="m-gut"><time>{timeOf(ts)}</time></div>
+  const promptTs = s.created || detail?.created || events?.[0]?.ts
+  if (detail?.prompt) {
+    if (promptTs) dayRow(promptTs, 'p')
+    rows.push(
+      <div className="m-ev m-ev-prompt" key="prompt">
+        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
+        <Quote ts={promptTs} text={detail.prompt} />
+      </div>,
+    )
+  }
+  for (const [i, item] of items.entries()) {
+    dayRow(item.ts, i)
+    if (item.kind === 'quote') {
       rows.push(
-        <div className="m-ev" key={i}>
-          <div className="m-ev-head">
-            <span className="m-ev-glyph" style={{ color: STATUS_COLOR[d] }}>{STATUS_GLYPH[d] || '·'}</span>
-            <span className="m-ev-word" style={{ color: STATUS_COLOR[d] }}>{t(`status.${d}`)}</span>
-            {span && <span className="m-ev-span">{span}</span>}
-            <span className="m-ev-time">{timeOf(e.ts)}</span>
-          </div>
-          <button type="button" className="m-transcript-toggle" aria-expanded={expanded} onClick={() => toggleTranscript(e, transcriptTo)}>
-            <span>{expanded ? '▾' : '▸'} {scale}</span>
-          </button>
-          {expanded && transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
-          {expanded && transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
-          {expanded && transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} />}
-          {e.note && (
-            <div className="m-ev-note">
-              <TimelineRichText>{e.note}</TimelineRichText>
-              {!hasTimelineHighlight() && (
-                <button type="button" className="m-copy-note" onClick={() => copyText(e.note)}>
-                  {t('mobile.copy')}
-                </button>
+        <div className="m-ev m-ev-sent" key={i}>
+          {gutter(item.ts)}
+          <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+        </div>,
+      )
+    } else if (item.kind === 'say') {
+      // THE AGENT IS THE PAGE. What it reported is the body — no well, no rule, no indent — with one small
+      // status chip above saying in what state it said it. The chip is the whole trace of the machine.
+      rows.push(
+        <div className="m-ev m-ev-say" key={i}>
+          {gutter(item.ts)}
+          <article className="m-say">
+            <div className="m-say-head">
+              <span className="m-say-chip" style={{ color: STATUS_COLOR[item.status] }}>
+                <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
+                <span className="m-ev-word">{t(`status.${item.status}`)}</span>
+              </span>
+              {item.text && !hasTimelineHighlight() && (
+                <button type="button" className="m-copy-note" onClick={() => copyText(item.text)}>{t('mobile.copy')}</button>
               )}
+              <time className="m-tin">{timeOf(item.ts)}</time>
             </div>
-          )}
+            {item.text && <div className="m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
+          </article>
+        </div>,
+      )
+    } else if (item.kind === 'event') {
+      // An error is something that HAPPENED, not a phase that lasted: one line, no duration. The old row
+      // read `error 80h 45m` — the time since — as if it had been failing for eighty hours.
+      rows.push(
+        <div className="m-ev m-ev-line" key={i}>
+          {gutter(item.ts)}
+          <div className="m-line">
+            <span className="m-ev-glyph" style={{ color: STATUS_COLOR[item.status] }}>{STATUS_GLYPH[item.status] || '·'}</span>
+            <span className="m-ev-word" style={{ color: STATUS_COLOR[item.status] }}>{t(`status.${item.status}`)}</span>
+            {item.text && <div className="m-line-text m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
+            <time className="m-tin">{timeOf(item.ts)}</time>
+          </div>
         </div>,
       )
     } else {
+      // THE SEAM. One line for everything between two messages, saying only how long the agent worked —
+      // the one duration a reader asks scrollback for — and, once read, what that stretch cost. The tail
+      // seam of a live session is the page's only moving thing; a tail seam of a dead one is the record's
+      // last word, `working`, with no duration invented for a stretch nothing closed.
+      const seamId = seamKey(s.id, item.from)
+      const transcript = transcripts.get(seamId)
+      const expanded = expandedSeams.has(seamId)
+      const ticking = item.open && footerState === 'live'
+      const lead = ticking ? `${t('status.working')} · ${elapsed(now - item.from)}`
+        : item.open ? t('status.working')
+          : `${t('mobile.worked')} ${elapsed(item.to - item.from)}`
+      const calls = transcript?.state === 'ready'
+        ? transcript.data.turns.reduce((n, turn) => n + (turn.tools?.length || 0), 0) : 0
       rows.push(
-        <div className="m-ev m-ev-sent" key={i}>
-          <div className="m-ev-head">
-            <span className="m-ev-from">{fromLabel(e.from)}</span>
-            <span className="m-ev-time">{timeOf(e.ts)}</span>
+        <div className="m-ev m-ev-seam" key={i}>
+          <div className="m-gut"><span className={`m-seam-dot${ticking ? ' is-live' : ''}`} aria-hidden="true">●</span></div>
+          <div className="m-seam">
+            <button type="button" className="m-seam-row" aria-expanded={expanded} onClick={() => toggleSeam(item)}>
+              <span className="m-seam-caret" aria-hidden="true" />
+              <span className="m-seam-lead">{lead}</span>
+              {transcript?.state === 'ready' && (
+                <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>
+              )}
+              <span className="m-seam-line" aria-hidden="true" />
+            </button>
+            {expanded && (
+              <div className="m-seam-inset">
+                {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
+                {transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
+                {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} />}
+              </div>
+            )}
           </div>
-          <div className="m-ev-text"><TimelineRichText>{e.text}</TimelineRichText></div>
         </div>,
       )
     }
@@ -630,17 +733,11 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
         onMouseDown={beginTimelineSelection}>
-        <div ref={timelineContentRef}>
-          {detail?.prompt && (
-            <details className="m-ev m-ev-prompt">
-              <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
-              <div className="m-ev-text"><TimelineRichText>{detail.prompt}</TimelineRichText></div>
-            </details>
-          )}
+        <div className="m-col" ref={timelineContentRef}>
           {events === null
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
-          <ExecutionTrace sessionId={s.id} active={active} />
+          <div className="m-ev m-ev-trace"><div className="m-gut" /><ExecutionTrace sessionId={s.id} active={active} /></div>
         </div>
       </div>
       {copyStatus && (

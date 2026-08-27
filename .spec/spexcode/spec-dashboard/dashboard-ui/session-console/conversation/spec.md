@@ -2,7 +2,7 @@
 title: conversation
 status: active
 hue: 280
-desc: The terminal-free session surface — one shared Conversation DOM for every existing session, with a footer whose data states cover live, offline, archived and retired; folded status rows; a floating composer that always replies via note; and a mount lifetime that survives deselection.
+desc: The terminal-free session surface — one shared Conversation DOM for every existing session, with a footer whose data states cover live, offline, archived and retired; messages, seams and events on a time ruler rather than status rows; a floating composer that always replies via note; and a mount lifetime that survives deselection.
 code:
   - spec-dashboard/src/TimelineChat.jsx
 related:
@@ -63,9 +63,45 @@ that says nothing is worse than one naming a tool we have no word for. Grouping 
 DID: a shell command parsed as harmless could hide a write inside a fold, so runs gather by position and
 are labelled by what is on the record.
 
-Conversation status rows carry how long the session stayed in that state — the question scrollback actually
-raises, with the status word beside it already saying which state — and expose one keyboard-reachable
-disclosure button (`aria-expanded`) for each transcript entry. Every entry starts folded on first load, after a timeline/status refresh, and when a different session is selected; no data arrival or remount may open it. The disclosure choice is keyed to the status event, not to the current transcript interval, so a later status that closes the interval keeps an already-open entry open and keeps an untouched entry closed. The timeline body is selectable text: Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an accidental editable surface.
+**THE STATUS MACHINE IS NOT THE READING UNIT.** The timeline the backend records is the machine's trace —
+`working` ↔ `asking` ↔ `working` … — and rendering every event as a row (a head with glyph, word, duration
+and time, then a disclosure line) made a real session show 26 bare `working` rows spending two lines of
+chrome each, `working 1s → 11s → 4m 30s` stacked as three rows, a toggle at the far right whose content
+opened at the far left, the agent's report set as a blockquote though it is the page, and a terminal
+`error 80h 45m` that read as eighty hours of failing. A reader reads three things, and the page shows
+exactly those three:
+
+- A MESSAGE is anything said. The agent's note IS the page: no well, no rule, no indent, at the prose size
+  (`--type-prose`, the one token this surface added) on a 620px measure, with one small status chip above it
+  (`? asking`, `‖ parked`, `✓ done`) as the machine's whole footprint. A sent message and the originating
+  prompt are QUOTED: a bubble on the right, capped at 520px, in the same grammar as the transcript's person
+  turn, so the outer conversation and the inner one read alike. A peer's name sits on its bubble; the
+  human's has none. The addressing envelope `spex session send` appends (`— from session … To reply: …`) is
+  never rendered — the record keeps it, the surface strips it. A long quote is clamped at first sight with
+  a `more`, because the conversation is about what came after it.
+- A SEAM is a run of bare `working` events between two messages: one line, `▸ worked 13m 17s`, whose
+  duration is the sum of that run — how long the agent worked, the one duration scrollback actually asks
+  for — and, once its transcript has been read, `N turns · M tool uses`. The seam owns the transcript for
+  exactly its interval (the transcript API already reads by interval; nothing server-side changes), opened
+  directly beneath it on a green inset line so where it came from stays in view, and it exposes the one
+  keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
+  `● working · 4m 12s` and is the page's only moving thing; the tail seam of a dead session says `working`
+  — the record's last word — with no duration invented for a stretch nothing closed.
+- An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
+  rather than lasted.
+
+THE RULER. Time lives in a 52px left gutter, tabular and the same for every message row; the day it belongs
+to sticks in that same gutter as the reader scrolls; the right edge carries nothing. When the PANE (a
+container query, not the viewport — a desktop side pane is as narrow as a phone) is under 560px the gutter
+goes and each row keeps its own inline time.
+
+Every seam starts folded on first load, after a timeline/status refresh, and when a different session is
+selected; no data arrival or remount may open it. The disclosure choice is keyed to the seam's first event,
+not to the current transcript interval, so a later event that closes the seam refreshes the interval while
+keeping an already-open seam open and an untouched one closed. The timeline body is selectable text:
+Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and
+indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an
+accidental editable surface.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. 
 

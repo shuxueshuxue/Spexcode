@@ -22,6 +22,11 @@ const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH
   || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const out = resolve(process.env.OUT || '/tmp/session-surface-cold-readable-e2e')
+// one row per message or event; a run of bare `working` statuses is one seam row, and a peer message's
+// addressing envelope is never rendered
+const bareWorking = (event) => event.kind === 'status' && (event.display || event.status) === 'working' && !event.note
+const conversationRows = (events) => events.reduce((n, event, i) => n + (bareWorking(event) && i > 0 && bareWorking(events[i - 1]) ? 0 : 1), 0)
+const shownText = (text) => text.replace(/\n*— from session [^\n]*"<your reply>"\s*$/, '')
 
 const freePort = () => new Promise((resolvePort, reject) => {
   const server = net.createServer()
@@ -227,10 +232,10 @@ try {
     const chat = page.locator('.tl-chat:visible')
     await chat.waitFor({ state: 'visible', timeout: 30_000 })
     await chat.locator('.m-empty').waitFor({ state: 'detached', timeout: 30_000 })
-    assert.equal(await chat.locator('.m-ev:not(.m-ev-prompt)').count(), apiTimeline.events.length, `${state} timeline event count differs from API`)
+    assert.equal(await chat.locator('.m-ev:not(.m-ev-prompt):not(.m-ev-trace)').count(), conversationRows(apiTimeline.events), `${state} timeline row count differs from API`)
     const renderedText = await chat.locator('.m-timeline').innerText()
     for (const entry of apiTimeline.events) {
-      const text = entry.kind === 'sent' ? entry.text : entry.note
+      const text = entry.kind === 'sent' ? shownText(entry.text) : entry.note
       if (text) assert.ok(renderedText.includes(text), `${state} timeline omitted ${JSON.stringify(text)}`)
     }
 
@@ -256,23 +261,25 @@ try {
   }
 
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  const archiveZone = page.locator('.si-zone-archive')
-  await archiveZone.waitFor({ state: 'visible', timeout: 30_000 })
-  await archiveZone.click()
-  const archivedRow = page.locator(`.si-zone-archive ~ .si-tree-row .si-item[data-sid="${archivedId}"]`)
+  // archived records live on the archive shelf behind the list's archive pill, not in a status zone
+  const archivePill = page.locator('.si-pill.archive')
+  await archivePill.waitFor({ state: 'visible', timeout: 30_000 })
+  if (!/\bon\b/.test(await archivePill.getAttribute('class') || '')) await archivePill.click()
+  const archivedRow = page.locator(`.si-archive-page-row[data-sid="${archivedId}"]`)
   await archivedRow.waitFor({ state: 'visible', timeout: 30_000 })
   timelineRequests.set(archivedId, 0)
   await archivedRow.click()
   const archivedSurface = await assertSurface(archivedId, 'archived', '▤ 已归档 · 内容只读', '取回')
   assert.equal(transcriptRequests.get(archivedId) || 0, 0, 'collapsed status fetched transcript eagerly')
-  const archivedTranscript = page.locator('.tl-chat:visible .m-transcript-toggle').first()
+  const archivedTranscript = page.locator('.tl-chat:visible .m-seam-row').first()
+  assert.ok(await archivedTranscript.count() > 0, 'archived fixture has no bare working run to carry its transcript')
   await archivedTranscript.click()
-  await page.locator('.m-transcript-flow').waitFor({ state: 'visible' })
-  assert.equal(transcriptRequests.get(archivedId), 1, 'expanded status did not issue exactly one transcript request')
-  assert.ok((await page.locator('.m-transcript-flow').innerText()).includes('persisted transcript turn'), 'archived transcript turn did not render after worktree removal')
-  const tool = page.locator('.m-transcript-tool').first()
-  assert.equal(await tool.locator('pre').isVisible(), false, 'tool output was expanded by default')
-  await tool.locator('summary').click()
+  await page.locator('.m-seam-inset .tc-flow').waitFor({ state: 'visible' })
+  assert.equal(transcriptRequests.get(archivedId), 1, 'expanded seam did not issue exactly one transcript request')
+  assert.ok((await page.locator('.m-seam-inset .tc-flow').innerText()).includes('persisted transcript turn'), 'archived transcript turn did not render after worktree removal')
+  const tool = page.locator('.m-seam-inset .tc-tool').first()
+  assert.equal(await tool.locator('.tc-tool-out').count(), 0, 'tool output was expanded by default')
+  await tool.locator('.tc-tool-row').click()
   assert.ok((await tool.innerText()).includes('fixture output'), 'tool output did not expand')
   await archivedTranscript.click()
   await archivedTranscript.click()
@@ -291,7 +298,7 @@ try {
   await page.goto(`${base}/#/sessions/${encodeURIComponent(offlineId)}`, { waitUntil: 'domcontentloaded' })
   const offlineSurface = await assertSurface(offlineId, 'offline', '⏻ agent 已离线 · 内容只读', '重新启动')
   assert.equal(transcriptRequests.get(offlineId) || 0, 0, 'collapsed unavailable status fetched transcript eagerly')
-  await page.locator('.tl-chat:visible .m-transcript-toggle').first().click()
+  await page.locator('.tl-chat:visible .m-seam-row').first().click()
   await page.locator('.tl-chat:visible .m-transcript-state.is-error').waitFor({ state: 'visible' })
   assert.match(await page.locator('.tl-chat:visible .m-transcript-state.is-error').innerText(), /transcript 已不可用/, 'unavailable transcript was blank')
   assert.equal(transcriptRequests.get(offlineId), 1, 'unavailable interval did not issue exactly one request')

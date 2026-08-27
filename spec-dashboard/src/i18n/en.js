@@ -940,7 +940,8 @@ export default {
   // the touch-first phone interface (MobileApp) — the desktop graph is a mouse/keyboard instrument, so a
   // phone gets a drill-down list + a sessions tab instead.
   mobile: {
-    conversation: 'conversation',
+    worked: 'worked',
+    more: 'more',
     specsTab: 'specs',
     sessionsTab: 'sessions',
     evalsTab: 'evals',
@@ -955,7 +956,6 @@ export default {
     launchFailed: 'launch failed — the backend refused or is unreachable',
     back: 'back',
     noEvents: 'nothing recorded yet — status changes and messages will land here',
-    asked: 'original ask',
     you: 'you',
     inputPlaceholder: 'message the agent…',
     send: 'send',

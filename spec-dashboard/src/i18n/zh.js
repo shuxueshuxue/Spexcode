@@ -927,7 +927,8 @@ export default {
 
   // 触控优先的手机界面（MobileApp）—— 桌面图谱是鼠标/键盘的操作方式，手机改用下钻列表 + 会话页。
   mobile: {
-    conversation: '对话',
+    worked: '工作了',
+    more: '展开',
     specsTab: '规格',
     sessionsTab: '会话',
     evalsTab: '评测',
@@ -942,7 +943,6 @@ export default {
     launchFailed: '启动失败 —— 后端拒绝或不可达',
     back: '返回',
     noEvents: '暂无记录 —— 状态变化和消息会出现在这里',
-    asked: '初始任务',
     you: '我',
     inputPlaceholder: '给 agent 发消息…',
     send: '发送',

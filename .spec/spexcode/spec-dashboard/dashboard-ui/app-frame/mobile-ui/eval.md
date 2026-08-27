@@ -25,8 +25,9 @@ scenarios:
       `.m-main`, `.m-composer`, `.m-composer-line`, `.m-input`, `.m-send`, and the persistent
       safe-area-owning `.m-tabbar`. Screenshot each mobile layout.
     expected: |
-      The TimelineChat composer ends exactly at both the session detail and `.m-main` bottoms, directly
-      against the tab bar's top edge. Its input and send action remain aligned, enabled after typing,
+      The session detail and `.m-main` end exactly at the tab bar's top edge, and the TimelineChat composer
+      floats inside that reading column just above it (the [[conversation]] float contract), never below the
+      edge or over the tab bar. Its input and send action remain aligned, enabled after typing,
       non-overlapping, and horizontally usable at every phone width. The tab bar keeps ownership of
       `safe-area-inset-bottom`, so navigation and home-bar clearance never move into the composer.
   - name: authored-composer-input-contract

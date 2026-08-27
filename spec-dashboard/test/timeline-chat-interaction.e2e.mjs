@@ -544,23 +544,24 @@ async function verifySecondConversationSink(viewport) {
   return { pass, mounted, sinks, selected, dragFocusSamples: drag.focusSamples, afterType }
 }
 
+// The seam's disclosure is the timeline's own control: opening it must neither steal the composer caret
+// nor drop the conversation selection.
 async function verifyDetailsToggle(viewport, inputHandle) {
-  const summary = page.locator('.m-ev-prompt:visible > summary').first()
-  if (!await summary.count()) return { pass: false, reason: 'prompt summary is missing' }
-  const details = summary.locator('..')
-  const before = await details.evaluate((element) => element.open)
+  const seam = page.locator('.m-seam-row:visible').first()
+  if (!await seam.count()) return { pass: false, reason: 'seam disclosure is missing' }
+  const before = await seam.getAttribute('aria-expanded')
   const highlightBefore = await readTimelineSelection(inputHandle)
-  await summary.click()
-  const after = await details.evaluate((element) => element.open)
+  await seam.click()
+  const after = await seam.getAttribute('aria-expanded')
   const highlightAfter = await readTimelineSelection(inputHandle)
   const pass = before !== after && highlightBefore.focus && highlightAfter.focus
     && highlightBefore.highlight && highlightBefore.native === '' && highlightAfter.native === ''
     && highlightAfter.highlight && highlightAfter.text === highlightBefore.text
-  await showReadout(viewport, 'details summary native toggle', {
+  await showReadout(viewport, 'seam disclosure toggle', {
     focus: highlightAfter.focus, draft: await page.locator('.m-input:visible').inputValue(),
     selection: highlightAfter.text, typed: 'selection retained', pass,
   })
-  mark(viewport, `details summary toggle (${pass ? 'pass' : 'fail'})`)
+  mark(viewport, `seam disclosure toggle (${pass ? 'pass' : 'fail'})`)
   await page.waitForTimeout(800)
   return { pass, before, after, highlightBefore, highlightAfter }
 }
@@ -781,7 +782,7 @@ try {
       `${result.viewport} copied formula did not occur exactly once`)
     assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)
     assert.equal(result.composerPress.pass, true, `${result.viewport} composer press did not retire the external selection`)
-    assert.equal(result.detailsToggle.pass, true, `${result.viewport} details summary did not toggle natively`)
+    assert.equal(result.detailsToggle.pass, true, `${result.viewport} seam disclosure did not toggle while keeping the selection`)
     if (result.executionTail) assert.equal(result.executionTail.pass, true, 'execution entry did not follow the pinned timeline tail')
     if (result.secondSink) assert.equal(result.secondSink.pass, true, 'second warm headless layer did not own the exact sink')
   }

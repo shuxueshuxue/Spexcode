@@ -40,6 +40,7 @@
   --type-meta: 12px;
   --type-control: 13px;
   --type-body: 13px;
+  --type-prose: 14px;      /* a message meant to be READ, not scanned: the agent's report, the person's ask */
   --type-subtitle: 15px;
   --type-title: 17px;
   --type-heading: 20px;
@@ -2607,7 +2608,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    phone the diff WRAPS instead (the reproduced h-scrollbar came exactly from here). */
 .m-app .ev-diff { overflow-x: hidden; }
 .m-app .ev-diff .dl { white-space: pre-wrap; overflow-wrap: anywhere; }
-.m-app .m-ev-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-app img, .m-app video { max-width: 100%; height: auto; }
 .m-specs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
@@ -2743,11 +2743,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    below), and sent prompts. RichText owns authored line breaks and blocks — these ARE the agent's reply. */
 /* .tl-chat is the phone session detail's chat root: a flex column filling its host; the pieces inside keep
    their m-* classes. */
-.tl-chat { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tl-chat { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; container-type: inline-size; }
 .si-term-layer .tl-chat { height: 100%; background: var(--paper); }
 .m-timeline {
   flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
-  padding: 10px 14px calc(var(--space-7) * 4);
+  padding: 0 24px calc(var(--space-7) * 4);
   user-select: text; -webkit-user-select: text;
 }
 /* THE CONVERSATION HAS A MEASURE, and the scroller is not it. Without this the flow ran the full pane: at
@@ -2755,40 +2755,112 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    nearly 1200px away, and the two read as columns of a table rather than as turns of one conversation. The
    column is centred so the exchange has a middle to happen in; the scroller keeps its own full width so the
    scrollbar stays on the pane's edge where a reader expects it. */
-.m-timeline > * { max-width: 896px; margin-inline: auto; }
+.m-col { display: flex; flex-direction: column; max-width: 760px; margin-inline: auto; padding-top: 12px; }
 /* TimelineChat keeps the real composer caret focused while this browser-owned highlight paints a
    conversation Range. It deliberately never creates a document Selection. */
 ::highlight(timeline-sel) { background-color: #264f78; color: #f0f6fc; }
-.m-day { text-align: center; margin: 10px 0 6px; font-size: var(--type-caption); letter-spacing: var(--tracking-normal); color: var(--muted); }
-.m-ev { margin: 8px 0; }
-.m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--ui-font); font-size: var(--type-control); }
+/* THE RULER ([[conversation]]). Every row is a gutter and a cell: time lives in the gutter, tabular and
+   the same for every row, and the day it belongs to sticks in that same gutter as the reader scrolls. The
+   right edge carries nothing — the old page hung time, a toggle and a copy button there, four times per
+   minute, and the eye crossed 900px to match a toggle to what it opened. */
+.m-ev, .m-day { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 16px; }
+.m-ev { padding: 9px 0; }
+.m-gut {
+  text-align: right; padding-top: 3px; font-family: var(--ui-font); font-size: var(--type-caption);
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.m-day { position: sticky; top: 0; z-index: 2; align-items: center; padding: 6px 0 4px; background: var(--paper); }
+.m-day .m-gut { padding-top: 0; color: var(--ink2); font-weight: var(--weight-semibold); }
+.m-day-rule { border-top: 1px solid var(--edge); }
 .m-ev-glyph { flex: none; }
-.m-ev-word { font-weight: var(--weight-semibold); }
-.m-ev-span { flex: none; color: var(--muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
-.m-ev-time { margin-left: auto; flex: none; font-size: var(--type-caption); color: var(--muted); }
-.m-transcript-toggle { display: flex; justify-content: flex-end; width: 100%; margin: 3px 0 0; padding: 0 2px; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; }
-.m-transcript-toggle:hover { color: var(--blue); }
-.m-transcript-state, .m-transcript-empty, .m-transcript-truncated { margin: 5px 0 0 14px; padding: 6px 8px; color: var(--muted); background: var(--panel); border-left: 2px solid var(--line); font-size: var(--type-meta); overflow-wrap: anywhere; }
+/* the inline time a row keeps for itself when the gutter is gone (narrow pane, phone) */
+.m-tin { display: none; margin-left: auto; flex: none; font-family: var(--ui-font); font-size: var(--type-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* THE AGENT IS THE PAGE: its report is the body — no well, no rule, no indent — at the prose size and held
+   to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
+   footprint on a message. The copy button is a ghost for the one browser without Custom Highlight copy. */
+.m-say { min-width: 0; max-width: 620px; }
+.m-say-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px; font-family: var(--ui-font); }
+.m-say-chip { display: inline-flex; align-items: baseline; gap: 5px; font-size: var(--type-caption); font-weight: var(--weight-semibold); }
+.m-ev-note { font-size: var(--type-prose); line-height: var(--leading-body); color: var(--ink2); overflow-wrap: anywhere; }
+.m-copy-note { margin-left: auto; padding: 0; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; opacity: 0; transition: opacity .12s; }
+.m-ev:hover .m-copy-note, .m-ev:focus-within .m-copy-note { opacity: 1; }
+
+/* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
+   page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.
+   The peer's name sits on the bubble; the human's has none, and the machine envelope never shows. */
+.m-quote {
+  position: relative; justify-self: end; min-width: 0; max-width: min(520px, 84%);
+  padding: 8px 12px; color: var(--ink2); background: var(--panel2);
+  /* the sheet spends ONE radius token; the squared tail corner is a sub-pixel mark, the one exception. */
+  border-radius: var(--radius); border-top-right-radius: 2px;
+}
+.m-quote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--ui-font); }
+.m-quote-head:not(:has(.m-quote-who)) { display: none; }
+.m-quote-who { font-size: var(--type-caption); font-weight: var(--weight-semibold); color: var(--blue); }
+.m-ev-text { font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
+/* a long quote is clamped at first sight; the conversation is about what came after it */
+.m-quote.is-clamped { max-height: 13em; overflow: hidden; }
+.m-quote.is-clamped::after { content: ""; position: absolute; inset: auto 0 0; height: 4.5em; background: linear-gradient(transparent, var(--panel2)); pointer-events: none; }
+.m-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--blue); background: none; border: 0; font: inherit; font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer; }
+
+/* AN EVENT LINE: something that happened — `error`, `corrupt` — is one line with no box and no duration.
+   The old row put a span beside it, so `error 80h 45m` read as eighty hours of failing. */
+.m-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-family: var(--ui-font); font-size: var(--type-control); }
+.m-line .m-ev-word { font-weight: var(--weight-semibold); }
+.m-line-text.m-ev-note { min-width: 0; color: var(--ink); font-size: var(--type-control); line-height: var(--leading-relaxed); }
+
+/* THE SEAM: one line for everything that happened between two messages, saying only how long the agent
+   worked — the one duration scrollback asks for — and, once read, what that stretch cost. The caret leads
+   so the row reads as a disclosure; the rule runs to the edge so it reads as a seam and not as another thing
+   that was said. The transcript opens directly beneath it on a green inset line, so where it came from stays
+   in view. The live dot in the gutter is the page's only moving thing. */
+.m-ev-seam { padding: 2px 0; }
+.m-seam { min-width: 0; }
+.m-seam-dot { font-size: var(--type-caption); color: var(--muted); }
+.m-seam-dot.is-live { color: var(--green); }
+.m-seam-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0;
+  color: var(--muted); background: none; border: 0; font-family: var(--ui-font); font-size: var(--type-meta); text-align: left; cursor: pointer;
+}
+.m-seam-row:hover { color: var(--ink2); }
+.m-seam-lead { flex: none; color: var(--ink); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
+.m-seam-detail { flex: none; font-variant-numeric: tabular-nums; }
+.m-seam-line { flex: 1; margin-left: 4px; border-top: 1px solid var(--edge); }
+.m-seam-caret { flex: none; width: 0; height: 0; margin-right: 2px; border: 4px solid transparent; border-left: 5px solid currentColor; border-right: 0; transform-origin: 40% 50%; transition: transform .12s; }
+.m-seam-row[aria-expanded="true"] .m-seam-caret { transform: rotate(90deg); }
+.m-seam-inset { margin: 4px 0 10px; padding: 10px 0 6px 16px; border-left: 2px solid color-mix(in srgb, var(--green) 45%, var(--edge)); }
+.m-transcript-state, .m-transcript-empty, .m-transcript-truncated { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
+/* the harness execution entry sits in the cell like any message; an empty trace leaves no row behind */
+.m-ev-trace:not(:has(.m-execution-trace)) { display: none; }
+.m-ev-trace .m-execution-entry { width: 100%; margin: 0; }
+
+/* A NARROW PANE HAS NO RULER: the gutter goes and each row keeps its own inline time; the day still leads
+   its rule. The pane, not the viewport, decides — a side pane on a desktop is as narrow as a phone. */
+@container (max-width: 560px) {
+  .m-timeline { padding-inline: 14px; }
+  .m-ev { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: 7px 0; }
+  .m-ev > .m-gut { display: none; }
+  .m-day { grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
+  .m-day .m-gut { text-align: left; }
+  .m-tin { display: inline; }
+  .m-quote .m-quote-head { display: flex; }
+  .m-say-head .m-copy-note { display: none; }
+}
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------
    The old transcript was a nested log: a tinted well, a rule under every turn, a role word above each one,
    and a bordered box per tool. Every level of nesting drew another line, so reading it meant reading the
    containers. A chat has almost no chrome — the turns' own shapes carry the structure, and whitespace does
    the separating. What is left here is the smallest set of marks that still says who spoke.               */
-.tc-flow { display: flex; flex-direction: column; gap: 18px; margin: 10px 0 0; }
-/* the person is QUOTED: a narrow bubble, one corner squared into a tail, sitting off the measure. The agent
-   IS the page — full width, no bubble, no tint. Boxing both would make a conversation read as a table. */
-.tc-ask {
-  align-self: flex-end; max-width: min(576px, 82%);
-  padding: 8px 12px; color: var(--ink2); background: var(--panel);
-  /* the sheet spends ONE radius token; a bubble does not get to invent a rounder one. The squared tail
-     corner is a sub-pixel mark, which is the one exception the geometry contract allows. */
-  border: 1px solid var(--edge); border-radius: var(--radius); border-top-right-radius: 2px;
-  overflow-wrap: anywhere;
-}
+.tc-flow { display: flex; flex-direction: column; gap: 16px; }
+/* the person is QUOTED with the same bubble the outer conversation uses (`.m-quote`), one step smaller
+   because it is nested; the agent IS the page — full width, no bubble, no tint. */
+.tc-ask { align-self: flex-end; }
+.tc-ask .m-ev-text { font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .tc-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 /* prose keeps a readable measure even when the pane is wide; only the tool blocks below may run long. */
-.tc-say-text { max-width: 74ch; color: var(--ink); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
+.tc-say-text { max-width: 620px; color: var(--ink); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
 /* the work segment's one line. It is a full-width rule rather than a sentence because it is a SEAM in the
    conversation — everything that produced the answer, closed. The caret leads so the row reads as a
    disclosure and not as another thing that happened. */
@@ -2832,19 +2904,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font: inherit; font-family: var(--mono); font-size: var(--type-meta);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.m-ev-note {
-  margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
-  overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0;
-}
-.m-copy-note { display: block; margin-top: 8px; padding: 3px 7px; color: var(--blue); background: transparent; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; cursor: pointer; }
-.m-ev-sent .m-ev-from { font-weight: var(--weight-semibold); color: var(--blue); }
-.m-ev-text {
-  margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink);
-  overflow-wrap: anywhere; background: color-mix(in srgb, var(--blue) 7%, var(--paper));
-  border-left: 2px solid color-mix(in srgb, var(--blue) 45%, var(--line)); border-radius: 0 var(--radius) var(--radius) 0;
-}
-.m-ev-prompt summary { font-family: var(--ui-font); font-size: var(--type-control); color: var(--muted); cursor: pointer; }
-
 /* Harness execution is a compact conversation entry, not a raw transcript view. */
 .m-execution-entry {
   display: flex; align-items: center; gap: 8px; width: calc(100% - 14px); margin: 10px 0 0 14px; padding: 7px 9px;

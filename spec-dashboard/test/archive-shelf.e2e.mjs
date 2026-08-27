@@ -214,7 +214,10 @@ try {
   const archivedConversation = page.locator('.tl-chat:visible')
   await archivedConversation.waitFor({ state: 'visible', timeout: 30_000 })
   assert.ok(archivedTimeline.events.length > 0, 'real archived target must retain timeline history')
-  assert.equal(await archivedConversation.locator('.m-ev:not(.m-ev-prompt)').count(), archivedTimeline.events.length, 'archive conversation must render the API timeline instead of a shelf card')
+  // one row per message or event; a run of bare `working` statuses is one seam row
+  const bareWorking = (event) => event.kind === 'status' && (event.display || event.status) === 'working' && !event.note
+  const expectedRows = archivedTimeline.events.reduce((n, event, i, all) => n + (bareWorking(event) && i > 0 && bareWorking(all[i - 1]) ? 0 : 1), 0)
+  assert.equal(await archivedConversation.locator('.m-ev:not(.m-ev-prompt):not(.m-ev-trace)').count(), expectedRows, 'archive conversation must render the API timeline instead of a shelf card')
   assert.equal(await page.locator('.si-shelf-card').count(), 0, 'archive card must not replace Conversation')
   assert.equal(await archivedConversation.locator('.m-input').isDisabled(), true, 'archived composer must be disabled')
   await archivedConversation.locator('.m-coldline-action').filter({ hasText: /restore/i }).waitFor({ state: 'visible' })

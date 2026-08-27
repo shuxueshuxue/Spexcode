@@ -29,6 +29,27 @@ scenarios:
       naming its count and kinds, and opening it reveals every call it stood for. Zero loss = the reader sees
       the answer and one line about what it cost, and reaches the rest in one click.
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/toolVocabulary.js]
+  - name: the-status-machine-leaves-the-reading-unit
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    description: >-
+      In a real browser open the Conversation of a real session whose timeline holds many bare `working`
+      events, peer messages carrying the `spex session send` envelope, and a terminal `error`. Read the API
+      timeline beside the DOM and count: bare `working` events versus rendered seam rows; disclosure buttons
+      outside any opened inset; message rows whose gutter time sits left of the content cell; text elements
+      (times, button labels) touching the column's right edge; the widest agent note and the widest quote;
+      envelope phrases in the rendered text. Read every seam's lead and the error line's text. Open the
+      newest seam that holds tool traffic and count the inset's tool rows. Repeat the desktop read in a light
+      preset, then at 390px wide count visible gutters and inline times. LOOK at the screenshots: the
+      numbers can pass while the page still reads as a machine log.
+    expected: >-
+      Each run of bare `working` events is one seam row and one disclosure — no per-event rows, no
+      `working 1s / 11s / 4m 30s` stacks. Every message row's time is in the left gutter, left of the
+      content cell, and nothing textual touches the right edge. Agent notes hold a 620px measure; quotes cap
+      at 520px flush right. Zero envelope phrases render although the API text carries them. Every closed
+      seam reads `worked <span>`; the error line carries no duration. The opened seam shows its transcript
+      inset with tool rows beneath it. At 390px no gutter is visible and every message row carries an inline
+      time. The light preset changes only colour, not shape.
 ---
 # measuring conversation
 

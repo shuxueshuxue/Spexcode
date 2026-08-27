@@ -716,7 +716,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* [[status-bar]] — the window footer, not a floating chip or a bar over the sidebar. Numbers are VS Code's, which Zed's 4px padding
    plus 8px group gap reproduces in visual weight: 22px content box, 12px text, 0 5px per item. */
 .statusbar {
-  width: 100%; flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: center; justify-content: space-between;
+  width: 100%; flex: 0 0 var(--line-status); height: var(--line-status); display: flex; align-items: flex-end; justify-content: space-between;
   background: var(--ground); border-top: 1px solid var(--line);
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-status); color: var(--muted);
   overflow: hidden;

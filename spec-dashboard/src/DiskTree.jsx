@@ -3,6 +3,7 @@ import { fetchDirEntries } from './data.js'
 import { navigate, routeHash } from './route.js'
 import { holdAnchor } from './tabs.js'
 import { useT } from './i18n/index.jsx'
+import { toggleDiskDir, useDiskTreeState } from './specTreeState.js'
 
 // [[disk-tree]]: the explorer's ORDINARY-FILE projection. [[file-tree]] above it navigates the project the
 // way the SPEC tree is shaped — a node is a folder, a governed file hangs off the node that claims it — and
@@ -33,7 +34,8 @@ function useBranch(path, open) {
 
 function Dir({ entry, depth }) {
   const t = useT()
-  const [open, setOpen] = useState(false)
+  const { open: openDirs } = useDiskTreeState()
+  const open = openDirs.has(entry.path)
   const branch = useBranch(entry.path, open)
   return (
     <>
@@ -45,7 +47,7 @@ function Dir({ entry, depth }) {
           exactly the one verb it has and never grows a handler of its own. */}
       <button type="button" className="ft-row ft-dir" style={{ paddingLeft: 6 + depth * 11 }}
         aria-expanded={open} data-tip={entry.path} data-menu-kind="dir" data-menu-path={entry.path}
-        onClick={() => setOpen((v) => !v)}>
+        onClick={() => toggleDiskDir(entry.path)}>
         <span className="ft-caret">{open ? '▾' : '▸'}</span>
         <span className="ft-label">{entry.name}</span>
       </button>

@@ -103,6 +103,14 @@ sitting inside the head row, the current door needs no answer — the row it is 
 one. The keyboard follows the same rule rather than a second one: `/` opens the palette on the projection in
 force, so the key and the visible door can never disagree.
 
+**COLLAPSE FOLDERS IS ANOTHER OF THOSE DOORS, and it belongs to the explorer head alone.** The explorer's
+two sections are two projections of one list, so the action that folds every open folder in both is a
+property of the explorer and sits on this row — beside search, in the place an editor's explorer keeps its
+collapse-all view action — rather than beside either section's own disclosure ([[file-tree]]). It clears
+both ledgers of the one disclosure store, leaves the Specs and Files sections as the reader left them, and
+is disabled rather than hidden while nothing is open, so the head keeps one shape. The sessions head has no
+such door: its forest folds per family ([[session-forest]]).
+
 The dock's session projection is the **one full session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
 route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:

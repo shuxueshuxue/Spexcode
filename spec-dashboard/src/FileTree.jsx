@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Icon, IconButton } from './icons.jsx'
+import { Icon } from './icons.jsx'
 import { firesEvent } from './bindings.js'
 import ExplorerContextMenu from './ExplorerContextMenu.jsx'
 import { STATUS } from './specMeta.js'
@@ -10,7 +10,7 @@ import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
-import { collapseSpecTree, revealSpecPath, toggleSpecNode, useSpecTreeState } from './specTreeState.js'
+import { revealSpecPath, toggleSpecNode, useSpecTreeState } from './specTreeState.js'
 
 // [[file-tree]]: the left dock. A spec node is a FOLDER, so the tree that navigates the project is the
 // folder tree — the same shape on disk, on the board, and here.
@@ -126,16 +126,13 @@ const readSections = () => {
   } catch { return { specs: true, files: false } }
 }
 
-function Section({ name, open, onToggle, action, children }) {
+function Section({ name, open, onToggle, children }) {
   return (
     <section className="ft-section">
-      <div className="ft-section-head-row">
-        <button type="button" className="ft-section-head" aria-expanded={open} onClick={onToggle}>
-          <span className="ft-caret">{open ? '▾' : '▸'}</span>
-          <span className="ft-section-name">{name}</span>
-        </button>
-        {action}
-      </div>
+      <button type="button" className="ft-section-head" aria-expanded={open} onClick={onToggle}>
+        <span className="ft-caret">{open ? '▾' : '▸'}</span>
+        <span className="ft-section-name">{name}</span>
+      </button>
       {open && <div className="ft-section-body">{children}</div>}
     </section>
   )
@@ -149,7 +146,6 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
   const t = useT()
   const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
   const [sections, setSections] = useState(readSections)
-  const { open: openSpecIds } = useSpecTreeState()
   const kids = useMemo(() => kidsOf(specs || []), [specs])
   const roots = kids.get('') || []
   // THE TREE IS A VIEW OF THE ADDRESS, so routing to a node opens the branch that holds it. Without this
@@ -234,9 +230,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
   return (
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
       <div className="ft-body" onContextMenu={onRowContextMenu} onKeyDown={onRowKeyDown}>
-        <Section name={t('fileTree.specs')} open={sections.specs} onToggle={() => toggle('specs')}
-          action={<IconButton icon="collapse-all" size={14} className="ft-section-action"
-            label={t('fileTree.collapseAll')} disabled={!openSpecIds.size} onClick={collapseSpecTree} />}>
+        <Section name={t('fileTree.specs')} open={sections.specs} onToggle={() => toggle('specs')}>
           {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
         </Section>
         {/* mounted only while open, so a reader who never opens it never costs the backend a listing */}

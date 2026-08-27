@@ -41,17 +41,20 @@ scenarios:
       rows: the arrangement is held outside the rows that draw it, so unmounting a branch cannot erase it.
       Zero loss = a tree that is genuinely a view of the address rather than one that merely claims to be.
     code: [spec-dashboard/src/FileTree.jsx, spec-dashboard/src/specTreeState.js]
-  - name: collapse-all-spec-tree
+  - name: collapse-folders-is-one-door-on-the-explorer-head
     tags: [frontend-e2e, desktop]
     description: >-
-      Open several nested branches in the Specs section of the Explorer, hover or focus its section head,
-      and activate the Collapse All view action. Then reopen one node.
+      In a real desktop browser open several nested spec branches and the Files section with one directory
+      open, read the Explorer head, then activate its collapse-folders door. Count open branches in both
+      sections, read both section heads' aria-expanded, the route, and the door's disabled state; reopen one
+      node and count again. Then open a directory inside Files, close the section, and reopen it.
     expected: >-
-      The Specs section head exposes one quiet VS Code-style collapse-all icon. Activating it hides every
-      disclosed spec branch while keeping the Specs section open, the selected route unchanged, and the Files
-      section untouched. The action is disabled when no spec node is open; reopening a node reveals only that
-      branch and its existing children.
-    code: [spec-dashboard/src/FileTree.jsx, spec-dashboard/src/specTreeState.js, spec-dashboard/src/icons.jsx]
+      The door sits on the dock head beside search — never inside a section head — with a tooltip and an
+      accessible name. One activation folds every open spec branch AND every open disk directory while both
+      sections stay open, the roots stay listed and the route is untouched; the door is disabled once nothing
+      is open; reopening one node reveals only that branch. A directory opened inside Files survives closing
+      and reopening that section because disclosure is held in the explorer's shared store.
+    code: [spec-dashboard/src/FileTree.jsx, spec-dashboard/src/specTreeState.js, spec-dashboard/src/DiskTree.jsx, spec-dashboard/src/Dock.jsx]
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Capture the settled Explorer

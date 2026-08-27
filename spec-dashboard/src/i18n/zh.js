@@ -66,6 +66,7 @@ export default {
     sessions: '会话',
     searchNodes: '搜索节点',
     searchSessions: '搜索会话',
+    collapseFolders: '收起所有文件夹',
   },
   dockSessions: {
     new: '新建会话',

@@ -50,6 +50,22 @@ scenarios:
       seam reads `worked <span>`; the error line carries no duration. The opened seam shows its transcript
       inset with tool rows beneath it. At 390px no gutter is visible and every message row carries an inline
       time. The light preset changes only colour, not shape.
+  - name: a-native-selection-does-not-outlive-the-next-press
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    description: >-
+      In a real browser open a real session's Conversation and click one word of an agent note four times in
+      quick succession (detail 1..4 — the fourth is the click the custom selection did not claim, so the
+      browser itself selected the paragraph). Read `getSelection().toString()` and the `timeline-sel`
+      highlight. Then single-click another word of the same note, twice, reading both again, and LOOK at the
+      screenshot: the bug is a paragraph that stays painted after every click. Also confirm the ordinary
+      path still works — a plain drag paints the custom highlight with no document Selection, and one plain
+      click clears it.
+    expected: >-
+      After the plain click nothing is painted: the document Selection reads empty and the highlight is gone.
+      A press the timeline owns retires both kinds of selection, so no native selection that leaked in —
+      from a fourth click, a drag begun on a control — can survive the next click. The drag control case is
+      unchanged: custom highlight, no document Selection, cleared by one click.
 ---
 # measuring conversation
 

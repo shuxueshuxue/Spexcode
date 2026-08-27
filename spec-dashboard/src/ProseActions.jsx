@@ -83,20 +83,35 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   const content = useSpecContent(node?.id, node?.version)
   const body = node?.body ?? content?.body ?? ''
   const bodyReady = !!codeSelection || node?.body != null || content !== null
+  const codeSelectionRef = useRef(null)
+  if (codeSelection) codeSelectionRef.current = codeSelection
+  const hitRef = useRef(null)
 
   const [hit, setHit] = useState(null)        // { lines, x, y } — a live selection and where to point at it
+  const [menuOpen, setMenuOpen] = useState(false) // the action group is opened explicitly by the native context menu
   const [panel, setPanel] = useState(null)    // { kind:'send'|'manual', x, y }
   const [draft, setDraft] = useState('')      // the card's optional message / the editor's replacement
   const [target, setTarget] = useState('')    // a live session id, or 'new' (its launcher is the remembered one)
   const [jump, setJump] = useState(false)     // follow the passage to its session after the send
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const activeCodeSelection = codeSelection || (menuOpen ? codeSelectionRef.current : null)
 
   const live = sessions.filter((s) => sessionFooterState(s) === 'live')
   const dismiss = useCallback(() => { setPanel(null); setError(null); setBusy(false) }, [])
-  const clear = useCallback(() => { setHit(null); onCodeSelectionClear?.(); dismiss() }, [dismiss, onCodeSelectionClear])
+  const clear = useCallback(() => {
+    setHit(null)
+    setMenuOpen(false)
+    hitRef.current = null
+    codeSelectionRef.current = null
+    onCodeSelectionClear?.()
+    dismiss()
+  }, [dismiss, onCodeSelectionClear])
 
   useEffect(() => {
+    // A source selection can collapse transiently when CodeMirror handles the right-button press.
+    // Keep the menu state for that gesture; the ref below supplies the last lossless range.
+    if (codeSelection) setMenuOpen(false)
     if (!codeSelection) { setPanel(null); setError(null); setBusy(false) }
   }, [codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
 
@@ -117,15 +132,23 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     const read = () => {
       if (frozen.current) return
       const sel = document.getSelection()
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setHit(null); return }
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setHit(null); setMenuOpen(false); hitRef.current = null; return }
       const range = sel.getRangeAt(0)
       if (!host.contains(range.commonAncestorContainer)) return    // a selection elsewhere is not ours to clear
       const lines = stampedRange(range, host)
-      if (!lines) { setHit(null); return }
+      if (!lines) { setHit(null); setMenuOpen(false); hitRef.current = null; return }
       const rect = range.getBoundingClientRect()
-      setHit({ lines, x: rect.left, y: rect.top })
+      const next = { lines, x: rect.left, y: rect.top }
+      setHit(next)
+      hitRef.current = next
+      // Selecting with the primary button only records the range. The native context menu is the
+      // deliberate gesture that opens the action group.
+      setMenuOpen(false)
     }
-    const later = () => window.setTimeout(read, 0)
+    const later = (event) => {
+      if (event.type === 'mouseup' && event.button !== 0) return
+      window.setTimeout(read, 0)
+    }
     host.addEventListener('mouseup', later)
     host.addEventListener('keyup', later)
     return () => { host.removeEventListener('mouseup', later); host.removeEventListener('keyup', later) }
@@ -140,27 +163,36 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       // CodeMirror owns source selections and may not expose them through the browser Selection API.
       // The parent has already captured the lossless range, so right-clicking that source uses the same
       // action group and pointer anchor as prose without guessing from DOM text.
-      if (codeSelection) {
+      const sourceSelection = codeSelection || codeSelectionRef.current
+      if (sourceSelection) {
         event.preventDefault()
         setPanel(null)
-        setHit({ lines: { startLine: codeSelection.startLine, endLine: codeSelection.endLine }, x: event.clientX, y: event.clientY + 18 })
+        setMenuOpen(true)
+        const next = { lines: { startLine: sourceSelection.startLine, endLine: sourceSelection.endLine }, x: event.clientX, y: event.clientY + 18 }
+        setHit(next)
+        hitRef.current = next
         return
       }
       const sel = document.getSelection()
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
-      const lines = stampedRange(sel.getRangeAt(0), host)
+      const domLines = sel && !sel.isCollapsed && sel.rangeCount > 0
+        ? stampedRange(sel.getRangeAt(0), host)
+        : null
+      const lines = domLines || hitRef.current?.lines
       if (!lines) return
       event.preventDefault()
       setPanel(null)
-      setHit({ lines, x: event.clientX, y: event.clientY + 18 })
+      setMenuOpen(true)
+      const next = { lines, x: event.clientX, y: event.clientY + 18 }
+      setHit(next)
+      hitRef.current = next
     }
-    host.addEventListener('contextmenu', onMenu)
-    return () => host.removeEventListener('contextmenu', onMenu)
+    host.addEventListener('contextmenu', onMenu, true)
+    return () => host.removeEventListener('contextmenu', onMenu, true)
   }, [hostRef, codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
 
   // the send card layers its own Escape (menu → address → card); the editor and the bare group are one layer.
   useEscLayer(panel?.kind === 'manual', dismiss)
-  useEscLayer(!!(hit || codeSelection) && !panel, clear)
+  useEscLayer(!!(hit || activeCodeSelection) && !panel, clear)
 
   // an outside press closes the open card. Bound while a card is open only, so ordinary reading never pays
   // for a document-level listener.
@@ -171,16 +203,16 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     return () => document.removeEventListener('mousedown', onDown, true)
   }, [panel, dismiss])
 
-  const selection = codeSelection || (hit && (bodyReady
+  const selection = activeCodeSelection || (hit && (bodyReady
     ? proseSelection(node, body, hit.lines)
     : { node: node?.id, path: node?.path, startLine: hit.lines.startLine, endLine: hit.lines.endLine, text: '' }))
-  const loading = !codeSelection && !!hit && !bodyReady
+  const loading = !activeCodeSelection && !!hit && !bodyReady
 
   const open = (action, event) => {
     const x = event?.clientX ?? hit?.x ?? selection?.x ?? 0
     const y = (event?.clientY ?? hit?.y ?? selection?.y ?? 0) + 14
     setError(null)
-    if (action.key === 'manual' && !codeSelection) {
+    if (action.key === 'manual' && !activeCodeSelection) {
       setDraft(regionText(body, hit.lines.startLine, hit.lines.endLine))
       setPanel({ kind: 'manual', x, y })
       return
@@ -250,7 +282,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     }
   }
 
-  if ((!node && !codeSelection) || (!selection && !loading)) return null
+  if ((!node && !activeCodeSelection) || (!selection && !loading)) return null
   const anchor = {
     lines: hit?.lines || { startLine: selection?.startLine || 1, endLine: selection?.endLine || 1 },
     x: hit?.x ?? selection?.x ?? 0,
@@ -258,8 +290,8 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   }
   return (
     <>
-      {!panel && selection && <ActionGroup t={t} hit={anchor} disabled={loading} manualEnabled={!codeSelection} onPick={open} />}
-      {!panel && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
+      {!panel && menuOpen && selection && <ActionGroup t={t} hit={anchor} disabled={loading} manualEnabled={!activeCodeSelection} onPick={open} />}
+      {!panel && menuOpen && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
       {panel?.kind === 'send' && (
         <SendPopover t={t} panel={panel} node={node} selection={selection} specs={specs} sessions={sessions} live={live}
           launchers={launchers} launcher={launcher} target={target} onAddress={address} jump={jump} setJump={setJump}
@@ -273,7 +305,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   )
 }
 
-// The group that follows the passage. `role="menu"` and a fixed position: an overlay, counted as a z-layer
+// The group opened by the native context menu. `role="menu"` and a fixed position: an overlay, counted as a z-layer
 // and never as chrome. preventDefault on press keeps the browser selection alive under it — losing the
 // selection on the way to acting on it is the one bug this affordance cannot have.
 function ActionGroup({ t, hit, onPick, disabled = false, manualEnabled = true }) {

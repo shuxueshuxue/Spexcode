@@ -3608,10 +3608,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* two panes that both scroll on their own; only the editor inside gets to be tall */
 .diff-review-body { display:grid; grid-template-columns:minmax(220px, 300px) minmax(0, 1fr); flex:1; min-height:0; }
 .diff-file-panel { border-right:1px solid var(--line); overflow:auto; padding-bottom:8px; background:color-mix(in srgb, var(--line) 10%, var(--paper)); }
-.diff-file-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 8px 4px 10px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--type-caption); }
-.diff-file-panel-action { width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; padding:0; border:1px solid transparent; border-radius:var(--radius); color:var(--muted); background:transparent; cursor:pointer; }
-.diff-file-panel-action:hover:not(:disabled) { color:var(--ink2); background:var(--wash-hover); }
-.diff-file-panel-action:disabled { opacity:.4; cursor:default; }
 .diff-file-group { position:sticky; top:0; z-index:1; padding:6px 10px 4px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 22%, var(--paper)); color:var(--muted); font-size:var(--type-caption); }
 .diff-tree-file { justify-content:flex-start; }
 .diff-tree-file .ft-label { flex:1; }

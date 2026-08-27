@@ -797,7 +797,6 @@ export default {
     diffUnified: '统一',
     diffWrap: '折行',
     diffFiles: '变更文件',
-    diffCollapseAll: '折叠所有文件夹',
     diffPrevious: '上一个改动',
     diffNext: '下一个改动',
     diffSent: '已发送 {n} 条评论',

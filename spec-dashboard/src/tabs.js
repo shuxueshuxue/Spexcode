@@ -9,9 +9,9 @@ export { closeDestination, moveTab, placeTab, tabKey }
 // navigation model laid beside it.
 //
 // A NEW TAB IS A GESTURE, NEVER A SIDE EFFECT. The strip holds the documents the reader asked it to hold,
-// plus one current slot per document kind that ordinary navigation lands in and reuses. Every plain click —
-// an explorer row, a dock session row, an object row, a link inside a document — replaces the same-kind slot;
-// an address of another kind gets its own slot rather than evicting a different kind. Holding is explicit:
+// plus the documents the reader has explicitly held. Ordinary navigation replaces only the focused unpinned
+// tab; an unpinned tab of another kind (or an inactive tab of the same kind) is preserved and the new address
+// gets its own slot. Holding is explicit:
 // ctrl/⌘-click, a double-click, or a document's own "open in a new tab" action. That is the whole rule, and
 // it keeps the old anti-proliferation guarantee without allowing cross-kind eviction.
 //
@@ -169,6 +169,7 @@ export function focusSessionTab(id, open) {
 export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
   const [tabs, setTabs] = useState(getTabs)
+  const previousRouteKey = useRef(undefined)
   const onCloseStartRef = useRef(onCloseStart)
   useEffect(() => { onCloseStartRef.current = onCloseStart }, [onCloseStart])
   useEffect(() => {
@@ -182,11 +183,16 @@ export function useTabs({ onCloseStart } = {}) {
   // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
   useEffect(() => {
     const key = tabKey(route)
+    const priorKey = previousRouteKey.current
     if (pinKey && pinKey !== key) pinKey = null
-    if (!isDocument(route.page, route.param)) return
+    if (!isDocument(route.page, route.param)) {
+      previousRouteKey.current = key
+      return
+    }
     const mode = pinKey === key ? 'pin' : 'slot'
-    putTabs(placeTab(getTabs(), route, mode))
+    putTabs(placeTab(getTabs(), route, mode, priorKey))
     touch(key)
+    previousRouteKey.current = key
   }, [route.page, route.param, route.query])
 
   // Resident view routes keep their detail address in the URL but focus the one top-level view tab.

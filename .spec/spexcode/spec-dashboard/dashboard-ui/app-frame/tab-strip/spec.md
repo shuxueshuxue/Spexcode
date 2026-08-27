@@ -28,7 +28,7 @@ related:
 **The strip holds the workspace working set.** Object tabs include `#/file/<path>` and `#/sessions/<id>`.
 Spec, Evals, Issues, and Settings are dynamic top-level tabs (`#/spec`, `#/evals`, `#/issues`,
 `#/settings`); the workspace store does not seed or pin all four pages on cold boot. Opening a route creates
-or focuses that page-kind slot, while its detail address remains in the URL. A file or session detail never
+or focuses an existing tab, while its detail address remains in the URL. A file or session detail never
 replaces another kind's tab. Closing a page tab removes it; the next visit recreates exactly that one tab, so
 route and strip cannot drift while the working set stays honest about what the reader actually opened.
 A session's
@@ -81,21 +81,25 @@ those routes, which is a band that says nothing while costing the budget the sam
 > 什么时候是替换当前 tab，什么时候是新开。"
 
 That is the law, and everything below is its mechanism. **The strip holds one CURRENT SLOT plus whatever
-the reader explicitly held.** Ordinary navigation — any plain click on any finding row, any link inside a
-document, any address typed — lands in the slot and replaces its address. The slot keeps its position, so
-the strip does not reshuffle under the reader. A tab is born only from this whitelist:
+the reader explicitly held.** The strip keeps the focused document plus every other document the reader has
+opened. Ordinary navigation — any plain click on any finding row, any link inside a
+document, any address typed — replaces only the currently focused unpinned slot. If the requested kind has an
+unpinned tab elsewhere, that tab is preserved and the new address is appended, so navigation never overwrites a
+document the reader is not looking at. Explicit creation of a new session from the New Session composer holds
+the published session as a fresh tab because the launch page has no focused workspace tab to replace. The slot
+keeps its position, so the strip does not reshuffle under the reader. A tab is born only from this whitelist:
 
 1. ctrl/⌘-click on a row;
 2. a double-click, on a row or on the slot tab itself;
 3. a document's own explicit "open in a new tab" action — including a review row's context menu;
-4. a deep link into a workspace that has no slot yet (for an object document; boards do not qualify).
+4. explicit creation from the New Session composer, which holds the newly published session before routing;
+5. a deep link into a workspace that has no slot yet (for an object document; boards do not qualify).
 
-Everything else reuses the unpinned slot **within the route's page kind**. The two human rules sit beside
-each other: "弹新 tab 需用户准许" prevents kind-internal browsing from proliferating tabs, while
-"session 不许被 spec 顶掉 / session→session 原位切换" prevents a different kind from evicting the
-reader's session and keeps same-kind session clicks in place. One-slot-any-kind satisfies the first rule
-only by breaking the second: a spec click can drive out a session. When no unpinned slot exists for the
-requested kind, the address is appended as another unpinned slot for that kind; pinned tabs remain held.
+Everything else reuses the focused unpinned tab. The two human rules sit beside each other: "弹新 tab 需用户
+准许" prevents kind-internal browsing from proliferating tabs, while "session 不许被 spec 顶掉 /
+session→session 原位切换" prevents a different kind from evicting the reader's session. When the requested
+kind has an unpinned tab elsewhere, that inactive tab is preserved and the address is appended; pinned tabs
+remain held.
 
 **What replaced the type fence is a smaller pair of guarantees**: a pinned tab is never passively replaced
 (only its own close button removes it), and a session's persisted default face can only ever be a BASE
@@ -106,7 +110,7 @@ why the old fence was buying safety that was never at risk.
 
 | gesture | result |
 | --- | --- |
-| plain click / plain navigation | that page kind's slot takes the address (or one is opened if none exists) |
+| plain click / plain navigation | the focused unpinned slot takes the address; an inactive slot is preserved and a new one is appended |
 | ctrl/⌘-click | a new pinned tab |
 | double-click (row or tab) | pin — the slot becomes held, or the row opens already held |
 | ⌘/ctrl+Enter (the palette) | the highlighted row opens already held — the pointer gesture's keyboard twin |
@@ -169,7 +173,7 @@ route, `#/graph`, or the sessions launch page never creates a tab.
 
 **The semantics are a pure function** (`tabModel.js`: `placeTab`, `normalizeTabs`), separate from the hook
 that owns storage and the route subscription. The law above is therefore checkable without a browser, which
-is what the previous version lacked when it drifted: five plain clicks of one kind must leave exactly one slot, and a
+is what the previous version lacked when it drifted: five sequential plain clicks of one kind must leave exactly one slot, and a
 pinned tab must survive them all. Reading persisted tabs writes the normalized result back once, so retired
 review entries are removed from storage rather than merely hidden in memory.
 
@@ -196,9 +200,9 @@ keep in step with the list — the strip renders the array, so moving a tab is o
 persists through the same local storage the open list already uses. Two consequences fall out rather than
 being arranged: the arrangement survives a reload for free, and a drag *changes nothing else* — the active
 document stays active, no address is written, and a release that lands where the tab started writes nothing
-at all. **A slot is not exempt.** It is an ordinary entry that happens to be unpinned, found by its kind and
-that flag rather than by position, so it may be dragged anywhere and ordinary navigation still lands in it
-exactly where the reader put it.
+at all. **An unpinned tab is not exempt.** It is an ordinary entry that is replaced only when its address is
+the focused route, so it may be dragged anywhere without changing which document ordinary navigation can
+replace.
 
 While the pointer is held and crosses a new insertion point, the array reorders immediately; the reader sees
 the working set move under the pointer before release, and the same stored order is already the truth if the
@@ -218,7 +222,7 @@ the order. Nothing lifts and nothing casts a shadow: the strip stays one plane w
 A horizontal scroller hides the working set behind a gesture — the documents you are holding sit off-screen
 with nothing saying so, which is a strip that has stopped answering the question it exists to answer.
 Wrapping keeps the whole set legible and pays for it in a thickness the reader can see, and the payment is
-self-limiting: the current-slot-per-kind rule means the strip only grows when someone enters another kind or explicitly holds one, so a tall
+self-limiting: the active-slot rule means the strip grows only when someone returns to a kind whose unpinned tab is inactive, or explicitly holds one, so a tall
 strip is a working set someone chose. Every row is the same height, and the band's height is therefore the
 working set rather than a constant.
 

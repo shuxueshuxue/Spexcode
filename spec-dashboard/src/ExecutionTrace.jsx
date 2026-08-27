@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribeSessionExecution } from './data.js'
-import { Icon } from './icons.jsx'
+import { Caret, Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 
 const STEP_ICON = { command: 'terminal', read: 'eye', write: 'pencil', search: 'search', tool: 'command' }
@@ -76,7 +76,7 @@ export default function ExecutionTrace({ sessionId, active, live = false, lastSa
                   {step.state === 'running' && (
                     <span className="m-execution-running"><Icon name="loader" size={11} className="m-execution-spin" />{t('session.executionRunning')}</span>
                   )}
-                  {hasDetail && <span className="tc-tool-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>}
+                  {hasDetail && <Caret open={open} className="tc-tool-caret" />}
                 </Row>
                 {open && <div id={detailId} className="m-execution-detail">{step.detail}</div>}
               </li>

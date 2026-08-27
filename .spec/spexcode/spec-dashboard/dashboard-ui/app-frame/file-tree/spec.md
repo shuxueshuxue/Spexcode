@@ -49,6 +49,15 @@ built for scanning.
 bare address, which both focuses the held tab and clears any node or file selector; merely restoring the
 previous selector would leave the door looking inert whenever a concrete Spec document is already open.
 
+**The disclosure mark is a thin chevron, and nesting is drawn as a line.** Every collapsible row — a node,
+a directory, a section head, and the conversation's seams and tool rows ([[conversation]]) — wears
+[[icon-system]]'s one `Caret`: a stroke chevron that turns a quarter to say "open", the grammar Obsidian's
+file explorer and outliner read in (<https://docs.obsidian.md/Reference/CSS+variables/Components/Indentation+guides>),
+rather than a filled triangle, which reads as a bullet. Beneath an open row, each nested level hangs from a
+hairline indent guide dropped from the centre of its parent's caret slot at the divider weight (`--edge`):
+rows are flat siblings, so each draws its own segment and the stack joins into one continuous line, and
+a reader can see which branch a deep row belongs to without counting indents.
+
 **Files keep the colours their chips have in the popup**, so a governed file and an attachment look the same
 wherever they are listed rather than teaching the reader two vocabularies for one thing.
 

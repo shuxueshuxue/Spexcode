@@ -57,6 +57,9 @@ the accessible name impossible to forget.
   query/facet chrome also takes search, chevron-down, the secondary Filters trigger's filter/funnel,
   comments, and check marks from here; that filter-only menu never masquerades as an ellipsis/kebab action
   menu, and no Unicode check/cross or component-local triangle appears.
+- **`<Caret open/>` is the one disclosure mark.** A thin `chevron-right` that the `.caret.is-open` rule turns a
+  quarter — trees, section heads, conversation seams and tool rows all spend it, so a collapsible thing looks
+  the same everywhere and no component draws a triangle glyph or a CSS-border arrow of its own.
 - **`<IconButton icon label onClick/>` is the icon-only button.** `label` is required and becomes BOTH
   the tooltip — `data-tip`, the app's singleton tooltip layer ([[tooltip]]) — and the `aria-label`
   (the accessible-name gap the audit found — e.g. the issues New button had neither).

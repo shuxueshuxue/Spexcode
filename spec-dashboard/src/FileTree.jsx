@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Icon } from './icons.jsx'
+import { Caret, Icon } from './icons.jsx'
 import { firesEvent } from './bindings.js'
 import ExplorerContextMenu from './ExplorerContextMenu.jsx'
 import { STATUS } from './specMeta.js'
@@ -36,9 +36,9 @@ const kidsOf = (specs) => {
 function Row({ depth, onClick, open, hasKids, dot, label, kind, active, subject = null }) {
   return (
     <button type="button" className={`ft-row ft-${kind}${active ? ' on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 11 }} onClick={onClick} data-tip={label}
+      style={{ paddingLeft: 6 + depth * 11, '--depth': depth }} onClick={onClick} data-tip={label}
       data-menu-kind={subject?.kind} data-menu-id={subject?.id} data-menu-path={subject?.path}>
-      <span className="ft-caret">{hasKids ? (open ? '▾' : '▸') : ''}</span>
+      <span className="ft-caret">{hasKids && <Caret open={open} />}</span>
       {dot ? <i className="ft-dot" style={{ background: dot }} /> : <span className="ft-dot ft-none" />}
       <span className="ft-label">{label}</span>
     </button>
@@ -133,7 +133,7 @@ function Section({ name, open, onToggle, children }) {
   return (
     <section className="ft-section">
       <button type="button" className="ft-section-head" aria-expanded={open} onClick={onToggle}>
-        <span className="ft-caret">{open ? '▾' : '▸'}</span>
+        <span className="ft-caret"><Caret open={open} /></span>
         <span className="ft-section-name">{name}</span>
       </button>
       {open && <div className="ft-section-body">{children}</div>}

@@ -6,7 +6,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { apiFetch, sessionUrl } from './data.js'
 import { useI18n, useT } from './i18n/index.jsx'
-import { Icon, IconButton } from './icons.jsx'
+import { Caret, Icon, IconButton } from './icons.jsx'
 import { buildDiffTree, treeDirKeys, splitPath } from './diffTree.js'
 
 const HIGHLIGHT = HighlightStyle.define([
@@ -196,9 +196,9 @@ function TreeRows({ nodes, depth, prefix, scope, selected, openDirs, onToggleDir
       const key = prefix ? `${prefix}/${node.name}` : node.name
       const open = openDirs.has(key)
       return <Fragment key={`d:${key}`}>
-        <button type="button" className="ft-row ft-dir" style={{ paddingLeft: 6 + depth * 11 }}
+        <button type="button" className="ft-row ft-dir" style={{ paddingLeft: 6 + depth * 11, '--depth': depth }}
           aria-expanded={open} data-tip={key} onClick={() => onToggleDir(key)}>
-          <span className="ft-caret">{open ? '▾' : '▸'}</span>
+          <span className="ft-caret"><Caret open={open} /></span>
           <span className="ft-label">{node.name.includes('/')
             ? <><PathHead segments={node.name.split('/').slice(0, -1)} /><span className="path-leaf">{node.name.split('/').pop()}</span></>
             : <span className="path-leaf">{node.name}</span>}</span>
@@ -209,7 +209,7 @@ function TreeRows({ nodes, depth, prefix, scope, selected, openDirs, onToggleDir
     }
     const key = `${scope}:${node.file.path}`
     return <button type="button" key={`f:${key}`} className={`ft-row ft-code diff-tree-file${key === selected ? ' on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 11 }} aria-current={key === selected ? 'true' : undefined}
+      style={{ paddingLeft: 6 + depth * 11, '--depth': depth }} aria-current={key === selected ? 'true' : undefined}
       data-tip={node.file.path} onClick={() => onSelect(key)}>
       <span className="ft-caret" /><span className="ft-label"><span className="path-leaf">{node.name}</span></span>
       <span className="diff-tree-stat"><span className="diff-add">+{node.file.additions}</span> <span className="diff-del">−{node.file.deletions}</span></span>

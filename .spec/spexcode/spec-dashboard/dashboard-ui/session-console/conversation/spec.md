@@ -142,10 +142,12 @@ content and not of the frame: choosing Terminal or Conversation changes what fil
 how many chrome rows sit around it, which is exactly the claim [[ui-state-model]]'s budget measures. The
 composer's card IS its field — one frame, not an input bordered inside a bordered bar — and the card is
 PAPER: the page's own ground with a hairline frame and the one elevation token, not a panel tint laid over
-the flow, so it reads as part of the sheet the conversation is printed on. Its one action is the shared
+the flow, so it reads as part of the sheet the conversation is printed on. Its primary action is the shared
 send mark ([[icon-system]]'s `send`, the same accent square the thread's composer wears): icon-only, its
 word carried by the tooltip and the accessible name, filled while there is something to send and quiet
-while there is not, so every dashboard composer says "send" by one shape. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+while there is not, so every dashboard composer says "send" by one shape. The Command Box title and its
+`@`, `[[`, `/`, and attachment doors remain in the Conversation footer and act on that same draft; the
+separate terminal Command Box opener is the only command control disabled on this surface. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.

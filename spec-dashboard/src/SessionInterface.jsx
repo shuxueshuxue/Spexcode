@@ -641,7 +641,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const session = sessionsWithRetention.find((candidate) => candidate.id === id)
     return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
   }
-  const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
+  // Conversation owns the shared command-shaped footer, so the transient terminal Command Box opener is
+  // intentionally present but disabled on that surface instead of creating a second input face.
+  const commandAvailable = !conversationSurface && uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive, !!selSession)
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
   const footerState = sessionFooterState(selSession)
@@ -1500,18 +1502,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         },
       },
     ] : []),
-    ...uiCmds.filter((command) => command.button && !activeResource && (activeBaseSurface === 'terminal' || command.name !== 'merge')).map((command) => ({
+    ...uiCmds.filter((command) => command.button && !activeResource && (activeBaseSurface === 'terminal' || command.name !== 'merge')).map((command) => {
+      const enabled = command.enabled && !(command.name === 'command' && conversationSurface)
+      return ({
       id: command.name,
       icon: command.icon,
-      label: command.enabled
+      label: enabled
         ? withShortcut(t(command.titleKey), ...(command.shortcut ? [command.shortcut] : []))
-        : t(command.disabledTitleKey),
-      disabled: !command.enabled,
+        : t(command.disabledTitleKey || command.titleKey),
+      disabled: !enabled,
       disabledReason: command.enabled ? undefined : t(command.disabledTitleKey),
       pressed: command.pressed ? commandOpen : undefined,
       onClick: () => command.run?.(),
       priority: command.anchor === 'right' ? -10 : 50,
-    })),
+    })
+    }),
     ...(activeResource ? [
       {
         id: 'refresh-resource', icon: 'rotate-ccw', label: t('session.refreshResourceTab', { name: activeResource.label }), priority: 40,
@@ -1777,7 +1782,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {actionOutcome?.owner === 'panel' && footerState === 'live' && (
                   <div className="si-action-outcome-float"><ActionOutcome outcome={actionOutcome} /></div>
                 )}
-                {commandOpen && !noLivePane && (
+                {commandOpen && !noLivePane && !conversationSurface && (
                   <div className="si-command-layer" role="dialog" aria-label={t('session.commandBox')}>
                     <button type="button" className="si-command-dismiss" tabIndex={-1}
                       aria-label={t('session.commandClose')} onMouseDown={closeCommandBox} />

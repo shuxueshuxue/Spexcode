@@ -57,15 +57,15 @@ const readReveal = () => page.evaluate(() => {
   const on = document.querySelector('.dock .ft-node.on')
   const parent = on && rows[rows.indexOf(on) - 1]
   const painted = on && (() => { const r = on.getBoundingClientRect(); return r.width > 0 && r.height > 0 })()
-  return { rows: rows.length, focused: on?.querySelector('.ft-label').textContent.trim() || null, painted, ownCaret: on?.querySelector('.ft-caret').textContent.trim(),
-    parentCaret: parent?.querySelector('.ft-caret').textContent.trim() }
+  const caret = (row) => { const c = row?.querySelector('.ft-caret .caret'); return c ? (c.classList.contains('is-open') ? 'open' : 'closed') : 'none' }
+  return { rows: rows.length, focused: on?.querySelector('.ft-label').textContent.trim() || null, painted, ownCaret: caret(on), parentCaret: caret(parent) }
 })
 const reveal = await readReveal()
 record('explorer.reveal', reveal)
 assert.equal(reveal.focused, 'disk-tree')
 assert.equal(reveal.painted, true)
-assert.equal(reveal.parentCaret, '▾', 'the ancestor opened')
-assert.equal(reveal.ownCaret, '▸', 'the node itself stays closed')
+assert.equal(reveal.parentCaret, 'open', 'the ancestor opened')
+assert.equal(reveal.ownCaret, 'closed', 'the node itself stays closed')
 await settled()
 await page.locator('.dock').screenshot({ path: `${OUT}/explorer-reveal.png` })
 const railFold = page.locator('button[aria-pressed][aria-label="Collapse sidebar"]')
@@ -77,13 +77,13 @@ const revealAgain = await readReveal()
 record('explorer.revealAfterFold', revealAgain)
 assert.deepEqual(revealAgain, reveal, 'folding away and back renders exactly the same rows')
 const nodeRows = page.locator('.dock .ft-section').first().locator('.ft-node')
-const openNodeCarets = () => page.locator('.dock .ft-node .ft-caret', { hasText: '▾' }).count()
+const openNodeCarets = () => page.locator('.dock .ft-node .ft-caret .caret.is-open').count()
 const openDirs = () => page.locator('.dock .ft-dir[aria-expanded="true"]').count()
 const heads = page.locator('.dock .ft-section-head')
 const door = page.locator('.dock .dock-head-act[aria-label]').filter({ has: page.locator('svg') }).first()
 // open three more closed roots on top of whatever the route revealed
 for (let i = 0, opened = 0; i < await nodeRows.count() && opened < 3; i++) {
-  if ((await nodeRows.nth(i).locator('.ft-caret').innerText()).trim() === '▸') { await nodeRows.nth(i).click(); opened++; await page.waitForTimeout(120) }
+  if (await nodeRows.nth(i).locator('.ft-caret .caret:not(.is-open)').count()) { await nodeRows.nth(i).click(); opened++; await page.waitForTimeout(120) }
 }
 if ((await heads.nth(1).getAttribute('aria-expanded')) !== 'true') await heads.nth(1).click()
 await page.waitForSelector('.dock .ft-dir', { timeout: 20000 })
@@ -92,6 +92,28 @@ await page.waitForTimeout(400)
 const routeBefore = await page.evaluate(() => location.hash)
 record('explorer.before', { openNodes: await openNodeCarets(), openDirs: await openDirs(), route: routeBefore })
 assert.ok(facts['explorer.before'].openNodes >= 3 && facts['explorer.before'].openDirs >= 1, 'fixture: branches open in both sections')
+
+// the disclosure mark is a chevron and nesting is a line
+const marks = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('.dock .ft-row')]
+  const triangles = rows.filter((row) => /[▸▾]/.test(row.textContent)).length
+  const rotation = (el) => { const m = getComputedStyle(el).transform; if (m === 'none') return 0; const [a, b] = m.match(/-?[\d.]+/g).map(Number); return Math.round(Math.atan2(b, a) * 180 / Math.PI) }
+  const open = document.querySelector('.dock .ft-node .ft-caret .caret.is-open')
+  const closed = document.querySelector('.dock .ft-node .ft-caret .caret:not(.is-open)')
+  const heads = [...document.querySelectorAll('.dock .ft-section-head .ft-caret .caret')].map((c) => c.tagName)
+  const deep = rows.map((row) => ({ row, depth: Number(getComputedStyle(row).getPropertyValue('--depth')) })).find((r) => r.depth >= 3)
+  let guides = null
+  if (deep) {
+    const before = getComputedStyle(deep.row, '::before')
+    guides = { depth: deep.depth, left: before.left, width: before.width, image: before.backgroundImage.includes('repeating-linear-gradient') }
+  }
+  return { triangles, openTag: open?.tagName, openRotation: open ? rotation(open) : null, closedRotation: closed ? rotation(closed) : null, heads, guides }
+})
+record('explorer.marks', marks)
+assert.equal(marks.triangles, 0, 'no triangle glyph survives')
+assert.equal(marks.openTag, 'svg'); assert.equal(marks.openRotation, 90); assert.equal(marks.closedRotation, 0)
+assert.deepEqual(marks.heads, ['svg', 'svg'], 'section heads wear the same chevron')
+assert.ok(marks.guides && marks.guides.image && marks.guides.left === '12px' && marks.guides.width === `${marks.guides.depth * 11}px`, 'N guides for depth N, dropped from the caret slot')
 
 // where the door is: on the dock head, beside search, never inside a section head
 const doorLabel = await door.getAttribute('aria-label')
@@ -208,7 +230,10 @@ const measurePaper = async () => page.evaluate(() => {
     widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .m-quote'),
     rowPadding: parseFloat(getComputedStyle(rows[0]).paddingTop) * 2, minGap: Math.min(...gaps),
     timeOpacity: time ? parseFloat(getComputedStyle(time).opacity) : null,
-    seam: seam ? { fontSize: getComputedStyle(seam).fontSize, rule: !!seam.querySelector('.m-seam-line'), width: Math.round(seam.getBoundingClientRect().width) } : null,
+    seam: seam ? (() => { const caret = seam.querySelector('.caret'); const lead = seam.querySelector('.m-seam-lead')
+      return { fontSize: getComputedStyle(seam).fontSize, rule: !!seam.querySelector('.m-seam-line'), width: Math.round(seam.getBoundingClientRect().width),
+        caretLast: seam.lastElementChild === caret, caretTrails: !!caret && !!lead && caret.getBoundingClientRect().left >= lead.getBoundingClientRect().right } })() : null,
+    trailing: [...document.querySelectorAll('.tl-chat [aria-expanded]')].filter((row) => row.querySelector('.caret')).map((row) => row.lastElementChild.classList.contains('caret')),
     ground: getComputedStyle(document.querySelector('.tl-chat')).backgroundColor,
   }
 })
@@ -220,6 +245,8 @@ assert.ok(paper.widestNote >= paper.cell - 1, 'the agent runs the whole cell')
 assert.ok(paper.widestQuote <= Math.round(paper.cell * 0.8) + 1, 'the quote caps at 80% of the cell')
 assert.ok(paper.timeOpacity < 1, 'the minute rests quiet')
 assert.ok(paper.seam && !paper.seam.rule && paper.seam.fontSize === '11px' && paper.seam.width < paper.column, 'one caption line, no rule to the edge')
+assert.ok(paper.seam.caretLast && paper.seam.caretTrails, 'the seam chevron trails the words')
+assert.ok(paper.trailing.length > 0 && paper.trailing.every(Boolean), 'every disclosure in the conversation ends with its chevron')
 assert.ok(paper.rowPadding >= 24 && paper.minGap >= 0, 'air between rows')
 assert.ok(paper.sidePadding > 16, 'the margin grew with the pane')
 await page.locator('.tl-chat .m-ev.m-ev-say').first().hover()

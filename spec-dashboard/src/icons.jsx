@@ -186,6 +186,13 @@ export function Icon({ name, size = 16, strokeWidth, className, style }) {
   )
 }
 
+// THE ONE DISCLOSURE MARK: a thin chevron that turns a quarter to say "open" — the mark Obsidian's file
+// explorer and outliner use, not a filled triangle. Every tree row, section head, seam and tool row spends
+// this component, so a collapsible thing looks the same everywhere and the rotation is one CSS rule.
+export function Caret({ open = false, size = 12, className = '' }) {
+  return <Icon name="chevron-right" size={size} className={`caret${open ? ' is-open' : ''}${className ? ` ${className}` : ''}`} />
+}
+
 // The icon-only button: label is REQUIRED and becomes both the tooltip (`data-tip`, the app's
 // singleton tooltip layer — [[tooltip]]) and the accessible name (`aria-label`), so no icon button
 // can ship without either.

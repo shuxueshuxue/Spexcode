@@ -4,6 +4,7 @@ import { navigate, routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 import { toggleDiskDir, useDiskTreeState } from './specTreeState.js'
+import { Caret } from './icons.jsx'
 
 // [[disk-tree]]: the explorer's ORDINARY-FILE projection. [[file-tree]] above it navigates the project the
 // way the SPEC tree is shaped — a node is a folder, a governed file hangs off the node that claims it — and
@@ -48,10 +49,10 @@ function Dir({ entry, depth }) {
           something that has nothing to show. */}
       {/* the row menu reads its subject off the row ([[file-tree]]'s one explorer seam), so a folder offers
           exactly the one verb it has and never grows a handler of its own. */}
-      <button type="button" className="ft-row ft-dir" style={{ paddingLeft: 6 + depth * 11 }}
+      <button type="button" className="ft-row ft-dir" style={{ paddingLeft: 6 + depth * 11, '--depth': depth }}
         aria-expanded={open} data-tip={entry.path} data-menu-kind="dir" data-menu-path={entry.path}
         onClick={() => toggleDiskDir(entry.path)}>
-        <span className="ft-caret">{open ? '▾' : '▸'}</span>
+        <span className="ft-caret"><Caret open={open} /></span>
         <span className="ft-label">{entry.name}</span>
       </button>
       {open && <Branch state={branch} depth={depth + 1} loading={t('diskTree.loading')} />}
@@ -65,7 +66,7 @@ function Dir({ entry, depth }) {
 function FileRow({ entry, depth }) {
   const href = routeHash('file', entry.path)
   return (
-    <a className="ft-row ft-code" style={{ paddingLeft: 6 + depth * 11 }} href={href} data-tip={entry.path}
+    <a className="ft-row ft-code" style={{ paddingLeft: 6 + depth * 11, '--depth': depth }} href={href} data-tip={entry.path}
       data-menu-kind="file" data-menu-path={entry.path}
       onClick={(event) => newTabAnchor(event, href)}
       onDoubleClick={(event) => { event.preventDefault(); navigate('file', entry.path) }}>

@@ -84,15 +84,19 @@ exactly those three:
   never rendered — the record keeps it, the surface strips it. A long quote is clamped at first sight with
   a `more`, because the conversation is about what came after it.
 - A SEAM is a run of bare `working` events between two messages: one quiet line in the caption voice,
-  `▸ worked 13m 17s`, whose duration is the sum of that run — how long the agent worked, the one duration
+  `worked 13m 17s ›`, whose duration is the sum of that run — how long the agent worked, the one duration
   scrollback actually asks for — and, once its transcript has been read, `N turns · M tool uses`. It draws
   no rule across the page: the work between two messages is a footnote to the exchange, lit only under the
-  pointer, the way a reading surface folds its thinking. The seam owns the transcript for exactly its
+  pointer, the way a reading surface folds its thinking. Its chevron TRAILS the words, and so does every
+  other disclosure in the conversation — the work fold, each tool row, the live tail's steps — so a folded
+  thing reads content-first and one shape at the end of a line says "open" everywhere on this page (the
+  trees keep theirs leading, because a tree's chevron is also its indent). The seam owns the transcript for exactly its
   interval (the transcript API already reads by interval; nothing server-side changes), opened directly
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
-  `● working · 4m 12s` and is the page's only moving thing; the tail seam of a dead session says `working`
-  — the record's last word — with no duration invented for a stretch nothing closed.
+  `working · 4m 12s` in the live green and is the page's only moving thing — no dot in the gutter, nothing
+  beside the sentence, the words themselves say it; the tail seam of a dead session says `working` — the
+  record's last word — with no duration invented for a stretch nothing closed.
 - An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
   rather than lasted.
 

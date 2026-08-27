@@ -95,13 +95,13 @@ test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosure
   assert.match(zh, /fileTree:\s*\{[\s\S]*graph:\s*'规格图谱'/)
 })
 
-test('session row clicks focus an existing workspace tab before replacing the current slot', () => {
+test('session row clicks are plain navigation; the strip alone decides focus-or-replace', () => {
   const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
   const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
   const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
-  assert.match(dock, /focusSessionTab\(item\.s\.id,/)
-  assert.match(sessionsView, /focusSessionTab\(id,/)
-  assert.match(sessionsView, /scope\.open\(\{ page: 'sessions', param: id, query: null \}\)/)
+  assert.match(dock, /else navigate\('sessions', item\.s\.id\)/)
+  assert.match(sessionsView, /const route = \{ page: 'sessions', param: id, query: null \}/)
+  assert.match(sessionsView, /return scope\.open\(route\)/)
   assert.match(sessionInterface, /onSelect=\{\(id, options\) => onPickSession \? onPickSession\(id, options\)/)
 })
 
@@ -133,7 +133,7 @@ test('empty workspace remains a real route and view entry', () => {
 test('board details focus one dynamic top-level tab without evicting documents', () => {
   const spec = { page: 'spec', param: 'node', query: null }
   const session = { page: 'sessions', param: 's1', query: null }
-  let tabs = placeTab(placeTab([], spec, 'pin'), session, 'pin')
+  let tabs = placeTab(placeTab([], spec, 'append'), session, 'append')
   const evalDetail = { page: 'evals', param: 'node/scenario', query: null }
   const issueDetail = { page: 'issues', param: '42', query: null }
   tabs = placeTab(placeTab(tabs, evalDetail), issueDetail)
@@ -141,9 +141,9 @@ test('board details focus one dynamic top-level tab without evicting documents',
   assert.equal(tabKey(evalDetail), '#/evals')
   assert.equal(tabKey(issueDetail), '#/issues')
   assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
-  assert.deepEqual(tabs.slice(2).map(({ page, param, pinned }) => ({ page, param, pinned })), [
-    { page: 'evals', param: 'node/scenario', pinned: false },
-    { page: 'issues', param: '42', pinned: false },
+  assert.deepEqual(tabs.slice(2), [
+    { page: 'evals', param: 'node/scenario', query: null },
+    { page: 'issues', param: '42', query: null },
   ])
   assert.deepEqual(tabRoute(evalDetail), { page: 'evals', param: null, query: null })
   assert.deepEqual(tabRoute(issueDetail), { page: 'issues', param: null, query: null })

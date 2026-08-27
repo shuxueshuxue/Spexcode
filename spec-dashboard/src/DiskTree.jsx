@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchDirEntries } from './data.js'
 import { navigate, routeHash } from './route.js'
-import { holdAnchor } from './tabs.js'
+import { newTabAnchor } from './tabs.js'
 import { useT } from './i18n/index.jsx'
 
 // [[disk-tree]]: the explorer's ORDINARY-FILE projection. [[file-tree]] above it navigates the project the
@@ -54,15 +54,15 @@ function Dir({ entry, depth }) {
   )
 }
 
-// A FILE IS A DOCUMENT, so its row is a real anchor on the workspace's slot semantics ([[tab-strip]]):
-// plain click reads it in the current slot, ctrl/⌘ holds it as its own tab. Same gesture, same helper, and
+// A FILE IS A DOCUMENT, so its row is a real anchor on the workspace's tab semantics ([[tab-strip]]):
+// plain click reads it in the focused tab, ctrl/⌘ opens it in a new tab. Same gesture, same helper, and
 // the same address the node tree's governed-file rows open — one file has one address however it was found.
 function FileRow({ entry, depth }) {
   const href = routeHash('file', entry.path)
   return (
     <a className="ft-row ft-code" style={{ paddingLeft: 6 + depth * 11 }} href={href} data-tip={entry.path}
       data-menu-kind="file" data-menu-path={entry.path}
-      onClick={(event) => holdAnchor(event, href)}
+      onClick={(event) => newTabAnchor(event, href)}
       onDoubleClick={(event) => { event.preventDefault(); navigate('file', entry.path) }}>
       <span className="ft-caret" />
       <span className="ft-label">{entry.name}</span>

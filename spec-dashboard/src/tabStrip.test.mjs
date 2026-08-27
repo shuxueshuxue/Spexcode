@@ -33,8 +33,9 @@ test('tab menu actions are explicit and use the existing workspace APIs', () => 
   assert.match(source, /useEscLayer\(!!menu/)
 })
 
-test('ordinary navigation supplies focus history so inactive slots cannot be replaced', () => {
-  assert.match(tabs, /const previousRouteKey = useRef\(undefined\)/)
+test('ordinary navigation names the focused tab so an inactive tab cannot be replaced', () => {
+  assert.match(tabs, /let focusedKey = null/)
+  assert.match(tabs, /const priorKey = focusedKey\n    focusedKey = key/)
   assert.match(tabs, /placeTab\(getTabs\(\), route, mode, priorKey\)/)
 })
 
@@ -115,54 +116,61 @@ test('new-session dock door keeps a compact icon target with a visible keyboard 
   assert.match(css, /\.dock-head-act-new\s*\{[\s\S]*width:\s*24px; height:\s*24px;[\s\S]*background:\s*transparent;[\s\S]*border:\s*1px solid color-mix\(in srgb, var\(--blue\) 72%, var\(--line\)\);[\s\S]*border-radius:\s*var\(--radius\)/)
 })
 
-// The strip's law says a tab is born from ctrl/⌘-click, a double-click, or a document's own explicit
-// "open in a new tab" action. A law each surface re-implements is a law each surface can quietly drop —
-// which is what happened: the finding dock held, the Sessions page it was projecting replaced instead.
+// The strip's law says a second tab of a kind is born from ctrl/⌘-click or a document's own explicit
+// "open in a new tab" action — and that the tab which arrives is an ordinary tab. A law each surface
+// re-implements is a law each surface can quietly drop — which is what happened: the finding dock appended,
+// the Sessions page it was projecting replaced instead.
 
-test('the hold gesture is ONE predicate every pointer row surface asks', () => {
-  assert.match(tabs, /export const isHoldGesture = \(event\) => event\.button === 0 && !event\.shiftKey && !event\.altKey/)
-  assert.match(tabs, /export function holdAnchor\(event, href\) \{\n  if \(!isHoldGesture\(event\)\) return false/)
+test('the new-tab gesture is ONE predicate every pointer row surface asks', () => {
+  assert.match(tabs, /export const isNewTabGesture = \(event\) => event\.button === 0 && !event\.shiftKey && !event\.altKey/)
+  assert.match(tabs, /export function newTabAnchor\(event, href\) \{\n  if \(!isNewTabGesture\(event\)\) return false/)
   for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest], ['SpecSearch', palette]]) {
-    assert.match(src, /isHoldGesture\(/, `${name} does not ask the shared hold predicate`)
+    assert.match(src, /isNewTabGesture\(/, `${name} does not ask the shared new-tab predicate`)
   }
   for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest]]) {
     assert.doesNotMatch(src, /ctrlKey \|\| \w+\.metaKey/, `${name} still hand-rolls a pointer modifier test`)
   }
 })
 
-test('holding an address and writing its route are separable halves', () => {
-  assert.match(tabs, /export function markTabHold\(page, param = null, query = null\)/)
-  assert.match(tabs, /export function pinTab\(page, param = null, query = null\) \{\n  markTabHold\(page, param, query\)\n  navigate\(page, param, \{ query \}\)/)
-  // both hold branches record the same pair, so a reload's normalization cannot demote an explicit hold
-  assert.match(tabs, /\{ \.\.\.tab, pinned: true, held: true \}/)
+test('asking for a new tab and writing its route are separable halves, and no tab is ever pinned', () => {
+  assert.match(tabs, /export function markNewTab\(page, param = null, query = null\)/)
+  assert.match(tabs, /export function openNewTab\(page, param = null, query = null\) \{\n  markNewTab\(page, param, query\)\n  navigate\(page, param, \{ query \}\)/)
+  // the mark is consumed by the placement that appends; nothing about a tab records how it arrived
+  assert.match(tabs, /const mode = appendKey === key \? 'append' : 'slot'/)
+  for (const [name, src] of [['tabs', tabs], ['TabStrip', source], ['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest]]) {
+    assert.doesNotMatch(src, /\.pinned|pinned:|pinTab|markTabHold|isHoldGesture|holdAnchor/, `${name} still speaks the pinned-tab vocabulary`)
+  }
+  // the strip draws every tab the same way: no replaceable-slot face, no double-click promotion
+  assert.doesNotMatch(source, /' slot'|onDoubleClick/)
+  assert.doesNotMatch(css, /\.tab\.slot/)
 })
 
-test('a Sessions-page session row keeps both claimed pointer gestures', () => {
-  assert.match(forest, /onClick: \(event\) => selecting \? togglePick\(session\.id\) : onSelect\?\.\(session\.id, \{ hold: isHoldGesture\(event\) \}\)/)
-  assert.match(forest, /onDoubleClick: \(\) => \{ if \(!selecting\) onSelect\?\.\(session\.id, \{ hold: true \}\) \}/)
-  // the hold is marked on the workspace, while the address itself is still written through the view's scope
-  assert.match(sessionsView, /markTabHold\(route\.page, route\.param, route\.query\)/)
-  assert.match(sessionsView, /scope\.open\(route\)/)
+test('a Sessions-page session row keeps the one claimed pointer gesture', () => {
+  assert.match(forest, /onClick: \(event\) => selecting \? togglePick\(session\.id\) : onSelect\?\.\(session\.id, \{ newTab: isNewTabGesture\(event\) \}\)/)
+  assert.doesNotMatch(forest, /onDoubleClick: \(\) => \{ if \(!selecting\) onSelect/)
+  // the new tab is marked on the workspace, while the address itself is still written through the view's scope
+  assert.match(sessionsView, /if \(newTab && id !== 'new'\) markNewTab\(route\.page, route\.param, route\.query\)/)
+  assert.match(sessionsView, /return scope\.open\(route\)/)
 })
 
 test('the session row menu carries the explicit open-in-a-new-tab action', () => {
-  assert.match(sessionMenu, /pinTab\('sessions', id\)/)
+  assert.match(sessionMenu, /openNewTab\('sessions', id\)/)
   assert.match(sessionMenu, /ContextMenuItem icon="plus" onClick=\{openInNewTab\}>\{t\('tabs\.openInNewTab'\)\}/)
 })
 
-test('the palette holds by pointer and by its keyboard twin', () => {
-  assert.match(palette, /const pick = \(e, hold = false\) => \{ if \(e\) \{ onPick\(e, \{ hold \}\); onClose\(\) \} \}/)
+test('the palette opens a new tab by pointer and by its keyboard twin', () => {
+  assert.match(palette, /const pick = \(e, newTab = false\) => \{ if \(e\) \{ onPick\(e, \{ newTab \}\); onClose\(\) \} \}/)
   assert.match(palette, /pick\(results\[sel\], e\.ctrlKey \|\| e\.metaKey\)/)
-  assert.match(palette, /onClick=\{\(event\) => pick\(e, isHoldGesture\(event\)\)\}/)
-  assert.match(shell, /if \(!options\?\.hold\) return navigateAddress\(hit\?\.address\)/)
-  assert.match(shell, /pinTab\(held\.page, held\.param, held\.query\)/)
+  assert.match(palette, /onClick=\{\(event\) => pick\(e, isNewTabGesture\(event\)\)\}/)
+  assert.match(shell, /if \(!options\?\.newTab\) return navigateAddress\(hit\?\.address\)/)
+  assert.match(shell, /openNewTab\(route\.page, route\.param, route\.query\)/)
 })
 
-test('holding is reachable without a pointer, from the one binding registry', () => {
-  assert.match(keymap, /id: 'shell\.tabHold',\s+keys: \['Alt\+Shift\+KeyP'\]/)
-  assert.match(shell, /firesEvent\('shell\.tabHold', event\)\) \{ event\.preventDefault\(\); runTabCommand\('hold'\)/)
-  assert.match(tabs, /hold: \(\) => \{/)
+test('there is no hold chord: nothing in the binding registry or the shell pins a tab', () => {
+  assert.doesNotMatch(keymap, /tabHold/)
+  assert.doesNotMatch(shell, /tabHold|runTabCommand\('hold'\)/)
+  assert.doesNotMatch(tabs, /hold: \(\) => \{/)
   for (const [name, dict] of [['en', en], ['zh', zh]]) {
-    assert.match(dict, /tabHold: '/, `${name} has no legend line for the hold chord`)
+    assert.doesNotMatch(dict, /tabHold: '/, `${name} still has a legend line for the retired hold chord`)
   }
 })

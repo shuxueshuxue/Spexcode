@@ -9,7 +9,7 @@ import { routeHash } from './route.js'
 // that object, not different documents: changing `?surface=conversation|terminal|diff` must update the URL
 // without replacing or multiplying the session tab. Resident Spec/Evals/Issues/Settings details canonicalize
 // to their top-level address. Published resources are the exception: they are file-class workspace objects,
-// so their resource selector remains in the identity and opens beside the session.
+// so their resource selector remains in the identity — a resource and its session are two tabs, not two faces.
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
@@ -26,44 +26,33 @@ export const tabKey = (t) => {
   return routeHash(route.page, route.param, route.query)
 }
 
-// `preview` remains a legacy marker (spec/file documents only), while explicit `pinned: false` entries stay
-// unpinned so an inactive tab is not silently promoted or rewritten during reload. The document predicate is
-// supplied by the view registry so persisted routes that no longer belong in the workspace (bare boards, for
-// example) are cleared at the same read boundary as new routes.
+// EVERY TAB IS ONE SHAPE: an address. Older releases persisted `pinned` / `held` / `preview` marks that made
+// some tabs immune to ordinary navigation, and a reload resurrected that immunity long after the reader had
+// forgotten how the tab arrived. The read boundary drops those marks and collapses duplicate identities, so
+// nothing a previous release wrote can still protect a tab. The document predicate is supplied by the view
+// registry so persisted routes that no longer belong in the workspace (bare boards, for example) are cleared
+// at the same read boundary as new routes.
 export function normalizeTabs(raw, isDocument = () => true) {
-  const tabs = raw.filter((t) => isDocument(t.page, t.param ?? null)).map((t) => {
-    const original = { page: t.page, param: t.param ?? null, query: t.query ?? null }
-    const route = tabRoute(original)
-    const explicitHold = t.held === true
-    return {
-      page: original.page, param: original.param, query: original.query,
-      // Published resources are deliberate holds: they must never compete for a replaceable file slot,
-      // including when an older persisted record forgot to mark them pinned.
-      // Old releases persisted every board as pinned. Demote those legacy faces at the migration boundary;
-      // a board is a dynamic page-kind slot, while only a resource or an explicit hold remains durable.
-      ...(explicitHold ? { held: true } : {}),
-      pinned: isResourceRoute(route) ? true : TOP_LEVEL_PAGES.has(route.page) ? explicitHold
-        : (t.pinned != null ? t.pinned !== false : t.preview !== true),
-    }
-  })
   const unique = []
-  const byKey = new Map()
-  for (const tab of tabs) {
+  const seen = new Set()
+  for (const t of raw) {
+    if (!isDocument(t.page, t.param ?? null)) continue
+    const tab = { page: t.page, param: t.param ?? null, query: t.query ?? null }
     const key = tabKey(tab)
-    const existing = byKey.get(key)
-    if (existing) { existing.pinned ||= tab.pinned; existing.held ||= tab.held; continue }
-    byKey.set(key, tab)
+    if (seen.has(key)) continue
+    seen.add(key)
     unique.push(tab)
   }
   return unique
 }
 
-// WHERE THE STRIP LANDS, given what it holds and what was asked for. Everything the strip decides is here:
-// an already-open address is activated (and pinned when that is what was asked); a new one replaces only the
-// previously focused unpinned slot. If that kind has an unpinned entry elsewhere, it is preserved and the new
-// address is appended instead of silently overwriting a document the reader is not looking at. `activeKey` is
-// optional for pure callers that do not have route history; the workspace hook always supplies it.
-export function placeTab(tabs, route, mode = 'slot', activeKey = undefined) {
+// WHERE THE STRIP LANDS, given what it holds and what was asked for. An already-open address is activated
+// (its detail or face updated in place). A new address REPLACES the focused tab when that tab is of the same
+// kind (`activeKey` names it); otherwise it is APPENDED — because another kind is focused, because nothing in
+// the strip is focused yet (a cold deep link, a non-document route), or because the caller asked for
+// `append` (ctrl/⌘-click, "open in a new tab", session creation). No tab is immune: a tab that arrived by
+// append is replaced by the next plain same-kind navigation exactly like one that arrived by a plain click.
+export function placeTab(tabs, route, mode = 'slot', activeKey = null) {
   const original = { page: route.page, param: route.param ?? null, query: route.query ?? null }
   const normalized = tabRoute(original)
   const key = tabKey(normalized)
@@ -73,26 +62,13 @@ export function placeTab(tabs, route, mode = 'slot', activeKey = undefined) {
       && JSON.stringify(open.query || null) !== JSON.stringify(normalized.query || null)
     const residentChanged = TOP_LEVEL_PAGES.has(normalized.page)
       && (open.param !== original.param || JSON.stringify(open.query || null) !== JSON.stringify(original.query || null))
-    if (mode !== 'pin' && !faceChanged && !residentChanged) return tabs
-    return tabs.map((t) => tabKey(t) === key
-      ? { ...t, ...(faceChanged || residentChanged ? { param: original.param, query: original.query } : {}), ...(mode === 'pin' ? { pinned: true, held: true } : {}) }
-      : t)
+    if (!faceChanged && !residentChanged) return tabs
+    return tabs.map((t) => (tabKey(t) === key ? { ...t, param: original.param, query: original.query } : t))
   }
-  const entry = {
-    page: original.page,
-    param: original.param ?? null,
-    query: original.query ?? null,
-    // A resource opened from a session is a held file-class object. It is intentionally durable until
-    // explicitly closed, so ordinary file navigation can never evict it.
-    pinned: isResourceRoute(normalized) || mode === 'pin',
-    ...(mode === 'pin' && !isResourceRoute(normalized) ? { held: true } : {}),
-  }
-  // A published resource is a file-class workspace tab. Opening one appends it, preserving the session tab
-  // and its selected base face; a second click on the same resource was handled by the identity check above.
-  if (isResourceRoute(normalized)) return [...tabs, entry]
-  const slot = tabs.findIndex((t) => !t.pinned && tabKind(t) === tabKind(normalized)
-    && (activeKey === undefined || tabKey(t) === activeKey))
-  if (mode === 'pin' || slot < 0) return [...tabs, entry]
+  const entry = { page: original.page, param: original.param, query: original.query }
+  const slot = mode === 'append' || activeKey == null ? -1
+    : tabs.findIndex((t) => tabKey(t) === activeKey && tabKind(t) === tabKind(normalized))
+  if (slot < 0) return [...tabs, entry]
   return tabs.map((t, i) => (i === slot ? entry : t))
 }
 
@@ -100,10 +76,6 @@ export function placeTab(tabs, route, mode = 'slot', activeKey = undefined) {
 // and put back at one index — there is no drag state machine here, and nothing about a tab changes except
 // where it sits. `before` names the tab the moved one lands in FRONT of; null means the end of the strip,
 // which is the one insertion point no existing tab can name.
-//
-// A slot is not special. It is an ordinary entry that happens to be unpinned, and `placeTab` finds the
-// requested kind's slot by that flag rather than by position, so a reader may drag it anywhere without
-// changing what it means.
 //
 // An order that did not change returns the SAME array, so a drag that lands where it started writes
 // nothing and wakes no subscriber.

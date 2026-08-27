@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
-import { moveTab, pinTab, tabKey, useTabs } from './tabs.js'
+import { moveTab, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
@@ -238,13 +238,10 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
         const marks = `${drag?.key === key ? ' tab-moving' : ''}${drag?.before === key ? ' tab-drop-before' : ''}`
           + `${drag && drag.before === null && index === tabs.length - 1 ? ' tab-drop-after' : ''}`
         return (
-          <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${tab.pinned ? '' : ' slot'}${isClosing ? ' tab-closing' : ''}${marks}`}
+          <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${isClosing ? ' tab-closing' : ''}${marks}`}
             role="tab" aria-selected={active} aria-grabbed={drag?.key === key || undefined}
             aria-hidden={isClosing ? 'true' : undefined}
             onMouseDown={(e) => { if (!isClosing) startTabDrag(e, tab) }}
-            onDoubleClick={(e) => {
-              if (!tab.pinned && !e.target.closest('.tab-x')) pinTab(tab.page, tab.param, tab.query)
-            }}
             onContextMenu={(e) => {
               if (isClosing) return
               e.preventDefault()

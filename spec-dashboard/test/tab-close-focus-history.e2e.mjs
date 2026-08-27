@@ -61,14 +61,12 @@ try {
   const sceneA = await closeActive()
   await page.screenshot({ path: join(out, 'scene-a.png'), fullPage: true })
 
-  // Scene B — the last focused tab wins across kinds. README and CLAUDE.md are held; package.json takes the
-  // replaceable file slot, then the reader returns to Spec before closing package.json.
+  // Scene B — the last focused tab wins across kinds. Three file tabs coexist because each file after the
+  // first is opened while the Spec tab is focused (a file is appended beside another kind, never replacing
+  // it); then the reader returns to Spec before closing package.json.
   await fresh('#/file/README.md')
-  await page.locator('[data-tab-key="#/file/README.md"]').dblclick()
-  await page.waitForTimeout(350)
+  await go(`#/spec/${encodeURIComponent(node.id)}`)
   await go('#/file/CLAUDE.md')
-  await page.locator('[data-tab-key="#/file/CLAUDE.md"]').dblclick()
-  await page.waitForTimeout(350)
   await go(`#/spec/${encodeURIComponent(node.id)}`)
   await go('#/file/package.json')
   await go('#/file/README.md')

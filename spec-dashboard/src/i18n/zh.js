@@ -69,7 +69,7 @@ export default {
   dockSessions: {
     new: '新建会话',
     archive: '已归档会话',
-    rowTip: '打开 · ctrl+点击或双击固定为标签 · alt+点击把图锁定到该会话',
+    rowTip: '打开 · ctrl+点击在新标签打开 · alt+点击把图锁定到该会话',
   },
   sessionPicker: {
     label: '选择会话',
@@ -473,7 +473,6 @@ export default {
       tabClose: '关闭当前页签',
       tabNext: '选择下一个页签',
       tabPrevious: '选择上一个页签',
-      tabHold: '固定当前页签，普通跳转不再替换它',
       tabSplit: '将当前页签送入分屏',
       commandBox: '开关会话 Command Box',
     },
@@ -717,8 +716,8 @@ export default {
   session: {
     // 会话文档上的省略号：这个面上只有它能走到重命名 / tmux attach / 锁定到图谱，所以直接把内容写出来。
     menuLabel: '会话操作 —— 重命名、attach、锁定到图谱、关闭',
-    opsTitle: '此会话正在改动的节点 —— ctrl+点击或双击固定为标签 · 右键打开会话操作',
-    lockTitle: 'ctrl+点击或双击固定为标签 · 右键打开会话操作，包括锁定到图谱',
+    opsTitle: '此会话正在改动的节点 —— ctrl+点击在新标签打开 · 右键打开会话操作',
+    lockTitle: 'ctrl+点击在新标签打开 · 右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话',
     searchTitle: '搜索',

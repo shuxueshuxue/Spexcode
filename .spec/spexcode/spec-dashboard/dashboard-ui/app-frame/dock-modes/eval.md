@@ -20,7 +20,7 @@ scenarios:
     expected: >-
       The dock is the only desktop session list: rows follow the session forest hierarchy, show status glyphs,
       and highlight the route-selected session. A plain row click navigates in place and ctrl/command-click
-      holds a tab. The `+` door reaches `#/sessions/new`; the archive door opens the existing document overlay.
+      opens a new tab. The `+` door reaches `#/sessions/new`; the archive door opens the existing document overlay.
       On `#/sessions/<id>` and `#/sessions/new`, the document contains no `.si-list`, `.si-board-scroll`, list
       resizer, or collapsed stub; the terminal or timeline fills the complete document width. No drag or
       multi-select affordance appears in the read-only dock.

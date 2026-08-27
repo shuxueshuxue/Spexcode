@@ -15,7 +15,7 @@ import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, routeAddress, sessionEvalAddress } from './address.js'
 import { routeHash } from './route.js'
-import { markTabHold, useTabs } from './tabs.js'
+import { markNewTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
@@ -926,11 +926,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           status: result.session?.status || 'queued', liveness: result.session?.liveness || 'offline',
           archived: false, capabilities: result.session?.capabilities || { headless: true },
         })
-        // Creation is an explicit new-document action, not ordinary session navigation. Hold the published
-        // address before routing so the new session is appended and cannot evict the current session slot.
+        // Creation is an explicit new-document action, not ordinary session navigation. Mark the published
+        // address before routing so the new session is appended and cannot evict the current session tab.
         // The create response is the publication fence: move the reader into the new document immediately,
         // while its queued/starting row and live execution trace catch up through the board stream.
-        markTabHold('sessions', result.id, null)
+        markNewTab('sessions', result.id, null)
         scope.open({ page: 'sessions', param: result.id, query: null })
         reload?.()
       } else if (!result.ok) {

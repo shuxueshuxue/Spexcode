@@ -5,7 +5,7 @@ import { useT } from './i18n/index.jsx'
 import { rankDocs } from '@spexcode/spec-cli/ranker'
 import { useSpecCorpus } from './corpus.js'
 import { sessionAddress, specAddress } from './address.js'
-import { isHoldGesture } from './tabs.js'
+import { isNewTabGesture } from './tabs.js'
 // the breadcrumb path the rows show + match against — the same path the @-mention rows read
 import { specPath } from './mentions.jsx'
 
@@ -121,15 +121,15 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
 
   // hand the whole entry back; App executes the entry's app address (a graph node, or a session). A HOLD
   // rides along as the caller's second argument rather than as a second door: the palette knows the
-  // gesture, the shell knows what to do with an address, and [[tab-strip]] owns what holding means.
-  const pick = (e, hold = false) => { if (e) { onPick(e, { hold }); onClose() } }
+  // gesture, the shell knows what to do with an address, and [[tab-strip]] owns what a new tab means.
+  const pick = (e, newTab = false) => { if (e) { onPick(e, { newTab }); onClose() } }
 
   // the input OWNS its keys (App returns early while search is open — see onKey there), so ↑/↓ walk the
   // result list, Enter jumps to the highlighted entry, Esc closes; everything else types into the query.
   const onKeyDown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSel((i) => Math.min(results.length - 1, i + 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((i) => Math.max(0, i - 1)) }
-    // ⌘/ctrl+Enter is the pointer hold's keyboard twin — the palette is where a reader arrives WITHOUT a
+    // ⌘/ctrl+Enter is the pointer new-tab gesture's keyboard twin — the palette is where a reader arrives WITHOUT a
     // pointer, so the gesture has to exist for the hand that got here by typing.
     else if (e.key === 'Enter') { e.preventDefault(); pick(results[sel], e.ctrlKey || e.metaKey) }
     else if (e.key === 'Escape') { e.preventDefault(); onClose() }
@@ -158,7 +158,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
               data-kind={e.kind}
               data-target={e.target}
               onMouseEnter={() => setSel(i)}
-              onClick={(event) => pick(e, isHoldGesture(event))}
+              onClick={(event) => pick(e, isNewTabGesture(event))}
             >
               <span className="node-dot" style={{ background: e.color }} />
               <span className={`search-kind k-${e.kind}`}>{t(`search.kind.${e.kind}`)}</span>

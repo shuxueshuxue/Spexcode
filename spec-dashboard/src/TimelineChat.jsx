@@ -250,6 +250,19 @@ const clearTimelineHighlight = () => {
   if (hasTimelineHighlight()) CSS.highlights.delete('timeline-sel')
 }
 
+// The custom path exists only where both halves do; without them the press stays the browser's.
+const hasTimelineSelection = () => hasTimelineHighlight() && typeof document.caretRangeFromPoint === 'function'
+
+// @@@leaked-selection - the browser can still own a Selection over the timeline (a drag begun on a control,
+// a fourth quick click), and the cancelled mousedown that keeps the composer caret also cancels the browser's
+// own click-to-collapse — so a leaked Selection must be retired here or it outlives every later press.
+const clearNativeSelectionWithin = (timeline) => {
+  const selection = document.getSelection()
+  if (!timeline || !selection || selection.rangeCount === 0) return
+  const inside = (node) => !!node && timeline.contains(node)
+  if (inside(selection.anchorNode) || inside(selection.focusNode)) selection.removeAllRanges()
+}
+
 const setTimelineHighlight = (range) => {
   if (!hasTimelineHighlight() || !range || range.collapsed) return false
   CSS.highlights.set('timeline-sel', new Highlight(range))
@@ -498,6 +511,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const clearSelection = () => {
     timelineRangeRef.current = null
     clearTimelineHighlight()
+    clearNativeSelectionWithin(scrollRef.current)
     setCopyStatus(null)
   }
 
@@ -518,7 +532,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const beginTimelineSelection = (e) => {
     const timeline = scrollRef.current
     const target = e.target
-    if (e.button !== 0 || !timeline || !(target instanceof Element)) return
+    if (e.button !== 0 || !timeline || !(target instanceof Element) || !hasTimelineSelection()) return
     const control = target.closest(SELECTION_CONTROLS)
     if (control && timeline.contains(control)) return
     if (target === timeline) {
@@ -526,18 +540,18 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       if (e.clientX - rect.left - timeline.clientLeft >= timeline.clientWidth
         || e.clientY - rect.top - timeline.clientTop >= timeline.clientHeight) return
     }
-    const mode = e.detail === 1 ? SelectionMode.NORMAL
-      : e.detail === 2 ? SelectionMode.WORD
-        : e.detail === 3 ? SelectionMode.LINE : null
-    if (mode === null) return
+    // From here the press is the timeline's whether or not it lands on selectable text: it retires every
+    // selection and keeps the composer caret. A press left to the browser would select natively instead.
+    clearSelection()
+    e.preventDefault()
+    const mode = e.detail === 2 ? SelectionMode.WORD
+      : e.detail >= 3 ? SelectionMode.LINE : SelectionMode.NORMAL
     const anchor = mode === SelectionMode.WORD
       ? wordRangeAtPoint(timeline, e.clientX, e.clientY)
       : mode === SelectionMode.LINE
         ? lineRangeAtPoint(timeline, e.clientX, e.clientY)
         : rangeAtPoint(timeline, e.clientX, e.clientY)
     if (!anchor) return
-    clearSelection()
-    e.preventDefault()
     selectionDragRef.current = { mode, anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
     if (mode !== SelectionMode.NORMAL) {
       timelineRangeRef.current = anchor

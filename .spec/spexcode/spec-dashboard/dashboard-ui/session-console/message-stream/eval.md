@@ -10,13 +10,17 @@ scenarios:
       - spec-dashboard/src/styles.css
     description: >-
       Through the running dashboard's real Sessions route, select Conversation for a live session, receive one
-      normalized latest-working-note execution frame at the bottom of the conversation, and click the note entry.
+      normalized latest-working-note execution frame at the bottom of the conversation, read its shape against
+      the rows above it, open its steps, replay a same-turn revision and a new turn, then replay a note equal
+      to the newest agent message on the record.
     expected: >-
-      One compact working-note entry is the newest timeline row and opens an execution pop-out. Its normalized
-      read and command rows carry their respective familiar icons and done/running states in chronological order.
-      Safe details start hidden; each row expands independently and gains height only for its own allowlisted
-      detail. A same-turn update retains an expanded row, while a changed turn starts its rows collapsed. No
-      transcript envelope, raw argument, sensitive input, or output is rendered by the browser.
+      The working note is the newest timeline row, drawn as agent prose on the page — no entry button, no card,
+      no pop-out anywhere. Its normalized read and command rows are transcript-style tool sentences narrower
+      than the column, carrying their familiar icons in chronological order; only the running one wears a
+      running mark. Safe details start hidden; each row expands inline and independently, gaining height only
+      for its own allowlisted detail. A same-turn update retains an expanded row, a changed turn starts its rows
+      collapsed, an empty frame removes the tail, and a note the record already carries draws nothing. No
+      transcript envelope, raw argument, sensitive input, or output is rendered by the browser. No page errors.
   - name: conversation-is-the-only-headless-console
     tags: [frontend-e2e, desktop, mobile]
     description: >-

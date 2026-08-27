@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: interrupt-reaches-a-pane-tui-as-its-own-key
+    tags: [backend-api]
+    test: { path: spec-cli/src/session-interrupt.api.test.ts, name: "YATU: interrupt reaches a pane-backed TUI as its own key, and refuses where no keyboard or turn exists" }
+    code: [spec-cli/src/sessions.ts, spec-cli/src/session-interrupt.api.test.ts]
+    description: >-
+      Boot a real backend on a throwaway home and tmux socket with three records: a headless adapter with no
+      native interrupt, a pane-backed claude TUI that is not working, and the same TUI while working with a
+      real pane whose shell traps SIGINT. POST /interrupt to each and read the pane.
+    expected: >-
+      The headless record is refused (502, no native hard-interrupt control); the idle TUI is refused (502,
+      not working); the working TUI answers ok and its pane reports the SIGINT it received — C-c delivered
+      through the raw-key channel, decided in the backend, with no caller choosing a transport.
   - name: merge-dispatch-keeps-landing-local
     tags: [backend-api, cli]
     test: { path: spec-cli/src/session-merge-dispatch.api.test.ts, name: "merge dispatch gives the agent the short local landing flow" }

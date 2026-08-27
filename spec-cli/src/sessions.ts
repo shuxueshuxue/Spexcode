@@ -5029,16 +5029,26 @@ export function canonicalMessageText(message: { kind: string; body: Uint8Array }
   throw new ResourceConflict(`canonical message kind ${message.kind} cannot be delivered as session text`)
 }
 
-// Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a
-// confirmed native primitive refuses loudly; there is no signal/PTY fallback that could target the wrong turn.
+// Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness with a native
+// primitive uses it. Without one the transport decides: a HEADLESS adapter has no keyboard, so it refuses
+// loudly rather than emulating an interrupt with a signal that could hit the wrong process; a PANE-BACKED
+// TUI has an operator's keyboard by definition, so its interrupt is the key that operator would press —
+// C-c into its own pane, through the raw-key channel below — and only while its lifecycle is actually
+// active, because the same key on an idle TUI is a second Ctrl-C away from quitting it.
 export async function interruptSession(id: string): Promise<DispatchResult> {
-  return withRecordLock(id, async () => {
+  const plan = await withRecordLock(id, async (): Promise<DispatchResult | { paneKey: true }> => {
     const rec = readRecord(id)
     if (!rec) return { ok: false, error: `no session record for ${id} - nothing to interrupt` }
     const h = harnessById(rec.harness || defaultHarness.id)
-    if (!h.interrupt) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
-    return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
+    if (h.interrupt) return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
+    if (h.headless) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
+    if (rec.status !== 'active') return { ok: false, error: `session ${id} is not working (lifecycle ${rec.status}) - nothing to interrupt` }
+    return { paneKey: true }
   })
+  if (!('paneKey' in plan)) return plan
+  // outside the record lock: rawKey takes the same lock for its own send
+  const sent = await rawKey(id, 'C-c')
+  return sent ? { ok: true } : { ok: false, error: `session ${id} has no live pane to interrupt` }
 }
 
 // @@@ rawKey - the RAW-KEYSTROKE nav path, kept DELIBERATELY on `tmux send-keys` and NEVER the rendezvous

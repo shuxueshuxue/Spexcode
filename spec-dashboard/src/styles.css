@@ -2851,8 +2851,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-transcript-state, .m-transcript-empty, .m-transcript-truncated { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
 /* the harness execution entry sits in the cell like any message; an empty trace leaves no row behind */
-.m-ev-trace:not(:has(.m-execution-trace)) { display: none; }
-.m-ev-trace .m-execution-entry { width: 100%; margin: 0; }
+.m-ev-trace:not(:has(.m-execution)) { display: none; }
 
 /* A NARROW PANE HAS NO RULER: the gutter goes and each row keeps its own inline time; the day still leads
    its rule. The pane, not the viewport, decides — a side pane on a desktop is as narrow as a phone. */
@@ -2923,31 +2922,24 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font: inherit; font-family: var(--mono); font-size: var(--type-meta);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-/* Harness execution is a compact conversation entry, not a raw transcript view. */
-.m-execution-entry {
-  display: flex; align-items: center; gap: 8px; width: calc(100% - 14px); margin: 10px 0 0 14px; padding: 7px 9px;
-  overflow: hidden; color: var(--ink2); font: inherit; font-size: var(--type-control); text-align: left;
-  background: color-mix(in srgb, var(--blue) 5%, var(--paper)); border: 1px dashed color-mix(in srgb, var(--blue) 45%, var(--line)); border-radius: var(--radius); cursor: pointer;
+/* THE LIVE TAIL ([[message-stream]]): the current turn drawn as conversation, not as a card. The working note
+   is agent prose at the prose size; the steps are the transcript's own tool sentences (`.tc-tool*`), so the
+   live tail and the folded history are one grammar. Live is said by a caret at the note's end and a spinner
+   on the running step — nothing else moves, and reduced motion stills both. A revision fades in. */
+.m-execution { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.m-execution-note { color: var(--ink2); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; animation: rise var(--dur-rise) ease; }
+.m-execution.is-live .m-execution-note::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-execution-caret 1s steps(2, start) infinite; }
+@keyframes m-execution-caret { to { visibility: hidden; } }
+.m-execution-steps { list-style: none; margin: 0; padding: 0; }
+.m-execution-kind { flex: none; align-self: center; color: var(--muted); }
+.m-execution-step.is-running .tc-tool-verb { color: var(--ink2); }
+.m-execution-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
+.m-execution-spin { animation: m-execution-spin 1s linear infinite; }
+@keyframes m-execution-spin { to { transform: rotate(360deg); } }
+.m-execution-detail { margin: 2px 0 4px 18px; color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .m-execution-note, .m-execution.is-live .m-execution-note::after, .m-execution-spin { animation: none; }
 }
-.m-execution-entry:hover { background: color-mix(in srgb, var(--blue) 9%, var(--paper)); border-color: var(--blue); }
-.m-execution-entry span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-execution-entry svg { flex: none; color: var(--blue); }
-.m-execution-entry svg:last-child { color: var(--muted); }
-.execution-trace-modal { width: min(520px, calc(100vw - 28px)); }
-.execution-note { padding: 0 0 10px; color: var(--ink2); font-size: var(--type-body); line-height: var(--leading-relaxed); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.execution-steps { display: flex; flex-direction: column; gap: 2px; padding: 10px 0 0; margin: 0; list-style: none; }
-.execution-step { min-height: 32px; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); border-bottom: 1px solid var(--line); }
-.execution-step:last-child { border-bottom: 0; }
-.execution-step-toggle, .execution-step-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 7px; color: inherit; font: inherit; text-align: left; background: transparent; border: 0; }
-.execution-step-toggle { cursor: pointer; }
-.execution-step-toggle:hover { background: color-mix(in srgb, var(--blue) 5%, transparent); }
-.execution-step-toggle > svg:first-child, .execution-step-row > svg:first-child { color: var(--blue); }
-.execution-step-toggle > svg:last-child { color: var(--muted); }
-.execution-step-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.execution-step-detail { padding: 0 30px 8px; overflow-wrap: anywhere; color: var(--muted); font-size: var(--type-caption); line-height: var(--leading-relaxed); }
-.execution-step-state { color: var(--muted); font-size: var(--type-caption); }
-.execution-step.running .execution-step-state { color: var(--orange); }
-.execution-empty { padding: 8px 7px; color: var(--muted); font-size: var(--type-control); }
 
 /* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */
 .rich-text { min-width: 0; max-width: 100%; overflow-x: auto; white-space: normal; overflow-wrap: anywhere; }
@@ -3013,6 +3005,15 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .m-send:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 85%, var(--ink2)); }
 .m-send:disabled { color: var(--muted); background: var(--wash-active); cursor: default; }
+/* STOP wears the same square as send, in the quiet wash: present only while the agent works ([[conversation]]) */
+.m-stop {
+  flex: none; align-self: flex-end; height: 26px; width: 26px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink2); background: var(--wash-active); border: 0; border-radius: var(--radius); cursor: pointer;
+  transition: background var(--dur-tab), color var(--dur-tab);
+}
+.m-stop:hover:not(:disabled) { color: var(--paper); background: var(--orange); }
+.m-stop:disabled { opacity: .45; cursor: default; }
 .m-coldline {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;
   color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control);

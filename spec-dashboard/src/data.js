@@ -514,6 +514,13 @@ export function subscribeSessionExecution(id, onExecution) {
   return () => { closed = true; deadman.disarm(); try { es?.close() } catch { /* already closed */ } }
 }
 
+// ONE stop verb for every session ([[dispatch]]): the backend picks native interrupt or the pane's own key.
+export async function interruptSession(id) {
+  const res = await apiFetch(sessionUrl(id, 'interrupt'), { method: 'POST' })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok && body?.ok !== false, error: body?.error }
+}
+
 // the session record detail (full originating prompt on top of the board row) behind /api/sessions/:id.
 export async function loadSessionDetail(id) {
   const res = await apiFetch(sessionUrl(id))

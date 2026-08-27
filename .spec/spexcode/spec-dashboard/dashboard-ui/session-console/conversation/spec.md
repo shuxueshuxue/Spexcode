@@ -150,6 +150,15 @@ terminal-free surface property, and the note data arrives because the agent exec
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.
 
+**Stop lives in the composer, and only while there is something to stop.** While the session is `working`
+the composer shows one stop square beside send — the mark every chat reader knows as "stop generating" —
+and shows nothing otherwise, because a permanently visible disabled stop is chrome about a state the page is
+not in. It calls the one interrupt verb ([[dispatch]]); the backend decides between the adapter's native
+interrupt and, for a pane-backed TUI, the operator's own key into its pane, so this surface never learns
+which transport it is on. A refusal lands in the composer's error line like a failed send; a success asks the
+timeline to refresh. The current turn itself is drawn above as the live tail ([[message-stream]]), in this
+conversation's own grammar.
+
 TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
 IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea

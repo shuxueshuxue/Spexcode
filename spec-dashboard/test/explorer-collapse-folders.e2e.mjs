@@ -1,6 +1,7 @@
 // [[file-tree]] `the-tree-opens-the-branch-the-address-names-and-remembers-it` and
 // `collapse-folders-is-one-door-on-the-explorer-head`, [[disk-tree]] `a-folder-stays-open-across-the-files-fold`,
-// and [[conversation]] `the-composer-is-paper-with-one-send-mark` + `the-conversation-reads-as-paper`, measured
+// and [[conversation]] `the-composer-is-paper-with-one-send-mark` + `the-conversation-reads-as-paper` +
+// `stop-is-one-square-while-working`, measured
 // through the running dashboard in a real browser.
 //
 //   BASE=http://127.0.0.1:5198 OUT=/path/to/evidence node spec-dashboard/test/explorer-collapse-folders.e2e.mjs
@@ -239,6 +240,38 @@ record('composer.sent', { requests: sent, draftAfter: await input.inputValue() }
 assert.equal(sent.length, 1, 'one send request')
 assert.deepEqual(sent[0], { kind: 'text', text: 'YATU composer probe — first line\nsecond line', replyVia: 'note' })
 assert.equal(facts['composer.sent'].draftAfter, '')
+
+// ---- stop: one square beside send, only while the agent works; the one interrupt verb, intercepted
+const interrupts = []
+await page.route('**/api/sessions/**/interrupt', async (route) => {
+  interrupts.push(route.request().url())
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+})
+const working = (graph.sessions || []).find((s) => s.liveness !== 'offline' && s.status === 'working' && !s.capabilities?.headless)
+if (working) {
+  await page.goto(`${BASE}/#/sessions/${working.id}?surface=conversation`)
+  await settled('.m-composer:visible')
+  // two TimelineChats stay mounted once two sessions were visited; read only the one on screen
+  const stopFacts = await page.evaluate(() => {
+    const shown = (sel) => [...document.querySelectorAll(sel)].find((el) => el.getClientRects().length > 0)
+    const stop = shown('.tl-chat .m-stop'); const send = shown('.tl-chat .m-send')
+    if (!stop) return { present: false }
+    const a = stop.getBoundingClientRect(); const b = send.getBoundingClientRect()
+    return { present: true, tag: stop.tagName, label: stop.getAttribute('aria-label'), tip: stop.getAttribute('data-tip'), w: Math.round(a.width), h: Math.round(a.height), leftOfSend: a.right <= b.left, hasSvg: !!stop.querySelector('svg') }
+  })
+  record('stop.working', { session: working.id, ...stopFacts })
+  assert.deepEqual(stopFacts, { present: true, tag: 'BUTTON', label: 'stop', tip: 'stop', w: 26, h: 26, leftOfSend: true, hasSvg: true })
+  await page.locator('.m-composer:visible').screenshot({ path: `${OUT}/composer-stop.png` })
+  await page.locator('.m-stop:visible').click()
+  await page.waitForTimeout(400)
+  record('stop.pressed', { interrupts })
+  assert.equal(interrupts.length, 1)
+  assert.ok(interrupts[0].includes(`/api/sessions/${working.id}/interrupt`))
+} else record('stop.working', { skipped: 'no working pane-backed session on the board' })
+await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)
+await settled('.m-composer:visible')
+record('stop.asking', { session: live.id, status: live.status, stops: await page.locator('.m-stop:visible').count() })
+assert.equal(facts['stop.asking'].stops, 0, 'no stop control while nothing is working')
 
 await page.setViewportSize({ width: 760, height: 900 })
 await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .m-ev-text')

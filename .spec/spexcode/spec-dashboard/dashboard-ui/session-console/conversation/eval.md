@@ -95,6 +95,17 @@ scenarios:
       below full opacity and comes up on hover; the seam is one caption-sized line with no rule to the edge;
       rows sit at least 12px apart; the side margin grows with the pane and shrinks to 14px under the 560px
       threshold. The ground is the theme's paper, dark preset included. No page errors.
+  - name: stop-is-one-square-while-working
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
+    description: >-
+      In a real browser open the Conversation of a session that is `working` and of one that is `asking`.
+      Read the composer line of each: what sits beside send, its element kind, accessible name, size and
+      position. Intercept the interrupt request at the network edge and press stop on the working one.
+    expected: >-
+      The working session's composer carries one stop square left of send — a BUTTON with a tooltip and an
+      aria-label, the same 26px square as send — and pressing it posts exactly one interrupt for that session
+      through the one verb. The asking session's composer carries no stop control at all. No page errors.
 ---
 # measuring conversation
 

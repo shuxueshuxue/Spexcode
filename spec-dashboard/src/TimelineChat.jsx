@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elapsed, RUN_MIN, runKinds, splitTarget, toolTarget, toolVerb } from './toolVocabulary.js'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
-import { loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
+import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import RichText, { richTextFromRange } from './RichText.js'
@@ -359,9 +359,13 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
   return range
 }
 
-function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress }) {
+function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop }) {
   const t = useT()
   const readOnly = state !== 'live'
+  // STOP IS IN THE COMPOSER, and only while there is something to stop: the square every chat reader knows,
+  // beside send, shown while the agent is working and gone otherwise — a permanently visible disabled stop
+  // would be chrome about a state the page is not in. One verb; the backend decides native vs the pane's key.
+  const canStop = !readOnly && working
   // The composer is a SURFACE the conversation floats, not a chrome band the shell stacks — the same shape
   // the terminal surface already gives its command box, so both session surfaces frame their content
   // identically and the reading column keeps its full height behind it.
@@ -385,6 +389,10 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
             }
           }}
         />
+        {canStop && (
+          <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
+            onMouseDown={(e) => e.preventDefault()} onClick={stop} />
+        )}
         {/* one send mark across every composer ([[icon-system]]): the label lives in the tooltip and the
             accessible name, the button is the accent square a reader already knows from the thread. */}
         <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
@@ -414,6 +422,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [stopping, setStopping] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const [copyStatus, setCopyStatus] = useState(null)
   const [expandedSeams, setExpandedSeams] = useState(() => new Set())
@@ -457,6 +466,11 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
   const items = useMemo(() => conversationItems(events || [], transcriptNowRef.current), [events])
+  // what the agent most recently SAID on the record — the live tail elides a note the record already carries
+  const lastSaid = useMemo(() => {
+    for (let i = items.length - 1; i >= 0; i--) if (items[i].kind === 'say' && items[i].text) return items[i].text
+    return null
+  }, [items])
 
   const fetchTranscript = useCallback(async (seam, seamId) => {
     const key = transcriptKey(s.id, seam.from, seam.to)
@@ -627,6 +641,15 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     else setSendErr(r.error || t('mobile.sendFailed'))
   }
 
+  const stop = async () => {
+    if (stopping) return
+    setStopping(true); setSendErr(null)
+    const r = await interruptSession(s.id)
+    setStopping(false)
+    if (r.ok) load()
+    else setSendErr(r.error || t('mobile.stopFailed'))
+  }
+
   // who a `sent` event came from: null = the human; a session id resolves to its live headline when the
   // sender is still on the board, else its short id.
   const fromLabel = (from) => {
@@ -754,7 +777,11 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {events === null
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
-          <div className="m-ev m-ev-trace"><div className="m-gut" /><ExecutionTrace sessionId={s.id} active={active} /></div>
+          {/* THE LIVE TAIL: the current turn, in the conversation's own grammar, after everything on the record */}
+          <div className="m-ev m-ev-trace"><div className="m-gut" />
+            <ExecutionTrace sessionId={s.id} active={active} live={footerState === 'live' && s.status === 'working'}
+              lastSaid={lastSaid} onTurnSettled={load} />
+          </div>
         </div>
       </div>
       {copyStatus && (
@@ -764,7 +791,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       )}
       <TimelineFooter state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
         sending={sending} send={send} sendErr={sendErr} onRestore={onRestore} actionOutcome={actionOutcome}
-        onComposerPress={prepareComposerPress} />
+        onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop} />
     </div>
   )
 }

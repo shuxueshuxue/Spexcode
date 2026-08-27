@@ -594,7 +594,7 @@ async function verifyExecutionTail(viewport) {
     workingNote: 'Live execution entry arrived after the reader reached the tail',
     steps: [],
   }))
-  const entry = page.locator('.m-execution-entry:visible')
+  const entry = page.locator('.m-execution:visible')
   await entry.waitFor({ state: 'visible', timeout: 5_000 })
   await nextFrame()
   const insertion = await timelineMetrics()

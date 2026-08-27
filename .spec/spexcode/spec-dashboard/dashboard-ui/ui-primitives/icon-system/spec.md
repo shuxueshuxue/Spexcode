@@ -39,7 +39,10 @@ the accessible name impossible to forget.
   sourced from AionUi's multi-CLI icon set and monochrome-adapted: hardcoded brand fills stripped so
   the mark inherits `currentColor` (readable in both themes), a two-tone original keeping its second
   tone as an opacity step. The console's `corner-up-left` mark names the session-tree move back to top
-  level, retaining the same stroke vocabulary rather than a component-local arrow.
+  level, retaining the same stroke vocabulary rather than a component-local arrow. The explorer head's
+  `collapse-all` mark ([[dock-modes]]) — two stacked sheets, the front one folded to a minus, the shape
+  every editor's explorer already uses for that action — is drawn here on the 16-grid in this contract,
+  not copied from any editor's icon set.
 - **Identity marks are a data adapter, not scattered glyphs.** [[project-identity]] renders the named
   [[icon-presets]] registry because the same data must serialize into browser favicons. That one renderer
   is the deliberate sibling to the chrome glyph vocabulary; pages still never hand-write SVG variants.

@@ -54,7 +54,12 @@ no information either, since the spec graph names every node's file `spec.md`. A
 and leaves each row the one segment it owns, and a directory holding nothing but one more directory collapses into
 its child so a leaf is never pushed a dozen indents to the right. Where a label still has to give — the sticky
 header's directories, a collapsed chain — it gives at the FRONT, never at the leaf, and the untruncated path stays
-on the row's tooltip. Two changed files never render the same label.
+on the row's tooltip. Two changed files never render the same label. The panel title bar carries the familiar
+VS Code-style **Collapse All** view action at its right edge, using the shared `collapse-all` icon vocabulary;
+the action is quiet until the title bar is hovered or the control receives focus. It clears only the panel's
+in-memory directory disclosure set, keeps the selected file and diff surface where they are, and leaves each
+directory row as the way to reopen one branch. A fresh diff load still starts fully expanded so the review opens
+with every changed path in view.
 
 The second scope is the session's uncommitted work: the tracked edits and untracked additions its worktree holds
 but has not committed. It is enumerated from one porcelain status plus one numstat however dirty the tree is, and

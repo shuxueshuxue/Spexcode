@@ -85,6 +85,22 @@ test('the uncommitted half is read from the session\'s own worktree, or honestly
   assert.match(zh, /diffGroupUncommitted:/)
 })
 
+test('the changed-file tree uses the VS Code collapse-all action shape', () => {
+  const diff = source('./DiffDocument.jsx')
+  const icons = source('./icons.jsx')
+  const en = source('./i18n/en.js')
+  const zh = source('./i18n/zh.js')
+
+  assert.match(diff, /className="diff-file-panel-head"/)
+  assert.match(diff, /IconButton icon="collapse-all"/)
+  assert.match(diff, /session\.diffCollapseAll/)
+  assert.match(diff, /disabled=\{!openDirs\.size\}/)
+  assert.match(diff, /onClick=\{\(\) => setOpenDirs\(new Set\(\)\)\}/)
+  assert.match(icons, /'collapse-all':/)
+  assert.match(en, /diffCollapseAll:/)
+  assert.match(zh, /diffCollapseAll:/)
+})
+
 test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {
   const backend = source('../../spec-cli/src/sessions.ts')
   const diff = source('./DiffDocument.jsx')

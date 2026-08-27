@@ -13,6 +13,7 @@ test('file selection mounts the shared action host for source right-click dispat
   assert.match(actions, /const sourceSelection = codeSelection \|\| codeSelectionRef\.current[\s\S]*event\.preventDefault\(\)[\s\S]*const next = \{ lines: \{ startLine: sourceSelection\.startLine, endLine: sourceSelection\.endLine \}/)
   assert.match(actions, /const \[menuOpen, setMenuOpen\] = useState\(false\)/)
   assert.match(actions, /!panel && menuOpen && selection && <ActionGroup/)
+  assert.match(actions, /const dismiss = useCallback\(\(\) => \{ setPanel\(null\); setMenuOpen\(false\);/)
 })
 
 test('source selection remains lossless and does not require DOM Selection for the right-click path', () => {

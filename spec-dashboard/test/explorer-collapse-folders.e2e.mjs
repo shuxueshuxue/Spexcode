@@ -1,7 +1,7 @@
 // [[file-tree]] `the-tree-opens-the-branch-the-address-names-and-remembers-it` and
 // `collapse-folders-is-one-door-on-the-explorer-head`, [[disk-tree]] `a-folder-stays-open-across-the-files-fold`,
-// and [[conversation]] `the-composer-is-paper-with-one-send-mark`, measured through the running dashboard in
-// a real browser.
+// and [[conversation]] `the-composer-is-paper-with-one-send-mark` + `the-conversation-reads-as-paper`, measured
+// through the running dashboard in a real browser.
 //
 //   BASE=http://127.0.0.1:5198 OUT=/path/to/evidence node spec-dashboard/test/explorer-collapse-folders.e2e.mjs
 //
@@ -185,10 +185,47 @@ assert.equal(desktop.send.tip, 'send')
 assert.equal(desktop.send.hasSvg, true)
 assert.equal(desktop.send.text, '', 'icon-only: no word inside the button')
 assert.equal(desktop.send.disabled, true, 'nothing to send yet')
-assert.ok(desktop.width <= 760 && desktop.width <= desktop.columnWidth + 1, 'no wider than the reading column')
+assert.ok(desktop.width <= 720 && desktop.width <= desktop.columnWidth + 1, 'no wider than the reading column')
 assert.ok(desktop.centreOffset <= 1, 'centred on the pane')
 assert.equal(desktop.border, '1px')
 await page.screenshot({ path: `${OUT}/conversation-desktop.png` })
+
+// ---- the page as paper: one measure, quiet minutes, a seam with no rule
+const measurePaper = async () => page.evaluate(() => {
+  const col = document.querySelector('.tl-chat .m-col'); const chat = document.querySelector('.tl-chat .m-timeline')
+  const c = col.getBoundingClientRect(); const h = chat.getBoundingClientRect()
+  const widest = (sel) => Math.max(0, ...[...document.querySelectorAll(sel)].map((el) => Math.round(el.getBoundingClientRect().width)))
+  const rows = [...document.querySelectorAll('.tl-chat .m-ev')].filter((row) => row.getBoundingClientRect().height > 0)
+  const gaps = rows.slice(1).map((row, i) => Math.round(row.getBoundingClientRect().top - rows[i].getBoundingClientRect().bottom))
+  const seam = document.querySelector('.tl-chat .m-seam-row')
+  const time = document.querySelector('.tl-chat .m-ev .m-gut time')
+  // the CELL is the measure minus the 52px ruler and its 16px gap: what a note may fill and a quote is capped against
+  const cell = Math.round(document.querySelector('.tl-chat .m-ev-say > .m-say')?.parentElement.getBoundingClientRect().width - 68)
+  return {
+    column: Math.round(c.width), cell, centreOffset: Math.round(Math.abs((c.left + c.width / 2) - (h.left + h.width / 2))),
+    sidePadding: parseFloat(getComputedStyle(chat).paddingLeft),
+    widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .m-quote'),
+    rowPadding: parseFloat(getComputedStyle(rows[0]).paddingTop) * 2, minGap: Math.min(...gaps),
+    timeOpacity: time ? parseFloat(getComputedStyle(time).opacity) : null,
+    seam: seam ? { fontSize: getComputedStyle(seam).fontSize, rule: !!seam.querySelector('.m-seam-line'), width: Math.round(seam.getBoundingClientRect().width) } : null,
+    ground: getComputedStyle(document.querySelector('.tl-chat')).backgroundColor,
+  }
+})
+const paper = await measurePaper()
+record('paper.desktop', paper)
+assert.equal(paper.column, 720); assert.ok(paper.centreOffset <= 1)
+assert.equal(paper.cell, 652, 'the ruler takes 52px + 16px of the 720px measure')
+assert.ok(paper.widestNote >= paper.cell - 1, 'the agent runs the whole cell')
+assert.ok(paper.widestQuote <= Math.round(paper.cell * 0.8) + 1, 'the quote caps at 80% of the cell')
+assert.ok(paper.timeOpacity < 1, 'the minute rests quiet')
+assert.ok(paper.seam && !paper.seam.rule && paper.seam.fontSize === '11px' && paper.seam.width < paper.column, 'one caption line, no rule to the edge')
+assert.ok(paper.rowPadding >= 24 && paper.minGap >= 0, 'air between rows')
+assert.ok(paper.sidePadding > 16, 'the margin grew with the pane')
+await page.locator('.tl-chat .m-ev.m-ev-say').first().hover()
+await page.waitForTimeout(250)
+record('paper.hover', { timeOpacity: await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.tl-chat .m-ev.m-ev-say .m-gut time')).opacity)) })
+assert.equal(facts['paper.hover'].timeOpacity, 1)
+await page.mouse.move(5, 5)
 
 const input = page.locator('.tl-chat .m-input')
 await input.fill('YATU composer probe — first line\nsecond line')
@@ -210,6 +247,10 @@ record('composer.narrow', narrow)
 assert.equal(narrow.gutters, 0, 'no ruler under the container threshold')
 assert.ok(narrow.inlineTimes > 0, 'rows keep their own time')
 assert.ok(narrow.width <= narrow.paneWidth && narrow.centreOffset <= 1)
+const paperNarrow = await measurePaper()
+record('paper.narrow', paperNarrow)
+assert.equal(paperNarrow.sidePadding, 14)
+assert.ok(paperNarrow.widestQuote <= Math.round(paperNarrow.column * 0.88) + 1, 'under the threshold the ruler is gone and the quote caps at 88% of the column')
 await page.screenshot({ path: `${OUT}/conversation-narrow.png` })
 
 await page.setViewportSize({ width: 390, height: 844 })

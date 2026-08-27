@@ -42,9 +42,11 @@ rule under every turn, a role word above each, a bordered box per tool — so re
 chrome. A chat carries its structure in the shapes of the turns themselves. The person is QUOTED: a narrow
 bubble, capped well under the measure, one corner squared into a tail, sitting off to its own side. The
 agent IS the page: full measure, no bubble, no tint. Boxing both would make an exchange read as a table of
-two columns. The whole flow is held to a centred measure — without one, at a wide pane the bubble sat
+two columns. The whole flow is held to ONE centred measure — `--conversation-measure`, 720px, the column the agent's
+prose, the person's quotes and the composer all share — without one, at a wide pane the bubble sat
 against the right edge while the prose began at the far left, a thousand pixels away, and the two stopped
-reading as one conversation.
+reading as one conversation. The margins around that column grow with the pane (container units), so a
+wide window reads as a sheet with generous edges and a narrow one keeps every pixel for the words.
 
 **Collapse the process, keep the result.** Everything that produced an answer folds the moment the answer
 exists; the answer itself, and anything durable, stays. The unit is the work SEGMENT — a consecutive run of
@@ -72,18 +74,22 @@ opened at the far left, the agent's report set as a blockquote though it is the 
 exactly those three:
 
 - A MESSAGE is anything said. The agent's note IS the page: no well, no rule, no indent, at the prose size
-  (`--type-prose`, the one token this surface added) on a 620px measure, with one small status chip above it
-  (`? asking`, `‖ parked`, `✓ done`) as the machine's whole footprint. A sent message and the originating
-  prompt are QUOTED: a bubble on the right, capped at 520px, in the same grammar as the transcript's person
-  turn, so the outer conversation and the inner one read alike. A peer's name sits on its bubble; the
+  (`--type-prose`, the one token this surface added) running the full measure, with one small status chip
+  above it (`? asking`, `‖ parked`, `✓ done`) in the caption voice at medium weight as the machine's whole
+  footprint. A sent message and the originating prompt are QUOTED: a soft sheet on the right — a quieter
+  tint than a panel, the radius token doubled because it is a page element and not a control — capped at
+  80% of the measure, in the same grammar as the transcript's person turn, so the outer conversation and
+  the inner one read alike. A peer's name sits on its bubble; the
   human's has none. The addressing envelope `spex session send` appends (`— from session … To reply: …`) is
   never rendered — the record keeps it, the surface strips it. A long quote is clamped at first sight with
   a `more`, because the conversation is about what came after it.
-- A SEAM is a run of bare `working` events between two messages: one line, `▸ worked 13m 17s`, whose
-  duration is the sum of that run — how long the agent worked, the one duration scrollback actually asks
-  for — and, once its transcript has been read, `N turns · M tool uses`. The seam owns the transcript for
-  exactly its interval (the transcript API already reads by interval; nothing server-side changes), opened
-  directly beneath it on a green inset line so where it came from stays in view, and it exposes the one
+- A SEAM is a run of bare `working` events between two messages: one quiet line in the caption voice,
+  `▸ worked 13m 17s`, whose duration is the sum of that run — how long the agent worked, the one duration
+  scrollback actually asks for — and, once its transcript has been read, `N turns · M tool uses`. It draws
+  no rule across the page: the work between two messages is a footnote to the exchange, lit only under the
+  pointer, the way a reading surface folds its thinking. The seam owns the transcript for exactly its
+  interval (the transcript API already reads by interval; nothing server-side changes), opened directly
+  beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
   `● working · 4m 12s` and is the page's only moving thing; the tail seam of a dead session says `working`
   — the record's last word — with no duration invented for a stretch nothing closed.
@@ -91,7 +97,10 @@ exactly those three:
   rather than lasted.
 
 THE RULER. Time lives in a 52px left gutter, tabular and the same for every message row; the day it belongs
-to sticks in that same gutter as the reader scrolls; the right edge carries nothing. When the PANE (a
+to sticks in that same gutter as the reader scrolls; the right edge carries nothing. THE MINUTE IS QUIET: a
+reader scans a conversation by what was said and asks for the time only when they need it, so each row's
+time rests at reduced opacity and comes up under the pointer or keyboard focus — it never leaves the DOM,
+so nothing assistive loses it. The day stays full, because it is structure rather than a stamp. When the PANE (a
 container query, not the viewport — a desktop side pane is as narrow as a phone) is under 560px the gutter
 goes and each row keeps its own inline time.
 
@@ -108,6 +117,23 @@ document Selection lying in the timeline (one the browser made on a fourth quick
 control). No selection outlives the next click; a press outside selectable text still counts as the timeline's.
 
 That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. 
+
+## the paper, and where its grammar was borrowed from
+
+The surface is the PAGE the conversation is printed on — the theme's own `--paper`, dark or light as the
+preset says, never a cream forced over the product — and it borrows from two public references, checked
+rather than imagined. From assistant-ui's open-source Claude example
+(<https://www.assistant-ui.com/examples/claude>): the person's turn is a right-aligned sheet capped near
+80% of the column, the assistant's turn is plain full-width text sitting directly on the ground with no
+bubble and no avatar, the composer is one thin-bordered card with no shadow of its own, and the actions
+around a message stay out of sight until hover. From Anthropic's own frontend-design guidance
+(<https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md>):
+"structure is information" — every structural device here (the day, the chip, the seam) encodes something
+true about the record and none decorates; "spend your boldness in one place, keep everything around it
+quiet" — the one bold thing is the exchange itself, so the time, the seam and the chip all step back; and a
+quality floor that is not announced — responsive to the pane, visible keyboard focus, reduced motion
+respected. What was deliberately NOT borrowed: the cream palette and the serif face, because the theme owns
+colour and [[typography]] owns the voice.
 
 **Both session surfaces frame their content identically.** The Conversation's composer FLOATS over its
 reading column, the same shape Command Box already has on the terminal surface, and the timeline pads its

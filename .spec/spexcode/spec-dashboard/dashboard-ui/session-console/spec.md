@@ -36,10 +36,12 @@ related:
 
 ## raw source
 
-`Enter` on the board opens the session interface; the finding dock's session projection is the
-at-a-glance summary. Both are **thin views of `/api/graph`** (i.e. `spex graph --json`): the dashboard renders only
-what the backend reports and never invents session state, so a human watching the dashboard and an agent
-driving the same sessions through the CLI see identical state.
+`Enter` on the board opens the focused node's info popup; explicit session links and node-menu actions open the
+session interface. The finding dock's session projection is the at-a-glance summary. The dock and the console's
+working-session rows take lifecycle state from `/api/graph` (i.e. `spex graph --json`), while the console also uses
+the documented archive index, retained-record, timeline/detail, and post-create transitional projections. Those
+secondary projections do not become a second lifecycle authority, so a human watching the dashboard and an agent
+driving the same sessions through the CLI see the same reported session state.
 
 The backend's closed `DisplayStatus` vocabulary is the one lifecycle word source for the dashboard. The
 session projection, both locale dictionaries, and every status-word surface cover the full set, including

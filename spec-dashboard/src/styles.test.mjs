@@ -187,6 +187,9 @@ test('the status bar owns a flex row and cannot cover the content viewport', () 
   const statusRule = css.match(/\.statusbar\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(statusRule, /width:\s*100%/)
   assert.match(statusRule, /flex:\s*0 0 var\(--line-status\)/)
+  // The 1px top seam leaves a fractional content height; bottom-aligning the fixed-height groups keeps
+  // an upward popup visible without exposing a half-pixel below the viewport when the bar is un-clipped.
+  assert.match(statusRule, /align-items:\s*flex-end/)
   assert.match(statusRule, /border-top:\s*1px solid var\(--line\)/)
   assert.doesNotMatch(statusRule, /position:\s*(?:absolute|fixed)/)
   assert.match(css, /\.side-rail\s*\{[^}]*border-right:\s*1px solid var\(--line\)/s)

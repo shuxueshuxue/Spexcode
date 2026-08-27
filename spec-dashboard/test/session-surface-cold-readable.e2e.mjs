@@ -265,7 +265,7 @@ try {
   const archivePill = page.locator('.si-pill.archive')
   await archivePill.waitFor({ state: 'visible', timeout: 30_000 })
   if (!/\bon\b/.test(await archivePill.getAttribute('class') || '')) await archivePill.click()
-  const archivedRow = page.locator(`.si-item[data-sid="${archivedId}"]`)
+  const archivedRow = page.locator(`.si-archive-page-row[data-sid="${archivedId}"]`)
   await archivedRow.waitFor({ state: 'visible', timeout: 30_000 })
   timelineRequests.set(archivedId, 0)
   await archivedRow.click()

@@ -79,3 +79,9 @@ captured fixtures verify Gemini `gemini` records and `$set.messages`, OpenClaw `
 `toolResult`, and Hermes's `messages` array with OpenAI-style `tool_calls`; other native record variants are
 `unverified` rather than inferred. The transcript remains a payload, never a field in `timeline.ndjson` or
 `runtime.json`.
+
+**A closed Codex thread is still readable.** Codex archives a thread's rollout when the thread is archived — the
+app-server's `thread/archive`, which a closed session runs — moving it out of `sessions/YYYY/MM/DD/` into the flat
+`archived_sessions/` beside it. The locator looks there second, so a session that has finished and been closed
+does not read as `missing` while its conversation is on disk; measured on a real eight-lane run whose transcripts
+all answered `missing` the moment the lanes were closed.

@@ -185,7 +185,8 @@ export interface Harness {
   // idle/attention event, so Codex has NO equivalent of StopFailure / Notification — a real harness difference,
   // not a TODO. It binds only the five it actually fires (see CODEX_EVENTS).
   readonly events: readonly string[]
-  // whether the harness's agent opens a reclaude rendezvous control socket. Claude does; Codex has no such
+  // whether the harness's agent opens Claude Code's background-daemon rendezvous control socket (`CLAUDE_BG_BACKEND=daemon` +
+  // `CLAUDE_BG_RENDEZVOUS_SOCK`, a stock claude feature — no wrapper involved). Claude does; Codex has no such
   // daemon and uses its app-server JSON-RPC control plane instead.
   readonly ownsRendezvous: boolean
   // whether this harness's tmux pane_title is the agent's OWN live task self-summary (so the board headline
@@ -293,7 +294,7 @@ export interface Harness {
   // snapshot (see sessions.ts liveSnapshot): the window's presence, a PaneProbe — the pane's root pid plus one
   // whole-box process table — AND `socketLive`, whether a CONNECT to this session's rendezvous socket found a
   // live listener (the caller probes all windowed sessions once per snapshot). The adapter adds only its own
-  // channel check. claude: online iff the window is up AND its reclaude rendezvous socket has a live LISTENER
+  // channel check. claude: online iff the window is up AND its rendezvous socket has a live LISTENER
   // (`socketLive` — a connect that a live claude accepts and a stale socket FILE refuses; claude IGNORES the
   // pane probe). codex: online iff the window is up AND the launch-registered `agent.pid` is alive
   // (`pane.pidAlive`, the hot-tier kill-0 verdict — zero ps scan); a pre-registration session with no agent.pid
@@ -2845,7 +2846,7 @@ export const claudeHarness: Harness = {
   dispatchId: 'claude',
   headless: false,
   events: CLAUDE_EVENTS,
-  ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
+  ownsRendezvous: true,                              // claude's background daemon opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
   transcript: claudeTranscript,
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
@@ -2966,7 +2967,7 @@ export const codexHarness: Harness = {
   headless: false,
   sharedRuntimeSpawn: true,
   events: CODEX_EVENTS,
-  ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
+  ownsRendezvous: false,                             // no rendezvous daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
   transcript: codexTranscript,
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
@@ -3319,7 +3320,7 @@ export const codexHeadlessHarness: Harness = {
 // hook binding (its lifecycle surface is the in-process extension API), so the shim is a GENERATED TypeScript
 // extension (.pi/extensions/spexcode.ts, run natively by pi) that forwards five claude-shaped events to
 // dispatch.sh AND binds this session's rendezvous socket itself (the adapter's launchEnv exports
-// CLAUDE_BG_RENDEZVOUS_SOCK) speaking the reclaude line protocol — so
+// CLAUDE_BG_RENDEZVOUS_SOCK) speaking claude's rendezvous line protocol — so
 // deliverViaRendezvous and the socket-listener liveness work through the same adapter seam. Trust: pi gates project-local
 // extensions behind saved per-directory trust (~/.pi/agent/trust.json), so writeTrust stamps the main
 // checkout there (the nearest-parent lookup covers nested worktrees) and the launch carries `--approve` as
@@ -3329,7 +3330,7 @@ export const piHarness: Harness = {
   dispatchId: 'pi',
   headless: false,
   events: PI_EVENTS,
-  ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
+  ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks claude's rendezvous protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
   transcript: piTranscript,
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)

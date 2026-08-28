@@ -8,6 +8,7 @@ code:
 related:
   - package.json
   - packages/transcript/package.json
+  - packages/transcript-ui/package.json
   - packages/spec-core/package.json
   - packages/session-protocol/package.json
   - packages/session-topology/package.json
@@ -23,12 +24,12 @@ related:
 ---
 # release-publish
 
-The metapackage is not a release unit by itself. A release is the committed set of thirteen public packages:
-`@spexcode/transcript`, `@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-events`,
+The metapackage is not a release unit by itself. A release is the committed set of fourteen public packages:
+`@spexcode/transcript`, `@spexcode/transcript-ui`, `@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-events`,
 `@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/spec-core`, `@spexcode/spec-eval`,
 `@spexcode/spec-forge`, `@spexcode/spec-cli`, `@spexcode/spec-dashboard`, and `spexcode`. Every public package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
-the publication order is transcript (it depends on nothing), session-protocol, session-topology, session-runtime, session-events, session-application,
+the publication order is transcript (it depends on nothing), transcript-ui, session-protocol, session-topology, session-runtime, session-events, session-application,
 session-selflaunch, core, dashboard, eval, forge, CLI, root. The session stack is published in dependency order;
 dashboard is independent of the root's
 install closure, but it is still a public installation entrypoint and belongs to the same release action. It
@@ -38,7 +39,7 @@ the dashboard package, that exact same-version repair is already resolvable from
 `npm run release:check` is the local rehearsal: it validates the version/dependency graph, builds the owned
 artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.
 `npm run release:publish` first requires a clean checkout on `main`, then repeats the rehearsal, proves the
-registry contains none of this version of the thirteen-package set, and publishes in that order with public access.
+registry contains none of this version of the fourteen-package set, and publishes in that order with public access.
 The dist-tag is derived from the committed version, never chosen by hand: a prerelease version
 (`0.7.0-next.0`, any `-` suffix) publishes every member under `next`, so `npm i spexcode` keeps resolving the last
 stable release while an adopter that opted in with `@next` receives the whole set at once; a stable version moves

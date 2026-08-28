@@ -56,6 +56,7 @@ feature had no prior package edge; it is an explicit exception, not an unexamine
 | `b1c36fb04` | Added `@spexcode/session-application` and `@spexcode/session-selflaunch` to `spec-cli`. | Same-change extraction: application composition and self-launch adapter implementations moved out of the CLI; the old copies were removed. |
 | `0443c68df` | Removed the retired `@spexcode/session-core` workspace edge. | Same-change subtraction: root build, launcher source closure, release plan, CI, lint roots and lockfile no longer build or ship the legacy package. |
 | `ef95e779e` | Extracted `@spexcode/transcript` and added it to `spec-cli` and the dashboard (`./frames`). | Same-change extraction: `spec-cli/src/transcript-reader.ts` and the dashboard's frame merge moved into the package and the old copies were removed; the SSE route and the dashboard import the one protocol. |
+| `24dd8c9d4` | Extracted `@spexcode/transcript-ui` and added it to the dashboard. | Same-change extraction: the dashboard's `Transcript.jsx` grammar, `LiveTail.jsx` and `toolVocabulary.js` moved into the package (with their CSS) and the old copies were removed; `Transcript.jsx` keeps only the binding. |
 
 The table is an immutable-history ledger, not permission to add a dependency without a review. A future edge must
 either name its same-change subtraction here or add a measured **No package predecessor** exception with an owner and

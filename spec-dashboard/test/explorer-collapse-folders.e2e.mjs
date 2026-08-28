@@ -196,7 +196,7 @@ const measureComposer = async () => page.evaluate(() => {
   }
 })
 await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)
-await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .m-ev-text')
+await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .tx-quote-text')
 const desktop = await measureComposer()
 record('composer.desktop', desktop)
 assert.equal(desktop.send.tag, 'BUTTON')
@@ -227,7 +227,7 @@ const measurePaper = async () => page.evaluate(() => {
     column: Math.round(c.width), cell, centreOffset: Math.round(Math.abs((c.left + c.width / 2) - (h.left + h.width / 2))),
     noteCentreOffset: note ? Math.round(Math.abs((note.getBoundingClientRect().left + note.getBoundingClientRect().width / 2) - (h.left + h.width / 2))) : null,
     sidePadding: parseFloat(getComputedStyle(chat).paddingLeft),
-    widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .m-quote'),
+    widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .tx-quote'),
     rowPadding: parseFloat(getComputedStyle(rows[0]).paddingTop) * 2, minGap: Math.min(...gaps),
     timeOpacity: time ? parseFloat(getComputedStyle(time).opacity) : null,
     seam: seam ? (() => { const caret = seam.querySelector('.caret'); const lead = seam.querySelector('.m-seam-lead')
@@ -324,7 +324,7 @@ if (working) {
     await page.route('**/transcript?*', async (route) => { reads.push(Number(new URL(route.request().url()).searchParams.get('to'))); await route.continue() })
     const liveRow = page.locator('.tl-chat:visible .m-seam-row.is-live')
     await liveRow.click()
-    await page.waitForSelector('.tl-chat:visible .m-seam-inset .tc-flow, .tl-chat:visible .m-seam-inset .m-transcript-empty', { timeout: 20000 })
+    await page.waitForSelector('.tl-chat:visible .m-seam-inset .tx-flow, .tl-chat:visible .m-seam-inset .m-transcript-empty', { timeout: 20000 })
     const detailBefore = await page.locator('.tl-chat:visible .m-seam-row.is-live .m-seam-detail').textContent().catch(() => null)
     let loadingFlashes = 0
     const deadline = Date.now() + 19000
@@ -352,17 +352,17 @@ for (const theme of ['minimal', 'things']) {
   await page.evaluate((t) => { localStorage.setItem('spexcode.theme', t); document.documentElement.dataset.theme = t }, theme)
   await page.waitForTimeout(150)
   const seams = page.locator('.tl-chat:visible .m-seam-row')
-  for (let i = await seams.count() - 1; i >= 0 && !(await page.locator('.tl-chat:visible .tc-tool-row.is-openable').count()); i--) {
+  for (let i = await seams.count() - 1; i >= 0 && !(await page.locator('.tl-chat:visible .tx-tool-row.is-openable').count()); i--) {
     if ((await seams.nth(i).getAttribute('aria-expanded')) !== 'true') { await seams.nth(i).click(); await page.waitForTimeout(700) }
   }
-  const fold = page.locator('.tl-chat:visible .tc-work-row').first()
+  const fold = page.locator('.tl-chat:visible .tx-work-row').first()
   if (await fold.count() && (await fold.getAttribute('aria-expanded')) !== 'true') { await fold.click(); await page.waitForTimeout(200) }
-  const tool = page.locator('.tl-chat:visible .tc-tool-row.is-openable').first()
+  const tool = page.locator('.tl-chat:visible .tx-tool-row.is-openable').first()
   if (await tool.count() && (await tool.getAttribute('aria-expanded')) !== 'true') { await tool.click(); await page.waitForTimeout(200) }
   foldFacts[theme] = await page.evaluate(() => {
     const probe = document.createElement('div'); probe.style.background = 'var(--panel2)'; document.body.append(probe)
     const panel2 = getComputedStyle(probe).backgroundColor; probe.remove()
-    const fold = document.querySelector('.tl-chat .tc-work-row'); const out = document.querySelector('.tl-chat .tc-tool-out')
+    const fold = document.querySelector('.tl-chat .tx-work-row'); const out = document.querySelector('.tl-chat .tx-tool-out')
     // a flex container blockifies an inline-flex child (computed `flex`), so the row is judged by what the UA
     // default button would have painted instead: a grey fill, no radius, 1px 6px padding
     const fs = fold ? getComputedStyle(fold) : null
@@ -380,7 +380,7 @@ await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)
 await settled('.m-composer:visible')
 
 await page.setViewportSize({ width: 760, height: 900 })
-await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .m-ev-text')
+await settled('.tl-chat .m-ev .m-ev-note, .tl-chat .m-ev .tx-quote-text')
 const narrow = await measureComposer()
 record('composer.narrow', narrow)
 assert.equal(narrow.gutters, 0, 'no ruler under the container threshold')
@@ -394,7 +394,7 @@ await page.screenshot({ path: `${OUT}/conversation-narrow.png` })
 
 await page.setViewportSize({ width: 390, height: 844 })
 await page.goto(`${BASE}/#/sessions/${live.id}`)
-await settled('.m-app .tl-chat .m-ev .m-ev-note, .m-app .tl-chat .m-ev .m-ev-text')
+await settled('.m-app .tl-chat .m-ev .m-ev-note, .m-app .tl-chat .m-ev .tx-quote-text')
 const phone = await page.evaluate(() => {
   const composer = document.querySelector('.m-app .tl-chat .m-composer').getBoundingClientRect()
   const tabbar = document.querySelector('.m-app .m-tabbar')?.getBoundingClientRect()

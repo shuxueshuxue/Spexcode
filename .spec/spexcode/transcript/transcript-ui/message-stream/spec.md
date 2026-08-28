@@ -4,8 +4,11 @@ status: active
 hue: 280
 desc: The live tail is the open seam's collapsed face — the current turn derived in the browser from the seam's streamed transcript payload, drawn in the conversation's own grammar; TimelineChat never reads a native transcript or a second projection.
 code:
-  - spec-dashboard/src/LiveTail.jsx
+  - packages/transcript-ui/src/LiveTail.tsx
 related:
+  - packages/transcript-ui/src/segments.ts
+  - packages/transcript-ui/src/useTranscriptFrames.ts
+  - packages/transcript-ui/src/TranscriptView.tsx
   - spec-dashboard/src/Transcript.jsx
   - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/data.js
@@ -73,3 +76,9 @@ normalized turns and nothing else, and adding a harness changes no rendering bra
 keep their real terminal as the full live surface; this face is additive to the Conversation, never a
 raw-process door or an alternate terminal. A stream frame that carries an error shows the seam's unavailable
 line in place; an absent source (the thread has not started writing) draws nothing until it does.
+
+**Where it lives now.** `LiveTail`, `currentTurn`, `liveSlice` and `alreadySaid` are the published package's
+([[transcript-ui]]); the dashboard binds them in [[conversation]] with the seam's streamed turns
+(`turns`, `revision`) and the note the record last drew (`lastSaid`), and the frames themselves are merged by
+the package's `useTranscriptFrames` or, as the dashboard does, by `@spexcode/transcript/frames`'
+`mergeTranscriptFrame` in its data layer — one merge, one wire ([[transcript-frames]]).

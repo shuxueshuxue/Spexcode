@@ -1,5 +1,9 @@
 import { TranscriptReadError, type TranscriptRead, type TranscriptReader, type TranscriptTail, type TranscriptTool, type TranscriptTurn } from './turns.js'
 
+// the browser-safe entry is complete on its own: the normalized shape travels with the frames that carry it
+export { TranscriptReadError } from './turns.js'
+export type { TranscriptRange, TranscriptRead, TranscriptReader, TranscriptTail, TranscriptTool, TranscriptTurn } from './turns.js'
+
 // THE FRAME PROTOCOL — what an open interval's subscriber receives, and how it merges it. This module is the
 // contract's one home and imports nothing from Node, so the producer (a server tick, an Electron main process)
 // and the consumer (a browser, a renderer) share the exact same code. Transport is not decided here: SpexCode

@@ -39,7 +39,7 @@ const readRows = (page) => page.evaluate(() => [...document.querySelectorAll('.m
       const button = row.querySelector('.m-seam-row')
       return { kind: 'seam', live: button.classList.contains('is-live'), lead: button.querySelector('.m-seam-lead').textContent, expanded: button.getAttribute('aria-expanded') }
     }
-    if (row.matches('.m-ev-sent')) return { kind: 'sent', text: row.querySelector('.m-ev-text')?.textContent?.slice(0, 40) }
+    if (row.matches('.m-ev-sent')) return { kind: 'sent', text: row.querySelector('.tx-quote-text')?.textContent?.slice(0, 40) }
     if (row.matches('.m-ev-say')) return { kind: 'say', word: row.querySelector('.m-ev-word')?.textContent }
     if (row.matches('.m-ev-line')) return { kind: 'line', word: row.querySelector('.m-ev-word')?.textContent }
     return { kind: row.className }

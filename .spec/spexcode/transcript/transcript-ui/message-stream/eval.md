@@ -3,7 +3,7 @@ scenarios:
   - name: the-open-seam-is-the-live-tail
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/live-tail.e2e.mjs
-    code: spec-dashboard/src/LiveTail.jsx
+    code: packages/transcript-ui/src/LiveTail.tsx
     related:
       - spec-dashboard/src/Transcript.jsx
       - spec-dashboard/src/TimelineChat.jsx

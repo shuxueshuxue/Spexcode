@@ -2830,8 +2830,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   }
 }
 .m-ev-glyph { flex: none; }
-/* the inline time a row keeps for itself when the gutter is gone (narrow pane, phone) */
-.m-tin { display: none; margin-left: auto; flex: none; font-family: var(--ui-font); font-size: var(--type-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* THE AGENT IS THE PAGE: its report is the body — no well, no rule, no indent — at the prose size and held
    to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
@@ -2846,22 +2844,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
    page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.
    The peer's name sits on the bubble; the human's has none, and the machine envelope never shows. */
-.m-quote {
-  --quote-bg: color-mix(in srgb, var(--panel2) 72%, var(--paper));
-  position: relative; justify-self: end; min-width: 0; max-width: 80%;
-  padding: var(--space-4) var(--space-5); color: var(--ink2); background: var(--quote-bg);
-  /* the sheet spends the radius token twice over — a softer corner than a control's, because this is a
-     page element and not a button; the squared tail corner is a sub-pixel mark, the one exception. */
-  border-radius: calc(var(--radius) * 2); border-top-right-radius: 2px;
-}
-.m-quote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--ui-font); }
-.m-quote-head:not(:has(.m-quote-who)):has(.m-tin) { display: none; }
-.m-quote-who { font-size: var(--type-caption); font-weight: var(--weight-semibold); color: var(--blue); }
-.m-ev-text { font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
-/* a long quote is clamped at first sight; the conversation is about what came after it */
-.m-quote.is-clamped { max-height: 13em; overflow: hidden; }
-.m-quote.is-clamped::after { content: ""; position: absolute; inset: auto 0 0; height: 4.5em; background: linear-gradient(transparent, var(--quote-bg)); pointer-events: none; }
-.m-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--blue); background: none; border: 0; font: inherit; font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer; }
 
 /* AN EVENT LINE: something that happened — `error`, `corrupt` — is one inline line with no box or duration. */
 .m-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-family: var(--ui-font); font-size: var(--type-control); }
@@ -2910,12 +2892,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @container (max-width: 560px) {
   .m-timeline { padding-inline: 14px; }
   .m-ev { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: var(--space-4) 0; }
-  .m-quote { max-width: 88%; }
   .m-ev > .m-gut { display: none; }
   .m-day { grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
   .m-day .m-gut { text-align: left; }
-  .m-tin { display: inline; }
-  .m-quote .m-quote-head:not(:has(.m-quote-who)):has(.m-tin) { display: flex; }
   .m-say-head .m-copy-note { display: none; }
 }
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------
@@ -2923,85 +2902,26 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    and a bordered box per tool. Every level of nesting drew another line, so reading it meant reading the
    containers. A chat has almost no chrome — the turns' own shapes carry the structure, and whitespace does
    the separating. What is left here is the smallest set of marks that still says who spoke.               */
-.tc-flow { display: flex; flex-direction: column; gap: var(--space-6); }
 /* consecutive tool-only turns are ONE list of calls: the harness draws a turn boundary around every call it
    makes, and that boundary is not a paragraph break — seven calls in seven turns read at the same list
    spacing as seven calls in one, in the opened interval and in an opened fold alike */
-.tc-flow > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - var(--space-6)); }
-.tc-work-body > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - 14px); }
-/* the person is QUOTED with the same bubble the outer conversation uses (`.m-quote`), one step smaller
+/* the person is QUOTED with the same bubble the outer conversation uses (the package's `.tx-quote`), one step smaller
    because it is nested; the agent IS the page — full width, no bubble, no tint. */
-.tc-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-/* prose keeps a readable measure even when the pane is wide; only the tool blocks below may run long. */
-.tc-say-text { max-width: 100%; color: var(--ink); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
 /* the work segment's one line. It is a full-width rule rather than a sentence because it is a SEAM in the
    conversation — everything that produced the answer, closed. The chevron trails the count and the kinds,
    the same bounded sentence shape the tool rows and the seam wear. */
-/* the fold row is a bounded sentence, so the column does not stretch it; the body below keeps the width */
-.tc-work { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.tc-work-row {
-  display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; padding: var(--space-2) var(--space-3); margin-left: calc(var(--space-3) * -1);
-  color: var(--muted); background: none; border: 0; border-radius: var(--radius);
-  font-family: var(--ui-font); font-size: var(--type-meta); text-align: left; cursor: pointer;
-}
-.tc-work-row:hover { background: var(--wash-hover); }
-.tc-work-row:hover { color: var(--ink2); }
-.tc-work-caret, .m-seam-caret { align-self: center; margin-left: 1px; }
-.tc-work-lead { flex: none; color: var(--ink2); font-weight: var(--weight-medium); }
-.tc-work-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-work-body { align-self: stretch; display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--edge); }
-.tc-tools { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0; max-width: 100%; }
-.tc-tool { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 100%; }
+.m-seam-caret { align-self: center; margin-left: 1px; }
 /* a SENTENCE, not a card: inline-flex so it is exactly as wide as what it says. A dozen of these read as a
    list of things that happened; a dozen full-width bars read as a stack of boxes. */
-.tc-tool-row {
-  /* a sentence has a length; a long shell command must not stretch the row into a full-width bar. Measured:
-     36 of 39 rows filled their container before this cap, which is the difference between reading a list of
-     things that happened and reading a stack of boxes. */
-  display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: min(100%, 56ch);
-  padding: 2px 0; color: var(--muted); background: none; border: 0;
-  font-family: var(--ui-font); font-size: var(--type-meta); text-align: left;
-}
-.tc-tool-row.is-openable { cursor: pointer; }
-.tc-tool-row.is-openable:hover { color: var(--ink2); }
 /* the verb IS the status: there is no per-tool success or failure in the record, so no tick and no badge
    is invented here. */
-.tc-tool-verb { flex: none; color: var(--ink2); font-weight: var(--weight-medium); }
-.tc-tool-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
-.tc-tool-trail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-.tc-tool-size { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tc-tool-caret { align-self: center; }
-.tc-tool-row.is-run .tc-tool-verb { color: var(--muted); font-weight: var(--weight-regular); }
-.tc-tool-kids { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--edge); }
-.tc-tool-in, .tc-tool-out {
-  max-width: 100%; max-height: 220px; overflow: auto; margin: 0 0 2px; padding: 7px 9px;
-  /* a quiet well on the PAGE's ladder, not the terminal's fixed dark: this is quoted output on paper, and
-     --term-bg with a theme-following --ink read as dark-on-dark in every light preset. */
-  color: var(--ink); background: var(--panel2); border-radius: var(--radius);
-  font: inherit; font-family: var(--mono); font-size: var(--type-meta);
-  white-space: pre-wrap; overflow-wrap: anywhere;
-}
 /* THE LIVE TAIL ([[message-stream]]): the open seam's collapsed face — the current turn drawn as conversation
-   in the transcript's own grammar (`.tc-say-text`, `.tc-tool*`), from the same payload the expanded seam
+   in the transcript's own grammar (`.tx-say-text`, `.tx-tool*`), from the same payload the expanded seam
    shows in full, so the tail and the folded history are one flow. Live is said by a caret at the newest
    prose and a spinner on a running call — nothing else moves, and reduced motion stills both. */
-/* a withheld body while it is fetched, or the reason it could not be: the well's own voice, one line */
-.tc-tool-out.tc-tool-out-state { font-family: var(--ui-font); font-size: var(--type-meta); color: var(--muted); }
-.tc-tool-out.tc-tool-out-state.is-error { color: var(--red); }
-.m-live { margin-top: var(--space-2); min-width: 0; }
-.m-live .tc-say-text { animation: rise var(--dur-rise) ease; }
 /* the caret sits INLINE at the end of the newest prose's last line (on its last block, not on the block
    container — an ::after on the container lands under the last paragraph as a line of its own), and only
    while that prose is the newest thing in the turn (`is-speaking`): once a call follows, the words are done */
-.m-live.is-speaking > .tc-say:last-child .tc-say-text .rich-text > :last-child::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-live-caret 1s steps(2, start) infinite; }
-@keyframes m-live-caret { to { visibility: hidden; } }
-.tc-tool.is-running .tc-tool-verb { color: var(--ink2); }
-.tc-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
-.tc-tool-spin { animation: tc-tool-spin 1s linear infinite; }
-@keyframes tc-tool-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .m-live .tc-say-text, .m-live.is-speaking > .tc-say:last-child .tc-say-text .rich-text > :last-child::after, .tc-tool-spin { animation: none; }
-}
 
 /* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */
 .rich-text { min-width: 0; max-width: 100%; overflow-x: auto; white-space: normal; overflow-wrap: anywhere; }

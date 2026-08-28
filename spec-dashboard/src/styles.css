@@ -824,12 +824,12 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 .sb-launcher-summary-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 12px; height: 12px; padding: 0 2px; border: 1px solid var(--muted); border-radius: 2px; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-none); }
 /* The line rests on one aggregate; a mouse can reveal the fixed-content groups without making touch hover sticky. */
 @media (hover: hover) and (pointer: fine) {
-  .sb-item:has(.sb-launcher-groups:hover) { overflow: visible; }
+  /* Clear sibling readouts so the detail has its own line space instead of painting over them. */
+  .statusbar:has(.sb-launcher-groups:hover) .sb-right > .sb-item:not(:has(.sb-launcher-groups)) { display: none; }
   .sb-launcher-groups:hover .sb-launcher-list {
-    position: absolute; right: 0; top: 0; z-index: 1; display: inline-flex;
-    padding-left: var(--space-3); background: var(--ground);
+    display: inline-flex;
   }
-  .sb-launcher-groups:hover .sb-launcher-summary { visibility: hidden; }
+  .sb-launcher-groups:hover .sb-launcher-summary { display: none; }
 }
 
 /* ---- left navigation rail ---- */

@@ -37,8 +37,9 @@ scenarios:
       At both widths the settled bar remains exactly one --line-status row and rests on one clickable aggregate
       badge with complete running-needs-you-other slash digits. On a precise-pointer hover, that badge is
       replaced by each non-empty configured launcher as a non-overlapping icon/name/slash-tally group, plus one
-      other bucket for unmatched records; the detail expands inward without changing the row's layout, stays
-      inside the viewport, and leaving returns to the aggregate and adjacent readouts. No session is silently
+      other bucket for unmatched records; the other right-side status readouts temporarily hide so the detail
+      expands in normal flow without mixing or painting over them, and leaving restores the aggregate and those
+      readouts. No session is silently
       omitted, needs-you uses the existing sb-warning semantic token, the aggregate badge stays inside the viewport,
       shared-harness profiles remain distinguishable by their expanded names, and the click opens the sessions
       console without an unrelated archive-index error notice.

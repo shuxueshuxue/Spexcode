@@ -86,7 +86,7 @@ exactly those three:
 - A MESSAGE is anything said. The agent's note IS the page: no well, no rule, no indent, at the prose size
   (`--type-prose`, the one token this surface added) running the full measure, with one small status chip
   above it (`? asking`, `‖ parked`, `✓ done`) in the caption voice at medium weight as the machine's whole
-  footprint. A sent message and the originating prompt are QUOTED: a soft sheet on the right — a quieter
+  footprint; its timestamp sits inline before that chip in the content column. A sent message and the originating prompt are QUOTED: a soft sheet on the right — a quieter
   tint than a panel, the radius token doubled because it is a page element and not a control — capped at
   80% of the measure, in the same grammar as the transcript's person turn, so the outer conversation and
   the inner one read alike. A peer's name sits on its bubble; the

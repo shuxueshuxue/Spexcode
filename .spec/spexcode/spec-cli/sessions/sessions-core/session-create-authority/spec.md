@@ -18,15 +18,23 @@ the work starts from. Both are settled BEFORE any Git mutation, so a refusal lea
 branch, store, or receipt behind.
 
 **Public session creation asks one lightweight authority question before it may use the local path.** The CLI
-asks only `GET /api/instance` — an identity route that enumerates no governed records and derives no worktree
-overlays — against its own 1500ms budget; an optional recorded-endpoint health read is discovery only and never
-consumes it. An explicit target skips project comparison and normally owns the one keyed `POST /api/sessions`; an
+first opens a bounded TCP connection to the target. A completed connect is the presence fact: the supervisor's
+proxy accepts it even while the child event loop is busy, so a slow `/api/instance` response is still a present
+backend. Only a connection that is refused (the entire transport cause chain is `ECONNREFUSED`) licenses the
+in-process fallback. After presence is established, `GET /api/instance` is the identity read — it enumerates
+no governed records and derives no worktree overlays — and it uses the ordinary session-create request deadline,
+not the presence budget; an optional recorded-endpoint health read is discovery only and never consumes either
+budget. An explicit target skips project comparison and normally owns the one keyed `POST /api/sessions`; an
 implicit target does so once the instance identity canonically matches, compared through the shared main-root
 resolver (which follows a linked worktree to its common checkout and applies the configured `main`) rather than
-by raw path. Any HTTP response proves ownership, and a proven mismatch is still refused. The SOLE licence for the
-in-process fallback is an exact no-listener failure whose entire transport cause chain is `ECONNREFUSED`;
-timeout, reset, DNS, and every other transport result fail without local creation, and a response already
-received is never relabelled indeterminate.
+by raw path. Any HTTP response proves ownership, and a proven mismatch is still refused. A timeout, reset, DNS,
+or other transport failure before TCP acceptance is indeterminate and fails without local creation; a failure
+after acceptance is a present-backend authority-read failure and also never falls back.
+
+**Measured finding (out of scope for this lane).** On 2026-08-29 the live backend logged
+`/api/graph build took 11822ms (budget 1500ms)`: one event-loop stall is long enough to make a header-deadline
+probe report a false absence. The create authority now treats that stall as presence and delegates to the
+backend; the graph build's blocking work remains a separate performance investigation.
 
 **A create may pin its fork point.** Creation accepts an optional `base` — any commit-ish the main checkout can
 resolve. Absent, the session forks from the auto-detected source-of-truth branch, i.e. from whatever that branch

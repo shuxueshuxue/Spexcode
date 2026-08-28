@@ -123,7 +123,11 @@ goes and each row keeps its own inline time.
 Every seam starts folded on first load, after a timeline/status refresh, and when a different session is
 selected; no data arrival or remount may open it. The disclosure choice is keyed to the seam's first event,
 not to the current transcript interval, so a later event that closes the seam refreshes the interval while
-keeping an already-open seam open and an untouched one closed. The timeline body is selectable text:
+keeping an already-open seam open and an untouched one closed. AN EXPANDED LIVE SEAM KEEPS COUNTING: the open
+tail's interval ends at the latest poll's server time, so each poll re-reads the expanded tail's transcript and
+its `N turns · M tool uses` follows the agent; what is already on screen stays until the fresh read lands (no
+loading flash), a failed refresh keeps the last good read and retries on the next poll, and the module cache
+holds one interval per seam rather than every poll's. A collapsed seam reads nothing. The timeline body is selectable text:
 Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and
 indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an
 accidental editable surface. The timeline's own selection is a browser-painted highlight over a Range, never a

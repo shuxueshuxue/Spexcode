@@ -424,13 +424,22 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const selectionDragRef = useRef(null)
   const timelineRangeRef = useRef(null)
   const copyStatusTimerRef = useRef(null)
-  const transcriptNowRef = useRef(Date.now())
+  // THE OPEN TAIL'S INTERVAL ENDS AT THE LATEST POLL. It used to end at mount time so the transcript key
+  // stayed stable — which also meant an EXPANDED live seam never re-read: its `0 turns · 0 tool uses` froze
+  // the moment it opened and nothing the agent did afterwards was inside the interval. The end now moves
+  // with each timeline read (server clock), so the expanded seam refreshes each poll; the seam's identity
+  // is its start, so the disclosure survives the moving end, and a collapsed seam still reads nothing.
+  const [pollNow, setPollNow] = useState(() => Date.now())
   const skewRef = useRef(0)   // server clock minus ours, re-read on every timeline response
+  const inflightRef = useRef(new Set())   // transcript keys being read right now
+  const wantedRef = useRef(new Map())     // seamId → the interval key it currently maps to
+  const cachedKeyRef = useRef(new Map())  // seamId → the last key the module cache holds for it
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
     if (Number.isFinite(d?.serverNow)) skewRef.current = d.serverNow - Date.now()
-    setNow(Date.now() + skewRef.current)
+    const serverNow = Date.now() + skewRef.current
+    setNow(serverNow); setPollNow(serverNow)
     if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
   }), [s.id])
   // THE LIVE SEAM COUNTS EVERY SECOND. The record only moves on a poll, so between polls the tail seam
@@ -448,7 +457,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }, [ticking])
   useEffect(() => {
     if (!active) return undefined
-    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedSeams(new Set()); setTranscripts(new Map()); transcriptNowRef.current = Date.now(); setNow(transcriptNowRef.current); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
@@ -470,7 +479,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }, [load, active, footerState])
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
-  const items = useMemo(() => conversationItems(events || [], transcriptNowRef.current), [events])
+  const items = useMemo(() => conversationItems(events || [], pollNow), [events, pollNow])
   // what the agent most recently SAID on the record — the live tail elides a note the record already carries
   const lastSaid = useMemo(() => {
     for (let i = items.length - 1; i >= 0; i--) if (items[i].kind === 'say' && items[i].text) return items[i].text
@@ -479,23 +488,34 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
 
   const fetchTranscript = useCallback(async (seam, seamId) => {
     const key = transcriptKey(s.id, seam.from, seam.to)
+    wantedRef.current.set(seamId, key)
     const cached = transcriptCache.get(key)
     if (cached) {
       setTranscripts((previous) => new Map(previous).set(seamId, { ...cached, transcriptKey: key }))
       return
     }
-    const pending = { state: 'loading', transcriptKey: key }
-    transcriptCache.set(key, pending)
-    setTranscripts((previous) => new Map(previous).set(seamId, pending))
+    if (inflightRef.current.has(key)) return
+    inflightRef.current.add(key)
+    // the FIRST read of a seam shows its loading line; a REFRESH of an open tail keeps what is on screen
+    // until the fresh read lands, so the numbers move without the transcript blinking away every poll
+    setTranscripts((previous) => (previous.get(seamId)?.state === 'ready'
+      ? previous : new Map(previous).set(seamId, { state: 'loading', transcriptKey: key })))
     const result = await loadSessionTranscript(s.id, seam.from, seam.to)
+    inflightRef.current.delete(key)
     const value = result.ok
       ? { state: 'ready', data: result.data, transcriptKey: key }
       : { state: 'error', error: result.error, transcriptKey: key }
-    transcriptCache.set(key, value)
+    // the module cache keeps ONE interval per seam: a moving tail's previous read is superseded, not hoarded
+    const previousKey = cachedKeyRef.current.get(seamId)
+    if (previousKey && previousKey !== key) transcriptCache.delete(previousKey)
+    transcriptCache.set(key, value); cachedKeyRef.current.set(seamId, key)
     setTranscripts((previous) => {
-      const current = previous.get(seamId)
       // A newer poll may have moved this seam to another interval while this request was in flight.
-      return current?.transcriptKey === key ? new Map(previous).set(seamId, value) : previous
+      if (wantedRef.current.get(seamId) !== key) return previous
+      const current = previous.get(seamId)
+      // a refresh that failed keeps the last good read on screen; the next poll's new interval retries
+      if (!result.ok && current?.state === 'ready') return new Map(previous).set(seamId, { ...current, transcriptKey: key })
+      return new Map(previous).set(seamId, value)
     })
   }, [s.id])
 
@@ -509,7 +529,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       if (!expandedSeams.has(seamId)) continue
       const key = transcriptKey(s.id, seam.from, seam.to)
       const current = transcripts.get(seamId)
-      if (current?.transcriptKey === key || current?.state === 'loading') continue
+      if (current?.transcriptKey === key || inflightRef.current.has(key)) continue
       void fetchTranscript(seam, seamId)
     }
     return undefined

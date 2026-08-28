@@ -28,7 +28,7 @@ scenarios:
       record has no per-tool status to report. The work that produced the answer arrives FOLDED to one line
       naming its count and kinds, and opening it reveals every call it stood for. Zero loss = the reader sees
       the answer and one line about what it cost, and reaches the rest in one click.
-    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/toolVocabulary.js]
+    code: [spec-dashboard/src/TimelineChat.jsx, packages/transcript-ui/src/vocabulary.ts]
   - name: the-status-machine-leaves-the-reading-unit
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

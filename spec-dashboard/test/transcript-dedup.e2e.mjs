@@ -58,16 +58,16 @@ try {
   const seam = page.locator('.m-ev-seam').last()
   await seam.locator('.m-seam-row').waitFor({ state: 'visible', timeout: 30_000 })
   // the record shows the prompt exactly once, as the sent quote above the seam
-  const outerQuotes = await page.locator('.tl-chat .m-quote .m-ev-text').allTextContents()
+  const outerQuotes = await page.locator('.tl-chat .tx-quote .tx-quote-text').allTextContents()
   const promptCopies = outerQuotes.filter((t) => t.includes('harness adapter')).length
   await seam.locator('.m-seam-row').click()
   await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 10_000 })
   await page.waitForTimeout(200)
-  const asksInside = await seam.locator('.m-seam-inset .tc-ask').count()
+  const asksInside = await seam.locator('.m-seam-inset .tx-ask').count()
   const promptInsideSeam = await seam.locator('.m-seam-inset').evaluate((el, needle) => (el.textContent || '').split(needle).length - 1, 'harness adapter，从而让我的另一个项目')
   await page.screenshot({ path: `${OUT}/transcript-dedup-${TAG}.png`, fullPage: true })
   console.log(`[${TAG}] prompt copies in record quotes: ${promptCopies}`)
-  console.log(`[${TAG}] user turns drawn inside expanded seam (.tc-ask): ${asksInside}`)
+  console.log(`[${TAG}] user turns drawn inside expanded seam (.tx-ask): ${asksInside}`)
   console.log(`[${TAG}] prompt sentence occurrences inside seam DOM: ${promptInsideSeam}`)
   console.log(`[${TAG}] page errors: ${JSON.stringify(pageErrors)}`)
   if (TAG === 'after') {

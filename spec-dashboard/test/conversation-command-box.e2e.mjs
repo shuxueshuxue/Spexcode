@@ -222,7 +222,7 @@ try {
   facts.steps.mention = { sentText: sent.text, replyVia: sent.replyVia ?? null }
   assert.match(sent.text, /^\[\[fixture\]\] \(\S*fixture\/spec\.md\) hello /, `[[fixture]] expanded to its spec pointer at send: ${sent.text}`)
   assert.equal(sent.replyVia, 'note', 'the Conversation still asks for a note reply')
-  await page.waitForFunction((expected) => [...document.querySelectorAll('.m-ev-text')].some((node) => node.textContent?.includes(expected)), token, { timeout: 20_000 })
+  await page.waitForFunction((expected) => [...document.querySelectorAll('.tx-quote-text')].some((node) => node.textContent?.includes(expected)), token, { timeout: 20_000 })
   // the durable append shows on the timeline's poll before the native handoff answers the POST; the draft
   // clears when that answer lands, so it is awaited rather than read at the first sighting
   await page.waitForFunction(() => document.querySelector('.m-composer .m-input')?.value === '', null, { timeout: 20_000 })

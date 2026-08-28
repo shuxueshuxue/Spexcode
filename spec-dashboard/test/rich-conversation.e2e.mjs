@@ -133,7 +133,7 @@ try {
       const images = [...document.querySelectorAll('.rich-text img')]
       const bounded = richElements.every((element) => {
         const box = element.getBoundingClientRect()
-        const host = element.closest('.m-ev-note, .m-ev-text').getBoundingClientRect()
+        const host = element.closest('.m-ev-note, .tx-quote-text').getBoundingClientRect()
         return box.left >= host.left - 1 && box.right <= host.right + 1
       })
       const localScrollers = [...document.querySelectorAll('.rich-text pre, .rich-text table, .rich-text .katex-block, .rich-text .katex-display')]

@@ -6,6 +6,7 @@ desc: The terminal-free session surface — one shared Conversation DOM for ever
 code:
   - spec-dashboard/src/TimelineChat.jsx
 related:
+  - spec-dashboard/src/Transcript.jsx
   - spec-dashboard/src/RichText.js
   - spec-dashboard/src/conversationItems.js
   - spec-dashboard/src/Composer.jsx
@@ -224,3 +225,11 @@ so its timeline cursor, rendered history and last live tail survive revisits ([[
 timer and transcript stream run only while selected.
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
 surfaces remain inert and make no timeline/detail reads or polling timers. 
+
+**The transcript grammar is bound, not owned.** The person quoted, the agent as the page, the tool sentence,
+the work fold and the live tail are `@spexcode/transcript-ui` ([[transcript-ui]], [[transcript-view]],
+[[message-stream]]); this surface binds them once at its root through `DashboardTranscriptUi`
+(`spec-dashboard/src/Transcript.jsx`) — its prose renderer with spec links and evidence, its labels in the
+reader's language — and each seam adds only the loader for withheld tool bodies. The package's stylesheet is
+imported at the dashboard entry and inherits this page's tokens through the `--tx-*` fallback chain, so the
+conversation looks as it did and every other host draws the same grammar.

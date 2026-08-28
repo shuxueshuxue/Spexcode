@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, markInterrupted, stampInterrupt, INTERRUPTED_NOTE, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -1907,6 +1907,19 @@ test('machine turn failures share one active-only error projection', serial, () 
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(canonicalState(id).status, 'active')
     assert.equal(canonicalState(id).note, nativeNote)
+
+    // a human interrupt: the marker stamped before the abort turns the aborted child's non-zero exit into the
+    // interrupt it was — `asking`, never `error` — and is consumed by that one report
+    stampInterrupt(id)
+    assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '1'), true, 'the aborted child exit reads as the interrupt')
+    assert.equal(canonicalState(id).status, 'asking')
+    assert.equal(canonicalState(id).note, INTERRUPTED_NOTE)
+    assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '1'), false, 'the marker was consumed and asking is not active')
+    assert.equal(canonicalState(id).status, 'asking')
+    transitionFixtureState(id, 'awaiting', 'nothing', canonicalState(id).note)
+    assert.equal(markInterrupted(id), false, 'a declaration that landed first stays authoritative over the interrupt projection')
+    assert.equal(canonicalState(id).status, 'awaiting')
+    transitionFixtureState(id, 'active', null, nativeNote)
 
     writeFileSync(sessionRecordPath(id), JSON.stringify({ ...stored, stopped: true }, null, 2) + '\n')
     assert.equal(markTurnFailure(id, 'late failure after stop'), false, 'explicit stop wins over a late native completion')

@@ -66,6 +66,15 @@ in that same delivery error rather than swallowed. A still-running turn is accep
 window. Probe/spawn failures are likewise returned loudly and no PTY prompt typing or stdin controller is
 introduced. An inconclusive socket probe never starts a possibly duplicate turn.
 
+Hard interrupt is opencode's own `session.abort`, asked of the generated plugin over the live rendezvous socket
+([[shim-runtime]]'s `interrupt` line) and confirmed only once that socket stops serving — `opencode run` serves
+it for exactly the turn it runs, so the listener going dead IS the turn's exit, and a delivery that follows
+the confirmation wakes cold instead of poking an exiting process. A dead listener before the ask means no
+turn is running and refuses loudly; an unproven probe sends nothing; a plugin that has adopted no session or
+whose abort finds no running turn rejects with that reason. The aborted `opencode run` leaves non-zero, and the
+pane wrapper still reports that exit through the shared turn-outcome seam; the session layer's stamped
+interrupt reads it as the interrupt it was and projects `asking`, never `error` ([[dispatch]]).
+
 The tmux home is the session-owned leaf; OpenCode has no controller or shared resident behind it. Launch binds that
 home through the ordinary pane-ancestry PID/start receipt. While the home exists the non-stopped sleeping
 conversation remains addressable. Physical cold proof requires the receipt-bound leaf and exact home to be gone and

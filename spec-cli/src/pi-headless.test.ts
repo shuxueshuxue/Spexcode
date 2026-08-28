@@ -58,6 +58,75 @@ process.stdout.write('pi fixture\\n')
   assert.equal(existsSync(piHeadlessSock(id)), true)
 })
 
+// [[dispatch]] hard interrupt for pi-headless: the controller aborts natively over the child's rendezvous
+// socket and confirms only once that child has exited; a child that never reached its first agent event is
+// still the controller's own process and is terminated as such; nothing running refuses loudly.
+test('pi-headless interrupt aborts the running child through its rendezvous shim and confirms after the child exits', async (t) => {
+  const { interruptPiHeadless } = await import('./pi-headless.js')
+  const root = mkdtempSync(join(tmpdir(), 'spex-pi-headless-int-'))
+  const runtime = join(root, 'runtime')
+  const marks = join(root, 'marks.ndjson')
+  const fake = join(root, 'fake-pi.mjs')
+  // a pi stand-in: binds the rendezvous socket the launch env names, answers an interrupt line like the
+  // generated extension does (runtime shim protocol), then exits 0 shortly after — pi's own aborted-turn shape
+  writeFileSync(fake, `
+import { appendFileSync, unlinkSync } from 'node:fs'
+import { createServer } from 'node:net'
+const sock = process.env.CLAUDE_BG_RENDEZVOUS_SOCK
+try { unlinkSync(sock) } catch {}
+const server = createServer((c) => {
+  let buf = ''
+  c.on('data', (d) => {
+    buf += d.toString('utf8')
+    if (!buf.includes('\\n')) return
+    if (buf.includes('"interrupt"')) {
+      appendFileSync(${JSON.stringify(marks)}, 'aborted\\n')
+      c.write(JSON.stringify({ type: 'interrupt-done' }) + '\\n')
+      setTimeout(() => process.exit(0), 150)
+    }
+  })
+})
+server.listen(sock)
+setTimeout(() => process.exit(0), 20000)
+`)
+  const id = `pi-headless-int-${process.pid}`
+  const { rvSock } = await import('./harness.js')
+  const previous = process.env.CLAUDE_BG_RENDEZVOUS_SOCK
+  process.env.CLAUDE_BG_RENDEZVOUS_SOCK = rvSock(id)
+  const controller = new PiHeadlessController(id, runtime, `${process.execPath} ${fake}`, process.cwd())
+  t.after(async () => { await controller.close(); process.env.CLAUDE_BG_RENDEZVOUS_SOCK = previous; rmSync(root, { recursive: true, force: true }) })
+  await controller.start('INITIAL')
+  await waitFor(() => existsSync(rvSock(id)))
+  const r = await interruptPiHeadless({ session: id })
+  assert.deepEqual(r, { ok: true })
+  assert.equal(readFileSync(marks, 'utf8'), 'aborted\n', 'the abort reached the child through the rendezvous shim')
+  assert.equal(existsSync(rvSock(id)) && (await rvListener(rvSock(id))) === 'live', false, 'the interrupted child is gone when the interrupt is confirmed')
+  const idle = await interruptPiHeadless({ session: id })
+  assert.equal(idle.ok, false)
+  assert.match(idle.error || '', /no pi-headless turn is running/)
+})
+
+test('pi-headless interrupt terminates a child that never reached its first agent event', async (t) => {
+  const { interruptPiHeadless } = await import('./pi-headless.js')
+  const root = mkdtempSync(join(tmpdir(), 'spex-pi-headless-int-'))
+  const fake = join(root, 'fake-pi.mjs')
+  writeFileSync(fake, `setTimeout(() => {}, 60000)\n`)   // a pi still booting: no rendezvous listener, no events
+  const id = `pi-headless-boot-${process.pid}`
+  const controller = new PiHeadlessController(id, join(root, 'runtime'), `${process.execPath} ${fake}`, process.cwd())
+  t.after(async () => { await controller.close(); rmSync(root, { recursive: true, force: true }) })
+  await controller.start('INITIAL')
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  const r = await interruptPiHeadless({ session: id })
+  assert.deepEqual(r, { ok: true }, 'the owned process was terminated as the fallback')
+  const idle = await interruptPiHeadless({ session: id })
+  assert.match(idle.error || '', /no pi-headless turn is running/)
+})
+
+async function rvListener(path: string): Promise<'live' | 'dead' | 'unproven'> {
+  const { listenerAt } = await import('./harness.js')
+  return listenerAt(path)
+}
+
 test('pi-headless cold proof accepts only dead controller and rendezvous listeners', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'spex-pi-headless-cold-proof-'))
   const id = `pi-headless-cold-proof-${process.pid}`

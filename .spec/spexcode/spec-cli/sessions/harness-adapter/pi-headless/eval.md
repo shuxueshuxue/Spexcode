@@ -43,6 +43,22 @@ scenarios:
       - spec-cli/src/harness.ts#recordOnline
       - spec-cli/src/harness.ts#piHeadlessHarness
       - spec-cli/src/sessions.ts
+  - name: pi-headless-interrupt
+    description: >-
+      While a real governed pi-headless turn is inside a long tool call, interrupt it through the public
+      `POST /api/sessions/:id/interrupt` route; interrupt again with nothing running; then send a follow-up
+      through the public session send surface and read the record, timeline, pane, and pi's native session log.
+    expected: >-
+      The first interrupt is confirmed only after pi's own abort ran (the native session log records the turn as
+      aborted) and the turn child has exited; the record reads `asking` with the interrupted note, never `error`,
+      even though the aborted child leaves non-zero; the second interrupt is refused loudly as nothing running;
+      the follow-up wakes the same saved session cold with `pi -p --session <id>` and its declaration lands.
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/pi-headless.ts#PiHeadlessController.interrupt
+      - spec-cli/src/pi-headless.ts#interruptPiHeadless
+      - spec-cli/src/harness.ts#interruptViaRendezvous
+      - spec-cli/src/sessions.ts#markInterrupted
   - name: pi-headless-close-residue
     description: Close the real pi-headless session through the public session API and inspect its process, tmux, worktree, sockets, and record store.
     expected: The controller and pi children stop, both controller and rendezvous sockets are gone, the session worktree is removed, and the archived session record/store and branch are retained.

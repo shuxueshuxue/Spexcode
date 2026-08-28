@@ -118,6 +118,8 @@ const spexShimRuntime = (cfg) => {
 
   // The per-session rendezvous control socket is a best-effort same-turn poke. The timeline remains the
   // message's durable copy, so this listener only receives reply lines and never confirms or rejects them.
+  // An "interrupt" line is the one CONFIRMED message: the host's native abort runs and the socket answers
+  // interrupt-done or interrupt-rejected, because an interrupt has no durable copy to fall back on.
   const serveRendezvous = (inject, opts) => {
     const sock = (process.env.CLAUDE_BG_RENDEZVOUS_SOCK || "").trim()
     if (!sock) return null
@@ -126,6 +128,7 @@ const spexShimRuntime = (cfg) => {
     const server = __spexCreateServer((c) => {
       let buf = ""
       c.on("error", () => { /* probes disconnect abruptly — expected */ })
+      const answer = (o) => { try { c.write(JSON.stringify(o) + "\\n") } catch { /* the asker left — nothing to confirm to */ } }
       c.on("data", (d) => {
         buf += d.toString("utf8")
         let nl
@@ -134,6 +137,17 @@ const spexShimRuntime = (cfg) => {
           buf = buf.slice(nl + 1)
           let msg
           try { msg = JSON.parse(line) } catch { continue }
+          if (msg && msg.type === "interrupt") {
+            const abort = opts && opts.interrupt
+            if (!abort) { answer({ type: "interrupt-rejected", error: "this " + HARNESS + " shim exposes no native abort" }); continue }
+            try {
+              Promise.resolve(abort()).then(
+                () => answer({ type: "interrupt-done" }),
+                (e) => answer({ type: "interrupt-rejected", error: String((e && e.message) || e) }),
+              )
+            } catch (e) { answer({ type: "interrupt-rejected", error: String((e && e.message) || e) }) }
+            continue
+          }
           if (msg && msg.type === "reply" && typeof msg.text === "string") {
             if (opts && opts.canInject && !opts.canInject()) continue
             const mid = typeof msg.mid === "string" ? msg.mid : ""

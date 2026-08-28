@@ -48,8 +48,8 @@ scenarios:
       - spec-cli/src/harness.ts#claudeHeadlessHarness
       - spec-cli/src/sessions.ts
   - name: hooks-and-close
-    description: Exercise a real Claude lifecycle hook and then close the governed headless session through the public session API.
-    expected: The Claude-identical shim fires against the governed record, and close leaves no tmux window, child/controller process, control socket, worktree, branch, or session record residue.
+    description: Exercise a real Claude lifecycle hook, stop the governed headless session, then close it through the public session API.
+    expected: The Claude-identical shim fires against the governed record; close of the stopped/offline record never re-enters the absent controller socket, and leaves no tmux window, child/controller process, control socket, or worktree, while the archived record and its branch remain exactly as the close contract keeps them (resumable history, never a live row).
     tags: [backend-api, cli]
     code:
       - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.close

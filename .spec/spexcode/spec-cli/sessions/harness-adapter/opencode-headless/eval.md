@@ -46,6 +46,22 @@ scenarios:
     expected: The existing rendezvous poke reaches `client.session.prompt` when the live channel accepts it; no second turn process or PTY input bridge is used, and a missed poke remains in the timeline for the reader.
     tags: [backend-api, cli]
     code: [spec-cli/src/opencode-headless.ts]
+  - name: opencode-headless-interrupt
+    description: >-
+      While a real governed `opencode run` turn is inside a long tool call with its plugin rendezvous socket
+      bound, interrupt it through the public `POST /api/sessions/:id/interrupt` route; interrupt again with
+      nothing running; then send a follow-up through the public session send surface and read the record,
+      timeline, and pane.
+    expected: >-
+      The interrupt is confirmed only after the plugin's native `session.abort` answered and the turn process
+      stopped serving the rendezvous socket; the aborted process's non-zero exit is projected as the interrupt
+      (`asking`, interrupted note), never `error`; the second interrupt is refused loudly as nothing running; the
+      follow-up wakes the same conversation cold in the session tmux home and its declaration lands.
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#interruptViaRendezvous
+      - spec-cli/src/harness.ts#opencodeHeadlessHarness
+      - spec-cli/src/sessions.ts#markHeadlessTurnFailure
   - name: opencode-headless-fail-loud
     description: Remove the session's turn home, then send a prompt through the public session send surface.
     expected: Send succeeds once its timeline line is appended; the failed immediate wake leaves that line unread, records no false native poke success, and never falls back to terminal typing.

@@ -8,7 +8,7 @@ import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 import { controlRequest, withTimeout } from './headless-controller.js'
 import { shQuote } from './sh.js'
 
-type ControlRequest = { type: 'deliver'; text: string; mid?: string }
+type ControlRequest = { type: 'deliver'; text: string; mid?: string } | { type: 'interrupt' }
 type ChildTurn = { process: ChildProcess; exited: Promise<number | null> }
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))
@@ -17,6 +17,7 @@ const CONTROL_TIMEOUT_MS = 30_000
 const START_TIMEOUT_MS = 30_000
 const TERM_EXIT_GRACE_MS = 500
 const KILL_EXIT_GRACE_MS = 2_000
+const INTERRUPT_EXIT_GRACE_MS = 15_000
 
 /** The resident controller socket is distinct from pi's per-turn rendezvous socket. */
 export const piHeadlessSock = (id: string) => join(tmpdir(), `spexcode-ph-${id}.sock`)
@@ -29,6 +30,15 @@ export const deliverViaPiHeadless = (rec: HarnessDeliveryRecord, text: string) =
   controlRequest(piHeadlessSock(rec.session), { type: 'deliver', text, mid: rec.mid }, {
     name: 'pi-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
     rejected: 'pi-headless controller rejected the request',
+  })
+
+// The controller owns the turn child, so it is the one actor that can both abort the turn natively and
+// know when that turn is actually over — an interrupt confirmed here means no pi process serves this
+// session any more, and the next delivery is a clean cold wake rather than a poke into an exiting agent.
+export const interruptPiHeadless = (rec: HarnessDeliveryRecord) =>
+  controlRequest(piHeadlessSock(rec.session), { type: 'interrupt' }, {
+    name: 'pi-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
+    rejected: 'pi-headless controller rejected the interrupt',
   })
 
 // The resident controller and a running pi turn own two per-session listeners. The generic lifecycle
@@ -130,7 +140,22 @@ export class PiHeadlessController {
     })
   }
 
+  // Abort the running turn through pi's own ctx.abort() (the shim answers over the child's rendezvous socket,
+  // so pi records the turn as aborted and the conversation stays resumable), then wait for that child to
+  // exit. A turn whose extension holds no context yet — pi still booting, before its first agent event —
+  // is still THIS controller's process, so it is terminated as the owner rather than left to run.
+  private async interrupt(): Promise<DispatchResult> {
+    const turn = this.child
+    if (!turn || turn.process.exitCode !== null) return { ok: false, error: `no pi-headless turn is running for session ${this.id} - nothing to interrupt` }
+    const { interruptViaRendezvous } = await import('./harness.js')
+    const aborted = await interruptViaRendezvous(this.id, 'pi-headless')
+    if (!aborted.ok && !/no pi turn is running|nothing to interrupt/.test(aborted.error || '')) return aborted
+    if (!aborted.ok || !await this.waitForExit(turn, INTERRUPT_EXIT_GRACE_MS)) await this.terminateTurn(turn)
+    return { ok: true }
+  }
+
   private async handle(request: ControlRequest): Promise<DispatchResult> {
+    if (request.type === 'interrupt') return this.interrupt()
     if (request.type !== 'deliver') return { ok: false, error: 'unknown pi-headless control request' }
     if (!request.text) return { ok: false, error: 'empty prompt - nothing to deliver' }
 
@@ -161,6 +186,7 @@ export class PiHeadlessController {
     childProcess.once('close', (code) => {
       if (this.child === turn) this.child = null
       resolveExit(code)
+      // an aborted child leaves non-zero too; the session layer's interrupt marker reads that exit as the interrupt it was
       if (code !== 0 && !this.closing) void import('./harness.js').then(({ reportHeadlessTurnExit }) => reportHeadlessTurnExit(this.id, 'pi-headless', code, this.cwd))
     })
     await withTimeout(new Promise<void>((resolve, reject) => {

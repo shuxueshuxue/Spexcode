@@ -31,13 +31,18 @@ scenarios:
   - name: divider-seam-and-group-head-geometry
     description: >-
       In a real Chromium dashboard, open a spec document with the Explorer dock and a session document with
-      the Sessions dock at both a 1440x900 desktop viewport and a 390x844 narrow viewport. Measure the rendered
-      tab strip/content seam, an Explorer section divider, and a Sessions zone heading divider after each view
-      settles; capture one screenshot per viewport.
+      the Sessions dock (then ctrl/⌘-click a second live session so the document strip holds an inactive tab)
+      at both a 1440x900 desktop viewport and a 390x844 narrow viewport. Measure the rendered tab strip/content
+      seam — computed style and the actual pixels of the band's bottom row under the active tab, under an
+      inactive tab, and in the empty band — an Explorer section divider, and a Sessions zone heading divider
+      after each view settles; capture one screenshot per viewport and route.
     expected: >-
-      The content host owns exactly one 1px top divider while the tab strip owns no bottom border. Explorer and
-      Sessions group headings expose the same 1px divider rule, with no negative geometry, overlap, or horizontal
-      overflow at either viewport. The tab strip bottom and content host top share one y coordinate.
+      The band meets the page at a hairline except under the active tab: the band's bottom row is the page's
+      own colour under the active tab (joined, no line) and a divider under an inactive tab and in the empty
+      band; the strip owns that rule as an inset at its bottom edge and the content host owns no top border, on
+      the shell strip and on the session document's strip alike. Explorer and Sessions group headings expose
+      the same 1px divider rule, with no negative geometry, overlap, or horizontal overflow at either viewport.
+      The tab strip bottom and content host top share one y coordinate.
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/styles.css]
     test: spec-dashboard/test/divider-geometry.e2e.mjs

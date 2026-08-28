@@ -59,7 +59,10 @@ agent turns ending at the last one that actually says something — not a single
 distinction is measured, not assumed: a real session put 39 calls across 21 turns, one or two each, so a
 fold scoped to one turn never fired and the reader still scrolled 21 blocks of work to reach one answer.
 A folded segment states the count and the KINDS that ran and nothing else; naming the kinds is what lets a
-reader decide whether to open, while repeating the count they just read is noise.
+reader decide whether to open, while repeating the count they just read is noise. What has not produced an
+answer yet — the calls after the agent's newest prose while it is still at work — is not process behind
+anything and stays in the open, in the live tail and the expanded seam alike, folding when the answer lands
+([[transcript-view]]).
 
 **A tool call is a SENTENCE, not a card**: a past-tense verb, its target, and the size of what came back,
 `inline-flex` and bounded so a long shell command cannot stretch it into a full-width bar. Twelve of them

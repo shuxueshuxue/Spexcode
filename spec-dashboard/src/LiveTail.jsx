@@ -1,18 +1,5 @@
 import { useMemo } from 'react'
-import { isRunning, TranscriptTurns, useDisclosure } from './Transcript.jsx'
-
-const squash = (text) => (text || '').replace(/\s+/g, ' ').trim()
-
-// THE LIVE TAIL SAYS NOTHING THE RECORD ALREADY SAID. The tail's note is the agent's newest prose in the
-// current turn; the moment the agent declares that prose as its status note, the durable timeline draws it as
-// a message one row above — and the same sentence twice, once as history and once as "now", is the duplication
-// a reader notices first. The note is elided when the newest message already carries it (the backend clips a
-// note at 240 chars, so either side may be the prefix of the other).
-export const noteAlreadySaid = (note, said) => {
-  const n = squash(note).replace(/(\.\.\.|…)$/, '')
-  const s = squash(said)
-  return !!n && !!s && (s.startsWith(n) || n.startsWith(s))
-}
+import { alreadySaid, isRunning, TranscriptTurns, useDisclosure } from './Transcript.jsx'
 
 // the current turn: everything after the newest human message inside the interval (or the whole interval
 // when the stretch was opened by the agent itself and no message sits in it)
@@ -39,14 +26,21 @@ export default function LiveTail({ data, lastSaid = null }) {
   const [openIds, toggle] = useDisclosure()
   const slice = useMemo(() => (data?.turns ? liveSlice(data.turns) : []), [data])
   if (!slice.length) return null
-  const repeated = noteAlreadySaid(slice[0].text, lastSaid)
+  // THE LIVE TAIL SAYS NOTHING THE RECORD ALREADY SAID: the moment the agent declares its newest prose as its
+  // status note, the durable timeline draws it as a message one row above, so the tail elides it
+  const repeated = alreadySaid(slice[0].text, lastSaid)
   const running = slice.some((turn) => (turn.tools || []).some((tool) => isRunning(tool, true)))
   // said, and nothing still running: the record has the words and the seam above keeps the folded history
   if (repeated && !running) return null
   const turns = repeated ? [{ ...slice[0], text: undefined }, ...slice.slice(1)] : slice
   if (!turns.some((turn) => turn.text || turn.tools?.length)) return null
+  // THE CARET MARKS WORDS STILL BEING SAID. It sits at the end of the newest prose only while that prose is the
+  // newest thing in the turn; once a call follows it the words are finished and the running call is the live
+  // mark — a caret blinking under a finished sentence, above a tool row, marked nothing.
+  const last = turns[turns.length - 1]
+  const speaking = !!last.text && !last.tools?.length
   return (
-    <div className="m-live" data-revision={data.revision}>
+    <div className={`m-live${speaking ? ' is-speaking' : ''}`} data-revision={data.revision}>
       <TranscriptTurns turns={turns} openIds={openIds} onToggle={toggle} live />
     </div>
   )

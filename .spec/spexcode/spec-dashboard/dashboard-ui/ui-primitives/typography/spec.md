@@ -89,14 +89,16 @@ half-strength `--line`, and it is what the rail, dock, strip, status bar and con
 
 `--divider-rule` is the one quiet rule for seams and group heads: `1px solid var(--edge)`. A caller may
 place that rule on a border or use it as the trailing hairline of a heading, but it does not invent another
-colour or weight for the same boundary job. The tab strip's content boundary is owned by the content host's
-top edge, so the active tab and document meet through the same token without a second strip line.
+colour or weight for the same boundary job. The tab strip's content boundary is the band's own inset hairline in
+that token, broken under the active tab so it meets its document with no line at all ([[tab-layout]]); the
+content host owns no top edge of its own, so there is still one line and one token at that seam.
 
 **A SEAM IS A STEP, NOT A LINE — and the step is built from the ladder itself.** Where the chrome floor
 meets the content plane the boundary runs `--ground` · the `--edge` hairline · one pixel of `--panel` ·
 `--paper`: four values in three pixels. That middle pixel is what makes the document read as sitting ABOVE
-the chrome rather than beside it, and it is the same rung the tab strip is painted in, so it continues
-unbroken across the top of the content column and then down its leading edge. This is the whole of the
+the chrome rather than beside it, and it is the same rung the tab strip is painted in, so it continues across
+the top of the content column — broken only under the active tab, which is the document itself
+([[tab-layout]]) — and then down its leading edge. This is the whole of the
 "raised panel" feel that other editors buy with a drop shadow, and it is why we do not have to:
 
 **One elevation, and depth is not one of its jobs.** `--shadow` is a single drop spent only on things that

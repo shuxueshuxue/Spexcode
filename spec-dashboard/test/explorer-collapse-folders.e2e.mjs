@@ -85,7 +85,6 @@ const door = page.locator('.dock .dock-head-act[aria-label]').filter({ has: page
 for (let i = 0, opened = 0; i < await nodeRows.count() && opened < 3; i++) {
   if (await nodeRows.nth(i).locator('.ft-caret .caret:not(.is-open)').count()) { await nodeRows.nth(i).click(); opened++; await page.waitForTimeout(120) }
 }
-if ((await heads.nth(1).getAttribute('aria-expanded')) !== 'true') await heads.nth(1).click()
 await page.waitForSelector('.dock .ft-dir', { timeout: 20000 })
 await page.locator('.dock .ft-dir').first().click()
 await page.waitForTimeout(400)
@@ -100,19 +99,23 @@ const marks = await page.evaluate(() => {
   const rotation = (el) => { const m = getComputedStyle(el).transform; if (m === 'none') return 0; const [a, b] = m.match(/-?[\d.]+/g).map(Number); return Math.round(Math.atan2(b, a) * 180 / Math.PI) }
   const open = document.querySelector('.dock .ft-node .ft-caret .caret.is-open')
   const closed = document.querySelector('.dock .ft-node .ft-caret .caret:not(.is-open)')
-  const heads = [...document.querySelectorAll('.dock .ft-section-head .ft-caret .caret')].map((c) => c.tagName)
+  const heads = [...document.querySelectorAll('.dock .ft-section-head[aria-expanded]')].length
+  const zones = [...document.querySelectorAll('.dock .ft-section-head.si-zone')].map((head) => ({
+    label: head.querySelector('.si-zone-label')?.textContent?.trim(), count: head.querySelector('.si-zone-count')?.textContent?.trim(),
+  }))
   const deep = rows.map((row) => ({ row, depth: Number(getComputedStyle(row).getPropertyValue('--depth')) })).find((r) => r.depth >= 3)
   let guides = null
   if (deep) {
     const before = getComputedStyle(deep.row, '::before')
     guides = { depth: deep.depth, left: before.left, width: before.width, image: before.backgroundImage.includes('repeating-linear-gradient') }
   }
-  return { triangles, openTag: open?.tagName, openRotation: open ? rotation(open) : null, closedRotation: closed ? rotation(closed) : null, heads, guides }
+  return { triangles, openTag: open?.tagName, openRotation: open ? rotation(open) : null, closedRotation: closed ? rotation(closed) : null, heads, zones, guides }
 })
 record('explorer.marks', marks)
 assert.equal(marks.triangles, 0, 'no triangle glyph survives')
 assert.equal(marks.openTag, 'svg'); assert.equal(marks.openRotation, 90); assert.equal(marks.closedRotation, 0)
-assert.deepEqual(marks.heads, ['svg', 'svg'], 'section heads wear the same chevron')
+assert.equal(marks.heads, 0, 'section zone heads have no disclosure control')
+assert.deepEqual(marks.zones.map((zone) => zone.label), ['Specs', 'Files'])
 assert.ok(marks.guides && marks.guides.image && marks.guides.left === '12px' && marks.guides.width === `${marks.guides.depth * 11}px`, 'N guides for depth N, dropped from the caret slot')
 
 // where the door is: on the dock head, beside search, never inside a section head
@@ -145,8 +148,8 @@ record('explorer.afterCollapse', {
 })
 assert.equal(facts['explorer.afterCollapse'].openNodes, 0)
 assert.equal(facts['explorer.afterCollapse'].openDirs, 0)
-assert.equal(facts['explorer.afterCollapse'].specsHead, 'true')
-assert.equal(facts['explorer.afterCollapse'].filesHead, 'true')
+assert.equal(facts['explorer.afterCollapse'].specsHead, null)
+assert.equal(facts['explorer.afterCollapse'].filesHead, null)
 assert.ok(facts['explorer.afterCollapse'].rootsVisible > 0, 'roots stay listed')
 assert.equal(facts['explorer.afterCollapse'].route, routeBefore)
 assert.equal(facts['explorer.afterCollapse'].doorDisabled, true)
@@ -163,18 +166,12 @@ record('explorer.reopenOne', { openNodes: await openNodeCarets(), doorDisabled: 
 assert.equal(facts['explorer.reopenOne'].openNodes, 1)
 assert.equal(facts['explorer.reopenOne'].doorDisabled, false)
 
-// a directory opened inside Files survives closing and reopening the section
+// a directory opened inside Files stays mounted while the explorer remains visible
 await page.locator('.dock .ft-dir').first().click()
 await page.waitForTimeout(300)
 const dirPath = await page.locator('.dock .ft-dir').first().getAttribute('data-menu-path')
-await heads.nth(1).click()   // close Files
-await page.waitForTimeout(200)
-record('explorer.filesClosed', { dirRows: await page.locator('.dock .ft-dir').count() })
-await heads.nth(1).click()   // reopen Files
-await page.waitForSelector('.dock .ft-dir', { timeout: 20000 })
-await page.waitForTimeout(400)
 record('explorer.filesReopened', { dir: dirPath, stillOpen: await page.locator(`.dock .ft-dir[data-menu-path="${dirPath}"]`).getAttribute('aria-expanded') })
-assert.equal(facts['explorer.filesReopened'].stillOpen, 'true', 'directory disclosure is remembered across the section fold')
+assert.equal(facts['explorer.filesReopened'].stillOpen, 'true', 'directory disclosure remains visible in the static Files projection')
 
 // ───────────────────────────── conversation: paper card, one send mark ─────────────────────────────
 const sent = []

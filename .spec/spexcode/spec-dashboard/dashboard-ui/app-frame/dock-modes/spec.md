@@ -24,12 +24,10 @@ related:
 The dock is one finding surface with two projections: **explorer** finds governed files and spec nodes;
 **sessions** finds active sessions.
 
-The explorer itself discloses two SECTIONS — the spec tree ([[file-tree]], open by default) and the real
-directory tree ([[disk-tree]], closed). That is not a third projection: a projection decides what the dock
-is FOR right now and is chosen from the rail, while a section is a disclosure inside the one list the
-explorer already is. The distinction survives the band rule below because a section head owns its own
-disclosure control and scrolls with its list, so the dock is still exactly one band with either section
-open, both, or neither.
+The explorer shows two SECTIONS — the spec tree ([[file-tree]]) and the real directory tree ([[disk-tree]]).
+They are two projections of the same project, identified by static zone heads with count pods and trailing
+hairlines. Neither section has a top-level expand/collapse control: only spec nodes and disk directories
+disclose their own children, while the explorer head's collapse-folders door can clear both ledgers.
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
 projection it shows and whether it exists at all. A node or a governed file belongs with the explorer.
@@ -105,10 +103,9 @@ force, so the key and the visible door can never disagree.
 **COLLAPSE FOLDERS IS ANOTHER OF THOSE DOORS, and it belongs to the explorer head alone.** The explorer's
 two sections are two projections of one list, so the action that folds every open folder in both is a
 property of the explorer and sits on this row — beside search, in the place an editor's explorer keeps its
-collapse-all view action — rather than beside either section's own disclosure ([[file-tree]]). It clears
-both ledgers of the one disclosure store, leaves the Specs and Files sections as the reader left them, and
-is disabled rather than hidden while nothing is open, so the head keeps one shape. The sessions head has no
-such door: its forest folds per family ([[session-forest]]).
+collapse-all view action — rather than beside either section ([[file-tree]]). It clears both ledgers while
+the static Specs and Files zone heads remain visible. The sessions head has no such door: its forest folds
+per family ([[session-forest]]).
 
 The dock's session projection is the **one full session list** in the desktop window. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the

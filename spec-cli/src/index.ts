@@ -23,7 +23,7 @@ import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionTranscript, sessionTranscriptStream } from './session-transcript.js'
-import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
+import { defaultHarness, HARNESSES, codexHarness, launcherList, launcherDefault, harnessById } from './harness.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
 import { putBlob } from '@spexcode/spec-eval/cache'
@@ -290,11 +290,10 @@ app.post('/api/evidence', async (c) => {
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
 // `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
-// `.layout.main`) and the dashboard-visible launcher profiles ([[launcher-visibility]]) the New-Session picker
-// offers — `{ name, harness, cmd, headless }`: the cmd is read-only display data for the picker (the dashboard sits
+// `.layout.main`) and the complete launcher profiles ([[launcher-select]]) the New-Session picker offers —
+// `{ name, harness, cmd, headless }`: the cmd is read-only display data for the picker (the dashboard sits
 // behind the gateway auth; the browser can read but never edit config) — plus the configured `default` NAME
-// so the picker pre-selects the SAME launcher a bare `spex session new` uses when that row is visible, else
-// its first visible row rather than a hidden headless default,
+// so the picker pre-selects the SAME launcher a bare `spex session new` uses, else its first row.
 // Missing defaultLauncher is returned as an actionable config error, not hidden by falling through to the
 // built-in `claude` launcher.
 // `tmuxSocket` is the `-L <name>` label our private tmux server runs under (a backend fact, env-overridable),
@@ -302,7 +301,7 @@ app.post('/api/evidence', async (c) => {
 // beside the blessed `spex session attach` command — the frontend never hardcodes the socket.
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
-  launchers: dashboardLauncherList(),
+  launchers: launcherList(),
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))

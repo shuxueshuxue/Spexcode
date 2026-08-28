@@ -162,8 +162,8 @@ export interface Harness {
   readonly id: HarnessId
   // the id baked into the materialized shim. Headless variants reuse their native family's shim.
   readonly dispatchId: 'claude' | 'codex' | 'opencode' | 'pi' | 'zcode'
-  // whether this harness runs without an interactive TUI. The dashboard launcher picker hides headless
-  // adapters by default ([[launcher-visibility]]); CLI launcher resolution never consumes that policy.
+  // whether this harness runs without an interactive TUI. The session projection carries it as
+  // `capabilities.headless` (the Conversation-only console); launcher resolution never branches on it.
   readonly headless: boolean
   // whether the launch command intentionally exits after its first turn instead of owning a resident process.
   // One-shot adapters must not be mistaken for a failed fast boot and retried with a duplicate prompt.
@@ -3480,7 +3480,7 @@ export function harnessById(id: string): Harness {
 // launchers (with the regular command path), so they are edited like any other. harness defaults to claude.
 // resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
 // auth) and validates the harness id. There is NO env-derived built-in fallback: this registry lists exactly
-// the config's real launchers; dashboardLauncherList applies only the dashboard visibility projection.
+// the config's real launchers, and the dashboard picker offers that same complete list.
 export type Launcher = { name: string; harness: string; cmd: string; headless: boolean }
 export type LauncherDefault = { default: string | null; error: string | null }
 
@@ -3495,13 +3495,6 @@ export function launcherList(root = mainCheckout()): Launcher[] {
       return { name, harness: harness.id, cmd: m[name].cmd, headless: harness.headless }
     })
     .sort((a, b) => a.name.localeCompare(b.name))
-}
-
-// The dashboard's visibility projection. It never removes a launcher from the complete config/CLI path;
-// it only narrows GET /api/settings for the New Session picker ([[launcher-visibility]]).
-export function dashboardLauncherList(root = mainCheckout()): Launcher[] {
-  const showHeadless = readConfig(root).dashboard?.showHeadlessLaunchers === true
-  return launcherList(root).filter((launcher) => showHeadless || !launcher.headless)
 }
 
 export const MISSING_DEFAULT_LAUNCHER_ERROR =

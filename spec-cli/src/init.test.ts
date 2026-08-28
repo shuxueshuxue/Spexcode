@@ -163,7 +163,7 @@ test('--harness seeds only the selected launchers, with automatic permission lim
     const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SEEDED_LAUNCHERS[name as keyof typeof SEEDED_LAUNCHERS]]))
 
     assert.deepEqual(cfg.harnesses, selected, 'the choice is persisted as the harnesses field')
-    assert.equal(cfg.dashboard.showHeadlessLaunchers, false, 'fresh init explicitly hides headless dashboard launchers')
+    assert.equal(cfg.dashboard?.showHeadlessLaunchers, undefined, 'no headless-launcher visibility gate: the picker offers every configured launcher')
     assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands match their runtime form')
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
     if (!selected.includes('codex-headless'))

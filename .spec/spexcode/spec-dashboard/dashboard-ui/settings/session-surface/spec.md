@@ -30,8 +30,9 @@ opens is how a surface becomes a trap.
 This store owns only that bare-address base default, not session state or resource selection. Its scoped
 localStorage payload contains a default and explicit per-session base overrides. Valid stored values are exactly
 `terminal` and `conversation`; anything else is rejected on write and dropped on read, so a corrupted or
-hand-edited payload cannot pin a session to an overlay. The default is Terminal. Headless and read-only
-sessions resolve Conversation.
+hand-edited payload cannot pin a session to an overlay. The default is Conversation — the terminal-free face
+every harness and every lifecycle state can show — and Terminal is a pane-backed session's opt-in, chosen per
+session or as the browser's own default. Headless and read-only sessions always resolve Conversation.
 
 The base-surface predicate is an implementation detail of this store. It is not a second public mechanism: callers
 use the address-level `isSessionSurface` contract or the read/write functions above, and the module exposes no

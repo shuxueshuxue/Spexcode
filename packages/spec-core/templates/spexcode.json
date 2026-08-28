@@ -2,9 +2,6 @@
   "lint": {
     "governedRoots": ["."]
   },
-  "dashboard": {
-    "showHeadlessLaunchers": false
-  },
   "uploads": {
     "maxBytes": 2147483648,
     "chunkBytes": 8388608,

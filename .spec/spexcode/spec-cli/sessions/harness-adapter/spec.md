@@ -188,9 +188,9 @@ surface:
   summary) → false, so its headline falls through to the launch-prompt preview rather than showing the folder.
   Consumed by [[session-activity]]'s headline resolver — this capability field is the ONLY harness branch in
   that path (no `if (codex)`).
-- **headless** — whether the adapter launches without an interactive TUI. [[launcher-visibility]] consumes
-  this capability to keep headless profiles out of the dashboard picker by default without learning an adapter
-  id; the complete launcher registry and explicit CLI selection remain unchanged. Claude, Codex, OpenCode, and
+- **headless** — whether the adapter launches without an interactive TUI. The session projection carries it
+  as `capabilities.headless`, which is what fixes a session onto the Conversation surface and marks its launcher
+  row, without any surface learning an adapter id. Claude, Codex, OpenCode, and
   pi each declare `false`; an actually non-interactive adapter declares `true` on its own row. A one-shot
   headless adapter may also declare `launchOneShot`, which tells the generic
   launcher not to treat its intentional fast exit as a failed boot worth replaying.

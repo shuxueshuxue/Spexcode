@@ -28,6 +28,10 @@ holds a running call is marked so its fold can say it. A closed interval never s
 ended before a result was written is history, not something still happening, so the same payload read as
 history draws the same call as a plain sentence.
 
+**An expanded call shows both sides of the record.** Its original `input` is rendered alongside the recorded
+output, so parameters remain inspectable even when a live call has no result yet. A withheld live result still
+fetches its body on demand; the input never waits for that fetch.
+
 **The work in progress never folds.** Folding is for process that already produced an answer — collapse the
 process, keep the result. The last segment of a LIVE payload is what is happening now: its calls after the newest
 prose, or all of its calls while there is no prose yet, draw as sentences whatever their number, in the collapsed

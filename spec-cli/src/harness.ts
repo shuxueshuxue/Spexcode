@@ -2869,7 +2869,10 @@ const panePidLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane
   (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
-const sessionHomeLiveness: Harness['liveness'] = (_rec, tmuxAlive) => tmuxAlive ? 'online' : 'offline'
+// Leaf-backed headless sessions are the controller process, not the tmux pane that hosts it. The pane can
+// survive a SIGKILL as a bare shell, so tmux presence without the launch-registered PID is never online.
+const sessionHomeLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane) =>
+  (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 // @@@ unlinkSocks - remove ONLY the transport this teardown PROVED dead. `cleanupRuntime` unlinks *their*
 // socket, and the honest test of "theirs" is that the agent it just killed is GONE. It used to unlink on
@@ -2975,6 +2978,7 @@ export const claudeHeadlessHarness: Harness = {
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
   launchEnv: noLaunchEnv,
+  // The controller's registered PID is the liveness witness; the tmux home is only the address boundary.
   liveness: sessionHomeLiveness,
   deliveryTransport: unprovenDeliveryTransport,
   deliver: deliverViaClaudeHeadless,
@@ -3451,6 +3455,7 @@ export const piHeadlessHarness: Harness = {
   runtimeOwnership: 'leaf',
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
+  // The controller's registered PID is the liveness witness; the tmux home is only the address boundary.
   liveness: sessionHomeLiveness,
   deliver: deliverViaPiHeadless,
   // the controller aborts its own turn child natively and confirms only once that child is gone
@@ -3570,6 +3575,7 @@ export const opencodeHeadlessHarness: Harness = {
   runtimeOwnership: 'leaf',
   deliveryTransport: unprovenDeliveryTransport,
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
+  // The controller's registered PID is the liveness witness; the tmux home is only the address boundary.
   liveness: sessionHomeLiveness,
   coldRuntime: async (rec) => {
     const result = await opencodeHeadlessColdRuntime(rec)

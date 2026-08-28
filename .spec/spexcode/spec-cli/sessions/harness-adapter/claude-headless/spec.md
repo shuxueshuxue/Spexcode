@@ -66,7 +66,8 @@ presented as a complete event.
 
 The controller is a session-owned leaf in an exact tmux home, not an adapter resident. Launch therefore uses the
 same pane-ancestry-minted PID/start receipt as interactive leaves. While the home exists the non-stopped record is
-addressable even between child turns. Physical cold proof is stricter: the receipt-bound controller leaf and home
+addressable only while the receipt-bound controller process is still alive; a surviving tmux pane or shell is not
+the session. Physical cold proof is stricter: the receipt-bound controller leaf and home
 must be gone and the controller socket must reject a connect probe. A successful human `stop` records that teardown,
 so later archive or close does not issue a second native interrupt or demand the already-consumed receipt again.
 The stopped bit alone is not authority: a live, unreadable, malformed, or reappeared leaf/home/socket refuses.

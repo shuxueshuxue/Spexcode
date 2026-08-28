@@ -50,7 +50,7 @@ scenarios:
       - spec-cli/src/claude-headless.ts#INTERRUPT_TIMEOUT_MS
   - name: record-liveness
     description: Read the public session state with and without a resident turn child, and after deliberately making the controller transport unreachable while leaving runtime.json intact.
-    expected: The intact record always reads online; the unreachable controller is reported only as a loud deliver failure, and removing the session record removes the session rather than producing an offline row.
+    expected: The intact record reads online only while the controller process is alive; an unreachable or dead controller is reported offline (never working/online), and removing the session record removes the session rather than producing an offline row.
     tags: [backend-api, cli]
     code: [spec-cli/src/claude-headless.ts]
   - name: claude-headless-explicit-stop-resume
@@ -61,6 +61,20 @@ scenarios:
       - spec-cli/src/harness.ts#recordOnline
       - spec-cli/src/harness.ts#claudeHeadlessHarness
       - spec-cli/src/sessions.ts
+  - name: controller-kill-converges-offline
+    description: >-
+      Through the running backend and real `claude-headless` launcher, create one governed session, identify its
+      controller PID from `spex session resources --json`, SIGKILL that PID, and poll `spex session show <id> --json`
+      until the first post-kill reading settles.
+    expected: >-
+      Before the kill the row reads `working/online`; within one liveness poll interval after the controller dies it
+      reads `offline` (never `working/online`), and `spex session resources --json` retains the session with an
+      explicit headless liveness contradiction finding rather than dropping it with the process.
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#claudeHeadlessHarness
+      - spec-cli/src/sessions.ts#liveness
+      - spec-cli/src/host-resources.ts
   - name: hooks-and-close
     description: Exercise a real Claude lifecycle hook, stop the governed headless session, then close it through the public session API.
     expected: The Claude-identical shim fires against the governed record; close of the stopped/offline record never re-enters the absent controller socket, and leaves no tmux window, child/controller process, control socket, or worktree, while the archived record and its branch remain exactly as the close contract keeps them (resumable history, never a live row).

@@ -239,7 +239,8 @@ surface:
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
   JSON-RPC turn delivery live in the Codex adapter. [[claude-headless]] composes the materialize half from
-  `claudeHarness` but replaces this whole runtime half: its intact, non-stopped record is online, active delivery
+  `claudeHarness` but replaces this whole runtime half: its non-stopped record is online only while the
+  session-owned controller leaf is alive (the tmux pane alone is not a witness), active delivery
   writes a native stream-json user event into the resident turn child, idle delivery spawns a
   `claude -p --resume` turn, and hard interrupt writes Claude's native `control_request/interrupt`. Every
   complete native stdout event is forwarded unchanged through the controller's stdout; it is not persisted as

@@ -98,6 +98,10 @@ has a durable readiness marker and its witness is not yet online. A row that is 
 or a live pane is settled: reload clears only the stale marker (and any old readiness diagnostic) and never starts a
 new timer, calls the readiness observer, or writes a warning note.
 
+The readiness diagnostic is launch-phase evidence only until the session produces another authored lifecycle event
+after the launch transition. If a declaration or later lifecycle activity has landed, a timeout is moot and is not
+recorded; in particular, no readiness diagnostic may replace the declaration's note.
+
 **A queued launch carries a stable public-backend authority lease.** Its identity is the normalized
 `SPEXCODE_API_URL` the supervisor injects — the stable loopback proxy URL agents use, stripped of credentials,
 query, and fragment — never the supervisor's ephemeral child port or PID (a direct server falls back to its

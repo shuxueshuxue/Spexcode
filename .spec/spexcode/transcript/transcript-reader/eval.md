@@ -80,6 +80,12 @@ scenarios:
     code: packages/transcript/src/readers.ts
     description: Place a Codex rollout only under `archived_sessions/` (the dated `sessions/` tree empty) and probe the revision and read the interval through the codex reader.
     expected: The revision is non-null and the read returns the archived thread's turns; a thread Codex archived after a session closed is not reported as missing.
+  - name: claude-steered-message-is-a-user-turn
+    tags: [cli]
+    test: packages/transcript/src/live.test.ts
+    code: packages/transcript/src/parsers.ts
+    description: Push a real `queued_command` attachment record (captured from a claude-headless session steered mid-turn) between two assistant records into a live Claude transcript, plus an unrelated attachment.
+    expected: The queued command reads as a user turn keyed by the record's uuid, ordered between the calls it fell between, with its prompt text; the unrelated attachment is not a turn.
 ---
 
 The backend fixture proof is intentionally adapter-local and bounded. The browser scenario uses a real governed

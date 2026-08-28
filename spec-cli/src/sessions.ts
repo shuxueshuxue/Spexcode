@@ -15,6 +15,7 @@ import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
+import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
 import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
 import { stripRefSigil } from './mentions.js'
@@ -1658,11 +1659,40 @@ let draining = false   // re-entrancy guard: only one drain pass runs at a time 
 // queued prompts cannot drain during the candidate window; the successful publication path drains normally.
 const readinessWakeSuppressed = new Set<string>()
 
+// A readiness timeout is launch-phase evidence only until the session produces another durable event. The
+// first event at/after the readiness marker is the launch transition itself; anything after that proves the
+// worker progressed (including a declaration), so a late diagnostic is moot and must not replace its note.
+function hasLaterLaunchReadinessEvent(rec: SessRec): boolean {
+  const startedAt = rec.launchReadinessStartedAt
+  if (!Number.isFinite(startedAt)) return false
+  const application = configuredSessionApplicationIfCutover()
+  if (!application?.readState(rec.session)) return false
+  const events = application.readEvents(rec.session)
+  const statusPayload = (event: (typeof events)[number]): Record<string, unknown> | null => {
+    const payload = decodeEventJson(event.payload)
+    return payload && typeof payload === 'object' && !Array.isArray(payload) && 'status' in payload
+      ? payload as Record<string, unknown> : null
+  }
+  const baseline = events.find((event) => {
+    if (event.occurredAtMs < Number(startedAt)) return false
+    const payload = statusPayload(event)
+    return payload?.status === 'active'
+  })
+  return baseline ? events.some((event) => {
+    if (event.eventSeq <= baseline.eventSeq) return false
+    const payload = statusPayload(event)
+    if (!payload) return false
+    const note = payload.note
+    return !(typeof note === 'string' && /^(?:queued launch readiness failed|launch readiness warning):/.test(note))
+  }) : false
+}
+
 function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string, live = false): void {
+  const rec = readRecord(id)
+  if (rec && (terminal || label === 'launch readiness warning') && hasLaterLaunchReadinessEvent(rec)) return
   const reason = error instanceof Error ? error.message : String(error)
   const note = `${label ?? (terminal ? 'queued launch readiness failed' : 'launch readiness warning')}: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
-  const rec = readRecord(id)
   if (rec && !retirementReason(rec) && (rec.note !== note
     || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null))
     || (!terminal && live && (rec.status === 'error' || rec.stopped)))) {

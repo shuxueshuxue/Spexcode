@@ -145,7 +145,9 @@ terminalized by a timeout — it keeps `active`/online truth, restores `stopped:
 wrote a terminal projection, takes a loud non-terminal warning, and replays neither receipt nor binding — while
 only a proven-dead one publishes the terminal record, through the ordinary transition/watch path so a parent
 watcher is notified and the row cannot sit queued while claiming a launch is in progress. Witness and recovery
-write are ONE locked decision. [[launch]] owns the window and the terminal reason.
+write are ONE locked decision. A readiness diagnostic is launch-phase evidence only until a later authored
+lifecycle event lands; after that event it is moot and must not overwrite the declaration's note. [[launch]] owns
+the window and the terminal reason.
 
 An explicit successful `session resume` is a new runtime attempt, not a continuation of a terminal launch or turn
 failure: it clears the prior `error` lifecycle and its failure note, publishes the resumed conversation as `idle`

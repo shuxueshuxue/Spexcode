@@ -84,7 +84,10 @@
   --radius-full: 999px;
   /* THE CONVERSATION'S ONE MEASURE ([[conversation]]): the column the agent's prose, the person's quotes
      and the composer all share. One number, so the exchange has a middle to happen in at every width. */
-  --conversation-measure: 720px;
+  /* the conversation's column grows with its pane — 86% of it, never under 720px, capped at 1200px — so a
+     wide pane spends its width on the words instead of on two idle margins; resolved against the pane
+     (container units) wherever it is used */
+  --conversation-measure: clamp(720px, 86cqi, 1200px);
   --space-1: 2px;
   --space-2: 4px;
   --space-3: 6px;

@@ -344,7 +344,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return () => clearInterval(iv)
   }, [ticking])
   useEffect(() => {
-    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
   }, [s.id])
   useEffect(() => {
     if (!active) return undefined
@@ -377,11 +377,29 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   // subscription's identity: a later message opens a new seam and a new stream.
   const openSeam = items.length && items[items.length - 1].kind === 'seam' && items[items.length - 1].open ? items[items.length - 1] : null
   const streamFrom = active && footerState === 'live' && openSeam ? openSeam.from : null
+  // THE TAIL SURVIVES DESELECTION. Leaving the tab closes the stream (a hidden pane reads nothing), but the
+  // last payload stays held: coming back draws the tail at once, from what was last seen, and the reopened
+  // stream's first `full` frame replaces it in place. Clearing it only when the SEAM changes is what keeps a
+  // return from blinking the tail away and back. A new seam (a later message) starts from nothing.
+  const tailForRef = useRef(null)   // the seam start the held tail belongs to
   useEffect(() => {
-    setTail(null)
     if (streamFrom === null) return undefined
+    if (tailForRef.current !== streamFrom) { tailForRef.current = streamFrom; setTail(null) }
     return subscribeSessionTranscript(s.id, streamFrom, setTail)
   }, [s.id, streamFrom])
+  // ONE FIRST PAINT. The record and the open seam's stream arrive on two clocks — the timeline read lands,
+  // then a few hundred milliseconds later the first frame — and painting the rows first put the tail in a
+  // second paint that pushed the page. The first paint of a session waits for its tail (bounded, 600ms);
+  // after that the rows never wait again: a later seam draws into a page already on screen.
+  const paintedRef = useRef(false)
+  const [waited, setWaited] = useState(false)
+  const holdingFirstPaint = !paintedRef.current && events !== null && streamFrom !== null && tail === null && !waited
+  useEffect(() => {
+    if (!holdingFirstPaint) return undefined
+    const timer = setTimeout(() => setWaited(true), 600)
+    return () => clearTimeout(timer)
+  }, [holdingFirstPaint])
+  if (events !== null && !holdingFirstPaint) paintedRef.current = true
   // what the agent most recently SAID on the record — the live tail elides a note the record already carries
   const lastSaid = useMemo(() => {
     for (let i = items.length - 1; i >= 0; i--) if (items[i].kind === 'say' && items[i].text) return items[i].text
@@ -714,7 +732,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
         onMouseDown={beginTimelineSelection}>
         <div className="m-col" ref={timelineContentRef}>
-          {events === null
+          {events === null || holdingFirstPaint
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
         </div>

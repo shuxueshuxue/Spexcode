@@ -10,6 +10,7 @@ related:
   - spec-cli/package.json
   - spec-eval/package.json
   - spec-forge/package.json
+  - scripts/build-workspaces.mjs
 ---
 
 # release-build-atomic

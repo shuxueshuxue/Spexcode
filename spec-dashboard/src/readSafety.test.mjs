@@ -143,6 +143,12 @@ test('a 502 publishes one global offline state and marks retained tallies stale'
   assert.match(dock, /dock-stale/)
 })
 
+test('a graph HTTP failure stays retryable instead of becoming an undefined board', () => {
+  const data = source('./data.js')
+
+  assert.match(data, /if \(!res\.ok\) \{[\s\S]*throw new Error\(body\?\.error \|\| `graph load failed \(\$\{res\.status\}\)`\)/)
+})
+
 test('Command Box turns a lost response into an explicit retryable outcome', () => {
   const data = source('./data.js')
   const session = source('./SessionInterface.jsx')

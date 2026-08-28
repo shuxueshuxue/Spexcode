@@ -73,20 +73,11 @@ live in [[dock-modes]]' single header row, because they describe the dock that i
 explorer; a projection that re-declares its own name is a second answer to a question answered one row
 above, and it cost a chrome band to give.
 
-**The explorer discloses TWO sections, and they are two projections of one project.** SPECS is this tree —
-open by default, because it is the explorer's main body rather than one option among two. FILES is the disk
-listed as the disk ([[disk-tree]]) — closed by default, because it answers a question this tree cannot: a
-path exists here only if some node claims it, so a reader who knows where a file lives but not which node
-governs it has nowhere to look. Closed also means unmounted, so a reader who never opens it never costs the
-backend a listing.
-
-A section head is NOT a band, and the distinction is structural rather than a matter of taste about
-thickness: each is a `<section>` whose head owns its own disclosure control, so it scrolls inside the list
-it heads instead of standing between the window edge and the content ([[ui-state-model]]'s classifier reads
-exactly that shape). The dock therefore stays one band however many projections it discloses. The heads
-borrow [[dock-modes]]' header register — muted meta, the name in ink at medium weight, **sentence case** —
-because an all-caps tracked label is decoration wearing the costume of hierarchy ([[typography]]), and the
-collapsed state of each is a localStorage preference like every other pane's.
+**The explorer shows TWO sections, and they are two projections of one project.** SPECS is this tree and FILES
+is the disk listed as the disk ([[disk-tree]]). Both are always mounted and identified by static `.si-zone`
+heads: a count pod, sentence-case label, and trailing hairline. There is no section-level disclosure state or
+localStorage preference; only a spec node or disk directory can disclose its own children. The explorer head's
+collapse-folders door still folds those child ledgers together, leaving both zone heads and their roots visible.
 
 **Collapse folders is a door of the EXPLORER, not of a section.** One action folds every open folder in
 both projections — every disclosed spec node and every disclosed disk directory — through the one store,

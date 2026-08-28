@@ -137,6 +137,36 @@ test('backend restart does not re-arm readiness for a witnessed active session',
   }
 })
 
+test('late launch readiness diagnostics do not overwrite a later declaration note', serial, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
+  const originalLaunchReady = (codexHeadlessHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-readiness-note-order-'))
+  const id = `readiness-note-order-${process.pid}`
+  process.env.SPEXCODE_HOME = home
+  assertIsolatedResumeStore(home, id)
+  try {
+    writeResumeFixtureRecord(id, process.cwd(), 'true', {
+      harness: 'codex-headless', harness_session_id: 'thread-note-order', stopped: false,
+      launch_readiness_started_at: Date.now() - 60_000,
+    })
+    ;(codexHeadlessHarness as any).launchReady = async () => null
+    transitionFixtureState(id, 'awaiting', 'close', 'agent declaration survives readiness timeout')
+    await drainQueue()
+    await sleep(50)
+    assert.equal(canonicalState(id).status, 'awaiting')
+    assert.equal(canonicalState(id).note, 'agent declaration survives readiness timeout')
+    assert.doesNotMatch(canonicalState(id).note || '', /launch readiness/)
+  } finally {
+    ;(codexHeadlessHarness as any).launchReady = originalLaunchReady
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('session diff commit links preserve the full forge repository and commit identity', () => {
   const commit = '2dcade6662e89689444e3ee1cc73a866dcab83d0'
   assert.equal(commitUrlForRemote('git@github.com:shuxueshuxue/spexcode.git', commit),

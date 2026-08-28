@@ -261,3 +261,19 @@ test('unsupported, missing, timestamp-less, and malformed transcripts fail loudl
     assert.equal(claudeTranscript.revision('gone'), null)
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
+
+test('an archived codex rollout is still located and read', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CODEX_HOME', root, async () => {
+    const archive = join(root, 'archived_sessions')
+    mkdirSync(archive, { recursive: true })
+    mkdirSync(join(root, 'sessions'), { recursive: true })
+    writeFileSync(join(archive, 'rollout-2026-08-29T03-56-51-thread-archived.jsonl'), [
+      line({ type: 'event_msg', payload: { type: 'user_message', message: 'compute', timestamp: '2026-08-20T00:00:00.000Z' } }),
+      line({ type: 'event_msg', payload: { type: 'agent_message', message: '42', timestamp: '2026-08-20T00:00:01.000Z' } }),
+    ].join(''))
+    assert.ok(codexTranscript.revision('thread-archived'), 'the revision probe sees the archived file')
+    const read = await codexTranscript.read('thread-archived', { from: T('00:00:00'), to: T('00:00:05') })
+    assert.deepEqual(read.turns.map((turn) => turn.text), ['compute', '42'])
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { TranscriptReadError, type TranscriptRead, type TranscriptReader } from './turns.js'
 import { IntervalCollector, claudeEvent, codexEvent, geminiEvent, hermesEvents, openclawEvent, opencodeEvents, piEvent, type Parse, type ParsedEvent } from './parsers.js'
 
@@ -28,13 +28,17 @@ export function claudeTranscriptPath(threadId: string, root = projectTranscriptR
 const codexSessionsDir = () => join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions')
 // Walk newest day first and return on the first hit; the walk is exhaustive rather than capped, because
 // future-dated junk under sessions/ sorts above every real day and a cap once masked every real rollout.
-export function codexRolloutPath(threadId: string, root = codexSessionsDir()): string | null {
+// A thread Codex has ARCHIVED (the app-server's thread/archive, which a closed session runs) keeps its
+// rollout, moved out of the dated tree into the flat `archived_sessions/` beside it — a closed session's
+// conversation is still on disk and still readable, so the locator looks there second.
+export function codexRolloutPath(threadId: string, root = codexSessionsDir(), archive = join(dirname(root), 'archived_sessions')): string | null {
   for (const year of children(root)) for (const month of children(join(root, year))) for (const day of children(join(root, year, month))) {
     const dir = join(root, year, month, day)
     const file = children(dir).find((name) => name.includes(threadId))
     if (file) return join(dir, file)
   }
-  return null
+  const archived = children(archive).find((name) => name.includes(threadId))
+  return archived ? join(archive, archived) : null
 }
 
 const piSessionsRoot = () => join(process.env.SPEXCODE_PI_AGENT_DIR || join(homedir(), '.pi', 'agent'), 'sessions')

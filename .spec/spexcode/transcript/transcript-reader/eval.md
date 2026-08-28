@@ -74,6 +74,12 @@ scenarios:
     code: spec-dashboard/src/TimelineChat.jsx
     description: Expand status rows through a prebuilt dashboard and isolated backend after the real archived session worktree has been removed.
     expected: Collapsed rows make no transcript request; expansion requests the interval once, renders turns, keeps tool output folded until a second click, reuses the cached result, and shows a human-readable unavailable reason for a missing transcript.
+  - name: archived-codex-rollout-is-still-readable
+    tags: [cli]
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
+    description: Place a Codex rollout only under `archived_sessions/` (the dated `sessions/` tree empty) and probe the revision and read the interval through the codex reader.
+    expected: The revision is non-null and the read returns the archived thread's turns; a thread Codex archived after a session closed is not reported as missing.
 ---
 
 The backend fixture proof is intentionally adapter-local and bounded. The browser scenario uses a real governed

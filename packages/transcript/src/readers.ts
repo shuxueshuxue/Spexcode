@@ -3,7 +3,7 @@ import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } fr
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { TranscriptReadError, type TranscriptRead, type TranscriptReader } from './turns.js'
-import { IntervalCollector, claudeEvent, codexEvent, opencodeEvents, piEvent, type Parse, type ParsedEvent } from './parsers.js'
+import { IntervalCollector, claudeEvent, codexEvent, geminiEvent, hermesEvents, openclawEvent, opencodeEvents, piEvent, type Parse, type ParsedEvent } from './parsers.js'
 
 // THE NATIVE-THREAD READERS. Each harness keeps its conversation somewhere private — Claude's project JSONL,
 // Codex's rollout, pi's session JSONL, OpenCode's store behind `opencode export` — and this module is the only
@@ -58,6 +58,33 @@ export function piSessionPath(threadId: string, root = piSessionsRoot()): string
   }
   return null
 }
+
+const findJsonl = (root: string, threadId: string, maxDepth = 5): string | null => {
+  const walk = (dir: string, depth: number): string | null => {
+    if (depth > maxDepth) return null
+    for (const name of children(dir)) {
+      const path = join(dir, name)
+      try {
+        if (statSync(path).isFile() && name.endsWith('.jsonl')) {
+          if (name.includes(threadId)) return path
+          const header = JSON.parse(readFileSync(path, 'utf8').split('\n', 1)[0]) as Record<string, unknown>
+          if (header.sessionId === threadId || header.id === threadId) return path
+        } else if (statSync(path).isDirectory()) {
+          const found = walk(path, depth + 1)
+          if (found) return found
+        }
+      } catch { /* skip entries that disappear or are not JSON */ }
+    }
+    return null
+  }
+  return walk(root, 0)
+}
+
+const geminiRoot = () => process.env.GEMINI_HOME || process.env.GEMINI_CONFIG_DIR || join(homedir(), '.gemini')
+export function geminiTranscriptPath(threadId: string, root = geminiRoot()): string | null { return findJsonl(root, threadId) }
+
+const openclawRoot = () => process.env.OPENCLAW_STATE_DIR || join(homedir(), '.openclaw', 'state')
+export function openclawTranscriptPath(threadId: string, root = openclawRoot()): string | null { return findJsonl(root, threadId) }
 
 const opencodeStoreRoot = () => process.env.SPEXCODE_OPENCODE_DATA_DIR
   || join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), 'opencode')
@@ -197,6 +224,8 @@ function lineFileReader(harness: string, locate: (threadId: string) => string | 
 export const claudeTranscript: TranscriptReader = lineFileReader('claude', (threadId) => claudeTranscriptPath(threadId), claudeEvent)
 export const codexTranscript: TranscriptReader = lineFileReader('codex', (threadId) => codexRolloutPath(threadId), codexEvent)
 export const piTranscript: TranscriptReader = lineFileReader('pi', (threadId) => piSessionPath(threadId), piEvent)
+export const geminiTranscript: TranscriptReader = lineFileReader('gemini', (threadId) => geminiTranscriptPath(threadId), geminiEvent)
+export const openclawTranscript: TranscriptReader = lineFileReader('openclaw', (threadId) => openclawTranscriptPath(threadId), openclawEvent)
 
 // OpenCode has no per-thread file: the store's revision is the change token, and one export per
 // revision is parsed and kept, so repeated interval reads of a quiet thread cost nothing new.
@@ -229,6 +258,36 @@ export function opencodeTranscriptReader(root = opencodeStoreRoot(), load: (thre
   }
 }
 export const opencodeTranscript: TranscriptReader = opencodeTranscriptReader()
+
+const hermesRoot = () => process.env.HERMES_HOME || join(homedir(), '.hermes', 'profiles', 'default')
+function hermesRevision(root: string): string | null {
+  try { const stat = statSync(join(root, 'state.db')); return `${stat.size}:${Math.floor(stat.mtimeMs)}` } catch { return null }
+}
+function hermesExport(threadId: string): string {
+  return execFileSync(process.env.SPEXCODE_HERMES_CMD || 'hermes', ['sessions', 'export', '--format', 'jsonl', '--session-id', threadId, '--yes'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+}
+const hermesExports = new Map<string, { revision: string; events: ParsedEvent[] }>()
+export function hermesTranscriptReader(root = hermesRoot(), load: (threadId: string) => string = hermesExport): TranscriptReader {
+  const read = async (threadId: string, range: { from: number; to: number }): Promise<TranscriptRead> => {
+    const revision = hermesRevision(root)
+    if (!revision) throw new TranscriptReadError('missing', `hermes transcript for ${threadId} is unavailable: state.db was not found`)
+    const key = `${root}:${threadId}`
+    let cached = hermesExports.get(key)
+    if (!cached || cached.revision !== revision) {
+      let exported: string
+      try { exported = load(threadId) } catch (error) { throw new TranscriptReadError('unreadable', `hermes transcript could not be exported: ${error instanceof Error ? error.message : String(error)}`) }
+      let value: unknown
+      try { value = JSON.parse(exported) } catch (error) { throw new TranscriptReadError('invalid', `hermes transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
+      cached = { revision, events: hermesEvents(value) }
+      hermesExports.set(key, cached)
+    }
+    const collector = new IntervalCollector(range)
+    for (const event of cached.events) collector.add(event)
+    return collector.finish(revision, 'hermes')
+  }
+  return { revision: () => hermesRevision(root), read, tail: (threadId, from) => ({ advance: (to) => read(threadId, { from, to }), close: () => {} }) }
+}
+export const hermesTranscript: TranscriptReader = hermesTranscriptReader()
 
 export function unsupportedTranscript(harness: string): TranscriptReader {
   const refuse = async (): Promise<never> => { throw new TranscriptReadError('unsupported', `${harness} does not support transcript access`) }

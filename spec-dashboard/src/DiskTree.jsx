@@ -35,9 +35,9 @@ function useBranch(path, open) {
 
 function Dir({ entry, depth }) {
   const t = useT()
-  // disclosure lives in the explorer's shared ledger ([[file-tree]]'s store), not on the row: closing the
-  // Files section unmounts every row, and a row-local flag forgot each folder the reader had opened. The
-  // same ledger is what lets the dock head's collapse door fold this projection with the spec tree.
+  // disclosure lives in the explorer's shared ledger ([[file-tree]]'s store), not on the row: a row can
+  // unmount when its ancestor or dock folds, and a row-local flag would forget each folder it had opened.
+  // The same ledger is what lets the dock head's collapse door fold this projection with the spec tree.
   const { open: openDirs } = useDiskTreeState()
   const open = openDirs.has(entry.path)
   const branch = useBranch(entry.path, open)
@@ -91,9 +91,12 @@ function Branch({ state, depth, loading }) {
   )
 }
 
-export default function DiskTree() {
+export default function DiskTree({ onCount }) {
   const t = useT()
   const branch = useBranch('', true)
+  useEffect(() => {
+    if (branch && !branch.error) onCount?.(branch.entries.length)
+  }, [branch, onCount])
   return <div className="ft-files">
     <Branch state={branch} depth={0} loading={t('diskTree.loading')} />
   </div>

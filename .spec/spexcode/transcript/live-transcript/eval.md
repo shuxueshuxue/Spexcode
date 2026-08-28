@@ -12,4 +12,11 @@ scenarios:
     code: packages/transcript/src/live.ts
     description: Push Codex rollout records without native ids into a live transcript and read them.
     expected: The turns come back keyed `<role>@<at>` in thread order, exactly as the file reader keys them.
+  - name: codex-app-server-live-fixture
+    tags: [cli]
+    test: packages/transcript/src/codex-app-server.test.ts
+    code: packages/transcript/src/parsers.ts
+    related: packages/transcript/src/live.ts
+    description: Replay the captured Codex app-server notification stream through the stateful parser, an in-memory transcript, and an open frame stream.
+    expected: The command item is output-less at `item/started` and gains `ok` at `item/completed`; commentary and final agent deltas replace one stable turn per native item id; the stream emits `full` then `delta` frames whose merged turns match a one-shot read.
 ---

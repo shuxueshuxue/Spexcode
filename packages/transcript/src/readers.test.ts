@@ -143,6 +143,20 @@ test('a turn without a native id is keyed by its place in the thread', async () 
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
 
+test('append-only Codex files keep each native id as its own turn', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CODEX_HOME', root, async () => {
+    const path = join(root, 'sessions', '2026', '08', '20', 'rollout-native-ids.jsonl')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, [
+      line({ type: 'event_msg', payload: { id: 'message-1', type: 'agent_message', timestamp: '2026-08-20T00:00:01.000Z', message: 'first' } }),
+      line({ type: 'event_msg', payload: { id: 'message-2', type: 'agent_message', timestamp: '2026-08-20T00:00:02.000Z', message: 'second' } }),
+    ].join(''))
+    const read = await codexTranscript.read('native-ids', { from: T('00:00:00'), to: T('00:00:10') })
+    assert.deepEqual(read.turns.map((turn) => turn.id), ['message-1', 'message-2'])
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
 test('codex transcript reader detects timestamp disorder inside its bounded post-range lookahead', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
   await withEnv('CODEX_HOME', root, async () => {

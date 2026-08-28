@@ -187,6 +187,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       if (!lines) {
         // A reader can act on the node itself even when the native Selection is empty. Links and controls
         // keep their browser menu; plain prose opens the node-level send/copy group instead.
+        if (!node) return
         if (event.target.closest?.('a,button,input,textarea,select')) return
         event.preventDefault()
         setPanel(null)

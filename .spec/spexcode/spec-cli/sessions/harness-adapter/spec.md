@@ -15,7 +15,7 @@ related:
   - spec-cli/src/materialize.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/session-declarations.ts
-  - spec-cli/src/transcript-reader.ts
+  - packages/transcript/src/readers.ts
   - spec-cli/src/harness.test.ts
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg

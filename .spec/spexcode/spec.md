@@ -24,7 +24,8 @@ from rotting into one blur. **L0 — the data asset**: the spec↔code graph, it
 robustness, and an **install surface small enough that nothing can stop it landing** (an install-time
 dependency that can fail on a user's machine is a barrier to the asset ever starting to accumulate, and
 is refused at this altitude). **L1 — the agent-army substrate**: [[session-protocol]] and
-[[session-topology]] are sibling foundations; [[session-runtime]] composes them with lifecycle and harness
+[[session-topology]] are sibling foundations, [[transcript]] is the sibling that reads and carries what a worker's
+harness said; [[session-runtime]] composes them with lifecycle and harness
 control to drive workers on top of that asset. Spex CLI is one adopter, not the substrate's gatekeeper. This is
 the brick a CI, a review pipeline, or a software factory builds with, so it
 is judged by **scale and composability** — a mechanism whose cost grows with (observers × subjects) is a

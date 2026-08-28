@@ -1,34 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { graphTitles, layout, loadGraph, mergeTranscriptFrame, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
-
-// [[session-transcript]]: the stream sends the whole interval once, then only what changed; the subscriber
-// merges by turn id so the renderer always reads one complete payload
-test('transcript frames merge by turn id into one complete payload', () => {
-  const base = { revision: 'r1', from: 10, to: 20, truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0 }
-  const a = { id: 'a', at: 11, role: 'user', text: 'go' }
-  const b = { id: 'b', at: 12, role: 'assistant', tools: [{ id: 't1', name: 'Bash', input: '{}', outputLines: 0, outputBytes: 0 }] }
-  const full = mergeTranscriptFrame({ turns: [] }, { ...base, kind: 'full', turns: [a, b] })
-  assert.deepEqual(full.payload, { ...base, turns: [a, b] }, 'a full frame is the payload, minus the wire kind')
-  // the call completes and a new turn lands: only those two travel; the untouched turn is kept in place
-  const bDone = { ...b, tools: [{ ...b.tools[0], output: null, outputLines: 1, outputBytes: 2 }] }
-  const c = { id: 'c', at: 13, role: 'assistant', text: 'done' }
-  const delta = mergeTranscriptFrame(full.state, { ...base, revision: 'r2', to: 21, kind: 'delta', turns: [bDone, c], removed: [] })
-  assert.deepEqual(delta.payload.turns, [a, bDone, c])
-  assert.equal(delta.payload.revision, 'r2')
-  assert.equal(delta.payload.kind, undefined)
-  // the turn cap evicted the oldest: it leaves, the counters are the frame's absolute ones
-  const evicted = mergeTranscriptFrame(delta.state, { ...base, revision: 'r3', kind: 'delta', turns: [], removed: ['a'], truncated: true, omittedTurns: 1 })
-  assert.deepEqual(evicted.payload.turns.map((turn) => turn.id), ['b', 'c'])
-  assert.equal(evicted.payload.omittedTurns, 1)
-  // an error frame passes through and holds what was there for the next good frame
-  const failed = mergeTranscriptFrame(evicted.state, { revision: 'r4', from: 10, to: 22, error: 'gone', reason: 'missing' })
-  assert.equal(failed.payload.error, 'gone')
-  assert.deepEqual(failed.state.turns.map((turn) => turn.id), ['b', 'c'])
-  // a frame without a kind (a closed read, an older server) is read whole
-  const plain = mergeTranscriptFrame(failed.state, { ...base, turns: [c] })
-  assert.deepEqual(plain.payload.turns, [c])
-})
+import { graphTitles, layout, loadGraph, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
 
 const tree = [
   { id: 'root', parent: null },

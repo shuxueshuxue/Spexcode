@@ -3,8 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { HARNESSES } from './harness.js'
-import { claudeTranscript, codexTranscript, opencodeTranscriptReader, piTranscript, TranscriptReadError, unsupportedTranscript } from './transcript-reader.js'
+import { claudeTranscript, codexTranscript, opencodeTranscriptReader, piTranscript, TranscriptReadError, unsupportedTranscript } from './index.js'
 
 const line = (value: unknown) => `${JSON.stringify(value)}\n`
 const T = (clock: string) => Date.parse(`2026-08-20T${clock}.000Z`)
@@ -221,14 +220,4 @@ test('unsupported, missing, timestamp-less, and malformed transcripts fail loudl
     await assert.rejects(() => claudeTranscript.read('gone', { from: 1, to: 2 }), /file was not found/)
     assert.equal(claudeTranscript.revision('gone'), null)
   }).finally(() => rmSync(root, { recursive: true, force: true }))
-})
-
-test('every registered adapter reads its transcript through one reader; headless rows inherit their base', () => {
-  const base = HARNESSES.filter((harness) => !harness.headless)
-  const headless = HARNESSES.filter((harness) => harness.headless && harness.id !== 'zcode')
-  assert.equal(base.length, 4)
-  assert.equal(headless.length, 4)
-  assert.equal(new Set(base.map((harness) => harness.transcript)).size, 4, 'four native shapes, four readers')
-  assert.ok(headless.every((harness) => base.some((candidate) => candidate.transcript === harness.transcript)))
-  assert.equal(HARNESSES.find((harness) => harness.id === 'zcode')?.transcript.revision('x'), null)
 })

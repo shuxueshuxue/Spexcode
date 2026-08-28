@@ -41,6 +41,7 @@ jobs:
         run: npx tsc --noEmit
       - name: Session package unit suites
         run: |
+          npm test --workspace=@spexcode/transcript
           npm test --workspace=@spexcode/session-protocol
           npm test --workspace=@spexcode/session-topology
           npm test --workspace=@spexcode/session-runtime

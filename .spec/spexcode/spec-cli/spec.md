@@ -19,7 +19,7 @@ related:
 # spec-cli
 
 The backend package is `@spexcode/spec-cli`; its declared dependencies are `@spexcode/spec-core`,
-`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
+`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/transcript`, `@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
 host port with the session, issue, source-policy, and transport implementations.
 `eval-host.ts` is that one-way composition seam: it installs the concrete CLI capabilities at startup and does
 not duplicate the eval engine or its remark types. Its defining contract has a focused governance node.
@@ -55,6 +55,7 @@ feature had no prior package edge; it is an explicit exception, not an unexamine
 | `377c832f4` | Extracted the first session protocol package. | Historical extraction; the package was later retired after the application cutover. |
 | `b1c36fb04` | Added `@spexcode/session-application` and `@spexcode/session-selflaunch` to `spec-cli`. | Same-change extraction: application composition and self-launch adapter implementations moved out of the CLI; the old copies were removed. |
 | `0443c68df` | Removed the retired `@spexcode/session-core` workspace edge. | Same-change subtraction: root build, launcher source closure, release plan, CI, lint roots and lockfile no longer build or ship the legacy package. |
+| `ef95e779e` | Extracted `@spexcode/transcript` and added it to `spec-cli` and the dashboard (`./frames`). | Same-change extraction: `spec-cli/src/transcript-reader.ts` and the dashboard's frame merge moved into the package and the old copies were removed; the SSE route and the dashboard import the one protocol. |
 
 The table is an immutable-history ledger, not permission to add a dependency without a review. A future edge must
 either name its same-change subtraction here or add a measured **No package predecessor** exception with an owner and
@@ -81,7 +82,7 @@ board or issue dump arrives whole, never a JSON cut off mid-object that reads as
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree in the
 compiled runtime closure** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-eval`, `spec-core`, `session-application`, `session-selflaunch`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
+(`spec-forge`, `spec-eval`, `spec-core`, `transcript`, `session-application`, `session-selflaunch`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
 reads via fs or never imports (the frontend is a separate vite server with its own HMR). In a source workspace
 the supervisor rebuilds that closure before it reloads; an installed package watches only its shipped `dist`.
 Watching only its own dir was a real gap: a merge touching `spec-forge` reached disk while the running child

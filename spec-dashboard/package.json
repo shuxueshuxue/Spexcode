@@ -31,6 +31,7 @@
     "@lezer/highlight": "^1.2.1",
     "@spexcode/spec-cli": "0.6.8",
     "@spexcode/spec-core": "0.6.8",
+    "@spexcode/transcript": "0.6.8",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "6.0.0",
     "@xyflow/react": "^12.3.5",

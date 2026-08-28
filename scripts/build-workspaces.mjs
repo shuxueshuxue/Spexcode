@@ -7,6 +7,7 @@ const buildScript = fileURLToPath(new URL('./build-dist.mjs', import.meta.url))
 
 // Keep the release dependency order, but avoid starting npm's workspace runner for every package.
 const packages = [
+  'packages/transcript',
   'packages/session-protocol',
   'packages/session-topology',
   'packages/session-runtime',

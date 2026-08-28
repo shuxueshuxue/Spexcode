@@ -65,8 +65,8 @@ omitted), so the reply target is never lost even if the row is momentarily unlis
 
 **Multiline replies keep their newlines.** The note-reply insert tells an agent to put its complete response in
 the declaration note. When that response spans lines, the declaration must receive real newline characters, not
-the two-character sequence `\\n`. The prompt explicitly warns against `String.raw` and direct multiline content
-inside a quoted string. It gives a JavaScript tool call with a normally-built note passed as one argument with
-`JSON.stringify(note)` as an example; equivalent stdin/file-safe methods are also valid. The CLI and timeline
+the two-character sequence `\\n`. Because `functions.exec` runs a shell command through bash, the prompt explicitly
+warns against interpolating `JSON.stringify(note)` into that command; it points to stdin, a heredoc, or base64
+followed by `--note \"$note\"`. It also warns against `String.raw` and literal backslash+n. The CLI and timeline
 already preserve note bytes verbatim; this is guidance for the agent-side command construction, not a decoding
 rule for readers.

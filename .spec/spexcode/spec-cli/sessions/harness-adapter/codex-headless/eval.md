@@ -27,6 +27,22 @@ scenarios:
       - spec-cli/src/harness.ts#codexHeadlessHarness
       - spec-cli/src/sessions.ts
     tags: [backend-api, cli]
+  - name: codex-headless-resume-reloads-an-evicted-thread
+    description: >
+      Take a real governed codex-headless session whose thread the shared app-server has EVICTED from its loaded
+      set (thread/loaded/list does not include it, though its rollout is intact on disk — the natural state of a
+      completed/idle session after the server drops it). Confirm the thread is not resident, then resume the
+      session through the public session API and read its liveness.
+    expected: >
+      Before resume the readiness census cannot see the thread (not in the loaded set) so a bare resume would
+      time out. Resume reopens the thread into the shared app-server (thread/resume, running no turn and
+      streaming no history), the loaded-set census then includes it, and the session returns online with its
+      prior declaration note intact — not "launch did not become ready".
+    code:
+      - spec-cli/src/harness.ts#codexReopenThread
+      - spec-cli/src/harness.ts#codexHeadlessHarness
+      - spec-cli/src/cli.ts
+    tags: [backend-api, cli]
   - name: codex-headless-live-steer
     description: While a real codex-headless app-server turn is in progress, send a second prompt through the public session command.
     expected: The delivery is accepted by `turn/steer` on the owned thread and no second Codex process or TUI is spawned.

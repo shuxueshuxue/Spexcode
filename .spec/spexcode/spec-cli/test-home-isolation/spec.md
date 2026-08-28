@@ -34,3 +34,12 @@ The same bootstrap pins the session application's SQLite database inside the dis
 inherited session-configuration override, so a fixture backend or CLI a test starts can never open the operator's
 canonical session database. The isolation is whole-store for SQLite exactly as it is for the record tree: both
 live under the redirected root and die with it.
+
+`~/.spexcode` is not the only persistent user store a test can reach. Codex keeps project trust in the user's
+global `~/.codex/config.toml`, and the codex adapter writes there on every materialize of a codex harness — so a
+test that inits a temporary project with codex stamps that user file with a trust block for a path that stops
+existing minutes later, and nothing ever removes it (one host accumulated a thousand such fixture blocks, ten
+thousand lines, before a concurrent rewrite corrupted the file and took every dispatched codex thread offline).
+The bootstrap therefore redirects `CODEX_HOME` with the same rules as `SPEXCODE_HOME`: a disposable codex home
+inside the disposable SpexCode home, inherited by Node children, replaced per test worker, left alone when a
+fixture sets its own, and rejected loudly when it resolves to the user's real `~/.codex`.

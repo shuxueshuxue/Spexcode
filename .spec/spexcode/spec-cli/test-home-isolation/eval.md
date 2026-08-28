@@ -51,6 +51,23 @@ scenarios:
     tags: [cli]
     code: scripts/test-home.mjs
     related: [spec-cli/package.json, spec-eval/package.json, packages/spec-core/src/layout.ts]
+  - name: no-test-process-writes-into-the-user-codex-home
+    description: >
+      With the inherited SPEXCODE_HOME and CODEX_HOME variables removed, count the lines of the real user's
+      ~/.codex/config.toml and its `"/tmp/` trust entries, run a test that inits a temporary project with the
+      codex harness (the host browse test) through the package test command, then count again. Then run the
+      package test command with CODEX_HOME set to the real ~/.codex.
+    expected: >
+      The test passes, the real config.toml has the same line count before and after, and no `"/tmp/` trust
+      entry appears in it — the trust stamp for the temporary project landed in a disposable codex home that
+      no longer exists. The package test command rejects CODEX_HOME equal to the real ~/.codex with a
+      non-zero exit and a clear error.
+    tags: [cli]
+    test:
+      path: spec-cli/src/test-home.test.ts
+      name: test bootstrap redirects CODEX_HOME into the disposable home and never at the user codex home
+    code: scripts/test-home.mjs
+    related: [spec-cli/src/harness.ts, spec-cli/src/host.test.ts]
 ---
 
 Measure the user-visible test command and the real default store count. The temporary repository is an

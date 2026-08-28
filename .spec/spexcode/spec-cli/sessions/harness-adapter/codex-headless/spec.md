@@ -58,7 +58,13 @@ dashboard launcher picker by default and the note conversation is the console tr
 session runtime and marks the retained record stopped, so it reads `offline` until a proven resume clears the
 marker. Resume is the no-TUI form: an identified thread resumes by its exact marker, while a pre-identity recovery
 replays the authoritative resolved launch payload; an absent shared server must be
-recreated through the canonical delegated spawn before the record can return online. The adapter's launch
+recreated through the canonical delegated spawn before the record can return online. Because readiness proves
+online only for a thread the shared app-server currently holds resident, and that server evicts an idle thread
+from its loaded set, an identified resume must first reload its thread into the server before the readiness
+census runs — the load a visible-TUI resume performs by attaching, which the headless form has no TUI to do. That
+reload runs no turn and streams no history; it only makes the on-disk thread resident again, so a completed
+session whose thread was evicted resumes to online instead of timing out its readiness on a thread that is intact
+on disk. The adapter's launch
 readiness is stricter than its steady-state record liveness: it proves one unchanged version-4 detached-launch
 receipt through the shared process adapter (exact PID/start and process group everywhere, plus `/proc` session on
 Linux, never Darwin `ps sess`) and composes it with the exact socket generation, the target's existing thread loaded under that

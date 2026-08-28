@@ -1481,6 +1481,15 @@ if (cmd === 'serve') {
     if (!sock || !tid || !text) { console.error('usage: spex internal codex-turn <sock> <threadId> <text...>'); process.exit(2) }
     const r = await codexTurn(sock, tid, text)
     if (r.ok) { console.log('ok') } else { console.error(r.error); process.exit(1) }
+  } else if (sub === 'codex-reopen') {
+    // A headless resume reloads its evicted thread into the shared app-server (thread/resume, no turn), so
+    // readiness — which proves online only for a RESIDENT thread — can see it. The visible TUI does this
+    // implicitly by attaching; headless has no TUI, so its launch.sh resume branch calls this.
+    const { codexReopenThread } = await import('./harness.js')
+    const sock = process.argv[4], tid = process.argv[5]
+    if (!sock || !tid) { console.error('usage: spex internal codex-reopen <sock> <threadId>'); process.exit(2) }
+    const r = await codexReopenThread(sock, tid)
+    if (r.ok) { console.log('reopened') } else { console.error(r.error); process.exit(1) }
   } else if (sub === 'check-staged') {
     // the pre-commit hook's eval backstop: a staged stray evidence blob or malformed eval.md rejects the
     // commit. Logic lives in spec-eval; the hook shims here.

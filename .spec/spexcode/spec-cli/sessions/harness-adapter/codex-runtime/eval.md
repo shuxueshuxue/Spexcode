@@ -12,6 +12,22 @@ scenarios:
       Stop) reach dispatch.sh with the worktree as `proj`, the record advances past launch, and the commit carries
       the Session trailer; with the root shim gone and only the anchor left, no hook fires — the anchor is
       discovery plumbing, never the shim.
+  - name: trust-write-refuses-an-unparseable-config-and-keeps-mode
+    tags: [cli]
+    code: [spec-cli/src/harness.ts#writeCodexTrust]
+    description: >
+      Point CODEX_HOME at a directory holding a small parseable config.toml with mode 0600 and run
+      `spex init --harness codex` on a fresh git repository. Then overwrite that config with one that ends in a
+      line cut short mid-value (the shape a concurrent codex rewrite leaves when read mid-way), still 0600, and
+      run `spex materialize`.
+    expected: >
+      After init the file carries this project's trust block, parses, and is still mode 0600. The materialize
+      against the truncated file exits non-zero naming the config path and "does not parse as TOML", and the
+      file's bytes are identical before and after — nothing of SpexCode's is appended to a file codex could not
+      load, and no staging file is left beside it.
+    test:
+      path: spec-cli/src/harness.test.ts
+      name: writeCodexTrust refuses to persist a config.toml that codex could not load, and replaces a good one without changing its mode
 ---
 # measuring codex-runtime
 

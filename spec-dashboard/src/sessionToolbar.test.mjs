@@ -98,11 +98,13 @@ test('pane-backed and headless consoles share one warm TimelineChat Conversation
   assert.equal((timelineChat.match(/className="tl-chat"/g) || []).length, 1)
 })
 
-test('live offline and archived conversations share one footer with cold input and polling policy', () => {
+test('live offline and archived conversations share one footer with coldline and polling policy', () => {
   assert.equal((timelineChat.match(/<footer className=/g) || []).length, 1)
   assert.match(timelineChat, /data-footer-state=\{state\}/)
-  assert.match(timelineChat, /disabled=\{readOnly\}/)
+  assert.match(timelineChat, /editor=\{!readOnly && \(/)
+  assert.match(timelineChat, /\{!readOnly && \([\s\S]*className="si-command-tools m-composer-tools"/)
   assert.match(timelineChat, /data-focus-sink=\{active && !readOnly \? '' : undefined\}/)
+  assert.doesNotMatch(timelineChat, /disabled=\{readOnly\}/)
   assert.match(timelineChat, /if \(!active \|\| footerState === 'archived'\) return undefined[\s\S]{0,100}setInterval\(load, 8000\)/)
   assert.match(source, /onRestore=\{id === active && session\.status !== 'retired' \? resumeAndReturnToWorking : undefined\}/)
   assert.match(timelineChat, /\{onRestore && <button type="button" className="m-coldline-action"/)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elapsed } from './toolVocabulary.js'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
-import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText, subscribeSessionTranscript } from './data.js'
+import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { richTextFromRange } from './RichText.js'
@@ -166,7 +166,7 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 // and the paperclip, a pasted screenshot or a dropped file all go through the one resumable upload path
 // ([[file-attach]]) and leave the file's path in this draft. The only Command Box control this surface does
 // not carry is the terminal-only Alt+I opener, because this composer is already open.
-function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [] }) {
+function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [] }) {
   const t = useT()
   const readOnly = state !== 'live'
   // STOP IS IN THE COMPOSER, and only while there is something to stop: the square every chat reader knows,
@@ -205,7 +205,7 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
       className={`m-composer is-${state}${attach.dragging ? ' dragover' : ''}`}
       data-footer-state={state}
       {...attach.dropProps}
-      preview={sendErr && <div className="m-senderr">{sendErr}</div>}
+      preview={(sendErr || sendNote) && <div className={sendErr ? 'm-senderr' : 'm-sendnote'}>{sendErr || sendNote}</div>}
       editor={(
         <>
         <div className="m-composer-line fv-tawrap">
@@ -283,6 +283,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [sendErr, setSendErr] = useState(null)
+  const [sendNote, setSendNote] = useState(null)   // the last send's child receipt (`@new`), if any
   const [copyStatus, setCopyStatus] = useState(null)
   const [expandedSeams, setExpandedSeams] = useState(() => new Set())
   const [transcripts, setTranscripts] = useState(() => new Map())
@@ -327,7 +328,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }, [ticking])
   useEffect(() => {
     if (!active) return undefined
-    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
@@ -542,10 +543,12 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     setSending(true); setSendErr(null)
     // Redundant for a headless target, whose adapter now owns the note-reply default. Keep the explicit input
     // for compatibility; the server's shared prompt seam remains the sole policy and phrase owner.
-    const r = await sendSessionText(s.id, text, { replyVia: 'note' })
+    // The footer IS a Command Box, so it speaks the box's input kind: the durable append is the acceptance
+    // and any `@new` child receipt rides back as the mention summary, shown in the composer's own line.
+    const r = await sendSessionCommand(s.id, text, { replyVia: 'note' })
     setSending(false)
-    if (r.ok) { setDraft(''); load() }
-    else setSendErr(r.error || t('mobile.sendFailed'))
+    if (r.ok) { setDraft(''); setSendNote(r.outcome?.mentionSummary || null); load() }
+    else setSendErr(r.outcome?.error || t('mobile.sendFailed'))
   }
 
   const stop = async () => {
@@ -700,7 +703,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
         </div>
       )}
       <TimelineFooter session={s} state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
-        sending={sending} send={send} sendErr={sendErr} onRestore={onRestore} actionOutcome={actionOutcome}
+        sending={sending} send={send} sendErr={sendErr} sendNote={sendNote} onRestore={onRestore} actionOutcome={actionOutcome}
         onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
         specs={specs} sessions={sessions} boardCommands={boardCommands} />
     </div>

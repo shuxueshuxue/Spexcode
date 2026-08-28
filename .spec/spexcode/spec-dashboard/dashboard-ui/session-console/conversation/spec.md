@@ -182,7 +182,10 @@ then the harness's own commands behind `/`, in [[command-box]]'s precedence), an
 attachment hook (paste, drop and the paperclip carry the file over the resumable stream and leave its path in
 this draft, with the same per-file rows). A `[[node]]` in the draft expands to its live spec pointer at send;
 an exact `/stop`-style board line runs on the board (its outcome owned by the panel, not the box) and is never
-sent; a `/preset` invocation passes through raw for the backend to expand. It used to be the shell alone —
+sent; a `/preset` invocation passes through raw for the backend to expand. The footer sends through the box's own
+input kind (`kind:"command"`, [[dispatch]]) with the terminal-free `replyVia:"note"` mark, so an `@new` in the
+draft creates a child under this session exactly as the terminal box's does, and the child receipt (the mention
+summary) shows in the composer's own line beneath the field, where a failed send shows its error. It used to be the shell alone —
 the doors typed their trigger character and the paperclip only focused the field — which is the one thing a
 composer must never be: chrome that promises a mechanism it does not have. The only Command Box control this
 surface does not carry is the terminal-only Alt+I opener, because this composer is already open. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed

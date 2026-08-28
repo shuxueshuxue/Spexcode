@@ -905,8 +905,14 @@ app.post('/api/sessions/:id/input', async (c) => {
     if (!text.trim()) return c.json({ ok: false, error: EMPTY_PROMPT_ERROR }, 400)
     const deliveryKey = typeof body?.deliveryId === 'string' && body.deliveryId.trim() ? body.deliveryId.trim() : undefined
     // Command Box acceptance is the durable append. Do not hold the HTTP request on a
-    // slow native handoff: the delivery supervisor already owns the queued retry path.
-    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey, deferDrain: true } : { deferDrain: true })
+    // slow native handoff: the delivery supervisor already owns the queued retry path. The Conversation
+    // footer is a Command Box on a terminal-free surface, so it says `replyVia:"note"` here exactly as a
+    // text send would, and the note-reply insert rides the same delivery.
+    const r = await sendText(id, text, undefined, {
+      deferDrain: true,
+      ...(deliveryKey ? { deliveryKey } : {}),
+      ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
+    })
     if (!r.ok) return c.json(r, 502)
     // Start the first handoff without holding the HTTP response on native readiness. The queue remains the
     // acceptance boundary; only a successful dequeue is allowed to publish human activity.

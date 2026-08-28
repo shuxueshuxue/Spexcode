@@ -120,7 +120,8 @@ selected session supplies the spawned worker's parent without giving shell `spex
 
 All faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
 `kind:"text"` is the prompt delivery above; `kind:"command"` is Command Box text plus `@new` resolution using
-`:id` as the parent originator; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
+`:id` as the parent originator — and, from the Conversation footer (a Command Box on a terminal-free surface), it
+carries `replyVia:"note"` so the note-reply insert rides the same delivery; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
 own `tmux send-keys` transport — the per-keystroke channel for driving the agent's TUI menus, carrying named
 keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so CLI remote control drives the
 terminal, **not** a prompt fallback. The transport split (socket vs send-keys) is an implementation fact the

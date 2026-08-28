@@ -2992,8 +2992,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rich-text .katex-error { color: var(--red); white-space: pre-wrap; }
 
 /* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
-.m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
+.m-senderr, .m-sendnote, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-senderr { color: var(--red); }
+.m-sendnote { color: var(--muted); }
 .m-copy-status { color: var(--muted); }
 .m-copy-status.failed { color: var(--red); }
 /* [[session-console]]: the conversation's composer is a SURFACE the reading column floats, not a chrome
@@ -3011,7 +3012,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
 }
 .m-composer:focus-within { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
-.m-composer > .m-senderr { padding: 0 0 var(--space-3); }
+.m-composer > .m-senderr, .m-composer > .m-sendnote { padding: 0 0 var(--space-3); }
 .m-composer-line { display: flex; align-items: flex-end; gap: var(--space-4); }
 .m-composer .si-command-title { color: var(--muted); }
 .m-composer .si-command-tools { padding-top: 5px; }

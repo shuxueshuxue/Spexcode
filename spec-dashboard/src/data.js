@@ -552,10 +552,12 @@ export async function sendSessionText(id, text, { replyVia } = {}) {
 // message cannot be appended twice; `signal` is the caller's transport deadline. The raw status and body come
 // back untouched because the box's outcome vocabulary (queued / deferred / failed / unconfirmed) is its own.
 // Plain fetch, not apiFetch: the deadline's abort must surface at once as "unconfirmed", never be retried.
-export async function sendSessionCommand(id, text, { deliveryId, signal } = {}) {
+// `replyVia:'note'` marks a terminal-free host (the Conversation footer): the server appends the note-reply
+// insert to the delivery, as it does for a text send.
+export async function sendSessionCommand(id, text, { deliveryId, signal, replyVia } = {}) {
   const res = await fetch(sessionUrl(id, 'input'), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: 'command', text, ...(deliveryId ? { deliveryId } : {}) }),
+    body: JSON.stringify({ kind: 'command', text, ...(deliveryId ? { deliveryId } : {}), ...(replyVia === 'note' ? { replyVia: 'note' } : {}) }),
     signal,
   })
   const outcome = await res.json().catch(() => null)

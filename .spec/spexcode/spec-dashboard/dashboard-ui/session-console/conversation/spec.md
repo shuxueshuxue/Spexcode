@@ -119,11 +119,11 @@ exactly those three:
 - An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
   rather than lasted.
 
-THE RULER. Time lives in a 52px left gutter, tabular and the same for every message row; the day it belongs
-to sticks in that same gutter as the reader scrolls; the right edge carries nothing. THE MINUTE IS QUIET: a
+THE RULER. Time lives in a 52px tabular gutter shared by every message row; user messages reverse the two
+columns so their time sits to the right of the right-aligned bubble. THE MINUTE IS QUIET: a
 reader scans a conversation by what was said and asks for the time only when they need it, so each row's
 time rests at reduced opacity and comes up under the pointer or keyboard focus — it never leaves the DOM,
-so nothing assistive loses it. The day stays full, because it is structure rather than a stamp. When the PANE (a
+so nothing assistive loses it. The day stays in normal document flow, because it is structure rather than a stamp. When the PANE (a
 container query, not the viewport — a desktop side pane is as narrow as a phone) is under 560px the gutter
 goes and each row keeps its own inline time.
 

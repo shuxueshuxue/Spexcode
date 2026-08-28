@@ -8,10 +8,14 @@ related:
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/mentions.jsx
+  - spec-dashboard/src/useAttachQueue.jsx
+  - spec-dashboard/src/launch.js
+  - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/textarea.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/command-box-new.e2e.mjs
+  - spec-dashboard/test/conversation-command-box.e2e.mjs
 ---
 
 # command-box
@@ -32,7 +36,15 @@ the surrounding TUI visible. It does not reserve layout or resize xterm. Its wid
 shrinks with the pane. The shared [[composer]] footer stays on that fixed bottom edge while textarea content
 grows upward to a bounded cap; the box never walks toward the screen bottom or top as lines are added. Menus
 open above the caret/footer inside the available upper space. At phone width the desktop Command Box does not
-replace [[mobile-ui]]'s existing composer.
+replace [[mobile-ui]]'s existing composer — that composer is the [[conversation]] footer, which carries this
+box's whole grammar itself.
+
+**One grammar, one hook, several hosts.** The Command Box keeps no menu state machine of its own: its `[[`,
+`@` and `/` menus are [[mentions]]' one shared autocomplete hook, armed with this box's `/` vocabulary and a
+pick handler that RUNS a board row and inserts anything else; the New Session prompt arms the same hook with
+the launch-preset palette, and the Conversation footer arms it with this box's vocabulary again. Its
+attachments are likewise [[file-attach]]'s one hook. A surface that wears these doors therefore has them, and
+a fix to the grammar lands in every host at once.
 
 Sending appends the prompt to the selected session's durable log ([[dispatch]]), so one authored prompt lands
 atomically even while the terminal is in copy mode. `@session` remains a passive [[mentions]] reference, while

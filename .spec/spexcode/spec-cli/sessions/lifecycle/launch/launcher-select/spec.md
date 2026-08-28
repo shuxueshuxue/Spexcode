@@ -37,8 +37,8 @@ declares it as an explicit launcher choice in `spexcode.json` or the gitignored 
 init never grants those permissions silently. There is NO runtime env or harness-specific branch that rewrites
 a launcher's command. The complete
 launcher registry therefore lists exactly the config's real launchers, and two names can never resolve to the
-same command as ghost duplicates; the dashboard applies only [[launcher-visibility]]'s adapter-capability
-projection on top. Because a launcher NAMES a harness, picking a launcher is the ONLY user-facing launch
+same command as ghost duplicates; the dashboard picker offers that same complete list — a headless launcher is
+an ordinary row, not a hidden tier. Because a launcher NAMES a harness, picking a launcher is the ONLY user-facing launch
 selection. The old free-standing harness pick is gone.
 
 `sessions.defaultLauncher` names the profile a session with no explicit choice uses; it is required for any
@@ -61,8 +61,7 @@ its own (no control, no independent text-selection region: a cmd click that mere
 selection instead of picking read as a broken row). So a human can
 inspect exactly what a launcher runs before picking it, without any edit surface — config files stay the sole
 place a `cmd` is written. That endpoint reports `{ launchers: [{ name, harness, cmd, headless }], default }`;
-the list is already narrowed by [[launcher-visibility]]'s committed dashboard policy, while the capability
-marker still identifies any revealed headless row. The command rides the payload only as display data (the
+the list is the complete configured registry, and the capability marker identifies each headless row. The command rides the payload only as display data (the
 dashboard sits behind the deployment's gateway auth). The mobile
 composer keeps a plain native launcher select — the pop-out is desktop chrome. The picker's INITIAL selection
 is always a visible launcher choice: a still-valid remembered (per-browser) pick wins, else a visible configured

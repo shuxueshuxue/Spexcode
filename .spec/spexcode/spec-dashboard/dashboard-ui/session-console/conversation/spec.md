@@ -9,7 +9,10 @@ related:
   - spec-dashboard/src/RichText.js
   - spec-dashboard/src/conversationItems.js
   - spec-dashboard/src/Composer.jsx
+  - spec-dashboard/src/mentions.jsx
+  - spec-dashboard/src/useAttachQueue.jsx
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
+  - spec-dashboard/test/conversation-command-box.e2e.mjs
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
@@ -21,8 +24,8 @@ Every existing session in the [[session-console]] — live, offline, archived, h
 Conversation: one timeline body, one footer, one composer. Lifecycle changes what the footer says and whether the
 composer is enabled; it never creates another right-pane face. [[rich-conversation]] owns how prose renders inside
 it — with one decision declared HERE: a newline in the transcript was typed mid-conversation, so it stays a line
-break rather than reflowing as an authoring wrap; [[message-stream]] owns the native execution trace this surface
-deliberately does not drill into.
+break rather than reflowing as an authoring wrap; [[message-stream]] owns the live tail — the open seam's collapsed face — and the transcript stream that feeds
+the open seam.
 
 **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
@@ -98,7 +101,8 @@ exactly those three:
   other disclosure in the conversation — the work fold, each tool row, the live tail's steps — so a folded
   thing reads content-first and one shape at the end of a line says "open" everywhere on this page (the
   trees keep theirs leading, because a tree's chevron is also its indent). The seam owns the transcript for exactly its
-  interval (the transcript API already reads by interval; nothing server-side changes), opened directly
+  interval ([[transcript-reader]] reads by interval; a closed seam fetches its interval once when opened, the
+  open seam of a live session streams its interval — [[session-transcript]]), opened directly
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
   `working · 4m 12s` in the live green with a slow sweep of light across the words, and is the page's only
@@ -123,11 +127,13 @@ goes and each row keeps its own inline time.
 Every seam starts folded on first load, after a timeline/status refresh, and when a different session is
 selected; no data arrival or remount may open it. The disclosure choice is keyed to the seam's first event,
 not to the current transcript interval, so a later event that closes the seam refreshes the interval while
-keeping an already-open seam open and an untouched one closed. AN EXPANDED LIVE SEAM KEEPS COUNTING: the open
-tail's interval ends at the latest poll's server time, so each poll re-reads the expanded tail's transcript and
-its `N turns · M tool uses` follows the agent; what is already on screen stays until the fresh read lands (no
-loading flash), a failed refresh keeps the last good read and retries on the next poll, and the module cache
-holds one interval per seam rather than every poll's. A collapsed seam reads nothing. The timeline body is selectable text:
+keeping an already-open seam open and an untouched one closed. THE OPEN SEAM OF A LIVE SESSION STREAMS: it subscribes to its
+interval's transcript stream from the moment it exists, so its `N turns · M tool uses` and its two faces —
+the live tail while collapsed, the whole interval while expanded ([[message-stream]]) — follow the agent the
+instant the native thread changes rather than on the next poll; what is on screen stays until the next frame
+lands (no loading flash), a frame that carries an error shows the unavailable line in place, and the seam's
+start is the subscription's identity, so a later message that opens a new seam opens a new stream. A collapsed
+CLOSED seam reads nothing; an expanded closed seam fetches its interval once and keeps it. The timeline body is selectable text:
 Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and
 indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an
 accidental editable surface. The timeline's own selection is a browser-painted highlight over a Range, never a
@@ -136,7 +142,8 @@ also cancels the browser's click-to-collapse, every press the timeline owns reti
 document Selection lying in the timeline (one the browser made on a fourth quick click, or on a drag begun on a
 control). No selection outlives the next click; a press outside selectable text still counts as the timeline's.
 
-That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. 
+That conversation is the whole terminal-free console: the live tail is part of its open seam ([[message-stream]]),
+not a native-event drill-down beside it. 
 
 ## the paper, and where its grammar was borrowed from
 
@@ -165,21 +172,37 @@ PAPER: the page's own ground with a hairline frame and the one elevation token, 
 the flow, so it reads as part of the sheet the conversation is printed on. Its primary action is the shared
 send mark ([[icon-system]]'s `send`, the same accent square the thread's composer wears): icon-only, its
 word carried by the tooltip and the accessible name, filled while there is something to send and quiet
-while there is not, so every dashboard composer says "send" by one shape. The Command Box title and its
-`@`, `[[`, `/`, and attachment doors remain in the Conversation footer and act on that same draft; the
-separate terminal Command Box opener is the only command control disabled on this surface. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+while there is not, so every dashboard composer says "send" by one shape.
+
+**The Conversation footer IS a Command Box, not a picture of one.** It wears the Command Box title and its
+`@`, `[[`, `/` and attachment doors, and every one of them acts on this draft through the SAME shared
+mechanism the terminal Command Box uses — [[mentions]]' one autocomplete hook (session and launcher rows
+behind `@`, `@new` → `@new:<launcher>`; spec nodes behind `[[`; the board's `[ui]` rows first, then presets,
+then the harness's own commands behind `/`, in [[command-box]]'s precedence), and [[file-attach]]'s one
+attachment hook (paste, drop and the paperclip carry the file over the resumable stream and leave its path in
+this draft, with the same per-file rows). A `[[node]]` in the draft expands to its live spec pointer at send;
+an exact `/stop`-style board line runs on the board (its outcome owned by the panel, not the box) and is never
+sent; a `/preset` invocation passes through raw for the backend to expand. The footer sends through the box's own
+input kind (`kind:"command"`, [[dispatch]]) with the terminal-free `replyVia:"note"` mark, so an `@new` in the
+draft creates a child under this session exactly as the terminal box's does, and the child receipt (the mention
+summary) shows in the composer's own line beneath the field, where a failed send shows its error. It used to be the shell alone —
+the doors typed their trigger character and the paperclip only focused the field — which is the one thing a
+composer must never be: chrome that promises a mechanism it does not have. The only Command Box control this
+surface does not carry is the terminal-only Alt+I opener, because this composer is already open. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.
 
 **Stop lives in the composer, and only while there is something to stop.** While the session is `working`
-the composer shows one stop square beside send — the mark every chat reader knows as "stop generating" —
-and shows nothing otherwise, because a permanently visible disabled stop is chrome about a state the page is
+the composer shows one stop square beside send — the mark every chat reader knows as "stop generating",
+filled in the WORKING hue (the orange the seam's running mark and the working status already wear) so that
+beside the blue send the two read as a pair, blue sending into the live turn and orange stopping it, and the
+stop is never mistaken for one more tool button in the quiet wash — and shows nothing otherwise, because a permanently visible disabled stop is chrome about a state the page is
 not in. It calls the one interrupt verb ([[dispatch]]); the backend decides between the adapter's native
 interrupt and, for a pane-backed TUI, the operator's own key into its pane, so this surface never learns
 which transport it is on. A refusal lands in the composer's error line like a failed send; a success asks the
-timeline to refresh. The current turn itself is drawn above as the live tail ([[message-stream]]), in this
-conversation's own grammar.
+timeline to refresh. The current turn itself is drawn above as the open seam's live tail ([[message-stream]]),
+in this conversation's own grammar.
 
 TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /

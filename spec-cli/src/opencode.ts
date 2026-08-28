@@ -93,8 +93,16 @@ export const SpexcodePlugin = async (ctx) => {
   }
 
   // The shared rendezvous server receives best-effort reply pokes. An unadopted plugin simply leaves the
-  // timeline line for its next turn boundary; the SDK injection remains host-owned.
-  rt.serveRendezvous(injectPrompt, { canInject: () => !!(client && rootSession) })
+  // timeline line for its next turn boundary; the SDK injection remains host-owned. An interrupt is
+  // opencode's own session abort on the adopted root session, confirmed back over the same socket.
+  rt.serveRendezvous(injectPrompt, {
+    canInject: () => !!(client && rootSession),
+    interrupt: async () => {
+      if (!client || !rootSession) throw new Error("no opencode session is adopted - nothing to interrupt")
+      const r = await client.session.abort({ path: { id: rootSession } })
+      if (r === false || (r && r.data === false)) throw new Error("no opencode turn is running - nothing to interrupt")
+    },
+  })
 
   const toolPayload = (input, output) => {
     const sid = (input && input.sessionID) || ""

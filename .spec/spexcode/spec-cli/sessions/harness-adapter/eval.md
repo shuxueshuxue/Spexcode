@@ -489,7 +489,7 @@ scenarios:
     tags: [backend-api]
     code:
       - spec-cli/src/harness.ts#codexRolloutExists
-      - spec-cli/src/execution-trace.ts#codexRolloutPath
+      - spec-cli/src/transcript-reader.ts#codexRolloutPath
       - spec-cli/src/harness.ts#waitForCodexRollout
     test:
       path: spec-cli/src/harness.test.ts

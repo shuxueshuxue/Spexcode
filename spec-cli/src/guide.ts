@@ -311,7 +311,7 @@ PORTABILITY, and picking the right one is the whole discipline:
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
-icon or launcher-visibility policy, upload policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
+icon, upload policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
@@ -343,13 +343,8 @@ Example — a repo whose trunk is \`staging\`, not \`main\`:
   dashboard.apiUrl  the per-project backend the dashboard proxies to (read frontend-side). For a SHARED
                     install prefer the API_URL env var; apiUrl here is the default only when the dashboard
                     lives inside the project.
-  dashboard.showHeadlessLaunchers
-                    include launchers whose harness declares itself headless in the dashboard New Session
-                    picker. Default: false. This changes dashboard visibility only; explicit CLI
-                    --launcher selection can still use every configured launcher.
 Example:
-  { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch",
-                   "showHeadlessLaunchers": false } }
+  { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
 
 ── HOST GATEWAY ($SPEXCODE_HOME/config.json — per-user host identity, never a project file) ──
   gateway.icon      the global /projects icon, using the same preset ids above. Default: "gateway".
@@ -407,14 +402,17 @@ A named launcher profile fixes BOTH a session's harness AND its exact launch com
 by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
 reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS an ordinary named launcher for each
 harness the adopter SELECTED (--harness), from the template pool
-  "claude"   → { "harness": "claude",   "cmd": "claude" }
   "claude-headless" → { "harness": "claude-headless", "cmd": "claude" }
-  "codex"    → { "harness": "codex",    "cmd": "codex" }
+  "claude"   → { "harness": "claude",   "cmd": "claude" }
   "codex-headless" → { "harness": "codex-headless", "cmd": "codex --yolo" }
-  "opencode" → { "harness": "opencode", "cmd": "opencode" }
+  "codex"    → { "harness": "codex",    "cmd": "codex" }
   "opencode-headless" → { "harness": "opencode-headless", "cmd": "opencode --auto" }
-  "pi"       → { "harness": "pi",       "cmd": "pi" }
+  "opencode" → { "harness": "opencode", "cmd": "opencode" }
   "pi-headless" → { "harness": "pi-headless", "cmd": "pi" }
+  "pi"       → { "harness": "pi",       "cmd": "pi" }
+Each harness's headless (terminal-free) form leads its interactive one, and \`spex init\` makes the FIRST
+planted launcher the default — so an adoption that selects both forms of a harness creates its sessions
+headless by default, read through the dashboard's Conversation; the interactive TUI launcher is the opt-in.
 The interactive profiles preserve each harness's normal permission model. \`opencode-headless\` and
 \`codex-headless\` are deliberate seed exceptions: their terminal-free runs require \`opencode --auto\` and
 \`codex --yolo\`; interactive profiles stay plain. Other automatic-permission commands are NEVER clean-init

@@ -200,3 +200,37 @@ test('piHarness adapter surface: launch/resume/shim/liveness one-liners', () => 
   assert.equal(piHarness.worktreeHookAnchor('/p'), null)
   assert.equal(piHarness.agentDir('/p'), null)
 })
+
+test('pi extension: an interrupt poke aborts the RUNNING turn through ctx.abort() and is confirmed; no turn → rejected', async () => {
+  const { interruptViaRendezvous, rvSock } = await import('./harness.js')
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'))
+  const session = `pi-int-${process.pid}`
+  const sock = rvSock(session)
+  const { factory } = await loadExtension(dir, 'exit 0')
+  const { api, handlers } = stubPi()
+  const prev = process.env.CLAUDE_BG_RENDEZVOUS_SOCK
+  process.env.CLAUDE_BG_RENDEZVOUS_SOCK = sock
+  try {
+    factory(api)
+    for (let i = 0; i < 100 && !existsSync(sock); i++) await new Promise((r) => setTimeout(r, 10))
+    // before any turn event the extension holds no running turn: the interrupt is rejected, never guessed
+    const idle = await interruptViaRendezvous(session, 'pi-headless')
+    assert.equal(idle.ok, false)
+    assert.match(idle.error || '', /no pi turn is running/)
+    // a mid-turn event hands the extension the turn's ctx; its abort() is the interrupt, confirmed back
+    const aborts: number[] = []
+    const ctx = { sessionManager: { getSessionId: () => session }, isIdle: () => false, abort: () => aborts.push(1) }
+    await handlers.get('tool_call')!({ toolName: 'bash', input: { command: 'sleep 30' } }, ctx)
+    const live = await interruptViaRendezvous(session, 'pi-headless')
+    assert.deepEqual(live, { ok: true })
+    assert.equal(aborts.length, 1, 'ctx.abort() ran exactly once')
+    await handlers.get('session_shutdown')!({}, {})
+    // once the turn process is gone the listener is dead: nothing is running, nothing to interrupt
+    const gone = await interruptViaRendezvous(session, 'pi-headless')
+    assert.equal(gone.ok, false)
+    assert.match(gone.error || '', /no pi-headless turn is running/)
+  } finally {
+    process.env.CLAUDE_BG_RENDEZVOUS_SOCK = prev
+    if (existsSync(sock)) unlinkSync(sock)
+  }
+})

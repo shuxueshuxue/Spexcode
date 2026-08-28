@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: conversation-live-tail
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Through a running backend and the real `opencode-headless` launcher, dispatch a session whose prompt runs a slow
+      shell command, reads a file, lists a directory, runs a second slow command, and finally declares `ask`.
+      In a real browser open its Conversation and, every few seconds while it works, read the open seam's
+      lead and counts, the live tail's prose and tool sentences, which call wears the running mark, and the
+      record's messages; keep reading until the declaration lands.
+    expected: >-
+      The open seam reads `working · <duration>` with `N turns · M tool uses` growing as the native thread
+      grows; the live tail beneath it shows the agent's newest prose and every call after it in order, the
+      call without a recorded result marked running and the mark leaving when its result lands; no trace row,
+      card, or pop-out exists; and when the agent declares, the seam closes to `worked <duration>`, the tail
+      leaves, and the declared note is the newest message on the record. No page errors.
   - name: opencode-headless-materialized-system-context-live
     tags: [backend-api, cli]
     description: >-
@@ -46,6 +60,22 @@ scenarios:
     expected: The existing rendezvous poke reaches `client.session.prompt` when the live channel accepts it; no second turn process or PTY input bridge is used, and a missed poke remains in the timeline for the reader.
     tags: [backend-api, cli]
     code: [spec-cli/src/opencode-headless.ts]
+  - name: opencode-headless-interrupt
+    description: >-
+      While a real governed `opencode run` turn is inside a long tool call with its plugin rendezvous socket
+      bound, interrupt it through the public `POST /api/sessions/:id/interrupt` route; interrupt again with
+      nothing running; then send a follow-up through the public session send surface and read the record,
+      timeline, and pane.
+    expected: >-
+      The interrupt is confirmed only after the plugin's native `session.abort` answered and the turn process
+      stopped serving the rendezvous socket; the aborted process's non-zero exit is projected as the interrupt
+      (`asking`, interrupted note), never `error`; the second interrupt is refused loudly as nothing running; the
+      follow-up wakes the same conversation cold in the session tmux home and its declaration lands.
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#interruptViaRendezvous
+      - spec-cli/src/harness.ts#opencodeHeadlessHarness
+      - spec-cli/src/sessions.ts#markHeadlessTurnFailure
   - name: opencode-headless-fail-loud
     description: Remove the session's turn home, then send a prompt through the public session send surface.
     expected: Send succeeds once its timeline line is appended; the failed immediate wake leaves that line unread, records no false native poke success, and never falls back to terminal typing.

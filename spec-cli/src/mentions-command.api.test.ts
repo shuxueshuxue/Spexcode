@@ -186,6 +186,20 @@ test('a Command Box @new creates a child under the selected session, optionally 
 
     assert.equal((await dispatch('@new inspect the selected work', 'new')).launcher, 'fake')
     assert.equal((await dispatch('@new:fake inspect the selected work', 'new:fake')).launcher, 'fake')
+    // the Conversation footer is a Command Box on a terminal-free surface: the same kind, plus replyVia:note,
+    // spawns the child AND delivers the prompt with the note-reply insert
+    const noted = await request(base, `/api/sessions/${source}/input`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text: '@new:fake from the conversation', replyVia: 'note' }),
+    })
+    assert.equal(noted.status, 200, noted.text)
+    const notedChild = (noted.body as { outcomes?: Array<{ detail?: string }> }).outcomes?.[0]?.detail
+    assert.ok(notedChild, noted.text)
+    created.push(notedChild)
+    const timeline = (await request(base, `/api/sessions/${source}/timeline`)).body as { events: Array<{ kind: string; text?: string; replyVia?: string }> }
+    const sent = timeline.events.filter((event) => event.kind === 'sent').at(-1)
+    assert.match(sent?.text || '', /from the conversation/)
+    assert.equal(sent?.replyVia, 'note', 'the record keeps the terminal-free sender mark')
+    await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes('REQUIRED REPLY TRANSPORT'), 'the note-reply insert rides the command delivery')
   } finally {
     for (const id of created.reverse()) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     if (backend.exitCode === null) {

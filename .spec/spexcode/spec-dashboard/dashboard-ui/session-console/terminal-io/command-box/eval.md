@@ -7,12 +7,15 @@ scenarios:
     description: >-
       Start the dashboard and backend over a fresh temporary project with one live fake-harness session and
       one named `fake` launcher. Open that session's Command Box, type `@`, choose `@new`, choose the
-      launcher, append work text, and submit through the browser.
+      launcher, append work text, and submit through the browser; read the harness's own pane for what it
+      received. Then shrink the window to phone width and type `@` into the composer that is there.
     expected: >-
       The first pick changes the draft to `@new:` and the launcher pick to `@new:fake `; the submitted
-      prompt remains in the selected session. The dashboard shows the backend's spawned-worker receipt in
-      its shared success notice, and exactly one created session records that selected session as `parent`
-      and `fake` as its launcher. An ordinary `@session` token remains a passive reference.
+      prompt remains in the selected session and reaches the harness (its pane echoes the text). The
+      dashboard shows the backend's spawned-worker receipt in its shared success notice, and exactly one
+      created session records that selected session as `parent` and `fake` as its launcher. An ordinary
+      `@session` token remains a passive reference. At phone width no desktop Command Box exists; the phone
+      shell's Conversation composer opens the same `@` menu with its `@new` row.
   - name: command-box-control-surface
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs

@@ -31,7 +31,8 @@ await context.addInitScript(() => {
   const sources = new Set()
   class ExecutionFixtureSource {
     constructor(url, init) {
-      if (!String(url).includes('/execution/stream')) return new NativeEventSource(url, init)
+      if (!String(url).includes('/transcript/stream')) return new NativeEventSource(url, init)
+      this.from = Number(new URL(String(url), location.href).searchParams.get('from'))
       this.listeners = new Map()
       sources.add(this)
     }
@@ -44,8 +45,8 @@ await context.addInitScript(() => {
       this.listeners.set(type, (this.listeners.get(type) || []).filter((item) => item !== listener))
     }
     emit(data) {
-      for (const listener of this.listeners.get('execution') || []) {
-        listener(new MessageEvent('execution', { data: JSON.stringify(data) }))
+      for (const listener of this.listeners.get('transcript') || []) {
+        listener(new MessageEvent('transcript', { data: JSON.stringify({ revision: data.revision, from: this.from, to: this.from + 60_000, truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0, turns: data.turns }) }))
       }
     }
     close() { sources.delete(this) }
@@ -591,10 +592,9 @@ async function verifyExecutionTail(viewport) {
 
   await page.evaluate(() => window.__emitExecutionFixture({
     revision: 'tail-insert',
-    workingNote: 'Live execution entry arrived after the reader reached the tail',
-    steps: [],
+    turns: [{ id: 'tail-insert', at: Date.now(), role: 'assistant', text: 'Live tail prose arrived after the reader reached the tail' }],
   }))
-  const entry = page.locator('.m-execution:visible')
+  const entry = page.locator('.m-live:visible')
   await entry.waitFor({ state: 'visible', timeout: 5_000 })
   await nextFrame()
   const insertion = await timelineMetrics()

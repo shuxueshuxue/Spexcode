@@ -9,8 +9,7 @@ related:
   - packages/spec-core/src/harness-identity.ts
   - spec-cli/src/harness-identity.test.ts
   - spec-cli/src/headless-controller.ts
-  - spec-cli/src/execution-trace.ts
-  - spec-cli/src/session-execution.ts
+  - spec-cli/src/session-transcript.ts
   - spec-cli/src/sh.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
@@ -72,18 +71,14 @@ surface:
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
   commands). Decoupled from execution — see `slash-commands.ts` (today Claude-only; becomes the Claude impl).
-- **executionTrace(thread, currentTurn)** — the one read-only transcript seam. The four base adapters locate
-  and incrementally parse their current native thread behind this shared selector, returning only the last
-  displayable assistant working prose plus the small typed tool-step projection after it. It never returns raw
-  envelopes, arguments, outputs, reasoning, or another message history. The selector comes fresh from the
-  durable human timeline and a reader uses it only to compare native user boundaries; it never stores one. Session
-  and HTTP code consume only that normalized result and never branch on a harness id. The transcript is an
-  ephemeral adapter observation, never a second SpexCode session record: [[message-stream]] owns the one
-  conversation entry and its REST/SSE transport.
-- **readTranscript(thread, range)** — the durable payload seam ([[transcript-reader]]). Claude and Codex resolve
-  their native files and return bounded, interval-filtered turns with tool output; adapters without a reliable
-  native transcript return an explicit unsupported error. This reader is independent of runtime liveness and never
-  writes the session record or timeline.
+- **transcript** — the one native-thread reader ([[transcript-reader]]): a cheap revision probe plus a bounded,
+  interval-addressed read of the harness's own conversation as normalized turns (user/assistant prose, tool calls
+  and their recorded output). Every surface that shows what the agent did — the history seam, the live tail, the
+  transcript stream ([[session-transcript]]) — reads through this one field, so a harness has exactly one parser.
+  Claude, Codex, pi and OpenCode resolve their native sources; the headless rows inherit their base reader; a
+  harness without a reliable native transcript declares the unsupported reader, which fails loudly rather than
+  pretending the conversation was empty. The transcript is an ephemeral adapter observation, never a second
+  SpexCode session record; [[message-stream]] owns the one conversation entry it feeds.
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
   the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no
@@ -193,9 +188,9 @@ surface:
   summary) → false, so its headline falls through to the launch-prompt preview rather than showing the folder.
   Consumed by [[session-activity]]'s headline resolver — this capability field is the ONLY harness branch in
   that path (no `if (codex)`).
-- **headless** — whether the adapter launches without an interactive TUI. [[launcher-visibility]] consumes
-  this capability to keep headless profiles out of the dashboard picker by default without learning an adapter
-  id; the complete launcher registry and explicit CLI selection remain unchanged. Claude, Codex, OpenCode, and
+- **headless** — whether the adapter launches without an interactive TUI. The session projection carries it
+  as `capabilities.headless`, which is what fixes a session onto the Conversation surface and marks its launcher
+  row, without any surface learning an adapter id. Claude, Codex, OpenCode, and
   pi each declare `false`; an actually non-interactive adapter declares `true` on its own row. A one-shot
   headless adapter may also declare `launchOneShot`, which tells the generic
   launcher not to treat its intentional fast exit as a failed boot worth replaying.
@@ -290,7 +285,10 @@ session layer through each harness's native signal: Claude's StopFailure hook, a
 adapter's non-zero child exit, or the Codex app-server observer inherited by its interactive and headless forms.
 Every source reaches the same active-only `markTurnFailure` compare-and-set, changing a live undeclared
 `active` lifecycle to `error`; a zero process exit, native completed or interrupted turn, declaration, or
-explicit stop that landed first changes nothing. Process notes name the harness plus exit code or signal;
+explicit stop that landed first changes nothing. A human interrupt is the one exit that is not a failure: the
+backend stamps the interrupt before the abort is sent, and a process-backed headless adapter's non-zero exit
+that follows a fresh stamp is projected as the interrupt (`asking`, [[dispatch]]) through this same seam,
+never as `error`. Process notes name the harness plus exit code or signal;
 Codex notes retain the native error message and native `completedAt`. `online` may remain true
 when the adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal
 `error` lifecycle is the honest signal that the previous turn failed.

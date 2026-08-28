@@ -11,9 +11,12 @@ code:
   - spec-cli/src/uploads.ts#safeName
 related:
   - spec-cli/src/uploads.api.test.ts
+  - spec-dashboard/src/useAttachQueue.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/attachment-complete.e2e.mjs
+  - spec-dashboard/test/conversation-command-box.e2e.mjs
   - spec-cli/src/index.ts
   - packages/spec-core/src/layout.ts
   - spec-cli/src/guide.ts
@@ -26,18 +29,19 @@ agent can't see. This node closes that gap: **a file attached to the prompt is c
 session runs on, and the prompt is left holding its path.** An attachment becomes an ordinary local path the
 agent can just read — no bytes smuggled through the prompt, no out-of-band copy step the human has to narrate.
 
-## attach three ways, both authored surfaces
+## attach three ways, every authored surface
 
-The same gesture set works on **both** authored composers — the New Session prompt and a running session's
-[[command-box]]:
+The same gesture set works on **every** authored composer — the New Session prompt, a running session's
+[[command-box]], and the [[conversation]] footer, on the desktop and in the phone shell:
 
 - **Paste** a file (a screenshot, a copied file). A paste that carries files attaches them; a plain text
   paste is untouched and types as before.
 - **Drop** a file onto the box. The surface rings to signal it's droppable while a file hovers.
 - **Pick** a file from the small attach affordance beside the box.
 
-An offline session has no Command Box and takes none of these — there is no live machine to carry a file to
-until it relaunches.
+An offline or archived session takes none of these — its Command Box does not open and its Conversation
+composer, paperclip included, is disabled — because there is no live machine to carry a file to until it
+relaunches.
 
 ## the path is the whole handoff
 
@@ -94,8 +98,12 @@ them; only a successful row has automatic cleanup.
 
 ## where it lives
 
-The gestures, the path-splicing, and the attach affordance are the authored composers in `SessionInterface.jsx`
-([[session-console]], [[command-box]]); their styling rides `styles.css`. The upload endpoint and the
+The gestures, the path-splicing, the per-file rows, and the hidden picker the attach affordance clicks are ONE
+hook, `useAttachQueue.jsx`, that each authored composer instantiates for its own textarea — the New Session
+prompt and the Command Box in `SessionInterface.jsx` ([[session-console]], [[command-box]]), the Conversation
+footer in `TimelineChat.jsx` ([[conversation]]); their styling rides `styles.css`. A composer that renders the
+hook's paperclip has its whole path; the machinery used to live inside the console and route by a target
+name, which left the Conversation wearing a paperclip it could not use. The upload endpoint and the
 `/tmp` sink are the backend's ([[api-endpoint]], [[sessions]]) — a thin route over a small upload module,
 the same shape [[session-rename]] uses to span the UI and the server for one feature. This node's slices of
 those shared files are just the attach-control styling in `styles.css` and the `/api/uploads` route in

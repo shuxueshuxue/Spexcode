@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import DiffDocument from './DiffDocument.jsx'
-import { createSession, useLaunchers, useCommandPresets } from './launch.js'
+import { createSession, useLaunchers, useCommandPresets, useHarnessCommands } from './launch.js'
 import { sessionFooterState, sessionForest, sessionHeadline } from './session.js'
-import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
+import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
+import { useAttachQueue } from './useAttachQueue.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
@@ -17,7 +18,7 @@ import { addressHash, routeAddress, sessionEvalAddress } from './address.js'
 import { routeHash } from './route.js'
 import { markNewTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
-import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS } from './data.js'
+import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS, sendSessionCommand } from './data.js'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
@@ -165,15 +166,6 @@ function ArchivePage({ sessions, onOpenSession, onClose }) {
 // state, the spinning `loader` ring.
 const AttachGlyph = () => <Icon name="paperclip" size={15} />
 const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy" />
-const SINGLE_UPLOAD_WORKER = 1
-const BYTES_PER_KIBIBYTE = 1024
-const KIBIBYTES_PER_MEBIBYTE = 1024
-const MEBIBYTES_PER_GIBIBYTE = 1024
-const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * KIBIBYTES_PER_MEBIBYTE
-const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
-let nextAttachmentKey = 0
-
-const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
 const HERO_WORDMARK = [
   '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
   '██╔════╝██╔══██╗██╔════╝╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝',
@@ -392,14 +384,14 @@ function SessionEvalStats({ summary }) {
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
-// the `[[`/`@` mention machinery — trigger scanners, ranking, MENTION_RE, the MentionMenu dropdown — is the
-// SHARED module ./mentions.jsx ([[mentions]]): one autocomplete for the console and the issue composers.
+// the whole composer grammar — `[[`/`@` mentions, the `/` palettes, their ranking and dropdowns — is the ONE
+// shared hook in ./mentions.jsx ([[mentions]]), armed here twice (the New prompt with the launch-preset
+// palette, the Command Box with the board/preset/harness palette) and once more by the Conversation footer in
+// TimelineChat.jsx. The attachment path is likewise the one shared ./useAttachQueue.jsx ([[file-attach]]).
+// This console keeps no menu state or upload machinery of its own; it only names its surfaces.
 
 // The Command Box, New prompt, and review/issue composers share ComposerTextarea's measurement and IME
 // boundary. Their domain grammars remain local to the home that sends them.
-
-// the `/` matcher + dropdown render (matchSlash, SlashMenu) are the SHARED module ./mentions.jsx too —
-// one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
@@ -473,10 +465,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [forestMounted, forestClosing, forestOpening] = useFold(forestOpen)
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
-  const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
   const [selectRequest, setSelectRequest] = useState(null)
-  const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
@@ -487,8 +477,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
   const [resourceFocusRequest, setResourceFocusRequest] = useState(0)
-  const [dragTarget, setDragTarget] = useState(null)
-  const [attachments, setAttachments] = useState([])
   const [resourceTabs, setResourceTabs] = useState([])
   const { tabs: openTabs } = useTabs()
   const [unreadResources, setUnreadResources] = useState(() => new Set())
@@ -500,30 +488,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // One opaque key per session draft lets a queued transport retry the same durable message. It is cleared
   // only after accepted handover or when the human edits the draft, never when the box merely closes.
   const commandDeliveryKeysRef = useRef({})
-  const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
-  const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const knownWebsRef = useRef(null)
   const archiveRequestRef = useRef(null)
   useEffect(() => subscribeSessionSurface(() => setSurfaceVersion((version) => version + 1)), [])
   const outcomeTimerRef = useRef(null)
-  const attachmentsRef = useRef([])
-  const uploadControllersRef = useRef(new Map())
-  const uploadQueueBusyRef = useRef(false)
 
   useEffect(() => {
     if (!actionOutcome || actionOutcome.phase === 'pending' || actionOutcome.phase === 'sending') return
     notify(actionOutcome.message, { kind: actionOutcome.phase === 'delivered' ? 'success' : 'error' })
     setActionOutcome(null)
   }, [actionOutcome, notify])
-
-  const replaceAttachments = (next) => {
-    attachmentsRef.current = next
-    setAttachments(next)
-  }
-  const patchAttachment = (id, patch) => replaceAttachments(attachmentsRef.current.map((item) =>
-    item.id === id ? { ...item, ...patch } : item,
-  ))
-  const uploadingAt = (target) => attachments.some((item) => item.target === target && (item.phase === 'queued' || item.phase === 'uploading'))
 
   const closeCommandBox = () => {
     if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current)
@@ -789,7 +763,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const selectSession = (id) => {
     if (id === 'new') return
     closeCommandBox()
-    setMenu(null)
+    closeMenus()
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
   }
@@ -805,13 +779,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (remember || id === active) scope.open({ page: 'sessions', param: id, query: { surface } }, { replace: true })
   }
 
-  // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
-  // session gets codex's menu and a claude session gets claude's. The same data each harness's `/` menu uses.
-  // Display+insert only; never executed.
-  useEffect(() => {
-    const harness = selSession?.harness || 'claude'
-    fetch(apiUrl(`/api/slash-commands?harness=${harness}`)).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
-  }, [selSession?.harness])
+  // the ACTIVE session's harness `/` commands (shared fetch, ./launch.js) — recomputed when you switch tabs, so
+  // a codex session gets codex's menu and a claude session gets claude's. Display+insert only; never executed.
+  const slashCmds = useHarnessCommands(selSession?.harness)
 
   // command presets feed both prompt boxes' `/` palettes. Picking one inserts its raw invocation; the backend
   // expands the body at the launch/send boundary. Shared fetch (./launch.js), no client interpreter.
@@ -824,7 +794,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     outcomeTimerRef.current = null
     setCommandOpen(false)
     setActionOutcome(null)
-    setMenu(null)
+    closeMenus()
   }, [active])
   useEffect(() => { if (!commandAvailable) closeCommandBox() }, [commandAvailable])
   useEffect(() => () => { if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current) }, [])
@@ -881,7 +851,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const decoded = decodePrompt(seed)
     setPrompt(decoded.text)
     setCodeSelections(decoded.selections)
-    setMenu(null)
+    closeMenus()
     onSeedConsumed?.()
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
   }, [seed])
@@ -900,15 +870,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // New-session command invocation is backend-owned: this surface and the phone send the raw
   // `/<preset> [[node]]… <free text>` through the ordinary create request, and newSession expands it for
   // every caller (dashboard, phone, CLI, direct API) on the one launch path.
-
-  // the running-session twin of the launch owner's mention resolution: expand each `[[<id>]]` in a keyed message
-  // to an inline pointer at the node's live spec.md (`[[<id>]] (<path>)`), so the driven agent is aimed at that
-  // contract and reads the file itself — never a pasted body (see [[spec-pointer]]). Unknown ids pass through.
-  const expandMentions = (text) =>
-    text.replace(MENTION_RE, (m, id) => {
-      const s = specs.find((x) => x.id === id)
-      return s ? `[[${s.id}]] (${s.path})` : m
-    })
 
   // launch a session, then follow the published id into its document. The box NEVER disables or blurs: clear the
   // draft optimistically (so a fresh draft can't be clobbered when the POST lands) and keep the launch request in
@@ -941,125 +902,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     })
   }
 
-  // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@` session references
-  // — the shared scanners from ./mentions.jsx — work on BOTH; the New prompt adds the config-preset (`/`)
-  // palette, a session's Command Box adds the slash menu.
-  const buildMenu = (value, caret) => {
-    const mm = nodeMentionAt(value, caret, specs, focusId)
-    if (mm) return mm
-    const am = sessionMentionAt(value, caret, sessionsWithRetention, launchers)
-    if (am) return am
-    if (active === 'new') {
-      const cm = slashTokenAt(value, caret, commandPresets)
-      if (cm) return { kind: 'config', ...cm }
-      return null
-    }
-    const sm = value.match(/^\/(\S*)$/)
-    if (sm) {
-      // Board commands (coloured, run HERE) lead; SpexCode prompt presets follow; harness commands come last.
-      // matchSlash is a stable prefix rank, so source precedence survives inside each score band.
-      const ui = typedUiCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color }))
-      const items = matchSlash(inboxCommands(ui, commandPresets, slashCmds), sm[1])
-      if (!items.length) return null
-      return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
-    }
-    return null
-  }
-  // recompute from the textarea's live value + caret (covers typing, deletes, and bare caret moves).
-  const syncMenu = (el) => setMenu(el ? buildMenu(el.value, el.selectionStart) : null)
-  const navMenu = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
-  // replace the menu's span under the caret with the picked item's token, then drop the caret after it.
-  // Each kind writes its OWN surface: slash → the active session's Command Box draft (msgRef), insert-only and never
-  // executed; mention → the New Session prompt (taRef). `[[<id>]] ` / `/<name> ` both leave a trailing space.
-  const accept = (item) => {
-    if (!item || !menu) return
-    if (menu.kind === 'slash') {
-      // A board command RUNS on pick (the typed twin of its button); presets and harness commands insert text.
-      if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run('command'); return }
-      const insert = `/${item.name} `
-      const before = msg.slice(0, menu.start)
-      setMsg(before + insert + msg.slice(menu.end))
-      setMenu(null)
-      const caret = before.length + insert.length
-      requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
-      return
-    }
-    // command preset → the New prompt (composed at launch); a `[[`/`@` reference → whichever box is active.
-    if (menu.kind === 'config') {
-      // A preset governs the whole launch, so a token picked anywhere in an existing draft becomes its
-      // leading command. This is still an authoring edit only: Enter sends the normalized raw grammar through
-      // createSession, and the backend remains the sole plugin-body interpreter.
-      const rest = [prompt.slice(0, menu.start).trim(), prompt.slice(menu.end).trim()].filter(Boolean).join(' ')
-      const next = `/${item.name}${rest ? ` ${rest}` : ''} `
-      setPrompt(next)
-      setMenu(null)
-      requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
-      return
-    }
-    const onMsg = (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && active !== 'new'
-    const ref = onMsg ? msgRef : taRef
-    const cur = onMsg ? msg : prompt
-    const setCur = onMsg ? setMsg : setPrompt
-    const before = cur.slice(0, menu.start)
-    if (menu.kind === 'session' && item.id === 'new') {
-      const next = before + '@new:' + cur.slice(menu.end)
-      const caret = before.length + '@new:'.length
-      setCur(next)
-      setMenu(sessionMentionAt(next, caret, sessionsWithRetention, launchers))
-      requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
-      return
-    }
-    const insert = menu.kind === 'session' ? `@${item.id} `
-      : menu.kind === 'launcher' ? `@new:${item.id} `
-        : `[[${item.id}]] `
-    setCur(before + insert + cur.slice(menu.end))
-    setMenu(null)
-    const caret = before.length + insert.length
-    requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
-  }
-
-  // both `/` palettes — Command Box's board/preset/harness menu (`up`) and the New box's
-  // config-preset menu (downward) — render through the ONE shared SlashMenu; only the head label differs.
-  const slashMenu = (up, head) => (
-    <SlashMenu menu={menu} up={up} head={head} onPick={accept}
-      onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
-  )
-
-  // the node-mention/`@`-session dropdown, on either surface — downward under the centered New box, or `up`
-  // above Command Box. The rows are the shared MentionMenu ([[mentions]]); only the open direction
-  // and the pick/hover wiring into THIS surface's menu state are ours.
-  const mentionMenuEl = (up) => (
-    <MentionMenu menu={menu} up={up} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
-  )
-
-  const insertCommandTrigger = (trigger) => {
-    const el = msgRef.current
-    if (!el) return
-    const start = el.selectionStart ?? msg.length
-    const end = el.selectionEnd ?? start
-    const next = msg.slice(0, start) + trigger + msg.slice(end)
-    const caret = start + trigger.length
-    setMsg(next)
-    requestAnimationFrame(() => {
-      const textarea = msgRef.current
-      if (!textarea) return
-      textarea.focus()
-      textarea.setSelectionRange(caret, caret)
-      syncMenu(textarea)
-    })
-  }
-
   const sendMsg = async () => {
     const raw = msg
     if (!raw.trim() || active === 'new') return
     // a line that is EXACTLY `/<name>` of an available board command runs HERE instead of being sent to the
-    // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
-    // completion's trailing space and a stray newline.
-    const cmd = typedUiCmds.find((c) => raw.trim() === `/${c.name}`)
-    if (cmd) { setMsg(''); setMenu(null); cmd.run('command'); return }
+    // agent (this covers the no-menu submit; the menu pick runs through the grammar's onPick).
+    const cmd = boardCommandFor(raw, commandBoardRows)
+    if (cmd) { setMsg(''); commandGrammar.close(); cmd.run(); return }
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the backend (the running-session twin
     // of the New Session launch composition — see [[command-box]]).
-    const text = expandMentions(raw)
+    const text = expandMentions(raw, specs)
     if (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending') return
     const deliveryId = commandDeliveryKeysRef.current[active] || crypto.randomUUID()
     commandDeliveryKeysRef.current[active] = deliveryId
@@ -1067,13 +919,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), COMMAND_DELIVERY_TIMEOUT_MS)
     try {
-      const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'command', text, deliveryId }),
-        signal: controller.signal,
-      })
-      const outcome = await res.json().catch(() => null)
-      if (!res.ok) {
+      const { ok, status, outcome } = await sendSessionCommand(active, text, { deliveryId, signal: controller.signal })
+      if (!ok) {
         if (outcome?.deliveryPending) {
           // Durable append succeeded, but the native handoff did not. Keep the draft and box open so the
           // user can retry after the transport recovers; a queued record is not a delivered command.
@@ -1083,7 +930,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setActionOutcome({
           owner: 'command',
           phase: 'failed',
-          message: outcome?.error || t('session.deliveryFailed', { status: res.status }),
+          message: outcome?.error || t('session.deliveryFailed', { status }),
         })
         return
       }
@@ -1117,234 +964,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }
 
-  const responseError = async (res) => {
-    const body = await res.json().catch(() => null)
-    return body?.error || `upload failed (HTTP ${res.status})`
-  }
-  const validUploadTransfer = (transfer, size) => transfer?.size === size &&
-    Number.isSafeInteger(transfer.chunkBytes) && transfer.chunkBytes > 0 &&
-    Number.isSafeInteger(transfer.concurrency) && transfer.concurrency > 0 &&
-    Number.isSafeInteger(transfer.requestTimeoutMs) && transfer.requestTimeoutMs > 0 &&
-    Number.isSafeInteger(transfer.retryLimit) && transfer.retryLimit >= 0 &&
-    Number.isSafeInteger(transfer.retryDelayMs) && transfer.retryDelayMs >= 0 &&
-    Number.isSafeInteger(transfer.offset) && transfer.offset >= 0 && transfer.offset <= size
-  const waitForUploadRetry = (delayMs, controller) => new Promise((resolve, reject) => {
-    if (controller.signal.aborted) { reject(new Error('upload cancelled')); return }
-    const timer = window.setTimeout(() => {
-      controller.signal.removeEventListener('abort', abort)
-      resolve()
-    }, delayMs)
-    const abort = () => {
-      window.clearTimeout(timer)
-      reject(new Error('upload cancelled'))
-    }
-    controller.signal.addEventListener('abort', abort, { once: true })
-  })
-  const uploadFetch = async (url, init, controller, timeoutMs) => {
-    const request = new AbortController()
-    const abort = () => request.abort()
-    controller.signal.addEventListener('abort', abort, { once: true })
-    const timer = window.setTimeout(() => request.abort(), timeoutMs)
-    try {
-      return await fetch(url, { ...init, signal: request.signal })
-    } catch (error) {
-      if (!controller.signal.aborted && request.signal.aborted) throw new Error('upload request timed out')
-      throw error
-    } finally {
-      window.clearTimeout(timer)
-      controller.signal.removeEventListener('abort', abort)
-    }
-  }
-  const retryTransientUpload = async (run, transfer, controller) => {
-    let retries = 0
-    for (;;) {
-      try {
-        return await run()
-      } catch (error) {
-        if (controller.signal.aborted || retries >= transfer.retryLimit) throw error
-        retries += 1
-        await waitForUploadRetry(transfer.retryDelayMs, controller)
-      }
-    }
-  }
-  // splice `text` at the caret of a textarea (ref+value+setter), padding with spaces so it never glues to
-  // neighbouring words, then drop the caret after it. The auto-grow effects re-run on the new value.
-  const insertAtCaret = (ref, value, setValue, text) => {
-    const el = ref.current
-    value = el?.value ?? value
-    const start = el ? el.selectionStart : value.length
-    const end = el ? el.selectionEnd : value.length
-    const pre = value.slice(0, start)
-    const insert = (pre && !/\s$/.test(pre) ? ' ' : '') + text + ' '
-    setValue(pre + insert + value.slice(end))
-    requestAnimationFrame(() => {
-      if (!el) return
-      el.focus()
-      const c = pre.length + insert.length
-      el.setSelectionRange(c, c)
-    })
-  }
-  const transferAttachment = async (id, onPolicy = null) => {
-    const item = attachmentsRef.current.find((candidate) => candidate.id === id)
-    if (!item || item.phase === 'cancelled') return null
-    patchAttachment(id, { phase: 'uploading', error: null })
-    const controller = new AbortController()
-    uploadControllersRef.current.set(id, controller)
-    try {
-      let transferId = item.transferId
-      let transfer = null
-      if (transferId) {
-        const resumed = await fetch(apiUrl(`/api/uploads/${transferId}`), { signal: controller.signal })
-        if (resumed.ok) transfer = await resumed.json()
-        else if (resumed.status !== 404) throw new Error(await responseError(resumed))
-      }
-      if (!transfer) {
-        const created = await fetch(apiUrl('/api/uploads'), {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name: item.file.name || 'pasted', size: item.file.size }), signal: controller.signal,
-        })
-        if (!created.ok) throw new Error(await responseError(created))
-        transfer = await created.json()
-        transferId = transfer?.id
-        if (!transferId) throw new Error('upload did not return a transfer id')
-        patchAttachment(id, { transferId })
-      }
-      if (!validUploadTransfer(transfer, item.file.size)) {
-        throw new Error('upload transfer metadata is invalid')
-      }
-      onPolicy?.(transfer.concurrency)
-      let offset = transfer.offset
-      patchAttachment(id, { offset })
-      while (offset < item.file.size) {
-        const bytes = item.file.slice(offset, Math.min(item.file.size, offset + transfer.chunkBytes))
-        const sent = await retryTransientUpload(async () => {
-          const response = await uploadFetch(apiUrl(`/api/uploads/${transferId}`), {
-            method: 'PATCH', headers: { 'content-type': 'application/offset+octet-stream', 'upload-offset': String(offset) }, body: bytes,
-          }, controller, transfer.requestTimeoutMs)
-          if (response.status >= 500) throw new Error(await responseError(response))
-          return response
-        }, transfer, controller)
-        const next = await sent.json().catch(() => null)
-        if (sent.status === 409 && Number.isSafeInteger(next?.offset) && next.offset >= 0 && next.offset <= item.file.size) {
-          offset = next.offset
-          patchAttachment(id, { offset })
-          continue
-        }
-        if (!sent.ok) throw new Error(next?.error || `upload failed (HTTP ${sent.status})`)
-        if (!Number.isSafeInteger(next?.offset) || next.offset <= offset || next.offset > item.file.size) {
-          throw new Error('upload did not advance its committed offset')
-        }
-        offset = next.offset
-        patchAttachment(id, { offset })
-      }
-      const completed = await uploadFetch(apiUrl(`/api/uploads/${transferId}/complete`), { method: 'POST' }, controller, transfer.requestTimeoutMs)
-      if (!completed.ok) throw new Error(await responseError(completed))
-      const result = await completed.json().catch(() => null)
-      if (!result?.path) throw new Error('upload did not return a path')
-      const latest = attachmentsRef.current.find((candidate) => candidate.id === id)
-      if (latest?.phase === 'cancelled') return
-      if (item.target === 'new') insertAtCaret(taRef, prompt, setPrompt, result.path)
-      else insertAtCaret(msgRef, msg, setMsg, result.path)
-      patchAttachment(id, { phase: 'complete', offset: item.file.size, path: result.path })
-      return transfer.concurrency
-    } catch (error) {
-      onPolicy?.(null)
-      if (controller.signal.aborted) patchAttachment(id, { phase: 'cancelled', offset: 0, transferId: null, error: null })
-      else patchAttachment(id, { phase: 'failed', error: error instanceof Error ? error.message : String(error) })
-    } finally {
-      uploadControllersRef.current.delete(id)
-    }
-    return null
-  }
-  const runQueuedAttachments = async (ids) => {
-    if (uploadQueueBusyRef.current) return
-    uploadQueueBusyRef.current = true
-    try {
-      const [first, ...rest] = ids
-      let resolvePolicy
-      const firstPolicy = new Promise((resolve) => { resolvePolicy = resolve })
-      const firstTransfer = first ? transferAttachment(first, resolvePolicy) : Promise.resolve(SINGLE_UPLOAD_WORKER)
-      const concurrency = first ? await firstPolicy : SINGLE_UPLOAD_WORKER
-      const workerCount = Math.min(Math.max(0, (concurrency || SINGLE_UPLOAD_WORKER) - SINGLE_UPLOAD_WORKER), rest.length)
-      if (workerCount === 0) {
-        await firstTransfer
-        for (const id of rest) await transferAttachment(id)
-        return
-      }
-      let next = 0
-      const workers = Array.from({ length: workerCount }, async () => {
-        while (next < rest.length) {
-          const id = rest[next]
-          next += 1
-          await transferAttachment(id)
-        }
-      })
-      await Promise.all([firstTransfer, ...workers])
-    } finally {
-      uploadQueueBusyRef.current = false
-    }
-  }
-  const retryAttachment = (id) => {
-    if (!uploadQueueBusyRef.current) void runQueuedAttachments([id])
-  }
-  const cancelAttachment = async (id) => {
-    const item = attachmentsRef.current.find((candidate) => candidate.id === id)
-    if (!item) return
-    uploadControllersRef.current.get(id)?.abort()
-    if (item.transferId) await fetch(apiUrl(`/api/uploads/${item.transferId}`), { method: 'DELETE' }).catch(() => {})
-    patchAttachment(id, { phase: 'cancelled', offset: 0, transferId: null, error: null })
-  }
-  const dismissAttachment = (id) => {
-    const item = attachmentsRef.current.find((candidate) => candidate.id === id)
-    if (!item) return
-    if (item.phase !== 'complete' && item.phase !== 'cancelled') void cancelAttachment(id)
-    replaceAttachments(attachmentsRef.current.filter((candidate) => candidate.id !== id))
-  }
-  // The policy's default is one writer; a project may raise it, while every row retains independent resume,
-  // retry, and cancellation state.
-  const attachFiles = async (fileList, target) => {
-    const files = [...(fileList || [])]
-    if (!files.length || uploadQueueBusyRef.current) return
-    const added = files.map((file) => ({ id: attachmentKey(), target, file, phase: 'queued', offset: 0, transferId: null, error: null }))
-    replaceAttachments([...attachmentsRef.current, ...added])
-    await runQueuedAttachments(added.map((item) => item.id))
-  }
-  const formatUploadBytes = (bytes) => {
-    if (bytes < BYTES_PER_KIBIBYTE) return `${bytes} B`
-    if (bytes < BYTES_PER_MEBIBYTE) return `${Math.round(bytes / BYTES_PER_KIBIBYTE)} KB`
-    if (bytes < BYTES_PER_GIBIBYTE) return `${(bytes / BYTES_PER_MEBIBYTE).toFixed(1)} MB`
-    return `${(bytes / BYTES_PER_GIBIBYTE).toFixed(2)} GB`
-  }
-  const attachmentQueue = (target) => {
-    const rows = attachments.filter((item) => item.target === target)
-    if (!rows.length) return null
-    return (
-      <div className={`si-attach-queue ${target === 'command' ? 'command' : 'new'}`} aria-live="polite">
-        {rows.map((item) => {
-          const active = item.phase === 'queued' || item.phase === 'uploading'
-          const status = item.phase === 'queued' ? t('session.attachQueued')
-            : item.phase === 'uploading' ? `${formatUploadBytes(item.offset)} / ${formatUploadBytes(item.file.size)}`
-              : item.phase === 'complete' ? t('session.attachDone') : item.phase === 'cancelled' ? t('session.attachCancelled') : item.error
-          return (
-            <div key={item.id} className={`si-attach-row ${item.phase}`}
-              onAnimationEnd={(event) => {
-                if (event.target === event.currentTarget && event.animationName === 'si-attach-complete-out') dismissAttachment(item.id)
-              }}>
-              <span className="si-attach-name" title={item.file.name}><Icon name="paperclip" size={12} />{item.file.name}</span>
-              <progress className="si-attach-progress" value={item.offset} max={item.file.size} aria-label={`${item.file.name}: ${status}`} />
-              <span className="si-attach-status" role={item.phase === 'failed' ? 'alert' : 'status'}>{status}</span>
-              {item.phase === 'failed' && <IconButton icon="rotate-ccw" size={13} className="si-attach-action" label={t('session.attachRetry')}
-                disabled={uploadQueueBusyRef.current} onClick={() => retryAttachment(item.id)} />}
-              {(active || item.phase === 'failed') && <IconButton icon="x" size={13} className="si-attach-action" label={t('session.attachCancel')}
-                onClick={() => { void cancelAttachment(item.id) }} />}
-              {(item.phase === 'complete' || item.phase === 'cancelled') && <IconButton icon="x" size={13} className="si-attach-action" label={t('session.attachDismiss')}
-                onClick={() => dismissAttachment(item.id)} />}
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
   const codeSelectionQueue = () => {
     if (!codeSelections.length) return null
     return (
@@ -1356,22 +975,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       </div>
     )
   }
-  // a paste carrying file(s) (a screenshot, a copied file) attaches them instead of pasting text; a plain
-  // text paste has no files and falls through to the textarea's normal behaviour untouched.
-  const onPasteFiles = (e, target) => {
-    const files = e.clipboardData?.files
-    if (files && files.length) { e.preventDefault(); attachFiles(files, target) }
-  }
-  // drag-drop onto an input surface: highlight while a file hovers, attach on drop.
-  const onDropFiles = (e, target) => {
-    e.preventDefault(); setDragTarget(null)
-    attachFiles(e.dataTransfer?.files, target)
-  }
-  const onDragOverFiles = (e, target) => {
-    if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); setDragTarget(target) }
-  }
-  // open the file picker, remembering which surface its result should land in.
-  const pickFiles = (target) => { fileTargetRef.current = target; fileRef.current?.click() }
 
   // Lifecycle actions consume both status and structured bodies before reload. Their outcome belongs to the
   // selected action panel, never to the navigation list, so one refusal cannot masquerade as two operations.
@@ -1420,6 +1023,44 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
   const uiCmds = uiCommandsFor(selSession, runners)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false && command.enabled)
+  // THE CONSOLE'S GRAMMARS, one shared hook each ([[mentions]]) — no menu state of this file's own. Board
+  // commands (coloured, run HERE) lead the Command Box palette; SpexCode prompt presets follow; harness
+  // commands come last — inboxCommands' precedence, ranked by the one shared matcher. The Conversation
+  // footer (TimelineChat) arms the same hook with the same board rows, owned by the panel outcome instead of
+  // the box's, so `/stop` typed there reports where that surface reports.
+  const boardRow = (command, owner) => ({ name: command.name, description: t(command.descKey), ui: true, color: command.color, run: () => command.run?.(owner) })
+  const ui = typedUiCmds.map((command) => boardRow(command, 'command'))
+  const conversationBoardRows = typedUiCmds.map((command) => boardRow(command, 'panel'))
+  const newGrammar = useMentionAutocomplete({
+    inputRef: taRef, value: prompt, setValue: setPrompt, specs, sessions: sessionsWithRetention, launchers, focusId,
+    // the launch preset palette: a preset governs the whole launch, so a token picked anywhere in an existing
+    // draft becomes its leading command. Still an authoring edit only — Enter sends the normalized raw grammar
+    // through createSession, and the backend remains the sole plugin-body interpreter.
+    slash: { commands: commandPresets, mode: 'token', head: t('session.menuPresets'), onPick: (item, menu) => {
+      const rest = [prompt.slice(0, menu.start).trim(), prompt.slice(menu.end).trim()].filter(Boolean).join(' ')
+      const next = `/${item.name}${rest ? ` ${rest}` : ''} `
+      setPrompt(next)
+      requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
+      return true
+    } },
+  })
+  const commandGrammar = useMentionAutocomplete({
+    inputRef: msgRef, value: msg, setValue: setMsg, specs, sessions: sessionsWithRetention, launchers, focusId, up: true,
+    // a board command RUNS on pick (the typed twin of its button); presets and harness commands insert text.
+    slash: { commands: inboxCommands(ui, commandPresets, slashCmds), mode: 'line', head: t('session.menuCommands'), onPick: (item) => {
+      if (!item.ui) return false
+      setMsg('')
+      item.run()
+      return true
+    } },
+  })
+  const commandBoardRows = ui
+  const closeMenus = () => { newGrammar.close(); commandGrammar.close() }
+  // the grammar's discoverability doors type the exact trigger so the SAME autocomplete opens naturally
+  const insertCommandTrigger = (trigger) => typeTrigger(msgRef.current, trigger, setMsg, commandGrammar.sync)
+  // each composer's attachment path ([[file-attach]]): its own queue, picker, and drop ring
+  const newAttach = useAttachQueue({ inputRef: taRef, setValue: setPrompt, variant: 'new' })
+  const commandAttach = useAttachQueue({ inputRef: msgRef, setValue: setMsg, variant: 'command' })
   // THE EVAL DOOR'S ONE SENTENCE. The summary is a projection with phases, not a number that is either
   // there or not, so the door says which phase it is reading and carries the last-known counts through
   // every phase that still has them — a door that silently printed stale counts would be the same control
@@ -1531,9 +1172,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
   const stateRef = useRef({})
+  // the router drives whichever surface is active: the New prompt's grammar or the Command Box's
+  const grammar = active === 'new' ? newGrammar : commandGrammar
   stateRef.current = {
-    active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-    commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
+    active, submit, menu: grammar.menu, navMenu: grammar.nav, accept: grammar.accept, closeMenu: grammar.dismiss,
+    open, searchOpen, commandOpen, commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
   }
   // The console's whole keyboard contract, registered as ONE service scope (priority 10 — above the
   // shell's globals, below any modal). Consumption is signalled the way the branches always did — via
@@ -1542,7 +1185,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useKeyboardScope((event) => {
     const onKey = (e) => {
       const {
-        active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+        active, submit, menu, navMenu, accept, closeMenu, open, searchOpen, commandOpen,
         commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
@@ -1573,7 +1216,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
         if (e.key === 'ArrowUp')   { e.preventDefault(); e.stopPropagation(); navMenu(-1); return }
         if ((e.key === 'Enter' || e.key === 'Tab') && !composingKey(e)) { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
-        if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
+        if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); closeMenu(); return }
       }
       if (commandOpen && e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation(); closeCommandBox(); return
@@ -1638,25 +1281,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through
           any chrome interaction. Capture phase so no child's stopPropagation can leak a press. */}
       <div className="si-panel" onMouseDownCapture={inertChromePress}>
-        {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
-            surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          style={{ display: 'none' }}
-          onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
-        />
+        {/* each authored composer's own hidden picker ([[file-attach]]); its paperclip clicks it */}
+        {newAttach.fileInput}
+        {commandAttach.fileInput}
         <section className={`si-content${active === 'new' ? ' is-new' : ' is-session'}`}>
           {active === 'new' && (
             <div className="si-new-center">
               <LaunchHero />
-              <div
-                className={dragTarget === 'new' ? 'si-inputwrap dragover' : 'si-inputwrap'}
-                onDragOver={(e) => onDragOverFiles(e, 'new')}
-                onDragLeave={() => setDragTarget(null)}
-                onDrop={(e) => onDropFiles(e, 'new')}
-              >
+              <div className={newAttach.dragging ? 'si-inputwrap dragover' : 'si-inputwrap'} {...newAttach.dropProps}>
                 <ComposerTextarea
                   ref={taRef}
                   className="si-input"
@@ -1669,10 +1301,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     event.stopPropagation()
                     submit()
                   }}
-                  onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
-                  onSelect={(e) => syncMenu(e.target)}
-                  onPaste={(e) => onPasteFiles(e, 'new')}
-                  onBlur={() => setMenu(null)}
+                  onChange={(e) => { setPrompt(e.target.value); newGrammar.sync(e.target) }}
+                  onSelect={(e) => newGrammar.sync(e.target)}
+                  onPaste={newAttach.onPaste}
+                  onBlur={newGrammar.close}
                   placeholder={t('session.inputPlaceholder')}
                   spellCheck={false}
                 />
@@ -1680,20 +1312,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   type="button"
                   className="si-attach"
                   data-tip={t('session.attachTitle')}
-                  onClick={() => pickFiles('new')}
-                  disabled={uploadingAt('new')}
-                >{uploadingAt('new') ? <BusyGlyph /> : <AttachGlyph />}</button>
+                  onClick={newAttach.pick}
+                  disabled={newAttach.busy}
+                >{newAttach.busy ? <BusyGlyph /> : <AttachGlyph />}</button>
                 {/* THE EXPLICIT LAUNCH CONTROL remains the pointer twin of plain Enter. The press is inert
                     chrome: the draft box must keep focus through the launch, because the whole point of
                     firing in the background is that the reader can keep typing. */}
                 <IconButton icon="send" size={14} className="si-launch" label={t('session.launchSend')}
                   disabled={!prompt.trim()} onMouseDown={inertChromePress} onClick={submit} />
-                {menu && (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && mentionMenuEl(false)}
-                {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
-                {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
+                {/* the `[[`/`@` dropdown and the config-preset `/` palette — one hook, opening downward here */}
+                {newGrammar.menuEl}
               </div>
               {codeSelectionQueue()}
-              {attachmentQueue('new')}
+              {newAttach.queue}
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}
               {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}
@@ -1756,6 +1387,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           pointerEvents: conversationShown ? 'auto' : 'none',
                         }}>
                           <TimelineChat s={session} sessions={sessionsWithRetention} active={open && conversationShown}
+                            specs={specs} boardCommands={id === active ? conversationBoardRows : []}
                             footerState={sessionFooterState(session)}
                             onRestore={id === active && session.status !== 'retired' ? resumeAndReturnToWorking : undefined}
                             actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />
@@ -1787,29 +1419,27 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     <button type="button" className="si-command-dismiss" tabIndex={-1}
                       aria-label={t('session.commandClose')} onMouseDown={closeCommandBox} />
                     <ComposerSurface
-                      className={`si-command-box${dragTarget === 'command' ? ' dragover' : ''}`}
-                      onDragOver={(e) => onDragOverFiles(e, 'command')}
-                      onDragLeave={() => setDragTarget(null)}
-                      onDrop={(e) => onDropFiles(e, 'command')}
+                      className={`si-command-box${commandAttach.dragging ? ' dragover' : ''}`}
+                      {...commandAttach.dropProps}
                       editor={(
                         <>
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
-                            onChange={(e) => { delete commandDeliveryKeysRef.current[active]; setMsg(e.target.value); syncMenu(e.target) }}
-                            onSelect={(e) => syncMenu(e.target)}
-                            onPaste={(e) => onPasteFiles(e, 'command')}
-                            onBlur={() => setMenu(null)}
+                            onChange={(e) => { delete commandDeliveryKeysRef.current[active]; setMsg(e.target.value); commandGrammar.sync(e.target) }}
+                            onSelect={(e) => commandGrammar.sync(e.target)}
+                            onPaste={commandAttach.onPaste}
+                            onBlur={commandGrammar.close}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
                                 e.preventDefault(); e.stopPropagation(); sendMsg()
                               }
                             }}
                             placeholder={t('session.commandPlaceholder')} spellCheck={false} />
-                          {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
-                          {menu && (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && mentionMenuEl(true)}
+                          {/* the board/preset/harness `/` palette and the `[[`/`@` dropdown — one hook, opening upward */}
+                          {commandGrammar.menuEl}
                         </div>
-                        {attachmentQueue('command')}
+                        {commandAttach.queue}
                         </>
                       )}
                       footer={(
@@ -1824,10 +1454,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <button type="button" className="fv-trigger-btn" data-tip={t('session.menuCommands')}
                             aria-label={t('session.menuCommands')}
                             onClick={() => insertCommandTrigger('/')}>/</button>
-                          <IconButton icon={uploadingAt('command') ? 'loader' : 'paperclip'} size={14}
-                            iconClassName={uploadingAt('command') ? 'si-attach-busy' : undefined}
+                          <IconButton icon={commandAttach.busy ? 'loader' : 'paperclip'} size={14}
+                            iconClassName={commandAttach.busy ? 'si-attach-busy' : undefined}
                             className="si-command-tool" label={t('session.attachTitle')}
-                            disabled={uploadingAt('command')} onClick={() => pickFiles('command')} />
+                            disabled={commandAttach.busy} onClick={commandAttach.pick} />
                           {actionOutcome?.owner === 'command' && <ActionOutcome outcome={actionOutcome} />}
                           <IconButton icon="send" size={14} className="si-command-send" label={t('session.commandSend')}
                             disabled={!msg.trim() || (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending')} onClick={sendMsg} />

@@ -1,26 +1,29 @@
 ---
 scenarios:
-  - name: latest-working-note-opens-execution-trace
+  - name: the-open-seam-is-the-live-tail
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/execution-trace.e2e.mjs
-    code: spec-dashboard/src/ExecutionTrace.jsx
+    test: spec-dashboard/test/live-tail.e2e.mjs
+    code: spec-dashboard/src/LiveTail.jsx
     related:
+      - spec-dashboard/src/Transcript.jsx
       - spec-dashboard/src/TimelineChat.jsx
       - spec-dashboard/src/data.js
       - spec-dashboard/src/styles.css
     description: >-
-      Through the running dashboard's real Sessions route, select Conversation for a live session, receive one
-      normalized latest-working-note execution frame at the bottom of the conversation, read its shape against
-      the rows above it, open its steps, replay a same-turn revision and a new turn, then replay a note equal
-      to the newest agent message on the record.
+      Through the running dashboard's real Sessions route, select Conversation for a working session and feed
+      the open seam's transcript stream normalized frames: a human message, prose, a completed call and a
+      running one; the running call's completion; a later prose turn; a turn with tools and no prose; then
+      prose equal to the newest agent message on the record. Between frames, expand and collapse the seam.
     expected: >-
-      The working note is the newest timeline row, drawn as agent prose on the page — no entry button, no card,
-      no pop-out anywhere. Its normalized read and command rows are transcript-style tool sentences narrower
-      than the column, carrying their familiar icons in chronological order; only the running one wears a
-      running mark. Safe details start hidden; each row expands inline and independently, gaining height only
-      for its own allowlisted detail. A same-turn update retains an expanded row, a changed turn starts its rows
-      collapsed, an empty frame removes the tail, and a note the record already carries draws nothing. No
-      transcript envelope, raw argument, sensitive input, or output is rendered by the browser. No page errors.
+      The tail sits inside the open seam's row beneath its live line — no trace row, no card, no pop-out — and
+      the seam's turn and call counts come from the same payload. The newest prose is agent prose on the page;
+      each call is a transcript sentence narrower than the column, only the result-less one wearing the running
+      mark; output stays folded until clicked and opens inline. A same-interval refresh keeps the open row and
+      drops the settled call's running mark; a later prose turn replaces the compact view with that prose and
+      the calls after it; a prose-less turn still shows its calls. Expanding the seam shows the whole interval
+      from the payload already held — every prose turn, the quoted human message, the still-running call, no
+      loading line — and the compact face leaves; collapsing brings it back. Prose the record already carries,
+      with nothing running, draws nothing. No page errors.
   - name: conversation-is-the-only-headless-console
     tags: [frontend-e2e, desktop, mobile]
     description: >-

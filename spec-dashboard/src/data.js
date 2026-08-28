@@ -492,9 +492,11 @@ export async function loadSessionTranscript(id, from, to) {
   return { ok: true, data: body }
 }
 
-// The execution stream is already normalized by the harness adapter. This client only decodes its compact
-// JSON projection; it never receives a transcript path or parses native tool envelopes.
-export function subscribeSessionExecution(id, onExecution) {
+// THE OPEN INTERVAL, STREAMED ([[session-transcript]]): the tail seam of a working session subscribes with its
+// start, and every change to the native thread pushes the whole normalized payload for [from, now] — the same
+// shape the closed-interval GET above returns, so one renderer reads both. The browser never sees a transcript
+// path or a native envelope; it only decodes the adapter's turns. A frame may instead carry `{error, reason}`.
+export function subscribeSessionTranscript(id, from, onFrame) {
   let es = null
   let closed = false
   const reopen = () => { try { es?.close() } catch { /* an already-closed EventSource is harmless */ } ; open() }
@@ -505,12 +507,12 @@ export function subscribeSessionExecution(id, onExecution) {
   })
   const receive = (event) => {
     deadman.arm()
-    try { onExecution(JSON.parse(event.data)) } catch { /* a bad frame is skipped; the next revision replaces it */ }
+    try { onFrame(JSON.parse(event.data)) } catch { /* a bad frame is skipped; the next revision replaces it */ }
   }
   const open = () => {
     if (closed) return
-    try { es = new EventSource(sessionUrl(id, 'execution', 'stream')) } catch { es = null; return }
-    es.addEventListener('execution', receive)
+    try { es = new EventSource(`${sessionUrl(id, 'transcript', 'stream')}?from=${encodeURIComponent(String(from))}`) } catch { es = null; return }
+    es.addEventListener('transcript', receive)
     es.addEventListener('ping', () => deadman.arm())
   }
   open()
@@ -542,6 +544,24 @@ export async function sendSessionText(id, text, { replyVia } = {}) {
   })
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok && body?.ok !== false, error: body?.error }
+}
+
+// the Command Box's keyed dispatch ([[command-box]]): `kind:'command'` is the durable-append acceptance, so the
+// backend answers before the native handover and runs the `@new` dispatch whose receipt rides back as
+// `outcomes` / `mentionSummary`. `deliveryId` is the one opaque key a retry re-presents so an accepted
+// message cannot be appended twice; `signal` is the caller's transport deadline. The raw status and body come
+// back untouched because the box's outcome vocabulary (queued / deferred / failed / unconfirmed) is its own.
+// Plain fetch, not apiFetch: the deadline's abort must surface at once as "unconfirmed", never be retried.
+// `replyVia:'note'` marks a terminal-free host (the Conversation footer): the server appends the note-reply
+// insert to the delivery, as it does for a text send.
+export async function sendSessionCommand(id, text, { deliveryId, signal, replyVia } = {}) {
+  const res = await fetch(sessionUrl(id, 'input'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'command', text, ...(deliveryId ? { deliveryId } : {}), ...(replyVia === 'note' ? { replyVia: 'note' } : {}) }),
+    signal,
+  })
+  const outcome = await res.json().catch(() => null)
+  return { ok: res.ok, status: res.status, outcome }
 }
 
 // [[spec-body-edit]]: replace a line range of a node's spec body and land it as a commit. `original` is

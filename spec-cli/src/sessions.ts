@@ -1,4 +1,5 @@
 import { execFile, execFileSync, spawn } from 'node:child_process'
+import { createConnection } from 'node:net'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
@@ -2387,19 +2388,52 @@ function isExplicitConnectionRefused(error: unknown): boolean {
   if (Array.isArray(errors)) return errors.length > 0 && errors.every(isExplicitConnectionRefused)
   return isExplicitConnectionRefused((error as { cause?: unknown }).cause)
 }
+async function establishBackendConnection(target: ApiBaseInfo): Promise<boolean> {
+  const parsed = new URL(target.url)
+  const port = Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80)
+  return await new Promise<boolean>((resolve, reject) => {
+    const socket = createConnection({ host: parsed.hostname, port })
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      fn()
+    }
+    const timer = setTimeout(() => finish(() => {
+      const error = new Error(`backend connection was not accepted at ${target.url} within 1500ms`)
+      error.name = 'BackendError'
+      Object.assign(error, { code: 'backend_availability_indeterminate' })
+      reject(error)
+    }), 1500)
+    timer.unref?.()
+    socket.once('connect', () => finish(() => resolve(false)))
+    socket.once('error', (error) => finish(() => {
+      if (isExplicitConnectionRefused(error)) return resolve(true)
+      const failed = new Error(`backend availability is indeterminate at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
+      failed.name = 'BackendError'
+      Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
+      reject(failed)
+    }))
+  })
+}
 async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean> {
+  // TCP acceptance establishes presence. The identity route can be delayed by a busy backend event loop,
+  // so it gets the ordinary create request deadline instead of a short availability deadline.
+  const refused = await establishBackendConnection(target)
+  if (refused) return true
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 1500)
+  const timer = setTimeout(() => controller.abort(new Error('backend authority request timed out')), sessionCreateTimeoutMs() + 5_000)
   timer.unref?.()
   let response: Response
   try {
     response = await fetch(`${target.url}/api/instance`, { signal: controller.signal })
   } catch (error) {
     clearTimeout(timer)
-    if (isExplicitConnectionRefused(error)) return true
-    const failed = new Error(`backend availability is indeterminate at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
+    const failed = new Error(`backend authority read failed after connection at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
     failed.name = 'BackendError'
-    Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
+    Object.assign(failed, { code: 'backend_authority_read_failed', cause: error })
     throw failed
   }
   try {

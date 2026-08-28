@@ -139,10 +139,12 @@ package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so 
 so the launch always runs where the launch env and cap live. The caller can be **another agent** running in a
 stripped or divergent environment, so an in-process launch there would bring workers up in the caller's context
 rather than the backend's. The CLI falls back to in-process **only when the target explicitly refuses the
-connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). One
-bounded settings probe also performs the implicit target's project check. Any HTTP response proves an owner,
-regardless of status. A probe timeout, abort, reset, DNS failure, or unknown transport error is indeterminate
-and fails loud without creating; it may hide an already accepted request.
+connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). Presence
+is established by TCP connection acceptance, not by a response-header deadline: a connected but slow backend
+remains present and receives the ordinary create request. One bounded settings probe also performs the implicit
+target's project check. Any HTTP response proves an owner, regardless of status. A timeout, abort, reset, DNS
+failure, or unknown transport error before acceptance is indeterminate and fails loud without creating; failures
+after acceptance remain backend errors and never fall back.
 
 That ownership starts at prompt invocation, not after a client has already interpreted it. A raw leading
 `/<preset>` names a live `surface: command` plugin: the shared prompt resolver expands its body, fills `{{targets}}` from the

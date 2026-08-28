@@ -77,18 +77,20 @@ with `session_create_key_reused` and creates nothing. Callers that omit the head
 semantics with a backend-minted key; SpexCode's own CLI always sends a fresh key and retains it across its one
 bounded request attempt.
 
-Before that attempt the CLI performs one bounded `GET /api/instance` authority probe. It is the small identity
-route, never `/api/settings`: creation authority must not enumerate session records or derive layout overlays.
+Before that attempt the CLI opens a bounded TCP connection, which is the presence probe, then performs one
+`GET /api/instance` identity read. The route is small and never `/api/settings`: creation authority must not
+enumerate session records or derive layout overlays. The TCP presence budget ends when a connection is accepted;
+the identity read then uses the ordinary create request deadline, so a busy event loop cannot look absent merely
+because response headers are late.
 For an implicit target, each supplied root is resolved through the shared lightweight main-root resolver before
 comparison, so a linked worktree and an explicit configured `main` retain their canonical project identity;
 `--api` names the target and skips that comparison but still makes this availability decision: normally that
-explicit target owns the one POST. The only exception is an exact all-chain `ECONNREFUSED`, which proves that
-the selected target has no listener and permits the existing in-process fallback. The optional recorded-endpoint
-health read is only target discovery and has its own wall; it does not shorten the 1500ms instance probe. Every
-HTTP response, including `404` and `503`, proves that a backend owns the target; a slow accepted connection,
-abort, reset, DNS failure, or unknown transport outcome is indeterminate. Those cases fail loud within the
-instance probe wall without local creation, because the remote owner may already have admitted the keyed
-request.
+explicit target owns the one POST. The only exception is an exact all-chain `ECONNREFUSED` before acceptance,
+which proves that the selected target has no listener and permits the existing in-process fallback. The optional
+recorded-endpoint health read is only target discovery and has its own wall; it does not consume the presence
+budget. Every HTTP response, including `404` and `503`, proves that a backend owns the target; a reset, DNS
+failure, or unknown transport outcome after acceptance is a backend error and never falls back. A failure before
+acceptance is indeterminate and fails loud without local creation.
 
 `sessionCreateRequest` is the only callable governed-session creation seam. It owns validation, maintenance
 admission, request identity, deadline/cancellation, and the private prepare/publish function's required context.

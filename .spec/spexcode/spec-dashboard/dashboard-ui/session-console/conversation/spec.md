@@ -194,8 +194,10 @@ terminal-free surface property, and the note data arrives because the agent exec
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.
 
 **Stop lives in the composer, and only while there is something to stop.** While the session is `working`
-the composer shows one stop square beside send — the mark every chat reader knows as "stop generating" —
-and shows nothing otherwise, because a permanently visible disabled stop is chrome about a state the page is
+the composer shows one stop square beside send — the mark every chat reader knows as "stop generating",
+filled in the WORKING hue (the orange the seam's running mark and the working status already wear) so that
+beside the blue send the two read as a pair, blue sending into the live turn and orange stopping it, and the
+stop is never mistaken for one more tool button in the quiet wash — and shows nothing otherwise, because a permanently visible disabled stop is chrome about a state the page is
 not in. It calls the one interrupt verb ([[dispatch]]); the backend decides between the adapter's native
 interrupt and, for a pane-backed TUI, the operator's own key into its pane, so this surface never learns
 which transport it is on. A refusal lands in the composer's error line like a failed send; a success asks the

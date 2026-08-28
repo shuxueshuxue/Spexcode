@@ -2787,8 +2787,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* TimelineChat keeps the real composer caret focused while this browser-owned highlight paints a
    conversation Range. It deliberately never creates a document Selection. */
 ::highlight(timeline-sel) { background-color: #264f78; color: #f0f6fc; }
-/* THE RULER ([[conversation]]). Every row is a gutter and a cell: time lives in the gutter, tabular and
-   shared by every row. User quotes reverse the two columns so their time follows the right-aligned bubble. */
+/* THE RULER ([[conversation]]). Ordinary rows are a gutter and a cell: time lives in the gutter, tabular;
+   user quotes reverse the two columns, while status/event times stay inline at the content start. */
 .m-ev, .m-day { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 16px; }
 .m-ev { padding: var(--space-5) 0; }
 .m-ev-prompt, .m-ev-sent { grid-template-columns: minmax(0, 1fr) 52px; }

@@ -630,9 +630,10 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       // status chip above saying in what state it said it. The chip is the whole trace of the machine.
       rows.push(
         <div className="m-ev m-ev-say" key={i}>
-          {gutter(item.ts)}
+          <div className="m-gut" />
           <article className="m-say">
             <div className="m-say-head">
+              <time className="m-line-time">{timeOf(item.ts)}</time>
               <span className="m-say-chip" style={{ color: STATUS_COLOR[item.status] }}>
                 <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
                 <span className="m-ev-word">{t(`status.${item.status}`)}</span>
@@ -640,7 +641,6 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               {item.text && !hasTimelineHighlight() && (
                 <button type="button" className="m-copy-note" onClick={() => copyText(item.text)}>{t('mobile.copy')}</button>
               )}
-              <time className="m-tin">{timeOf(item.ts)}</time>
             </div>
             {item.text && <div className="m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
           </article>

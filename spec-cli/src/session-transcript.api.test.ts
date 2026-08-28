@@ -38,7 +38,7 @@ async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
 }
 
-type Frame = { revision: string; from: number; to: number; turns?: Array<{ role: string; text?: string; tools?: Array<{ id: string; output?: string }> }>; error?: string; reason?: string }
+type Frame = { revision: string; from: number; to: number; kind?: 'full' | 'delta'; removed?: string[]; turns?: Array<{ id: string; role: string; text?: string; tools?: Array<{ id: string; output?: string | null; outputBytes?: number }> }>; error?: string; reason?: string }
 
 // reads SSE chunks until one `transcript` event arrives (pings are skipped)
 async function nextFrame(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<Frame> {
@@ -105,7 +105,7 @@ test('YATU: the transcript GET and stream read one native thread through the ada
     assert.ok(stream.body)
     const reader = stream.body.getReader()
     const absent = await nextFrame(reader)
-    assert.deepEqual({ revision: absent.revision, from: absent.from, turns: absent.turns }, { revision: 'absent', from, turns: [] })
+    assert.deepEqual({ revision: absent.revision, from: absent.from, turns: absent.turns, kind: absent.kind }, { revision: 'absent', from, turns: [], kind: 'full' })
 
     // the thread starts: an older stretch, then the current human boundary, prose, and a running tool
     mkdirSync(dirname(rollout), { recursive: true })
@@ -117,18 +117,32 @@ test('YATU: the transcript GET and stream read one native thread through the ada
     ].join(''))
     const started = await nextFrame(reader)
     assert.notEqual(started.revision, 'absent')
+    assert.equal(started.kind, 'full', 'the first read of a thread is the whole interval')
     assert.deepEqual(started.turns?.map((turn) => [turn.role, turn.text ?? null]), [['user', 'begin the next turn'], ['assistant', 'work for the current turn'], ['assistant', null]])
+    assert.ok(started.turns?.every((turn) => typeof turn.id === 'string' && turn.id), 'every turn is keyed')
     assert.equal(started.turns?.[2]?.tools?.[0]?.output, undefined, 'the call has no result yet')
     assert.doesNotMatch(JSON.stringify(started), /OLD_COMMENTARY/, 'the interval excludes the older stretch')
 
-    // the tool completes: the same frame shape arrives again with the output joined
+    // the tool completes: a DELTA carrying only the turn that changed, its result recorded but its body withheld
     appendFileSync(rollout, line({ timestamp: clock(-2), type: 'response_item', payload: { type: 'custom_tool_call_output', call_id: 'tool-2', output: 'current body' } }))
     const completed = await nextFrame(reader)
-    assert.equal(completed.turns?.[2]?.tools?.[0]?.output, 'current body')
+    assert.equal(completed.kind, 'delta')
+    assert.deepEqual(completed.turns?.map((turn) => turn.id), [started.turns?.[2]?.id], 'only the turn whose call completed is in the frame')
+    assert.equal(completed.turns?.[0]?.tools?.[0]?.output, null, 'the live frame withholds the output body')
+    assert.equal(completed.turns?.[0]?.tools?.[0]?.outputBytes, Buffer.byteLength('current body'), 'but tells its size')
+    assert.deepEqual(completed.removed, [])
+    assert.doesNotMatch(JSON.stringify(completed), /current body|work for the current turn/, 'neither the body nor the unchanged turns travel')
     assert.ok(completed.to >= started.to, 'the open interval end moves with the server clock')
     await reader.cancel()
 
-    // the closed-interval GET reads the same thread through the same adapter
+    // the body is fetched on demand, for exactly one call of the same interval
+    const tool = await fetch(`${base}/api/sessions/${id}/transcript/tool/tool-2?from=${from}`)
+    assert.equal(tool.status, 200)
+    assert.deepEqual(await tool.json(), { id: 'tool-2', output: 'current body', outputLines: 1, outputBytes: Buffer.byteLength('current body') })
+    assert.equal((await fetch(`${base}/api/sessions/${id}/transcript/tool/no-such-call?from=${from}`)).status, 404)
+    assert.equal((await fetch(`${base}/api/sessions/${id}/transcript/tool/tool-2`)).status, 400)
+
+    // the closed-interval GET reads the same thread through the same adapter, outputs inline
     const closed = await fetch(`${base}/api/sessions/${id}/transcript?from=${from}&to=${Date.now() + 5_000}`)
     assert.equal(closed.status, 200)
     const body = await closed.json() as Frame
@@ -147,6 +161,7 @@ test('YATU: the transcript GET and stream read one native thread through the ada
     assert.ok(resumed.body)
     const resumedReader = resumed.body.getReader()
     const again = await nextFrame(resumedReader)
+    assert.equal(again.kind, 'full', 'a new subscription starts from the whole interval')
     assert.equal(again.turns?.length, 3)
     await resumedReader.cancel()
   } finally {

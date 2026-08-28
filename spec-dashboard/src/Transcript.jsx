@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { RUN_MIN, runKinds, splitTarget, toolTarget, toolVerb } from './toolVocabulary.js'
 import RichText from './RichText.js'
 import { BlobMedia } from './Evidence.jsx'
@@ -30,6 +30,26 @@ export function TimelineRichText({ children, className = '' }) {
 // interval that ends before the result was written is history, not something still happening
 export const isRunning = (tool, live) => live && tool.output === undefined
 
+// A LIVE FRAME WITHHOLDS OUTPUT BODIES ([[session-transcript]]): a recorded result is `null` on the wire, its
+// size told, and the body is fetched once when a person opens the call. The seam that knows the session and
+// the interval provides the loader; a closed interval's read carries its bodies inline and never asks.
+export const TranscriptOutput = createContext(null)   // { load(toolId) → Promise<{ ok, data | error }> }
+
+function WithheldOutput({ tool }) {
+  const t = useT()
+  const loader = useContext(TranscriptOutput)
+  const [fetched, setFetched] = useState(null)
+  useEffect(() => {
+    if (!loader) return undefined
+    let live = true
+    loader.load(tool.id).then((result) => { if (live) setFetched(result) }, (error) => { if (live) setFetched({ ok: false, error: String(error?.message || error) }) })
+    return () => { live = false }
+  }, [loader, tool.id])
+  if (!fetched) return <div className="tc-tool-out tc-tool-out-state">{t('common.loading')}</div>
+  if (!fetched.ok) return <div className="tc-tool-out tc-tool-out-state is-error">{fetched.error}</div>
+  return <pre className="tc-tool-out">{fetched.data?.output ?? ''}</pre>
+}
+
 // THE TRANSCRIPT SAYS NOTHING THE RECORD ALREADY SAID. The record draws the message that opened a seam and
 // the note the agent declared as rows of its own; the same sentence twice, once on the record and once
 // inside the seam, is the duplication a reader notices first. Either side may be the other's prefix — the
@@ -50,7 +70,8 @@ export function ToolLine({ tool, open, onToggle, live = false }) {
   const target = toolTarget(tool.input)
   const { lead, trail } = splitTarget(target)
   const lines = tool.outputLines || 0
-  const canOpen = !!tool.output
+  const withheld = tool.output === null   // recorded, body not carried — fetched when opened
+  const canOpen = !!tool.output || withheld
   const running = isRunning(tool, live)
   const Row = canOpen ? 'button' : 'div'
   return (
@@ -64,7 +85,7 @@ export function ToolLine({ tool, open, onToggle, live = false }) {
         {running && <span className="tc-tool-running"><Icon name="loader" size={11} className="tc-tool-spin" />{t('session.executionRunning')}</span>}
         {canOpen && <Caret open={open} className="tc-tool-caret" />}
       </Row>
-      {open && canOpen && <pre className="tc-tool-out">{tool.output}</pre>}
+      {open && canOpen && (withheld ? <WithheldOutput tool={tool} /> : <pre className="tc-tool-out">{tool.output}</pre>)}
     </div>
   )
 }

@@ -499,13 +499,47 @@ export async function loadSessionTranscript(id, from, to) {
   return { ok: true, data: body }
 }
 
+// One call's recorded output, fetched when a person opens it: the live stream withholds bodies (below).
+export async function loadSessionTranscriptTool(id, from, toolId) {
+  const query = new URLSearchParams({ from: String(from) })
+  const res = await apiFetch(`${sessionUrl(id, 'transcript', 'tool', toolId)}?${query}`, { cache: 'no-store' })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { ok: false, error: body?.error || `HTTP ${res.status}` }
+  return { ok: true, data: body }
+}
+
+// THE SUBSCRIBER MERGES, THE RENDERER READS ONE PAYLOAD. A stream's first frame is the whole interval
+// (`full`); each later frame is a `delta` holding only the turns that are new or changed and the ids the turn
+// cap evicted ([[session-transcript]]). Merging by turn id here — replace a turn the reader holds, append one
+// it does not, drop the removed — hands the renderer the same complete shape the closed-interval GET returns,
+// so nothing downstream knows the wire is incremental. New turns append in arrival order: the native thread
+// is append-only. An `{error, reason}` frame passes through untouched and leaves the held turns as they were.
+export function mergeTranscriptFrame(state, frame) {
+  if (frame.error) return { state, payload: frame }
+  const { kind, removed, turns: incoming, ...rest } = frame
+  if (kind !== 'delta') {
+    const turns = [...(incoming || [])]
+    return { state: { turns }, payload: { ...rest, turns } }
+  }
+  const gone = new Set(removed || [])
+  const turns = state.turns.filter((turn) => !gone.has(turn.id))
+  const index = new Map(turns.map((turn, at) => [turn.id, at]))
+  for (const turn of incoming || []) {
+    const at = index.get(turn.id)
+    if (at === undefined) { index.set(turn.id, turns.length); turns.push(turn) } else turns[at] = turn
+  }
+  return { state: { turns }, payload: { ...rest, turns } }
+}
+
 // THE OPEN INTERVAL, STREAMED ([[session-transcript]]): the tail seam of a working session subscribes with its
-// start, and every change to the native thread pushes the whole normalized payload for [from, now] — the same
-// shape the closed-interval GET above returns, so one renderer reads both. The browser never sees a transcript
-// path or a native envelope; it only decodes the adapter's turns. A frame may instead carry `{error, reason}`.
+// start, and every change to the native thread pushes what changed in [from, now]; merged above, each frame
+// yields the same shape the closed-interval GET returns, so one renderer reads both. The browser never sees a
+// transcript path or a native envelope; it only decodes the adapter's turns. A reopened stream starts from a
+// `full` frame again, which replaces what was held.
 export function subscribeSessionTranscript(id, from, onFrame) {
   let es = null
   let closed = false
+  let held = { turns: [] }
   const reopen = () => { try { es?.close() } catch { /* an already-closed EventSource is harmless */ } ; open() }
   const deadman = createDeadman(() => {
     if (closed) return
@@ -514,7 +548,11 @@ export function subscribeSessionTranscript(id, from, onFrame) {
   })
   const receive = (event) => {
     deadman.arm()
-    try { onFrame(JSON.parse(event.data)) } catch { /* a bad frame is skipped; the next revision replaces it */ }
+    try {
+      const merged = mergeTranscriptFrame(held, JSON.parse(event.data))
+      held = merged.state
+      onFrame(merged.payload)
+    } catch { /* a bad frame is skipped; the next revision replaces it */ }
   }
   const open = () => {
     if (closed) return

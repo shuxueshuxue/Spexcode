@@ -51,12 +51,14 @@ try {
         if (url.includes('/transcript/stream')) {
           window.transcriptSource = this
           window.transcriptFrom = Number(new URL(url, location.href).searchParams.get('from'))
+          // the wire of [[session-transcript]]: the first frame is the whole interval; a recorded result is
+          // `output: null` (its body is fetched when opened), a running call has no output field
           setTimeout(() => this.emit('transcript', {
-            revision: 'fixture-1', from: window.transcriptFrom, to: window.transcriptFrom + 5000,
+            kind: 'full', revision: 'fixture-1', from: window.transcriptFrom, to: window.transcriptFrom + 5000,
             turns: [
               { id: 'u1', at: window.transcriptFrom + 100, role: 'user', text: 'begin the next turn' },
               { id: 'a1', at: window.transcriptFrom + 200, role: 'assistant', text: 'Inspecting the live tail', tools: [
-                { id: 'read', name: 'Read', input: '{"file_path":"/repo/src/trace.ts"}', output: 'export const x = 1', outputLines: 1, outputBytes: 18 },
+                { id: 'read', name: 'Read', input: '{"file_path":"/repo/src/trace.ts"}', output: null, outputLines: 1, outputBytes: 18 },
                 { id: 'run', name: 'Bash', input: '{"command":"npm test"}', outputLines: 0, outputBytes: 0 },
               ] },
             ],
@@ -91,6 +93,8 @@ try {
   await page.route('**/api/settings*', json({ launchers: [], default: null }))
   await page.route(`**/api/sessions/${SESSION_ID}`, json({ ...board.sessions[0], prompt: 'the originating prompt' }))
   await page.route(`**/api/sessions/${SESSION_ID}/timeline*`, json(timeline))
+  // a withheld body, fetched for exactly one call when a person opens it
+  await page.route(`**/api/sessions/${SESSION_ID}/transcript/tool/read?*`, json({ id: 'read', output: 'export const x = 1', outputLines: 1, outputBytes: 18 }))
   await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION_ID)}?surface=conversation`, { waitUntil: 'domcontentloaded' })
   const seam = page.locator('.m-ev-seam').last()
   const tail = seam.locator('.m-live')
@@ -121,46 +125,50 @@ try {
   const rowWidth = await rows.nth(0).locator('.tc-tool-row').evaluate((element) => element.getBoundingClientRect().width)
   const tailWidth = await tail.evaluate((element) => element.getBoundingClientRect().width)
   assert.ok(rowWidth < tailWidth, 'a call is a sentence, not a bar')
-  // output stays folded until asked; the completed call opens inline and independently
+  // output stays folded until asked; the completed call opens inline and independently — its body arrives by
+  // one fetch for that call, because the live frame carried only its size
   assert.equal(await tail.locator('.tc-tool-out').count(), 0)
   await rows.nth(0).locator('.tc-tool-row').click()
   assert.equal(await rows.nth(0).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true')
-  assert.equal(await tail.locator('.tc-tool-out').textContent(), 'export const x = 1')
+  await tail.locator('pre.tc-tool-out').waitFor({ state: 'visible', timeout: 5_000 })
+  assert.equal(await tail.locator('pre.tc-tool-out').textContent(), 'export const x = 1')
+  assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 1, 'one body fetch, for the one call opened')
 
-  // a refresh of the same interval keeps what the reader opened, and the running call settles
+  // a refresh of the same interval keeps what the reader opened, and the running call settles: a DELTA
+  // carrying only the turn that changed
   await page.evaluate(() => window.transcriptSource.emit('transcript', {
-    revision: 'fixture-2', from: window.transcriptFrom, to: window.transcriptFrom + 9000,
+    kind: 'delta', revision: 'fixture-2', from: window.transcriptFrom, to: window.transcriptFrom + 9000,
     turns: [
-      { id: 'u1', at: window.transcriptFrom + 100, role: 'user', text: 'begin the next turn' },
       { id: 'a1', at: window.transcriptFrom + 200, role: 'assistant', text: 'Inspecting the live tail', tools: [
-        { id: 'read', name: 'Read', input: '{"file_path":"/repo/src/trace.ts"}', output: 'export const x = 1', outputLines: 1, outputBytes: 18 },
-        { id: 'run', name: 'Bash', input: '{"command":"npm test"}', output: 'ok', outputLines: 1, outputBytes: 2 },
+        { id: 'read', name: 'Read', input: '{"file_path":"/repo/src/trace.ts"}', output: null, outputLines: 1, outputBytes: 18 },
+        { id: 'run', name: 'Bash', input: '{"command":"npm test"}', output: null, outputLines: 1, outputBytes: 2 },
       ] },
     ],
+    removed: [],
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
   }))
   await page.waitForTimeout(100)
   assert.equal(await rows.nth(0).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true', 'a same-interval refresh keeps the open row')
+  assert.equal(await tail.locator('pre.tc-tool-out').textContent(), 'export const x = 1', 'and the body it fetched')
+  assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 1, 'a refresh does not refetch an opened body')
   assert.equal(await rows.nth(1).locator('.tc-tool-running').count(), 0, 'the finished call lost its running mark')
+  assert.equal(await tail.locator('.tc-ask').count(), 0, 'the delta left the human message where the record has it')
 
-  // a later note replaces the compact view: the newest prose and the calls after it
+  // a later note replaces the compact view: the newest prose and the calls after it — three new turns in one
+  // delta; the unchanged first turn does not travel again
   await page.evaluate(() => window.transcriptSource.emit('transcript', {
-    revision: 'fixture-3', from: window.transcriptFrom, to: window.transcriptFrom + 12000,
+    kind: 'delta', revision: 'fixture-3', from: window.transcriptFrom, to: window.transcriptFrom + 12000,
     turns: [
-      { id: 'u1', at: window.transcriptFrom + 100, role: 'user', text: 'begin the next turn' },
-      { id: 'a1', at: window.transcriptFrom + 200, role: 'assistant', text: 'Inspecting the live tail', tools: [
-        { id: 'read', name: 'Read', input: '{"file_path":"/repo/src/trace.ts"}', output: 'export const x = 1', outputLines: 1, outputBytes: 18 },
-        { id: 'run', name: 'Bash', input: '{"command":"npm test"}', output: 'ok', outputLines: 1, outputBytes: 2 },
-      ] },
       // prose in a turn of its own, then calls AFTER it in tool-only turns — the live tail's usual shape
       { id: 'a2', at: window.transcriptFrom + 9000, role: 'assistant', text: 'Now testing' },
       { id: 'a3', at: window.transcriptFrom + 9200, role: 'assistant', tools: [
-        { id: 'run2', name: 'Bash', input: '{"command":"npm run e2e"}', output: 'ok', outputLines: 1, outputBytes: 2 },
+        { id: 'run2', name: 'Bash', input: '{"command":"npm run e2e"}', output: null, outputLines: 1, outputBytes: 2 },
       ] },
       { id: 'a4', at: window.transcriptFrom + 9500, role: 'assistant', tools: [
         { id: 'run3', name: 'Bash', input: '{"command":"npm run lint"}', outputLines: 0, outputBytes: 0 },
       ] },
     ],
+    removed: [],
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
   }))
   await page.waitForTimeout(100)
@@ -194,14 +202,14 @@ try {
   assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 0, 'the message that opened the seam is quoted on the record one row above, not again inside the interval')
   assert.equal(await seam.locator('.m-seam-inset .tc-tool-running').count(), 1, 'the running call is still running in the full view')
   assert.equal(await page.locator('.m-transcript-state').count(), 0, 'no loading line: the payload was already here')
-  assert.equal(requests.filter((url) => !url.includes('/transcript/stream')).length, 0, 'the open seam issues no interval GET of its own')
+  assert.equal(requests.filter((url) => !url.includes('/transcript/stream') && !url.includes('/transcript/tool/')).length, 0, 'the open seam issues no interval GET of its own')
   await page.screenshot({ path: `${OUT}/live-tail-expanded.png` })
   await seam.locator('.m-seam-row').click()
   await tail.waitFor({ state: 'visible', timeout: 5_000 })
 
   // a turn that opens with tools and no prose is not blank: the calls are the news
   await page.evaluate(() => window.transcriptSource.emit('transcript', {
-    revision: 'fixture-4', from: window.transcriptFrom, to: window.transcriptFrom + 15000,
+    kind: 'full', revision: 'fixture-4', from: window.transcriptFrom, to: window.transcriptFrom + 15000,
     turns: [
       { id: 'u1', at: window.transcriptFrom + 100, role: 'user', text: 'begin the next turn' },
       { id: 'a3', at: window.transcriptFrom + 14000, role: 'assistant', tools: [
@@ -222,22 +230,23 @@ try {
     { id: 'u1', at: 100, role: 'user', text: 'begin the next turn' },
     // a human turn the record does not carry — typed into the harness itself — is still quoted in the interval
     { id: 'u2', at: 13900, role: 'user', text: 'typed into the harness itself' },
-    { id: 'b1', at: 14000, role: 'assistant', tools: [{ id: 'w1', name: 'Grep', input: '{"pattern":"seam"}', output: 'x', outputLines: 1, outputBytes: 1 }] },
-    { id: 'b2', at: 14100, role: 'assistant', tools: [{ id: 'w2', name: 'Read', input: '{"file_path":"/repo/src/a.ts"}', output: 'x', outputLines: 1, outputBytes: 1 }] },
-    { id: 'b3', at: 14200, role: 'assistant', tools: [{ id: 'w3', name: 'Bash', input: '{"command":"npm test"}', output: 'ok', outputLines: 1, outputBytes: 2 }] },
-    { id: 'b4', at: 14300, role: 'assistant', tools: [{ id: 'w4', name: 'Bash', input: '{"command":"npm run lint"}', output: 'ok', outputLines: 1, outputBytes: 2 }] },
+    { id: 'b1', at: 14000, role: 'assistant', tools: [{ id: 'w1', name: 'Grep', input: '{"pattern":"seam"}', output: null, outputLines: 1, outputBytes: 1 }] },
+    { id: 'b2', at: 14100, role: 'assistant', tools: [{ id: 'w2', name: 'Read', input: '{"file_path":"/repo/src/a.ts"}', output: null, outputLines: 1, outputBytes: 1 }] },
+    { id: 'b3', at: 14200, role: 'assistant', tools: [{ id: 'w3', name: 'Bash', input: '{"command":"npm test"}', output: null, outputLines: 1, outputBytes: 2 }] },
+    { id: 'b4', at: 14300, role: 'assistant', tools: [{ id: 'w4', name: 'Bash', input: '{"command":"npm run lint"}', output: null, outputLines: 1, outputBytes: 2 }] },
     // one turn that fired three calls at once — the per-turn run fold's own trigger
     { id: 'b5', at: 14400, role: 'assistant', tools: [
-      { id: 'w5', name: 'Read', input: '{"file_path":"/repo/src/b.ts"}', output: 'x', outputLines: 1, outputBytes: 1 },
-      { id: 'w6', name: 'Read', input: '{"file_path":"/repo/src/c.ts"}', output: 'x', outputLines: 1, outputBytes: 1 },
+      { id: 'w5', name: 'Read', input: '{"file_path":"/repo/src/b.ts"}', output: null, outputLines: 1, outputBytes: 1 },
+      { id: 'w6', name: 'Read', input: '{"file_path":"/repo/src/c.ts"}', output: null, outputLines: 1, outputBytes: 1 },
       { id: 'w7', name: 'Read', input: '{"file_path":"/repo/src/d.ts"}', outputLines: 0, outputBytes: 0 },
     ] },
   ]
-  const emitTurns = (revision, turns) => page.evaluate(({ revision, turns }) => window.transcriptSource.emit('transcript', {
-    revision, from: window.transcriptFrom, to: window.transcriptFrom + 15500,
+  const emitTurns = (revision, turns, kind = 'full') => page.evaluate(({ revision, turns, kind }) => window.transcriptSource.emit('transcript', {
+    kind, revision, from: window.transcriptFrom, to: window.transcriptFrom + 15500,
     turns: turns.map((turn) => ({ ...turn, at: window.transcriptFrom + turn.at })),
+    ...(kind === 'delta' ? { removed: [] } : {}),
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
-  }), { revision, turns })
+  }), { revision, turns, kind })
   await emitTurns('fixture-4b', inProgress)
   await page.waitForTimeout(100)
   await page.screenshot({ path: `${OUT}/live-tail-in-progress.png` })
@@ -258,7 +267,7 @@ try {
   await seam.locator('.m-seam-row').click()
   await tail.waitFor({ state: 'visible', timeout: 5_000 })
   // ...and the moment the agent answers, that work is process behind an answer: gone from the tail, folded in history
-  await emitTurns('fixture-4c', [...inProgress, { id: 'b6', at: 15000, role: 'assistant', text: 'Found the seam' }])
+  await emitTurns('fixture-4c', [{ id: 'b6', at: 15000, role: 'assistant', text: 'Found the seam' }], 'delta')
   await page.waitForTimeout(100)
   assert.equal(await tail.locator('.tc-say-text').textContent(), 'Found the seam')
   assert.equal(await tail.locator('.tc-tool').count(), 0, 'the calls that produced the answer left the tail')
@@ -287,9 +296,9 @@ try {
   assert.equal(lastSaid, 'Earlier answer already on the record')
   {
     await page.evaluate((note) => window.transcriptSource.emit('transcript', {
-      revision: 'fixture-5', from: window.transcriptFrom, to: window.transcriptFrom + 16000,
+      kind: 'full', revision: 'fixture-5', from: window.transcriptFrom, to: window.transcriptFrom + 16000,
       turns: [{ id: 'a4', at: window.transcriptFrom + 15500, role: 'assistant', text: note.replace(/\s+/g, ' ').trim().slice(0, 239), tools: [
-        { id: 'done', name: 'Bash', input: '{"command":"true"}', output: '', outputLines: 0, outputBytes: 0 },
+        { id: 'done', name: 'Bash', input: '{"command":"true"}', output: null, outputLines: 0, outputBytes: 0 },
       ] }],
       truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
     }), lastSaid)

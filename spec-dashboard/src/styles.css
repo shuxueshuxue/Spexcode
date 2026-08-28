@@ -2962,6 +2962,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    in the transcript's own grammar (`.tc-say-text`, `.tc-tool*`), from the same payload the expanded seam
    shows in full, so the tail and the folded history are one flow. Live is said by a caret at the newest
    prose and a spinner on a running call — nothing else moves, and reduced motion stills both. */
+/* a withheld body while it is fetched, or the reason it could not be: the well's own voice, one line */
+.tc-tool-out.tc-tool-out-state { font-family: var(--ui-font); font-size: var(--type-meta); color: var(--muted); }
+.tc-tool-out.tc-tool-out-state.is-error { color: var(--red); }
 .m-live { margin-top: var(--space-2); min-width: 0; }
 .m-live .tc-say-text { animation: rise var(--dur-rise) ease; }
 /* the caret sits INLINE at the end of the newest prose's last line (on its last block, not on the block

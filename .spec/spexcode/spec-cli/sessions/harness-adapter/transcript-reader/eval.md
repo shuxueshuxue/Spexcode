@@ -30,6 +30,26 @@ scenarios:
     code: spec-cli/src/harness.ts
     description: Inspect the registered adapters' transcript readers.
     expected: The four base harnesses carry four distinct readers, every headless adapter shares its base reader, and z-code's reader is the unsupported one.
+  - name: open-interval-tail-parses-appends
+    tags: [backend-api]
+    test: spec-cli/src/transcript-reader.test.ts
+    code: spec-cli/src/transcript-reader.ts
+    description: >-
+      Open a tail on a Claude thread before its file exists, then write an older stretch, the current prompt
+      and a running call; advance; append the call's result cut mid-line, advance, complete the line and add a
+      prose turn, advance; compare with a one-shot read of the same interval; overwrite the file with a shorter
+      one and advance again.
+    expected: >-
+      The first advance fails as missing. After the write, the tail shows the prompt and the running call; the
+      half-written result is carried, not parsed, until its newline lands, after which the result joins the
+      call from the earlier advance and the prose follows; every turn carries an id, stable across advances;
+      the one-shot read of the interval equals the cursor's snapshot; the shrunken file is read afresh.
+  - name: every-turn-is-keyed
+    tags: [backend-api]
+    test: spec-cli/src/transcript-reader.test.ts
+    code: spec-cli/src/transcript-reader.ts
+    description: Read a Codex rollout whose event messages carry no ids, two of them on the same clock.
+    expected: Each turn's id is `<role>@<at>`, with `#1` on the second turn that shares a clock, in thread order.
   - name: lazy-status-disclosure
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/session-surface-cold-readable.e2e.mjs

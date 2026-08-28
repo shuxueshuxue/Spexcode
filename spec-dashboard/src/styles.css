@@ -804,8 +804,8 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 /* the bar's ONE vertical divider voice: the same full-height --edge hairline the launcher group's
    border-left draws, so the two seams on the status line cannot read as two different rules. */
 .sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
-.sb-launcher-groups { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
-.sb-launcher-list { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-groups { position: relative; display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-list { display: none; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
 .sb-launcher-group {
   display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; min-width: max-content; max-width: 100%; padding: 0; border: 0;
   color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer;
@@ -819,13 +819,17 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 .sb-launcher-needs { color: var(--yellow); }
 .sb-launcher-other { color: var(--muted); }
 .sb-launcher-slash { color: var(--muted); padding: 0 1px; }
-.sb-launcher-summary { display: none; align-items: center; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer; }
+.sb-launcher-summary { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer; }
 .sb-launcher-summary:hover { color: var(--ink2); }
 .sb-launcher-summary-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 12px; height: 12px; padding: 0 2px; border: 1px solid var(--muted); border-radius: 2px; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-none); }
-/* Compact desktop widths hide the launcher list as one unit, so no KDA digit can be flex-shrunk or clipped. */
-@media (max-width: 900px) {
-  .sb-launcher-list { display: none; }
-  .sb-launcher-summary { display: inline-flex; }
+/* The line rests on one aggregate; a mouse can reveal the fixed-content groups without making touch hover sticky. */
+@media (hover: hover) and (pointer: fine) {
+  .sb-item:has(.sb-launcher-groups:hover) { overflow: visible; }
+  .sb-launcher-groups:hover .sb-launcher-list {
+    position: absolute; right: 0; top: 0; z-index: 1; display: inline-flex;
+    padding-left: var(--space-3); background: var(--ground);
+  }
+  .sb-launcher-groups:hover .sb-launcher-summary { visibility: hidden; }
 }
 
 /* ---- left navigation rail ---- */

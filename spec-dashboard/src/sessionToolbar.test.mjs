@@ -111,6 +111,12 @@ test('live offline and archived conversations share one footer with cold input a
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
 })
 
+test('conversation revisit refreshes a warm instance without clearing its rendered state', () => {
+  assert.match(timelineChat, /useEffect\(\(\) => \{\n    setEvents\(null\); setDetail\(null\); setCopyStatus\(null\); setSendNote\(null\); setExpandedSeams\(new Set\(\)\); setTranscripts\(new Map\(\)\);[\s\S]*?\n  \}, \[s\.id\]\)/)
+  assert.match(timelineChat, /useEffect\(\(\) => \{\n    if \(!active\) return undefined\n    load\(\); loadSessionDetail\(s\.id\)/)
+  assert.doesNotMatch(timelineChat, /useEffect\(\(\) => \{\n    if \(!active\) return undefined\n    setEvents\(null\)/)
+})
+
 test('archive overlay remains document-side while the Sessions forest is restored', () => {
   assert.match(source, /archiveRequested = false/)
   assert.match(source, /if \(archiveRequested\) setArchiveIndexOpen\(true\)/)

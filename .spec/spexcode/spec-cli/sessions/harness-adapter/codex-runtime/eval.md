@@ -16,13 +16,15 @@ scenarios:
     tags: [cli]
     code: [spec-cli/src/harness.ts#writeCodexTrust]
     description: >
-      Point CODEX_HOME at a directory whose config.toml is mode 0600 and ends in a line cut short mid-value (the
-      shape a concurrent codex rewrite leaves when read mid-way), and run `spex init --harness codex` on a fresh
-      git repository. Then replace that config with a small parseable one, still 0600, and init again.
+      Point CODEX_HOME at a directory holding a small parseable config.toml with mode 0600 and run
+      `spex init --harness codex` on a fresh git repository. Then overwrite that config with one that ends in a
+      line cut short mid-value (the shape a concurrent codex rewrite leaves when read mid-way), still 0600, and
+      run `spex materialize`.
     expected: >
-      The first init fails with a non-zero exit naming the config path and "does not parse as TOML", and the
+      After init the file carries this project's trust block, parses, and is still mode 0600. The materialize
+      against the truncated file exits non-zero naming the config path and "does not parse as TOML", and the
       file's bytes are identical before and after — nothing of SpexCode's is appended to a file codex could not
-      load. The second init succeeds, the file carries this project's trust block, and its mode is still 0600.
+      load, and no staging file is left beside it.
     test:
       path: spec-cli/src/harness.test.ts
       name: writeCodexTrust refuses to persist a config.toml that codex could not load, and replaces a good one without changing its mode

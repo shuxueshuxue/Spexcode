@@ -12,8 +12,10 @@ scenarios:
     description: >-
       Through the running dashboard's real Sessions route, select Conversation for a working session and feed
       the open seam's transcript stream normalized frames: a human message, prose, a completed call and a
-      running one; the running call's completion; a later prose turn; a turn with tools and no prose; then
-      prose equal to the newest agent message on the record. Between frames, expand and collapse the seam.
+      running one; the running call's completion; a later prose turn; a turn with tools and no prose; a
+      trailing run of seven calls across five tool-only turns with no prose, one turn firing three calls at
+      once, behind a human turn the record does not carry; the prose that answers that run; then prose equal
+      to the newest agent message on the record. Between frames, expand and collapse the seam.
     expected: >-
       The tail sits inside the open seam's row beneath its live line — no trace row, no card, no pop-out — and
       the seam's turn and call counts come from the same payload. The newest prose is agent prose on the page;
@@ -21,9 +23,14 @@ scenarios:
       mark; output stays folded until clicked and opens inline. A same-interval refresh keeps the open row and
       drops the settled call's running mark; a later prose turn replaces the compact view with that prose and
       the calls after it; a prose-less turn still shows its calls. Expanding the seam shows the whole interval
-      from the payload already held — every prose turn, the quoted human message, the still-running call, no
-      loading line — and the compact face leaves; collapsing brings it back. Prose the record already carries,
-      with nothing running, draws nothing. No page errors.
+      from the payload already held — every prose turn, the still-running call, no loading line — and the
+      compact face leaves; collapsing brings it back. The interval never quotes the message that opened the
+      seam (it is on the record one row above), while the human turn the record does not carry is quoted.
+      Work in progress never folds: the trailing run draws all seven calls as sentences in the collapsed face
+      and in the expanded interval alike, with no `N tool uses` row in either, at one even list spacing
+      across the turn boundaries; the moment the agent answers, the tail is that prose alone and the expanded
+      interval folds the seven calls behind it. Prose the record already carries, with nothing running, draws
+      nothing. No page errors.
   - name: conversation-is-the-only-headless-console
     tags: [frontend-e2e, desktop, mobile]
     description: >-

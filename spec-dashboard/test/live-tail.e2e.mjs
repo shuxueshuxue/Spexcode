@@ -180,7 +180,7 @@ try {
   assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 2, 'the answer\'s own call and the call after it stay in the open')
   await seam.locator('.m-seam-inset .tc-work-row').click()
   assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 2, 'opening the fold shows every prose turn')
-  assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 1, 'the full interval quotes the human message that opened it')
+  assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 0, 'the message that opened the seam is quoted on the record one row above, not again inside the interval')
   assert.equal(await seam.locator('.m-seam-inset .tc-tool-running').count(), 1, 'the running call is still running in the full view')
   assert.equal(await page.locator('.m-transcript-state').count(), 0, 'no loading line: the payload was already here')
   assert.equal(requests.filter((url) => !url.includes('/transcript/stream')).length, 0, 'the open seam issues no interval GET of its own')
@@ -202,6 +202,61 @@ try {
   await page.waitForTimeout(100)
   assert.equal(await tail.locator('.tc-say-text').count(), 0)
   assert.equal(await tail.locator('.tc-tool-running').count(), 1, 'tools before any prose still show')
+
+  // WORK IN PROGRESS NEVER FOLDS. In history a run of three or more calls folds to `N tool uses` — but the
+  // calls after the newest prose of a LIVE payload are what is happening, and a fold that says seven and
+  // shows none, under a seam line that already says seven, is the duplication a reader hits first. Every
+  // call in progress is a sentence in BOTH faces, and the run folds the moment the agent speaks.
+  const inProgress = [
+    { id: 'u1', at: 100, role: 'user', text: 'begin the next turn' },
+    // a human turn the record does not carry — typed into the harness itself — is still quoted in the interval
+    { id: 'u2', at: 13900, role: 'user', text: 'typed into the harness itself' },
+    { id: 'b1', at: 14000, role: 'assistant', tools: [{ id: 'w1', name: 'Grep', input: '{"pattern":"seam"}', output: 'x', outputLines: 1, outputBytes: 1 }] },
+    { id: 'b2', at: 14100, role: 'assistant', tools: [{ id: 'w2', name: 'Read', input: '{"file_path":"/repo/src/a.ts"}', output: 'x', outputLines: 1, outputBytes: 1 }] },
+    { id: 'b3', at: 14200, role: 'assistant', tools: [{ id: 'w3', name: 'Bash', input: '{"command":"npm test"}', output: 'ok', outputLines: 1, outputBytes: 2 }] },
+    { id: 'b4', at: 14300, role: 'assistant', tools: [{ id: 'w4', name: 'Bash', input: '{"command":"npm run lint"}', output: 'ok', outputLines: 1, outputBytes: 2 }] },
+    // one turn that fired three calls at once — the per-turn run fold's own trigger
+    { id: 'b5', at: 14400, role: 'assistant', tools: [
+      { id: 'w5', name: 'Read', input: '{"file_path":"/repo/src/b.ts"}', output: 'x', outputLines: 1, outputBytes: 1 },
+      { id: 'w6', name: 'Read', input: '{"file_path":"/repo/src/c.ts"}', output: 'x', outputLines: 1, outputBytes: 1 },
+      { id: 'w7', name: 'Read', input: '{"file_path":"/repo/src/d.ts"}', outputLines: 0, outputBytes: 0 },
+    ] },
+  ]
+  const emitTurns = (revision, turns) => page.evaluate(({ revision, turns }) => window.transcriptSource.emit('transcript', {
+    revision, from: window.transcriptFrom, to: window.transcriptFrom + 15500,
+    turns: turns.map((turn) => ({ ...turn, at: window.transcriptFrom + turn.at })),
+    truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
+  }), { revision, turns })
+  await emitTurns('fixture-4b', inProgress)
+  await page.waitForTimeout(100)
+  await page.screenshot({ path: `${OUT}/live-tail-in-progress.png` })
+  assert.equal(await seam.locator('.m-seam-detail').textContent(), '7 turns · 7 tool uses')
+  assert.equal(await tail.locator('.tc-work-row, .tc-tool-row.is-run').count(), 0, 'the work in progress is not folded behind a count')
+  assert.equal(await tail.locator('.tc-tool').count(), 7, 'every call in progress is a sentence')
+  assert.equal(await tail.locator('.tc-tool-running').count(), 1)
+  await seam.locator('.m-seam-row').click()
+  await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
+  await page.screenshot({ path: `${OUT}/live-tail-in-progress-expanded.png` })
+  assert.equal(await seam.locator('.m-seam-inset .tc-work-row, .m-seam-inset .tc-tool-row.is-run').count(), 0, 'the expanded live seam does not fold the work in progress either')
+  assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 7)
+  assert.deepEqual(await seam.locator('.m-seam-inset .tc-ask .m-ev-text').allTextContents(), ['typed into the harness itself'], 'only the human turn the record does not carry is quoted inside the interval')
+  // seven calls across five turns sit at one list spacing: no turn gap between consecutive tool-only turns
+  const rowTops = await seam.locator('.m-seam-inset .tc-tool-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().top))
+  const steps = rowTops.slice(1).map((top, index) => Math.round(top - rowTops[index]))
+  assert.ok(Math.max(...steps) - Math.min(...steps) <= 2, `consecutive calls are evenly spaced, got steps ${steps.join(',')}`)
+  await seam.locator('.m-seam-row').click()
+  await tail.waitFor({ state: 'visible', timeout: 5_000 })
+  // ...and the moment the agent answers, that work is process behind an answer: gone from the tail, folded in history
+  await emitTurns('fixture-4c', [...inProgress, { id: 'b6', at: 15000, role: 'assistant', text: 'Found the seam' }])
+  await page.waitForTimeout(100)
+  assert.equal(await tail.locator('.tc-say-text').textContent(), 'Found the seam')
+  assert.equal(await tail.locator('.tc-tool').count(), 0, 'the calls that produced the answer left the tail')
+  await seam.locator('.m-seam-row').click()
+  await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
+  assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^7 tool uses/, 'in history the same seven calls fold behind the answer')
+  await page.screenshot({ path: `${OUT}/live-tail-folded-after-answer.png` })
+  await seam.locator('.m-seam-row').click()
+  await tail.waitFor({ state: 'visible', timeout: 5_000 })
 
   // THE TAIL SAYS NOTHING THE RECORD ALREADY SAID: prose equal to the newest message on the record, with
   // nothing still running, draws nothing at all.

@@ -46,6 +46,14 @@ test('the shared Icon and IconButton contracts stay mechanically enforced', () =
   assert.match(iconSource, /console\.error\(`unknown icon: \$\{name\}`\)/)
 })
 
+test('headless launcher ids reuse their base harness marks', () => {
+  const harnessSource = readFileSync(join(srcDir, 'harness.jsx'), 'utf8')
+  assert.match(harnessSource, /export const harnessForId = \(id\) =>/)
+  assert.match(harnessSource, /id\.replace\(\/-headless\$\/, ''\)/)
+  assert.match(readFileSync(join(srcDir, 'Shell.jsx'), 'utf8'), /harnessForId\(launcher\.harness\)/)
+  assert.match(readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8'), /harnessForId\(l\.harness\)/)
+})
+
 // The explorer head's collapse door wears VS Code's OWN collapse-all Codicon (0.0.35, CC BY 4.0): the official
 // fill geometry, path for path, so the mark a VS Code reader already knows is exactly the one drawn here.
 test("the collapse-all mark is the official Codicon geometry, path for path", () => {

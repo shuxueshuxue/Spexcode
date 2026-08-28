@@ -62,6 +62,61 @@ test('an open interval re-read seeks to its first event and sees a still-running
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
 
+test('an open interval tail parses only what the harness appended, keys every turn, and starts over when the file shrinks', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CLAUDE_CONFIG_DIR', root, async () => {
+    const path = join(root, 'projects', 'fixture', 'tail-thread.jsonl')
+    mkdirSync(dirname(path), { recursive: true })
+    const from = T('00:00:00')
+    const tail = claudeTranscript.tail('tail-thread', from)
+    await assert.rejects(() => tail.advance(T('00:00:01')), /file was not found/, 'a tail opened before the thread exists fails as missing on advance')
+    writeFileSync(path, [
+      line({ type: 'assistant', timestamp: '2026-08-19T23:59:00.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'older stretch' }] } }),
+      line({ type: 'user', timestamp: '2026-08-20T00:00:00.000Z', message: { role: 'user', content: 'current prompt' } }),
+      line({ type: 'assistant', timestamp: '2026-08-20T00:00:05.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'run', name: 'Bash', input: { command: 'sleep 30' } }] } }),
+    ].join(''))
+    const first = await tail.advance(T('00:00:10'))
+    assert.deepEqual(first.turns.map((turn) => turn.role), ['user', 'assistant'])
+    assert.equal(first.turns[1]?.tools?.[0]?.output, undefined)
+    // a partial trailing line is still being written: it is carried, not parsed, until its newline lands
+    const result = line({ type: 'user', timestamp: '2026-08-20T00:00:36.000Z', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'run', content: 'done' }] } })
+    appendFileSync(path, result.slice(0, 40))
+    const partial = await tail.advance(T('00:00:40'))
+    assert.equal(partial.turns.length, 2)
+    assert.equal(partial.turns[1]?.tools?.[0]?.output, undefined)
+    appendFileSync(path, result.slice(40))
+    appendFileSync(path, line({ type: 'assistant', timestamp: '2026-08-20T00:00:37.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'after' }] } }))
+    const second = await tail.advance(T('00:01:00'))
+    assert.equal(second.turns[1]?.tools?.[0]?.output, 'done', 'the result joined the call from an earlier advance')
+    assert.deepEqual(second.turns.map((turn) => turn.text ?? null), ['current prompt', null, 'after'])
+    assert.ok(second.turns.every((turn) => typeof turn.id === 'string' && turn.id), 'every turn carries an id')
+    assert.deepEqual(second.turns.map((turn) => turn.id), first.turns.map((turn) => turn.id).concat(second.turns[2]!.id), 'ids are stable across advances')
+    // the same interval read one-shot agrees with the cursor
+    const whole = await claudeTranscript.read('tail-thread', { from, to: T('00:01:00') })
+    assert.deepEqual(whole.turns, second.turns)
+    // a rewritten (shorter) file is read afresh rather than from a stale position
+    writeFileSync(path, line({ type: 'user', timestamp: '2026-08-20T00:00:01.000Z', message: { role: 'user', content: 'rewritten' } }))
+    const fresh = await tail.advance(T('00:01:30'))
+    assert.deepEqual(fresh.turns.map((turn) => turn.text), ['rewritten'])
+    tail.close()
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
+test('a turn without a native id is keyed by its place in the thread', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CODEX_HOME', root, async () => {
+    const path = join(root, 'sessions', '2026', '08', '20', 'rollout-keyed-thread.jsonl')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, [
+      line({ timestamp: '2026-08-20T00:00:01.000Z', type: 'event_msg', payload: { type: 'user_message', message: 'go' } }),
+      line({ timestamp: '2026-08-20T00:00:02.000Z', type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'first' } }),
+      line({ timestamp: '2026-08-20T00:00:02.000Z', type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'second, same clock' } }),
+    ].join(''))
+    const read = await codexTranscript.read('keyed-thread', { from: T('00:00:00'), to: T('00:00:10') })
+    assert.deepEqual(read.turns.map((turn) => turn.id), [`user@${T('00:00:01')}`, `assistant@${T('00:00:02')}`, `assistant@${T('00:00:02')}#1`])
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
 test('codex transcript reader detects timestamp disorder inside its bounded post-range lookahead', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
   await withEnv('CODEX_HOME', root, async () => {

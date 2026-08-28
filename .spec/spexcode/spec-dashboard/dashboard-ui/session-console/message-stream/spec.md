@@ -22,8 +22,13 @@ an adapter-local observation read on demand ([[transcript-reader]]) and never co
 
 **The live tail IS the open seam.** A working record ends in one open seam ([[conversation]]); while the session
 is live, that seam subscribes to its interval's transcript stream ([[session-transcript]]) — `[from, now]`, the
-stretch the agent is working in, re-read by the server only when the native thread changed and pushed whole. The
-seam then has two faces of ONE payload. Collapsed, it draws the CURRENT TURN — the turns after the newest human
+stretch the agent is working in, advanced by the server only when the native thread changed and sent as what
+changed: the whole interval once, then only the turns that are new or changed, which the subscriber merges by
+turn id into the one complete payload the renderers read, so nothing that draws a turn knows the wire is
+incremental. A live frame carries no tool output bodies — a recorded result is `null` on the wire with its size
+— and a call opened in the seam fetches its body once for that session and interval, remembered while the
+session is on screen; a running call still has no output field at all. The seam then has two faces of ONE
+payload. Collapsed, it draws the CURRENT TURN — the turns after the newest human
 message in the interval (or the whole interval when the stretch was opened by the agent itself) — as its live
 tail, directly beneath the `working · 4m 12s` line. Expanded, it draws the whole interval in full — without
 re-quoting the message that opened it, which the record already quotes directly above ([[transcript-view]]) — and

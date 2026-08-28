@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elapsed } from './toolVocabulary.js'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
-import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionCommand, subscribeSessionTranscript } from './data.js'
+import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { richTextFromRange } from './RichText.js'
@@ -9,7 +9,7 @@ import 'katex/dist/katex.min.css'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import LiveTail from './LiveTail.jsx'
-import { Quote, TimelineRichText, timeOf, TranscriptPayload } from './Transcript.jsx'
+import { Quote, TimelineRichText, timeOf, TranscriptOutput, TranscriptPayload } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -295,6 +295,23 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const selectionDragRef = useRef(null)
   const timelineRangeRef = useRef(null)
   const copyStatusTimerRef = useRef(null)
+  // A LIVE FRAME WITHHOLDS OUTPUT BODIES: a call opened in the open seam fetches its body once, by session and
+  // interval, and the seam remembers it for as long as the session is on screen — reopening never refetches.
+  const outputCacheRef = useRef(new Map())    // `${from}:${toolId}` → the fetch's promise
+  const outputLoadersRef = useRef(new Map())  // seam start → its stable loader (a context value that never churns)
+  const loaderFor = (from) => {
+    let loader = outputLoadersRef.current.get(from)
+    if (!loader) {
+      loader = { load: (toolId) => {
+        const key = `${from}:${toolId}`
+        let pending = outputCacheRef.current.get(key)
+        if (!pending) { pending = loadSessionTranscriptTool(s.id, from, toolId); outputCacheRef.current.set(key, pending) }
+        return pending
+      } }
+      outputLoadersRef.current.set(from, loader)
+    }
+    return loader
+  }
   // THE OPEN TAIL'S INTERVAL ENDS AT THE LATEST POLL. It used to end at mount time so the transcript key
   // stayed stable — which also meant an EXPANDED live seam never re-read: its `0 turns · 0 tool uses` froze
   // the moment it opened and nothing the agent did afterwards was inside the interval. The end now moves
@@ -327,7 +344,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return () => clearInterval(iv)
   }, [ticking])
   useEffect(() => {
-    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
   }, [s.id])
   useEffect(() => {
     if (!active) return undefined
@@ -354,8 +371,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
 
   const items = useMemo(() => conversationItems(events || [], pollNow), [events, pollNow])
   // THE OPEN SEAM STREAMS. A working record ends in an open seam; while the session is live that seam
-  // subscribes to its interval's stream — the server re-reads the native thread only when it changed and
-  // pushes the whole normalized payload — so the collapsed live tail and the expanded transcript are one
+  // subscribes to its interval's stream — the server advances the native thread only when it changed and
+  // pushes what changed, merged by turn id in the subscriber — so the collapsed live tail and the expanded transcript are one
   // read, refreshed the instant the agent acts rather than on the next poll. The seam's start is the
   // subscription's identity: a later message opens a new seam and a new stream.
   const openSeam = items.length && items[items.length - 1].kind === 'seam' && items[items.length - 1].open ? items[items.length - 1] : null
@@ -675,16 +692,18 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               {/* the chevron TRAILS, as on every disclosure in the conversation: content first, one shape says open */}
               <Caret open={expanded} className="m-seam-caret" />
             </button>
-            {expanded && (
-              <div className="m-seam-inset">
-                {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
-                {transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
-                {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} live={streamed} opener={opener} />}
-              </div>
-            )}
-            {/* THE LIVE TAIL: the open seam's collapsed face — the current turn, in the conversation's own
-                grammar, from the same streamed payload the expanded seam shows in full */}
-            {streamed && !expanded && <LiveTail key={seamId} data={tail} lastSaid={lastSaid} />}
+            <TranscriptOutput.Provider value={loaderFor(item.from)}>
+              {expanded && (
+                <div className="m-seam-inset">
+                  {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
+                  {transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
+                  {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} live={streamed} opener={opener} />}
+                </div>
+              )}
+              {/* THE LIVE TAIL: the open seam's collapsed face — the current turn, in the conversation's own
+                  grammar, from the same streamed payload the expanded seam shows in full */}
+              {streamed && !expanded && <LiveTail key={seamId} data={tail} lastSaid={lastSaid} />}
+            </TranscriptOutput.Provider>
           </div>
         </div>,
       )

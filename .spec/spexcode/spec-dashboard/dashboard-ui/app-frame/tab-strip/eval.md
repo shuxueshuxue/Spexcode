@@ -41,8 +41,9 @@ scenarios:
       own colour under the active tab (joined, no line) and a divider under an inactive tab and in the empty
       band; the strip owns that rule as an inset at its bottom edge and the content host owns no top border, on
       the shell strip and on the session document's strip alike. Explorer and Sessions group headings expose
-      the same 1px divider rule, with no negative geometry, overlap, or horizontal overflow at either viewport.
-      The tab strip bottom and content host top share one y coordinate.
+      the same 1px divider rule; Explorer adds no extra full-width border between its sections, with no negative
+      geometry, overlap, or horizontal overflow at either viewport. The tab strip bottom and content host top
+      share one y coordinate.
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/styles.css]
     test: spec-dashboard/test/divider-geometry.e2e.mjs

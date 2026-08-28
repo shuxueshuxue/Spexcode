@@ -176,7 +176,8 @@ test('seams and group heads use one divider rule', () => {
   // and the content host under it owns no second line
   assert.match(css, /\.tabstrip\s*\{\s*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/)
   assert.doesNotMatch(css, /\.viewhost\s*\{[^}]*border-top:/s)
-  assert.match(css, /\.ft-section \+ \.ft-section\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  assert.match(css, /\.ft-section \+ \.ft-section\s*\{[^}]*margin-top:\s*var\(--space-2\);/s)
+  assert.doesNotMatch(css, /\.ft-section \+ \.ft-section\s*\{[^}]*border-top:/s)
   // the three zone heads (dock, console, phone) trail ONE rule — one declaration, not three copies of it
   assert.match(css, /\.dock-session-zone::after, \.si-zone::after, \.m-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
   assert.equal(css.match(/zone::after\s*\{/g)?.length ?? 0, 1)

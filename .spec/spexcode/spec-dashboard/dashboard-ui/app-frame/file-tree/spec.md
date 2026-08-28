@@ -75,7 +75,8 @@ above, and it cost a chrome band to give.
 
 **The explorer shows TWO sections, and they are two projections of one project.** SPECS is this tree and FILES
 is the disk listed as the disk ([[disk-tree]]). Both are always mounted and identified by static `.si-zone`
-heads: a count pod, sentence-case label, and trailing hairline. There is no section-level disclosure state or
+heads: a count pod, sentence-case label, and trailing hairline. The heads' trailing hairlines are the only
+boundary between the sections; the explorer does not add a second full-width divider. There is no section-level disclosure state or
 localStorage preference; only a spec node or disk directory can disclose its own children. The explorer head's
 collapse-folders door still folds those child ledgers together, leaving both zone heads and their roots visible.
 

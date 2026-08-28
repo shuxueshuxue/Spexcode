@@ -120,7 +120,7 @@ try {
       assert.equal(specGeometry.stripBottom, '0px', `${viewport.name}: the strip draws its rule as a border, not the band's inset`)
       assert.match(specGeometry.seam.boxShadow, /inset/, `${viewport.name}: the band owns no inset hairline`)
       assert.equal(specGeometry.hostTop, '0px', `${viewport.name}: the content host still owns a top divider — two owners for one seam`)
-      assert.equal(specGeometry.groupTop, '1px', `${viewport.name}: explorer group has no shared divider`)
+      assert.equal(specGeometry.groupTop, '0px', `${viewport.name}: explorer has an extra section divider`)
       assert.equal(specGeometry.seam.seam.active.joined, true, `${viewport.name}: a line runs under the active tab (${JSON.stringify(specGeometry.seam.seam.active)})`)
       assert.equal(specGeometry.seam.seam.band?.ruled, true, `${viewport.name}: no hairline in the empty band (${JSON.stringify(specGeometry.seam.seam.band)})`)
     }

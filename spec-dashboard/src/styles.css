@@ -480,7 +480,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 
 /* the explorer's two projections ([[file-tree]], [[disk-tree]]) share the session list's zone grammar. Their
    static heads carry a count pod, label, and trailing hairline; only rows inside them disclose folders. */
-.ft-section + .ft-section { border-top: var(--divider-rule); margin-top: var(--space-2); }
+.ft-section + .ft-section { margin-top: var(--space-2); }
 .ft-section-head {
   width: 100%;
 }

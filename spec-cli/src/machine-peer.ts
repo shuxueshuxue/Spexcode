@@ -83,13 +83,17 @@ export function readPeerMachineId(): string {
   return machineId
 }
 
+// @@@ peer sender spelling - the authenticated peer identity travels as the message's ordinary `senderSessionId`,
+// so it must fit the protocol's frozen session_id grammar `[0-9A-Za-z_][0-9A-Za-z_-]*` (session-protocol §5.2:
+// no `:`, no leading `-`; namespaces are encoded INTO the id). `peer_<machineId>_<sessionId>` is that encoding;
+// the earlier `peer:` spelling was refused by every receiving backend with PROTOCOL_SESSION_ID_INVALID.
 export function peerSenderRef(machineId: string, sessionId?: string): string {
-  return sessionId && validMachineId(sessionId) ? `peer:${machineId}:${sessionId}` : `peer:${machineId}`
+  return sessionId && validMachineId(sessionId) ? `peer_${machineId}_${sessionId}` : `peer_${machineId}`
 }
 
 function validPeerSender(value: unknown, machineId: string): value is string {
   if (typeof value !== 'string') return false
-  const match = value.match(/^peer:([0-9a-f-]{36})(?::([0-9a-f-]{36}))?$/i)
+  const match = value.match(/^peer_([0-9a-f-]{36})(?:_([0-9a-f-]{36}))?$/i)
   return !!match && match[1] === machineId && (match[2] === undefined || validMachineId(match[2]))
 }
 

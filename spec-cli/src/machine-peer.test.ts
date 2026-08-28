@@ -120,11 +120,11 @@ test('a peer ingress derives one local project then uses its ordinary session in
     assert.ok(accepted.ok && accepted.peer)
     const peer = accepted.peer
     const response = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/input`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'hello', from: `peer:${SOURCE}:${SOURCE}` }),
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'hello', from: `peer_${SOURCE}_${SOURCE}` }),
     })
     assert.equal(response.status, 200)
     assert.deepEqual(received, [{
-      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'hello', from: `peer:${SOURCE}:${SOURCE}` },
+      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'hello', from: `peer_${SOURCE}_${SOURCE}` },
     }])
 
     const claimed = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/input`, {
@@ -132,7 +132,7 @@ test('a peer ingress derives one local project then uses its ordinary session in
     })
     assert.equal(claimed.status, 200)
     assert.deepEqual(received[1], {
-      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'claim', from: `peer:${SOURCE}` },
+      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'claim', from: `peer_${SOURCE}` },
     })
 
     const shown = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}`)
@@ -258,9 +258,9 @@ test('a known peer makes client send use its forward and missing peers fail befo
       res.end(JSON.stringify({ ok: true }))
     })
     await listen(forward, peer.outboundPort)
-    assert.deepEqual(await clientSendThroughPeer('peer-fixture', SESSION, 'through tunnel', `peer:${SOURCE}:${SOURCE}`), { ok: true })
+    assert.deepEqual(await clientSendThroughPeer('peer-fixture', SESSION, 'through tunnel', `peer_${SOURCE}_${SOURCE}`), { ok: true })
     assert.deepEqual(received, [{
-      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'through tunnel', from: `peer:${SOURCE}:${SOURCE}` },
+      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'through tunnel', from: `peer_${SOURCE}_${SOURCE}` },
     }])
     assert.deepEqual(await clientSendThroughPeer('peer-fixture', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'missing'), {
       ok: false, error: 'no local project owns that session',

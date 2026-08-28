@@ -12,13 +12,13 @@ import 'katex/dist/katex.min.css'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
+import { conversationItems, splitEnvelope } from './conversationItems.js'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
 const timeOf = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 const dayOf = (ts) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
 const dayKey = (ts) => new Date(ts).toDateString()
-const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 
 const transcriptCache = new Map()
 
@@ -38,44 +38,6 @@ function TimelineRichText({ children, className = '' }) {
 function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
 // The interval end moves when a later event closes the seam; expansion belongs to the seam itself.
 function seamKey(sessionId, from) { return `${sessionId}:${from}` }
-
-// The envelope `spex session send` appends is addressing, not what the peer said. The server's one prompt
-// seam still ships it inside the text, so this surface strips it to render the message and keeps only the
-// sender name it carries; the record itself is untouched.
-const ENVELOPE = /\n*— from session (?:"(.*?)" \(([^\s)]+)\)|(\S+))(?: on machine \S+)?\. To reply: spex session send (?:--ssh \S+ )?\S+ "<your reply>"\s*$/
-function splitEnvelope(text) {
-  const m = ENVELOPE.exec(text || '')
-  if (!m) return { text, envelope: null }
-  return { text: text.slice(0, m.index), envelope: { label: m[1] || null, id: m[2] || m[3] } }
-}
-
-// MESSAGES, SEAMS, AND EVENTS — the three things on this page, in wire order. The status machine wrote the
-// timeline (`working` ↔ `asking` ↔ `working` …), but a reader is not reading the machine: a run of bare
-// `working` events is one stretch in which the agent said nothing and worked, so it becomes one SEAM that
-// carries the transcript for exactly that interval. Anything said — a note, a sent message — is a message;
-// `error` and `corrupt` are events that happened, not phases that lasted. The tail seam is still open: its
-// interval ends at the mount-time `now` so the transcript key stays stable across polls.
-function conversationItems(events, transcriptNow) {
-  const items = []
-  let seam = null
-  const close = (to, open = false) => {
-    if (seam) items.push({ ...seam, to, open })
-    seam = null
-  }
-  for (const event of events) {
-    const status = event.display || event.status
-    if (event.kind === 'status' && status === 'working' && !event.note) {
-      seam ??= { kind: 'seam', ts: event.ts, from: epochOf(event.ts) }
-      continue
-    }
-    close(epochOf(event.ts))
-    if (event.kind === 'sent') items.push({ kind: 'quote', ts: event.ts, from: event.from, ...splitEnvelope(event.text) })
-    else if (status === 'error' || status === 'corrupt') items.push({ kind: 'event', ts: event.ts, status, text: event.note })
-    else items.push({ kind: 'say', ts: event.ts, status, text: event.note })
-  }
-  if (seam) close(Math.max(seam.from + 1, transcriptNow), true)
-  return items
-}
 
 // A long quote is clamped at first sight — the conversation is about what came after it. The trigger is the
 // text itself rather than a measured height, so the row never reflows after paint.

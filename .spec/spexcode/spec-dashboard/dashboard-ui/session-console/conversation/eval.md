@@ -122,6 +122,24 @@ scenarios:
       The working session's composer carries one stop square left of send — a BUTTON with a tooltip and an
       aria-label, the same 26px square as send — and pressing it posts exactly one interrupt for that session
       through the one verb. The asking session's composer carries no stop control at all. No page errors.
+  - name: a-working-agent-always-ends-with-an-open-seam
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/conversation-working-tail.e2e.mjs]
+    description: >-
+      In a real browser open the Conversation of fixture sessions whose timelines are the shapes the status
+      machine really writes: a message into an awaiting session followed by its `active` event; a SECOND
+      message into the now-active session, which leaves no status event behind; a message into a working
+      agent that later asks; an `active` event carrying a note, then asking; a peer message into an asking
+      session; an error, a message, and the re-entry; and an offline record whose last word is working. Read
+      the rows after the prompt in order — seam (live or closed, its lead), message, say, line — and click
+      the live tail to open it.
+    expected: >-
+      Whenever the session is working, the last row is one live seam reading `working · <duration>` that
+      opens on click; a seam sits after every message or note that landed on a working agent, mid-history
+      as well as at the tail, so no stretch of work is left without its disclosure. A message that lands on
+      an agent that is not working claims no seam; an error line carries none before it; the offline
+      record's tail reads the bare word `working`. The shapes that were already right render exactly as
+      before.
 ---
 # measuring conversation
 

@@ -25,8 +25,9 @@ is live, that seam subscribes to its interval's transcript stream ([[session-tra
 stretch the agent is working in, re-read by the server only when the native thread changed and pushed whole. The
 seam then has two faces of ONE payload. Collapsed, it draws the CURRENT TURN — the turns after the newest human
 message in the interval (or the whole interval when the stretch was opened by the agent itself) — as its live
-tail, directly beneath the `working · 4m 12s` line. Expanded, it draws the whole interval in full, and the
-collapsed face steps aside, so nothing is ever drawn twice. There is no separate row after the seam, no card, no
+tail, directly beneath the `working · 4m 12s` line. Expanded, it draws the whole interval in full — without
+re-quoting the message that opened it, which the record already quotes directly above ([[transcript-view]]) — and
+the collapsed face steps aside, so nothing is ever drawn twice. There is no separate row after the seam, no card, no
 door, no pop-out, and no second server projection of "the latest note and its steps": the browser derives the
 current turn from the same normalized turns the history reads in.
 
@@ -34,7 +35,10 @@ current turn from the same normalized turns the history reads in.
 call after it — the process that produced earlier prose has already folded into the history the expanded seam
 keeps — and draws them in the transcript's own grammar: prose as the page at the prose size, each call as the
 same tool sentence the folded history uses. Before any prose, the calls themselves are the news: a turn that
-opens with tools and no words (Claude Code's usual shape) is not blank, it is working. What reads as live is a
+opens with tools and no words (Claude Code's usual shape) is not blank, it is working. Those calls never fold,
+whatever their number: the seam line above already counts them, and a fold's one job — hiding the process behind
+an answer — has no object while there is no answer yet ([[transcript-view]]); they leave the compact face the
+moment the agent speaks, when they become that answer's history. What reads as live is a
 caret at the newest prose and a spinner on a running call — a call is running exactly while the harness has
 recorded no result for it — and nothing else; reduced motion stills both. Output stays folded until asked, each
 call opening inline and independently; a refresh of the same interval keeps what the reader opened, because

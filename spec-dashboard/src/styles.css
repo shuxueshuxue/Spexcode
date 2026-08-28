@@ -2889,6 +2889,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    containers. A chat has almost no chrome — the turns' own shapes carry the structure, and whitespace does
    the separating. What is left here is the smallest set of marks that still says who spoke.               */
 .tc-flow { display: flex; flex-direction: column; gap: var(--space-6); }
+/* consecutive tool-only turns are ONE list of calls: the harness draws a turn boundary around every call it
+   makes, and that boundary is not a paragraph break — seven calls in seven turns read at the same list
+   spacing as seven calls in one, in the opened interval and in an opened fold alike */
+.tc-flow > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - var(--space-6)); }
+.tc-work-body > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - 14px); }
 /* the person is QUOTED with the same bubble the outer conversation uses (`.m-quote`), one step smaller
    because it is nested; the agent IS the page — full width, no bubble, no tint. */
 .tc-ask { align-self: flex-end; }

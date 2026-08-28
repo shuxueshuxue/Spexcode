@@ -1,18 +1,5 @@
 import { useMemo } from 'react'
-import { isRunning, TranscriptTurns, useDisclosure } from './Transcript.jsx'
-
-const squash = (text) => (text || '').replace(/\s+/g, ' ').trim()
-
-// THE LIVE TAIL SAYS NOTHING THE RECORD ALREADY SAID. The tail's note is the agent's newest prose in the
-// current turn; the moment the agent declares that prose as its status note, the durable timeline draws it as
-// a message one row above — and the same sentence twice, once as history and once as "now", is the duplication
-// a reader notices first. The note is elided when the newest message already carries it (the backend clips a
-// note at 240 chars, so either side may be the prefix of the other).
-export const noteAlreadySaid = (note, said) => {
-  const n = squash(note).replace(/(\.\.\.|…)$/, '')
-  const s = squash(said)
-  return !!n && !!s && (s.startsWith(n) || n.startsWith(s))
-}
+import { alreadySaid, isRunning, TranscriptTurns, useDisclosure } from './Transcript.jsx'
 
 // the current turn: everything after the newest human message inside the interval (or the whole interval
 // when the stretch was opened by the agent itself and no message sits in it)
@@ -39,7 +26,9 @@ export default function LiveTail({ data, lastSaid = null }) {
   const [openIds, toggle] = useDisclosure()
   const slice = useMemo(() => (data?.turns ? liveSlice(data.turns) : []), [data])
   if (!slice.length) return null
-  const repeated = noteAlreadySaid(slice[0].text, lastSaid)
+  // THE LIVE TAIL SAYS NOTHING THE RECORD ALREADY SAID: the moment the agent declares its newest prose as its
+  // status note, the durable timeline draws it as a message one row above, so the tail elides it
+  const repeated = alreadySaid(slice[0].text, lastSaid)
   const running = slice.some((turn) => (turn.tools || []).some((tool) => isRunning(tool, true)))
   // said, and nothing still running: the record has the words and the seam above keeps the folded history
   if (repeated && !running) return null

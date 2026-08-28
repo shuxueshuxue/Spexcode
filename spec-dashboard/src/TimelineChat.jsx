@@ -659,6 +659,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           : `${t('mobile.worked')} ${elapsed(item.to - item.from)}`
       const calls = transcript?.state === 'ready'
         ? transcript.data.turns.reduce((n, turn) => n + (turn.tools?.length || 0), 0) : 0
+      // the message that opened this seam is quoted on the record one row above; the interval does not quote it again
+      const opener = i > 0 ? (items[i - 1].kind === 'quote' ? items[i - 1].text : null) : detail?.prompt || null
       rows.push(
         <div className="m-ev m-ev-seam" key={i}>
           <div className="m-gut" />
@@ -675,7 +677,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               <div className="m-seam-inset">
                 {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
                 {transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
-                {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} live={streamed} />}
+                {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} live={streamed} opener={opener} />}
               </div>
             )}
             {/* THE LIVE TAIL: the open seam's collapsed face — the current turn, in the conversation's own

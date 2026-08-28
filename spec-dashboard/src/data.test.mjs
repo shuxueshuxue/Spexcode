@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { graphTitles, layout, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
+import { graphTitles, layout, loadGraph, singleLayerFrontier, viewportForFocus, CAMERA_ANCHOR_RATIO, CAMERA_GUTTER, X_GAP, Y_GAP } from './data.js'
 
 const tree = [
   { id: 'root', parent: null },
@@ -11,6 +11,19 @@ const tree = [
   { id: 'b1', parent: 'b' },
   { id: 'a1x', parent: 'a1' },
 ]
+
+test('loadGraph rejects a 503 payload so the shell can render its retry panel', async () => {
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: 'graph build timed out' }), {
+    status: 503,
+    headers: { 'content-type': 'application/json' },
+  })
+  try {
+    await assert.rejects(loadGraph(), /graph build timed out/)
+  } finally {
+    globalThis.fetch = previousFetch
+  }
+})
 
 test('single-layer frontier opens only the focused branch', () => {
   const expanded = new Set(['root', 'a'])

@@ -241,6 +241,13 @@ export async function loadGraph() {
     const body = await res.json().catch(() => null)
     return { authRequired: body?.reason || 'project-login' }
   }
+  // A gateway/build failure is still an HTTP failure. Do not pass its error payload through as a board:
+  // doing so leaves `board` undefined, suppresses the fail-loud boot panel, and makes the retry action look
+  // inert while the app remains in its loading state.
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error || `graph load failed (${res.status})`)
+  }
   const tag = res.headers.get('etag') || ''
   const board = await res.json()
   return { board, seal: () => { boardTag = tag } }

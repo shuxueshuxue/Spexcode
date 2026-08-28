@@ -92,6 +92,19 @@ scenarios:
       unless that cause was actually proven. Bounded fast-exit retry remains intact.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/sessions.test.ts
+  - name: launch-readiness-warning-preserves-declaration
+    tags: [backend-api]
+    description: >
+      Through a real backend running this code, let a session publish its launch transition and then declare a
+      proposal with a note before the bounded post-receipt readiness observer times out. Read the session record,
+      board projection, parent-watch delivery, and timeline after the timeout.
+    expected: >
+      The timeout is treated as a launch-phase diagnostic only while no later authored lifecycle event exists.
+      Once the session has declared, the late warning is moot: it is not recorded, the declaration note remains
+      the current note on every surface, and no warning status event or parent-watch transition is emitted. The
+      readiness probe remains the adapter's normal bounded liveness check; increasing its timeout is not the fix.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
   - name: deterministic-launch-failure-fails-once
     tags: [backend-api]
     description: >

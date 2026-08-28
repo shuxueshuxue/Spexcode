@@ -33,7 +33,7 @@ export const isQuietTool = (name) => QUIET.has(name)
 // The target, from the call's own arguments. `input` is the raw JSON of the arguments (or a bare string),
 // so this reads the field the tool actually names and shows NOTHING when it cannot — a wrong target is
 // worse than no target, and a truncated blob of JSON is not a target at all.
-const TARGET_KEYS = ['file_path', 'path', 'notebook_path', 'pattern', 'query', 'command', 'cmd', 'url', 'description']
+const TARGET_KEYS = ['file_path', 'filePath', 'path', 'notebook_path', 'pattern', 'query', 'command', 'cmd', 'url', 'description']
 export function toolTarget(input) {
   if (typeof input !== 'string' || !input) return null
   let parsed = null

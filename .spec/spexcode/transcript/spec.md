@@ -33,6 +33,7 @@ handed over from memory. Two sources implement the reader verbs over those parse
 the native thread file each harness writes, and [[live-transcript]] over the native events a headless controller
 already holds. [[transcript-frames]] is the wire: what a subscriber receives from an open interval, when a frame
 is worth sending, and how the subscriber merges it back — producer and consumer halves in one module.
+[[transcript-ui]] is the sibling package that draws what this one reads.
 
 **Two entries.** `.` is the Node entry and exports everything. `./frames` exports only `turns.ts` and
 `frames.ts`, whose module graph has no `node:` import, so a browser bundle or an Electron renderer merges frames

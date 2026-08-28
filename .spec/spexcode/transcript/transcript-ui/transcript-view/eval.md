@@ -3,7 +3,7 @@ scenarios:
   - name: a-seam-draws-the-agents-work-not-the-conversation
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/transcript-dedup.e2e.mjs
-    code: spec-dashboard/src/Transcript.jsx
+    code: packages/transcript-ui/src/TranscriptView.tsx
     related:
       - spec-dashboard/src/TimelineChat.jsx
       - spec-dashboard/src/styles.css

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import Root from './Root.jsx'
 import { I18nProvider } from './i18n/index.jsx'
 import { legacyProjectsRedirect } from './project.js'
+import '@spexcode/transcript-ui/styles.css'
 import './styles.css'
 
 // the ReactFlowProvider lives in GraphView.jsx — hoisting it here would drag xyflow into the entry

@@ -52,8 +52,8 @@ that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repai
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.
 
-The repository holds the transcript package `@spexcode/transcript` ([[transcript]]; Node >= 18, the one
-package whose floor is set by the Electron adopters it is published for), the runtime package stack `@spexcode/session-protocol`, `@spexcode/session-events`,
+The repository holds the transcript packages `@spexcode/transcript` and `@spexcode/transcript-ui` ([[transcript]],
+[[transcript-ui]]; Node >= 18, the packages whose floor is set by the Electron adopters they are published for), the runtime package stack `@spexcode/session-protocol`, `@spexcode/session-events`,
 `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-application`, and
 `@spexcode/session-selflaunch`, alongside the product packages `@spexcode/spec-core`, `@spexcode/spec-eval`,
 `@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name real package

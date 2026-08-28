@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { elapsed } from './toolVocabulary.js'
+import { LiveTail, Quote, TranscriptView, elapsed, timeOf } from '@spexcode/transcript-ui'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
@@ -8,8 +8,7 @@ import { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { Caret, Icon, IconButton } from './icons.jsx'
-import LiveTail from './LiveTail.jsx'
-import { Quote, TimelineRichText, timeOf, TranscriptOutput, TranscriptPayload } from './Transcript.jsx'
+import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -17,7 +16,7 @@ import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js
 import { inboxCommands } from './sessionCommands.js'
 
 // a short date for the day separators the timeline inserts when the calendar day flips between
-// neighbouring events; the row time itself is the transcript's (./Transcript.jsx).
+// neighbouring events; the row time itself is the transcript's (`timeOf`, @spexcode/transcript-ui).
 const dayOf = (ts) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
 const dayKey = (ts) => new Date(ts).toDateString()
 
@@ -138,7 +137,7 @@ const lineRangeAtPoint = (timeline, clientX, clientY) => {
   const point = rangeAtPoint(timeline, clientX, clientY)
   const node = point?.startContainer
   const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement
-  const line = element?.closest('.m-ev-note, .m-ev-text')
+  const line = element?.closest('.m-ev-note, .tx-quote-text')
   if (!line || !timeline.contains(line)) return null
   const range = document.createRange()
   range.selectNodeContents(line)
@@ -305,12 +304,12 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const loaderFor = (from) => {
     let loader = outputLoadersRef.current.get(from)
     if (!loader) {
-      loader = { load: (toolId) => {
+      loader = (toolId) => {
         const key = `${from}:${toolId}`
         let pending = outputCacheRef.current.get(key)
         if (!pending) { pending = loadSessionTranscriptTool(s.id, from, toolId); outputCacheRef.current.set(key, pending) }
-        return pending
-      } }
+        return pending.then((result) => (result.ok ? { ok: true, output: result.data?.output ?? null } : { ok: false, error: result.error }))
+      }
       outputLoadersRef.current.set(from, loader)
     }
     return loader
@@ -710,18 +709,18 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               {/* the chevron TRAILS, as on every disclosure in the conversation: content first, one shape says open */}
               <Caret open={expanded} className="m-seam-caret" />
             </button>
-            <TranscriptOutput.Provider value={loaderFor(item.from)}>
+            <DashboardTranscriptUi loadToolOutput={loaderFor(item.from)}>
               {expanded && (
                 <div className="m-seam-inset">
                   {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
                   {transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
-                  {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} live={streamed} />}
+                  {transcript?.state === 'ready' && <TranscriptView data={transcript.data} live={streamed} />}
                 </div>
               )}
               {/* THE LIVE TAIL: the open seam's collapsed face — the current turn, in the conversation's own
                   grammar, from the same streamed payload the expanded seam shows in full */}
-              {streamed && !expanded && <LiveTail key={seamId} data={tail} lastSaid={lastSaid} />}
-            </TranscriptOutput.Provider>
+              {streamed && !expanded && <LiveTail key={seamId} turns={tail?.turns} revision={tail?.revision} lastSaid={lastSaid} />}
+            </DashboardTranscriptUi>
           </div>
         </div>,
       )
@@ -729,6 +728,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }
 
   return (
+    <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
         onMouseDown={beginTimelineSelection}>
@@ -748,5 +748,6 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
         onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
         specs={specs} sessions={sessions} boardCommands={boardCommands} />
     </div>
+    </DashboardTranscriptUi>
   )
 }

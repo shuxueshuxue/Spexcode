@@ -51,10 +51,10 @@ try {
         for (const node of mutation.addedNodes) {
           if (!(node instanceof Element)) continue
           if (window.firstSeen.rows === null && (node.matches('.m-ev') || node.querySelector('.m-ev'))) window.firstSeen.rows = performance.now()
-          if (window.firstSeen.live === null && (node.matches('.m-live') || node.querySelector('.m-live'))) window.firstSeen.live = performance.now()
+          if (window.firstSeen.live === null && (node.matches('.tx-live') || node.querySelector('.tx-live'))) window.firstSeen.live = performance.now()
         }
         for (const node of mutation.removedNodes) {
-          if (node instanceof Element && (node.matches('.m-live') || node.querySelector('.m-live'))) window.firstSeen.liveRemoved++
+          if (node instanceof Element && (node.matches('.tx-live') || node.querySelector('.tx-live'))) window.firstSeen.liveRemoved++
         }
       }
     }).observe(document, { childList: true, subtree: true })   // the root element does not exist yet at init time
@@ -112,7 +112,7 @@ try {
   await page.route(`**/api/sessions/${SESSION_ID}/transcript/tool/run?*`, json({ id: 'run', output: 'done', outputLines: 1, outputBytes: 4 }))
   await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION_ID)}?surface=conversation`, { waitUntil: 'domcontentloaded' })
   const seam = page.locator('.m-ev-seam').last()
-  const tail = seam.locator('.m-live')
+  const tail = seam.locator('.tx-live')
   await tail.waitFor({ state: 'visible', timeout: 30_000 })
 
   // ONE FIRST PAINT: the rows and the tail reach the DOM together, not the rows first and the tail a frame later
@@ -128,38 +128,38 @@ try {
   assert.equal(await seam.locator('.m-seam-detail').textContent(), '2 turns · 2 tool uses', 'the seam counts from the streamed payload')
 
   // the newest prose is the page: prose size, no border, no well
-  const note = tail.locator('.tc-say-text')
+  const note = tail.locator('.tx-say-text')
   assert.equal(await note.textContent(), 'Inspecting the live tail')
   const noteStyle = await note.evaluate((element) => {
     const style = getComputedStyle(element); return { fontSize: style.fontSize, border: style.borderStyle, background: style.backgroundColor }
   })
   assert.equal(noteStyle.border, 'none')
   assert.equal(noteStyle.background, 'rgba(0, 0, 0, 0)', 'the note sits on the page, not in a well')
-  assert.equal(await tail.locator('.tc-ask').count(), 0, 'the human message that opened the turn is on the record above, not repeated in the tail')
+  assert.equal(await tail.locator('.tx-ask').count(), 0, 'the human message that opened the turn is on the record above, not repeated in the tail')
 
   // each call is a transcript sentence; the one without a result is running
-  const rows = tail.locator('.tc-tool')
+  const rows = tail.locator('.tx-tool')
   assert.equal(await rows.count(), 2)
-  assert.equal(await rows.nth(0).locator('.tc-tool-running').count(), 0, 'a call with its result carries no running mark')
-  assert.equal(await rows.nth(1).locator('.tc-tool-running').count(), 1, 'the call without a result says running')
-  const rowWidth = await rows.nth(0).locator('.tc-tool-row').evaluate((element) => element.getBoundingClientRect().width)
+  assert.equal(await rows.nth(0).locator('.tx-tool-running').count(), 0, 'a call with its result carries no running mark')
+  assert.equal(await rows.nth(1).locator('.tx-tool-running').count(), 1, 'the call without a result says running')
+  const rowWidth = await rows.nth(0).locator('.tx-tool-row').evaluate((element) => element.getBoundingClientRect().width)
   const tailWidth = await tail.evaluate((element) => element.getBoundingClientRect().width)
   assert.ok(rowWidth < tailWidth, 'a call is a sentence, not a bar')
   // output stays folded until asked; the completed call opens inline and independently — its body arrives by
   // one fetch for that call, because the live frame carried only its size
-  assert.equal(await tail.locator('.tc-tool-out').count(), 0)
-  await rows.nth(0).locator('.tc-tool-row').click()
-  assert.equal(await rows.nth(0).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true')
-  await tail.locator('pre.tc-tool-out').waitFor({ state: 'visible', timeout: 5_000 })
-  assert.equal(await rows.nth(0).locator('.tc-tool-in').textContent(), '{"file_path":"/repo/src/trace.ts"}', 'expanded call shows its parameters')
-  assert.equal(await tail.locator('pre.tc-tool-out').textContent(), 'export const x = 1')
+  assert.equal(await tail.locator('.tx-tool-out').count(), 0)
+  await rows.nth(0).locator('.tx-tool-row').click()
+  assert.equal(await rows.nth(0).locator('.tx-tool-row').getAttribute('aria-expanded'), 'true')
+  await tail.locator('pre.tx-tool-out').waitFor({ state: 'visible', timeout: 5_000 })
+  assert.equal(await rows.nth(0).locator('.tx-tool-in').textContent(), '{"file_path":"/repo/src/trace.ts"}', 'expanded call shows its parameters')
+  assert.equal(await tail.locator('pre.tx-tool-out').textContent(), 'export const x = 1')
   assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 1, 'one body fetch, for the one call opened')
 
   // a running call has no result body yet, but its recorded parameters remain inspectable
-  await rows.nth(1).locator('.tc-tool-row').click()
-  assert.equal(await rows.nth(1).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true')
-  assert.equal(await rows.nth(1).locator('.tc-tool-in').textContent(), '{"command":"npm test"}')
-  assert.equal(await rows.nth(1).locator('.tc-tool-out').count(), 0)
+  await rows.nth(1).locator('.tx-tool-row').click()
+  assert.equal(await rows.nth(1).locator('.tx-tool-row').getAttribute('aria-expanded'), 'true')
+  assert.equal(await rows.nth(1).locator('.tx-tool-in').textContent(), '{"command":"npm test"}')
+  assert.equal(await rows.nth(1).locator('.tx-tool-out').count(), 0)
 
   // a refresh of the same interval keeps what the reader opened, and the running call settles: a DELTA
   // carrying only the turn that changed
@@ -175,11 +175,11 @@ try {
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
   }))
   await page.waitForTimeout(100)
-  assert.equal(await rows.nth(0).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true', 'a same-interval refresh keeps the open row')
-  assert.equal(await rows.nth(0).locator('pre.tc-tool-out').textContent(), 'export const x = 1', 'and the body it fetched')
+  assert.equal(await rows.nth(0).locator('.tx-tool-row').getAttribute('aria-expanded'), 'true', 'a same-interval refresh keeps the open row')
+  assert.equal(await rows.nth(0).locator('pre.tx-tool-out').textContent(), 'export const x = 1', 'and the body it fetched')
   assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 2, 'a refresh does not refetch either already opened body')
-  assert.equal(await rows.nth(1).locator('.tc-tool-running').count(), 0, 'the finished call lost its running mark')
-  assert.equal(await tail.locator('.tc-ask').count(), 0, 'the delta left the human message where the record has it')
+  assert.equal(await rows.nth(1).locator('.tx-tool-running').count(), 0, 'the finished call lost its running mark')
+  assert.equal(await tail.locator('.tx-ask').count(), 0, 'the delta left the human message where the record has it')
 
   // a later note replaces the compact view: the newest prose and the calls after it — three new turns in one
   // delta; the unchanged first turn does not travel again
@@ -199,20 +199,20 @@ try {
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
   }))
   await page.waitForTimeout(100)
-  assert.equal(await tail.locator('.tc-say-text').last().textContent(), 'Now testing')
+  assert.equal(await tail.locator('.tx-say-text').last().textContent(), 'Now testing')
   // THE CARET MARKS WORDS STILL BEING SAID: a call follows this prose, so the words are finished and no caret
   // blinks under them — the running call is the live mark
   const caret = () => page.evaluate(() => {
-    const live = document.querySelector('.m-live')
-    const text = [...live.querySelectorAll('.tc-say-text')].pop()   // the newest prose
+    const live = document.querySelector('.tx-live')
+    const text = [...live.querySelectorAll('.tx-say-text')].pop()   // the newest prose
     const block = text?.querySelector('.rich-text > :last-child')
     const content = (element) => (element ? getComputedStyle(element, '::after').content : null)
     return { speaking: live.classList.contains('is-speaking'), onContainer: content(text), onBlock: content(block), blockHeight: block?.getBoundingClientRect().height, lineHeight: block ? parseFloat(getComputedStyle(block).lineHeight) : null }
   })
   await page.screenshot({ path: `${OUT}/live-tail.png` })
   assert.deepEqual(await caret().then((c) => [c.speaking, c.onContainer, c.onBlock]), [false, 'none', 'none'], 'no caret under prose that a call already follows')
-  assert.equal(await tail.locator('.tc-tool').count(), 2, 'the earlier prose and its calls folded away; the calls after the newest prose stay, including a tool-only turn')
-  assert.equal(await tail.locator('.tc-tool-running').count(), 1, 'the newest call is the running one')
+  assert.equal(await tail.locator('.tx-tool').count(), 2, 'the earlier prose and its calls folded away; the calls after the newest prose stay, including a tool-only turn')
+  assert.equal(await tail.locator('.tx-tool-running').count(), 1, 'the newest call is the running one')
   assert.equal(await seam.locator('.m-seam-detail').textContent(), '5 turns · 4 tool uses')
 
   // EXPANDING THE SEAM SHOWS THE WHOLE INTERVAL FROM THE SAME PAYLOAD — and the compact tail steps aside,
@@ -221,13 +221,13 @@ try {
   await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
   assert.equal(await tail.count(), 0, 'the collapsed face leaves when the seam opens')
   // the full view is the conversation's own fold: the process behind the newest answer collapses to one row
-  assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^2 tool uses/, 'the process before the answer folds; the fold counts only what it hides')
-  assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 1, 'the answer stays')
-  assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 2, 'the calls after the answer stay in the open')
-  await seam.locator('.m-seam-inset .tc-work-row').click()
-  assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 2, 'opening the fold shows every prose turn')
-  assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 0, 'the message that opened the seam is quoted on the record one row above, not again inside the interval')
-  assert.equal(await seam.locator('.m-seam-inset .tc-tool-running').count(), 1, 'the running call is still running in the full view')
+  assert.match(await seam.locator('.m-seam-inset .tx-work-row').textContent(), /^2 tool uses/, 'the process before the answer folds; the fold counts only what it hides')
+  assert.equal(await seam.locator('.m-seam-inset .tx-say-text').count(), 1, 'the answer stays')
+  assert.equal(await seam.locator('.m-seam-inset .tx-tool:visible').count(), 2, 'the calls after the answer stay in the open')
+  await seam.locator('.m-seam-inset .tx-work-row').click()
+  assert.equal(await seam.locator('.m-seam-inset .tx-say-text').count(), 2, 'opening the fold shows every prose turn')
+  assert.equal(await seam.locator('.m-seam-inset .tx-ask').count(), 0, 'the message that opened the seam is quoted on the record one row above, not again inside the interval')
+  assert.equal(await seam.locator('.m-seam-inset .tx-tool-running').count(), 1, 'the running call is still running in the full view')
   assert.equal(await page.locator('.m-transcript-state').count(), 0, 'no loading line: the payload was already here')
   assert.equal(requests.filter((url) => !url.includes('/transcript/stream') && !url.includes('/transcript/tool/')).length, 0, 'the open seam issues no interval GET of its own')
   await page.screenshot({ path: `${OUT}/live-tail-expanded.png` })
@@ -246,8 +246,8 @@ try {
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
   }))
   await page.waitForTimeout(100)
-  assert.equal(await tail.locator('.tc-say-text').count(), 0)
-  assert.equal(await tail.locator('.tc-tool-running').count(), 1, 'tools before any prose still show')
+  assert.equal(await tail.locator('.tx-say-text').count(), 0)
+  assert.equal(await tail.locator('.tx-tool-running').count(), 1, 'tools before any prose still show')
 
   // WORK IN PROGRESS NEVER FOLDS. In history a run of three or more calls folds to `N tool uses` — but the
   // calls after the newest prose of a LIVE payload are what is happening, and a fold that says seven and
@@ -279,17 +279,17 @@ try {
   await page.waitForTimeout(100)
   await page.screenshot({ path: `${OUT}/live-tail-in-progress.png` })
   assert.equal(await seam.locator('.m-seam-detail').textContent(), '7 turns · 7 tool uses')
-  assert.equal(await tail.locator('.tc-work-row, .tc-tool-row.is-run').count(), 0, 'the work in progress is not folded behind a count')
-  assert.equal(await tail.locator('.tc-tool').count(), 7, 'every call in progress is a sentence')
-  assert.equal(await tail.locator('.tc-tool-running').count(), 1)
+  assert.equal(await tail.locator('.tx-work-row, .tx-tool-row.is-run').count(), 0, 'the work in progress is not folded behind a count')
+  assert.equal(await tail.locator('.tx-tool').count(), 7, 'every call in progress is a sentence')
+  assert.equal(await tail.locator('.tx-tool-running').count(), 1)
   await seam.locator('.m-seam-row').click()
   await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
   await page.screenshot({ path: `${OUT}/live-tail-in-progress-expanded.png` })
-  assert.equal(await seam.locator('.m-seam-inset .tc-work-row, .m-seam-inset .tc-tool-row.is-run').count(), 0, 'the expanded live seam does not fold the work in progress either')
-  assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 7)
-  assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 0, 'no user turn is drawn inside the interval — not even a harness-typed one; the seam is the agent\'s work, the conversation is on the record')
+  assert.equal(await seam.locator('.m-seam-inset .tx-work-row, .m-seam-inset .tx-tool-row.is-run').count(), 0, 'the expanded live seam does not fold the work in progress either')
+  assert.equal(await seam.locator('.m-seam-inset .tx-tool:visible').count(), 7)
+  assert.equal(await seam.locator('.m-seam-inset .tx-ask').count(), 0, 'no user turn is drawn inside the interval — not even a harness-typed one; the seam is the agent\'s work, the conversation is on the record')
   // seven calls across five turns sit at one list spacing: no turn gap between consecutive tool-only turns
-  const rowTops = await seam.locator('.m-seam-inset .tc-tool-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().top))
+  const rowTops = await seam.locator('.m-seam-inset .tx-tool-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().top))
   const steps = rowTops.slice(1).map((top, index) => Math.round(top - rowTops[index]))
   assert.ok(Math.max(...steps) - Math.min(...steps) <= 2, `consecutive calls are evenly spaced, got steps ${steps.join(',')}`)
   await seam.locator('.m-seam-row').click()
@@ -297,8 +297,8 @@ try {
   // ...and the moment the agent answers, that work is process behind an answer: gone from the tail, folded in history
   await emitTurns('fixture-4c', [{ id: 'b6', at: 15000, role: 'assistant', text: 'Found the seam' }], 'delta')
   await page.waitForTimeout(100)
-  assert.equal(await tail.locator('.tc-say-text').textContent(), 'Found the seam')
-  assert.equal(await tail.locator('.tc-tool').count(), 0, 'the calls that produced the answer left the tail')
+  assert.equal(await tail.locator('.tx-say-text').textContent(), 'Found the seam')
+  assert.equal(await tail.locator('.tx-tool').count(), 0, 'the calls that produced the answer left the tail')
   // ...and now the prose IS the newest thing: the caret blinks inline at the end of its last line — on the last
   // block, adding no line of its own, never on the container under the paragraph
   {
@@ -311,7 +311,7 @@ try {
   }
   await seam.locator('.m-seam-row').click()
   await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
-  assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^7 tool uses/, 'in history the same seven calls fold behind the answer')
+  assert.match(await seam.locator('.m-seam-inset .tx-work-row').textContent(), /^7 tool uses/, 'in history the same seven calls fold behind the answer')
   await page.screenshot({ path: `${OUT}/live-tail-folded-after-answer.png` })
   await seam.locator('.m-seam-row').click()
   await tail.waitFor({ state: 'visible', timeout: 5_000 })

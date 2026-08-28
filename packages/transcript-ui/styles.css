@@ -1,0 +1,122 @@
+/* @spexcode/transcript-ui — the transcript's grammar as one stylesheet.
+   Every colour, face, size and space is a `--tx-*` token with a fallback chain: a host that defines the
+   same-named bare token (`--ink`, `--mono`, `--type-prose`…) is inherited automatically; a host that
+   defines nothing gets the dark defaults; a host that wants something else sets `--tx-*` on `.tx` or any
+   ancestor. Class names are the second customisation surface and are stable. No emoji, no icon font. */
+.tx {
+  --tx-ink: var(--ink, #d1d1d1);
+  --tx-ink2: var(--ink2, #e6e6e6);
+  --tx-muted: var(--muted, #999999);
+  --tx-blue: var(--blue, #6c99bb);
+  --tx-orange: var(--orange, #d5763f);
+  --tx-red: var(--red, #d04255);
+  --tx-paper: var(--paper, #262626);
+  --tx-panel2: var(--panel2, #2c2c2c);
+  --tx-edge: var(--edge, rgba(120, 120, 120, .45));
+  --tx-wash-hover: var(--wash-hover, rgba(255, 255, 255, .06));
+  --tx-mono: var(--mono, 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace);
+  --tx-ui-font: var(--ui-font, var(--tx-mono));
+  --tx-type-caption: var(--type-caption, 11px);
+  --tx-type-meta: var(--type-meta, 12px);
+  --tx-type-prose: var(--type-prose, 14px);
+  --tx-leading-body: var(--leading-body, 1.65);
+  --tx-weight-medium: var(--weight-medium, 500);
+  --tx-weight-semibold: var(--weight-semibold, 600);
+  --tx-radius: var(--radius, 6px);
+  --tx-space-1: 4px; --tx-space-2: 6px; --tx-space-3: 8px; --tx-space-4: 12px; --tx-space-5: 16px; --tx-space-6: 22px;
+  --tx-dur-rise: var(--dur-rise, 120ms);
+  min-width: 0;
+  color: var(--tx-ink);
+}
+
+/* THE FLOW: turns stacked at paragraph distance. Consecutive tool-only turns are ONE list of calls — the
+   harness draws a turn boundary around every call it makes, and that boundary is not a paragraph break. */
+.tx-flow { display: flex; flex-direction: column; gap: var(--tx-space-6); }
+.tx-flow > .tx-say:not(:has(.tx-say-text)) + .tx-say:not(:has(.tx-say-text)) { margin-top: calc(2px - var(--tx-space-6)); }
+.tx-work-body > .tx-say:not(:has(.tx-say-text)) + .tx-say:not(:has(.tx-say-text)) { margin-top: calc(2px - 14px); }
+.tx-empty, .tx-truncated { color: var(--tx-muted); font-family: var(--tx-ui-font); font-size: var(--tx-type-meta); overflow-wrap: anywhere; }
+
+/* THE AGENT IS THE PAGE: full measure, no bubble, no tint. */
+.tx-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tx-say-text { max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+.tx-prose > p { margin: 0; }
+.tx-prose > p + p { margin-top: .75em; }
+
+/* THE PERSON IS QUOTED: a bubble off to its own side, one corner squared, capped well under the measure. */
+.tx-quote {
+  --tx-quote-bg: color-mix(in srgb, var(--tx-panel2) 72%, var(--tx-paper));
+  position: relative; justify-self: end; margin-left: auto; min-width: 0; max-width: 80%;
+  padding: var(--tx-space-4) var(--tx-space-5); color: var(--tx-ink2); background: var(--tx-quote-bg);
+  border-radius: calc(var(--tx-radius) * 2); border-top-right-radius: 2px;
+}
+.tx-quote-nested { max-width: 88%; }
+.tx-quote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--tx-ui-font); }
+.tx-quote-who { font-size: var(--tx-type-caption); font-weight: var(--tx-weight-semibold); color: var(--tx-blue); }
+.tx-time { display: none; margin-left: auto; flex: none; font-family: var(--tx-ui-font); font-size: var(--tx-type-caption); color: var(--tx-muted); font-variant-numeric: tabular-nums; }
+.tx-quote-text { font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+.tx-quote.is-clamped { max-height: 13em; overflow: hidden; }
+.tx-quote.is-clamped::after { content: ""; position: absolute; inset: auto 0 0; height: 4.5em; background: linear-gradient(transparent, var(--tx-quote-bg)); pointer-events: none; }
+.tx-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--tx-blue); background: none; border: 0; font: inherit; font-family: var(--tx-ui-font); font-size: var(--tx-type-caption); cursor: pointer; }
+
+/* THE WORK SEGMENT'S ONE LINE: a bounded sentence — the count, the kinds, the chevron trailing. */
+.tx-work { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.tx-work-row {
+  display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; padding: var(--tx-space-2) var(--tx-space-3); margin-left: calc(var(--tx-space-3) * -1);
+  color: var(--tx-muted); background: none; border: 0; border-radius: var(--tx-radius);
+  font-family: var(--tx-ui-font); font-size: var(--tx-type-meta); text-align: left; cursor: pointer;
+}
+.tx-work-row:hover { background: var(--tx-wash-hover); color: var(--tx-ink2); }
+.tx-work-lead { flex: none; color: var(--tx-ink2); font-weight: var(--tx-weight-medium); }
+.tx-work-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-work-body { align-self: stretch; display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--tx-edge); }
+
+/* A TOOL CALL IS A SENTENCE, not a card: inline-flex, exactly as wide as what it says, capped so a long shell
+   command never stretches the row into a full-width bar. The verb IS the status: no tick, no badge. */
+.tx-tools { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0; max-width: 100%; }
+.tx-tool { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 100%; }
+.tx-tool-row {
+  display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: min(100%, 56ch);
+  padding: 2px 0; color: var(--tx-muted); background: none; border: 0;
+  font-family: var(--tx-ui-font); font-size: var(--tx-type-meta); text-align: left;
+}
+.tx-tool-row.is-openable { cursor: pointer; }
+.tx-tool-row.is-openable:hover { color: var(--tx-ink2); }
+.tx-tool-verb { flex: none; color: var(--tx-ink2); font-weight: var(--tx-weight-medium); }
+.tx-tool-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx-ink); }
+.tx-tool-trail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx-muted); }
+.tx-tool-size { flex: none; color: var(--tx-muted); font-variant-numeric: tabular-nums; }
+.tx-tool-row.is-run .tx-tool-verb { color: var(--tx-muted); font-weight: inherit; }
+.tx-tool-kids { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--tx-edge); }
+.tx-tool-in, .tx-tool-out {
+  max-width: 100%; max-height: 220px; overflow: auto; margin: 0 0 2px; padding: 7px 9px;
+  color: var(--tx-ink); background: var(--tx-panel2); border-radius: var(--tx-radius);
+  font: inherit; font-family: var(--tx-mono); font-size: var(--tx-type-meta);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.tx-tool-out.tx-tool-out-state { font-family: var(--tx-ui-font); font-size: var(--tx-type-meta); color: var(--tx-muted); }
+.tx-tool-out.tx-tool-out-state.is-error { color: var(--tx-red); }
+
+/* THE CHEVRON trails every disclosure; the same shape says open everywhere. */
+.tx-caret { flex: none; align-self: center; transition: transform .12s ease; }
+.tx-caret.is-open { transform: rotate(90deg); }
+
+/* LIVE: a running call wears a spinner and the word; the newest prose rises in; the caret blinks at the end
+   of words still being said. Reduced motion keeps the marks and drops the movement. */
+.tx-tool.is-running .tx-tool-verb { color: var(--tx-ink2); }
+.tx-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--tx-orange); font-size: var(--tx-type-caption); }
+.tx-spin { animation: tx-spin 1s linear infinite; }
+@keyframes tx-spin { to { transform: rotate(360deg); } }
+.tx-live { margin-top: var(--tx-space-2); min-width: 0; }
+.tx-live .tx-say-text { animation: tx-rise var(--tx-dur-rise) ease; }
+@keyframes tx-rise { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after { content: '▍'; margin-left: 2px; color: var(--tx-muted); animation: tx-caret 1s steps(2, start) infinite; }
+@keyframes tx-caret { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .tx-live .tx-say-text, .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after, .tx-spin, .tx-caret { animation: none; transition: none; }
+}
+
+/* A NARROW PANE: the quote widens and shows its own time, because there is no ruler beside the flow. */
+@container (max-width: 560px) {
+  .tx-quote { max-width: 88%; }
+  .tx-time { display: inline; }
+}

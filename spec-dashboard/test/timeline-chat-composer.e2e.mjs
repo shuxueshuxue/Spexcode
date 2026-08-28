@@ -35,13 +35,13 @@ const metrics = (input) => input.evaluate((element) => {
 const sentCount = (page) => page.locator('.m-ev-sent:visible').count()
 
 async function waitForSent(page, token) {
-  await page.waitForFunction((expected) => [...document.querySelectorAll('.m-ev-text')]
+  await page.waitForFunction((expected) => [...document.querySelectorAll('.tx-quote-text')]
     .some((element) => element.textContent?.includes(expected)), token, { timeout: 20_000 })
 }
 
 async function verifyComposerPress(page, input) {
   const highlighted = await page.evaluate(() => {
-    const note = document.querySelector('.m-ev-note') || document.querySelector('.m-ev-text')
+    const note = document.querySelector('.m-ev-note') || document.querySelector('.tx-quote-text')
     const walker = note ? document.createTreeWalker(note, NodeFilter.SHOW_TEXT) : null
     let text = walker?.nextNode()
     while (text && !text.data.trim()) text = walker.nextNode()
@@ -178,7 +178,7 @@ async function runViewport(name, viewport) {
       value: await input.inputValue(),
       sentBefore: enterBefore,
       sentAfter: await sentCount(page),
-      delivered: await page.locator('.m-ev-text:visible').filter({ hasText: sendToken }).count() > 0,
+      delivered: await page.locator('.tx-quote-text:visible').filter({ hasText: sendToken }).count() > 0,
     }
     mark('send unique token with plain Enter')
     if (phase === 'B' && name === 'mobile') {

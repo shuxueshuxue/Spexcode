@@ -28,6 +28,16 @@ scenarios:
     test:
       path: spec-cli/src/harness.test.ts
       name: writeCodexTrust refuses to persist a config.toml that codex could not load, and replaces a good one without changing its mode
+  - name: codex-tui-finished-turn-closes-through-public-api
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts#codexHarness, spec-cli/src/sessions.ts]
+    description: >-
+      Through the public `spex session new --launcher codex` path, run a trivial no-edit task whose final work
+      action is a tool call, wait for `done --propose close` and `close-pending`, then invoke `spex session close`
+      immediately and inspect the native rollout tail and retained session record.
+    expected: >-
+      The native rollout has a terminal task-complete event, the record is close-pending before close, and the
+      public close succeeds without an active-turn refusal; the session is retired and its worktree is removed.
 ---
 # measuring codex-runtime
 

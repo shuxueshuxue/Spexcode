@@ -20,7 +20,9 @@ scenarios:
       The tail sits inside the open seam's row beneath its live line — no trace row, no card, no pop-out — and
       the seam's turn and call counts come from the same payload. The newest prose is agent prose on the page;
       each call is a transcript sentence narrower than the column, only the result-less one wearing the running
-      mark; output stays folded until clicked and opens inline. A same-interval refresh keeps the open row and
+      mark; output stays folded until clicked and opens inline. The caret blinks inline at the end of the
+      newest prose's last line only while that prose is the turn's newest event — never on a line of its own,
+      and not at all once a call follows the words. A same-interval refresh keeps the open row and
       drops the settled call's running mark; a later prose turn replaces the compact view with that prose and
       the calls after it; a prose-less turn still shows its calls. Expanding the seam shows the whole interval
       from the payload already held — every prose turn, the still-running call, no loading line — and the

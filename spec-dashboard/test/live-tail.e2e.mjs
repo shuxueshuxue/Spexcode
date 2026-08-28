@@ -152,11 +152,12 @@ try {
         { id: 'read', name: 'Read', input: '{"file_path":"/repo/src/trace.ts"}', output: 'export const x = 1', outputLines: 1, outputBytes: 18 },
         { id: 'run', name: 'Bash', input: '{"command":"npm test"}', output: 'ok', outputLines: 1, outputBytes: 2 },
       ] },
-      { id: 'a2', at: window.transcriptFrom + 9000, role: 'assistant', text: 'Now testing', tools: [
+      // prose in a turn of its own, then calls AFTER it in tool-only turns — the live tail's usual shape
+      { id: 'a2', at: window.transcriptFrom + 9000, role: 'assistant', text: 'Now testing' },
+      { id: 'a3', at: window.transcriptFrom + 9200, role: 'assistant', tools: [
         { id: 'run2', name: 'Bash', input: '{"command":"npm run e2e"}', output: 'ok', outputLines: 1, outputBytes: 2 },
       ] },
-      // a call AFTER the newest prose, in its own tool-only turn — the live tail's usual shape
-      { id: 'a3', at: window.transcriptFrom + 9500, role: 'assistant', tools: [
+      { id: 'a4', at: window.transcriptFrom + 9500, role: 'assistant', tools: [
         { id: 'run3', name: 'Bash', input: '{"command":"npm run lint"}', outputLines: 0, outputBytes: 0 },
       ] },
     ],
@@ -164,10 +165,20 @@ try {
   }))
   await page.waitForTimeout(100)
   assert.equal(await tail.locator('.tc-say-text').last().textContent(), 'Now testing')
+  // THE CARET MARKS WORDS STILL BEING SAID: a call follows this prose, so the words are finished and no caret
+  // blinks under them — the running call is the live mark
+  const caret = () => page.evaluate(() => {
+    const live = document.querySelector('.m-live')
+    const text = [...live.querySelectorAll('.tc-say-text')].pop()   // the newest prose
+    const block = text?.querySelector('.rich-text > :last-child')
+    const content = (element) => (element ? getComputedStyle(element, '::after').content : null)
+    return { speaking: live.classList.contains('is-speaking'), onContainer: content(text), onBlock: content(block), blockHeight: block?.getBoundingClientRect().height, lineHeight: block ? parseFloat(getComputedStyle(block).lineHeight) : null }
+  })
+  await page.screenshot({ path: `${OUT}/live-tail.png` })
+  assert.deepEqual(await caret().then((c) => [c.speaking, c.onContainer, c.onBlock]), [false, 'none', 'none'], 'no caret under prose that a call already follows')
   assert.equal(await tail.locator('.tc-tool').count(), 2, 'the earlier prose and its calls folded away; the calls after the newest prose stay, including a tool-only turn')
   assert.equal(await tail.locator('.tc-tool-running').count(), 1, 'the newest call is the running one')
-  assert.equal(await seam.locator('.m-seam-detail').textContent(), '4 turns · 4 tool uses')
-  await page.screenshot({ path: `${OUT}/live-tail.png` })
+  assert.equal(await seam.locator('.m-seam-detail').textContent(), '5 turns · 4 tool uses')
 
   // EXPANDING THE SEAM SHOWS THE WHOLE INTERVAL FROM THE SAME PAYLOAD — and the compact tail steps aside,
   // so nothing is drawn twice
@@ -177,7 +188,7 @@ try {
   // the full view is the conversation's own fold: the process behind the newest answer collapses to one row
   assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^2 tool uses/, 'the process before the answer folds; the fold counts only what it hides')
   assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 1, 'the answer stays')
-  assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 2, 'the answer\'s own call and the call after it stay in the open')
+  assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 2, 'the calls after the answer stay in the open')
   await seam.locator('.m-seam-inset .tc-work-row').click()
   assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 2, 'opening the fold shows every prose turn')
   assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 0, 'the message that opened the seam is quoted on the record one row above, not again inside the interval')
@@ -251,6 +262,16 @@ try {
   await page.waitForTimeout(100)
   assert.equal(await tail.locator('.tc-say-text').textContent(), 'Found the seam')
   assert.equal(await tail.locator('.tc-tool').count(), 0, 'the calls that produced the answer left the tail')
+  // ...and now the prose IS the newest thing: the caret blinks inline at the end of its last line — on the last
+  // block, adding no line of its own, never on the container under the paragraph
+  {
+    const c = await caret()
+    assert.equal(c.speaking, true, 'the tail is speaking when prose is its newest event')
+    assert.equal(c.onBlock, '"▍"', 'the caret sits on the last block of the prose')
+    assert.equal(c.onContainer, 'none', 'no caret on the block container')
+    assert.ok(Math.abs(c.blockHeight - c.lineHeight) <= 2, `the caret is inline — the paragraph stays one line (${c.blockHeight}px vs ${c.lineHeight}px)`)
+    await page.screenshot({ path: `${OUT}/live-tail-caret-inline.png` })
+  }
   await seam.locator('.m-seam-row').click()
   await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
   assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^7 tool uses/, 'in history the same seven calls fold behind the answer')

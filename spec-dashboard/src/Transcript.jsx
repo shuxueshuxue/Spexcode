@@ -30,6 +30,17 @@ export function TimelineRichText({ children, className = '' }) {
 // interval that ends before the result was written is history, not something still happening
 export const isRunning = (tool, live) => live && tool.output === undefined
 
+// THE TRANSCRIPT SAYS NOTHING THE RECORD ALREADY SAID. The record draws the message that opened a seam and
+// the note the agent declared as rows of its own; the same sentence twice, once on the record and once
+// inside the seam, is the duplication a reader notices first. Either side may be the other's prefix — the
+// backend clips a note at 240 characters — so the test is a prefix match over squashed whitespace.
+const squash = (text) => (text || '').replace(/\s+/g, ' ').trim()
+export const alreadySaid = (text, said) => {
+  const a = squash(text).replace(/(\.\.\.|…)$/, '')
+  const b = squash(said)
+  return !!a && !!b && (b.startsWith(a) || a.startsWith(b))
+}
+
 // One tool call as a SENTENCE, not a card: verb, target, and the size of what came back. It is
 // `inline-flex` so a dozen of them read as a list of things that happened rather than a dozen boxes.
 // There is no success mark, because the transcript carries no per-tool status — the past-tense verb is the
@@ -61,13 +72,14 @@ export function ToolLine({ tool, open, onToggle, live = false }) {
 // A turn's tool calls are consecutive by construction, so "a run" is just "this turn's calls". Three or
 // more fold to one row; one or two stay sentences, where the verb and target are worth reading on sight.
 // Measured against a real transcript — 39 calls in one turn, all the same tool — the noise a reader wants
-// gone is repetition, not any particular tool, and nothing here judges what a call DID.
-export function ToolRun({ tools, openIds, onToggle, live = false }) {
+// gone is repetition, not any particular tool, and nothing here judges what a call DID. `fold` is off for
+// the work in progress (see `segments`): calls still landing are sentences whatever their number.
+export function ToolRun({ tools, openIds, onToggle, live = false, fold = true }) {
   if (!tools?.length) return null
   const line = (tool) => (
     <ToolLine key={tool.id} tool={tool} open={openIds.has(tool.id)} onToggle={() => onToggle(tool.id)} live={live} />
   )
-  if (tools.length < RUN_MIN) return <div className="tc-tools">{tools.map(line)}</div>
+  if (!fold || tools.length < RUN_MIN) return <div className="tc-tools">{tools.map(line)}</div>
   const id = `run:${tools[0].id}`
   const open = openIds.has(id)
   const running = tools.some((tool) => isRunning(tool, live))
@@ -96,7 +108,13 @@ export function ToolRun({ tools, openIds, onToggle, live = false }) {
 // Calls made AFTER the answer (an agent that speaks, then runs three tools without another word — the
 // live tail's usual shape) are not process behind the answer; they follow it, in the open, or the seam's
 // count says three tool uses and the reader sees none.
-export function segments(turns) {
+//
+// THE WORK IN PROGRESS NEVER FOLDS. Folding is for process that already produced an answer. The last
+// segment of a LIVE payload is what is happening now: its calls after the newest prose — or all of them,
+// while there is no prose yet — draw as sentences whatever their number, because a `7 tool uses ›` under a
+// seam line that already says `7 tool uses ›` is a count that shows nothing, twice. They fold the moment
+// the agent speaks, when they become the process behind that answer.
+export function segments(turns, live = false) {
   const out = []
   let run = []
   const flush = () => {
@@ -107,7 +125,7 @@ export function segments(turns) {
     const answer = run[lead]?.text ? run[lead] : null
     const work = answer ? run.slice(0, lead) : run
     const after = answer ? run.slice(lead + 1) : []
-    out.push({ kind: 'work', work, answer, after, calls, folded: calls >= RUN_MIN && work.length > 0 })
+    out.push({ kind: 'work', work, answer, after, calls, folded: calls >= RUN_MIN && work.length > 0, now: false })
     run = []
   }
   for (const turn of turns) {
@@ -115,13 +133,15 @@ export function segments(turns) {
     run.push(turn)
   }
   flush()
+  const last = out[out.length - 1]
+  if (live && last?.kind === 'work') { last.now = true; last.folded = last.folded && !!last.answer }
   return out
 }
 
-function TurnBody({ turn, openIds, onToggle, live }) {
+function TurnBody({ turn, openIds, onToggle, live, fold = true }) {
   return <div className="tc-say">
     {turn.text && <div className="tc-say-text"><TimelineRichText>{turn.text}</TimelineRichText></div>}
-    <ToolRun tools={turn.tools} openIds={openIds} onToggle={onToggle} live={live} />
+    <ToolRun tools={turn.tools} openIds={openIds} onToggle={onToggle} live={live} fold={fold} />
   </div>
 }
 
@@ -130,6 +150,8 @@ function WorkSegment({ segment, openIds, onToggle, live }) {
   const open = openIds.has(id)
   const kinds = runKinds(segment.work.flatMap((turn) => turn.tools || []))
   const foldedCalls = segment.work.reduce((n, turn) => n + (turn.tools?.length || 0), 0)
+  // history folds its runs; the work in progress (a live segment's calls after its newest prose) does not
+  const history = !segment.now || !!segment.answer
   return <>
     {segment.folded ? (
       <div className="tc-work">
@@ -142,9 +164,9 @@ function WorkSegment({ segment, openIds, onToggle, live }) {
           {segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} />)}
         </div>}
       </div>
-    ) : segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} />)}
-    {segment.answer && <TurnBody turn={segment.answer} openIds={openIds} onToggle={onToggle} live={live} />}
-    {segment.after.map((turn, i) => <TurnBody key={`after${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} />)}
+    ) : segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} fold={history} />)}
+    {segment.answer && <TurnBody turn={segment.answer} openIds={openIds} onToggle={onToggle} live={live} fold={!segment.now} />}
+    {segment.after.map((turn, i) => <TurnBody key={`after${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} fold={!segment.now} />)}
   </>
 }
 
@@ -190,19 +212,23 @@ export function Quote({ who, ts, text, className = '' }) {
 // THE CONVERSATION, SHAPED AS ONE. A person's turn is quoted — a narrow bubble with one corner squared off
 // — and the agent's turn IS the page: full measure, no bubble, no tint. The asymmetry is the design; giving
 // both a box makes a chat read as a table of two columns.
-export function TranscriptPayload({ data, live = false }) {
+export function TranscriptPayload({ data, live = false, opener = null }) {
   const [openIds, toggle] = useDisclosure()
   if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
   return <div className="tc-flow">
-    <TranscriptTurns turns={data.turns} openIds={openIds} onToggle={toggle} live={live} />
+    <TranscriptTurns turns={data.turns} openIds={openIds} onToggle={toggle} live={live} opener={opener} />
     {data.truncated && <div className="m-transcript-truncated">transcript 已截断：省略 {data.omittedTurns || 0} turns、{data.omittedBytes || 0} bytes{data.outOfOrderEvents ? `，检测到 ${data.outOfOrderEvents} 条乱序记录` : ''}</div>}
   </div>
 }
 
-export function TranscriptTurns({ turns, openIds, onToggle, live = false }) {
-  return segments(turns).map((segment, index) => {
+// `opener` is the message on the record that opened this interval — quoted one row above the seam, so the
+// interval's own copy of it (the harness's first user turn) is not quoted again; a human turn the record does
+// not carry (typed into the harness itself) still is.
+export function TranscriptTurns({ turns, openIds, onToggle, live = false, opener = null }) {
+  return segments(turns, live).map((segment, index) => {
     if (segment.kind !== 'ask') return <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={onToggle} live={live} />
     const { text, envelope } = splitEnvelope(segment.turn.text || '')
+    if (index === 0 && alreadySaid(text, opener)) return null
     return <Quote key={`a${index}`} className="tc-ask" who={envelope?.label || null} text={text} />
   })
 }

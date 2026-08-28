@@ -23,6 +23,17 @@ scenarios:
       before any Git mutation and leaves no worktree, branch, store, or receipt. Every create records the commit
       it actually forked from, while an unpinned create keeps its exact legacy record bytes and receipt hash, and
       a retry that changes the pin hashes as a different request.
+  - name: concurrent-creates-from-remote-base-do-not-track
+    tags: [backend-api]
+    code: [spec-cli/src/sessions.ts#sessionCreateRequest]
+    description: >
+      In a scratch clone with `mainBranch: origin/main`, launch several concurrent `spex session new` calls
+      through the CLI and inspect each created branch's upstream configuration; also run two concurrent raw
+      `git worktree add -b` commands from `origin/main` and retain the Git stderr.
+    expected: >
+      Every product create succeeds without a `.git/config` lock failure and every node branch has no upstream
+      remote or merge configuration. The raw Git race demonstrates the avoided mechanism with `could not lock
+      config file .git/config: File exists` and `unable to write upstream branch configuration` on one contender.
 ---
 # measuring session-create-authority
 

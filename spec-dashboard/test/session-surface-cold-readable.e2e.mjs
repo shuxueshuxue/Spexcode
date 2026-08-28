@@ -265,14 +265,9 @@ try {
     const restore = footer.locator('.m-coldline-action', { hasText: expectedAction })
     assert.equal(await restore.isEnabled(), true, `${state} restore action is disabled`)
 
-    const terminal = page.locator('[data-surface-switch="terminal"]:visible')
-    await terminal.waitFor({ state: 'visible' })
-    assert.equal(await terminal.isDisabled(), true, `${state} terminal control is not disabled`)
-    const baseLabel = page.locator('.si-base-tabs [role="tab"]:visible .si-tab-label')
-    const before = await baseLabel.innerText()
-    await terminal.click({ force: true })
-    assert.equal(await baseLabel.innerText(), before, `${state} terminal activation changed the surface`)
-    assert.equal(await chat.isVisible(), true, `${state} terminal activation hid Conversation`)
+    assert.equal(await page.locator('[data-action="surface-switcher"]:visible').count(), 0,
+      `${state} exposes a surface switch despite having only the Conversation face`)
+    assert.equal(await chat.isVisible(), true, `${state} read-only session did not keep Conversation visible`)
     return { chat, restore, shape: await directShape(chat), eventCount: apiTimeline.events.length }
   }
 

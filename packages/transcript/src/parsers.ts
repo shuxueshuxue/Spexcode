@@ -116,6 +116,92 @@ export function codexEvent(value: unknown): ParsedEvent | null {
   return null
 }
 
+// Codex app-server notifications are a different native stream from rollout lines. Keep this mapping stateless:
+// a caller that needs streamed prose uses codexAppServerStream below, while file and in-memory sources still
+// share the same one-record parser contract.
+export function codexAppServerEvent(value: unknown): ParsedEvent | null {
+  const entry = object(value)
+  const params = object(entry?.params)
+  if (!entry || !params || typeof entry.method !== 'string') return null
+  const item = object(params.item)
+  const method = entry.method
+  const recognized = method === 'item/agentMessage/delta' || method === 'item/started' || method === 'item/completed'
+  if (!recognized) return null
+  const eventAt = timestamp(params.emittedAtMs) ?? timestamp(params.startedAtMs) ?? timestamp(params.completedAtMs)
+  if (eventAt === null) return { at: null, turn: null }
+
+  if (method === 'item/agentMessage/delta') {
+    const id = string(params.itemId)
+    const delta = string(params.delta)
+    return id && delta !== null
+      ? { at: eventAt, turn: { id, at: eventAt, role: 'assistant', text: delta, tools: [] } }
+      : null
+  }
+  if ((method !== 'item/started' && method !== 'item/completed') || !item) return null
+  const id = string(item.id)
+  const type = string(item.type)
+  if (!id || !type) return null
+  if (type === 'userMessage') {
+    const text = blockText(item.content)
+    return text ? { at: eventAt, turn: { id, at: eventAt, role: 'user', text, tools: [] } } : null
+  }
+  if (type === 'agentMessage') {
+    const text = string(item.text)
+    return { at: eventAt, turn: { id, at: eventAt, role: 'assistant', text: text ?? undefined, tools: [] } }
+  }
+
+  const toolTypes = new Set(['commandExecution', 'functionCall', 'customToolCall', 'mcpToolCall', 'dynamicToolCall'])
+  if (!toolTypes.has(type)) return null
+  if (method === 'item/started') {
+    const name = type === 'commandExecution' ? 'command'
+      : string(item.name) ?? string(item.tool) ?? (type === 'mcpToolCall' ? 'mcp' : 'tool')
+    const input = item.arguments !== undefined ? item.arguments
+      : item.input !== undefined ? item.input
+        : item.command !== undefined ? item.command
+          : undefined
+    return { at: eventAt, turn: { id, at: eventAt, role: 'assistant', tools: [{ id, name, input: input === undefined ? undefined : compact(input), outputLines: 0, outputBytes: 0 }] } }
+  }
+
+  let output: unknown = undefined
+  if (type === 'commandExecution') output = item.aggregatedOutput
+  else if (type === 'functionCall' || type === 'customToolCall') output = item.output ?? item.result
+  else if (type === 'mcpToolCall') output = item.result ?? item.error
+  else if (type === 'dynamicToolCall') output = item.contentItems ?? item.output ?? item.error
+  return output === undefined || output === null
+    ? { at: eventAt, turn: null }
+    : { at: eventAt, turn: null, toolOutputs: [{ id, text: compact(output) }] }
+}
+
+// Agent-message deltas are fragments of one native item. The closure remembers only that item's text and
+// re-emits its native id, allowing IntervalCollector to replace the earlier turn in place.
+export function codexAppServerStream(): Parse {
+  const textByItem = new Map<string, string>()
+  return (value) => {
+    const parsed = codexAppServerEvent(value)
+    if (!parsed) return null
+    const entry = object(value)
+    const params = object(entry?.params)
+    const item = object(params?.item)
+    if (entry?.method === 'item/agentMessage/delta') {
+      const id = string(params?.itemId)
+      if (!id || !parsed.turn) return parsed
+      const text = (textByItem.get(id) ?? '') + (parsed.turn.text ?? '')
+      textByItem.set(id, text)
+      return { ...parsed, turn: { ...parsed.turn, text } }
+    }
+    if (item && item.type === 'agentMessage') {
+      const id = string(item.id)
+      if (id) {
+        const text = string(item.text)
+        if (text !== null || !textByItem.has(id)) textByItem.set(id, text ?? '')
+        const turn = parsed.turn
+        if (turn) return { ...parsed, turn: { ...turn, text: textByItem.get(id) || undefined } }
+      }
+    }
+    return parsed
+  }
+}
+
 const blockText = (content: unknown): string | null => typeof content === 'string'
   ? string(content)
   : items(content).map((block) => string(object(block)?.text)).filter(Boolean).join('\n') || null
@@ -332,12 +418,27 @@ export class IntervalCollector {
         this.synthesized.set(base, seen + 1)
         turn.id = seen ? `${base}#${seen}` : base
       }
-      this.turns.push(turn)
-      for (const tool of turn.tools) this.byTool.set(tool.id, tool)
-      if (this.turns.length > MAX_TURNS) {
-        const dropped = this.turns.shift()!
-        for (const tool of dropped.tools) this.evicted.add(tool.id)
-        this.omittedTurns++
+      const existingAt = this.turns.findIndex((candidate) => candidate.id === turn.id)
+      if (existingAt >= 0) {
+        const existing = this.turns[existingAt]
+        const incomingTools = new Map(turn.tools.map((tool) => [tool.id, tool]))
+        const tools = existing.tools.map((tool) => {
+          const incoming = incomingTools.get(tool.id)
+          incomingTools.delete(tool.id)
+          return incoming ? { ...tool, ...incoming, output: incoming.output ?? tool.output } : tool
+        })
+        tools.push(...incomingTools.values())
+        const replacement: MutableTurn = { ...existing, ...turn, text: turn.text ?? existing.text, tools }
+        this.turns[existingAt] = replacement
+        for (const tool of replacement.tools) this.byTool.set(tool.id, tool)
+      } else {
+        this.turns.push(turn)
+        for (const tool of turn.tools) this.byTool.set(tool.id, tool)
+        if (this.turns.length > MAX_TURNS) {
+          const dropped = this.turns.shift()!
+          for (const tool of dropped.tools) this.evicted.add(tool.id)
+          this.omittedTurns++
+        }
       }
     }
     return this.pastRange

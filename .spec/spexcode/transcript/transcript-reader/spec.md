@@ -49,6 +49,10 @@ for the n-th turn sharing that clock — assigned in thread order, which an appe
 re-reads. That is what lets [[session-transcript]] send only the turns that changed and a subscriber match them
 to the ones it holds.
 
+Live app-server sources may re-emit a native id while an item streams; the shared collector replaces that turn in
+place and preserves its tool calls. Native thread files do not re-emit ids, so file readers remain ordinary
+append-only scans with the same normalized result.
+
 **Bounded, and honest about the bound.** The read caps turns and per-tool output bytes and reports `truncated`,
 `omittedTurns`, `omittedBytes`, and `outOfOrderEvents` whenever payload was omitted or the native timestamp
 order crosses back into or before the requested range. The turn cap keeps the NEWEST turns — a live tail and a

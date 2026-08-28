@@ -85,3 +85,12 @@ app-server's `thread/archive`, which a closed session runs — moving it out of 
 `archived_sessions/` beside it. The locator looks there second, so a session that has finished and been closed
 does not read as `missing` while its conversation is on disk; measured on a real eight-lane run whose transcripts
 all answered `missing` the moment the lanes were closed.
+
+**A steered message is a user turn.** Claude does not record a message injected into a RUNNING turn (stream-json
+`type:user` on the controller's stdin, a queued command in the TUI) as a `user` message; it writes an
+`attachment` record of type `queued_command` carrying the prompt blocks. The parser reads that as the person's
+turn at the moment it entered the conversation — the one place a steer becomes observable, since no hook fires
+for it (gugu#636) — so a live surface shows the steer between the calls it fell between, and a status derived
+from the transcript sees it. Other attachments (tool listings, reminders) are not turns. Measured on a real
+claude-headless session steered mid-count (bench 3.6): before this, the transcript showed the agent stopping
+for no visible reason.

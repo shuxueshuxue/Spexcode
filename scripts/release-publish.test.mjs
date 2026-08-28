@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { RELEASE_PACKAGES, assertReleaseCheckout, registryState, releasePlan, requireAbsentRegistry } from './release-publish.mjs'
+import { RELEASE_PACKAGES, assertReleaseCheckout, distTagFor, registryState, releasePlan, requireAbsentRegistry } from './release-publish.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -107,4 +107,11 @@ test('release publish rejects a non-main or dirty checkout before it builds or c
     () => assertReleaseCheckout({ branch: 'main', clean: false }),
     /refusing to release a dirty checkout/,
   )
+})
+
+test('a prerelease version publishes under next and a stable one under latest', () => {
+  assert.equal(distTagFor('0.7.0-next.0'), 'next')
+  assert.equal(distTagFor('1.0.0-rc.1'), 'next')
+  assert.equal(distTagFor('0.6.8'), 'latest')
+  assert.equal(distTagFor('1.0.0'), 'latest')
 })

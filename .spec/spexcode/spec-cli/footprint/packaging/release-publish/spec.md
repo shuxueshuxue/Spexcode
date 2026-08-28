@@ -39,6 +39,11 @@ the dashboard package, that exact same-version repair is already resolvable from
 artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.
 `npm run release:publish` first requires a clean checkout on `main`, then repeats the rehearsal, proves the
 registry contains none of this version of the thirteen-package set, and publishes in that order with public access.
+The dist-tag is derived from the committed version, never chosen by hand: a prerelease version
+(`0.7.0-next.0`, any `-` suffix) publishes every member under `next`, so `npm i spexcode` keeps resolving the last
+stable release while an adopter that opted in with `@next` receives the whole set at once; a stable version moves
+`latest`. One committed version therefore means one registry state, and a prerelease line can iterate on `next`
+without touching what existing installs receive.
 It never edits versions, commits, tags, pushes, or repairs a partial registry state. A version found for only
 some members is a loud refusal: publishing again cannot turn a partial release into a trustworthy release.
 

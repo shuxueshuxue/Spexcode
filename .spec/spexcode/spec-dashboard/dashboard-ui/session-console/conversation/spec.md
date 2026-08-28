@@ -22,16 +22,18 @@ related:
 
 Every existing session in the [[session-console]] — live, offline, archived, headless — renders the same
 Conversation: one timeline body, one footer, one composer. Lifecycle changes what the footer says and whether the
-composer is enabled; it never creates another right-pane face. [[rich-conversation]] owns how prose renders inside
+composer is enabled; it never creates another right-pane face. In an offline or archived state the editor and
+command controls are omitted entirely, leaving only the read-only coldline and its relaunch/restore action.
+[[rich-conversation]] owns how prose renders inside
 it — with one decision declared HERE: a newline in the transcript was typed mid-conversation, so it stays a line
 break rather than reflowing as an authoring wrap; [[message-stream]] owns the live tail — the open seam's collapsed face — and the transcript stream that feeds
 the open seam.
 
 **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
-For a live session that footer is only the enabled message composer. For an offline session it contains the
-same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
-action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读`; its
+For a live session that footer is the enabled message composer. For an offline session its editor and command
+controls are absent; the footer contains `⏻ agent 已离线 · 内容只读` and the ordinary relaunch action. For an
+archived session those controls are likewise absent and the footer contains `▤ 已归档 · 内容只读`; its
 archive restore action remains available. A `retired` record is the other legislated offline exception: it keeps
 the `⚑` badge that says its worktree is gone and has no relaunch action. These are data states of one footer
 component, not separate panels. The timeline remains

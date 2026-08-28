@@ -14,7 +14,7 @@ scenarios:
       glues to a neighbouring word. Then corroborate the whole handoff on the backend: the file actually
       landed under the upload sink and the spliced string is exactly its path. (The same gesture set works on
       a live session's Command Box and on its Conversation composer; an offline session exposes no Command
-      Box and its Conversation composer is disabled.)
+      Box and omits its Conversation composer controls.)
     expected: |
       The picked file is uploaded through the resumable backend stream (`POST /api/uploads` → create,
       ordered `PATCH` chunks → `POST /api/uploads/:id/complete` → `201 {path}`) and lands in one

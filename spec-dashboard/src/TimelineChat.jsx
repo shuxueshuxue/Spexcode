@@ -206,7 +206,7 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
       data-footer-state={state}
       {...attach.dropProps}
       preview={(sendErr || sendNote) && <div className={sendErr ? 'm-senderr' : 'm-sendnote'}>{sendErr || sendNote}</div>}
-      editor={(
+      editor={!readOnly && (
         <>
         <div className="m-composer-line fv-tawrap">
           <ComposerTextarea
@@ -216,7 +216,6 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
             rows={1}
             placeholder={t('mobile.inputPlaceholder')}
             value={draft}
-            disabled={readOnly}
             onMouseDownCapture={onComposerPress}
             onChange={(e) => { setDraft(e.target.value); grammar.sync(e.target) }}
             onSelect={(e) => grammar.sync(e.target)}
@@ -238,21 +237,25 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
       )}
       footer={(
         <>
-          {attach.fileInput}
-          <div className="si-command-tools m-composer-tools">
-            <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('/')}>/</button>
-            <IconButton icon={attach.busy ? 'loader' : 'paperclip'} size={14} iconClassName={attach.busy ? 'si-attach-busy' : undefined}
-              className="si-command-tool" label={t('session.attachTitle')} disabled={readOnly || attach.busy} onClick={attach.pick} />
-            {canStop && (
-              <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
-                onMouseDown={(e) => e.preventDefault()} onClick={stop} />
-            )}
-            <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
-              disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={submit} />
-          </div>
+          {!readOnly && (
+            <>
+              {attach.fileInput}
+              <div className="si-command-tools m-composer-tools">
+                <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
+                <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
+                <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
+                <button type="button" className="fv-trigger-btn" data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('/')}>/</button>
+                <IconButton icon={attach.busy ? 'loader' : 'paperclip'} size={14} iconClassName={attach.busy ? 'si-attach-busy' : undefined}
+                  className="si-command-tool" label={t('session.attachTitle')} disabled={attach.busy} onClick={attach.pick} />
+                {canStop && (
+                  <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
+                    onMouseDown={(e) => e.preventDefault()} onClick={stop} />
+                )}
+                <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
+                  disabled={!draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={submit} />
+              </div>
+            </>
+          )}
           {readOnly && (
             <div className="m-coldline">
               <span>{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>

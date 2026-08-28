@@ -52,8 +52,8 @@ scenarios:
       action, and count archived timeline requests for longer than one polling interval.
     expected: >-
       Archived and offline sessions retain the same Conversation tabs, timeline body, and shared footer shell as a
-      live session. Their persisted entries render, the composer is disabled and cannot take focus, and the terminal
-      control remains visible but disabled without changing surface. The archived footer reads
+      live session. Their persisted entries render, the editor and command controls are absent, so no composer
+      control can take focus, and the terminal control remains visible but disabled without changing surface. The archived footer reads
       `▤ 已归档 · 内容只读` with one usable `取回` action; the offline footer reads
       `⏻ agent 已离线 · 内容只读` with one usable `重新启动` action. The archived selection performs exactly one
       timeline read across an interval longer than eight seconds, and both actions use the real resume endpoint.
@@ -66,8 +66,8 @@ scenarios:
       click its relaunch action, then inspect the restored conversation and public timeline.
     expected: >-
       `/stop` is handled as the real board command and never sent as agent text. The Conversation timeline remains
-      visible while its shared footer disables the composer, reports the offline read-only state, and offers
-      relaunch; Command Box is unavailable. While the relaunch request is pending, its one right-pane status reports
+      visible while its shared footer omits the editor and command controls, reports the offline read-only state,
+      and offers relaunch; Command Box is unavailable. While the relaunch request is pending, its one right-pane status reports
       a lifecycle transition (`working...`), never a message delivery (`sending...`); prompt dispatch retains its
       own sending outcome. Relaunch returns the session online and re-enables the same conversation with the unique
       pre-stop note and timeline intact.

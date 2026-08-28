@@ -544,6 +544,22 @@ export async function sendSessionText(id, text, { replyVia } = {}) {
   return { ok: res.ok && body?.ok !== false, error: body?.error }
 }
 
+// the Command Box's keyed dispatch ([[command-box]]): `kind:'command'` is the durable-append acceptance, so the
+// backend answers before the native handover and runs the `@new` dispatch whose receipt rides back as
+// `outcomes` / `mentionSummary`. `deliveryId` is the one opaque key a retry re-presents so an accepted
+// message cannot be appended twice; `signal` is the caller's transport deadline. The raw status and body come
+// back untouched because the box's outcome vocabulary (queued / deferred / failed / unconfirmed) is its own.
+// Plain fetch, not apiFetch: the deadline's abort must surface at once as "unconfirmed", never be retried.
+export async function sendSessionCommand(id, text, { deliveryId, signal } = {}) {
+  const res = await fetch(sessionUrl(id, 'input'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'command', text, ...(deliveryId ? { deliveryId } : {}) }),
+    signal,
+  })
+  const outcome = await res.json().catch(() => null)
+  return { ok: res.ok, status: res.status, outcome }
+}
+
 // [[spec-body-edit]]: replace a line range of a node's spec body and land it as a commit. `original` is
 // the text the reader saw — the server refuses rather than merges when it no longer matches, so the whole
 // error body (message + code + the text that is actually there) is handed back for the editor to show.

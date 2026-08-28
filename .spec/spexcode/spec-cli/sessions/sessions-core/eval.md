@@ -24,8 +24,10 @@ scenarios:
     expected: |
       A fast instance response routes exactly one keyed create POST to that backend even while settings would
       never answer; settings receives zero authority traffic and no local record, branch, worktree, or tmux
-      artifact is created. A slow instance, reset, or DNS failure is indeterminate with no POST or fallback and
-      the same zero-artifact result. Implicit routing accepts linked and configured-main equivalence, refuses a
+      artifact is created. A slow instance whose TCP connection is accepted still routes one POST after the
+      delayed identity read. An accepted reset is a backend authority-read failure with no POST or fallback,
+      while a pre-acceptance DNS failure is indeterminate with no POST or fallback and the same zero-artifact
+      result. Implicit routing accepts linked and configured-main equivalence, refuses a
       mismatched canonical main before POST, and explicit `--api` skips that project comparison while still
       using instance authority. An explicit target normally owns its POST; only the exact closed-listener
       ECONNREFUSED path is the legacy fallback exception. Any HTTP instance response owns the target and

@@ -116,8 +116,13 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   // the active tab is painted the CONTENT tone so the tab and its document read as one plane
   assert.match(css, /\.tab\.on\s*\{[^}]*background:\s*var\(--paper\);/s)
   // A SEAM IS A STEP, NOT A LINE: ground · the --edge hairline · one pixel of --panel · paper. The middle
-  // rung is what makes the document read as raised, and it is why no panel here needs a drop shadow.
-  assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
+  // rung is what makes the document read as raised, and it is why no panel here needs a drop shadow. Across
+  // the top the hairline is the BAND's — an inset at its bottom edge that the active tab's paper covers, so
+  // the tab joins its document — and the content host owns no top rule of its own.
+  assert.match(css, /\.tabstrip\s*\{\s*box-shadow:\s*inset 0 -1px 0 var\(--edge\);\s*\}/)
+  assert.match(css, /\.tab:not\(\.on\)\s*\{[^}]*background:\s*var\(--panel\);[^}]*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/s)
+  assert.doesNotMatch(css, /\.viewhost\s*\{[^}]*border-top:/s)
+  assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
   // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
   assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
 })
@@ -167,7 +172,10 @@ test('every block comment closes before the next opens', () => {
 
 test('seams and group heads use one divider rule', () => {
   assert.match(css, /--divider-rule:\s*1px solid var\(--edge\);/)
-  assert.match(css, /\.viewhost\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
+  // the tab band carries that rule as an inset in the same --edge (a shorthand cannot ride a box-shadow),
+  // and the content host under it owns no second line
+  assert.match(css, /\.tabstrip\s*\{\s*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/)
+  assert.doesNotMatch(css, /\.viewhost\s*\{[^}]*border-top:/s)
   assert.match(css, /\.ft-section \+ \.ft-section\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)
   // the three zone heads (dock, console, phone) trail ONE rule — one declaration, not three copies of it
   assert.match(css, /\.dock-session-zone::after, \.si-zone::after, \.m-zone::after\s*\{[^}]*border-top:\s*var\(--divider-rule\);/s)

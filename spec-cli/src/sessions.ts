@@ -2956,14 +2956,18 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
   if (harness.launchPayloadProof && !current()?.harnessSessionId) {
     for (;;) {
       if (hasReadableLaunchReceipt(id)) {
-        if (recordLockHeld) {
+        // The probe above ran outside the fence, so another consumer (the drain, a resume recovery) may have
+        // taken the receipt first. Under the fence a receipt that is already gone with the identity bound is
+        // that consumer's success, not a missing receipt; gone and unbound means keep waiting.
+        const consume = (): boolean => {
           readinessWakeSuppressed.add(id)
-          try { consumeHarnessLaunchProofUnlocked(id) } finally { readinessWakeSuppressed.delete(id) }
-        } else await withRecordLock(id, async () => {
-          readinessWakeSuppressed.add(id)
-          try { consumeHarnessLaunchProofUnlocked(id) } finally { readinessWakeSuppressed.delete(id) }
-        })
-        break
+          try {
+            if (!hasReadableLaunchReceipt(id)) return !!readRecord(id)?.harnessSessionId
+            consumeHarnessLaunchProofUnlocked(id)
+            return true
+          } finally { readinessWakeSuppressed.delete(id) }
+        }
+        if (recordLockHeld ? consume() : await withRecordLock(id, async () => consume())) break
       }
       if (Date.now() >= deadline) return null
       await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))

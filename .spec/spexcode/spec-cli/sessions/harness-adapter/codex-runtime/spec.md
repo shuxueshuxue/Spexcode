@@ -93,7 +93,12 @@ trailer — silently, which is why each tier is asserted rather than hoped for.
   carrying a duplicate key, and auto-writes a bare `[projects."<proj>"]` the moment it trusts a folder. The
   writer therefore strips every prior definition of this project's trust — a sentinel block in any past format,
   a bare table, and its `[hooks.state]` entries — before appending, self-healing a config that already carries
-  one rather than appending a second key that takes codex fully offline.
+  one rather than appending a second key that takes codex fully offline. The same file has a second writer the
+  adapter cannot coordinate with — codex itself rewrites it whole when it trusts a folder or records a hook hash
+  — so the adapter never persists bytes codex could not load: the body about to be written must parse as TOML,
+  else the write is refused loudly and the file is left exactly as found (a line read mid-rewrite would otherwise
+  be committed as truncation, and every dispatched thread then dies at config load). The write itself is an
+  atomic replacement, so codex's own reader never sees the adapter's half-written file either.
 - **Hooks REVIEWED.** Even trusted and enabled, an unhashed hook counts as new-or-changed, and codex forces the
   startup hook-review prompt on a PERSISTENT RESUME regardless of the bypass flag. The visible TUI attaches by
   `resume`, so an unhashed hook wedges the worker at an interactive menu. The adapter writes the per-hook

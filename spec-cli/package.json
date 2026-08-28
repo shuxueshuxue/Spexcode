@@ -39,7 +39,8 @@
     "@spexcode/session-selflaunch": "0.6.8",
     "@spexcode/spec-core": "0.6.8",
     "@spexcode/spec-eval": "0.6.8",
-    "@spexcode/spec-forge": "0.6.8"
+    "@spexcode/spec-forge": "0.6.8",
+    "smol-toml": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

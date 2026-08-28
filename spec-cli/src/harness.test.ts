@@ -2764,3 +2764,26 @@ test('a codex thread is created carrying its session identity, and the visible T
   const cmd = codexLaunchCommand('rec-42', 'codex --yolo', 'codex', '/tmp/spex-project')
   assert.match(cmd, /-c '\\''shell_environment_policy\.set\.SPEXCODE_SESSION_ID=rec-42'\\'' --cd "\$PWD" --remote unix:\/\/"\$sock" resume "\$tid"/)
 })
+
+test('writeCodexTrust refuses to persist a config.toml that codex could not load, and replaces a good one without changing its mode', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-cxhome-'))
+  const file = join(home, 'config.toml')
+  const proj = '/tmp/spex-proj-y'
+  const orig = { ...process.env }
+  process.env.CODEX_HOME = home
+  try {
+    // the live failure shape: another writer's line cut short mid-value (a concurrent codex rewrite read mid-way)
+    const truncated = `model = "gpt-5.5"\n\n[hooks.state."/other/keep/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:ee24c9d11f409a63be85`
+    writeFileSync(file, truncated, { mode: 0o600 })
+    assert.throws(() => writeCodexTrust(proj, ['Stop'], (e) => `spex dispatch ${e}`), /refusing to rewrite .*config\.toml: it does not parse as TOML/)
+    assert.equal(readFileSync(file, 'utf8'), truncated, 'a refused write leaves the broken bytes exactly as found — nothing of ours is appended')
+
+    writeFileSync(file, `model = "gpt-5.5"\n`, { mode: 0o600 })
+    writeCodexTrust(proj, ['Stop'], (e) => `spex dispatch ${e}`)
+    const cfg = readFileSync(file, 'utf8')
+    assert.ok(cfg.startsWith('model = "gpt-5.5"\n') && cfg.includes(`[projects."${proj}"]`), 'a parseable config is stamped')
+    assert.equal(statSync(file).mode & 0o777, 0o600, 'the replaced file keeps the user-private mode codex gave it')
+  } finally {
+    process.env = orig
+  }
+})

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { claudeTranscript, codexTranscript, geminiTranscript, hermesTranscriptReader, openclawTranscript, opencodeTranscriptReader, piTranscript, TranscriptReadError, unsupportedTranscript } from './index.js'
 
@@ -275,5 +276,27 @@ test('an archived codex rollout is still located and read', async () => {
     assert.ok(codexTranscript.revision('thread-archived'), 'the revision probe sees the archived file')
     const read = await codexTranscript.read('thread-archived', { from: T('00:00:00'), to: T('00:00:05') })
     assert.deepEqual(read.turns.map((turn) => turn.text), ['compute', '42'])
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
+const CODEX_146 = (name: string) => join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'codex-0.146', name)
+
+test('a Codex 0.146 rollout: the person once, never as JSON blocks; the agent once, never twice', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CODEX_HOME', root, async () => {
+    const dir = join(root, 'sessions', '2026', '08', '29')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'rollout-2026-08-29T06-15-54-01a04a71-9ccb-77a0-b9e9-1341f534ef72.jsonl'), readFileSync(CODEX_146('rollout-meeting-participant.jsonl')))
+    writeFileSync(join(dir, 'rollout-2026-08-29T06-15-53-01a04a71-98e0-7961-adc4-a228b1185373.jsonl'), readFileSync(CODEX_146('rollout-meeting-participant-prose.jsonl')))
+    const range = { from: 1, to: Date.parse('2026-08-29T00:00:00Z') }
+    const quiet = await codexTranscript.read('01a04a71-9ccb-77a0-b9e9-1341f534ef72', range)
+    assert.equal(quiet.turns.filter((turn) => turn.role === 'user').length, 3, 'three human messages, each once — the response_item echo and the AGENTS.md injection are not turns')
+    assert.ok(!quiet.turns.some((turn) => (turn.text || '').startsWith('[{"type":"input_text"')), 'no JSON-encoded content blocks as text')
+    assert.equal(quiet.turns.filter((turn) => turn.role === 'assistant' && turn.text).length, 0, 'an agent that only answered through tool calls has no prose turns (its empty agent_message events are clocks)')
+    assert.ok(quiet.turns.some((turn) => turn.tools?.length), 'its tool calls are turns')
+    const prose = await codexTranscript.read('01a04a71-98e0-7961-adc4-a228b1185373', range)
+    const said = prose.turns.filter((turn) => turn.role === 'assistant' && turn.text).map((turn) => turn.text)
+    assert.equal(said.length, 2, 'two prose replies — the response_item copy of each agent_message is not a second turn')
+    assert.match(said[0] || '', /four-day work week/)
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })

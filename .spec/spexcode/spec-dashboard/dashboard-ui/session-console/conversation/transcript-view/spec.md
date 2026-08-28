@@ -28,6 +28,22 @@ holds a running call is marked so its fold can say it. A closed interval never s
 ended before a result was written is history, not something still happening, so the same payload read as
 history draws the same call as a plain sentence.
 
+**The work in progress never folds.** Folding is for process that already produced an answer — collapse the
+process, keep the result. The last segment of a LIVE payload is what is happening now: its calls after the newest
+prose, or all of its calls while there is no prose yet, draw as sentences whatever their number, in the collapsed
+tail and in the expanded interval alike; neither the segment fold nor a turn's own run fold applies to them,
+because a `7 tool uses ›` row under a seam line that already says `7 tool uses ›` is a count that shows nothing,
+twice. They fold the moment the agent speaks — the prose that follows makes them the process behind that answer
+— and a closed interval reads the same calls as history, folded by the ordinary rule. Consecutive tool-only
+turns are ONE list of calls: the harness draws a turn boundary around every call it makes, and that boundary is
+not a paragraph break, so seven calls in seven turns sit at the same list spacing as seven calls in one.
+
+**The transcript says nothing the record already said.** The interval's first human turn is the message that
+opened the seam — the record quotes it one row above — so it is not quoted again inside; a human turn the record
+does not carry (typed into the harness itself) still is. The test is a prefix match either way over squashed
+whitespace, the same one the live tail applies to the agent's newest prose against the record's newest message
+([[message-stream]]); it lives here so both faces elide by one rule.
+
 **Disclosure is keyed to the transcript's own ids** — a tool's id, a run's first tool, a segment's first turn —
 never to render position, so a live refresh of the same interval keeps what the reader opened, and a payload
 for a different interval starts closed by construction. The person's turn inside a transcript strips the

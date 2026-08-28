@@ -85,7 +85,7 @@ The two planes, made native to touch:
   composer it sends on plain Enter, inserts a line on Shift+Enter, and lets an IME composition Enter commit
   text without sending, matching the desktop Command Box. The composer stops at the tab bar; `.m-tabbar` alone
   owns the viewport-bottom safe-area inset. The main/content boundary uses the same `--divider-rule` as the
-  desktop content host and session group heads, so the bottom tab bar does not invent a second seam token. Its
+  desktop tab band and session group heads, so the bottom tab bar does not invent a second seam token. Its
   retained silent `replyVia:"note"` is redundant for a
   headless target and remains no visible control; the session capability, not this surface, owns the
   default. The note itself is produced when the agent executes the external `spex session <verb>

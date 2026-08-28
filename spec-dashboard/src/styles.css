@@ -576,7 +576,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
    thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
    genuinely float (menus, the palette), never stacked to fake a surface. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; border-top: var(--divider-rule); box-shadow: inset 1px 0 0 var(--panel); }
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -650,6 +650,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   min-width: 132px; background: var(--paper); color: var(--ink2);
   border-right-color: transparent; border-radius: var(--radius) var(--radius) 0 0;
 }
+/* THE BAND MEETS THE PAGE AT A HAIRLINE, EXCEPT UNDER THE ACTIVE TAB. The active tab IS the page: its paper
+   runs straight down into the document, the way an editor's live tab is joined to its pane, and the divider
+   rule runs under everything else — inactive tabs, the empty band, the action cluster. The line is an inset
+   shadow at the band's bottom edge, painted beneath its children, so the active tab covers it with its own
+   paper and a wrapped band needs no per-row bookkeeping; an inactive tab carries the same rule itself so a
+   hover wash never breaks the line. The content host owns no top rule of its own: one seam, one owner. */
+.tabstrip { box-shadow: inset 0 -1px 0 var(--edge); }
+.tab:not(.on) { background: var(--panel); box-shadow: inset 0 -1px 0 var(--edge); }   /* an opaque ground: one rule, not the band's and the tab's stacked */
 .tab:not(.on):hover { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
 .tab:not(.on):focus-within { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
 @keyframes tab-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
@@ -2891,6 +2899,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    containers. A chat has almost no chrome — the turns' own shapes carry the structure, and whitespace does
    the separating. What is left here is the smallest set of marks that still says who spoke.               */
 .tc-flow { display: flex; flex-direction: column; gap: var(--space-6); }
+/* consecutive tool-only turns are ONE list of calls: the harness draws a turn boundary around every call it
+   makes, and that boundary is not a paragraph break — seven calls in seven turns read at the same list
+   spacing as seven calls in one, in the opened interval and in an opened fold alike */
+.tc-flow > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - var(--space-6)); }
+.tc-work-body > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - 14px); }
 /* the person is QUOTED with the same bubble the outer conversation uses (`.m-quote`), one step smaller
    because it is nested; the agent IS the page — full width, no bubble, no tint. */
 .tc-ask { align-self: flex-end; }
@@ -2951,14 +2964,17 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    prose and a spinner on a running call — nothing else moves, and reduced motion stills both. */
 .m-live { margin-top: var(--space-2); min-width: 0; }
 .m-live .tc-say-text { animation: rise var(--dur-rise) ease; }
-.m-live .tc-say-text:last-of-type::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-live-caret 1s steps(2, start) infinite; }
+/* the caret sits INLINE at the end of the newest prose's last line (on its last block, not on the block
+   container — an ::after on the container lands under the last paragraph as a line of its own), and only
+   while that prose is the newest thing in the turn (`is-speaking`): once a call follows, the words are done */
+.m-live.is-speaking > .tc-say:last-child .tc-say-text .rich-text > :last-child::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-live-caret 1s steps(2, start) infinite; }
 @keyframes m-live-caret { to { visibility: hidden; } }
 .tc-tool.is-running .tc-tool-verb { color: var(--ink2); }
 .tc-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
 .tc-tool-spin { animation: tc-tool-spin 1s linear infinite; }
 @keyframes tc-tool-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .m-live .tc-say-text, .m-live .tc-say-text:last-of-type::after, .tc-tool-spin { animation: none; }
+  .m-live .tc-say-text, .m-live.is-speaking > .tc-say:last-child .tc-say-text .rich-text > :last-child::after, .tc-tool-spin { animation: none; }
 }
 
 /* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */

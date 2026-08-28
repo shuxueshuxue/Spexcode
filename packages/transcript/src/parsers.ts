@@ -55,8 +55,20 @@ export type Parse = (value: unknown) => ParsedEvent | null
 
 export function claudeEvent(value: unknown): ParsedEvent | null {
   const entry = object(value)
-  const message = object(entry?.message)
-  if (!entry || !message) return null
+  if (!entry) return null
+  // A message steered into a RUNNING turn (stream-json `type:user` on stdin, a queued command in the TUI) is not
+  // recorded as a `user` message: Claude writes it as an `attachment` of type `queued_command` carrying the prompt
+  // blocks. It is the person's turn all the same, and the one place a steer becomes observable — hooks never fire
+  // for it — so the reader draws it as a user turn at the moment it entered the conversation.
+  if (entry.type === 'attachment') {
+    const attachment = object(entry.attachment)
+    const queuedAt = at(entry)
+    if (attachment?.type !== 'queued_command' || queuedAt === null) return null
+    const text = items(attachment.prompt).map((block) => string(object(block)?.text)).filter(Boolean).join('\n') || null
+    return text ? { at: queuedAt, turn: { id: idOf(entry), at: queuedAt, role: 'user', text, tools: [] } } : null
+  }
+  const message = object(entry.message)
+  if (!message) return null
   const eventAt = at(entry) ?? at(message)
   if (eventAt === null) return { at: null, turn: null }
   if (entry.type === 'user' && message.role === 'user') {

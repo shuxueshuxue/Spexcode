@@ -37,3 +37,17 @@ test('the same codex parser reads a rollout line from memory', async () => {
   const read = await live.read('codex-thread', { from: T('00:00:00'), to: T('00:00:05') })
   assert.deepEqual(read.turns.map((turn) => [turn.role, turn.text, turn.id]), [['user', 'hello', `user@${T('00:00:00')}`], ['assistant', 'hi there', `assistant@${T('00:00:01')}`]])
 })
+
+// captured 2026-08-29 from a real claude-headless session steered mid-turn (bench 3.6, ~/spexcode-evidence/9b7bbed4/claude-steer-attachment.jsonl)
+const STEER_ATTACHMENT = { parentUuid: 'cfcdaf08-d5e6-47e6-86b5-c63d7ca92e9f', isSidechain: false, attachment: { type: 'queued_command', prompt: [{ type: 'text', text: 'STEER: stop counting now. Do not run any further sleep command. Declare done immediately with the last number you echoed.' }] }, uuid: 'b1c2d3e4-0000-4000-8000-000000000001', type: 'attachment', timestamp: '2026-08-28T20:58:39.012Z', userType: 'external', entrypoint: 'cli' }
+
+test('a message steered into a running Claude turn is a user turn, in both sources', async () => {
+  const live = new LiveTranscript(claudeEvent, 'steered')
+  live.push({ type: 'assistant', timestamp: '2026-08-28T20:58:30.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'c10', name: 'Bash', input: { command: 'sleep 4 && echo 10' } }] } })
+  assert.equal(live.push(STEER_ATTACHMENT), true, 'the queued command is recognized')
+  live.push({ type: 'assistant', timestamp: '2026-08-28T20:58:50.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Done. Counted 1 through 11.' }] } })
+  const read = await live.read('steered', { from: Date.parse('2026-08-28T20:58:00Z'), to: Date.parse('2026-08-28T20:59:00Z') })
+  assert.deepEqual(read.turns.map((turn) => [turn.role, turn.id]), [['assistant', 'assistant@1787950710000'], ['user', 'b1c2d3e4-0000-4000-8000-000000000001'], ['assistant', 'assistant@1787950730000']])
+  assert.match(read.turns[1].text || '', /^STEER: stop counting now/)
+  assert.equal(live.push({ type: 'attachment', timestamp: '2026-08-28T20:58:40.000Z', attachment: { type: 'total_tokens_reminder', text: '<total_tokens>1</total_tokens>' } }), false, 'other attachments are not turns')
+})

@@ -1,0 +1,21 @@
+:root {
+  --tt-bg: var(--term-bg, #0d1117);
+  --tt-fg: var(--term-fg, #c9d1d9);
+  --tt-cursor: var(--term-cursor, #c9d1d9);
+  --tt-selection: var(--term-selection, #264f78);
+  --tt-selection-fg: var(--term-selection-fg, #f0f6fc);
+  --tt-mono: var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  --tt-size: var(--type-terminal, 14px);
+}
+
+.st-wrap { position: relative; width: 100%; height: 100%; background: var(--tt-bg); color: var(--tt-fg); }
+.st-host { width: 100%; height: 100%; overflow: clip; background: var(--tt-bg); }
+.st-host .xterm, .st-host .xterm-screen, .st-host .xterm-viewport { background: var(--tt-bg) !important; }
+.st-host .xterm { color: var(--tt-fg); font-family: var(--tt-mono); font-size: var(--tt-size); }
+.st-input-confirm-backdrop { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(0,0,0,.28); }
+.st-input-confirm { width: min(420px, calc(100% - 32px)); padding: 16px; border: 1px solid var(--edge, #30363d); border-radius: var(--radius, 4px); background: var(--panel, #161b22); color: var(--ink, #f0f6fc); }
+.st-input-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.st-input-confirm-actions button { padding: 6px 10px; border: 1px solid var(--line, #30363d); border-radius: var(--radius, 4px); background: var(--panel2, #21262d); color: var(--ink2, #c9d1d9); }
+.st-copyhint { position: absolute; right: 8px; bottom: 6px; z-index: 4; padding: 3px 6px; font: 12px var(--tt-mono); pointer-events: none; }
+.st-copyhint.copied { color: var(--green, #3fb950); }
+.st-copyhint.reconnecting { color: var(--orange, #d29922); }

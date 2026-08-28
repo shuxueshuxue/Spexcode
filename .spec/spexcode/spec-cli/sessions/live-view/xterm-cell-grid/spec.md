@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The pinned DOM renderer boxes every glyph run by terminal cells, so font fallback and DPR rounding cannot push the final columns outside the grid.
 code:
-  - spec-dashboard/scripts/patch-xterm-sync-resize.mjs#cellGridPatches
+  - packages/terminal-ui/scripts/patch-xterm-sync-resize.mjs#cellGridPatches
 related:
   - spec-dashboard/package.json
   - spec-dashboard/src/SessionTerm.jsx

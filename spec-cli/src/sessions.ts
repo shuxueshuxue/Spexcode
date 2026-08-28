@@ -1,4 +1,5 @@
 import { execFile, execFileSync, spawn } from 'node:child_process'
+import { createConnection } from 'node:net'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
@@ -15,6 +16,7 @@ import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { jsonMigrationFencePath, type ProductionSessionApplication } from '@spexcode/session-application'
+import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
 import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
 import { stripRefSigil } from './mentions.js'
@@ -1658,11 +1660,40 @@ let draining = false   // re-entrancy guard: only one drain pass runs at a time 
 // queued prompts cannot drain during the candidate window; the successful publication path drains normally.
 const readinessWakeSuppressed = new Set<string>()
 
+// A readiness timeout is launch-phase evidence only until the session produces another durable event. The
+// first event at/after the readiness marker is the launch transition itself; anything after that proves the
+// worker progressed (including a declaration), so a late diagnostic is moot and must not replace its note.
+function hasLaterLaunchReadinessEvent(rec: SessRec): boolean {
+  const startedAt = rec.launchReadinessStartedAt
+  if (!Number.isFinite(startedAt)) return false
+  const application = configuredSessionApplicationIfCutover()
+  if (!application?.readState(rec.session)) return false
+  const events = application.readEvents(rec.session)
+  const statusPayload = (event: (typeof events)[number]): Record<string, unknown> | null => {
+    const payload = decodeEventJson(event.payload)
+    return payload && typeof payload === 'object' && !Array.isArray(payload) && 'status' in payload
+      ? payload as Record<string, unknown> : null
+  }
+  const baseline = events.find((event) => {
+    if (event.occurredAtMs < Number(startedAt)) return false
+    const payload = statusPayload(event)
+    return payload?.status === 'active'
+  })
+  return baseline ? events.some((event) => {
+    if (event.eventSeq <= baseline.eventSeq) return false
+    const payload = statusPayload(event)
+    if (!payload) return false
+    const note = payload.note
+    return !(typeof note === 'string' && /^(?:queued launch readiness failed|launch readiness warning):/.test(note))
+  }) : false
+}
+
 function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = true, label?: string, live = false): void {
+  const rec = readRecord(id)
+  if (rec && (terminal || label === 'launch readiness warning') && hasLaterLaunchReadinessEvent(rec)) return
   const reason = error instanceof Error ? error.message : String(error)
   const note = `${label ?? (terminal ? 'queued launch readiness failed' : 'launch readiness warning')}: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
-  const rec = readRecord(id)
   if (rec && !retirementReason(rec) && (rec.note !== note
     || (terminal && (rec.status !== 'error' || !rec.stopped || rec.launchReadinessStartedAt != null))
     || (!terminal && live && (rec.status === 'error' || rec.stopped)))) {
@@ -2387,19 +2418,58 @@ function isExplicitConnectionRefused(error: unknown): boolean {
   if (Array.isArray(errors)) return errors.length > 0 && errors.every(isExplicitConnectionRefused)
   return isExplicitConnectionRefused((error as { cause?: unknown }).cause)
 }
+async function establishBackendConnection(target: ApiBaseInfo): Promise<boolean> {
+  const parsed = new URL(target.url)
+  const port = Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80)
+  return await new Promise<boolean>((resolve, reject) => {
+    const socket = createConnection({ host: parsed.hostname, port })
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      fn()
+    }
+    const timer = setTimeout(() => {
+      // The event loop may have been blocked past the wall after the kernel completed the handshake. In that
+      // case Node has not emitted `connect` yet, but `connecting` is already false; acceptance still proves
+      // presence and must not be relabelled as an unavailable backend.
+      if (!socket.connecting || socket.readyState === 'open') return finish(() => resolve(false))
+      finish(() => {
+      const error = new Error(`backend connection was not accepted at ${target.url} within 1500ms`)
+      error.name = 'BackendError'
+      Object.assign(error, { code: 'backend_availability_indeterminate' })
+      reject(error)
+      })
+    }, 1500)
+    timer.unref?.()
+    socket.once('connect', () => finish(() => resolve(false)))
+    socket.once('error', (error) => finish(() => {
+      if (isExplicitConnectionRefused(error)) return resolve(true)
+      const failed = new Error(`backend availability is indeterminate at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
+      failed.name = 'BackendError'
+      Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
+      reject(failed)
+    }))
+  })
+}
 async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean> {
+  // TCP acceptance establishes presence. The identity route can be delayed by a busy backend event loop,
+  // so it gets the ordinary create request deadline instead of a short availability deadline.
+  const refused = await establishBackendConnection(target)
+  if (refused) return true
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 1500)
+  const timer = setTimeout(() => controller.abort(new Error('backend authority request timed out')), sessionCreateTimeoutMs() + 5_000)
   timer.unref?.()
   let response: Response
   try {
     response = await fetch(`${target.url}/api/instance`, { signal: controller.signal })
   } catch (error) {
     clearTimeout(timer)
-    if (isExplicitConnectionRefused(error)) return true
-    const failed = new Error(`backend availability is indeterminate at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
+    const failed = new Error(`backend authority read failed after connection at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
     failed.name = 'BackendError'
-    Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
+    Object.assign(failed, { code: 'backend_authority_read_failed', cause: error })
     throw failed
   }
   try {

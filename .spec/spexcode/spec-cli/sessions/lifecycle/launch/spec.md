@@ -98,6 +98,10 @@ has a durable readiness marker and its witness is not yet online. A row that is 
 or a live pane is settled: reload clears only the stale marker (and any old readiness diagnostic) and never starts a
 new timer, calls the readiness observer, or writes a warning note.
 
+The readiness diagnostic is launch-phase evidence only until the session produces another authored lifecycle event
+after the launch transition. If a declaration or later lifecycle activity has landed, a timeout is moot and is not
+recorded; in particular, no readiness diagnostic may replace the declaration's note.
+
 **A queued launch carries a stable public-backend authority lease.** Its identity is the normalized
 `SPEXCODE_API_URL` the supervisor injects — the stable loopback proxy URL agents use, stripped of credentials,
 query, and fragment — never the supervisor's ephemeral child port or PID (a direct server falls back to its
@@ -139,10 +143,12 @@ package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so 
 so the launch always runs where the launch env and cap live. The caller can be **another agent** running in a
 stripped or divergent environment, so an in-process launch there would bring workers up in the caller's context
 rather than the backend's. The CLI falls back to in-process **only when the target explicitly refuses the
-connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). One
-bounded settings probe also performs the implicit target's project check. Any HTTP response proves an owner,
-regardless of status. A probe timeout, abort, reset, DNS failure, or unknown transport error is indeterminate
-and fails loud without creating; it may hide an already accepted request.
+connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). Presence
+is established by TCP connection acceptance, not by a response-header deadline: a connected but slow backend
+remains present and receives the ordinary create request. One bounded settings probe also performs the implicit
+target's project check. Any HTTP response proves an owner, regardless of status. A timeout, abort, reset, DNS
+failure, or unknown transport error before acceptance is indeterminate and fails loud without creating; failures
+after acceptance remain backend errors and never fall back.
 
 That ownership starts at prompt invocation, not after a client has already interpreted it. A raw leading
 `/<preset>` names a live `surface: command` plugin: the shared prompt resolver expands its body, fills `{{targets}}` from the

@@ -55,7 +55,12 @@ is pi's OWN half, chosen so the rest of the product needs NO pi branch:
   `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>`; the runtime's server binds it and pi supplies only the inject —
   `sendUserMessage({deliverAs: steer})`, always able, so no reject gate. Claude's best-effort rendezvous
   poke and socket-LISTENER liveness work for pi **unchanged** — `ownsRendezvous: true`, zero new transport
-  code; the runtime's server is multi-connection, so a probe cannot displace another poke.
+  code; the runtime's server is multi-connection, so a probe cannot displace another poke. The one other
+  binding pi supplies is the abort: the extension keeps the RUNNING turn's context (from `agent_start`,
+  `turn_start`, `input`, `tool_call`, `tool_result`; cleared at `agent_end`) and answers the runtime's
+  `interrupt` line with that context's `ctx.abort()` — rejected as "no pi turn is running" when there is
+  none or it is idle. [[pi-headless]] drives that through its controller; the interactive adapter keeps the
+  operator's own `C-c` ([[dispatch]]).
 
 The extension also exports `PI_SESSION_ID` (the adapter's `sessionEnvVar`) at `session_start`, so tool
 subprocesses — and the agent's own `spex` calls — inherit their session identity; the pinned `--session-id`

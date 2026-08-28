@@ -12,7 +12,7 @@ import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { claudeHeadlessColdRuntime, claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
-import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
+import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, interruptPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
@@ -745,6 +745,63 @@ export async function deliverViaSocketOrWake(
   if (probe === 'live') return deliverViaRendezvous(id, text, mid)
   if (probe === 'unproven') return { ok: false, error: unprovenError }
   return coldWake()
+}
+
+const RENDEZVOUS_INTERRUPT_WALL_MS = 10_000
+const RENDEZVOUS_INTERRUPT_SETTLE_MS = 15_000
+// @@@ interruptViaRendezvous - one `interrupt` line to the session's LIVE rendezvous listener, confirmed by the
+// shim's own answer ([[shim-runtime]] runs the host's native abort — pi's ctx.abort(), opencode's
+// session.abort — and writes interrupt-done / interrupt-rejected). Unlike a reply poke, whose durable copy is
+// the timeline, an interrupt has nothing to fall back on: silence is a loud failure, never an optimistic ok.
+// A generative shim serves its socket only while a turn process is alive, so a dead listener means no turn
+// is running — nothing to interrupt — and an unproven probe sends nothing. `settle` additionally waits for
+// that listener to go dead: for a one-turn-per-process adapter the abort ends the process, and confirming
+// only then means a delivery that follows the interrupt wakes cold instead of poking an exiting agent.
+export async function interruptViaRendezvous(id: string, harness: string, opts: { settle?: boolean } = {}): Promise<DispatchResult> {
+  const probe = await rendezvousListening(id)
+  if (probe === 'dead') return { ok: false, error: `no ${harness} turn is running for session ${id} - nothing to interrupt` }
+  if (probe === 'unproven') return { ok: false, error: `${harness} rendezvous listener for session ${id} is unproven - interrupt NOT sent` }
+  const answered = await sendRendezvousInterrupt(id, harness)
+  if (!answered.ok || !opts.settle) return answered
+  const deadline = Date.now() + RENDEZVOUS_INTERRUPT_SETTLE_MS
+  for (;;) {
+    const state = await rendezvousListening(id)
+    if (state === 'dead') return { ok: true }
+    if (Date.now() >= deadline) return { ok: false, error: `${harness} confirmed the interrupt but its turn process for session ${id} is still ${state === 'live' ? 'serving' : 'unproven'} after ${RENDEZVOUS_INTERRUPT_SETTLE_MS}ms` }
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+}
+
+function sendRendezvousInterrupt(id: string, harness: string): Promise<DispatchResult> {
+  return new Promise((resolve) => {
+    let settled = false
+    let c: ReturnType<typeof createConnection> | undefined
+    const done = (r: DispatchResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(wall)
+      try { c?.destroy() } catch { /* */ }
+      resolve(r)
+    }
+    const wall = setTimeout(() => done({ ok: false, error: `${harness} did not confirm the interrupt for session ${id} within ${RENDEZVOUS_INTERRUPT_WALL_MS}ms (a shim materialized before interrupt support never answers - rerun spex materialize)` }), RENDEZVOUS_INTERRUPT_WALL_MS)
+    try { c = createConnection({ path: rvSock(id) }) } catch (e) { done({ ok: false, error: `rendezvous socket connect threw: ${String(e)} - interrupt NOT sent` }); return }
+    c.on('error', (e: NodeJS.ErrnoException) => done({ ok: false, error: `rendezvous socket error: ${e?.code || String(e)} - interrupt NOT confirmed` }))
+    c.on('close', () => done({ ok: false, error: `rendezvous connection closed before ${harness} answered the interrupt` }))
+    c.on('connect', () => c!.write(`${JSON.stringify({ type: 'interrupt' })}\n`))
+    let buf = ''
+    c.on('data', (chunk) => {
+      buf += chunk.toString('utf8')
+      let nl: number
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl)
+        buf = buf.slice(nl + 1)
+        let msg: { type?: string; error?: string } = {}
+        try { msg = JSON.parse(line) as { type?: string; error?: string } } catch { continue }
+        if (msg.type === 'interrupt-done') return done({ ok: true })
+        if (msg.type === 'interrupt-rejected') return done({ ok: false, error: `${harness} rejected the interrupt: ${msg.error || 'no reason given'}` })
+      }
+    })
+  })
 }
 
 type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code?: number; message?: string } }
@@ -3328,6 +3385,8 @@ export const piHeadlessHarness: Harness = {
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
   liveness: sessionHomeLiveness,
   deliver: deliverViaPiHeadless,
+  // the controller aborts its own turn child natively and confirms only once that child is gone
+  interrupt: interruptPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
   coldRuntime: async (rec) => {
     const result = await piHeadlessColdRuntime(rec)
@@ -3459,6 +3518,9 @@ export const opencodeHeadlessHarness: Harness = {
       `opencode-headless rendezvous probe was inconclusive for session ${rec.session} - refusing to start a possibly duplicate turn`,
     )
   },
+  // `opencode run` serves the rendezvous socket only for the turn it runs, so the plugin's session abort IS the
+  // interrupt, and the listener going dead is the turn's exit — confirmed only then, so the next delivery wakes cold
+  interrupt: (rec) => interruptViaRendezvous(rec.session, 'opencode-headless', { settle: true }),
 }
 
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.

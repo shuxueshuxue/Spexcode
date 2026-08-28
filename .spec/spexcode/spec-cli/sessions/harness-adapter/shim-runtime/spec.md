@@ -36,7 +36,12 @@ The runtime owns five shared contracts:
   shared Claude-family adapter and socket-listener liveness are reused verbatim. MULTI-connection means a
   board probe cannot displace a concurrent poke. A repeated `mid` is injected once for this live shim; an
   injection error releases that marker, while an unable host leaves the message owed for the queue to retry.
-  It never confirms or rejects an injection: the timeline is the delivery.
+  It never confirms or rejects an injection: the timeline is the delivery. The one line it DOES answer is
+  `interrupt`: the host binds its native abort (pi's `ctx.abort()` of the running turn, opencode's
+  `session.abort` on the adopted root session) and the server writes `interrupt-done` once that abort ran or
+  `interrupt-rejected` with the reason — no turn running, no session adopted, no abort bound — because an
+  interrupt has no durable copy to fall back on, so the asker ([[dispatch]]'s headless interrupt) must hear
+  the answer or fail loudly.
 - **the stop-gate loop closure** (`dispatchStop`) — a blocked Stop's continuation is a LOOP, and the loop
   needs a termination bit: claude's native Stop payload carries `stop_hook_active=true` inside a
   hook-forced continuation, and the stop-gate's escape paths (auto-declare / downgrade-to-ask) key on

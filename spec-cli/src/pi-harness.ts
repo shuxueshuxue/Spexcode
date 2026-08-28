@@ -41,21 +41,34 @@ export default function spexcode(pi: ExtensionAPI) {
   const toolFields = (toolName: string, input: unknown) =>
     ({ tool_name: TOOL[toolName] ?? toolName, tool_input: rt.toolInput(input, "path") })
 
+  // the RUNNING turn's context, kept from the events pi hands us mid-turn: ctx.abort() is pi's own "stop the
+  // current agent operation" — the one honest interrupt — and only a turn that is actually streaming has one.
+  let turn: { abort: () => void; isIdle: () => boolean } | null = null
   // bound as soon as the extension loads so liveness reads online early; only a governed launch carries the
   // socket env (sessions.ts rvEnv) — a self-launched bare \`pi\` skips this.
-  const rv = rt.serveRendezvous((text: string) => pi.sendUserMessage(text, { deliverAs: "steer" }))
+  const rv = rt.serveRendezvous((text: string) => pi.sendUserMessage(text, { deliverAs: "steer" }), {
+    interrupt: () => {
+      if (!turn || turn.isIdle()) throw new Error("no pi turn is running - nothing to interrupt")
+      turn.abort()
+    },
+  })
 
   pi.on("session_start", async (_event, ctx) => {
     sessionId = ctx.sessionManager.getSessionId() || sessionId
     process.env.PI_SESSION_ID = sessionId   // tool subprocesses inherit it → spex CLI knows its session
     await rt.dispatchEvent("SessionStart")
   })
-  pi.on("input", async (event) => { await rt.dispatchEvent("UserPromptSubmit", { prompt: event.text }) })
-  pi.on("tool_call", async (event) => {
+  // agent_start is the earliest event a running turn hands us — before the first model token — so an
+  // interrupt that arrives while the model is still thinking finds a turn to abort rather than nothing.
+  pi.on("agent_start", async (_event, ctx) => { turn = ctx })
+  pi.on("turn_start", async (_event, ctx) => { turn = ctx })
+  pi.on("input", async (event, ctx) => { turn = ctx; await rt.dispatchEvent("UserPromptSubmit", { prompt: event.text }) })
+  pi.on("tool_call", async (event, ctx) => {
+    turn = ctx
     const r = await rt.dispatchEvent("PreToolUse", toolFields(event.toolName, event.input))
     if (rt.blocked(r)) return { block: true, reason: rt.blockReason(r, "blocked by a SpexCode hook") }
   })
-  pi.on("tool_result", async (event) => { await rt.dispatchEvent("PostToolUse", toolFields(event.toolName, event.input)) })
+  pi.on("tool_result", async (event, ctx) => { turn = ctx; await rt.dispatchEvent("PostToolUse", toolFields(event.toolName, event.input)) })
   // Stop rides the runtime's dispatchStop on TWO bindings that never duplicate: agent_end performs the
   // NORMAL dispatch (pi awaits its listeners inside the run loop and drains a queued teach as the SAME
   // awaited prompt's continuation — never the orphaned settle-time prompt whose late inject threw
@@ -71,7 +84,7 @@ export default function spexcode(pi: ExtensionAPI) {
     async (reason: string) => pi.sendUserMessage(reason, { deliverAs: "steer" }),
     "a SpexCode Stop hook blocked this stop without giving a reason",
   )
-  pi.on("agent_end", async () => { await stop() })
+  pi.on("agent_end", async () => { turn = null; await stop() })
   pi.on("agent_settled", async () => { if (rt.stopPending()) await stop() })
   pi.on("session_shutdown", async () => { rv?.close() })
 }

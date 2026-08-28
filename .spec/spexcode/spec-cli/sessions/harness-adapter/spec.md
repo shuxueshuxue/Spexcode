@@ -290,7 +290,10 @@ session layer through each harness's native signal: Claude's StopFailure hook, a
 adapter's non-zero child exit, or the Codex app-server observer inherited by its interactive and headless forms.
 Every source reaches the same active-only `markTurnFailure` compare-and-set, changing a live undeclared
 `active` lifecycle to `error`; a zero process exit, native completed or interrupted turn, declaration, or
-explicit stop that landed first changes nothing. Process notes name the harness plus exit code or signal;
+explicit stop that landed first changes nothing. A human interrupt is the one exit that is not a failure: the
+backend stamps the interrupt before the abort is sent, and a process-backed headless adapter's non-zero exit
+that follows a fresh stamp is projected as the interrupt (`asking`, [[dispatch]]) through this same seam,
+never as `error`. Process notes name the harness plus exit code or signal;
 Codex notes retain the native error message and native `completedAt`. `online` may remain true
 when the adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal
 `error` lifecycle is the honest signal that the previous turn failed.

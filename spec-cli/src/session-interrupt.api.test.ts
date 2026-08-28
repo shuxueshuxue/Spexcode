@@ -11,7 +11,8 @@ import { readFileSync } from 'node:fs'
 
 // [[dispatch]]: `POST /api/sessions/:id/interrupt` is ONE verb whose transport branch is decided in the
 // backend. A pane-backed TUI without a native interrupt receives the operator's own key — C-c into its own
-// pane — but only while its lifecycle is active; a headless adapter without a native primitive refuses.
+// pane — but only while its lifecycle is active; a headless adapter interrupts through its shim's native abort
+// and refuses loudly when no turn is serving its rendezvous socket.
 // Measured against a real backend, a real tmux server on a throwaway socket, and a real pane whose shell
 // reports the SIGINT it received.
 const here = dirname(fileURLToPath(import.meta.url))
@@ -91,10 +92,12 @@ test('YATU: interrupt reaches a pane-backed TUI as its own key, and refuses wher
       return { status: response.status, body: await response.json() as { ok: boolean; error?: string } }
     }
 
-    // a headless adapter with no native primitive refuses — there is no keyboard to press
+    // a headless adapter's interrupt goes to the process that owns its turn (pi-headless: the controller, which
+    // aborts natively over the child's rendezvous socket); with no controller listening nothing is running,
+    // and the answer says exactly that — never a guessed signal at some other process
     const refusedHeadless = await interrupt(headless)
     assert.equal(refusedHeadless.status, 502)
-    assert.match(refusedHeadless.body.error || '', /no native hard-interrupt control/)
+    assert.match(refusedHeadless.body.error || '', /pi-headless controller unreachable|no pi-headless turn is running/)
 
     // a pane-backed TUI that is not working refuses too: the same key on an idle TUI is a step toward quitting it
     const refusedIdle = await interrupt(idle)

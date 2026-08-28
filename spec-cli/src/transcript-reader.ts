@@ -19,7 +19,8 @@ export type TranscriptTool = Readonly<{
   outputBytes: number
 }>
 export type TranscriptTurn = Readonly<{
-  id: string | null
+  id: string                // the native id, or `<role>@<at>[#n]` synthesized in thread order — never null, so a
+                            // subscriber can key the same turn across reads ([[session-transcript]] diffs by it)
   at: number
   role: 'user' | 'assistant'
   text?: string
@@ -36,12 +37,23 @@ export type TranscriptRead = Readonly<{
   outOfOrderEvents: number
 }>
 
+// THE OPEN INTERVAL'S CURSOR. `[from, now]` is re-read on every native change while an agent works, and a native
+// file only ever grows: the cursor keeps its byte position and the line still being written, so each `advance`
+// parses what was appended since the last one and returns the same complete snapshot `read` would. A source
+// that shrank was rewritten underneath it and is read afresh.
+export type TranscriptTail = Readonly<{
+  advance(to: number): Promise<TranscriptRead>
+  close(): void
+}>
+
 // An adapter's transcript capability. `revision` is the cheap "did anything change" probe (a stat, never a
-// parse); `read` is the bounded interval read. A harness with no reliable native transcript declares
-// `unsupportedTranscript`, which fails loudly instead of pretending the conversation was empty.
+// parse); `read` is the bounded interval read; `tail` opens the incremental cursor on an open interval. A
+// harness with no reliable native transcript declares `unsupportedTranscript`, which fails loudly instead of
+// pretending the conversation was empty.
 export type TranscriptReader = Readonly<{
   revision(threadId: string): string | null
   read(threadId: string, range: TranscriptRange): Promise<TranscriptRead>
+  tail(threadId: string, from: number): TranscriptTail
 }>
 
 export class TranscriptReadError extends Error {
@@ -306,12 +318,17 @@ class IntervalCollector {
   readonly turns: MutableTurn[] = []
   private readonly byTool = new Map<string, MutableTool>()
   private readonly evicted = new Set<string>()
+  private readonly synthesized = new Map<string, number>()   // `<role>@<at>` → how many turns already wore it
   sawTimestamp = false
   omittedTurns = 0
   omittedBytes = 0
   outOfOrderEvents = 0
   private pastRange = false
-  constructor(private readonly range: TranscriptRange) {}
+  private readonly range: { from: number; to: number }
+  constructor(range: TranscriptRange) { this.range = { from: range.from, to: range.to } }
+
+  // the open interval's end is "now" and moves; extending it never revisits what was already collected
+  extend(to: number): void { if (to > this.range.to) this.range.to = to }
 
   // returns true once the source has moved past `to` (the caller may then bound its lookahead)
   add(event: ParsedEvent): boolean {
@@ -334,6 +351,14 @@ class IntervalCollector {
         if (bytes > remaining) this.omittedBytes += bytes - remaining
       }
     } else if (event.turn) {
+      // a turn without a native id gets one from its place in the thread — deterministic across re-reads of an
+      // append-only source, which is what lets a subscriber match it between frames
+      if (event.turn.id === null) {
+        const base = `${event.turn.role}@${event.turn.at}`
+        const seen = this.synthesized.get(base) ?? 0
+        this.synthesized.set(base, seen + 1)
+        event.turn.id = seen ? `${base}#${seen}` : base
+      }
       this.turns.push(event.turn)
       for (const tool of event.turn.tools) this.byTool.set(tool.id, tool)
       if (this.turns.length > MAX_TURNS) {
@@ -351,7 +376,7 @@ class IntervalCollector {
       revision,
       from: this.range.from,
       to: this.range.to,
-      turns: this.turns.map((turn) => ({ ...turn, tools: turn.tools.length ? turn.tools.map((tool) => ({ ...tool })) : undefined })),
+      turns: this.turns.map((turn) => ({ ...turn, id: turn.id as string, tools: turn.tools.length ? turn.tools.map((tool) => ({ ...tool })) : undefined })),
       truncated: this.omittedTurns > 0 || this.omittedBytes > 0 || this.outOfOrderEvents > 0,
       omittedTurns: this.omittedTurns,
       omittedBytes: this.omittedBytes,
@@ -369,64 +394,105 @@ const fileRevision = (path: string): string | null => {
 // each re-read into "parse the current stretch" instead of "parse the whole thread again".
 const intervalOffsets = new Map<string, number>()
 
-async function readLineFile(harness: string, path: string, parse: Parse, range: TranscriptRange): Promise<TranscriptRead> {
-  let size = 0
-  try { size = statSync(path).size } catch (error) { throw new TranscriptReadError('unreadable', `${harness} transcript is unreadable: ${error instanceof Error ? error.message : String(error)}`) }
-  if (size <= 0) throw new TranscriptReadError('unreadable', `${harness} transcript is unreadable: file is empty`)
-  const seekKey = `${path}\n${range.from}`
-  const seek = intervalOffsets.get(seekKey) ?? 0
-  const start = seek > 0 && seek < size ? seek : 0
-  const collector = new IntervalCollector(range)
-  // a seek lands on the interval's first event, so the timestamps before it are known to exist
-  if (start > 0) collector.sawTimestamp = true
-  let fd: number | null = null
-  try {
-    fd = openSync(path, 'r')
-    const chunk = Buffer.allocUnsafe(64 * 1024)
-    let carry = Buffer.alloc(0)
-    let position = start
-    let lineStart = start
-    let postRangeLines = 0
-    let stop = false
-    while (!stop) {
-      const read = readSync(fd, chunk, 0, chunk.length, position)
-      if (read <= 0) break
-      position += read
-      let buffer = carry.length ? Buffer.concat([carry, chunk.subarray(0, read)]) : Buffer.from(chunk.subarray(0, read))
-      let cut = 0
-      for (let index = 0; index < buffer.length; index++) {
-        if (buffer[index] !== 10) continue
-        const line = buffer.subarray(cut, index).toString('utf8')
-        const lineOffset = lineStart
-        lineStart += index - cut + 1
-        cut = index + 1
-        if (!line.trim()) continue
-        let value: unknown
-        try { value = JSON.parse(line) } catch (error) { throw new TranscriptReadError('invalid', `${harness} transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
-        const event = parse(value)
-        if (!event) continue
-        const inRange = event.at !== null && event.at >= range.from && event.at <= range.to
-        if (inRange && !intervalOffsets.has(seekKey)) intervalOffsets.set(seekKey, lineOffset)
-        const pastRange = collector.add(event)
-        if (pastRange && ++postRangeLines >= POST_RANGE_LOOKAHEAD_LINES) { stop = true; break }
-      }
-      // a trailing line without its newline is still being written by the harness; it joins the next read
-      carry = Buffer.from(buffer.subarray(cut))
+// Where a scan of the file stands: the next byte to read, and the bytes of a line that had no newline yet —
+// a trailing line without its newline is still being written by the harness and joins the next scan.
+type LineScan = Readonly<{ position: number; carry: Buffer }>
+
+// One pass over the bytes from `scan.position` to the end of the file. Every complete line is parsed as JSON
+// and handed to `onLine` with its byte offset; `onLine` returning true stops the scan early (a bounded
+// lookahead), which abandons the rest — only a one-shot read does that.
+function scanLines(harness: string, fd: number, scan: LineScan, onLine: (value: unknown, offset: number) => boolean): LineScan {
+  const chunk = Buffer.allocUnsafe(64 * 1024)
+  let { position, carry } = scan
+  let lineStart = position - carry.length
+  while (true) {
+    const read = readSync(fd, chunk, 0, chunk.length, position)
+    if (read <= 0) break
+    position += read
+    const buffer = carry.length ? Buffer.concat([carry, chunk.subarray(0, read)]) : Buffer.from(chunk.subarray(0, read))
+    let cut = 0
+    for (let index = 0; index < buffer.length; index++) {
+      if (buffer[index] !== 10) continue
+      const line = buffer.subarray(cut, index).toString('utf8')
+      const lineOffset = lineStart
+      lineStart += index - cut + 1
+      cut = index + 1
+      if (!line.trim()) continue
+      let value: unknown
+      try { value = JSON.parse(line) } catch (error) { throw new TranscriptReadError('invalid', `${harness} transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
+      if (onLine(value, lineOffset)) return { position, carry: Buffer.alloc(0) }
     }
-  } catch (error) {
-    if (error instanceof TranscriptReadError) throw error
-    throw new TranscriptReadError('unreadable', `${harness} transcript could not be read: ${error instanceof Error ? error.message : String(error)}`)
-  } finally { if (fd !== null) closeSync(fd) }
-  return collector.finish(fileRevision(path) ?? `${size}`, harness)
+    carry = Buffer.from(buffer.subarray(cut))
+  }
+  return { position, carry }
+}
+
+// The cursor over one interval of one line file. A one-shot `read` is a cursor advanced once and dropped; the
+// open interval's `tail` keeps it, so each advance parses only what the harness appended since the last one.
+class LineFileCursor {
+  private collector: IntervalCollector
+  private scan: LineScan = { position: 0, carry: Buffer.alloc(0) }
+  private started = false
+  private readonly seekKey: string
+  constructor(private readonly harness: string, private readonly path: string, private readonly parse: Parse, private readonly from: number) {
+    this.seekKey = `${path}\n${from}`
+    this.collector = new IntervalCollector({ from, to: from })
+  }
+
+  private restart(size: number): void {
+    const seek = intervalOffsets.get(this.seekKey) ?? 0
+    const start = seek > 0 && seek < size ? seek : 0
+    this.collector = new IntervalCollector({ from: this.from, to: this.from })
+    // a seek lands on the interval's first event, so the timestamps before it are known to exist
+    if (start > 0) this.collector.sawTimestamp = true
+    this.scan = { position: start, carry: Buffer.alloc(0) }
+  }
+
+  advance(to: number, lookahead = Number.POSITIVE_INFINITY): TranscriptRead {
+    let size = 0
+    try { size = statSync(this.path).size } catch (error) { throw new TranscriptReadError('unreadable', `${this.harness} transcript is unreadable: ${error instanceof Error ? error.message : String(error)}`) }
+    if (size <= 0) throw new TranscriptReadError('unreadable', `${this.harness} transcript is unreadable: file is empty`)
+    // a source that shrank was rewritten underneath the cursor: forget the position and read the interval afresh
+    if (!this.started || size < this.scan.position) { this.restart(size); this.started = true }
+    this.collector.extend(to)
+    let fd: number | null = null
+    try {
+      fd = openSync(this.path, 'r')
+      let postRangeLines = 0
+      this.scan = scanLines(this.harness, fd, this.scan, (value, offset) => {
+        const event = this.parse(value)
+        if (!event) return false
+        const inRange = event.at !== null && event.at >= this.from && event.at <= to
+        if (inRange && !intervalOffsets.has(this.seekKey)) intervalOffsets.set(this.seekKey, offset)
+        const pastRange = this.collector.add(event)
+        return pastRange && ++postRangeLines >= lookahead
+      })
+    } catch (error) {
+      if (error instanceof TranscriptReadError) throw error
+      throw new TranscriptReadError('unreadable', `${this.harness} transcript could not be read: ${error instanceof Error ? error.message : String(error)}`)
+    } finally { if (fd !== null) closeSync(fd) }
+    return this.collector.finish(fileRevision(this.path) ?? `${size}`, this.harness)
+  }
 }
 
 function lineFileReader(harness: string, locate: (threadId: string) => string | null, parse: Parse): TranscriptReader {
+  const find = (threadId: string): string => {
+    const path = locate(threadId)
+    if (!path) throw new TranscriptReadError('missing', `${harness} transcript for ${threadId} is unavailable: file was not found`)
+    return path
+  }
   return {
     revision: (threadId) => { const path = locate(threadId); return path ? fileRevision(path) : null },
-    read: async (threadId, range) => {
-      const path = locate(threadId)
-      if (!path) throw new TranscriptReadError('missing', `${harness} transcript for ${threadId} is unavailable: file was not found`)
-      return readLineFile(harness, path, parse, range)
+    // after passing `to`, a one-shot read scans a fixed lookahead window for timestamp disorder before stopping
+    read: async (threadId, range) => new LineFileCursor(harness, find(threadId), parse, range.from).advance(range.to, POST_RANGE_LOOKAHEAD_LINES),
+    tail: (threadId, from) => {
+      let cursor: LineFileCursor | null = null
+      return {
+        // the file is located on the first advance, so a tail opened before the thread exists fails as `missing`
+        // there rather than at construction
+        advance: async (to) => (cursor ??= new LineFileCursor(harness, find(threadId), parse, from)).advance(to),
+        close: () => { cursor = null },
+      }
     },
   }
 }
@@ -439,7 +505,7 @@ export const piTranscript: TranscriptReader = lineFileReader('pi', (threadId) =>
 // revision is parsed and kept, so repeated interval reads of a quiet thread cost nothing new.
 const opencodeExports = new Map<string, { revision: string; events: ParsedEvent[] }>()
 export function opencodeTranscriptReader(root = opencodeStoreRoot(), load: (threadId: string) => string = opencodeExport): TranscriptReader {
-  return {
+  const reader: Pick<TranscriptReader, 'revision' | 'read'> = {
     revision: () => opencodeStoreRevision(root),
     read: async (threadId, range) => {
       const revision = opencodeStoreRevision(root)
@@ -459,12 +525,19 @@ export function opencodeTranscriptReader(root = opencodeStoreRoot(), load: (thre
       return collector.finish(revision, 'opencode')
     },
   }
+  return {
+    ...reader,
+    // no file grows here: an open interval is re-collected from the cached export, which is one export per revision
+    tail: (threadId, from) => ({ advance: (to) => reader.read(threadId, { from, to }), close: () => {} }),
+  }
 }
 export const opencodeTranscript: TranscriptReader = opencodeTranscriptReader()
 
 export function unsupportedTranscript(harness: string): TranscriptReader {
+  const refuse = async (): Promise<never> => { throw new TranscriptReadError('unsupported', `${harness} does not support transcript access`) }
   return {
     revision: () => null,
-    read: async () => { throw new TranscriptReadError('unsupported', `${harness} does not support transcript access`) },
+    read: refuse,
+    tail: () => ({ advance: refuse, close: () => {} }),
   }
 }

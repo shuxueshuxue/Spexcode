@@ -10,6 +10,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/transcript-reader.ts
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/data.test.mjs
 ---
 
 # session-transcript
@@ -27,13 +28,28 @@ intended. A read failure keeps the reader's reason: `unsupported` is 501, `inval
 
 `GET /api/sessions/:id/transcript/stream?from=<ms>` is the OPEN interval `[from, now]` — the stretch a working
 agent is in right now, whose end is the server clock and moves. The stream writes one frame immediately, then
-each tick runs the adapter's cheap revision probe and, only when the revision moved, re-reads the interval and
-pushes the WHOLE normalized payload as one `transcript` event: a subscriber always holds one consistent read
-rather than a patch it has to merge, and it is the same shape the GET returns, so one renderer reads both. An
-absent source is a frame with the revision `absent` and no turns — the thread has not started writing — not an
-error; a read failure is a frame carrying `{error, reason}` so the surface can say so in place. Periodic `ping`
-heartbeats let the browser's dead-man reopen a silent stream. Reading happens only while a client is subscribed
-and stops on abort; reconnecting simply reads the thread again, and a restarted server reconstructs nothing.
+each tick runs the adapter's cheap revision probe and, only when the revision moved, advances the interval's
+cursor ([[transcript-reader]] parses only what was appended) and pushes what CHANGED as one `transcript` event.
+**The first frame is the whole interval (`kind: "full"`); every later one is a `delta`** holding only the turns
+that are new or changed since the previous frame — a turn changes when a call in it gains its result — and, as
+`removed`, the ids the turn cap evicted; `truncated` and the omission counters are always absolute. The
+subscriber merges by turn id and holds one consistent read of the same shape the GET returns, so one renderer
+reads both; a revision that moved without changing the interval sends nothing. A reconnect or a restarted server
+starts from `full` again. An absent source is an empty `full` frame with the revision `absent` — the thread has
+not started writing — not an error; a read failure is a frame carrying `{error, reason}` so the surface can say
+so in place. Periodic `ping` heartbeats let the browser's dead-man reopen a silent stream. Reading happens only
+while a client is subscribed and stops on abort, closing the cursor.
+
+**A live frame carries no output bodies.** A call whose result the harness recorded travels with `output: null`
+and its true `outputLines`/`outputBytes`; a call with no result has no `output` field at all, which is what the
+surface reads as running. The body comes from `GET /api/sessions/:id/transcript/tool/:toolId?from=<ms>` — the
+same interval, one call, `{id, output, outputLines, outputBytes}`, 404 when the call is not in it — read once,
+when a person opens the call. The closed-interval GET keeps bodies inline: it is read once for its history.
+
+Why both: measured on a real 29-minute turn (92 turns, 33 calls), the whole-payload frame was 320 KB — 74% tool
+output, 20% tool input, 0.3% prose — and it was re-sent on every native write, so a minute of ordinary tool use
+cost megabytes per open tab for a surface that shows one line per call and a body only on click. The delta makes
+a change cost what changed; withholding bodies makes even the first frame the size of what is on screen.
 
 The compact execution projection this replaced — a separate route that parsed the same native file a second
 way into "the latest working note and its steps" — no longer exists: the browser derives the current turn from

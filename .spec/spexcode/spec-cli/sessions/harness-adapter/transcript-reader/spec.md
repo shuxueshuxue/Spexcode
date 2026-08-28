@@ -25,13 +25,24 @@ harness has exactly one parser, and adding a harness adds one parser, never one 
 runtime state, tmux panes, and transcript paths do not cross the adapter boundary; structured or private
 reasoning is never a turn.
 
-**The reader has two verbs.** `revision(threadId)` is the cheap change probe — a file stat for the JSONL
+**The reader has three verbs.** `revision(threadId)` is the cheap change probe — a file stat for the JSONL
 harnesses, the store's database/write-ahead-log stat for OpenCode — and is `null` when the source does not exist
 yet, so a subscriber can tick without parsing and a thread that has not started writing reads as absent rather
 than broken. `read(threadId, {from, to})` is the bounded interval read; its result carries the revision it was read
-at. A harness with no reliable native transcript (z-code) declares `unsupportedTranscript`, whose read fails with an
-explicit `unsupported` reason and whose revision is always `null`; it never pretends the conversation was empty.
-The four headless adapters inherit their base harness's reader, because the thread is the same file.
+at. `tail(threadId, from)` opens a cursor on the OPEN interval `[from, now]`: each `advance(to)` parses only what
+the harness appended since the last one — a native file only grows, so the cursor keeps its byte position and the
+line still being written — and returns the same complete snapshot `read` would; a source that shrank was
+rewritten underneath it and is read afresh, and a tail opened before the thread exists fails as `missing` on
+advance, not at construction. OpenCode has no growing file, so its tail re-collects from the export cached per
+revision. A harness with no reliable native transcript (z-code) declares `unsupportedTranscript`, whose read and
+tail fail with an explicit `unsupported` reason and whose revision is always `null`; it never pretends the
+conversation was empty. The four headless adapters inherit their base harness's reader, because the thread is
+the same file.
+
+**Every turn is keyed.** A turn carries the harness's own id when it has one, else `<role>@<at>` — `#n` appended
+for the n-th turn sharing that clock — assigned in thread order, which an append-only source keeps stable across
+re-reads. That is what lets [[session-transcript]] send only the turns that changed and a subscriber match them
+to the ones it holds.
 
 **Bounded, and honest about the bound.** The read caps turns and per-tool output bytes and reports `truncated`,
 `omittedTurns`, `omittedBytes`, and `outOfOrderEvents` whenever payload was omitted or the native timestamp
@@ -44,10 +55,11 @@ a line reader scans a fixed lookahead window for timestamp disorder before stopp
 bounded.
 
 **An open interval re-reads cheaply.** A native file is append-only, so the byte where an interval's first
-event sits never moves; the reader remembers that offset per (file, `from`) and later reads of the same interval
-start there — the open tail is re-read on every change as "parse the current stretch", never "parse the whole
-thread again". OpenCode has no per-thread file: one export per store revision is parsed and kept, so
-repeated reads of a quiet thread export nothing new.
+event sits never moves; the reader remembers that offset per (file, `from`) and a one-shot read of the same
+interval starts there, while the tail cursor goes further and parses only the bytes appended since its last
+advance — the open interval is never "parse the whole stretch again", let alone the whole thread. OpenCode has
+no per-thread file: one export per store revision is parsed and kept, so repeated reads of a quiet thread
+export nothing new.
 
 A missing, deleted, unreadable, malformed, or timestamp-less native source is an explicit `missing`, `unreadable`,
 or `invalid` failure. The transcript remains a payload, never a field in `timeline.ndjson` or `runtime.json`.

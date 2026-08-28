@@ -11,8 +11,9 @@ scenarios:
       - spec-dashboard/src/styles.css
     description: >-
       Through the running dashboard's real Sessions route, select Conversation for a working session and feed
-      the open seam's transcript stream normalized frames: a human message, prose, a completed call and a
-      running one; the running call's completion; a later prose turn; a turn with tools and no prose; a
+      the open seam's transcript stream the wire's frames — one `full`, then `delta`s carrying only the turns
+      that changed, tool results as `output: null` with a tool route answering the body: a human message, prose,
+      a completed call and a running one; the running call's completion; a later prose turn; a turn with tools and no prose; a
       trailing run of seven calls across five tool-only turns with no prose, one turn firing three calls at
       once, behind a human turn the record does not carry; the prose that answers that run; then prose equal
       to the newest agent message on the record. Between frames, expand and collapse the seam.
@@ -20,7 +21,9 @@ scenarios:
       The tail sits inside the open seam's row beneath its live line — no trace row, no card, no pop-out — and
       the seam's turn and call counts come from the same payload. The newest prose is agent prose on the page;
       each call is a transcript sentence narrower than the column, only the result-less one wearing the running
-      mark; output stays folded until clicked and opens inline. The caret blinks inline at the end of the
+      mark; output stays folded until clicked and opens inline, its body arriving by one fetch for that call
+      that a later delta does not repeat; a delta leaves the untouched turns exactly where the full frame put
+      them. The caret blinks inline at the end of the
       newest prose's last line only while that prose is the turn's newest event — never on a line of its own,
       and not at all once a call follows the words. A same-interval refresh keeps the open row and
       drops the settled call's running mark; a later prose turn replaces the compact view with that prose and

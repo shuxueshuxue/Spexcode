@@ -22,7 +22,7 @@ import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
-import { readSessionTranscript, sessionTranscriptStream } from './session-transcript.js'
+import { readSessionTranscript, readSessionTranscriptTool, sessionTranscriptStream } from './session-transcript.js'
 import { defaultHarness, HARNESSES, codexHarness, launcherList, launcherDefault, harnessById } from './harness.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
@@ -734,6 +734,7 @@ app.get('/api/sessions/:id/capture', async (c) => {
 // route never guesses which stretch the caller intended; native bytes stay behind the adapter.
 app.get('/api/sessions/:id/transcript', (c) => readSessionTranscript(c))
 app.get('/api/sessions/:id/transcript/stream', (c) => sessionTranscriptStream(c))
+app.get('/api/sessions/:id/transcript/tool/:toolId', (c) => readSessionTranscriptTool(c))
 // the session's persisted interaction history ([[session-timeline]]): authored status transitions (with the
 // FULL note text) + delivered prompts, timestamped, oldest first — what a terminal-free surface renders as
 // the conversation. `?limit=<n>` caps the tail (default 500). 404 for an unknown/non-governed id.

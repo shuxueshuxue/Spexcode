@@ -219,7 +219,8 @@ try {
   const expectedRows = archivedTimeline.events.reduce((n, event, i, all) => n + (bareWorking(event) && i > 0 && bareWorking(all[i - 1]) ? 0 : 1), 0)
   assert.equal(await archivedConversation.locator('.m-ev:not(.m-ev-prompt):not(.m-ev-trace)').count(), expectedRows, 'archive conversation must render the API timeline instead of a shelf card')
   assert.equal(await page.locator('.si-shelf-card').count(), 0, 'archive card must not replace Conversation')
-  assert.equal(await archivedConversation.locator('.m-input').isDisabled(), true, 'archived composer must be disabled')
+  assert.equal(await archivedConversation.locator('.m-input').count(), 0, 'archived composer input should be hidden')
+  assert.equal(await archivedConversation.locator('.m-composer-tools').count(), 0, 'archived composer controls should be hidden')
   await archivedConversation.locator('.m-coldline-action').filter({ hasText: /restore/i }).waitFor({ state: 'visible' })
   frame('📷 flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
 

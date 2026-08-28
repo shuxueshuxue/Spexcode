@@ -50,6 +50,12 @@ send it to a session, or edit it in place and commit ([[prose-dispatch]]). That 
 prose column and is made entirely of z-layers: the document's geometry with a selection is exactly its
 geometry without one, and the chips are untouched by it.
 
+When no passage is selected, a plain-prose right-click still opens that same z-layer as a node action menu.
+It can send the complete current node through the shared session composer and copy the node's canonical link;
+links and controls retain their browser context menu. The node send uses the same selection-token transport as
+passage dispatch, with the whole body as the addressed range, so recipients receive one consistent node
+reference rather than a reader-only special case.
+
 **B5 acceptance.** A spec detail has no `.specview-code`, no automatic `SourceView`, and no split
 divider or `spex.docSplit` state. Opening a governance chip or attachment produces an independent file tab,
 leaves the spec tab in the working set, focuses the file, and lets a second chip replace the same file slot.

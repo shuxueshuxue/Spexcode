@@ -15,6 +15,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { menuKeyDown, slashTokenAt, SlashMenu, TriggerButton, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import SelectionAttachment from './SelectionAttachment.jsx'
 import { navigate } from './route.js'
+import { copyAddress, specAddress } from './address.js'
 import { markNewTab } from './tabs.js'
 
 // [[prose-dispatch]]: what a reader can DO with a passage of spec prose they just selected.
@@ -89,6 +90,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
 
   const [hit, setHit] = useState(null)        // { lines, x, y } — a live selection and where to point at it
   const [menuOpen, setMenuOpen] = useState(false) // the action group is opened explicitly by the native context menu
+  const [nodeMenuOpen, setNodeMenuOpen] = useState(false) // node actions when no passage is selected
   const [panel, setPanel] = useState(null)    // { kind:'send'|'manual', x, y }
   const [draft, setDraft] = useState('')      // the card's optional message / the editor's replacement
   const [target, setTarget] = useState('')    // a live session id, or 'new' (its launcher is the remembered one)
@@ -100,10 +102,11 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   const live = sessions.filter((s) => sessionFooterState(s) === 'live')
   // Closing the card also retires the action group that opened it. Keeping menuOpen true would make the
   // group paint for one frame when an outside press clears panel, before the selection listener catches up.
-  const dismiss = useCallback(() => { setPanel(null); setMenuOpen(false); setError(null); setBusy(false) }, [])
+  const dismiss = useCallback(() => { setPanel(null); setMenuOpen(false); setNodeMenuOpen(false); setError(null); setBusy(false) }, [])
   const clear = useCallback(() => {
     setHit(null)
     setMenuOpen(false)
+    setNodeMenuOpen(false)
     hitRef.current = null
     codeSelectionRef.current = null
     onCodeSelectionClear?.()
@@ -113,7 +116,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   useEffect(() => {
     // A source selection can collapse transiently when CodeMirror handles the right-button press.
     // Keep the menu state for that gesture; the ref below supplies the last lossless range.
-    if (codeSelection) setMenuOpen(false)
+    if (codeSelection) { setMenuOpen(false); setNodeMenuOpen(false) }
     if (!codeSelection) { setPanel(null); setError(null); setBusy(false) }
   }, [codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
 
@@ -127,7 +130,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   // WHERE THE LINE NUMBERS COME FROM. The renderer stamped each block with its body lines
   // ([[prose-selection]]); a selection is read back through those stamps on mouse-up, never by measuring
   // text. No stamps under the selection (the title, the meta row, a node whose parts could not be placed)
-  // means no actions — silence rather than a guessed range.
+  // means no passage actions — the node menu below still offers actions for the document itself.
   useEffect(() => {
     const host = hostRef?.current
     if (!host) return undefined
@@ -169,6 +172,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       if (sourceSelection) {
         event.preventDefault()
         setPanel(null)
+        setNodeMenuOpen(false)
         setMenuOpen(true)
         const next = { lines: { startLine: sourceSelection.startLine, endLine: sourceSelection.endLine }, x: event.clientX, y: event.clientY + 18 }
         setHit(next)
@@ -180,9 +184,22 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
         ? stampedRange(sel.getRangeAt(0), host)
         : null
       const lines = domLines || hitRef.current?.lines
-      if (!lines) return
+      if (!lines) {
+        // A reader can act on the node itself even when the native Selection is empty. Links and controls
+        // keep their browser menu; plain prose opens the node-level send/copy group instead.
+        if (!node) return
+        if (event.target.closest?.('a,button,input,textarea,select')) return
+        event.preventDefault()
+        setPanel(null)
+        setMenuOpen(false)
+        setNodeMenuOpen(true)
+        setHit({ lines: null, x: event.clientX, y: event.clientY + 18 })
+        hitRef.current = null
+        return
+      }
       event.preventDefault()
       setPanel(null)
+      setNodeMenuOpen(false)
       setMenuOpen(true)
       const next = { lines, x: event.clientX, y: event.clientY + 18 }
       setHit(next)
@@ -194,7 +211,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
 
   // the send card layers its own Escape (menu → address → card); the editor and the bare group are one layer.
   useEscLayer(panel?.kind === 'manual', dismiss)
-  useEscLayer(!!(hit || activeCodeSelection) && !panel, clear)
+  useEscLayer(!!(hit || activeCodeSelection || nodeMenuOpen) && !panel, clear)
 
   // an outside press closes the open card. Bound while a card is open only, so ordinary reading never pays
   // for a document-level listener.
@@ -205,10 +222,17 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     return () => document.removeEventListener('mousedown', onDown, true)
   }, [panel, dismiss])
 
-  const selection = activeCodeSelection || (hit && (bodyReady
+  const nodeSelection = node && bodyReady ? {
+    node: node.id,
+    path: node.path,
+    startLine: 1,
+    endLine: Math.max(1, body.split('\n').length),
+    text: body,
+  } : null
+  const selection = activeCodeSelection || (hit?.lines && (bodyReady
     ? proseSelection(node, body, hit.lines)
-    : { node: node?.id, path: node?.path, startLine: hit.lines.startLine, endLine: hit.lines.endLine, text: '' }))
-  const loading = !activeCodeSelection && !!hit && !bodyReady
+    : { node: node?.id, path: node?.path, startLine: hit.lines.startLine, endLine: hit.lines.endLine, text: '' })) || (nodeMenuOpen ? nodeSelection : null)
+  const loading = !activeCodeSelection && !!(hit || nodeMenuOpen) && !bodyReady
 
   const open = (action, event) => {
     const x = event?.clientX ?? hit?.x ?? selection?.x ?? 0
@@ -284,7 +308,10 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     }
   }
 
-  if ((!node && !activeCodeSelection) || (!selection && !loading)) return null
+  const copyNode = async () => {
+    if (await copyAddress(specAddress(node.id))) { setNodeMenuOpen(false); notify(t('proseActions.nodeCopied'), { kind: 'success' }) }
+  }
+  if ((!node && !activeCodeSelection) || (!selection && !loading && !nodeMenuOpen)) return null
   const anchor = {
     lines: hit?.lines || { startLine: selection?.startLine || 1, endLine: selection?.endLine || 1 },
     x: hit?.x ?? selection?.x ?? 0,
@@ -293,6 +320,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   return (
     <>
       {!panel && menuOpen && selection && <ActionGroup t={t} hit={anchor} disabled={loading} manualEnabled={!activeCodeSelection} onPick={open} />}
+      {!panel && nodeMenuOpen && <NodeActionGroup t={t} hit={anchor} disabled={loading} onSend={(event) => open({ key: 'send', preset: null, jump: false }, event)} onCopy={copyNode} />}
       {!panel && menuOpen && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
       {panel?.kind === 'send' && (
         <SendPopover t={t} panel={panel} node={node} selection={selection} specs={specs} sessions={sessions} live={live}
@@ -322,6 +350,23 @@ function ActionGroup({ t, hit, onPick, disabled = false, manualEnabled = true })
           {t(`proseActions.act.${action.key}`)}
         </button>
       ))}
+    </div>
+  )
+}
+
+function NodeActionGroup({ t, hit, onSend, onCopy, disabled = false }) {
+  const [ref, style] = useAnchored(hit.x, hit.y - 44, [])
+  return (
+    <div ref={ref} className="pa-group pa-node-group" role="menu" aria-label={t('proseActions.nodeGroupLabel')} style={style}>
+      <button type="button" role="menuitem" className="pa-act" disabled={disabled}
+        onMouseDown={(event) => event.preventDefault()} onClick={onSend}>
+        <Icon name="send" size={13} className="pa-act-icon" />
+        {t('proseActions.nodeSend')}
+      </button>
+      <button type="button" role="menuitem" className="pa-act" onMouseDown={(event) => event.preventDefault()} onClick={onCopy}>
+        <Icon name="copy" size={13} className="pa-act-icon" />
+        {t('proseActions.nodeCopy')}
+      </button>
     </div>
   )
 }

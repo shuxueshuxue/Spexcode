@@ -21,6 +21,8 @@ const resourceLabel = (url) => {
   } catch { return url }
 }
 
+const TAB_WRAP_FLOOR = 128
+
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
 
@@ -131,7 +133,9 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
     const host = tabsHostRef.current
     if (!host || typeof ResizeObserver === 'undefined') return undefined
     const update = () => {
-      const next = tabs.length * 80 > host.clientWidth
+      // Wrap while a tab can still keep a readable face. Waiting for the flex row to reach its 120px CSS
+      // minimum leaves labels and close affordances visibly cramped before the second row appears.
+      const next = tabs.length * TAB_WRAP_FLOOR > host.clientWidth
       setWrapped((current) => (current === next ? current : next))
     }
     update()

@@ -41,7 +41,7 @@ test('ordinary navigation names the focused tab so an inactive tab cannot be rep
 
 test('the strip enters shrink-wrap mode only when its minimums exceed the row', () => {
   assert.match(source, /new ResizeObserver\(update\)/)
-  assert.match(source, /tabs\.length \* 80 > host\.clientWidth/)
+  assert.match(source, /tabs\.length \* TAB_WRAP_FLOOR > host\.clientWidth/)
   assert.match(source, /tabstrip-tabs\$\{wrapped \? ' wrapped' : ''\}/)
 })
 

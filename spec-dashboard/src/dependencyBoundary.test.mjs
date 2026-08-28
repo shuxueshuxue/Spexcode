@@ -21,8 +21,8 @@ test('direct dashboard dependencies have a live owner or explicit boundary', () 
   const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
   const requiredImports = [
     '@codemirror/lang-javascript', '@codemirror/language', '@codemirror/merge', '@codemirror/state',
-    '@codemirror/view', '@lezer/highlight', '@spexcode/spec-cli', '@spexcode/spec-core', '@spexcode/transcript', '@spexcode/transcript-ui',
-    '@xterm/addon-fit', '@xyflow/react', 'katex', 'markdown-it', 'react', 'react-dom', '@vitejs/plugin-react',
+    '@codemirror/view', '@lezer/highlight', '@spexcode/spec-cli', '@spexcode/spec-core', '@spexcode/transcript', '@spexcode/transcript-ui', '@spexcode/terminal-ui',
+    '@xyflow/react', 'katex', 'markdown-it', 'react', 'react-dom', '@vitejs/plugin-react',
   ]
   for (const name of requiredImports) assert.ok(names.includes(name), `manifest lost required edge ${name}`)
   for (const name of requiredImports) assert.ok(source.includes(name), `dependency has no live importer: ${name}`)

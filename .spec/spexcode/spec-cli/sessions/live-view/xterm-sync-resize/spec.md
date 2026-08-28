@@ -7,7 +7,7 @@ code:
   - spec-dashboard/package.json
 related:
   - spec-dashboard/package-lock.json
-  - spec-dashboard/scripts/patch-xterm-sync-resize.mjs#synchronizedResizePatches
+  - packages/terminal-ui/scripts/patch-xterm-sync-resize.mjs#synchronizedResizePatches
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/styles.test.mjs
 ---

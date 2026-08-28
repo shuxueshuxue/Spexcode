@@ -34,3 +34,8 @@ calls, because this source collects the same events again on every read — the 
 never noticed, but a collector that appended a result onto the parsed tool object would show `okok` on the
 second read. The tail is an index into the event list: each advance collects only what was pushed since the last
 one and returns the same snapshot `read` would.
+
+**A live event may revise a turn.** App-server agent-message deltas re-emit the native item id as text grows.
+The collector replaces that id's turn in its original position, merging the accumulated text and retaining the
+existing tool map and any recorded outputs. A file source is append-only and never re-emits an id, so its turns
+retain the same behavior while the live source can publish one stable turn across a delta stream.

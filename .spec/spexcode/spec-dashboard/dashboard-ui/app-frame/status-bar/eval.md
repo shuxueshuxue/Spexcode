@@ -30,15 +30,18 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       With multiple configured launchers and session records, inspect the settled status bar at 1440px and
-      700px through the real dashboard. Include profiles sharing one harness icon, an unknown or missing
-      launcher record, and at least one needs-you session; click the launcher tally from a non-sessions route.
+      700px through the real dashboard before and while hovering the launcher tally. Include profiles sharing
+      one harness icon, an unknown or missing launcher record, and at least one needs-you session; click the
+      launcher tally from a non-sessions route.
     expected: >-
-      The 1440px bar remains exactly one --line-status row and shows each non-empty configured launcher as a
-      non-overlapping icon/name/running-needs-you-other group, plus one other bucket for unmatched records;
-      no session is silently omitted and needs-you uses the existing sb-warning semantic token. At 700px the
-      launcher list is replaced as one unit by a clickable aggregate badge with complete slash digits, the
-      badge stays inside the viewport, shared-harness profiles remain distinguishable by their initials, and
-      the click opens the sessions console without an unrelated archive-index error notice.
+      At both widths the settled bar remains exactly one --line-status row and rests on one clickable aggregate
+      badge with complete running-needs-you-other slash digits. On a precise-pointer hover, that badge is
+      replaced by each non-empty configured launcher as a non-overlapping icon/name/slash-tally group, plus one
+      other bucket for unmatched records; the detail expands inward without changing the row's layout, stays
+      inside the viewport, and leaving returns to the aggregate and adjacent readouts. No session is silently
+      omitted, needs-you uses the existing sb-warning semantic token, the aggregate badge stays inside the viewport,
+      shared-harness profiles remain distinguishable by their initials, and the click opens the sessions
+      console without an unrelated archive-index error notice.
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/styles.css]
     test: spec-dashboard/test/identity-chain.e2e.mjs
   - name: node-ledger-is-the-four-state-counts

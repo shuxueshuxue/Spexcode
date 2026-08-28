@@ -124,10 +124,10 @@ number remains a door without creating a second owner or tying ownership to a mo
 At every viewport the right group uses the available inline space without a hard viewport fraction or clipping
 overflow. Existing board, eval, and issue ledgers remain complete and actionable. The launcher tally rests as
 one aggregate badge at every desktop width; on devices with a precise hovering pointer, hovering that tally
-replaces the aggregate with the complete non-overlapping launcher groups, expanding inward over the line
-without reflowing it; leaving restores the aggregate and the readouts it temporarily covers. The default
-therefore spends one compact unit of the line, while the detail remains one pointer movement away and no
-slash digit is ever cut.
+replaces the aggregate with the complete launcher groups in normal flow while temporarily hiding the other
+right-side status readouts; no item is painted over another, and leaving restores both the aggregate and the
+hidden readouts. The default therefore spends one compact unit of the line, while the detail remains one
+pointer movement away and no slash digit is mixed into a neighboring readout.
 Density comes from one occurrence of each fact and compact
 glyph/count pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
 icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves

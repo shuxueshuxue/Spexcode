@@ -17,7 +17,7 @@ for (const scenario of SCENARIOS) {
   })
 }
 
-test('a seam owns exactly the interval between its neighbours; the open tail ends at the mount-time now', () => {
+test('a seam owns exactly the interval between its neighbours; the open tail ends at the now it is given', () => {
   const items = conversationItems(SCENARIOS.find((s) => s.name === 'second-message-while-working').events, NOW)
   const seams = items.filter((item) => item.kind === 'seam')
   assert.deepEqual(seams.map((seam) => [seam.from, seam.to]), [

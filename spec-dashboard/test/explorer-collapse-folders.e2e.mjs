@@ -1,7 +1,7 @@
 // [[file-tree]] `the-tree-opens-the-branch-the-address-names-and-remembers-it` and
 // `collapse-folders-is-one-door-on-the-explorer-head`, [[disk-tree]] `a-folder-stays-open-across-the-files-fold`,
 // and [[conversation]] `the-composer-is-paper-with-one-send-mark` + `the-conversation-reads-as-paper` +
-// `stop-is-one-square-while-working` + `the-live-seam-counts-and-glows`, measured
+// `stop-is-one-square-while-working` + `the-live-seam-counts-and-glows` + `an-expanded-live-seam-keeps-counting`, measured
 // through the running dashboard in a real browser.
 //
 //   BASE=http://127.0.0.1:5198 OUT=/path/to/evidence node spec-dashboard/test/explorer-collapse-folders.e2e.mjs
@@ -310,6 +310,27 @@ if (working) {
     assert.ok(first.startsWith('working') && seconds(first) !== null && seconds(second) !== null, 'the live seam reads working · Ns')
     assert.ok(Math.abs((seconds(second) - seconds(first) + 60) % 60 - 2) <= 1, 'the count advanced ~2s without a poll')
     assert.equal(anim, 'm-seam-shimmer')
+    // an EXPANDED live seam keeps counting: each poll re-reads its interval with an advancing `to`, and the
+    // inset never blinks back to its loading line once it has content
+    const reads = []
+    await page.route('**/transcript?*', async (route) => { reads.push(Number(new URL(route.request().url()).searchParams.get('to'))); await route.continue() })
+    const liveRow = page.locator('.tl-chat:visible .m-seam-row.is-live')
+    await liveRow.click()
+    await page.waitForSelector('.tl-chat:visible .m-seam-inset .tc-flow, .tl-chat:visible .m-seam-inset .m-transcript-empty', { timeout: 20000 })
+    const detailBefore = await page.locator('.tl-chat:visible .m-seam-row.is-live .m-seam-detail').textContent().catch(() => null)
+    let loadingFlashes = 0
+    const deadline = Date.now() + 19000
+    while (Date.now() < deadline) {
+      if (await page.locator('.tl-chat:visible .m-seam-inset .m-transcript-state').count()) loadingFlashes++
+      await page.waitForTimeout(300)
+    }
+    const detailAfter = await page.locator('.tl-chat:visible .m-seam-row.is-live .m-seam-detail').textContent().catch(() => null)
+    await page.unroute('**/transcript?*')
+    record('seam.expanded', { reads, loadingFlashes, detailBefore, detailAfter, stillOpen: await liveRow.getAttribute('aria-expanded') })
+    assert.ok(reads.length >= 2, 'the expanded live seam re-read across polls')
+    assert.ok(reads.every((to, i) => i === 0 || to > reads[i - 1]), 'each re-read ends later than the last')
+    assert.equal(loadingFlashes, 0, 'the inset never fell back to its loading line')
+    assert.equal(facts['seam.expanded'].stillOpen, 'true')
   } else record('seam.live', { skipped: 'no working session has an open tail seam right now' })
 } else record('stop.working', { skipped: 'no working pane-backed session on the board' })
 await page.goto(`${BASE}/#/sessions/${live.id}?surface=conversation`)

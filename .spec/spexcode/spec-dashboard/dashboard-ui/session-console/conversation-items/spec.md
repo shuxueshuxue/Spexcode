@@ -17,7 +17,8 @@ related:
 
 [[conversation]] renders three things in wire order — messages, seams, events — and this module is the one
 place that decides which stretch of a session's timeline is which. It is a pure function of the timeline
-events and a mount-time `now`; it knows nothing of the DOM, the footer, or liveness.
+events and a `now` (the caller's latest poll, on the server's clock); it knows nothing of the DOM, the footer,
+or liveness.
 
 **The items partition the session's time, and no stretch of work is ever dropped.** Every instant from the
 first event onward belongs to exactly one item: a QUOTE (a `sent` event; the addressing envelope
@@ -39,7 +40,11 @@ item is an open seam, and otherwise no item is open. Corollaries: the live tail 
 always present and disclosable no matter how many messages were sent into the turn; a message or note that
 landed on a working agent mid-history is followed by a `worked …` seam whose transcript can be opened; a
 message that lands on an agent that is not working claims no work. The open tail's interval ends at the
-mount-time `now`, never the poll-time one, so its transcript key stays stable across polls.
+`now` the caller passes — the SERVER time of the latest poll, never a mount-time snapshot. Freezing it at mount
+kept the transcript key stable across polls, and that was exactly the defect: an expanded live seam read
+`[from, mount]` once and its `0 turns · 0 tool uses` never moved while the agent worked. With the end
+advancing per poll the expanded tail re-reads its interval each poll; the seam's identity is its start, so
+the reader's disclosure survives the moving end, and a collapsed seam still reads nothing.
 
 The converse is not claimed: an open seam at the tail does not mean the agent is alive — the footer's
 liveness decides whether that seam ticks or reads the bare word `working` ([[conversation]]).

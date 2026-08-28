@@ -123,7 +123,7 @@ test('pi transcript reader locates the session by its header and joins tool resu
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
 
-test('opencode transcript reader parses one sanitized export per store revision', async () => {
+test('opencode transcript reader parses one export per store revision', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-transcript-store-'))
   try {
     writeFileSync(join(root, 'opencode.db'), '')

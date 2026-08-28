@@ -289,8 +289,11 @@ function opencodeStoreRevision(root: string): string | null {
     return `${database.size}:${Math.floor(database.mtimeMs)}:${writeAheadLog}`
   } catch { return null }
 }
+// The export is read RAW: `--sanitize` replaces every prose and tool-output part with a `[redacted:…]` token,
+// which made the whole conversation unreadable; the reader hands over the same local bytes the other harnesses'
+// files hold, and nothing here leaves the machine that ran the thread.
 function opencodeExport(threadId: string): string {
-  return execFileSync(process.env.SPEXCODE_OPENCODE_CMD || 'opencode', ['export', threadId, '--sanitize'], {
+  return execFileSync(process.env.SPEXCODE_OPENCODE_CMD || 'opencode', ['export', threadId], {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   })
 }
@@ -432,7 +435,7 @@ export const claudeTranscript: TranscriptReader = lineFileReader('claude', (thre
 export const codexTranscript: TranscriptReader = lineFileReader('codex', (threadId) => codexRolloutPath(threadId), codexEvent)
 export const piTranscript: TranscriptReader = lineFileReader('pi', (threadId) => piSessionPath(threadId), piEvent)
 
-// OpenCode has no per-thread file: the store's revision is the change token, and one sanitized export per
+// OpenCode has no per-thread file: the store's revision is the change token, and one export per
 // revision is parsed and kept, so repeated interval reads of a quiet thread cost nothing new.
 const opencodeExports = new Map<string, { revision: string; events: ParsedEvent[] }>()
 export function opencodeTranscriptReader(root = opencodeStoreRoot(), load: (threadId: string) => string = opencodeExport): TranscriptReader {

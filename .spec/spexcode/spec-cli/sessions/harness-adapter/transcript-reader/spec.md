@@ -15,7 +15,8 @@ related:
 # transcript-reader
 
 Every harness keeps its conversation somewhere private — Claude Code's project JSONL, Codex's rollout, pi's
-session JSONL, OpenCode's store behind `opencode export --sanitize`. The [[harness-adapter]] exposes ONE field for
+session JSONL, OpenCode's store behind `opencode export` (read raw: the `--sanitize` form replaces every prose and
+tool-output part with a redaction token and leaves nothing to read). The [[harness-adapter]] exposes ONE field for
 all of it, `transcript`, and this module is the only code that knows those shapes. It answers exactly one question
 for any harness: *what happened in this thread between `from` and `to`?* — as a small normalized turn stream:
 user and assistant prose, tool calls with their input, and each call's output once the harness recorded it. The
@@ -45,7 +46,7 @@ bounded.
 **An open interval re-reads cheaply.** A native file is append-only, so the byte where an interval's first
 event sits never moves; the reader remembers that offset per (file, `from`) and later reads of the same interval
 start there — the open tail is re-read on every change as "parse the current stretch", never "parse the whole
-thread again". OpenCode has no per-thread file: one sanitized export per store revision is parsed and kept, so
+thread again". OpenCode has no per-thread file: one export per store revision is parsed and kept, so
 repeated reads of a quiet thread export nothing new.
 
 A missing, deleted, unreadable, malformed, or timestamp-less native source is an explicit `missing`, `unreadable`,

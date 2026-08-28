@@ -10,7 +10,7 @@ scenarios:
     tags: [backend-api]
     test: spec-cli/src/transcript-reader.test.ts
     code: spec-cli/src/transcript-reader.ts
-    description: Read a pi session JSONL located by its header id and an OpenCode sanitized export cached by store revision, each with private reasoning, a tool call, and its result.
+    description: Read a pi session JSONL located by its header id and an OpenCode export cached by store revision, each with private reasoning, a tool call, and its result.
     expected: Both readers return the same normalized turn shape as Claude and Codex; a running OpenCode tool has no output field; an unchanged store is not exported again while a moved write-ahead log is; reasoning never appears.
   - name: open-interval-reread-seeks
     tags: [backend-api]

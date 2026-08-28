@@ -29,7 +29,7 @@ import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useLaunchers } from './launch.js'
-import { HARNESS_BY_ID } from './harness.jsx'
+import { harnessForId } from './harness.jsx'
 import Legend from './Legend.jsx'
 import { ViewScopeProvider } from './ViewScope.jsx'
 import { createViewScope } from './viewScope.js'
@@ -300,8 +300,7 @@ const storedGraphFocus = () => {
 // [[graph-stats]]'s walk; elsewhere issue/eval buttons keep opening their boards, while node categories
 // enter the graph already focused on the first node they count.
 function LauncherSessionTally({ launcher, sessions, onOpen, tooltip }) {
-  const harnessId = launcher.harness?.replace(/-headless$/, '') || 'claude'
-  const harness = HARNESS_BY_ID[launcher.harness] || HARNESS_BY_ID[harnessId] || HARNESS_BY_ID.claude
+  const harness = harnessForId(launcher.harness)
   const Glyph = harness.Glyph
   const counts = sessions.reduce((result, session) => {
     const zone = sessionZone(session)

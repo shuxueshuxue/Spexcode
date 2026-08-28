@@ -255,6 +255,10 @@ final record in its durable rollout tail: a terminal native event proves the tur
 unreadable, incomplete, or non-terminal tail stays fail-closed and names both the live client and the rollout
 evidence in its refusal. A live `active` report remains an immediate refusal the tail cannot override.
 
+When the exact bound generation is already reclaimed, close treats generation death as a positive empty-control
+plane proof: it skips native subtree census, removes the stale binding, and completes the record's own cold-stop
+archive. A live, unaddressable, or active generation remains fail-closed.
+
 **Quarantine is narrower than archive** because an unreadable record has no record-shaped ownership claim to hand
 it. It takes one exact native thread id plus the exact unreadable record id excluded from the owner census — an
 exclusion that leaves the incident record opaque without blindfolding the census, so any OTHER unreadable

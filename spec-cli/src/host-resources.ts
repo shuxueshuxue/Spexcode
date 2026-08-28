@@ -492,6 +492,13 @@ const sessionStopBlocker = async (
     const entryTargetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
     if (entryTargetThread && ownerCounts.get(entryTargetThread) !== 1)
       return `${descriptor.label} target thread ${entryTargetThread} has no one exact governed session owner`
+    // A retired shared generation is positive death, not an unknown control plane. Its residency census is
+    // the only proof needed here; there is no native target left to signal or unload.
+    if (descriptor.residency && entryTargetThread) {
+      let residency: Awaited<ReturnType<NonNullable<typeof descriptor.residency>>> | null = null
+      try { residency = await descriptor.residency() } catch { /* retain the normal fail-closed path */ }
+      if (residency?.healthy && residency.rootAbsent === true && residency.referenceIds.length === 0) continue
+    }
     if (!knownProbes && descriptor.mutationGuard) {
       if (!targetThread) return `${descriptor.label} target has no exact governed thread identity`
       if (!pid) return `${descriptor.label} target-scoped mutation guard has no readable owner PID`

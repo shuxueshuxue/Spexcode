@@ -39,6 +39,9 @@ transition lock and is eligible without a running turn.
 An unbound launch residue is eligible for close once its bounded readiness window has expired or its exact
 host process/transport is proven absent. The close guard must not treat a stale launch artifact as perpetual
 "launch or recovery is still in progress"; only a currently progressing, live or unproven owner may refuse.
+For a shared Codex session whose exact generation is already positively retired, generation absence is the cold
+proof: the adapter reports an empty control plane, drops the stale binding, and close continues through its own
+archive/worktree removal. Only a live or genuinely ambiguous generation can refuse on the generation/census seam.
 
 After cold proof, close writes the worktree tree (tracked and untracked files) as a commit whose parent is the
 current branch tip, then atomically publishes `refs/spex-archive/<session-id>` and verifies that ref. A ref or

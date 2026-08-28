@@ -736,6 +736,17 @@ export function resolveCodexGenerationForSession(root: string, sessionId: string
   return generation && generation.state !== 'reclaimed' ? generation.endpoint : null
 }
 
+// Close still needs the immutable endpoint record to recognize a positively retired generation. The
+// endpoint is never used for native I/O in this state; it only identifies the empty control plane.
+export function resolveCodexGenerationForClose(root: string, sessionId: string, threadId: string): { endpoint: CodexGenerationEndpoint; gone: boolean } | null {
+  const ledger = readCodexGenerationLedger(root)
+  const binding = ledger.bindings[sessionId]
+  if (!binding || binding.threadId !== threadId) return null
+  const generation = ledger.generations[binding.generationId]
+  if (!generation) return null
+  return { endpoint: generation.endpoint, gone: generation.state === 'reclaimed' }
+}
+
 export function codexGenerationBindingForSession(root: string, sessionId: string): CodexGenerationBinding | null {
   return readCodexGenerationLedger(root).bindings[sessionId] ?? null
 }

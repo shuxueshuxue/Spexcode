@@ -113,16 +113,16 @@ scenarios:
       in both presets. No page errors.
   - name: an-expanded-live-seam-keeps-counting
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/live-tail.e2e.mjs]
     description: >-
-      In a real browser open the Conversation of a working session whose tail seam is live, expand that seam,
-      and watch it across at least two timeline polls: record every transcript request the page makes (its
-      `to` parameter), whether the inset ever shows the loading line again after its first read, and the
-      seam's `N turns · M tool uses` before and after.
+      In a real browser open the Conversation of a working session whose tail seam is live, feed its transcript
+      stream successive frames for the same interval, expand the seam, and read: the seam's `N turns · M tool
+      uses` before and after each frame, whether the inset ever shows the loading line once it has content, and
+      whether the page makes any interval GET for the open seam.
     expected: >-
-      The expanded live seam re-reads its transcript on each poll with a `to` that advances, its inset never
-      falls back to the loading line once it has content, and its numbers follow the agent instead of freezing
-      at the moment of expansion. No page errors.
+      The open seam's numbers follow the streamed frames instead of freezing at the moment of expansion, its
+      inset never falls back to the loading line once it has content, and the open seam issues no interval GET
+      of its own — the stream is its only read. No page errors.
   - name: stop-is-one-square-while-working
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]

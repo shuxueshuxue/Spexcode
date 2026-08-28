@@ -2876,8 +2876,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-seam-inset { margin: var(--space-2) 0 var(--space-5); padding: var(--space-4) 0 var(--space-3) var(--space-6); border-left: 1px solid var(--edge); }
 .m-transcript-state, .m-transcript-empty, .m-transcript-truncated { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
-/* the harness execution entry sits in the cell like any message; an empty trace leaves no row behind */
-.m-ev-trace:not(:has(.m-execution)) { display: none; }
 
 /* A NARROW PANE HAS NO RULER: the gutter goes and each row keeps its own inline time; the day still leads
    its rule. The pane, not the viewport, decides — a side pane on a desktop is as narrow as a phone. */
@@ -2952,23 +2950,20 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   font: inherit; font-family: var(--mono); font-size: var(--type-meta);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-/* THE LIVE TAIL ([[message-stream]]): the current turn drawn as conversation, not as a card. The working note
-   is agent prose at the prose size; the steps are the transcript's own tool sentences (`.tc-tool*`), so the
-   live tail and the folded history are one grammar. Live is said by a caret at the note's end and a spinner
-   on the running step — nothing else moves, and reduced motion stills both. A revision fades in. */
-.m-execution { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
-.m-execution-note { color: var(--ink2); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; animation: rise var(--dur-rise) ease; }
-.m-execution.is-live .m-execution-note::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-execution-caret 1s steps(2, start) infinite; }
-@keyframes m-execution-caret { to { visibility: hidden; } }
-.m-execution-steps { list-style: none; margin: 0; padding: 0; }
-.m-execution-kind { flex: none; align-self: center; color: var(--muted); }
-.m-execution-step.is-running .tc-tool-verb { color: var(--ink2); }
-.m-execution-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
-.m-execution-spin { animation: m-execution-spin 1s linear infinite; }
-@keyframes m-execution-spin { to { transform: rotate(360deg); } }
-.m-execution-detail { margin: 2px 0 4px 18px; color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
+/* THE LIVE TAIL ([[message-stream]]): the open seam's collapsed face — the current turn drawn as conversation
+   in the transcript's own grammar (`.tc-say-text`, `.tc-tool*`), from the same payload the expanded seam
+   shows in full, so the tail and the folded history are one flow. Live is said by a caret at the newest
+   prose and a spinner on a running call — nothing else moves, and reduced motion stills both. */
+.m-live { margin-top: var(--space-2); min-width: 0; }
+.m-live .tc-say-text { animation: rise var(--dur-rise) ease; }
+.m-live .tc-say-text:last-of-type::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-live-caret 1s steps(2, start) infinite; }
+@keyframes m-live-caret { to { visibility: hidden; } }
+.tc-tool.is-running .tc-tool-verb { color: var(--ink2); }
+.tc-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
+.tc-tool-spin { animation: tc-tool-spin 1s linear infinite; }
+@keyframes tc-tool-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .m-execution-note, .m-execution.is-live .m-execution-note::after, .m-execution-spin { animation: none; }
+  .m-live .tc-say-text, .m-live .tc-say-text:last-of-type::after, .tc-tool-spin { animation: none; }
 }
 
 /* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */

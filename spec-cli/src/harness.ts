@@ -19,8 +19,7 @@ import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/spec-core'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
-import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, readLocalStoreExecutionTrace, readProjectJsonlExecutionTrace, readSessionJsonlExecutionTrace, type ExecutionTrace, type ExecutionTurn } from './execution-trace.js'
-import { readClaudeTranscript, readCodexTranscript, unsupportedTranscriptReader, type TranscriptRead, type TranscriptRange } from './transcript-reader.js'
+import { claudeTranscript, codexRolloutPath, codexTranscript, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from './transcript-reader.js'
 import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
@@ -196,12 +195,12 @@ export interface Harness {
   // instead of showing the folder name. This is the ONLY harness branch in the headline path: the capability
   // is data on the adapter, not an `if (codex)` in sessions.ts.
   readonly paneTitleIsSelfSummary: boolean
-  // The adapter-only native transcript reader. Its compact result has no raw envelope, argument, output, or
-  // reasoning data; product surfaces receive only the latest working note and typed tool steps.
-  executionTrace(threadId: string, turn: ExecutionTurn | null): ExecutionTrace | null
-  // A durable, interval-addressed payload reader. Unlike executionTrace this returns complete normalized turns;
-  // unsupported harnesses fail loudly instead of pretending their transcript was empty.
-  readTranscript(threadId: string, range: TranscriptRange): Promise<TranscriptRead>
+  // THE native-thread reader ([[transcript-reader]]): a cheap change probe plus a bounded interval read of the
+  // harness's own conversation, returned as normalized turns. Every surface that shows what the agent did —
+  // the history seam, the live tail, the transcript stream — reads through this one field, so a harness has
+  // exactly one parser. Adapters without a reliable native transcript declare `unsupportedTranscript`, which
+  // fails loudly instead of pretending the conversation was empty.
+  readonly transcript: TranscriptReader
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
   // visible TUI with `--remote` pointed at it. `cmd` is the SESSION's persisted launcher command
@@ -2791,8 +2790,7 @@ export const claudeHarness: Harness = {
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
-  executionTrace: readProjectJsonlExecutionTrace,
-  readTranscript: readClaudeTranscript,
+  transcript: claudeTranscript,
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   oneShotTurn: (prompt, cmd) => ({ command: `${claudeBaseCmd(cmd)} -p`, stdin: prompt }),   // --print reads the prompt from stdin
@@ -2913,8 +2911,7 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  executionTrace: readCodexExecutionTrace,
-  readTranscript: readCodexTranscript,
+  transcript: codexTranscript,
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   oneShotTurn: (prompt, cmd) => ({ command: `${codexBaseCmd(cmd)} exec -`, stdin: prompt }),   // `exec -` reads the prompt from stdin
@@ -3276,8 +3273,7 @@ export const piHarness: Harness = {
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
-  executionTrace: readSessionJsonlExecutionTrace,
-  readTranscript: (threadId, range) => unsupportedTranscriptReader('pi', threadId, range),
+  transcript: piTranscript,
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
@@ -3350,8 +3346,7 @@ export const zcodeHarness: Harness = {
   events: ZCODE_EVENTS,
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
-  executionTrace: noExecutionTrace,
-  readTranscript: (threadId, range) => unsupportedTranscriptReader('zcode', threadId, range),
+  transcript: unsupportedTranscript('zcode'),
   launchCmd: (_id, _rt, cmd) => `${zcodeBaseCmd(cmd)} --prompt`,
   baseCmd: zcodeBaseCmd,
   // z-code's one-turn launcher already IS the non-interactive shape; it takes the prompt as an argument.
@@ -3389,8 +3384,7 @@ export const opencodeHarness: Harness = {
   // socket the launch env hands it, so the shared reply poke and socket-listener liveness are reused verbatim.
   ownsRendezvous: true,
   paneTitleIsSelfSummary: false,                     // opencode's TUI title is not the agent's live task self-summary → headline uses the prompt
-  executionTrace: readLocalStoreExecutionTrace,
-  readTranscript: (threadId, range) => unsupportedTranscriptReader('opencode', threadId, range),
+  transcript: opencodeTranscript,
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
   // `opencode run` takes the message positionally; it documents no stdin form, so the prompt is an argument.

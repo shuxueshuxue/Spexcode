@@ -9,8 +9,7 @@ related:
   - packages/spec-core/src/harness-identity.ts
   - spec-cli/src/harness-identity.test.ts
   - spec-cli/src/headless-controller.ts
-  - spec-cli/src/execution-trace.ts
-  - spec-cli/src/session-execution.ts
+  - spec-cli/src/session-transcript.ts
   - spec-cli/src/sh.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
@@ -72,18 +71,14 @@ surface:
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
   commands). Decoupled from execution — see `slash-commands.ts` (today Claude-only; becomes the Claude impl).
-- **executionTrace(thread, currentTurn)** — the one read-only transcript seam. The four base adapters locate
-  and incrementally parse their current native thread behind this shared selector, returning only the last
-  displayable assistant working prose plus the small typed tool-step projection after it. It never returns raw
-  envelopes, arguments, outputs, reasoning, or another message history. The selector comes fresh from the
-  durable human timeline and a reader uses it only to compare native user boundaries; it never stores one. Session
-  and HTTP code consume only that normalized result and never branch on a harness id. The transcript is an
-  ephemeral adapter observation, never a second SpexCode session record: [[message-stream]] owns the one
-  conversation entry and its REST/SSE transport.
-- **readTranscript(thread, range)** — the durable payload seam ([[transcript-reader]]). Claude and Codex resolve
-  their native files and return bounded, interval-filtered turns with tool output; adapters without a reliable
-  native transcript return an explicit unsupported error. This reader is independent of runtime liveness and never
-  writes the session record or timeline.
+- **transcript** — the one native-thread reader ([[transcript-reader]]): a cheap revision probe plus a bounded,
+  interval-addressed read of the harness's own conversation as normalized turns (user/assistant prose, tool calls
+  and their recorded output). Every surface that shows what the agent did — the history seam, the live tail, the
+  transcript stream ([[session-transcript]]) — reads through this one field, so a harness has exactly one parser.
+  Claude, Codex, pi and OpenCode resolve their native sources; the headless rows inherit their base reader; a
+  harness without a reliable native transcript declares the unsupported reader, which fails loudly rather than
+  pretending the conversation was empty. The transcript is an ephemeral adapter observation, never a second
+  SpexCode session record; [[message-stream]] owns the one conversation entry it feeds.
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
   the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no

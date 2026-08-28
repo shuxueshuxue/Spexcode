@@ -42,11 +42,17 @@ twice. They fold the moment the agent speaks — the prose that follows makes th
 turns are ONE list of calls: the harness draws a turn boundary around every call it makes, and that boundary is
 not a paragraph break, so seven calls in seven turns sit at the same list spacing as seven calls in one.
 
-**The transcript says nothing the record already said.** The interval's first human turn is the message that
-opened the seam — the record quotes it one row above — so it is not quoted again inside; a human turn the record
-does not carry (typed into the harness itself) still is. The test is a prefix match either way over squashed
-whitespace, the same one the live tail applies to the agent's newest prose against the record's newest message
-([[message-stream]]); it lives here so both faces elide by one rule.
+**A seam draws the agent's work, not the conversation's messages.** Every message is already a row on the
+record ([[conversation-items]]) — the launch prompt, each `spex session send`, each peer reply — so a user turn
+inside a seam's transcript is only a boundary: it marks where a stretch of the agent's work begins and is never
+drawn. The seam renders assistant prose and tool calls alone, with no opener to locate and no text to match. The
+two layers never carry the same message, so there is nothing to reconcile and nothing to duplicate — and no
+intervening event (a `queued` row, a status note) between the record's message and its seam can defeat a dedup
+that no longer exists. A message typed directly into a harness, not through SpexCode, is not part of the
+record's conversation and is not surfaced here; the agent's response to it still renders as work. The one text
+elision that remains is the live tail's alone — the agent's newest prose against the note it just declared, the
+record having drawn that note one row above ([[message-stream]]) — and its `alreadySaid` helper lives here as the
+shared text test, used by that one face.
 
 **Disclosure is keyed to the transcript's own ids** — a tool's id, a run's first tool, a segment's first turn —
 never to render position, so a live refresh of the same interval keeps what the reader opened, and a payload

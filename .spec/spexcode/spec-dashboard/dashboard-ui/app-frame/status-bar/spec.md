@@ -94,9 +94,9 @@ and renders a compact `running/needs-you/other` slash tally using the existing g
 tokens. Only launchers with at least one session render. Records whose launcher is null, hidden, or no longer
 configured are counted in one `other` group instead of being dropped. Every group opens the sessions console, and its tooltip names the launcher and all three tally
 meanings. The launcher list hides as one unit at rest and a single clickable aggregate KDA badge takes its
-place, so the slash tally can never be clipped between digits. Named launcher profiles
-that share a harness mark carry a small profile-initial badge (for example `R` and `C`) so icon-only mode
-still distinguishes them. When any session needs the human, the sessions ledger item also carries the
+place, so the slash tally can never be clipped between digits. Named launcher profiles that share a harness
+mark remain distinct by their full names in the expanded detail; the aggregate deliberately states only the
+launcher count and combined tally. When any session needs the human, the sessions ledger item also carries the
 existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the session
 console's unread-resource signal, the session's [[eval-door]] measurement glance, the public-graph disclosure. A routed file's source path is NOT one of
 them — the owner withdrew it (2026-08-24): the workspace tab and the address already carry the document's

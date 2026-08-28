@@ -40,7 +40,7 @@ scenarios:
       other bucket for unmatched records; the detail expands inward without changing the row's layout, stays
       inside the viewport, and leaving returns to the aggregate and adjacent readouts. No session is silently
       omitted, needs-you uses the existing sb-warning semantic token, the aggregate badge stays inside the viewport,
-      shared-harness profiles remain distinguishable by their initials, and the click opens the sessions
+      shared-harness profiles remain distinguishable by their expanded names, and the click opens the sessions
       console without an unrelated archive-index error notice.
     code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/StatusBar.jsx, spec-dashboard/src/styles.css]
     test: spec-dashboard/test/identity-chain.e2e.mjs

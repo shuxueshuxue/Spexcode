@@ -2824,7 +2824,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           gitMutationStarted = true
           traceSessionCreate(id, requestDigest, phase, 'start', 'worktree-add')
           const added = await withGitAbortSignal(signal, () => gitTry(
-            ['-C', root, 'worktree', 'add', '-b', branch, path, startPoint],
+            ['-C', root, 'worktree', 'add', '--no-track', '-b', branch, path, startPoint],
             { extraEnv: DEFER_FOOTPRINT_REFRESH },
           ))
           traceSessionCreate(id, requestDigest, phase, 'finish', 'worktree-add')

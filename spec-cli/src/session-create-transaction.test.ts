@@ -273,6 +273,7 @@ esac
     assert.equal(JSON.parse(readFileSync(recordPath(a.id), 'utf8')).name, 'formal transaction name', 'the durable record has no second creation-name field')
     assert.equal(worktrees(), 3)
     assert.match(readFileSync(trace, 'utf8'), /git-start .*defer=session-create .*worktree add/, 'session creation defers the post-checkout refresh to its explicit materialize phase')
+    assert.match(readFileSync(trace, 'utf8'), /worktree add --no-track/, 'session creation never configures a node branch to track its base')
     assert.doesNotMatch(readFileSync(trace, 'utf8'), /hook-spex args=/, 'the session-owned post-checkout hook does not compete with the explicit materialize')
     const ordinaryPath = join(root, 'ordinary-hook-worktree')
     const ordinaryEnv: Record<string, string | undefined> = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, SPEX_CREATE_TRACE: trace }

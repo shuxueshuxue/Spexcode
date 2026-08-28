@@ -14,7 +14,10 @@ related:
 
 The release launcher must also be usable by repository hooks from a clean source checkout, where each
 package's `dist` directory is intentionally untracked. When the launcher finds the compiled runtime closure
-absent or older than the source trees it imports, it runs the workspace build before starting `dist/cli.js`.
+absent or older than the source trees it imports, it uses a fresh compiled closure from the main checkout when
+available, then rebuilds only changed packages and their dependents. If main is unavailable or stale, it runs
+the complete ordered workspace build driver before starting `dist/cli.js`. Both paths use package-complete
+atomic artifacts, so neither can run stale or partially emitted code.
 Concurrent source-workspace launchers take one cross-process build lock and re-check freshness after the owner
 finishes, so hooks and polling cannot start duplicate full builds.
 The recovery covers core, eval, forge, and CLI together: building only the CLI would leave its package imports

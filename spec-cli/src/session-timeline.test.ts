@@ -141,7 +141,7 @@ test('reply hints are explicit and composable', () => {
   assert.match(note, /FINAL tool call a Spex declaration/)
   assert.match(note, /session ask.*done.*park/)
   assert.match(note, /real newline characters/)
-  assert.match(note, /Do NOT use `String\.raw`/)
+  assert.match(note, /never use `String\.raw` or literal backslash\+n/)
   assert.match(note, /`JSON\.stringify\(note\)`/)
   const terminal = withTerminalReplyHint(note)
   assert.match(terminal, /terminal-attached client/)

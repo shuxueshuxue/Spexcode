@@ -245,9 +245,10 @@ test('launcher session tallies keep the status line geometry and semantic slash 
   assert.match(css, /\.sb-launcher-other\s*\{\s*color:\s*var\(--muted\)/)
   assert.match(css, /\.sb-launcher-list\s*\{[^}]*display:\s*none;/)
   assert.match(css, /\.sb-launcher-summary\s*\{[^}]*display:\s*inline-flex;/)
-  assert.match(css, /@media \(hover:\s*hover\) and \(pointer:\s*fine\)[\s\S]*?\.sb-item:has\(\.sb-launcher-groups:hover\)\s*\{\s*overflow:\s*visible;/)
-  assert.match(css, /\.sb-launcher-groups:hover \.sb-launcher-list\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;[^}]*display:\s*inline-flex;/s)
-  assert.match(css, /\.sb-launcher-groups:hover \.sb-launcher-summary\s*\{\s*visibility:\s*hidden;/)
+  assert.match(css, /@media \(hover:\s*hover\) and \(pointer:\s*fine\)[\s\S]*?\.statusbar:has\(\.sb-launcher-groups:hover\) \.sb-right > \.sb-item:not\(:has\(\.sb-launcher-groups\)\)\s*\{\s*display:\s*none;/)
+  assert.match(css, /\.sb-launcher-groups:hover \.sb-launcher-list\s*\{\s*display:\s*inline-flex;/)
+  assert.match(css, /\.sb-launcher-groups:hover \.sb-launcher-summary\s*\{\s*display:\s*none;/)
+  assert.doesNotMatch(css, /\.sb-launcher-groups:hover \.sb-launcher-list\s*\{[^}]*position:\s*absolute;/s)
   assert.doesNotMatch(css, /@media \(max-width:\s*900px\)[\s\S]*?\.sb-launcher-(?:list|summary)/)
 })
 

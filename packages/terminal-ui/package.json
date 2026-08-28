@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/terminal-ui",
-  "version": "0.7.0-next.2",
+  "version": "0.7.0-next.3",
   "type": "module",
   "description": "A dark xterm terminal component with an injectable transport seam.",
   "files": ["dist", "styles.css", "scripts"],

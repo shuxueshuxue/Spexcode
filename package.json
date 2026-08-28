@@ -44,8 +44,7 @@
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@spexcode/spec-cli": "0.7.0-next.2",
-    "@spexcode/transcript-ui": "^0.7.0-next.1"
+    "@spexcode/spec-cli": "0.7.0-next.2"
   },
   "publishConfig": {
     "access": "public"

@@ -36,8 +36,10 @@ install closure, but it is still a public installation entrypoint and belongs to
 follows core (its only runtime dependency) and precedes CLI, so when a new CLI first tells someone to install
 the dashboard package, that exact same-version repair is already resolvable from the registry.
 
-`npm run release:check` is the local rehearsal: it validates the version/dependency graph, builds the owned
-artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.
+`npm run release:check` is the local rehearsal: it validates the version/dependency graph, compiles the whole
+workspace closure once in dependency order (so a package that bundles a sibling's compiled entry at build time —
+the dashboard's `@spexcode/spec-cli/ranker` — resolves it in a fresh clone where that sibling is published later),
+builds the owned artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.
 `npm run release:publish` first requires a clean checkout on `main`, then repeats the rehearsal, proves the
 registry contains none of this version of the fourteen-package set, and publishes in that order with public access.
 The dist-tag is derived from the committed version, never chosen by hand: a prerelease version

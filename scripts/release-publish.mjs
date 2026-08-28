@@ -114,7 +114,16 @@ function assertMainAndClean() {
   })
 }
 
+// The whole workspace closure is compiled once, in dependency order, before any tarball is built: a package
+// that imports a sibling's compiled entry at BUILD time (the dashboard bundles `@spexcode/spec-cli/ranker`)
+// resolves it in a fresh clone, where no dist exists yet and the publication order puts that sibling later.
+function buildClosure() {
+  const result = npm(['run', 'build'])
+  if (result.status !== 0) fail('workspace build failed')
+}
+
 function preflight(plan) {
+  buildClosure()
   for (const entry of plan.entries) {
     for (const args of entry.build) {
       const result = npm(args, { cwd: dirname(entry.path) })

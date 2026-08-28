@@ -24,7 +24,7 @@ related:
 ---
 # release-publish
 
-The metapackage is not a release unit by itself. A release is the committed set of fourteen public packages:
+The metapackage is not a release unit by itself. A release is the committed set of fifteen public packages:
 `@spexcode/transcript`, `@spexcode/transcript-ui`, `@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-events`,
 `@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/spec-core`, `@spexcode/spec-eval`,
 `@spexcode/spec-forge`, `@spexcode/spec-cli`, `@spexcode/spec-dashboard`, and `spexcode`. Every public package
@@ -41,7 +41,7 @@ workspace closure once in dependency order (so a package that bundles a sibling'
 the dashboard's `@spexcode/spec-cli/ranker` — resolves it in a fresh clone where that sibling is published later),
 builds the owned artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.
 `npm run release:publish` first requires a clean checkout on `main`, then repeats the rehearsal, proves the
-registry contains none of this version of the fourteen-package set, and publishes in that order with public access.
+registry contains none of this version of the fifteen-package set, and publishes in that order with public access.
 The dist-tag is derived from the committed version, never chosen by hand: a prerelease version
 (`0.7.0-next.0`, any `-` suffix) publishes every member under `next`, so `npm i spexcode` keeps resolving the last
 stable release while an adopter that opted in with `@next` receives the whole set at once; a stable version moves

@@ -3020,6 +3020,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-composer-line { display: flex; align-items: flex-end; gap: var(--space-4); }
 .m-composer .si-command-title { color: var(--muted); }
 .m-composer .si-command-tools { padding-top: 5px; }
+.m-composer.dragover { border-color: var(--green); }
+/* the shared menus open above the composer line, clear of the card frame — the Command Box offset. */
+.m-composer .mention-menu.up { bottom: calc(100% + 10px); }
 .m-composer .m-input { padding: 2px 2px 5px; }
 .m-composer .m-send { margin-left: auto; }
 .m-input {

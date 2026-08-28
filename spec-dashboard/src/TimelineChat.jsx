@@ -13,6 +13,10 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import ExecutionTrace from './ExecutionTrace.jsx'
 import { conversationItems, splitEnvelope } from './conversationItems.js'
+import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
+import { useAttachQueue } from './useAttachQueue.jsx'
+import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
+import { inboxCommands } from './sessionCommands.js'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -323,35 +327,56 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 
 // The shared surface renders as the semantic footer (`<footer className=...>`); keeping that landmark on
 // the primitive means Conversation and Command Box still have one shell rather than nested card chrome.
-function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop }) {
+//
+// THE CONVERSATION FOOTER IS A COMMAND BOX, not a picture of one. Its `@`, `[[` and `/` doors open the same
+// shared autocomplete the terminal Command Box opens ([[mentions]]: session and launcher rows behind `@`,
+// spec nodes behind `[[`, board commands then presets then harness commands behind `/`), a `[[node]]` in the
+// draft expands to its live spec.md pointer at send, an exact `/stop`-style board line runs on the board,
+// and the paperclip, a pasted screenshot or a dropped file all go through the one resumable upload path
+// ([[file-attach]]) and leave the file's path in this draft. The only Command Box control this surface does
+// not carry is the terminal-only Alt+I opener, because this composer is already open.
+function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [] }) {
   const t = useT()
   const readOnly = state !== 'live'
   // STOP IS IN THE COMPOSER, and only while there is something to stop: the square every chat reader knows,
   // beside send, shown while the agent is working and gone otherwise — a permanently visible disabled stop
   // would be chrome about a state the page is not in. One verb; the backend decides native vs the pane's key.
   const canStop = !readOnly && working
-  const insertTrigger = (trigger) => {
-    const el = inputRef.current
-    const start = el?.selectionStart ?? draft.length
-    const end = el?.selectionEnd ?? start
-    const next = draft.slice(0, start) + trigger + draft.slice(end)
-    setDraft(next)
-    requestAnimationFrame(() => {
-      if (!el) return
-      el.focus()
-      const caret = start + trigger.length
-      el.setSelectionRange(caret, caret)
-    })
+  const { launchers } = useLaunchers()
+  const presets = useCommandPresets()
+  const harnessCommands = useHarnessCommands(session?.harness)
+  // the Command Box's one ordered vocabulary: board rows (run HERE) lead, presets follow, harness commands last
+  const commands = useMemo(() => inboxCommands(boardCommands, presets, harnessCommands), [boardCommands, presets, harnessCommands])
+  const grammar = useMentionAutocomplete({
+    inputRef, value: draft, setValue: setDraft, specs, sessions, launchers, up: true,
+    slash: { commands, mode: 'line', head: t('session.menuCommands'), onPick: (item) => {
+      if (!item.ui) return false
+      setDraft('')
+      item.run?.()
+      return true
+    } },
+  })
+  const attach = useAttachQueue({ inputRef, setValue: setDraft, variant: 'command', disabled: readOnly })
+  const insertTrigger = (trigger) => typeTrigger(inputRef.current, trigger, setDraft, grammar.sync)
+  // what Enter and the send mark do with the draft: a bare board line runs on the board, anything else is
+  // sent with its `[[node]]` mentions resolved to live spec pointers.
+  const submit = () => {
+    if (readOnly) return
+    const raw = draft.trim()
+    if (!raw) return
+    const board = boardCommandFor(raw, commands)
+    if (board) { setDraft(''); grammar.close(); board.run?.(); return }
+    send(expandMentions(raw, specs))
   }
-  // The conversation footer is the Command Box shell with a different host; the grammar and attachment
-  // controls remain usable against this draft. Only the separate terminal Command Box opener is disabled.
   return (
     <ComposerSurface
       as="footer"
-      className={`m-composer is-${state}`}
+      className={`m-composer is-${state}${attach.dragging ? ' dragover' : ''}`}
       data-footer-state={state}
+      {...attach.dropProps}
       preview={sendErr && <div className="m-senderr">{sendErr}</div>}
       editor={(
+        <>
         <div className="m-composer-line fv-tawrap">
           <ComposerTextarea
             ref={inputRef}
@@ -362,29 +387,40 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
             value={draft}
             disabled={readOnly}
             onMouseDownCapture={onComposerPress}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); grammar.sync(e.target) }}
+            onSelect={(e) => grammar.sync(e.target)}
+            onBlur={grammar.close}
+            onPaste={attach.onPaste}
             onKeyDown={(e) => {
+              if (composingKey(e)) return
+              // an open completion menu owns ↑/↓/Enter/Tab/Esc, so accepting a row never also sends
+              if (grammar.onKeyDown(e)) return
               if (!readOnly && e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
-                e.preventDefault(); e.stopPropagation(); send()
+                e.preventDefault(); e.stopPropagation(); submit()
               }
             }}
           />
+          {grammar.menuEl}
         </div>
+        {attach.queue}
+        </>
       )}
       footer={(
         <>
+          {attach.fileInput}
           <div className="si-command-tools m-composer-tools">
             <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onClick={() => insertTrigger('@')}>@</button>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onClick={() => insertTrigger('[[')}>[[</button>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onClick={() => insertTrigger('/')}>/</button>
-            <IconButton icon="paperclip" size={14} className="si-command-tool" label={t('session.attachTitle')} disabled={readOnly} onClick={() => inputRef.current?.focus()} />
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('/')}>/</button>
+            <IconButton icon={attach.busy ? 'loader' : 'paperclip'} size={14} iconClassName={attach.busy ? 'si-attach-busy' : undefined}
+              className="si-command-tool" label={t('session.attachTitle')} disabled={readOnly || attach.busy} onClick={attach.pick} />
             {canStop && (
               <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
                 onMouseDown={(e) => e.preventDefault()} onClick={stop} />
             )}
             <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
-              disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={send} />
+              disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={submit} />
           </div>
           {readOnly && (
             <div className="m-coldline">
@@ -405,7 +441,9 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
   )
 }
 
-export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome }) {
+// `specs` feeds the `[[` door and send-time expansion; `boardCommands` are the host's board rows (`[ui]`,
+// run on the board) for the `/` palette — the phone host passes none and keeps presets + harness commands.
+export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
   const t = useT()
   const isMobile = useIsMobile()
   const [events, setEvents] = useState(null)
@@ -654,8 +692,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
 
   const prepareComposerPress = () => clearSelection()
 
-  const send = async () => {
-    const text = draft.trim()
+  // `text` is the footer's composed message — the draft with its mentions already expanded
+  const send = async (text) => {
     if (!text || sending) return
     setSending(true); setSendErr(null)
     // Redundant for a headless target, whose adapter now owns the note-reply default. Keep the explicit input
@@ -815,9 +853,10 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {t(`mobile.${copyStatus === 'copied' ? 'copied' : 'copyFailed'}`)}
         </div>
       )}
-      <TimelineFooter state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
+      <TimelineFooter session={s} state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
         sending={sending} send={send} sendErr={sendErr} onRestore={onRestore} actionOutcome={actionOutcome}
-        onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop} />
+        onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
+        specs={specs} sessions={sessions} boardCommands={boardCommands} />
     </div>
   )
 }

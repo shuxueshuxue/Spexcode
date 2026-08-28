@@ -3247,14 +3247,12 @@ async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyReco
   if (!descriptor) return null
   const generationBefore = codexRuntimeGenerationProof(record.runtimeDir, endpoint)
   if (!generationBefore) return null
-  // The loaded-reference census itself is the listener proof. Calling descriptor.residency() here first
-  // performed a second listener probe immediately before the same thread/loaded/list RPC; during a cold
-  // app-server start (or a full Unix-socket backlog) that duplicate connect could consume the only ready
-  // slot and make an otherwise healthy first launch time out. Keep one connection for one readiness answer.
-  let loaded: Awaited<ReturnType<typeof codexLoadedReferenceIds>>
-  try { loaded = await codexLoadedReferenceIds(endpoint.socketPath) }
+  if (!descriptor.residency) return null
+  let resident: Awaited<ReturnType<NonNullable<typeof descriptor.residency>>>
+  try { resident = await descriptor.residency() }
   catch { return null }
-  if (!loaded.ok || !loaded.referenceIds.includes(record.harnessSessionId)) return null
+  if (!resident.healthy) return null
+  if (!resident.referenceIds.includes(record.harnessSessionId)) return null
   const owners = governedSharedRuntimeOwners(record.runtimeDir, descriptor.key, record.harnessSessionId)
   if (!owners || owners.length !== 1 || owners[0] !== record.session) return null
   const generationAfter = codexRuntimeGenerationProof(record.runtimeDir, endpoint)

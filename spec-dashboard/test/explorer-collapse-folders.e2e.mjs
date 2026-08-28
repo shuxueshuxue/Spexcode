@@ -221,9 +221,11 @@ const measurePaper = async () => page.evaluate(() => {
   const time = document.querySelector('.tl-chat .m-ev .m-gut time')
   // the CELL is the measure minus the 52px ruler and its 16px gap: what a note may fill and a quote is capped against
   const cell = Math.round(document.querySelector('.tl-chat .m-ev-say > .m-say')?.parentElement.getBoundingClientRect().width - 68)
+  const note = document.querySelector('.tl-chat .m-ev-say > .m-say')
   return {
     paneWidth: Math.round(h.width),
     column: Math.round(c.width), cell, centreOffset: Math.round(Math.abs((c.left + c.width / 2) - (h.left + h.width / 2))),
+    noteCentreOffset: note ? Math.round(Math.abs((note.getBoundingClientRect().left + note.getBoundingClientRect().width / 2) - (h.left + h.width / 2))) : null,
     sidePadding: parseFloat(getComputedStyle(chat).paddingLeft),
     widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .m-quote'),
     rowPadding: parseFloat(getComputedStyle(rows[0]).paddingTop) * 2, minGap: Math.min(...gaps),
@@ -242,6 +244,7 @@ const measureFor = (paneWidth) => Math.round(Math.min(1200, Math.max(720, paneWi
 assert.ok(Math.abs(paper.column - measureFor(paper.paneWidth)) <= 1, `the column is the pane-grown measure: ${paper.column}px of a ${paper.paneWidth}px pane`)
 assert.ok(paper.column > 720, 'at 1440px the column is past the old 720px floor')
 assert.ok(paper.centreOffset <= 1)
+assert.ok(paper.noteCentreOffset !== null && paper.noteCentreOffset <= 1, 'agent prose is centred on the pane, not shifted by the time gutter')
 assert.equal(paper.cell, paper.column - 68, 'the ruler takes 52px + 16px of the measure')
 assert.ok(paper.widestNote >= paper.cell - 1, 'the agent runs the whole cell')
 assert.ok(paper.widestQuote <= Math.round(paper.cell * 0.8) + 1, 'the quote caps at 80% of the cell')

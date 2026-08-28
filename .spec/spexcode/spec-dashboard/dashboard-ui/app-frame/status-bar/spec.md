@@ -93,10 +93,10 @@ pass/fail, unmeasured); the deduped open-issue total; and live sessions grouped 
 and renders a compact `running/needs-you/other` slash tally using the existing green/yellow/muted status
 tokens. Only launchers with at least one session render. Records whose launcher is null, hidden, or no longer
 configured are counted in one `other` group instead of being dropped. Every group opens the sessions console, and its tooltip names the launcher and all three tally
-meanings. At compact desktop widths the launcher list hides as one unit and a single clickable aggregate
-KDA badge takes its place, so the slash tally can never be clipped between digits. Named launcher profiles
-that share a harness mark carry a small profile-initial badge (for example `R` and `C`) so icon-only mode
-still distinguishes them. When any session needs the human, the sessions ledger item also carries the
+meanings. The launcher list hides as one unit at rest and a single clickable aggregate KDA badge takes its
+place, so the slash tally can never be clipped between digits. Named launcher profiles that share a harness
+mark remain distinct by their full names in the expanded detail; the aggregate deliberately states only the
+launcher count and combined tally. When any session needs the human, the sessions ledger item also carries the
 existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the session
 console's unread-resource signal, the session's [[eval-door]] measurement glance, the public-graph disclosure. A routed file's source path is NOT one of
 them — the owner withdrew it (2026-08-24): the workspace tab and the address already carry the document's
@@ -122,9 +122,13 @@ issue/eval categories open their boards and node categories enter the graph on a
 number remains a door without creating a second owner or tying ownership to a mounted view's lifetime.
 
 At every viewport the right group uses the available inline space without a hard viewport fraction or clipping
-overflow. Existing board, eval, and issue ledgers remain complete and actionable; launcher groups are
-non-overlapping fixed-content units, and compact widths swap the whole launcher list for one aggregate
-badge before any slash digit can be cut. Density comes from one occurrence of each fact and compact
+overflow. Existing board, eval, and issue ledgers remain complete and actionable. The launcher tally rests as
+one aggregate badge at every desktop width; on devices with a precise hovering pointer, hovering that tally
+replaces the aggregate with the complete non-overlapping launcher groups, expanding inward over the line
+without reflowing it; leaving restores the aggregate and the readouts it temporarily covers. The default
+therefore spends one compact unit of the line, while the detail remains one pointer movement away and no
+slash digit is ever cut.
+Density comes from one occurrence of each fact and compact
 glyph/count pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
 icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves
 the last verdict.

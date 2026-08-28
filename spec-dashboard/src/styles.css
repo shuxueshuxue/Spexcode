@@ -804,8 +804,8 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 /* the bar's ONE vertical divider voice: the same full-height --edge hairline the launcher group's
    border-left draws, so the two seams on the status line cannot read as two different rules. */
 .sb-status-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
-.sb-launcher-groups { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
-.sb-launcher-list { display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-groups { position: relative; display: inline-flex; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
+.sb-launcher-list { display: none; align-items: center; gap: 4px; min-width: max-content; flex: 0 0 auto; }
 .sb-launcher-group {
   display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; min-width: max-content; max-width: 100%; padding: 0; border: 0;
   color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer;
@@ -819,13 +819,17 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 .sb-launcher-needs { color: var(--yellow); }
 .sb-launcher-other { color: var(--muted); }
 .sb-launcher-slash { color: var(--muted); padding: 0 1px; }
-.sb-launcher-summary { display: none; align-items: center; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer; }
+.sb-launcher-summary { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; color: inherit; background: none; font: inherit; line-height: var(--line-status); cursor: pointer; }
 .sb-launcher-summary:hover { color: var(--ink2); }
 .sb-launcher-summary-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 12px; height: 12px; padding: 0 2px; border: 1px solid var(--muted); border-radius: 2px; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-none); }
-/* Compact desktop widths hide the launcher list as one unit, so no KDA digit can be flex-shrunk or clipped. */
-@media (max-width: 900px) {
-  .sb-launcher-list { display: none; }
-  .sb-launcher-summary { display: inline-flex; }
+/* The line rests on one aggregate; a mouse can reveal the fixed-content groups without making touch hover sticky. */
+@media (hover: hover) and (pointer: fine) {
+  .sb-item:has(.sb-launcher-groups:hover) { overflow: visible; }
+  .sb-launcher-groups:hover .sb-launcher-list {
+    position: absolute; right: 0; top: 0; z-index: 1; display: inline-flex;
+    padding-left: var(--space-3); background: var(--ground);
+  }
+  .sb-launcher-groups:hover .sb-launcher-summary { visibility: hidden; }
 }
 
 /* ---- left navigation rail ---- */
@@ -2808,6 +2812,23 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-day { align-items: center; padding: var(--space-4) 0 var(--space-2); background: var(--paper); }
 .m-day .m-gut { padding-top: 0; color: var(--ink2); font-weight: var(--weight-medium); }
 .m-day-rule { border-top: 1px solid var(--edge); }
+/* The ruler is an annotation, not part of the reading measure. Keeping its 52px cell in the grid pushed
+   every agent note, event and seam 34px to the right, even though `.m-col` itself was centred. Let those
+   rows use the whole measure and pull only their empty gutter back outside it; quoted rows keep the
+   right-aligned two-column grammar above. */
+@container (min-width: 561px) {
+  .m-ev-say > .m-say,
+  .m-ev-line > .m-line,
+  .m-ev-seam > .m-seam {
+    width: calc(100% + 52px + 16px);
+    max-width: none;
+    margin-left: calc(-1 * (52px + 16px));
+  }
+  .m-day-rule {
+    width: calc(100% + 52px + 16px);
+    margin-left: calc(-1 * (52px + 16px));
+  }
+}
 .m-ev-glyph { flex: none; }
 /* the inline time a row keeps for itself when the gutter is gone (narrow pane, phone) */
 .m-tin { display: none; margin-left: auto; flex: none; font-family: var(--ui-font); font-size: var(--type-caption); color: var(--muted); font-variant-numeric: tabular-nums; }

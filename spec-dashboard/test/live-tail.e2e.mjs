@@ -109,6 +109,7 @@ try {
   await page.route(`**/api/sessions/${SESSION_ID}/timeline*`, json(timeline))
   // a withheld body, fetched for exactly one call when a person opens it
   await page.route(`**/api/sessions/${SESSION_ID}/transcript/tool/read?*`, json({ id: 'read', output: 'export const x = 1', outputLines: 1, outputBytes: 18 }))
+  await page.route(`**/api/sessions/${SESSION_ID}/transcript/tool/run?*`, json({ id: 'run', output: 'done', outputLines: 1, outputBytes: 4 }))
   await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION_ID)}?surface=conversation`, { waitUntil: 'domcontentloaded' })
   const seam = page.locator('.m-ev-seam').last()
   const tail = seam.locator('.m-live')
@@ -150,8 +151,15 @@ try {
   await rows.nth(0).locator('.tc-tool-row').click()
   assert.equal(await rows.nth(0).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true')
   await tail.locator('pre.tc-tool-out').waitFor({ state: 'visible', timeout: 5_000 })
+  assert.equal(await rows.nth(0).locator('.tc-tool-in').textContent(), '{"file_path":"/repo/src/trace.ts"}', 'expanded call shows its parameters')
   assert.equal(await tail.locator('pre.tc-tool-out').textContent(), 'export const x = 1')
   assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 1, 'one body fetch, for the one call opened')
+
+  // a running call has no result body yet, but its recorded parameters remain inspectable
+  await rows.nth(1).locator('.tc-tool-row').click()
+  assert.equal(await rows.nth(1).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true')
+  assert.equal(await rows.nth(1).locator('.tc-tool-in').textContent(), '{"command":"npm test"}')
+  assert.equal(await rows.nth(1).locator('.tc-tool-out').count(), 0)
 
   // a refresh of the same interval keeps what the reader opened, and the running call settles: a DELTA
   // carrying only the turn that changed
@@ -168,8 +176,8 @@ try {
   }))
   await page.waitForTimeout(100)
   assert.equal(await rows.nth(0).locator('.tc-tool-row').getAttribute('aria-expanded'), 'true', 'a same-interval refresh keeps the open row')
-  assert.equal(await tail.locator('pre.tc-tool-out').textContent(), 'export const x = 1', 'and the body it fetched')
-  assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 1, 'a refresh does not refetch an opened body')
+  assert.equal(await rows.nth(0).locator('pre.tc-tool-out').textContent(), 'export const x = 1', 'and the body it fetched')
+  assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 2, 'a refresh does not refetch either already opened body')
   assert.equal(await rows.nth(1).locator('.tc-tool-running').count(), 0, 'the finished call lost its running mark')
   assert.equal(await tail.locator('.tc-ask').count(), 0, 'the delta left the human message where the record has it')
 

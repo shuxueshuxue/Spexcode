@@ -71,7 +71,9 @@ export function ToolLine({ tool, open, onToggle, live = false }) {
   const { lead, trail } = splitTarget(target)
   const lines = tool.outputLines || 0
   const withheld = tool.output === null   // recorded, body not carried — fetched when opened
-  const canOpen = !!tool.output || withheld
+  // Parameters are useful before a result exists, especially for a live call. Keep the disclosure
+  // available whenever either side of the call is recorded.
+  const canOpen = !!tool.input || tool.output !== undefined || withheld
   const running = isRunning(tool, live)
   const Row = canOpen ? 'button' : 'div'
   return (
@@ -85,7 +87,12 @@ export function ToolLine({ tool, open, onToggle, live = false }) {
         {running && <span className="tc-tool-running"><Icon name="loader" size={11} className="tc-tool-spin" />{t('session.executionRunning')}</span>}
         {canOpen && <Caret open={open} className="tc-tool-caret" />}
       </Row>
-      {open && canOpen && (withheld ? <WithheldOutput tool={tool} /> : <pre className="tc-tool-out">{tool.output}</pre>)}
+      {open && canOpen && <>
+        {tool.input && <pre className="tc-tool-in">{tool.input}</pre>}
+        {withheld
+          ? <WithheldOutput tool={tool} />
+          : tool.output !== undefined && <pre className="tc-tool-out">{tool.output}</pre>}
+      </>}
     </div>
   )
 }

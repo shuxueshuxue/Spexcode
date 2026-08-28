@@ -13,13 +13,14 @@ related:
 
 # claude-rendezvous
 
-The Claude Code adapter row of [[harness-adapter]] owns one runtime transport: reclaude's per-session rendezvous
-socket. Everything below is what that transport guarantees — where the socket lives and why, what counts as a live
-agent, how a message is handed over so a retry can never double-deliver, and how a session that Claude moved to a
-background job is still reached. The materialization half of the row (shim, contract file, artifact dirs) is the
-adapter seam's shared contract and is not restated here.
+The Claude Code adapter row of [[harness-adapter]] owns one runtime transport: Claude Code's per-session
+background-daemon rendezvous socket (`CLAUDE_BG_BACKEND=daemon` + `CLAUDE_BG_RENDEZVOUS_SOCK`, a stock claude feature;
+an auth wrapper such as reclaude only execs claude and adds nothing here). Everything below is what that transport
+guarantees — where the socket lives and why, what counts as a live agent, how a message is handed over so a retry can
+never double-deliver, and how a session that Claude moved to a background job is still reached. The materialization
+half of the row (shim, contract file, artifact dirs) is the adapter seam's shared contract and is not restated here.
 
-**Liveness.** The tmux window is up AND a live LISTENER is on its reclaude rendezvous socket
+**Liveness.** The tmux window is up AND a live LISTENER is on its rendezvous socket
   (`socketLive`) — a listener the OS accepts, **not** the mere existence of the socket FILE. This matters
   because a crashed/killed claude does **not** unlink its unix-socket path, so the old `existsSync(rvSock)` read
   a DEAD pane as `online` for as long as that stale file lingered — the incident's "dead pane stuck `working`

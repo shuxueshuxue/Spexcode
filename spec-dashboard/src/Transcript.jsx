@@ -6,7 +6,6 @@ import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import { Caret, Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
-import { splitEnvelope } from './conversationItems.js'
 
 // THE ONE TRANSCRIPT RENDERER. A closed seam's history and the open seam's live tail are the same payload —
 // the adapter's normalized turns for one interval ([[transcript-reader]]) — so they are drawn by the same
@@ -157,7 +156,9 @@ export function segments(turns, live = false) {
     run = []
   }
   for (const turn of turns) {
-    if (turn.role === 'user') { flush(); out.push({ kind: 'ask', turn }); continue }
+    // A user turn is a BOUNDARY, not a row: it ends the current run of agent work, and the message itself is
+    // already on the record ([[conversation-items]]) — the seam draws the agent's work, never the conversation.
+    if (turn.role === 'user') { flush(); continue }
     run.push(turn)
   }
   flush()
@@ -240,23 +241,20 @@ export function Quote({ who, ts, text, className = '' }) {
 // THE CONVERSATION, SHAPED AS ONE. A person's turn is quoted — a narrow bubble with one corner squared off
 // — and the agent's turn IS the page: full measure, no bubble, no tint. The asymmetry is the design; giving
 // both a box makes a chat read as a table of two columns.
-export function TranscriptPayload({ data, live = false, opener = null }) {
+export function TranscriptPayload({ data, live = false }) {
   const [openIds, toggle] = useDisclosure()
   if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
   return <div className="tc-flow">
-    <TranscriptTurns turns={data.turns} openIds={openIds} onToggle={toggle} live={live} opener={opener} />
+    <TranscriptTurns turns={data.turns} openIds={openIds} onToggle={toggle} live={live} />
     {data.truncated && <div className="m-transcript-truncated">transcript 已截断：省略 {data.omittedTurns || 0} turns、{data.omittedBytes || 0} bytes{data.outOfOrderEvents ? `，检测到 ${data.outOfOrderEvents} 条乱序记录` : ''}</div>}
   </div>
 }
 
-// `opener` is the message on the record that opened this interval — quoted one row above the seam, so the
-// interval's own copy of it (the harness's first user turn) is not quoted again; a human turn the record does
-// not carry (typed into the harness itself) still is.
-export function TranscriptTurns({ turns, openIds, onToggle, live = false, opener = null }) {
-  return segments(turns, live).map((segment, index) => {
-    if (segment.kind !== 'ask') return <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={onToggle} live={live} />
-    const { text, envelope } = splitEnvelope(segment.turn.text || '')
-    if (index === 0 && alreadySaid(text, opener)) return null
-    return <Quote key={`a${index}`} className="tc-ask" who={envelope?.label || null} text={text} />
-  })
+// A seam draws the agent's WORK, not the conversation. Every message — the launch prompt, each `spex session
+// send`, each peer reply — is a row on the record ([[conversation-items]]); the transcript's user turns only
+// mark where a stretch of work began, so they render nothing and the segments are the agent's work alone. No
+// opener, no dedup: the two layers never carry the same message, so there is nothing to reconcile.
+export function TranscriptTurns({ turns, openIds, onToggle, live = false }) {
+  return segments(turns, live).map((segment, index) =>
+    <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={onToggle} live={live} />)
 }

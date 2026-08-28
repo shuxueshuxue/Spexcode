@@ -528,7 +528,11 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   const distDir = opts.distDir ?? resolveDistDir()
 
   const peers = new MachinePeerGateway()
-  peers.start()
+  // a refused control socket is reclaimed inside start(); only a LIVE owner rejects, and that is fatal for a host
+  void peers.start().catch((error: unknown) => {
+    console.error(`spex dashboard: ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(1)
+  })
 
   const sseClients = new Set<http.ServerResponse>()
   let lastBroadcast = ''

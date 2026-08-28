@@ -19,8 +19,10 @@ the reading is honest before it is fast. Each adapter supplies its own probe ([[
 the witnesses, and the failure rule below are shared.
 
 **Derivation.** Most interactive adapters derive that answer from process/transport probes. Headless adapters deliberately
-  derive it from the intact, non-stopped session record instead: turn children are ephemeral, so no resident
-  process is an idle state rather than death; controller faults fail loudly at delivery. A human `stop` is
+  derive it from their runtime owner: a Claude-headless or other leaf-backed controller is online only when its
+  registered controller process is alive (the tmux pane or its fallback shell is not the session), while Codex-headless
+  joins the shared app-server proof with the exact thread's loaded-reference census. Turn children are ephemeral,
+  so no resident turn process is an idle state rather than death; controller faults fail loudly at delivery. A human `stop` is
   authoritative rather than a probe: it stamps the retained record's `stopped` liveness metadata after tearing
   down the runtime, so even a failed tmux probe cannot turn that known stop into `unknown`. For the process-probed adapters,
   detection runs in **two tiers, never the pane's foreground command**. The **hot 100ms tier** is a zero-spawn

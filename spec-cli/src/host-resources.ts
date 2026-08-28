@@ -263,6 +263,27 @@ const unresolvedHarnessOwners = (recs: RawRecord[], budgets: ResourceBudgets, ha
   }
   return out
 }
+// A leaf-backed headless controller is the session's runtime. Keep its durable row visible when the controller
+// disappears before the next resources sweep can attribute a process, and name the status/liveness contradiction
+// explicitly so a supervisor cannot mistake the missing process for a cleanly idle session.
+const missingHeadlessControllerOwners = (recs: RawRecord[], procs: Map<number, Proc>, budgets: ResourceBudgets, have: (sessionId: string) => boolean): ResourceOwner[] => {
+  const out: ResourceOwner[] = []
+  for (const rec of recs) {
+    const harness = harnessByIdOrNull(rec.harness || defaultHarness.id)
+    if (!rec.governed || rec.stopped || rec.archived || rec.status !== 'active' && rec.status !== 'idle'
+      || harness?.runtimeOwnership !== 'leaf' || have(rec.session_id)) continue
+    const pid = runtimePid(join(runtimeRoot(), 'sessions', rec.session_id, 'agent.pid'))
+    if (pid && procs.has(pid)) continue
+    out.push({
+      kind: 'session', id: rec.session_id, label: `session ${rec.session_id.slice(0, 8)}`, status: rec.status, liveness: 'offline',
+      processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0,
+      budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
+      findings: [`headless-liveness-contradiction:${rec.status}/offline`],
+      reclaim: { eligible: false, reason: 'headless controller is absent; lifecycle repair must be explicit' },
+    })
+  }
+  return out
+}
 const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<string, SharedEntry> => {
   const out = new Map<string, { descriptor: SharedRuntimeDescriptor; recs: RawRecord[] }>()
   for (const harness of HARNESSES) for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
@@ -693,6 +714,7 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       findings: [`session-record-corrupt:${entry.error}`], reclaim: { eligible: false, reason: 'session record is corrupt; ownership and lifecycle are unknown' },
     })
 
+  owners.push(...missingHeadlessControllerOwners(inv.recs, inv.procs, budgets, (sessionId) => owners.some((owner) => owner.kind === 'session' && owner.id === sessionId)))
   owners.push(...unresolvedHarnessOwners(inv.recs, budgets, (sessionId) => owners.some((owner) => owner.kind === 'session' && owner.id === sessionId)))
 
   // A referenced shared runtime with no readable process is still operationally important: keep its live or

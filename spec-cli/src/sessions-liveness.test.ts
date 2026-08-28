@@ -34,8 +34,10 @@ test('probe FAILURE reads unknown, never a false offline (board honesty under lo
 
 test('claude-headless liveness follows its exact session home', () => {
   const headless = rec({ harness: 'claude-headless' })
-  const withHome = new Map([[headless.session, {}]])
+  const withHome = new Map([[headless.session, { pidAlive: true }]])
   assert.equal(liveness(headless, snap({ windows: withHome })), 'online')
+  assert.equal(liveness(headless, snap({ windows: new Map([[headless.session, {}]]) })), 'offline',
+    'a surviving tmux shell is not the headless controller')
   assert.equal(liveness(headless, snap()), 'offline')
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown')
   assert.equal(liveness({ ...headless, stopped: true }, snap({ windows: withHome, probeFailed: true })), 'offline')
@@ -43,7 +45,7 @@ test('claude-headless liveness follows its exact session home', () => {
 
 test('opencode-headless liveness follows its exact session home', () => {
   const headless = rec({ harness: 'opencode-headless' })
-  const withHome = new Map([[headless.session, {}]])
+  const withHome = new Map([[headless.session, { pidAlive: true }]])
   assert.equal(liveness(headless, snap({ windows: withHome })), 'online')
   assert.equal(liveness(headless, snap()), 'offline')
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown')
@@ -59,7 +61,7 @@ test('codex-headless liveness requires an exact shared-runtime generation proof'
 
 test('pi-headless liveness follows its exact session home until an explicit stop', () => {
   const headless = rec({ harness: 'pi-headless' })
-  const withHome = new Map([[headless.session, {}]])
+  const withHome = new Map([[headless.session, { pidAlive: true }]])
   assert.equal(liveness(headless, snap({ windows: withHome })), 'online')
   assert.equal(liveness(headless, snap()), 'offline')
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown')

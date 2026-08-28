@@ -327,8 +327,10 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return () => clearInterval(iv)
   }, [ticking])
   useEffect(() => {
-    if (!active) return undefined
     setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
+  }, [s.id])
+  useEffect(() => {
+    if (!active) return undefined
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])

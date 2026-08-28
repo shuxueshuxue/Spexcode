@@ -62,3 +62,10 @@ so the reply-channel is product semantics living at the compose layer, not smugg
 session env var) yields `ownSessionId() === null` → `sender = null` → the bare message is delivered, exactly as
 before this node existed. A sender id that resolves to no board row still stamps that **full id** (label
 omitted), so the reply target is never lost even if the row is momentarily unlistable.
+
+**Multiline replies keep their newlines.** The note-reply insert tells an agent to put its complete response in
+the declaration note. When that response spans lines, the declaration must receive real newline characters, not
+the two-character sequence `\\n`. The prompt explicitly warns against `String.raw` and direct multiline content
+inside a quoted JavaScript string, and recommends passing a normally-built note as one argument with
+`JSON.stringify(note)` (or an equivalent stdin/file-safe method). The CLI and timeline already preserve note
+bytes verbatim; this is guidance for the agent-side command construction, not a decoding rule for readers.

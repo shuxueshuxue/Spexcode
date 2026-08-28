@@ -1011,15 +1011,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-ago { font-size: var(--type-caption); color: var(--muted); flex: none; white-space: nowrap; }
 .node-ver { font-size: var(--type-caption); color: var(--muted); flex: none; }
 
-/* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
-   on a collapsed node so a leaf and a closed branch are never confused. Muted by default; on the focused
-   node it picks up the blue so "drill in with → " reads clearly. */
+/* expandable hint: a small ▸N tab protruding OUTSIDE the node's right border (the direction children open),
+   shown only on a collapsed node so a leaf and a closed branch are never confused. It lives entirely in the
+   column gap — a collapsed node has no outgoing edges there — so it never covers the tile's own age, op
+   glyphs or badges; the tile's border doubles as the tab's left edge. Muted by default; on the focused node
+   it picks up the blue so "drill in with → " reads clearly. */
 .node-expand {
-  position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; gap: 1px;
   font-size: var(--type-caption); font-weight: var(--weight-semibold); line-height: var(--leading-none); color: var(--muted);
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 2px 4px; pointer-events: none;
+  background: var(--paper); border: 1px solid var(--line); border-left: 0; border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 2px 4px 2px 3px; pointer-events: none;
 }
 .spec-node.focused .node-expand { color: var(--blue); border-color: var(--blue); }
 

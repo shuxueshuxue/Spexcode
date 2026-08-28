@@ -24,12 +24,14 @@ communication tunnel between their machines, and sessions use it without becomin
 
 ## expanded spec
 
-**A peer is a machine pair.** Its durable state belongs in the per-user private gateway store, never in a
-project config, a backend endpoint record, or a session record. Session close, a backend restart, and adding or
-removing projects do not terminate it. Explicit disconnect, SSH failure, or revoked credentials do. The gateway
-owns the SSH child and both loopback-only forwarded ports, so a one-shot `session send` never leaves an orphaned
-background process. A later session on either machine reuses the peer; a reconnect restores the same peer rather
-than performing a new human pairing.
+**A peer is a machine pair.** Its durable state belongs in the per-user private gateway store, never in a project
+config, a backend endpoint record, or a session record. Session close, a backend restart, and adding or removing
+projects do not terminate it. Explicit disconnect, SSH failure, or revoked credentials do. The gateway's claim on its
+control socket is proven by a connect, never by the file: a killed gateway leaves `peer.sock` behind, so a path that
+refuses a connection is reclaimed at start, and only an accepting listener means another `spex dashboard` owns the
+machine. The gateway owns the SSH child and both loopback-only forwarded ports, so a one-shot `session send` never
+leaves an orphaned background process. A later session on either machine reuses the peer; a reconnect restores the
+same peer rather than performing a new human pairing.
 
 **One SSH connection has two directions.** Initial connection uses an opaque SSH address exactly as supplied by
 the agent. It establishes one local-to-remote forward and one remote-to-local forward. The receiver replies on

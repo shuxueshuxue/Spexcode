@@ -363,3 +363,28 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+test('the control socket claim is proven by a connect, not by the file', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-stale-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const first = new MachinePeerGateway()
+  const second = new MachinePeerGateway()
+  try {
+    // a killed gateway leaves its path behind with nothing listening: a regular file at the socket path refuses
+    // every connect exactly like a stale socket inode does
+    mkdirSync(join(home, 'gateway'), { recursive: true })
+    writeFileSync(join(home, 'gateway', 'peer.sock'), '')
+    await first.start()
+    const listed = await control({ op: 'list' })
+    assert.ok(listed.ok, JSON.stringify(listed))
+    // the path is now LIVE: a second gateway must refuse loudly and never unlink the owner's socket
+    await assert.rejects(second.start(), /already owns .*peer\.sock — another `spex dashboard` is running/)
+    assert.ok((await control({ op: 'list' })).ok)
+  } finally {
+    await first.close()
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})

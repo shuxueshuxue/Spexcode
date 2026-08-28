@@ -620,7 +620,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    set behind a gesture — the documents you are holding are off-screen and there is no mark saying so —
    while wrapping keeps the whole set legible and pays for it in a thickness the reader can see and control.
    The band's height is therefore the working set, not a constant; the strip is `flex: 0 0 auto` and the
-   rows are what make it tall. Each tab uses its intrinsic content width, then flex-shrink sees the 80px floor
+   rows are what make it tall. Each tab uses its intrinsic content width, then flex-shrink sees the 120px floor
    before line formation creates another row. */
 .tabstrip {
   flex: 0 0 auto; min-height: 30px; display: flex; align-items: stretch;
@@ -645,7 +645,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   transition: background-color var(--dur-tab) ease, color var(--dur-tab) ease, border-color var(--dur-tab) ease;
 }
 .tabstrip-tabs:not(.wrapped) .tab { container-type: normal; }
-.tabstrip-tabs.wrapped .tab { flex: 1 1 0; width: auto; }
+.tabstrip-tabs.wrapped .tab { flex: 0 1 auto; width: auto; }
 .tab.on {
   min-width: 132px; background: var(--paper); color: var(--ink2);
   border-right-color: transparent; border-radius: var(--radius) var(--radius) 0 0;

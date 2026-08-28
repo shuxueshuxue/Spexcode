@@ -7,10 +7,12 @@ code:
   - spec-dashboard/src/TimelineChat.jsx
 related:
   - spec-dashboard/src/RichText.js
+  - spec-dashboard/src/conversationItems.js
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
+  - spec-dashboard/test/conversation-working-tail.e2e.mjs
 ---
 
 # conversation
@@ -83,9 +85,12 @@ exactly those three:
   human's has none. The addressing envelope `spex session send` appends (`— from session … To reply: …`) is
   never rendered — the record keeps it, the surface strips it. A long quote is clamped at first sight with
   a `more`, because the conversation is about what came after it.
-- A SEAM is a run of bare `working` events between two messages: one quiet line in the caption voice,
-  `worked 13m 17s ›`, whose duration is the sum of that run — how long the agent worked, the one duration
-  scrollback actually asks for — and, once its transcript has been read, `N turns · M tool uses`. It draws
+- A SEAM is a stretch in which the agent said nothing and worked — opened by a bare `working` event, or by
+  any message or note that landed on an agent whose last recorded word is `working`, since the record does
+  not say `working` again ([[conversation-items]] carries that state; a working record therefore always
+  ends in an open seam, and a message sent mid-turn is followed by one). It is one quiet line in the caption
+  voice, `worked 13m 17s ›`, whose duration is how long the agent worked — the one duration scrollback
+  actually asks for — and, once its transcript has been read, `N turns · M tool uses`. It draws
   no rule across the page: the work between two messages is a footnote to the exchange, lit only under the
   pointer, the way a reading surface folds its thinking. Its chevron TRAILS the words, and so does every
   other disclosure in the conversation — the work fold, each tool row, the live tail's steps — so a folded

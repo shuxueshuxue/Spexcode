@@ -110,7 +110,7 @@ scenarios:
       through the one verb. The asking session's composer carries no stop control at all. No page errors.
   - name: a-working-agent-always-ends-with-an-open-seam
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/conversation-working-tail.e2e.mjs]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/conversation-working-tail.e2e.mjs]
     description: >-
       In a real browser open the Conversation of fixture sessions whose timelines are the shapes the status
       machine really writes: a message into an awaiting session followed by its `active` event; a SECOND

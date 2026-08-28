@@ -358,7 +358,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     const focusFrame = requestAnimationFrame(() => {
       const input = inputRef.current
       if (active && !isMobile && document.visibilityState !== 'hidden'
-        && input?.offsetParent !== null && getComputedStyle(input).visibility !== 'hidden'
+        && input && input.offsetParent !== null && getComputedStyle(input).visibility !== 'hidden'
         && document.activeElement !== input) input.focus()
     })
     return () => cancelAnimationFrame(focusFrame)

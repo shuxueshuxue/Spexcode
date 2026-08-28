@@ -22,10 +22,28 @@ const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH
   || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const out = resolve(process.env.OUT || '/tmp/session-surface-cold-readable-e2e')
-// one row per message or event; a run of bare `working` statuses is one seam row, and a peer message's
-// addressing envelope is never rendered
+// The Conversation projects the record into messages, seams, and events. Bare `working` statuses open one
+// seam for each stretch of carried working state; every other event is its own row and closes/reopens that
+// seam around a message. This is deliberately independent of the DOM so the assertion measures the spec's
+// projection rather than the implementation's element count.
 const bareWorking = (event) => event.kind === 'status' && (event.display || event.status) === 'working' && !event.note
-const conversationRows = (events) => events.reduce((n, event, i) => n + (bareWorking(event) && i > 0 && bareWorking(events[i - 1]) ? 0 : 1), 0)
+const conversationRows = (events) => {
+  let rows = 0
+  let working = false
+  let seam = false
+  for (const event of events) {
+    const status = event.display || event.status
+    if (event.kind === 'status') working = status === 'working'
+    if (bareWorking(event)) {
+      seam = true
+      continue
+    }
+    if (seam) { rows += 1; seam = false }
+    rows += 1
+    if (working) seam = true
+  }
+  return rows + (seam ? 1 : 0)
+}
 const shownText = (text) => text.replace(/\n*— from session [^\n]*"<your reply>"\s*$/, '')
 
 const freePort = () => new Promise((resolvePort, reject) => {
@@ -247,14 +265,9 @@ try {
     const restore = footer.locator('.m-coldline-action', { hasText: expectedAction })
     assert.equal(await restore.isEnabled(), true, `${state} restore action is disabled`)
 
-    const terminal = page.locator('[data-surface-switch="terminal"]:visible')
-    await terminal.waitFor({ state: 'visible' })
-    assert.equal(await terminal.isDisabled(), true, `${state} terminal control is not disabled`)
-    const baseLabel = page.locator('.si-base-tabs [role="tab"]:visible .si-tab-label')
-    const before = await baseLabel.innerText()
-    await terminal.click({ force: true })
-    assert.equal(await baseLabel.innerText(), before, `${state} terminal activation changed the surface`)
-    assert.equal(await chat.isVisible(), true, `${state} terminal activation hid Conversation`)
+    assert.equal(await page.locator('[data-action="surface-switcher"]:visible').count(), 0,
+      `${state} exposes a surface switch despite having only the Conversation face`)
+    assert.equal(await chat.isVisible(), true, `${state} read-only session did not keep Conversation visible`)
     return { chat, restore, shape: await directShape(chat), eventCount: apiTimeline.events.length }
   }
 

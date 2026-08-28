@@ -7,6 +7,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/test/divider-geometry.e2e.mjs
+  - spec-dashboard/test/tab-wrap-intrinsic-width.e2e.mjs
   - spec-dashboard/src/tabs.js
   - .spec/spexcode/spec-dashboard/dashboard-ui/app-frame/document-actions/spec.md
   - .spec/spexcode/spec-dashboard/dashboard-ui/app-frame/drag-gesture/spec.md
@@ -33,8 +34,8 @@ from the document's existing projections; unresolved selectors show their raw ad
 
 Wrapping begins while the row can still give each tab a readable face (a 128px per-tab budget), rather than
 waiting for flex-shrink to exhaust the 120px tab floor. The active tab keeps a slightly larger 132px floor for
-its persistent close affordance; once wrapped, each row shares its remaining width without dropping below those
-floors.
+its persistent close affordance. Once wrapped, tabs keep their intrinsic content widths and shrink only as needed
+to stay above those floors; a short final row does not stretch a tab across the remaining band.
 
 All tab faces share compact geometry, close affordance space, and top-corner treatment; there is no second
 face for a replaceable tab, because every tab is replaceable. Resident pages keep their registry icon. The

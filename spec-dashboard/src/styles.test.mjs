@@ -272,7 +272,7 @@ test('the chrome bands the budget does not allow are gone from the sheet', () =>
 test('tab widths follow content before wrapping and keep the active close affordance', () => {
   assert.match(css, /\.tabstrip-tabs\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*container-type:\s*inline-size;/s)
   assert.match(css, /\.tabstrip-tabs\.wrapped\s*\{[^}]*flex-wrap:\s*wrap;/s)
-  assert.match(css, /\.tabstrip-tabs\.wrapped \.tab\s*\{[^}]*flex:\s*1 1 0;/s)
+  assert.match(css, /\.tabstrip-tabs\.wrapped \.tab\s*\{[^}]*flex:\s*0 1 auto;/s)
   assert.match(css, /\.tab\s*\{[^}]*flex:\s*0 1 auto;[^}]*width:\s*auto;[^}]*min-width:\s*120px;[^}]*max-width:\s*240px;/s)
   assert.match(css, /\.tab\s*\{[^}]*container-type:\s*inline-size;/s)
   assert.match(css, /\.tabstrip-tabs:not\(\.wrapped\) \.tab\s*\{[^}]*container-type:\s*normal;/s)

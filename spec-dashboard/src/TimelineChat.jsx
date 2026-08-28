@@ -613,9 +613,9 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (!(seam.open && seam.from === streamFrom)) void fetchTranscript(seam, seamId)
   }
 
-  // THE RULER. Time lives in a left gutter, tabular and the same for every row, and the day it belongs to
-  // sticks in that same gutter as the reader scrolls; the right edge carries nothing. At a narrow width the
-  // gutter goes and each row keeps its own inline time instead.
+  // THE RULER. Time lives in a tabular gutter shared by ordinary rows. User quotes are right-aligned, so
+  // their gutter follows the bubble on the right; at a narrow width the gutter goes and each row keeps its
+  // own inline time instead.
   const rows = []
   let lastDay = null
   const dayRow = (ts, key) => {
@@ -629,8 +629,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
       <div className="m-ev m-ev-prompt" key="prompt">
-        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
         <Quote ts={promptTs} text={detail.prompt} />
+        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
       </div>,
     )
   }
@@ -639,8 +639,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (item.kind === 'quote') {
       rows.push(
         <div className="m-ev m-ev-sent" key={i}>
-          {gutter(item.ts)}
           <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+          {gutter(item.ts)}
         </div>,
       )
     } else if (item.kind === 'say') {
@@ -648,9 +648,10 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       // status chip above saying in what state it said it. The chip is the whole trace of the machine.
       rows.push(
         <div className="m-ev m-ev-say" key={i}>
-          {gutter(item.ts)}
+          <div className="m-gut" />
           <article className="m-say">
             <div className="m-say-head">
+              <time className="m-line-time">{timeOf(item.ts)}</time>
               <span className="m-say-chip" style={{ color: STATUS_COLOR[item.status] }}>
                 <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
                 <span className="m-ev-word">{t(`status.${item.status}`)}</span>
@@ -658,23 +659,21 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               {item.text && !hasTimelineHighlight() && (
                 <button type="button" className="m-copy-note" onClick={() => copyText(item.text)}>{t('mobile.copy')}</button>
               )}
-              <time className="m-tin">{timeOf(item.ts)}</time>
             </div>
             {item.text && <div className="m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
           </article>
         </div>,
       )
     } else if (item.kind === 'event') {
-      // An error is something that HAPPENED, not a phase that lasted: one line, no duration. The old row
-      // read `error 80h 45m` — the time since — as if it had been failing for eighty hours.
+      // An event is something that HAPPENED, not a phase that lasted: one line with its timestamp inline.
       rows.push(
         <div className="m-ev m-ev-line" key={i}>
-          {gutter(item.ts)}
+          <div className="m-gut" />
           <div className="m-line">
+            <time className="m-line-time">{timeOf(item.ts)}</time>
             <span className="m-ev-glyph" style={{ color: STATUS_COLOR[item.status] }}>{STATUS_GLYPH[item.status] || '·'}</span>
             <span className="m-ev-word" style={{ color: STATUS_COLOR[item.status] }}>{t(`status.${item.status}`)}</span>
             {item.text && <div className="m-line-text m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
-            <time className="m-tin">{timeOf(item.ts)}</time>
           </div>
         </div>,
       )

@@ -90,7 +90,7 @@ exactly those three:
 - A MESSAGE is anything said. The agent's note IS the page: no well, no rule, no indent, at the prose size
   (`--type-prose`, the one token this surface added) running the full measure, with one small status chip
   above it (`? asking`, `‖ parked`, `✓ done`) in the caption voice at medium weight as the machine's whole
-  footprint. A sent message and the originating prompt are QUOTED: a soft sheet on the right — a quieter
+  footprint; its timestamp sits inline before that chip in the content column. A sent message and the originating prompt are QUOTED: a soft sheet on the right — a quieter
   tint than a panel, the radius token doubled because it is a page element and not a control — capped at
   80% of the measure, in the same grammar as the transcript's person turn, so the outer conversation and
   the inner one read alike. A peer's name sits on its bubble; the
@@ -120,14 +120,14 @@ exactly those three:
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
   is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep; the tail seam of a dead session says `working` — the
   record's last word — with no duration invented for a stretch nothing closed.
-- An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
-  rather than lasted.
+- An EVENT is `error` or `corrupt`: one line in the content column — timestamp, glyph, word, note — with no
+  duration, because it happened rather than lasted.
 
-THE RULER. Time lives in a 52px left gutter, tabular and the same for every message row; the day it belongs
-to sticks in that same gutter as the reader scrolls; the right edge carries nothing. THE MINUTE IS QUIET: a
+THE RULER. Message time lives in a 52px tabular gutter; user messages reverse the two columns so their time
+sits to the right of the right-aligned bubble, while event time stays inline at the start of the content column. THE MINUTE IS QUIET: a
 reader scans a conversation by what was said and asks for the time only when they need it, so each row's
 time rests at reduced opacity and comes up under the pointer or keyboard focus — it never leaves the DOM,
-so nothing assistive loses it. The day stays full, because it is structure rather than a stamp. When the PANE (a
+so nothing assistive loses it. The day stays in normal document flow, because it is structure rather than a stamp. When the PANE (a
 container query, not the viewport — a desktop side pane is as narrow as a phone) is under 560px the gutter
 goes and each row keeps its own inline time.
 

@@ -2790,22 +2790,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* TimelineChat keeps the real composer caret focused while this browser-owned highlight paints a
    conversation Range. It deliberately never creates a document Selection. */
 ::highlight(timeline-sel) { background-color: #264f78; color: #f0f6fc; }
-/* THE RULER ([[conversation]]). Every row is a gutter and a cell: time lives in the gutter, tabular and
-   the same for every row, and the day it belongs to sticks in that same gutter as the reader scrolls. The
-   right edge carries nothing — the old page hung time, a toggle and a copy button there, four times per
-   minute, and the eye crossed 900px to match a toggle to what it opened. */
+/* THE RULER ([[conversation]]). Ordinary rows are a gutter and a cell: time lives in the gutter, tabular;
+   user quotes reverse the two columns, while status/event times stay inline at the content start. */
 .m-ev, .m-day { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 16px; }
 .m-ev { padding: var(--space-5) 0; }
+.m-ev-prompt, .m-ev-sent { grid-template-columns: minmax(0, 1fr) 52px; }
+.m-ev-prompt > .m-gut, .m-ev-sent > .m-gut { grid-column: 2; text-align: left; }
 .m-gut {
   text-align: right; padding-top: 3px; font-family: var(--ui-font); font-size: var(--type-caption);
   color: var(--muted); font-variant-numeric: tabular-nums;
 }
 /* THE MINUTE IS QUIET. A reader scans a conversation by what was said and asks for the time only when
    they need it, so the per-row time rests at reduced opacity and comes up under the pointer or keyboard
-   focus; it never leaves the DOM. The DAY stays full — it is structure, not a stamp. */
+   focus; it never leaves the DOM. The DAY stays in normal flow — it is structure, not a stamp. */
 .m-gut time { opacity: .6; transition: opacity var(--dur-tab); }
 .m-ev:hover .m-gut time, .m-ev:focus-within .m-gut time { opacity: 1; }
-.m-day { position: sticky; top: 0; z-index: 2; align-items: center; padding: var(--space-4) 0 var(--space-2); background: var(--paper); }
+.m-day { align-items: center; padding: var(--space-4) 0 var(--space-2); background: var(--paper); }
 .m-day .m-gut { padding-top: 0; color: var(--ink2); font-weight: var(--weight-medium); }
 .m-day-rule { border-top: 1px solid var(--edge); }
 .m-ev-glyph { flex: none; }
@@ -2834,7 +2834,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   border-radius: calc(var(--radius) * 2); border-top-right-radius: 2px;
 }
 .m-quote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--ui-font); }
-.m-quote-head:not(:has(.m-quote-who)) { display: none; }
+.m-quote-head:not(:has(.m-quote-who)):has(.m-tin) { display: none; }
 .m-quote-who { font-size: var(--type-caption); font-weight: var(--weight-semibold); color: var(--blue); }
 .m-ev-text { font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }
 /* a long quote is clamped at first sight; the conversation is about what came after it */
@@ -2842,9 +2842,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-quote.is-clamped::after { content: ""; position: absolute; inset: auto 0 0; height: 4.5em; background: linear-gradient(transparent, var(--quote-bg)); pointer-events: none; }
 .m-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--blue); background: none; border: 0; font: inherit; font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer; }
 
-/* AN EVENT LINE: something that happened — `error`, `corrupt` — is one line with no box and no duration.
-   The old row put a span beside it, so `error 80h 45m` read as eighty hours of failing. */
+/* AN EVENT LINE: something that happened — `error`, `corrupt` — is one inline line with no box or duration. */
 .m-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-family: var(--ui-font); font-size: var(--type-control); }
+.m-line-time { flex: none; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); font-variant-numeric: tabular-nums; opacity: .6; transition: opacity .15s ease; }
+.m-ev:hover .m-line-time, .m-ev:focus-within .m-line-time { opacity: 1; }
 .m-line .m-ev-word { font-weight: var(--weight-semibold); }
 .m-line-text.m-ev-note { min-width: 0; color: var(--ink); font-size: var(--type-control); line-height: var(--leading-relaxed); }
 
@@ -2893,7 +2894,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .m-day { grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
   .m-day .m-gut { text-align: left; }
   .m-tin { display: inline; }
-  .m-quote .m-quote-head { display: flex; }
+  .m-quote .m-quote-head:not(:has(.m-quote-who)):has(.m-tin) { display: flex; }
   .m-say-head .m-copy-note { display: none; }
 }
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------

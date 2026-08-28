@@ -4,23 +4,29 @@ status: active
 hue: 280
 desc: The one transcript renderer — a closed seam's history and the open seam's live tail are the same normalized payload, drawn by the same components; "live" only adds the truth that a call without a recorded result is still running.
 code:
-  - spec-dashboard/src/Transcript.jsx
+  - packages/transcript-ui/src/TranscriptView.tsx
 related:
+  - packages/transcript-ui/src/ToolLine.tsx
+  - packages/transcript-ui/src/segments.ts
+  - packages/transcript-ui/src/vocabulary.ts
+  - packages/transcript-ui/src/Quote.tsx
+  - packages/transcript-ui/src/render.test.tsx
+  - spec-dashboard/src/Transcript.jsx
   - spec-dashboard/src/TimelineChat.jsx
-  - spec-dashboard/src/LiveTail.jsx
-  - spec-dashboard/src/toolVocabulary.js
   - spec-dashboard/src/conversationItems.js
 ---
 
 # transcript-view
 
-[[conversation]] legislates how a transcript reads — the person quoted, the agent as the page, a tool call as a
-sentence, the work segment folded behind its answer, output in a quiet well on the page's own ladder. This node
-holds that grammar as ONE set of components, because two surfaces read the same payload: a closed seam's
-history, fetched once for its interval, and the open seam's live tail, streamed as the agent works
-([[message-stream]]). Both are the adapter's normalized turns ([[transcript-reader]]), and both are drawn here —
-`Quote`, `TimelineRichText`, the tool sentence, the tool run, the segment fold, the payload — so a change to how
-a call reads changes it in history and in the tail at once, and neither surface can drift into its own dialect.
+SpexCode's [[conversation]] legislated how a transcript reads — the person quoted, the agent as the page, a tool
+call as a sentence, the work segment folded behind its answer, output in a quiet well on the page's own ladder —
+and this node holds that grammar as ONE set of components in the published package ([[transcript-ui]]),
+because two surfaces read the same payload: a closed interval's history, fetched once, and the open interval's
+live tail, streamed as the agent works ([[message-stream]]). Both are the normalized turns of [[transcript]], and
+both are drawn here — `Quote`, the tool sentence (`ToolLine`), the tool run, the segment fold, `TranscriptView` —
+so a change to how a call reads changes it in history and in the tail at once, in every host, and no surface
+can drift into its own dialect. Prose is rendered by the host's `renderText`; the words the surface says come
+from its `labels`; the verbs and targets from its `vocabulary` ([[transcript-ui]]).
 
 **Live adds exactly one truth.** A tool call whose result the harness has not recorded yet carries no `output`;
 a LIVE reading draws that call as running — a small spinner and the word beside the sentence — and a run that
@@ -42,10 +48,11 @@ twice. They fold the moment the agent speaks — the prose that follows makes th
 turns are ONE list of calls: the harness draws a turn boundary around every call it makes, and that boundary is
 not a paragraph break, so seven calls in seven turns sit at the same list spacing as seven calls in one.
 
-**A seam draws the agent's work, not the conversation's messages.** Every message is already a row on the
-record ([[conversation-items]]) — the launch prompt, each `spex session send`, each peer reply — so a user turn
-inside a seam's transcript is only a boundary: it marks where a stretch of the agent's work begins and is never
-drawn. The seam renders assistant prose and tool calls alone, with no opener to locate and no text to match. The
+**A user turn is a boundary, and whether it is also drawn is the host's call** (`userTurns`). In SpexCode every
+message is already a row on the record ([[conversation-items]]) — the launch prompt, each `spex session send`,
+each peer reply — so a user turn inside a seam's transcript is only a boundary: it marks where a stretch of the
+agent's work begins and is never drawn (`boundary`, the default). A host for which the transcript is the whole
+conversation quotes it in place (`quote`), with the same bubble the outer conversation uses. The seam renders assistant prose and tool calls alone, with no opener to locate and no text to match. The
 two layers never carry the same message, so there is nothing to reconcile and nothing to duplicate — and no
 intervening event (a `queued` row, a status note) between the record's message and its seam can defeat a dedup
 that no longer exists. A message typed directly into a harness, not through SpexCode, is not part of the

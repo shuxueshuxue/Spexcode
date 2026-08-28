@@ -182,7 +182,7 @@ async function assertSameTarget(element, point, stage) {
     const hit = document.elementFromPoint(x, y)
     return {
       connected: target.isConnected,
-      same: !!hit && (hit === target || hit.closest('.m-ev-note, .m-ev-text') === target),
+      same: !!hit && (hit === target || hit.closest('.m-ev-note, .tx-quote-text') === target),
       hit: hit?.className || hit?.nodeName || null,
     }
   }, { target: element, x: point.x, y: point.y })
@@ -594,7 +594,7 @@ async function verifyExecutionTail(viewport) {
     revision: 'tail-insert',
     turns: [{ id: 'tail-insert', at: Date.now(), role: 'assistant', text: 'Live tail prose arrived after the reader reached the tail' }],
   }))
-  const entry = page.locator('.m-live:visible')
+  const entry = page.locator('.tx-live:visible')
   await entry.waitFor({ state: 'visible', timeout: 5_000 })
   await nextFrame()
   const insertion = await timelineMetrics()
@@ -660,7 +660,7 @@ async function verifyComposerPress(viewport, inputHandle) {
 async function runViewport(name, viewport) {
   await page.setViewportSize(viewport)
   await openTimeline(sessionId)
-  const note = page.locator('.m-ev-note:visible, .m-ev-text:visible').filter({ hasText: FIXTURE_MARKER }).last()
+  const note = page.locator('.m-ev-note:visible, .tx-quote-text:visible').filter({ hasText: FIXTURE_MARKER }).last()
   await note.waitFor({ state: 'visible', timeout: 30_000 })
   const noteHandle = await note.elementHandle()
   assert.ok(noteHandle, 'rich fixture note has no stable element handle')

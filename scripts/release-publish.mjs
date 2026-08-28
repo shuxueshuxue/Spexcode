@@ -81,6 +81,13 @@ export function releasePlan(base = root) {
   return { version, entries }
 }
 
+// A prerelease version (`0.7.0-next.0`) is published under the `next` dist-tag so `npm i spexcode` keeps
+// resolving the last stable release; a stable version moves `latest`. The tag is derived from the version,
+// never chosen by hand, so one committed version means one registry state.
+export function distTagFor(version) {
+  return /-/.test(version) ? 'next' : 'latest'
+}
+
 export function registryState(entries, lookup) {
   const present = entries.filter((entry) => lookup(entry.name, entry.manifest.version))
   if (present.length === 0) return 'absent'
@@ -137,9 +144,10 @@ function published(name, version) {
 function publish(plan) {
   const state = registryState(plan.entries, published)
   requireAbsentRegistry(state, plan.version)
+  const tag = distTagFor(plan.version)
   for (const entry of plan.entries) {
-    console.log(`[release] publishing ${entry.name}@${plan.version}`)
-    const result = npm(['publish', '--access', 'public'], {
+    console.log(`[release] publishing ${entry.name}@${plan.version} (dist-tag ${tag})`)
+    const result = npm(['publish', '--access', 'public', '--tag', tag], {
       cwd: dirname(entry.path),
       env: { ...process.env, SPEX_RELEASE_PUBLISH: plan.version },
     })

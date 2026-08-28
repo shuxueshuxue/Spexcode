@@ -153,15 +153,20 @@ try {
         { id: 'run', name: 'Bash', input: '{"command":"npm test"}', output: 'ok', outputLines: 1, outputBytes: 2 },
       ] },
       { id: 'a2', at: window.transcriptFrom + 9000, role: 'assistant', text: 'Now testing', tools: [
-        { id: 'run2', name: 'Bash', input: '{"command":"npm run e2e"}', outputLines: 0, outputBytes: 0 },
+        { id: 'run2', name: 'Bash', input: '{"command":"npm run e2e"}', output: 'ok', outputLines: 1, outputBytes: 2 },
+      ] },
+      // a call AFTER the newest prose, in its own tool-only turn — the live tail's usual shape
+      { id: 'a3', at: window.transcriptFrom + 9500, role: 'assistant', tools: [
+        { id: 'run3', name: 'Bash', input: '{"command":"npm run lint"}', outputLines: 0, outputBytes: 0 },
       ] },
     ],
     truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0,
   }))
   await page.waitForTimeout(100)
   assert.equal(await tail.locator('.tc-say-text').last().textContent(), 'Now testing')
-  assert.equal(await tail.locator('.tc-tool').count(), 1, 'the earlier prose and its calls folded away from the compact view')
-  assert.equal(await seam.locator('.m-seam-detail').textContent(), '3 turns · 3 tool uses')
+  assert.equal(await tail.locator('.tc-tool').count(), 2, 'the earlier prose and its calls folded away; the calls after the newest prose stay, including a tool-only turn')
+  assert.equal(await tail.locator('.tc-tool-running').count(), 1, 'the newest call is the running one')
+  assert.equal(await seam.locator('.m-seam-detail').textContent(), '4 turns · 4 tool uses')
   await page.screenshot({ path: `${OUT}/live-tail.png` })
 
   // EXPANDING THE SEAM SHOWS THE WHOLE INTERVAL FROM THE SAME PAYLOAD — and the compact tail steps aside,
@@ -170,8 +175,9 @@ try {
   await seam.locator('.m-seam-inset').waitFor({ state: 'visible', timeout: 5_000 })
   assert.equal(await tail.count(), 0, 'the collapsed face leaves when the seam opens')
   // the full view is the conversation's own fold: the process behind the newest answer collapses to one row
-  assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^3 tool uses/, 'earlier work folds behind the answer')
+  assert.match(await seam.locator('.m-seam-inset .tc-work-row').textContent(), /^2 tool uses/, 'the process before the answer folds; the fold counts only what it hides')
   assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 1, 'the answer stays')
+  assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 2, 'the answer\'s own call and the call after it stay in the open')
   await seam.locator('.m-seam-inset .tc-work-row').click()
   assert.equal(await seam.locator('.m-seam-inset .tc-say-text').count(), 2, 'opening the fold shows every prose turn')
   assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 1, 'the full interval quotes the human message that opened it')

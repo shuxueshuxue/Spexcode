@@ -93,6 +93,9 @@ export function ToolRun({ tools, openIds, onToggle, live = false }) {
 // So the unit is the work SEGMENT: a consecutive run of assistant turns, ending at the last one that
 // actually says something. Everything before that is how the answer was produced; the last turn is the
 // answer. Collapse the process, keep the result — a finished segment is one line plus what it concluded.
+// Calls made AFTER the answer (an agent that speaks, then runs three tools without another word — the
+// live tail's usual shape) are not process behind the answer; they follow it, in the open, or the seam's
+// count says three tool uses and the reader sees none.
 export function segments(turns) {
   const out = []
   let run = []
@@ -103,7 +106,8 @@ export function segments(turns) {
     while (lead > 0 && !run[lead].text) lead -= 1
     const answer = run[lead]?.text ? run[lead] : null
     const work = answer ? run.slice(0, lead) : run
-    out.push({ kind: 'work', work, answer, calls, folded: calls >= RUN_MIN && work.length > 0 })
+    const after = answer ? run.slice(lead + 1) : []
+    out.push({ kind: 'work', work, answer, after, calls, folded: calls >= RUN_MIN && work.length > 0 })
     run = []
   }
   for (const turn of turns) {
@@ -125,11 +129,12 @@ function WorkSegment({ segment, openIds, onToggle, live }) {
   const id = `seg:${segment.work[0]?.id || segment.work[0]?.at || segment.answer?.at}`
   const open = openIds.has(id)
   const kinds = runKinds(segment.work.flatMap((turn) => turn.tools || []))
+  const foldedCalls = segment.work.reduce((n, turn) => n + (turn.tools?.length || 0), 0)
   return <>
     {segment.folded ? (
       <div className="tc-work">
         <button type="button" className="tc-work-row" aria-expanded={open} onClick={() => onToggle(id)}>
-          <span className="tc-work-lead">{segment.calls} tool uses</span>
+          <span className="tc-work-lead">{foldedCalls} tool uses</span>
           {kinds && <span className="tc-work-detail">{kinds}</span>}
           <Caret open={open} className="tc-work-caret" />
         </button>
@@ -139,6 +144,7 @@ function WorkSegment({ segment, openIds, onToggle, live }) {
       </div>
     ) : segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} />)}
     {segment.answer && <TurnBody turn={segment.answer} openIds={openIds} onToggle={onToggle} live={live} />}
+    {segment.after.map((turn, i) => <TurnBody key={`after${i}`} turn={turn} openIds={openIds} onToggle={onToggle} live={live} />)}
   </>
 }
 

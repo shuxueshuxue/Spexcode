@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/resilientSocket.js#createResilientSocket
 related:
   - spec-dashboard/src/SessionTerm.jsx
+  - packages/terminal-ui/src/SessionTerminal.tsx
   - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/resilientSocket.test.mjs
   - spec-cli/src/index.ts

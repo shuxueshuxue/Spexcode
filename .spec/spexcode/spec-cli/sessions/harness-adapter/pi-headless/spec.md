@@ -38,6 +38,17 @@ spawns `pi -p --session <id> <msg>` to wake the exact saved conversation; `--ses
 path because it can silently create a new session. The controller remains resident so the tmux window is a
 stable home for later deliveries and resumes.
 
+Hard interrupt goes to the controller, because the controller is the one actor that owns the turn child and can
+know when it is over. Its `interrupt` control request asks the child's generated extension for pi's own
+`ctx.abort()` over the child's rendezvous socket ([[shim-runtime]]'s `interrupt` line — the extension keeps the
+running turn's context from `agent_start` onward, so an interrupt that lands while the model is still
+thinking finds a turn to abort), then waits for that child to exit before confirming; a child that has not
+reached its first agent event yet is still the controller's own process and is terminated as the owner. The
+confirmation therefore means no pi process serves the session any more: the next delivery is a clean cold
+wake of the same saved conversation, never a poke into an exiting agent. Nothing running refuses loudly; the
+session layer projects a confirmed interrupt as `asking` and reads the aborted child's non-zero exit as that
+interrupt rather than a failed turn ([[dispatch]]).
+
 The resident controller is a normal session-owned leaf, not a shared adapter runtime: launch registers its PID, and
 the unified lifecycle seam binds that process instance with the same pane-ancestry-minted PID/start receipt used by
 other interactive harnesses. Terminal close therefore has one finite proof chain: the receipt-checked leaf and its

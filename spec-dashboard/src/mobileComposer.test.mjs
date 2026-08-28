@@ -18,7 +18,7 @@ test('mobile session detail retains the aligned TimelineChat composer', () => {
   assert.match(timelineChat, /<ComposerTextarea[\s\S]*className="m-input"/)
   assert.match(timelineChat, /!e\.shiftKey && !composingKey\(e\)/)
   assert.match(timelineChat, /className="m-send"/)
-  assert.match(timelineChat, /sendSessionText\(s\.id, text, \{ replyVia: 'note' \}\)/)
+  assert.match(timelineChat, /sendSessionCommand\(s\.id, text, \{ replyVia: 'note' \}\)/)
   // the input and its send button are ONE row; the button rides the bottom edge so a grown textarea pushes
   // upward past it instead of stretching it ([[typography]]'s composer surface owns the frame, not the field)
   assert.match(styles, /\.m-composer-line\s*\{[^}]*align-items:\s*flex-end;/s)

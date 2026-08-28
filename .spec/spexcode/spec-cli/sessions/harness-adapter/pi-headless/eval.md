@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: conversation-live-tail
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Through a running backend and the real `pi-headless` launcher, dispatch a session whose prompt runs a slow
+      shell command, reads a file, lists a directory, runs a second slow command, and finally declares `ask`.
+      In a real browser open its Conversation and, every few seconds while it works, read the open seam's
+      lead and counts, the live tail's prose and tool sentences, which call wears the running mark, and the
+      record's messages; keep reading until the declaration lands.
+    expected: >-
+      The open seam reads `working · <duration>` with `N turns · M tool uses` growing as the native thread
+      grows; the live tail beneath it shows the agent's newest prose and every call after it in order, the
+      call without a recorded result marked running and the mark leaving when its result lands; no trace row,
+      card, or pop-out exists; and when the agent declares, the seam closes to `worked <duration>`, the tail
+      leaves, and the declared note is the newest message on the record. No page errors.
   - name: pi-headless-materialized-system-context-live
     tags: [backend-api, cli]
     description: >-
@@ -43,6 +57,22 @@ scenarios:
       - spec-cli/src/harness.ts#recordOnline
       - spec-cli/src/harness.ts#piHeadlessHarness
       - spec-cli/src/sessions.ts
+  - name: pi-headless-interrupt
+    description: >-
+      While a real governed pi-headless turn is inside a long tool call, interrupt it through the public
+      `POST /api/sessions/:id/interrupt` route; interrupt again with nothing running; then send a follow-up
+      through the public session send surface and read the record, timeline, pane, and pi's native session log.
+    expected: >-
+      The first interrupt is confirmed only after pi's own abort ran (the native session log records the turn as
+      aborted) and the turn child has exited; the record reads `asking` with the interrupted note, never `error`,
+      even though the aborted child leaves non-zero; the second interrupt is refused loudly as nothing running;
+      the follow-up wakes the same saved session cold with `pi -p --session <id>` and its declaration lands.
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/pi-headless.ts#PiHeadlessController.interrupt
+      - spec-cli/src/pi-headless.ts#interruptPiHeadless
+      - spec-cli/src/harness.ts#interruptViaRendezvous
+      - spec-cli/src/sessions.ts#markInterrupted
   - name: pi-headless-close-residue
     description: Close the real pi-headless session through the public session API and inspect its process, tmux, worktree, sockets, and record store.
     expected: The controller and pi children stop, both controller and rendezvous sockets are gone, the session worktree is removed, and the archived session record/store and branch are retained.

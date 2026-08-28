@@ -1,196 +1,31 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { elapsed, RUN_MIN, runKinds, splitTarget, toolTarget, toolVerb } from './toolVocabulary.js'
+import { elapsed } from './toolVocabulary.js'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
-import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
+import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
-import RichText, { richTextFromRange } from './RichText.js'
-import { BlobMedia } from './Evidence.jsx'
-import { routeHash } from './route.js'
-import { newTabAnchor } from './tabs.js'
+import { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { Caret, Icon, IconButton } from './icons.jsx'
-import ExecutionTrace from './ExecutionTrace.jsx'
-import { conversationItems, splitEnvelope } from './conversationItems.js'
+import LiveTail from './LiveTail.jsx'
+import { Quote, TimelineRichText, timeOf, TranscriptPayload } from './Transcript.jsx'
+import { conversationItems } from './conversationItems.js'
+import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
+import { useAttachQueue } from './useAttachQueue.jsx'
+import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
+import { inboxCommands } from './sessionCommands.js'
 
-// hour:minute for an event row; a short date for the day separators the timeline inserts when the
-// calendar day flips between neighbouring events.
-const timeOf = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+// a short date for the day separators the timeline inserts when the calendar day flips between
+// neighbouring events; the row time itself is the transcript's (./Transcript.jsx).
 const dayOf = (ts) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
 const dayKey = (ts) => new Date(ts).toDateString()
 
 const transcriptCache = new Map()
 
-// The transcript is the one message surface in the dashboard: a newline here was typed by a person or an
-// agent mid-conversation, not wrapped by an editor, so it stays a line break instead of reflowing.
-function TimelineRichText({ children, className = '' }) {
-  return <RichText className={className} softBreak="break"
-    renderSpecRef={(id, token, provenance) => {
-      const href = routeHash('spec', id)
-      return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>
-    }}
-    renderEvidence={(meta, token, provenance) => <span className="rich-evidence" {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
-    {children}
-  </RichText>
-}
-
 function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
 // The interval end moves when a later event closes the seam; expansion belongs to the seam itself.
 function seamKey(sessionId, from) { return `${sessionId}:${from}` }
-
-// A long quote is clamped at first sight — the conversation is about what came after it. The trigger is the
-// text itself rather than a measured height, so the row never reflows after paint.
-const isLongQuote = (text) => text.length > 700 || (text.match(/\n/g) || []).length > 10
-
-// The person is QUOTED: a bubble off to its own side, the one grammar this page shares with the transcript
-// inside a seam. The peer's name sits on the bubble; the human's has none, and the envelope never shows.
-function Quote({ who, ts, text, className = '' }) {
-  const t = useT()
-  const [open, setOpen] = useState(false)
-  const clamped = !open && isLongQuote(text)
-  return (
-    <div className={`m-quote${clamped ? ' is-clamped' : ''}${className ? ` ${className}` : ''}`}>
-      {(who || ts) && (
-        <div className="m-quote-head">
-          {who && <span className="m-quote-who">{who}</span>}
-          {ts && <time className="m-tin">{timeOf(ts)}</time>}
-        </div>
-      )}
-      <div className="m-ev-text"><TimelineRichText>{text}</TimelineRichText></div>
-      {clamped && <button type="button" className="m-quote-more" onClick={() => setOpen(true)}>{t('mobile.more')}</button>}
-    </div>
-  )
-}
-
-// One tool call as a SENTENCE, not a card: verb, target, and the size of what came back. It is
-// `inline-flex` so a dozen of them read as a list of things that happened rather than a dozen boxes.
-// There is no success mark, because the transcript carries no per-tool status — the past-tense verb is the
-// whole claim, and it is one we can actually make.
-function ToolLine({ tool, open, onToggle }) {
-  const target = toolTarget(tool.input)
-  const { lead, trail } = splitTarget(target)
-  const lines = tool.outputLines || 0
-  const canOpen = !!tool.output
-  const Row = canOpen ? 'button' : 'div'
-  return (
-    <div className="tc-tool">
-      <Row {...(canOpen ? { type: 'button', onClick: onToggle, 'aria-expanded': open } : {})}
-        className={`tc-tool-row${canOpen ? ' is-openable' : ''}`}>
-        <span className="tc-tool-verb">{toolVerb(tool.name)}</span>
-        {lead && <span className="tc-tool-target">{lead}</span>}
-        {trail && <span className="tc-tool-trail">{trail}</span>}
-        {lines > 0 && <span className="tc-tool-size">{lines} lines</span>}
-        {canOpen && <Caret open={open} className="tc-tool-caret" />}
-      </Row>
-      {open && canOpen && <pre className="tc-tool-out">{tool.output}</pre>}
-    </div>
-  )
-}
-
-// A turn's tool calls are consecutive by construction, so "a run" is just "this turn's calls". Three or
-// more fold to one row; one or two stay sentences, where the verb and target are worth reading on sight.
-// Measured against a real transcript — 39 calls in one turn, all the same tool — the noise a reader wants
-// gone is repetition, not any particular tool, and nothing here judges what a call DID.
-function ToolRun({ tools, openIds, onToggle }) {
-  if (!tools?.length) return null
-  const line = (tool) => (
-    <ToolLine key={tool.id} tool={tool} open={openIds.has(tool.id)} onToggle={() => onToggle(tool.id)} />
-  )
-  if (tools.length < RUN_MIN) return <div className="tc-tools">{tools.map(line)}</div>
-  const id = `run:${tools[0].id}`
-  const open = openIds.has(id)
-  return <div className="tc-tools">
-    <div className="tc-tool">
-      <button type="button" className="tc-tool-row is-openable is-run" aria-expanded={open}
-        onClick={() => onToggle(id)}>
-        <span className="tc-tool-verb">{tools.length} tool uses</span>
-        <span className="tc-tool-trail">{runKinds(tools)}</span>
-        <Caret open={open} className="tc-tool-caret" />
-      </button>
-      {open && <div className="tc-tool-kids">{tools.map(line)}</div>}
-    </div>
-  </div>
-}
-
-// WHERE THE FOLD BELONGS, decided by what a real transcript looks like rather than by what seemed likely.
-//
-// The first attempt folded a run of tool calls inside ONE assistant turn. Measured against a real session:
-// 39 calls spread across 21 assistant turns, one or two each — so that fold never fired and the reader
-// still scrolled 21 blocks of work to reach one answer. The repetition is BETWEEN turns, not within them.
-//
-// So the unit is the work SEGMENT: a consecutive run of assistant turns, ending at the last one that
-// actually says something. Everything before that is how the answer was produced; the last turn is the
-// answer. Collapse the process, keep the result — a finished segment is one line plus what it concluded.
-function segments(turns) {
-  const out = []
-  let run = []
-  const flush = () => {
-    if (!run.length) return
-    const calls = run.reduce((n, turn) => n + (turn.tools?.length || 0), 0)
-    let lead = run.length - 1
-    while (lead > 0 && !run[lead].text) lead -= 1
-    const answer = run[lead]?.text ? run[lead] : null
-    const work = answer ? run.slice(0, lead) : run
-    out.push({ kind: 'work', work, answer, calls, folded: calls >= RUN_MIN && work.length > 0 })
-    run = []
-  }
-  for (const turn of turns) {
-    if (turn.role === 'user') { flush(); out.push({ kind: 'ask', turn }); continue }
-    run.push(turn)
-  }
-  flush()
-  return out
-}
-
-function TurnBody({ turn, openIds, onToggle }) {
-  return <div className="tc-say">
-    {turn.text && <div className="tc-say-text"><TimelineRichText>{turn.text}</TimelineRichText></div>}
-    <ToolRun tools={turn.tools} openIds={openIds} onToggle={onToggle} />
-  </div>
-}
-
-function WorkSegment({ segment, openIds, onToggle }) {
-  const id = `seg:${segment.work[0]?.id || segment.work[0]?.at || segment.answer?.at}`
-  const open = openIds.has(id)
-  const kinds = runKinds(segment.work.flatMap((turn) => turn.tools || []))
-  return <>
-    {segment.folded ? (
-      <div className="tc-work">
-        <button type="button" className="tc-work-row" aria-expanded={open} onClick={() => onToggle(id)}>
-          <span className="tc-work-lead">{segment.calls} tool uses</span>
-          {kinds && <span className="tc-work-detail">{kinds}</span>}
-          <Caret open={open} className="tc-work-caret" />
-        </button>
-        {open && <div className="tc-work-body">
-          {segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} />)}
-        </div>}
-      </div>
-    ) : segment.work.map((turn, i) => <TurnBody key={`t${i}`} turn={turn} openIds={openIds} onToggle={onToggle} />)}
-    {segment.answer && <TurnBody turn={segment.answer} openIds={openIds} onToggle={onToggle} />}
-  </>
-}
-
-// THE CONVERSATION, SHAPED AS ONE. A person's turn is quoted — a narrow bubble with one corner squared off
-// — and the agent's turn IS the page: full measure, no bubble, no tint. The asymmetry is the design; giving
-// both a box makes a chat read as a table of two columns.
-function TranscriptPayload({ data }) {
-  const [openIds, setOpenIds] = useState(() => new Set())
-  const toggle = (id) => setOpenIds((prev) => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    return next
-  })
-  if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
-  return <div className="tc-flow">
-    {segments(data.turns).map((segment, index) => {
-      if (segment.kind !== 'ask') return <WorkSegment key={`w${index}`} segment={segment} openIds={openIds} onToggle={toggle} />
-      const { text, envelope } = splitEnvelope(segment.turn.text || '')
-      return <Quote key={`a${index}`} className="tc-ask" who={envelope?.label || null} text={text} />
-    })}
-    {data.truncated && <div className="m-transcript-truncated">transcript 已截断：省略 {data.omittedTurns || 0} turns、{data.omittedBytes || 0} bytes{data.outOfOrderEvents ? `，检测到 ${data.outOfOrderEvents} 条乱序记录` : ''}</div>}
-  </div>
-}
 
 // a poll answer is usually the SAME history — keep the old array identity then, so nothing downstream
 // (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
@@ -323,35 +158,56 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 
 // The shared surface renders as the semantic footer (`<footer className=...>`); keeping that landmark on
 // the primitive means Conversation and Command Box still have one shell rather than nested card chrome.
-function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop }) {
+//
+// THE CONVERSATION FOOTER IS A COMMAND BOX, not a picture of one. Its `@`, `[[` and `/` doors open the same
+// shared autocomplete the terminal Command Box opens ([[mentions]]: session and launcher rows behind `@`,
+// spec nodes behind `[[`, board commands then presets then harness commands behind `/`), a `[[node]]` in the
+// draft expands to its live spec.md pointer at send, an exact `/stop`-style board line runs on the board,
+// and the paperclip, a pasted screenshot or a dropped file all go through the one resumable upload path
+// ([[file-attach]]) and leave the file's path in this draft. The only Command Box control this surface does
+// not carry is the terminal-only Alt+I opener, because this composer is already open.
+function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [] }) {
   const t = useT()
   const readOnly = state !== 'live'
   // STOP IS IN THE COMPOSER, and only while there is something to stop: the square every chat reader knows,
   // beside send, shown while the agent is working and gone otherwise — a permanently visible disabled stop
   // would be chrome about a state the page is not in. One verb; the backend decides native vs the pane's key.
   const canStop = !readOnly && working
-  const insertTrigger = (trigger) => {
-    const el = inputRef.current
-    const start = el?.selectionStart ?? draft.length
-    const end = el?.selectionEnd ?? start
-    const next = draft.slice(0, start) + trigger + draft.slice(end)
-    setDraft(next)
-    requestAnimationFrame(() => {
-      if (!el) return
-      el.focus()
-      const caret = start + trigger.length
-      el.setSelectionRange(caret, caret)
-    })
+  const { launchers } = useLaunchers()
+  const presets = useCommandPresets()
+  const harnessCommands = useHarnessCommands(session?.harness)
+  // the Command Box's one ordered vocabulary: board rows (run HERE) lead, presets follow, harness commands last
+  const commands = useMemo(() => inboxCommands(boardCommands, presets, harnessCommands), [boardCommands, presets, harnessCommands])
+  const grammar = useMentionAutocomplete({
+    inputRef, value: draft, setValue: setDraft, specs, sessions, launchers, up: true,
+    slash: { commands, mode: 'line', head: t('session.menuCommands'), onPick: (item) => {
+      if (!item.ui) return false
+      setDraft('')
+      item.run?.()
+      return true
+    } },
+  })
+  const attach = useAttachQueue({ inputRef, setValue: setDraft, variant: 'command', disabled: readOnly })
+  const insertTrigger = (trigger) => typeTrigger(inputRef.current, trigger, setDraft, grammar.sync)
+  // what Enter and the send mark do with the draft: a bare board line runs on the board, anything else is
+  // sent with its `[[node]]` mentions resolved to live spec pointers.
+  const submit = () => {
+    if (readOnly) return
+    const raw = draft.trim()
+    if (!raw) return
+    const board = boardCommandFor(raw, commands)
+    if (board) { setDraft(''); grammar.close(); board.run?.(); return }
+    send(expandMentions(raw, specs))
   }
-  // The conversation footer is the Command Box shell with a different host; the grammar and attachment
-  // controls remain usable against this draft. Only the separate terminal Command Box opener is disabled.
   return (
     <ComposerSurface
       as="footer"
-      className={`m-composer is-${state}`}
+      className={`m-composer is-${state}${attach.dragging ? ' dragover' : ''}`}
       data-footer-state={state}
-      preview={sendErr && <div className="m-senderr">{sendErr}</div>}
+      {...attach.dropProps}
+      preview={(sendErr || sendNote) && <div className={sendErr ? 'm-senderr' : 'm-sendnote'}>{sendErr || sendNote}</div>}
       editor={(
+        <>
         <div className="m-composer-line fv-tawrap">
           <ComposerTextarea
             ref={inputRef}
@@ -362,29 +218,40 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
             value={draft}
             disabled={readOnly}
             onMouseDownCapture={onComposerPress}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); grammar.sync(e.target) }}
+            onSelect={(e) => grammar.sync(e.target)}
+            onBlur={grammar.close}
+            onPaste={attach.onPaste}
             onKeyDown={(e) => {
+              if (composingKey(e)) return
+              // an open completion menu owns ↑/↓/Enter/Tab/Esc, so accepting a row never also sends
+              if (grammar.onKeyDown(e)) return
               if (!readOnly && e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
-                e.preventDefault(); e.stopPropagation(); send()
+                e.preventDefault(); e.stopPropagation(); submit()
               }
             }}
           />
+          {grammar.menuEl}
         </div>
+        {attach.queue}
+        </>
       )}
       footer={(
         <>
+          {attach.fileInput}
           <div className="si-command-tools m-composer-tools">
             <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onClick={() => insertTrigger('@')}>@</button>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onClick={() => insertTrigger('[[')}>[[</button>
-            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onClick={() => insertTrigger('/')}>/</button>
-            <IconButton icon="paperclip" size={14} className="si-command-tool" label={t('session.attachTitle')} disabled={readOnly} onClick={() => inputRef.current?.focus()} />
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
+            <button type="button" className="fv-trigger-btn" disabled={readOnly} data-tip={t('session.menuCommands')} aria-label={t('session.menuCommands')} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('/')}>/</button>
+            <IconButton icon={attach.busy ? 'loader' : 'paperclip'} size={14} iconClassName={attach.busy ? 'si-attach-busy' : undefined}
+              className="si-command-tool" label={t('session.attachTitle')} disabled={readOnly || attach.busy} onClick={attach.pick} />
             {canStop && (
               <IconButton icon="stop" size={12} className="m-stop" label={t('mobile.stop')} disabled={stopping}
                 onMouseDown={(e) => e.preventDefault()} onClick={stop} />
             )}
             <IconButton icon="send" size={14} className="m-send" label={t('mobile.send')}
-              disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={send} />
+              disabled={readOnly || !draft.trim() || sending} onMouseDown={(e) => e.preventDefault()} onClick={submit} />
           </div>
           {readOnly && (
             <div className="m-coldline">
@@ -405,7 +272,9 @@ function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, sen
   )
 }
 
-export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome }) {
+// `specs` feeds the `[[` door and send-time expansion; `boardCommands` are the host's board rows (`[ui]`,
+// run on the board) for the `/` palette — the phone host passes none and keeps presets + harness commands.
+export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
   const t = useT()
   const isMobile = useIsMobile()
   const [events, setEvents] = useState(null)
@@ -414,9 +283,11 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [sendErr, setSendErr] = useState(null)
+  const [sendNote, setSendNote] = useState(null)   // the last send's child receipt (`@new`), if any
   const [copyStatus, setCopyStatus] = useState(null)
   const [expandedSeams, setExpandedSeams] = useState(() => new Set())
   const [transcripts, setTranscripts] = useState(() => new Map())
+  const [tail, setTail] = useState(null)   // the open seam's streamed payload ([[session-transcript]]); null until the first frame
   const [now, setNow] = useState(() => Date.now())   // advances with each timeline read; only an open live seam reads it
   const scrollRef = useRef(null)
   const timelineContentRef = useRef(null)
@@ -457,7 +328,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }, [ticking])
   useEffect(() => {
     if (!active) return undefined
-    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
@@ -480,6 +351,18 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
   const items = useMemo(() => conversationItems(events || [], pollNow), [events, pollNow])
+  // THE OPEN SEAM STREAMS. A working record ends in an open seam; while the session is live that seam
+  // subscribes to its interval's stream — the server re-reads the native thread only when it changed and
+  // pushes the whole normalized payload — so the collapsed live tail and the expanded transcript are one
+  // read, refreshed the instant the agent acts rather than on the next poll. The seam's start is the
+  // subscription's identity: a later message opens a new seam and a new stream.
+  const openSeam = items.length && items[items.length - 1].kind === 'seam' && items[items.length - 1].open ? items[items.length - 1] : null
+  const streamFrom = active && footerState === 'live' && openSeam ? openSeam.from : null
+  useEffect(() => {
+    setTail(null)
+    if (streamFrom === null) return undefined
+    return subscribeSessionTranscript(s.id, streamFrom, setTail)
+  }, [s.id, streamFrom])
   // what the agent most recently SAID on the record — the live tail elides a note the record already carries
   const lastSaid = useMemo(() => {
     for (let i = items.length - 1; i >= 0; i--) if (items[i].kind === 'say' && items[i].text) return items[i].text
@@ -524,7 +407,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   useEffect(() => {
     if (!active || !events) return undefined
     for (const seam of items) {
-      if (seam.kind !== 'seam') continue
+      if (seam.kind !== 'seam' || (seam.open && seam.from === streamFrom)) continue
       const seamId = seamKey(s.id, seam.from)
       if (!expandedSeams.has(seamId)) continue
       const key = transcriptKey(s.id, seam.from, seam.to)
@@ -533,7 +416,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       void fetchTranscript(seam, seamId)
     }
     return undefined
-  }, [active, events, items, expandedSeams, fetchTranscript, s.id, transcripts])
+  }, [active, events, items, expandedSeams, fetchTranscript, s.id, transcripts, streamFrom])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const followTimelineTail = useCallback(() => {
@@ -654,16 +537,18 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
 
   const prepareComposerPress = () => clearSelection()
 
-  const send = async () => {
-    const text = draft.trim()
+  // `text` is the footer's composed message — the draft with its mentions already expanded
+  const send = async (text) => {
     if (!text || sending) return
     setSending(true); setSendErr(null)
     // Redundant for a headless target, whose adapter now owns the note-reply default. Keep the explicit input
     // for compatibility; the server's shared prompt seam remains the sole policy and phrase owner.
-    const r = await sendSessionText(s.id, text, { replyVia: 'note' })
+    // The footer IS a Command Box, so it speaks the box's input kind: the durable append is the acceptance
+    // and any `@new` child receipt rides back as the mention summary, shown in the composer's own line.
+    const r = await sendSessionCommand(s.id, text, { replyVia: 'note' })
     setSending(false)
-    if (r.ok) { setDraft(''); load() }
-    else setSendErr(r.error || t('mobile.sendFailed'))
+    if (r.ok) { setDraft(''); setSendNote(r.outcome?.mentionSummary || null); load() }
+    else setSendErr(r.outcome?.error || t('mobile.sendFailed'))
   }
 
   const stop = async () => {
@@ -688,7 +573,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     const next = new Set(expandedSeams)
     if (next.has(seamId)) { next.delete(seamId); setExpandedSeams(next); return }
     next.add(seamId); setExpandedSeams(next)
-    void fetchTranscript(seam, seamId)
+    if (!(seam.open && seam.from === streamFrom)) void fetchTranscript(seam, seamId)
   }
 
   // THE RULER. Time lives in a left gutter, tabular and the same for every row, and the day it belongs to
@@ -762,9 +647,13 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       // seam of a live session is the page's only moving thing; a tail seam of a dead one is the record's
       // last word, `working`, with no duration invented for a stretch nothing closed.
       const seamId = seamKey(s.id, item.from)
-      const transcript = transcripts.get(seamId)
       const expanded = expandedSeams.has(seamId)
       const ticking = item.open && footerState === 'live'
+      const streamed = item.open && item.from === streamFrom
+      // the streaming seam reads its payload from the stream; every other seam from its interval read
+      const transcript = streamed
+        ? (tail === null ? { state: 'loading' } : tail.error ? { state: 'error', error: tail.error } : { state: 'ready', data: tail })
+        : transcripts.get(seamId)
       const lead = ticking ? `${t('status.working')} · ${elapsed(Math.max(0, now - item.from))}`
         : item.open ? t('status.working')
           : `${t('mobile.worked')} ${elapsed(item.to - item.from)}`
@@ -786,9 +675,12 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               <div className="m-seam-inset">
                 {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
                 {transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
-                {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} />}
+                {transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} live={streamed} />}
               </div>
             )}
+            {/* THE LIVE TAIL: the open seam's collapsed face — the current turn, in the conversation's own
+                grammar, from the same streamed payload the expanded seam shows in full */}
+            {streamed && !expanded && <LiveTail key={seamId} data={tail} lastSaid={lastSaid} />}
           </div>
         </div>,
       )
@@ -803,11 +695,6 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {events === null
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
-          {/* THE LIVE TAIL: the current turn, in the conversation's own grammar, after everything on the record */}
-          <div className="m-ev m-ev-trace"><div className="m-gut" />
-            <ExecutionTrace sessionId={s.id} active={active} live={footerState === 'live' && s.status === 'working'}
-              lastSaid={lastSaid} onTurnSettled={load} />
-          </div>
         </div>
       </div>
       {copyStatus && (
@@ -815,9 +702,10 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {t(`mobile.${copyStatus === 'copied' ? 'copied' : 'copyFailed'}`)}
         </div>
       )}
-      <TimelineFooter state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
-        sending={sending} send={send} sendErr={sendErr} onRestore={onRestore} actionOutcome={actionOutcome}
-        onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop} />
+      <TimelineFooter session={s} state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
+        sending={sending} send={send} sendErr={sendErr} sendNote={sendNote} onRestore={onRestore} actionOutcome={actionOutcome}
+        onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
+        specs={specs} sessions={sessions} boardCommands={boardCommands} />
     </div>
   )
 }

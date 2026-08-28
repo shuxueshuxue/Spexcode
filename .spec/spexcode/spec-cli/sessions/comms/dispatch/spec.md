@@ -84,12 +84,29 @@ a trace ([[session-timeline]]).
 Hard interrupt is a sibling control operation, not a magic prompt. `spex session interrupt` (and the
 Conversation's stop control, [[conversation]]) calls the adapter's interrupt capability through the backend;
 [[claude-headless]] sends native `control_request/interrupt` and confirms the matching `control_response`,
-[[codex-runtime]] interrupts the exact native turn. Without a native capability the TRANSPORT decides, once,
-in the backend: a headless adapter has no keyboard and refuses loudly — interrupt never falls back to a
-signal that could target the wrong process — while a pane-backed TUI has an operator's keyboard by
-definition, so its interrupt is the key that operator would press, `C-c` into its own pane through the
-raw-key channel, and only while the lifecycle is `active` (the same key on an idle TUI is one more Ctrl-C
-from quitting it). Callers never choose the branch; there is one route and one verb.
+[[codex-runtime]] interrupts the exact native turn, and the generative-shim headless forms abort through
+their own host — [[pi-headless]]'s controller asks the turn child's shim for pi's `ctx.abort()` and confirms
+only once that child has exited, [[opencode-headless]] asks the plugin for opencode's `session.abort` over
+the rendezvous socket and confirms only once that one-turn process has stopped serving it ([[shim-runtime]]
+carries the one `interrupt` line and its `interrupt-done` / `interrupt-rejected` answer). Every headless
+interrupt is CONFIRMED or it is a loud failure: nothing serving the turn means "no turn is running — nothing
+to interrupt", an unproven listener sends nothing, and silence within the wall is an error, never an
+optimistic ok. Without a native capability the TRANSPORT decides, once, in the backend: a headless adapter
+has no keyboard and refuses loudly — interrupt never falls back to a signal that could target the wrong
+process — while a pane-backed TUI has an operator's keyboard by definition, so its interrupt is the key that
+operator would press, `C-c` into its own pane through the raw-key channel, and only while the lifecycle is
+`active` (the same key on an idle TUI is one more Ctrl-C from quitting it). Callers never choose the branch;
+there is one route and one verb.
+
+**A confirmed interrupt is a turn outcome the record states.** The human ended the turn, so the agent now waits
+for the human: a native interrupt that confirms on an `active` record projects `asking` with the note
+`interrupted: the human stopped this turn; the next message continues the conversation` — the same
+active-only compare-and-set every turn-outcome writer uses ([[harness-adapter]]), so a declaration the agent
+landed first stays authoritative. The backend stamps that intent BEFORE sending the abort: a one-turn process
+leaves with a non-zero exit when aborted, and its own exit report can race the confirmation, so the adapter's
+turn-failure seam reads a freshly stamped interrupt as the interrupt it was rather than filing `error`; the
+stamp is consumed by that one report and expires on its own, and a refused interrupt leaves none behind.
+The pane key path confirms nothing and therefore writes nothing — the TUI's own idle signal follows.
 
 Before a text prompt reaches that channel, the backend applies the SAME `surface: command` resolver [[launch]]
 uses. A recognized leading `/<preset>` expands to the live plugin body, target placeholders, and remaining
@@ -120,7 +137,8 @@ selected session supplies the spawned worker's parent without giving shell `spex
 
 All faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
 `kind:"text"` is the prompt delivery above; `kind:"command"` is Command Box text plus `@new` resolution using
-`:id` as the parent originator; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
+`:id` as the parent originator — and, from the Conversation footer (a Command Box on a terminal-free surface), it
+carries `replyVia:"note"` so the note-reply insert rides the same delivery; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
 own `tmux send-keys` transport — the per-keystroke channel for driving the agent's TUI menus, carrying named
 keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so CLI remote control drives the
 terminal, **not** a prompt fallback. The transport split (socket vs send-keys) is an implementation fact the

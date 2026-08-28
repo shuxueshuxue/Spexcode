@@ -12,7 +12,8 @@ let memoryState = null
 
 export const sessionSurfaceStorageKey = (projectId = PROJECT_ID) => `${STORAGE_PREFIX}.${projectId || 'root'}`
 
-const emptyState = () => ({ defaultSurface: SESSION_SURFACE_TERMINAL, sessions: {} })
+// Conversation is the base default for every session; Terminal is a pane-backed session's opt-in face.
+const emptyState = () => ({ defaultSurface: SESSION_SURFACE_CONVERSATION, sessions: {} })
 const validBaseSurface = (value) => BASE_SURFACES.has(value)
 export const isResourceSurface = (value) => typeof value === 'string' && value.startsWith(SESSION_SURFACE_RESOURCE_PREFIX) && value.length > SESSION_SURFACE_RESOURCE_PREFIX.length
 export const isSessionSurface = (value) => validBaseSurface(value) || value === SESSION_SURFACE_DIFF || isResourceSurface(value)

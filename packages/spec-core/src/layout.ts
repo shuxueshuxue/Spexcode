@@ -28,7 +28,6 @@ export type Config = {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
     icon?: string                  // project identity icon: a picker preset id; existing emoji/Iconify/URL values remain supported ([[identity-config]])
-    showHeadlessLaunchers?: boolean // include headless harness profiles in the dashboard New Session picker (default false; [[launcher-visibility]])
   }
   uploads?: {
     // One resumable attachment policy. Values default from templates/spexcode.json so a project may omit this

@@ -40,8 +40,8 @@ test('session base surfaces persist explicit choices without overriding the defa
   const key = sessionSurfaceStorageKey()
   try {
     assert.match(key, /^spexcode\.session-surface\.v1\./)
-    assert.equal(getDefaultSessionSurface(), SESSION_SURFACE_TERMINAL)
-    assert.equal(getSessionBaseSurface('alpha'), SESSION_SURFACE_TERMINAL)
+    assert.equal(getDefaultSessionSurface(), SESSION_SURFACE_CONVERSATION)
+    assert.equal(getSessionBaseSurface('alpha'), SESSION_SURFACE_CONVERSATION)
     assert.equal(hasSessionBaseSurface('alpha'), false)
 
     setDefaultSessionSurface(SESSION_SURFACE_CONVERSATION)

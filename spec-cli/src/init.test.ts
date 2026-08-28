@@ -21,15 +21,17 @@ const PACKAGE = join(SRC, '..')
 const TSX = tsxBin(PACKAGE)
 const HOOK_TEMPLATES = join(SRC, '..', 'templates', 'hooks')
 const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(templateConfigPath, 'utf8')).lint.governedRoots)
+// template order: each harness's headless form leads its interactive one, so a selection that includes both
+// defaults to the terminal-free launcher ([[launcher-select]])
 const SEEDED_LAUNCHERS = {
-  claude: { harness: 'claude', cmd: 'claude' },
   'claude-headless': { harness: 'claude-headless', cmd: 'claude' },
-  codex: { harness: 'codex', cmd: 'codex' },
+  claude: { harness: 'claude', cmd: 'claude' },
   'codex-headless': { harness: 'codex-headless', cmd: 'codex --yolo' },
-  opencode: { harness: 'opencode', cmd: 'opencode' },
+  codex: { harness: 'codex', cmd: 'codex' },
   'opencode-headless': { harness: 'opencode-headless', cmd: 'opencode --auto' },
-  pi: { harness: 'pi', cmd: 'pi' },
+  opencode: { harness: 'opencode', cmd: 'opencode' },
   'pi-headless': { harness: 'pi-headless', cmd: 'pi' },
+  pi: { harness: 'pi', cmd: 'pi' },
 } as const
 
 function gitAvailable(): boolean {
@@ -163,7 +165,7 @@ test('--harness seeds only the selected launchers, with automatic permission lim
     const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SEEDED_LAUNCHERS[name as keyof typeof SEEDED_LAUNCHERS]]))
 
     assert.deepEqual(cfg.harnesses, selected, 'the choice is persisted as the harnesses field')
-    assert.equal(cfg.dashboard.showHeadlessLaunchers, false, 'fresh init explicitly hides headless dashboard launchers')
+    assert.equal(cfg.dashboard?.showHeadlessLaunchers, undefined, 'no headless-launcher visibility gate: the picker offers every configured launcher')
     assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands match their runtime form')
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
     if (!selected.includes('codex-headless'))

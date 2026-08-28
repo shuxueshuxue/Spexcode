@@ -113,16 +113,16 @@ scenarios:
       in both presets. No page errors.
   - name: an-expanded-live-seam-keeps-counting
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/live-tail.e2e.mjs]
     description: >-
-      In a real browser open the Conversation of a working session whose tail seam is live, expand that seam,
-      and watch it across at least two timeline polls: record every transcript request the page makes (its
-      `to` parameter), whether the inset ever shows the loading line again after its first read, and the
-      seam's `N turns · M tool uses` before and after.
+      In a real browser open the Conversation of a working session whose tail seam is live, feed its transcript
+      stream successive frames for the same interval, expand the seam, and read: the seam's `N turns · M tool
+      uses` before and after each frame, whether the inset ever shows the loading line once it has content, and
+      whether the page makes any interval GET for the open seam.
     expected: >-
-      The expanded live seam re-reads its transcript on each poll with a `to` that advances, its inset never
-      falls back to the loading line once it has content, and its numbers follow the agent instead of freezing
-      at the moment of expansion. No page errors.
+      The open seam's numbers follow the streamed frames instead of freezing at the moment of expansion, its
+      inset never falls back to the loading line once it has content, and the open seam issues no interval GET
+      of its own — the stream is its only read. No page errors.
   - name: stop-is-one-square-while-working
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
@@ -152,6 +152,27 @@ scenarios:
       an agent that is not working claims no seam; an error line carries none before it; the offline
       record's tail reads the bare word `working`. The shapes that were already right render exactly as
       before.
+  - name: the-conversation-composer-is-a-command-box
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/conversation-command-box.e2e.mjs
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/mentions.jsx, spec-dashboard/src/useAttachQueue.jsx]
+    description: >-
+      Boot an isolated backend over a fresh temporary project with one spec node and one live fake-harness
+      session, open that session's Conversation in a real browser, and work every door of its footer: type
+      `/` and read the rows and their order, Escape, pick a non-board row; type `@`, pick `@new`, pick the
+      launcher; type `[[`, pick the node, add a unique token and press Enter, then read the session's own
+      timeline and the harness's pane; paste a file, pick one through the paperclip, drop one on the
+      composer and read the draft and the backend's upload sink; finally type the bare board line `/eval`
+      and press Enter, reading the address and the timeline afterwards.
+    expected: >-
+      The `/` palette lists the board's `[ui]` rows (`/eval`, `/stop`, `/close`) before the preset and
+      harness rows; Escape closes it and keeps the draft; a non-board row inserts `/<name> `. `@` leads to
+      `@new:` and then `@new:fake `. `[[` inserts `[[fixture]] `, and the sent event on the timeline — and
+      the text the harness echoes — carry `[[fixture]] (<path>/fixture/spec.md)`, with `replyVia: note` and
+      the draft cleared on delivery. Each of paste, pick and drop uploads through the resumable stream and
+      splices its absolute `spexcode-uploads/` path into the draft, space-padded, three paths in the end,
+      each readable on the backend; the composer rings while a file hovers. The bare `/eval` line navigates
+      to the session's Evals door and appends nothing to the timeline. No page errors.
 ---
 # measuring conversation
 

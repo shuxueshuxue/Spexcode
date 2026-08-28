@@ -49,7 +49,10 @@ own half plays two roles:
   supplies the inject (`client.session.prompt` into the root session); an unadopted or failed injection
   leaves the message owed, for the delivery queue to retry. That makes `ownsRendezvous: true` LITERALLY
   true — the shared Claude-family poke and socket-listener liveness are reused with no opencode-specific
-  transport. The server is multi-connection, so a board probe cannot displace another poke.
+  transport. The server is multi-connection, so a board probe cannot displace another poke. The plugin also
+  binds the runtime's `interrupt` line to opencode's native `session.abort` on the adopted root session —
+  rejected when no session is adopted or the abort finds no running turn — which [[opencode-headless]] uses
+  as its hard interrupt; the interactive adapter keeps the operator's own `C-c` ([[dispatch]]).
 
 The remaining divergences are ordinary adapter facts: launch is a tail-branching script (a prompt tail
 launches `--prompt`, a `--resume <id>` marker re-attaches `--session <id>` — the codex marker pattern);

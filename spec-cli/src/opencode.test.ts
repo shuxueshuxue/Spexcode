@@ -103,7 +103,7 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
 // a fake SDK client records injected prompts, and the REAL deliverViaRendezvous talks to the plugin's socket.
 
 type Dispatched = { code: number }
-async function loadPlugin(opts: { session: string; block?: string[]; blockJson?: string[]; blockReason?: string; promptMs?: number; resumeId?: string; continueList?: unknown[] }) {
+async function loadPlugin(opts: { session: string; block?: string[]; blockJson?: string[]; blockReason?: string; promptMs?: number; resumeId?: string; continueList?: unknown[]; abortIdle?: boolean }) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oc-plugin-'))
   const dispatch = join(dir, 'dispatch.sh')
   // records `<event>.json` (argv check included: $1 must be the baked harness id); blocks listed events.
@@ -131,17 +131,20 @@ async function loadPlugin(opts: { session: string; block?: string[]; blockJson?:
   else delete process.env.SPEXCODE_OPENCODE_CONTINUE
   const mod = await import(pathToFileURL(pluginFile).href)
   const prompts: unknown[] = []
-  // promptMs simulates the REAL SDK contract: session.prompt resolves only when the injected TURN completes
+  const aborts: unknown[] = []
+  // promptMs simulates the REAL SDK contract: session.prompt resolves only when the injected TURN completes;
+  // abort answers the SDK's boolean — true when a turn was running, false when there was nothing to abort
   const client = {
     session: {
       prompt: async (x: unknown) => { prompts.push(x); if (opts.promptMs) await new Promise((r) => setTimeout(r, opts.promptMs)) },
       list: async () => ({ data: opts.continueList ?? [] }),
+      abort: async (x: unknown) => { aborts.push(x); return { data: opts.abortIdle ? false : true } },
     },
   }
   const hooks = await mod.SpexcodePlugin({ client, directory: dir })
   const payload = (e: string) => JSON.parse(readFileSync(join(dir, `${e}.json`), 'utf8'))
   const raw = (e: string) => readFileSync(join(dir, `${e}.json`), 'utf8')
-  return { dir, hooks, prompts, payload, raw, session: opts.session }
+  return { dir, hooks, prompts, aborts, payload, raw, session: opts.session }
 }
 
 test('hook bridge: claude-SHAPED payloads reach dispatch.sh (session_id = record id, Claude tool names, file_path)', async () => {
@@ -296,4 +299,38 @@ test('rendezvous daemon: a turn-length injection does not hold the poke open', a
   assert.equal((t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text, 'second message under fire')
   rmSync(t.dir, { recursive: true, force: true })
   rmSync(rvSock(session), { force: true })
+})
+
+test('rendezvous daemon: an interrupt poke aborts the adopted ROOT session through the SDK and is confirmed', async () => {
+  const { interruptViaRendezvous } = await import('./harness.js')
+  const session = `oc-t8-${process.pid}`
+  const t = await loadPlugin({ session })
+  // before adoption there is no session to abort: rejected, never a guessed abort of some other session
+  for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
+  const unadopted = await interruptViaRendezvous(session, 'opencode-headless')
+  assert.equal(unadopted.ok, false)
+  assert.match(unadopted.error || '', /no opencode session is adopted/)
+  await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
+  const r = await interruptViaRendezvous(session, 'opencode-headless')
+  assert.deepEqual(r, { ok: true })
+  assert.deepEqual(t.aborts, [{ path: { id: 'oc_root' } }], 'exactly one session.abort on the root session')
+  rmSync(t.dir, { recursive: true, force: true })
+  rmSync(rvSock(session), { force: true })
+})
+
+test('rendezvous daemon: an interrupt with no running turn (SDK abort answers false) is rejected loud', async () => {
+  const { interruptViaRendezvous } = await import('./harness.js')
+  const session = `oc-t9-${process.pid}`
+  const t = await loadPlugin({ session, abortIdle: true })
+  await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
+  for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
+  const r = await interruptViaRendezvous(session, 'opencode-headless')
+  assert.equal(r.ok, false)
+  assert.match(r.error || '', /no opencode turn is running/)
+  rmSync(t.dir, { recursive: true, force: true })
+  rmSync(rvSock(session), { force: true })
+  // and with the listener gone the backend's answer is "nothing is running", not a hung connect
+  const dead = await interruptViaRendezvous(session, 'opencode-headless')
+  assert.equal(dead.ok, false)
+  assert.match(dead.error || '', /no opencode-headless turn is running/)
 })

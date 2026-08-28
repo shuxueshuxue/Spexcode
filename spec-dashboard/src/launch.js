@@ -64,8 +64,8 @@ const initialLauncher = (list, configuredDefault, remembered = rememberedLaunche
 
 // the configured launcher profiles ([[launcher-select]]) + the current pick. The pick is remembered
 // per-browser under the ONE key every surface shares, so phone and desktop agree on it. Initial selection
-// honors a VISIBLE config default; a default hidden by [[launcher-visibility]] cannot become an invisible
-// dashboard pick: remembered pick (if still visible) → visible configured `default` → first visible row.
+// honors the config default: remembered pick (if still configured) → configured `default` → first row. The
+// list is the complete configured registry — headless launchers are ordinary rows, not a hidden tier.
 export function useLaunchers() {
   const cached = launcherListFrom(launcherSettings)
   const [launchers, setLaunchers] = useState(cached)
@@ -90,4 +90,21 @@ export function useCommandPresets() {
     loadPlugins().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
   return presets
+}
+
+// the harness's own `/` commands (GET /api/slash-commands?harness=…) — the SAME list that harness's TUI shows,
+// recomputed when the session's harness differs (a codex session gets codex's menu, a claude session
+// claude's). Display + insert only; never executed here. Shared by the Command Box and the Conversation
+// composer so both `/` palettes are one vocabulary ([[command-box]]).
+export function useHarnessCommands(harness) {
+  const [commands, setCommands] = useState([])
+  useEffect(() => {
+    let live = true
+    fetch(apiUrl(`/api/slash-commands?harness=${encodeURIComponent(harness || 'claude')}`))
+      .then((r) => r.json())
+      .then((d) => { if (live && Array.isArray(d)) setCommands(d) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [harness])
+  return commands
 }

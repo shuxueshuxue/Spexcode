@@ -9,9 +9,6 @@
     "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 },
     "breadth": { "maxChildren": 8 }
   },
-  "dashboard": {
-    "showHeadlessLaunchers": false
-  },
   "sessions": {
     "maxActive": 8,
     "launchers": {
@@ -22,6 +19,6 @@
       "pi": { "harness": "pi", "cmd": "pi" },
       "pi-headless": { "harness": "pi-headless", "cmd": "pi" }
     },
-    "defaultLauncher": "claude"
+    "defaultLauncher": "claude-headless"
   }
 }

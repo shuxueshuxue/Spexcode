@@ -3259,8 +3259,46 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
     return true
   })
 }
+// @@@ interrupt projection - a CONFIRMED human interrupt ended the turn, and the record says so the way an
+// undeclared stop does: `asking`, with the reason, because the agent now waits for the human's next message.
+// Active-only like every other turn-outcome writer: a declaration that landed first (the agent answered
+// before the abort reached it) stays authoritative. The marker is stamped before the abort is sent so the
+// adapter's own exit report — a one-turn process leaves with a non-zero code when aborted — reads the same
+// outcome instead of filing a failed turn; it expires so a genuine failure later is never mistaken for it.
+export const INTERRUPTED_NOTE = 'interrupted: the human stopped this turn; the next message continues the conversation'
+const INTERRUPT_MARKER_TTL_MS = 15_000
+const interruptMarkerPath = (id: string) => sessionArtifactPath(id, 'turn.interrupted')
+export function stampInterrupt(id: string): void {
+  mkdirSync(storeDir(id), { recursive: true })
+  writeFileSync(interruptMarkerPath(id), String(Date.now()))
+}
+export function clearInterruptMarker(id: string): void {
+  try { unlinkSync(interruptMarkerPath(id)) } catch { /* never stamped, or already consumed */ }
+}
+function consumeInterruptMarker(id: string): boolean {
+  let at = NaN
+  try { at = Number(readFileSync(interruptMarkerPath(id), 'utf8')) } catch { return false }
+  clearInterruptMarker(id)
+  return Number.isFinite(at) && Date.now() - at <= INTERRUPT_MARKER_TTL_MS
+}
+function projectInterruptedUnlocked(sessionId: string): boolean {
+  const rec = readLiveRecord(sessionId)
+  if (!rec?.governed || rec.status !== 'active' || rec.stopped || rec.archived) return false
+  const application = configuredSessionApplicationIfCutover()
+  if (application) {
+    application.transitionSession(sessionId, {
+      status: 'asking', proposal: null, note: INTERRUPTED_NOTE,
+      recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'asking'),
+    })
+    return true
+  }
+  writeRecord({ ...rec, status: 'asking', proposal: null, note: INTERRUPTED_NOTE })
+  return true
+}
+export const markInterrupted = (sessionId: string): boolean => withRecordLockSync(sessionId, () => projectInterruptedUnlocked(sessionId))
 export function markHeadlessTurnFailure(sessionId: string, harness: string, exitCode: string): boolean {
   if (exitCode === '0') return false
+  if (consumeInterruptMarker(sessionId)) return markInterrupted(sessionId)
   const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
   return markTurnFailure(sessionId, `${harness} turn exited with ${outcome}`)
 }
@@ -5042,7 +5080,15 @@ export async function interruptSession(id: string): Promise<DispatchResult> {
     const rec = readRecord(id)
     if (!rec) return { ok: false, error: `no session record for ${id} - nothing to interrupt` }
     const h = harnessById(rec.harness || defaultHarness.id)
-    if (h.interrupt) return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
+    if (h.interrupt) {
+      // stamped BEFORE the abort: the adapter's exit report can race the confirmation, and either order must
+      // read "interrupted" (see the interrupt projection); a refused interrupt leaves no trace behind.
+      stampInterrupt(id)
+      const result = await h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
+      if (!result.ok) { clearInterruptMarker(id); return result }
+      projectInterruptedUnlocked(id)
+      return result
+    }
     if (h.headless) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
     if (rec.status !== 'active') return { ok: false, error: `session ${id} is not working (lifecycle ${rec.status}) - nothing to interrupt` }
     const sent = await sendRawKeysLocked(id, ['C-c'])

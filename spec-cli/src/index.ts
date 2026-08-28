@@ -22,10 +22,9 @@ import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, SessionRecordUnusable, TMUX_SOCK, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
-import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
-import { defaultHarness, HARNESSES, codexHarness, dashboardLauncherList, launcherDefault, harnessById } from './harness.js'
+import { readSessionTranscript, sessionTranscriptStream } from './session-transcript.js'
+import { defaultHarness, HARNESSES, codexHarness, launcherList, launcherDefault, harnessById } from './harness.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
-import { TranscriptReadError } from './transcript-reader.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
 import { putBlob } from '@spexcode/spec-eval/cache'
 import { fileHumanReading } from '@spexcode/spec-eval/filing'
@@ -291,11 +290,10 @@ app.post('/api/evidence', async (c) => {
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
 // `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
-// `.layout.main`) and the dashboard-visible launcher profiles ([[launcher-visibility]]) the New-Session picker
-// offers — `{ name, harness, cmd, headless }`: the cmd is read-only display data for the picker (the dashboard sits
+// `.layout.main`) and the complete launcher profiles ([[launcher-select]]) the New-Session picker offers —
+// `{ name, harness, cmd, headless }`: the cmd is read-only display data for the picker (the dashboard sits
 // behind the gateway auth; the browser can read but never edit config) — plus the configured `default` NAME
-// so the picker pre-selects the SAME launcher a bare `spex session new` uses when that row is visible, else
-// its first visible row rather than a hidden headless default,
+// so the picker pre-selects the SAME launcher a bare `spex session new` uses, else its first row.
 // Missing defaultLauncher is returned as an actionable config error, not hidden by falling through to the
 // built-in `claude` launcher.
 // `tmuxSocket` is the `-L <name>` label our private tmux server runs under (a backend fact, env-overridable),
@@ -303,7 +301,7 @@ app.post('/api/evidence', async (c) => {
 // beside the blessed `spex session attach` command — the frontend never hardcodes the socket.
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
-  launchers: dashboardLauncherList(),
+  launchers: launcherList(),
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))
@@ -731,47 +729,11 @@ app.get('/api/sessions/:id/capture', async (c) => {
   if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
   return c.text('capture failed', 502)
 })
-// A live adapter-owned execution observation, intentionally distinct from the durable conversation timeline.
-// The response carries only the backend-normalized latest working note and typed tool rows; no transcript bytes
-// or parser schema cross this API boundary.
-app.get('/api/sessions/:id/execution', (c) => {
-  const execution = readSessionExecution(c.req.param('id') || '')
-  return execution ? c.json(execution) : c.json({ error: 'no such session' }, 404)
-})
-app.get('/api/sessions/:id/execution/stream', (c) => sessionExecutionStream(c))
-// The native transcript is a bounded payload behind the durable timeline index. Bounds are explicit epoch
-// milliseconds so the route never guesses which status interval the caller intended.
-app.get('/api/sessions/:id/transcript', async (c) => {
-  const id = c.req.param('id') || ''
-  const fromRaw = c.req.query('from')
-  const toRaw = c.req.query('to')
-  if (fromRaw == null || toRaw == null || fromRaw === '' || toRaw === '')
-    return c.json({ error: 'transcript needs both from and to epoch milliseconds' }, 400)
-  const from = Number(fromRaw)
-  const to = Number(toRaw)
-  if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isInteger(from) || !Number.isInteger(to) || from >= to)
-    return c.json({ error: 'transcript interval is invalid: from and to must be integer epoch milliseconds with from < to' }, 400)
-  let raw: ReturnType<typeof readAliasedRawRecord>
-  try { raw = readAliasedRawRecord(id) } catch (error) { return c.json({ error: `session ${id} record is unreadable: ${error instanceof Error ? error.message : String(error)}` }, 500) }
-  if (!raw || !raw.governed) return c.json({ error: `session ${id} does not exist` }, 404)
-  let harness
-  try { harness = harnessById(typeof raw.harness === 'string' && raw.harness ? raw.harness : defaultHarness.id) }
-  catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 500) }
-  const threadId = harness.exactNativeTargetId({
-    session: raw.session_id,
-    harnessSessionId: typeof raw.harness_session_id === 'string' ? raw.harness_session_id : null,
-    stopped: !!raw.stopped,
-    archived: !!raw.archived,
-  })
-  if (!threadId) return c.json({ error: `session ${id} transcript is unavailable: native harness identity is missing` }, 409)
-  try {
-    return c.json(await harness.readTranscript(threadId, { from, to }))
-  } catch (error) {
-    if (!(error instanceof TranscriptReadError)) throw error
-    const status = error.reason === 'unsupported' ? 501 : error.reason === 'invalid' ? 422 : 409
-    return c.json({ error: error.message, reason: error.reason }, status)
-  }
-})
+// The native transcript behind the durable timeline index ([[transcript-reader]], [[session-transcript]]):
+// a closed interval by GET, the open working interval by SSE. Bounds are explicit epoch milliseconds so the
+// route never guesses which stretch the caller intended; native bytes stay behind the adapter.
+app.get('/api/sessions/:id/transcript', (c) => readSessionTranscript(c))
+app.get('/api/sessions/:id/transcript/stream', (c) => sessionTranscriptStream(c))
 // the session's persisted interaction history ([[session-timeline]]): authored status transitions (with the
 // FULL note text) + delivered prompts, timestamped, oldest first — what a terminal-free surface renders as
 // the conversation. `?limit=<n>` caps the tail (default 500). 404 for an unknown/non-governed id.
@@ -943,8 +905,14 @@ app.post('/api/sessions/:id/input', async (c) => {
     if (!text.trim()) return c.json({ ok: false, error: EMPTY_PROMPT_ERROR }, 400)
     const deliveryKey = typeof body?.deliveryId === 'string' && body.deliveryId.trim() ? body.deliveryId.trim() : undefined
     // Command Box acceptance is the durable append. Do not hold the HTTP request on a
-    // slow native handoff: the delivery supervisor already owns the queued retry path.
-    const r = await sendText(id, text, undefined, deliveryKey ? { deliveryKey, deferDrain: true } : { deferDrain: true })
+    // slow native handoff: the delivery supervisor already owns the queued retry path. The Conversation
+    // footer is a Command Box on a terminal-free surface, so it says `replyVia:"note"` here exactly as a
+    // text send would, and the note-reply insert rides the same delivery.
+    const r = await sendText(id, text, undefined, {
+      deferDrain: true,
+      ...(deliveryKey ? { deliveryKey } : {}),
+      ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
+    })
     if (!r.ok) return c.json(r, 502)
     // Start the first handoff without holding the HTTP response on native readiness. The queue remains the
     // acceptance boundary; only a successful dequeue is allowed to publish human activity.

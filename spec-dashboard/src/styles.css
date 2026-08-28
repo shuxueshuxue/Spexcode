@@ -2839,9 +2839,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-quote.is-clamped::after { content: ""; position: absolute; inset: auto 0 0; height: 4.5em; background: linear-gradient(transparent, var(--quote-bg)); pointer-events: none; }
 .m-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--blue); background: none; border: 0; font: inherit; font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer; }
 
-/* AN EVENT LINE: something that happened — `error`, `corrupt` — is one line with no box and no duration.
-   The old row put a span beside it, so `error 80h 45m` read as eighty hours of failing. */
+/* AN EVENT LINE: something that happened — `error`, `corrupt` — is one inline line with no box or duration. */
 .m-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-family: var(--ui-font); font-size: var(--type-control); }
+.m-line-time { flex: none; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); font-variant-numeric: tabular-nums; opacity: .6; transition: opacity .15s ease; }
+.m-ev:hover .m-line-time, .m-ev:focus-within .m-line-time { opacity: 1; }
 .m-line .m-ev-word { font-weight: var(--weight-semibold); }
 .m-line-text.m-ev-note { min-width: 0; color: var(--ink); font-size: var(--type-control); line-height: var(--leading-relaxed); }
 

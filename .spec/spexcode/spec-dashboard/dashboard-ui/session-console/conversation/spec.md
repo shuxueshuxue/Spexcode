@@ -116,11 +116,11 @@ exactly those three:
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
   is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep; the tail seam of a dead session says `working` — the
   record's last word — with no duration invented for a stretch nothing closed.
-- An EVENT is `error` or `corrupt`: one line — glyph, word, note — with no duration, because it happened
-  rather than lasted.
+- An EVENT is `error` or `corrupt`: one line in the content column — timestamp, glyph, word, note — with no
+  duration, because it happened rather than lasted.
 
-THE RULER. Time lives in a 52px tabular gutter shared by every message row; user messages reverse the two
-columns so their time sits to the right of the right-aligned bubble. THE MINUTE IS QUIET: a
+THE RULER. Message time lives in a 52px tabular gutter; user messages reverse the two columns so their time
+sits to the right of the right-aligned bubble, while event time stays inline at the start of the content column. THE MINUTE IS QUIET: a
 reader scans a conversation by what was said and asks for the time only when they need it, so each row's
 time rests at reduced opacity and comes up under the pointer or keyboard focus — it never leaves the DOM,
 so nothing assistive loses it. The day stays in normal document flow, because it is structure rather than a stamp. When the PANE (a

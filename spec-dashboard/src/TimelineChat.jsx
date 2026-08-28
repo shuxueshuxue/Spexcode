@@ -647,16 +647,15 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
         </div>,
       )
     } else if (item.kind === 'event') {
-      // An error is something that HAPPENED, not a phase that lasted: one line, no duration. The old row
-      // read `error 80h 45m` — the time since — as if it had been failing for eighty hours.
+      // An event is something that HAPPENED, not a phase that lasted: one line with its timestamp inline.
       rows.push(
         <div className="m-ev m-ev-line" key={i}>
-          {gutter(item.ts)}
+          <div className="m-gut" />
           <div className="m-line">
+            <time className="m-line-time">{timeOf(item.ts)}</time>
             <span className="m-ev-glyph" style={{ color: STATUS_COLOR[item.status] }}>{STATUS_GLYPH[item.status] || '·'}</span>
             <span className="m-ev-word" style={{ color: STATUS_COLOR[item.status] }}>{t(`status.${item.status}`)}</span>
             {item.text && <div className="m-line-text m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
-            <time className="m-tin">{timeOf(item.ts)}</time>
           </div>
         </div>,
       )

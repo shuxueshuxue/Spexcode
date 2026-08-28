@@ -99,6 +99,10 @@ export function claudeEvent(value: unknown): ParsedEvent | null {
   return null
 }
 
+const blockText = (content: unknown): string | null => typeof content === 'string'
+  ? string(content)
+  : items(content).map((block) => string(object(block)?.text)).filter(Boolean).join('\n') || null
+
 export function codexEvent(value: unknown): ParsedEvent | null {
   const entry = object(value)
   const payload = object(entry?.payload)
@@ -106,16 +110,23 @@ export function codexEvent(value: unknown): ParsedEvent | null {
   const eventAt = at(payload) ?? at(entry)
   if (eventAt === null) return { at: null, turn: null }
   const type = string(payload.type)
-  if ((entry.type === 'event_msg' && type === 'user_message')
-    || (entry.type === 'response_item' && (type === 'message' || type === 'input_message') && payload.role === 'user')) {
+  // THE PERSON'S MESSAGE is the `user_message` event. Codex also records it as a `response_item` message (the API
+  // form, `input_text` blocks) beside harness injections that no person typed (the AGENTS.md instructions), so
+  // that form is not a turn — the event is, once.
+  if (entry.type === 'event_msg' && type === 'user_message') {
     const text = typeof payload.message === 'string' ? payload.message : compact(payload.message ?? payload.content ?? '')
     return text ? { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'user', text, tools: [] } } : null
   }
-  // commentary AND the final answer are both what the agent said; only structured reasoning stays private
+  if (entry.type === 'response_item' && (type === 'message' || type === 'input_message') && payload.role === 'user') return { at: eventAt, turn: null }
+  // WHAT THE AGENT SAID is the `agent_message` event — commentary and the final answer alike. Codex 0.146 also
+  // records the same prose as a `response_item` message (`output_text` blocks) beside it, so that form is not read:
+  // reading both would say every sentence twice. An empty event (a final answer that was a tool call) is a clock,
+  // not a turn. Structured reasoning stays private.
   if (entry.type === 'event_msg' && type === 'agent_message') {
     const text = string(payload.message ?? payload.text)
-    return text ? { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', text, tools: [] } } : null
+    return text ? { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', text, tools: [] } } : { at: eventAt, turn: null }
   }
+  if (entry.type === 'response_item' && type === 'message' && payload.role === 'assistant') return { at: eventAt, turn: null }
   if (entry.type === 'response_item' && (type === 'custom_tool_call' || type === 'function_call')) {
     const id = string(payload.call_id ?? payload.id) ?? 'tool'
     return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name: string(payload.name ?? payload.tool_name) ?? 'tool', input: payload.input === undefined && payload.arguments === undefined ? undefined : compact(payload.input ?? payload.arguments), outputLines: 0, outputBytes: 0 }] } }
@@ -214,9 +225,6 @@ export function codexAppServerStream(): Parse {
   }
 }
 
-const blockText = (content: unknown): string | null => typeof content === 'string'
-  ? string(content)
-  : items(content).map((block) => string(object(block)?.text)).filter(Boolean).join('\n') || null
 
 export function piEvent(value: unknown): ParsedEvent | null {
   const entry = object(value)

@@ -86,6 +86,12 @@ scenarios:
     code: packages/transcript/src/parsers.ts
     description: Push a real `queued_command` attachment record (captured from a claude-headless session steered mid-turn) between two assistant records into a live Claude transcript, plus an unrelated attachment.
     expected: The queued command reads as a user turn keyed by the record's uuid, ordered between the calls it fell between, with its prompt text; the unrelated attachment is not a turn.
+  - name: codex-0146-rollout-reads-each-message-once
+    tags: [cli]
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/parsers.ts
+    description: Read two real Codex 0.146 rollouts (one participant that answered in prose, one that answered only through tool calls) through the codex reader.
+    expected: Each human message is one user turn with its plain text (never a JSON-encoded block array, never the AGENTS.md injection); each prose reply is one assistant turn (the response_item copy is not a second one); an agent that only called tools has tool turns and no prose turns.
 ---
 
 The backend fixture proof is intentionally adapter-local and bounded. The browser scenario uses a real governed

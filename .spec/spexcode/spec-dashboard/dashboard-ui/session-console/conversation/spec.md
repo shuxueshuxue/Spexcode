@@ -9,7 +9,10 @@ related:
   - spec-dashboard/src/RichText.js
   - spec-dashboard/src/conversationItems.js
   - spec-dashboard/src/Composer.jsx
+  - spec-dashboard/src/mentions.jsx
+  - spec-dashboard/src/useAttachQueue.jsx
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
+  - spec-dashboard/test/conversation-command-box.e2e.mjs
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
@@ -165,9 +168,20 @@ PAPER: the page's own ground with a hairline frame and the one elevation token, 
 the flow, so it reads as part of the sheet the conversation is printed on. Its primary action is the shared
 send mark ([[icon-system]]'s `send`, the same accent square the thread's composer wears): icon-only, its
 word carried by the tooltip and the accessible name, filled while there is something to send and quiet
-while there is not, so every dashboard composer says "send" by one shape. The Command Box title and its
-`@`, `[[`, `/`, and attachment doors remain in the Conversation footer and act on that same draft; the
-separate terminal Command Box opener is the only command control disabled on this surface. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+while there is not, so every dashboard composer says "send" by one shape.
+
+**The Conversation footer IS a Command Box, not a picture of one.** It wears the Command Box title and its
+`@`, `[[`, `/` and attachment doors, and every one of them acts on this draft through the SAME shared
+mechanism the terminal Command Box uses — [[mentions]]' one autocomplete hook (session and launcher rows
+behind `@`, `@new` → `@new:<launcher>`; spec nodes behind `[[`; the board's `[ui]` rows first, then presets,
+then the harness's own commands behind `/`, in [[command-box]]'s precedence), and [[file-attach]]'s one
+attachment hook (paste, drop and the paperclip carry the file over the resumable stream and leave its path in
+this draft, with the same per-file rows). A `[[node]]` in the draft expands to its live spec pointer at send;
+an exact `/stop`-style board line runs on the board (its outcome owned by the panel, not the box) and is never
+sent; a `/preset` invocation passes through raw for the backend to expand. It used to be the shell alone —
+the doors typed their trigger character and the paperclip only focused the field — which is the one thing a
+composer must never be: chrome that promises a mechanism it does not have. The only Command Box control this
+surface does not carry is the terminal-only Alt+I opener, because this composer is already open. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.

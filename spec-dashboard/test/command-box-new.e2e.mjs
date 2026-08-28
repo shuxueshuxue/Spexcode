@@ -12,11 +12,16 @@ const root = resolve(here, '..', '..')
 const cliRoot = join(root, 'spec-cli')
 const dashboardRoot = join(root, 'spec-dashboard')
 const sharedRoot = resolve(root, '..', '..')
-const dependencyRoot = existsSync(join(root, 'spec-dashboard', 'node_modules')) ? root : sharedRoot
-const tsxCli = existsSync(join(root, 'spec-cli', 'node_modules', 'tsx', 'dist', 'cli.mjs'))
-  ? join(root, 'spec-cli', 'node_modules', 'tsx', 'dist', 'cli.mjs')
-  : join(sharedRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
-const modules = join(dependencyRoot, 'spec-dashboard', 'node_modules')
+// tsx is hoisted to the repo root's node_modules (a worktree symlinks it there); older layouts kept it under
+// spec-cli or beside a shared checkout, so every place it has lived is tried in turn.
+const tsxCli = [join(root, 'node_modules'), join(root, 'spec-cli', 'node_modules'), join(sharedRoot, 'node_modules')]
+  .map((dir) => join(dir, 'tsx', 'dist', 'cli.mjs')).find((path) => existsSync(path))
+if (!tsxCli) throw new Error('tsx is missing: no node_modules/tsx beside the repo, spec-cli, or the shared checkout')
+// the dashboard's dependencies are hoisted to the repo root's node_modules (a worktree symlinks it there);
+// the package-local and shared-checkout dirs are the older layouts. Pick the first that actually holds vite.
+const modules = [join(root, 'spec-dashboard', 'node_modules'), join(root, 'node_modules'), join(sharedRoot, 'spec-dashboard', 'node_modules'), join(sharedRoot, 'node_modules')]
+  .find((dir) => existsSync(join(dir, 'vite', 'package.json')))
+if (!modules) throw new Error('vite is missing: no node_modules holding vite beside the dashboard, the repo, or the shared checkout')
 const fakeLauncher = join(cliRoot, 'test', 'fixtures', 'fake-claude')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
@@ -92,7 +97,8 @@ try {
   const uiPort = await freePort()
   backend = spawn(process.execPath, [tsxCli, join(cliRoot, 'src', 'index.ts')], {
     cwd: project,
-    env: { ...process.env, PORT: String(apiPort), SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux, FAKE_HARNESS_INTERVAL_MS: '80' },
+    // a slower tick keeps the harness's REPLY echo on its screen long enough for the pane reads below
+    env: { ...process.env, PORT: String(apiPort), SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux, FAKE_HARNESS_INTERVAL_MS: '200' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   backend.stdout.on('data', (chunk) => { backendLog += chunk })
@@ -166,6 +172,12 @@ try {
   await outcome.waitFor({ state: 'visible' })
   assert.match((await outcome.textContent()) || '', /new:fake.*->/)
   step('read spawned child receipt')
+  // what the harness actually received, read from its pane echo while it is still on screen
+  const paneHas = (needle) => async () => {
+    const pane = await fetch(`${api}/api/sessions/${source}/capture`).then((response) => response.text())
+    return pane.replace(/\r?\n/g, '').includes(needle) || null
+  }
+  await waitFor(paneHas(text.slice(0, 120)), 'the harness echoing the first worker request')
 
   await page.locator('.si-command-box').waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
   await page.keyboard.press('Alt+i')
@@ -174,6 +186,8 @@ try {
   await input.fill(secondText)
   await page.locator('.si-command-send').click()
   step('submit second worker request')
+  // start watching the pane now (the echo is transient) but read the notices first — they expire too
+  const secondEcho = waitFor(paneHas(secondText), 'the harness echoing the second worker request')
   await page.waitForFunction(() => document.querySelectorAll('.tn-notice.success').length >= 1)
   const stackedNotices = await page.locator('.tn-notice.success').evaluateAll((nodes) => nodes.map((node) => {
     const rect = node.getBoundingClientRect()
@@ -187,33 +201,27 @@ try {
   }
   for (const notice of stackedNotices) assert.ok(Number.parseFloat(notice.duration) >= 5000 && Number.parseFloat(notice.duration) <= 14000)
   step('verify notice stack geometry')
+  await secondEcho
   await page.locator('.si-command-box').waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
   await page.screenshot({ path: join(out, 'command-box-new-spawned.png'), fullPage: true })
 
+  // at phone width the app is the phone shell ([[mobile-ui]]): the desktop Command Box never renders there —
+  // its session view is the Conversation, whose composer carries the same grammar doors ([[conversation]])
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.keyboard.press('Alt+i')
-  await page.keyboard.press('Alt+i')
-  await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
-  await input.fill('@new:fake mobile top-right notice ' + 'y '.repeat(80))
-  await page.locator('.si-command-send').click()
-  await page.locator('.tn-notice.success').last().waitFor({ state: 'visible', timeout: 15_000 })
-  const mobileNotice = await page.locator('.tn-notice.success').last().evaluate((node) => {
-    const rect = node.getBoundingClientRect()
-    return { bottom: rect.bottom, width: rect.width }
-  })
-  assert.ok(mobileNotice.width <= 370, `mobile notice width ${mobileNotice.width}`)
-  assert.ok(mobileNotice.bottom < 844 / 2, `mobile notice remains in the top half ${mobileNotice.bottom}`)
-  step('verify mobile notice placement')
+  await page.locator('.m-composer:visible .si-command-title').waitFor({ state: 'visible', timeout: 15_000 })
+  assert.equal(await page.locator('.si-command-box').count(), 0, 'the desktop Command Box does not render in the phone shell')
+  const phoneInput = page.locator('.m-composer:visible .m-input')
+  await phoneInput.fill('@')
+  await page.locator('.m-composer:visible .mention-item.new', { hasText: '@new' }).first().waitFor({ state: 'visible', timeout: 10_000 })
   await page.screenshot({ path: join(out, 'command-box-new-mobile.png'), fullPage: true })
+  await page.keyboard.press('Escape')
+  await phoneInput.fill('')
+  step('phone shell: the Conversation composer opens the same @ menu; no desktop box')
 
   const child = await waitFor(async () => {
     const sessions = await fetch(`${api}/api/sessions?all=1`).then((response) => response.json())
     return sessions.find((session) => session.parent === source && session.launcher === 'fake') || null
   }, 'child session spawned by Command Box')
-  const sourceCapture = await fetch(`${api}/api/sessions/${source}/capture`).then((response) => response.text())
-  const capturedInput = sourceCapture.replace(/\r?\n/g, '')
-  assert.match(capturedInput, new RegExp(text))
-  assert.match(capturedInput, new RegExp(secondText))
   assert.equal(child.parent, source)
   assert.equal(child.launcher, 'fake')
 

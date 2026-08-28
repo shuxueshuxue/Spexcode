@@ -2130,6 +2130,22 @@ export function sourceIndexes(root: string, tip = 'HEAD'): Promise<[HistoryIndex
 export function historyCacheStats(): { historyHeads: number; driftHeads: number; historyRoots: number; driftRoots: number } {
   return { historyHeads: indexCache.size, driftHeads: driftIdxCache.size, historyRoots: indexRoots.size, driftRoots: driftRoots.size }
 }
+
+// A backend snapshot is the authority for which checkout roots are live. Release cache ownership for roots
+// that disappeared from that snapshot so closed session worktrees do not keep immutable history warm until
+// the generic slot bound happens to evict them. Shared entries survive while another live root still names
+// the same immutable key; an in-flight promise remains usable by its current caller even after its cache key
+// is released.
+export function pruneHistoryCaches(activeRoots: Iterable<string>): void {
+  const active = new Set([...activeRoots].map(rootKey))
+  for (const [root] of indexRoots) if (!active.has(root)) indexRoots.delete(root)
+  for (const [root] of driftRoots) if (!active.has(root)) driftRoots.delete(root)
+  const referencedHistory = new Set(indexRoots.values())
+  const referencedDrift = new Set(driftRoots.values())
+  for (const key of indexCache.keys()) if (!referencedHistory.has(key)) indexCache.delete(key)
+  for (const key of driftIdxCache.keys()) if (!referencedDrift.has(key)) driftIdxCache.delete(key)
+  for (const root of eventPathMemo.keys()) if (!active.has(root)) eventPathMemo.delete(root)
+}
 // Tests deliberately clear process-local promises and path identity to exercise both cold and read-back paths.
 // Production callers retain the bounded index caches; this is not a correctness escape hatch.
 export function resetHistoryCachesForTests(): void {

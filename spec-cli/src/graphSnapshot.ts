@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { loadSpecs, requireGitWorkspace, headSha } from '@spexcode/spec-core'
 import { resolveLayout } from '@spexcode/spec-core'
 import { listSessions } from './sessions.js'
-import { driftIndex, historyIndex, repoRoot } from '@spexcode/spec-core'
+import { driftIndex, historyIndex, pruneHistoryCaches, repoRoot } from '@spexcode/spec-core'
 import { residentForgeRevision, residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { boardThreads } from './issues.js'
@@ -62,6 +62,9 @@ export async function boardSnapshot(): Promise<BoardSnapshot> {
   const root = repoRoot()
   requireGitWorkspace(root)
   const [specs, sessions] = await Promise.all([loadSpecs(), listSessions()])
+  // Session worktrees are the live-root census for immutable history caches. Reconcile before the snapshot
+  // returns so closing a session releases its full index immediately rather than waiting for an LRU slot.
+  pruneHistoryCaches([root, ...sessions.map((session) => session.path)])
   const layout = await resolveLayout({ activeSessionIds: sessions.map((session) => session.id) })
   const nodeIds = [...new Set([
     ...specs.map((node) => node.id),

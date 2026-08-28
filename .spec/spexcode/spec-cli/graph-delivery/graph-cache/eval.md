@@ -192,6 +192,16 @@ scenarios:
       the number of successful HEADs or retaining a full index per historical commit. A bounded increase
       from cold startup is acceptable only when it stabilizes across later rounds; a monotonic RSS/heap,
       child, watcher, or cache count is a failure even when every HTTP request returned 200.
+  - name: closed-session-history-cache-eviction
+    tags: [backend-api]
+    description: >-
+      Run an isolated backend with a heap snapshot signal, open and close several session worktrees, and
+      repeatedly exercise `/api/graph`, `/api/sessions`, and dashboard-style SSE streams. Capture constructor
+      histograms and history-cache root/head counts before load, while roots are live, and after each close.
+    expected: >-
+      Immutable Git history and drift entries remain shared for live linked roots, while closing a session
+      removes that root's cache ownership immediately. Retained constructor bytes and cache counts plateau
+      with the backend plus live sessions; they do not grow with the number of sessions that have existed.
   - name: session-projection-era-gate
     tags: [backend-api]
     description: >-

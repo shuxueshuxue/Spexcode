@@ -40,6 +40,7 @@
     "@spexcode/spec-core": "0.6.8",
     "@spexcode/spec-eval": "0.6.8",
     "@spexcode/spec-forge": "0.6.8",
+    "@spexcode/transcript": "0.6.8",
     "smol-toml": "^1.8.0"
   },
   "devDependencies": {

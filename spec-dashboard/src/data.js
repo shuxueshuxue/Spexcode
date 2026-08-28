@@ -1,3 +1,4 @@
+import { mergeTranscriptFrame } from '@spexcode/transcript/frames'
 import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
@@ -508,31 +509,9 @@ export async function loadSessionTranscriptTool(id, from, toolId) {
   return { ok: true, data: body }
 }
 
-// THE SUBSCRIBER MERGES, THE RENDERER READS ONE PAYLOAD. A stream's first frame is the whole interval
-// (`full`); each later frame is a `delta` holding only the turns that are new or changed and the ids the turn
-// cap evicted ([[session-transcript]]). Merging by turn id here — replace a turn the reader holds, append one
-// it does not, drop the removed — hands the renderer the same complete shape the closed-interval GET returns,
-// so nothing downstream knows the wire is incremental. New turns append in arrival order: the native thread
-// is append-only. An `{error, reason}` frame passes through untouched and leaves the held turns as they were.
-export function mergeTranscriptFrame(state, frame) {
-  if (frame.error) return { state, payload: frame }
-  const { kind, removed, turns: incoming, ...rest } = frame
-  if (kind !== 'delta') {
-    const turns = [...(incoming || [])]
-    return { state: { turns }, payload: { ...rest, turns } }
-  }
-  const gone = new Set(removed || [])
-  const turns = state.turns.filter((turn) => !gone.has(turn.id))
-  const index = new Map(turns.map((turn, at) => [turn.id, at]))
-  for (const turn of incoming || []) {
-    const at = index.get(turn.id)
-    if (at === undefined) { index.set(turn.id, turns.length); turns.push(turn) } else turns[at] = turn
-  }
-  return { state: { turns }, payload: { ...rest, turns } }
-}
-
 // THE OPEN INTERVAL, STREAMED ([[session-transcript]]): the tail seam of a working session subscribes with its
-// start, and every change to the native thread pushes what changed in [from, now]; merged above, each frame
+// start, and every change to the native thread pushes what changed in [from, now]; merged by the frame
+// protocol's own `mergeTranscriptFrame` ([[transcript-frames]] — the wire's one home, shared with the producer), each frame
 // yields the same shape the closed-interval GET returns, so one renderer reads both. The browser never sees a
 // transcript path or a native envelope; it only decodes the adapter's turns. A reopened stream starts from a
 // `full` frame again, which replaces what was held.

@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, HARNESSES, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
@@ -2786,4 +2786,14 @@ test('writeCodexTrust refuses to persist a config.toml that codex could not load
   } finally {
     process.env = orig
   }
+})
+
+test('every registered adapter reads its transcript through one reader; headless rows inherit their base', () => {
+  const base = HARNESSES.filter((harness) => !harness.headless)
+  const headless = HARNESSES.filter((harness) => harness.headless && harness.id !== 'zcode')
+  assert.equal(base.length, 4)
+  assert.equal(headless.length, 4)
+  assert.equal(new Set(base.map((harness) => harness.transcript)).size, 4, 'four native shapes, four readers')
+  assert.ok(headless.every((harness) => base.some((candidate) => candidate.transcript === harness.transcript)))
+  assert.equal(HARNESSES.find((harness) => harness.id === 'zcode')?.transcript.revision('x'), null)
 })

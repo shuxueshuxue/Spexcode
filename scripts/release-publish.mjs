@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const RELEASE_PACKAGES = Object.freeze([
+  { id: 'transcript', dir: 'packages/transcript', name: '@spexcode/transcript', build: [['run', 'build']] },
   { id: 'session-protocol', dir: 'packages/session-protocol', name: '@spexcode/session-protocol', build: [['run', 'build']] },
   { id: 'session-topology', dir: 'packages/session-topology', name: '@spexcode/session-topology', build: [['run', 'build']] },
   { id: 'session-runtime', dir: 'packages/session-runtime', name: '@spexcode/session-runtime', build: [['run', 'build']] },

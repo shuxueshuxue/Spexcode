@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { readAliasedRawRecord } from '@spexcode/spec-core'
 import { defaultHarness, harnessById, type Harness } from './harness.js'
-import { TranscriptReadError, type TranscriptRead, type TranscriptTail, type TranscriptTool, type TranscriptTurn } from './transcript-reader.js'
+import { TranscriptReadError, openFrameStream } from '@spexcode/transcript'
 
 // The session-addressed face of [[transcript-reader]]: one resolver from a governed session to its adapter and
 // native thread, one bounded GET for a closed interval, and one SSE for the OPEN interval — the stretch the
@@ -87,76 +87,27 @@ export async function readSessionTranscriptTool(c: Context) {
 const TICK_MS = 500
 const HEARTBEAT_TICKS = 20
 
-// WHAT THE STREAM CARRIES. A live frame's tool has no output body: a recorded result is `null` here (its
-// size still told), a missing one stays absent — that absence is what the surface reads as "running" — and a
-// body is fetched once, when a person opens the call. Measured on a real 29-minute turn, the whole-payload
-// frame was 320 KB of which 74% was tool output and 0.3% prose, re-sent on every native write.
-export type StreamTool = Readonly<Omit<TranscriptTool, 'output'> & { output?: null }>
-export type StreamTurn = Readonly<Omit<TranscriptTurn, 'tools'> & { tools?: readonly StreamTool[] }>
-export type StreamFrame = Readonly<Omit<TranscriptRead, 'turns'> & {
-  kind: 'full' | 'delta'     // `full`: the whole interval; `delta`: only turns that are new or changed, plus `removed`
-  turns: readonly StreamTurn[]
-  removed?: readonly string[]
-}>
-export type TranscriptFrame = StreamFrame | Readonly<{ revision: string; from: number; to: number; error: string; reason: string }>
-
-const withheld = (read: TranscriptRead): Omit<StreamFrame, 'kind'> => ({
-  ...read,
-  turns: read.turns.map((turn) => turn.tools
-    ? { ...turn, tools: turn.tools.map((tool) => tool.output === undefined ? tool as StreamTool : { ...tool, output: null }) }
-    : turn as StreamTurn),
-})
-
-// GET /api/sessions/:id/transcript/stream?from=<ms> — the open interval [from, now]. The adapter's revision
-// probe runs each tick; a changed revision advances the interval's cursor ([[transcript-reader]] parses only
-// what was appended) and pushes what CHANGED: the first frame is the whole interval (`full`), every later one
-// a `delta` holding only the turns that are new or changed since the previous frame — a turn changes when a
-// call in it gains its result — and the ids the turn cap evicted; the counters are always absolute. A
-// subscriber merges by turn id and holds one consistent read. An absent source is an empty `full` frame (the
-// thread has not started writing), not an error; a read failure is a frame that says so. A revision that moved
-// without changing the interval sends nothing.
+// GET /api/sessions/:id/transcript/stream?from=<ms> — the open interval [from, now], carried over SSE. What a
+// frame holds, when one is worth sending, and how a subscriber merges it are [[transcript-frames]]'
+// `openFrameStream`, shared with every other transport; this route owns only the carriage: a tick that asks
+// the stream to publish, one `transcript` SSE event per frame it yields, and periodic `ping` heartbeats so the
+// browser's dead-man can reopen a silent stream. Reading happens only while a client is subscribed and stops
+// on abort, closing the cursor.
 export async function sessionTranscriptStream(c: Context) {
   const id = c.req.param('id') || ''
   const from = epoch(c.req.query('from'))
   if (from === null) return c.json({ error: 'transcript stream needs from as integer epoch milliseconds' }, 400)
   const target = resolveTranscriptTarget(id)
   if (!target.ok) return c.json({ error: target.error }, target.status)
-  const { harness, threadId } = target
+  const frames = openFrameStream(target.harness.transcript, target.threadId, from)
   return streamSSE(c, async (stream) => {
     let aborted = false
-    let last: string | undefined
     let ticks = 0
-    const cursor: { tail: TranscriptTail | null } = { tail: null }   // opened on the first non-absent revision
-    let primed = false                       // a `full` frame has been delivered on this stream
-    let sent = new Map<string, string>()     // turn id → the serialized turn the subscriber holds
-    let counters = ''                        // the absolute counters as last sent
     const publish = async () => {
-      const revision = harness.transcript.revision(threadId) ?? 'absent'
-      if (revision === last) return
-      last = revision
-      const to = Math.max(from + 1, Date.now())
-      let frame: TranscriptFrame
-      if (revision === 'absent') {
-        frame = { kind: 'full', revision, from, to, turns: [], truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0 }
-        primed = false; sent = new Map(); counters = ''
-      } else {
-        try {
-          const read = withheld(await (cursor.tail ??= harness.transcript.tail(threadId, from)).advance(to))
-          const next = new Map(read.turns.map((turn) => [turn.id, JSON.stringify(turn)] as const))
-          const changed = read.turns.filter((turn) => sent.get(turn.id) !== next.get(turn.id))
-          const removed = [...sent.keys()].filter((turnId) => !next.has(turnId))
-          const nextCounters = `${read.truncated}:${read.omittedTurns}:${read.omittedBytes}:${read.outOfOrderEvents}`
-          if (primed && !changed.length && !removed.length && nextCounters === counters) return
-          frame = primed ? { ...read, kind: 'delta', turns: changed, removed } : { ...read, kind: 'full' }
-          sent = next; counters = nextCounters; primed = true
-        } catch (error) {
-          if (!(error instanceof TranscriptReadError)) throw error
-          frame = { revision, from, to, error: error.message, reason: error.reason }
-        }
-      }
-      await stream.writeSSE({ event: 'transcript', data: JSON.stringify(frame) })
+      const frame = await frames.publish()
+      if (frame) await stream.writeSSE({ event: 'transcript', data: JSON.stringify(frame) })
     }
-    stream.onAbort(() => { aborted = true; cursor.tail?.close() })
+    stream.onAbort(() => { aborted = true; frames.close() })
     try {
       await publish()
       while (!aborted) {
@@ -167,6 +118,6 @@ export async function sessionTranscriptStream(c: Context) {
       }
     } catch {
       // EventSource reconnects a dropped stream; a native read must never take the session server down.
-    } finally { cursor.tail?.close() }
+    } finally { frames.close() }
   })
 }

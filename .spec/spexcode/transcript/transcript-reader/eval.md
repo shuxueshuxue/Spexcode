@@ -2,38 +2,38 @@
 scenarios:
   - name: bounded-claude-codex-interval
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
-    code: spec-cli/src/transcript-reader.ts
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
     description: Read real-shaped Claude JSONL and Codex rollout fixtures through the adapter reader with a bounded epoch interval, including a Codex final answer and more turns than the cap.
     expected: Only records inside the requested interval become normalized turns, parallel tool results are all joined without native envelopes, orphan output bytes are reported as omitted, the cap keeps the newest turns and counts the dropped ones, and timestamp disorder reports honest truncation.
   - name: pi-and-opencode-native-shapes
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
-    code: spec-cli/src/transcript-reader.ts
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
     description: Read a pi session JSONL located by its header id and an OpenCode export cached by store revision, each with private reasoning, a tool call, and its result.
     expected: Both readers return the same normalized turn shape as Claude and Codex; a running OpenCode tool has no output field; an unchanged store is not exported again while a moved write-ahead log is; reasoning never appears.
   - name: open-interval-reread-seeks
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
-    code: spec-cli/src/transcript-reader.ts
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
     description: Read one open interval of a long Claude thread, append the running tool's result, observe the revision move, and read the same interval again.
     expected: The first read shows the call without output; the append changes the revision; the second read joins the output and, because it resumed at the interval's first event, counts nothing older as omitted.
   - name: loud-transcript-failures
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
-    code: spec-cli/src/transcript-reader.ts
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
     description: Ask for unsupported, missing, malformed, and timestamp-less native transcript sources, and probe their revisions.
     expected: Each read returns an explicit unsupported, missing, invalid, or unreadable reason and an absent source's revision is null; no failure is represented as an empty successful transcript.
   - name: one-reader-per-harness
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
+    test: spec-cli/src/harness.test.ts
     code: spec-cli/src/harness.ts
     description: Inspect the registered adapters' transcript readers.
     expected: The four base harnesses carry four distinct readers, every headless adapter shares its base reader, and z-code's reader is the unsupported one.
   - name: open-interval-tail-parses-appends
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
-    code: spec-cli/src/transcript-reader.ts
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
     description: >-
       Open a tail on a Claude thread before its file exists, then write an older stretch, the current prompt
       and a running call; advance; append the call's result cut mid-line, advance, complete the line and add a
@@ -46,8 +46,8 @@ scenarios:
       the one-shot read of the interval equals the cursor's snapshot; the shrunken file is read afresh.
   - name: every-turn-is-keyed
     tags: [backend-api]
-    test: spec-cli/src/transcript-reader.test.ts
-    code: spec-cli/src/transcript-reader.ts
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
     description: Read a Codex rollout whose event messages carry no ids, two of them on the same clock.
     expected: Each turn's id is `<role>@<at>`, with `#1` on the second turn that shares a clock, in thread order.
   - name: lazy-status-disclosure

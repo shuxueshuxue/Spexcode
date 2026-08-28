@@ -6,7 +6,7 @@ scenarios:
     code: spec-cli/src/session-transcript.ts
     related:
       - spec-cli/src/harness.ts
-      - spec-cli/src/transcript-reader.ts
+      - packages/transcript/src/frames.ts
       - spec-cli/src/index.ts
     description: >-
       Start a real backend against an isolated governed Codex record. Subscribe to the transcript stream before

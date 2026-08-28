@@ -4,9 +4,11 @@ status: active
 hue: 205
 desc: The one native-thread reader — a per-harness parser behind a cheap revision probe and a bounded, interval-addressed read that returns normalized turns for every surface that shows what the agent did.
 code:
-  - spec-cli/src/transcript-reader.ts
+  - packages/transcript/src/readers.ts
 related:
-  - spec-cli/src/transcript-reader.test.ts
+  - packages/transcript/src/readers.test.ts
+  - packages/transcript/src/parsers.ts
+  - packages/transcript/src/turns.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/session-transcript.ts
   - spec-dashboard/src/TimelineChat.jsx
@@ -17,7 +19,9 @@ related:
 Every harness keeps its conversation somewhere private — Claude Code's project JSONL, Codex's rollout, pi's
 session JSONL, OpenCode's store behind `opencode export` (read raw: the `--sanitize` form replaces every prose and
 tool-output part with a redaction token and leaves nothing to read). The [[harness-adapter]] exposes ONE field for
-all of it, `transcript`, and this module is the only code that knows those shapes. It answers exactly one question
+all of it, `transcript`. The parsers beside this module ([[transcript]]'s `parsers.ts`) are the only code that
+knows those shapes — one parser per harness, shared with the in-memory source ([[live-transcript]]) — and this
+module is the only code that knows WHERE each harness keeps the thread. It answers exactly one question
 for any harness: *what happened in this thread between `from` and `to`?* — as a small normalized turn stream:
 user and assistant prose, tool calls with their input, and each call's output once the harness recorded it. The
 history seam, the live tail, and the transcript stream ([[session-transcript]]) all read through this seam, so a

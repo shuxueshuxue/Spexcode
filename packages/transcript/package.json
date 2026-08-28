@@ -1,0 +1,30 @@
+{
+  "name": "@spexcode/transcript",
+  "version": "0.6.8",
+  "type": "module",
+  "description": "Normalized agent transcripts: one parser per harness, a bounded interval reader over a native thread file or an in-memory event stream, and the full/delta frame protocol every transport and renderer share.",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./frames": "./dist/frames.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../../scripts/release-publish.mjs --from-package-publish",
+    "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

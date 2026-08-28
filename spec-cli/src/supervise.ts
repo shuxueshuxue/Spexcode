@@ -53,7 +53,7 @@ const childApiBase = `http://127.0.0.1:${proxyPort}`
 // observe the source closure, compile it, then make the supervisor's normal zero-downtime swap. A source edit
 // must never cause a restart that still runs the old dist.
 const watchRoots = workspaceRoot
-  ? [sourceRoot, join(workspaceRoot, 'spec-forge', 'src'), join(workspaceRoot, 'spec-eval', 'src'), join(workspaceRoot, 'packages', 'spec-core', 'src')]
+  ? [sourceRoot, join(workspaceRoot, 'spec-forge', 'src'), join(workspaceRoot, 'spec-eval', 'src'), join(workspaceRoot, 'packages', 'spec-core', 'src'), join(workspaceRoot, 'packages', 'transcript', 'src')]
   : [here]
 function buildWorkspace(): boolean {
   if (!workspaceRoot) return true

@@ -196,7 +196,7 @@ try {
         composerFocused: document.activeElement?.classList.contains('m-input'),
       }
     })
-    assert.equal(formulaCopy.clipboard, 'Copy E = mc^2 and a+b once.\n', `${name}: copied formulas use their authored source once`)
+    assert.equal(formulaCopy.clipboard, 'Copy E = mc^2 and a+b once.', `${name}: copied formulas use their authored source once`)
     assert.equal(formulaCopy.native, '')
     assert.equal(formulaCopy.composerFocused, true)
     await page.keyboard.press('Escape')

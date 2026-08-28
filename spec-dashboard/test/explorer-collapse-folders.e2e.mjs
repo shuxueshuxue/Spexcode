@@ -251,9 +251,11 @@ assert.ok(paper.seam.caretLast && paper.seam.caretTrails, 'the seam chevron trai
 assert.ok(paper.trailing.length > 0 && paper.trailing.every(Boolean), 'every disclosure in the conversation ends with its chevron')
 assert.ok(paper.rowPadding >= 24 && paper.minGap >= 0, 'air between rows')
 assert.ok(paper.sidePadding > 16, 'the margin grew with the pane')
-await page.locator('.tl-chat .m-ev.m-ev-say').first().hover()
+// the minute comes up under the pointer on the row that carries it in the gutter (a sent or prompt row — an
+// agent note's time sits inline in its head instead)
+await page.locator('.tl-chat .m-ev:has(> .m-gut time)').first().hover()
 await page.waitForTimeout(250)
-record('paper.hover', { timeOpacity: await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.tl-chat .m-ev.m-ev-say .m-gut time')).opacity)) })
+record('paper.hover', { timeOpacity: await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.tl-chat .m-ev .m-gut time')).opacity)) })
 assert.equal(facts['paper.hover'].timeOpacity, 1)
 await page.mouse.move(5, 5)
 

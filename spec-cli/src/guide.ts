@@ -402,14 +402,17 @@ A named launcher profile fixes BOTH a session's harness AND its exact launch com
 by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
 reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS an ordinary named launcher for each
 harness the adopter SELECTED (--harness), from the template pool
-  "claude"   → { "harness": "claude",   "cmd": "claude" }
   "claude-headless" → { "harness": "claude-headless", "cmd": "claude" }
-  "codex"    → { "harness": "codex",    "cmd": "codex" }
+  "claude"   → { "harness": "claude",   "cmd": "claude" }
   "codex-headless" → { "harness": "codex-headless", "cmd": "codex --yolo" }
-  "opencode" → { "harness": "opencode", "cmd": "opencode" }
+  "codex"    → { "harness": "codex",    "cmd": "codex" }
   "opencode-headless" → { "harness": "opencode-headless", "cmd": "opencode --auto" }
-  "pi"       → { "harness": "pi",       "cmd": "pi" }
+  "opencode" → { "harness": "opencode", "cmd": "opencode" }
   "pi-headless" → { "harness": "pi-headless", "cmd": "pi" }
+  "pi"       → { "harness": "pi",       "cmd": "pi" }
+Each harness's headless (terminal-free) form leads its interactive one, and \`spex init\` makes the FIRST
+planted launcher the default — so an adoption that selects both forms of a harness creates its sessions
+headless by default, read through the dashboard's Conversation; the interactive TUI launcher is the opt-in.
 The interactive profiles preserve each harness's normal permission model. \`opencode-headless\` and
 \`codex-headless\` are deliberate seed exceptions: their terminal-free runs require \`opencode --auto\` and
 \`codex --yolo\`; interactive profiles stay plain. Other automatic-permission commands are NEVER clean-init

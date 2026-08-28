@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: conversation-live-tail
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Through a running backend and the real `opencode-headless` launcher, dispatch a session whose prompt runs a slow
+      shell command, reads a file, lists a directory, runs a second slow command, and finally declares `ask`.
+      In a real browser open its Conversation and, every few seconds while it works, read the open seam's
+      lead and counts, the live tail's prose and tool sentences, which call wears the running mark, and the
+      record's messages; keep reading until the declaration lands.
+    expected: >-
+      The open seam reads `working · <duration>` with `N turns · M tool uses` growing as the native thread
+      grows; the live tail beneath it shows the agent's newest prose and every call after it in order, the
+      call without a recorded result marked running and the mark leaving when its result lands; no trace row,
+      card, or pop-out exists; and when the agent declares, the seam closes to `worked <duration>`, the tail
+      leaves, and the declared note is the newest message on the record. No page errors.
   - name: opencode-headless-materialized-system-context-live
     tags: [backend-api, cli]
     description: >-

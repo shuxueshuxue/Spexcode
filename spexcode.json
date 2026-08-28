@@ -19,6 +19,6 @@
       "pi": { "harness": "pi", "cmd": "pi" },
       "pi-headless": { "harness": "pi-headless", "cmd": "pi" }
     },
-    "defaultLauncher": "claude"
+    "defaultLauncher": "claude-headless"
   }
 }

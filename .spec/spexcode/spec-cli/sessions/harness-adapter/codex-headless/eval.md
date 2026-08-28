@@ -53,6 +53,16 @@ scenarios:
     expected: The session closes with no per-session process, pane, worktree, branch, record, or socket residue; the shared project app-server is not mistaken for session-owned residue.
     code: [spec-cli/src/codex-headless.ts]
     tags: [backend-api, cli]
+  - name: codex-headless-finished-turn-closes-through-public-api
+    tags: [backend-api, cli]
+    code: [spec-cli/src/codex-headless.ts, spec-cli/src/sessions.ts]
+    description: >-
+      Through the public `spex session new --launcher codex-headless` path, run a trivial no-edit task whose final
+      work action is a tool call, wait for `done --propose close` and `close-pending`, then invoke `spex session
+      close` immediately and inspect the native rollout tail and retained session record.
+    expected: >-
+      The native rollout has a terminal task-complete event, the record is close-pending before close, and the
+      public close succeeds without an active-turn refusal; the session is retired and its worktree is removed.
   # harness-delivery-campaign:start
   - name: delivery-combo-codex-headless-launch-idle
     tags: [backend-api, cli]

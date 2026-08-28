@@ -58,6 +58,16 @@ the record already carries it (either side may be the other's prefix, since the 
 characters), and a tail whose prose is elided and whose calls are all done draws nothing: the record has the
 words and the seam has the history.
 
+**The tail is there when the page is.** Two things used to make the open seam blink: coming back to a
+Conversation tab cleared the tail and waited for the reopened stream's first frame, and a first visit painted
+the record's rows a few hundred milliseconds before the first frame, so the tail landed in a second paint that
+pushed the page. Now the last payload stays held while the tab is away — the stream closes, because a hidden
+pane reads nothing, but returning draws the tail at once from what was last seen and the reopened stream's
+first `full` frame replaces it in place; it is cleared only when the seam itself changes. And a session's FIRST
+paint waits for its open seam's first frame — bounded at 600 ms, so a silent stream still paints — and then
+paints rows and tail together; the rows never wait again after that, so a later seam draws into a page that
+is already on screen.
+
 The renderer never knows a harness id, a transcript path, an envelope schema, or reasoning text — it paints
 normalized turns and nothing else, and adding a harness changes no rendering branch here. Pane-backed adapters
 keep their real terminal as the full live surface; this face is additive to the Conversation, never a

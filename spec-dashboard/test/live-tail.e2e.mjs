@@ -44,6 +44,20 @@ try {
   // browser: the browser sees turns, and only turns.
   await context.addInitScript(() => {
     localStorage.setItem('spexcode.session-surface.v1.root', JSON.stringify({ defaultSurface: 'conversation', sessions: {} }))
+    // when the record's rows and the live tail first reach the DOM, and how often the tail leaves it
+    window.firstSeen = { rows: null, live: null, liveRemoved: 0 }
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof Element)) continue
+          if (window.firstSeen.rows === null && (node.matches('.m-ev') || node.querySelector('.m-ev'))) window.firstSeen.rows = performance.now()
+          if (window.firstSeen.live === null && (node.matches('.m-live') || node.querySelector('.m-live'))) window.firstSeen.live = performance.now()
+        }
+        for (const node of mutation.removedNodes) {
+          if (node instanceof Element && (node.matches('.m-live') || node.querySelector('.m-live'))) window.firstSeen.liveRemoved++
+        }
+      }
+    }).observe(document, { childList: true, subtree: true })   // the root element does not exist yet at init time
     class TranscriptSource {
       constructor(url) {
         this.url = url
@@ -84,7 +98,7 @@ try {
 
   const page = await context.newPage()
   const pageErrors = []
-  page.on('pageerror', (error) => pageErrors.push(error.message))
+  page.on('pageerror', (error) => pageErrors.push(`${error.message} @ ${(error.stack || '').split('\n')[1]?.trim() || '?'}`))
   const requests = []
   page.on('request', (request) => { if (request.url().includes('/transcript')) requests.push(request.url()) })
   const json = (body, status = 200) => (route) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
@@ -99,6 +113,11 @@ try {
   const seam = page.locator('.m-ev-seam').last()
   const tail = seam.locator('.m-live')
   await tail.waitFor({ state: 'visible', timeout: 30_000 })
+
+  // ONE FIRST PAINT: the rows and the tail reach the DOM together, not the rows first and the tail a frame later
+  const firstSeen = await page.evaluate(() => window.firstSeen)
+  assert.ok(firstSeen.rows !== null && firstSeen.live !== null, 'both the rows and the tail were seen')
+  assert.ok(Math.abs(firstSeen.live - firstSeen.rows) <= 20, `rows and tail painted together (${Math.round(firstSeen.live - firstSeen.rows)}ms apart)`)
 
   // the tail lives INSIDE the open seam's row — no row after it, no trace row, no card, no door
   assert.equal(await seam.locator('.m-seam-row.is-live').count(), 1, 'the seam above the tail is the live one')
@@ -287,6 +306,28 @@ try {
   await page.screenshot({ path: `${OUT}/live-tail-folded-after-answer.png` })
   await seam.locator('.m-seam-row').click()
   await tail.waitFor({ state: 'visible', timeout: 5_000 })
+
+  // THE TAIL SURVIVES DESELECTION: leave the tab and come back — the tail is on screen the moment the tab is
+  // back, drawn from what was last seen, and the reopened stream's first frame replaces it in place with
+  // nothing leaving the DOM in between. (Away, the hidden pane unmounts it unseen; what counts is the return.)
+  {
+    const before = await tail.getAttribute('data-revision')
+    const streamsBefore = await page.evaluate(() => window.transcriptClosed || 0)
+    await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(300)
+    assert.equal(await page.evaluate(() => window.transcriptClosed || 0), streamsBefore + 1, 'a hidden pane closes its stream')
+    const returnedAt = Date.now()
+    await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION_ID)}?surface=conversation`, { waitUntil: 'domcontentloaded' })
+    await tail.waitFor({ state: 'visible', timeout: 5_000 })
+    console.log(`tail back on screen ${Date.now() - returnedAt}ms after the return`)
+    // the fixture's reopened stream frames 50ms after it opens: a tail drawn from the held payload wears the
+    // revision from before the switch, one that waited for the stream would wear the stream's
+    assert.equal(await tail.getAttribute('data-revision'), before, 'drawn from the payload last seen, not from a frame the reopened stream had to deliver')
+    await page.evaluate(() => { window.firstSeen.liveRemoved = 0 })
+    await page.waitForTimeout(300)
+    assert.equal(await tail.getAttribute('data-revision'), 'fixture-1', 'the reopened stream\'s first frame replaced it in place')
+    assert.equal(await page.evaluate(() => window.firstSeen.liveRemoved), 0, 'and the tail never left the DOM while it did')
+  }
 
   // THE TAIL SAYS NOTHING THE RECORD ALREADY SAID: prose equal to the newest message on the record, with
   // nothing still running, draws nothing at all.

@@ -638,7 +638,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 }
 .tab {
   position: relative; flex: 0 1 auto; width: auto; height: 30px;
-  display: flex; align-items: center; min-width: 80px; max-width: 240px;
+  display: flex; align-items: center; min-width: 120px; max-width: 240px;
   border-right: 1px solid var(--edge); border-radius: var(--radius) var(--radius) 0 0;
   color: var(--muted); container-type: inline-size;
   overflow: hidden; animation: tab-in var(--dur-tab) ease backwards;
@@ -647,7 +647,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .tabstrip-tabs:not(.wrapped) .tab { container-type: normal; }
 .tabstrip-tabs.wrapped .tab { flex: 1 1 0; width: auto; }
 .tab.on {
-  min-width: 112px; background: var(--paper); color: var(--ink2);
+  min-width: 132px; background: var(--paper); color: var(--ink2);
   border-right-color: transparent; border-radius: var(--radius) var(--radius) 0 0;
 }
 .tab:not(.on):hover { background: var(--panel2); color: var(--ink2); border-radius: var(--radius) var(--radius) 0 0; }
@@ -3746,6 +3746,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow);
   animation: rise var(--dur-rise) ease;
 }
+.pa-node-group { flex-direction: column; align-items: stretch; min-width: 220px; }
+.pa-node-group .pa-act { justify-content: flex-start; }
 .pa-act {
   display: inline-flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4);
   background: none; border: none; border-radius: var(--radius); cursor: pointer;

@@ -696,6 +696,10 @@ export default {
   // [[prose-dispatch]] — what a reader does with a selected passage of spec prose.
   proseActions: {
     groupLabel: 'selected passage — send to a session, or edit it here',
+    nodeGroupLabel: 'current node actions',
+    nodeSend: 'Send current node to a session',
+    nodeCopy: 'Copy node link',
+    nodeCopied: 'node link copied',
     act: {
       send: 'Send to Session',
       editSend: 'Edit & Send',

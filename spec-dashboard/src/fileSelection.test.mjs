@@ -20,3 +20,10 @@ test('source selection remains lossless and does not require DOM Selection for t
   assert.match(source, /const next = \{ path, startLine, endLine, text: u\.state\.sliceDoc\(from, to\)/)
   assert.match(actions, /CodeMirror owns source selections and may not expose them through the browser Selection API/)
 })
+
+test('an unselected spec right-click exposes current-node actions through the shared prose layer', () => {
+  assert.match(actions, /if \(!lines\) \{[\s\S]*setNodeMenuOpen\(true\)/)
+  assert.match(actions, /className="pa-group pa-node-group"/)
+  assert.match(actions, /proseActions\.nodeSend/)
+  assert.match(actions, /copyAddress\(specAddress\(node\.id\)\)/)
+})

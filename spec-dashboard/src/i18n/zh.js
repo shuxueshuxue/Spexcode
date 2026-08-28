@@ -685,6 +685,10 @@ export default {
   // [[prose-dispatch]] —— 选中一段 spec 正文之后能做的事。
   proseActions: {
     groupLabel: '选中的正文 —— 发给会话，或就地编辑',
+    nodeGroupLabel: '当前节点操作',
+    nodeSend: '把当前节点发给会话',
+    nodeCopy: '复制节点链接',
+    nodeCopied: '节点链接已复制',
     act: {
       send: '发到会话',
       editSend: '改写并发送',

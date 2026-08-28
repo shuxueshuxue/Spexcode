@@ -22,6 +22,11 @@ the shared drag gesture owns threshold, cancellation, and swallowed-click behavi
 when minimum widths cannot fit, never scrolls sideways, and remains one budget band. Labels and status marks come
 from the document's existing projections; unresolved selectors show their raw address rather than blank chrome.
 
+Wrapping begins while the row can still give each tab a readable face (a 128px per-tab budget), rather than
+waiting for flex-shrink to exhaust the 120px tab floor. The active tab keeps a slightly larger 132px floor for
+its persistent close affordance; once wrapped, each row shares its remaining width without dropping below those
+floors.
+
 All tab faces share compact geometry, close affordance space, and top-corner treatment; there is no second
 face for a replaceable tab, because every tab is replaceable. Resident pages keep their registry icon. The
 strip context menu

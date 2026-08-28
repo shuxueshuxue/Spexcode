@@ -13,7 +13,8 @@ scenarios:
       the textarea's value and confirm an ABSOLUTE path was spliced in at the caret, space-padded so it never
       glues to a neighbouring word. Then corroborate the whole handoff on the backend: the file actually
       landed under the upload sink and the spliced string is exactly its path. (The same gesture set works on
-      a live session's Command Box; an offline session exposes no Command Box.)
+      a live session's Command Box and on its Conversation composer; an offline session exposes no Command
+      Box and its Conversation composer is disabled.)
     expected: |
       The picked file is uploaded through the resumable backend stream (`POST /api/uploads` → create,
       ordered `PATCH` chunks → `POST /api/uploads/:id/complete` → `201 {path}`) and lands in one
@@ -23,7 +24,8 @@ scenarios:
       the human's surrounding text is preserved. While uploading, the attach control shows its busy ring, not
       the paperclip; on success it returns to the paperclip and no error surfaces. The file read back from the
       spliced path on the backend equals the bytes that were attached — the path is the whole handoff, with no
-      transport text leaking into the prompt.
+      transport text leaking into the prompt. The Conversation footer's three gestures are measured by the
+      [[conversation]] node's `the-conversation-composer-is-a-command-box` scenario through the same hook.
   - name: empty-upload-refused-fail-loud
     tags: [frontend-e2e, backend-api]
     description: >

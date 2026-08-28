@@ -159,7 +159,11 @@ A pane-backed adapter keeps the warm, input-enabled `SessionTerm` described in [
 with no terminal placeholder, tmux socket, or [[message-stream]] alternate view.
 
 A pane-backed console's two input channels — xterm by default, the Command Box out of band — are
-[[terminal-io]]'s.
+[[terminal-io]]'s. The console's authored composers — the New prompt, the Command Box, and the Conversation
+footer it mounts — carry no grammar or upload machinery of their own: each arms [[mentions]]' one
+autocomplete hook (with its own `/` palette and pick rule) and [[file-attach]]'s one attachment hook, and
+the console's keyboard router drives whichever hook belongs to the active surface. A door on any of these
+composers therefore opens the same menu and the same upload path as the others.
 
 Around both channels, **console chrome is pointer-inert for focus** (the panel-wide blanket;
 [[terminal-input]] and [[focus-return]] carry the contract): pressing rows, zone headers, parent disclosure rows, the
@@ -182,7 +186,7 @@ reports `sending...`, while the latter reports the neutral `working...`; reusing
 stop or close would falsely claim the dashboard sent the agent a prompt.
 A right-click on a session row opens the session's one context menu ([[session-rename]]).
 
-Both authored composers accept an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
+Every authored composer, the Conversation footer included, accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
 emoji**). Their shared file-attach projection is per file — name, byte progress, final/failure state, and retry or
 cancel affordance — so one failed item never collapses a batch into a generic spinner. Only a completed backend

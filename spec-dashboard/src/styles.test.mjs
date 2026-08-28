@@ -15,6 +15,7 @@ const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8'
 const sessionsView = readFileSync(join(here, 'SessionsView.jsx'), 'utf8')
 const composer = readFileSync(join(here, 'Composer.jsx'), 'utf8')
 const timelineChat = readFileSync(join(here, 'TimelineChat.jsx'), 'utf8')
+const attachQueue = readFileSync(join(here, 'useAttachQueue.jsx'), 'utf8')
 const mobileApp = readFileSync(join(here, 'MobileApp.jsx'), 'utf8')
 const thread = readFileSync(join(here, 'Thread.jsx'), 'utf8')
 const issues = readFileSync(join(here, 'IssuesPage.jsx'), 'utf8')
@@ -413,9 +414,12 @@ test('Command Box floats lower-middle and grows above a fixed footer', () => {
 test('completed attachment rows fade and remove themselves while failures stay actionable', () => {
   assert.match(css, /\.si-attach-row\.complete\s*\{[^}]*animation:\s*si-attach-complete-out\s+1\.4s\s+ease\s+forwards;/)
   assert.match(css, /@keyframes\s+si-attach-complete-out\s*\{[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;/)
-  assert.match(sessionInterface, /onAnimationEnd=\{\(event\) => \{[\s\S]*event\.animationName === 'si-attach-complete-out'[\s\S]*dismissAttachment\(item\.id\)/)
-  assert.match(sessionInterface, /item\.phase === 'failed' && <IconButton[\s\S]*attachRetry/)
-  assert.match(sessionInterface, /item\.phase === 'complete' \|\| item\.phase === 'cancelled'/)
+  // the rows live in the ONE attachment hook every authored composer renders ([[file-attach]])
+  assert.match(attachQueue, /onAnimationEnd=\{\(event\) => \{[\s\S]*event\.animationName === 'si-attach-complete-out'[\s\S]*dismiss\(item\.id\)/)
+  assert.match(attachQueue, /item\.phase === 'failed' && <IconButton[\s\S]*attachRetry/)
+  assert.match(attachQueue, /item\.phase === 'complete' \|\| item\.phase === 'cancelled'/)
+  for (const host of [sessionInterface, timelineChat]) assert.match(host, /useAttachQueue\(\{ inputRef/)
+  assert.doesNotMatch(sessionInterface, /si-attach-row/)
 })
 
 test('terminal viewport clips — tmux owns all scrolling', () => {

@@ -91,3 +91,20 @@ export function useCommandPresets() {
   }, [])
   return presets
 }
+
+// the harness's own `/` commands (GET /api/slash-commands?harness=…) — the SAME list that harness's TUI shows,
+// recomputed when the session's harness differs (a codex session gets codex's menu, a claude session
+// claude's). Display + insert only; never executed here. Shared by the Command Box and the Conversation
+// composer so both `/` palettes are one vocabulary ([[command-box]]).
+export function useHarnessCommands(harness) {
+  const [commands, setCommands] = useState([])
+  useEffect(() => {
+    let live = true
+    fetch(apiUrl(`/api/slash-commands?harness=${encodeURIComponent(harness || 'claude')}`))
+      .then((r) => r.json())
+      .then((d) => { if (live && Array.isArray(d)) setCommands(d) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [harness])
+  return commands
+}

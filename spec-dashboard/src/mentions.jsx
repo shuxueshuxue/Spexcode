@@ -3,18 +3,35 @@ import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { STATUS } from './specMeta.js'
 import { SessionPickerRow } from './SessionPicker.jsx'
 import { useT } from './i18n/index.jsx'
+import { useEscLayer } from './escStack.js'
 
 // The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (session)
 // triggers, their ranking, and the dropdown — shared by every input box that takes the grammar (the session
-// console's New prompt + ❯ inbox in SessionInterface.jsx, the Issues page's reply/new-thread composers in
-// IssuesPage.jsx, the eval remark composer in EventDetail.jsx). One implementation, never a per-surface
-// fork. References only edit the current draft; the exact @new token opens the shared worker launcher door.
+// console's New prompt, its Command Box and the Conversation composer in SessionInterface.jsx /
+// TimelineChat.jsx, the Issues page's reply/new-thread composers in IssuesPage.jsx, the eval remark composer
+// in EventDetail.jsx). One implementation, never a per-surface fork. References only edit the current draft;
+// the exact @new token opens the shared worker launcher door. A host that also takes `/` commands arms the
+// same hook's slash palette instead of keeping a menu state machine of its own.
 
 // a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.plugins]]` resolves
 // (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
 // launch grammar and the running-session send-time resolution — one pattern. Token chars are any unicode
 // letter/number (a CJK dir name is a legal node id), mirroring the server's MENTION.
 export const MENTION_RE = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/gu
+
+// the send-time twin of the launch owner's mention resolution: every `[[<id>]]` in a message to a RUNNING
+// session becomes an inline pointer at the node's live spec.md (`[[<id>]] (<path>)`), so the driven agent is
+// aimed at that contract and reads the file itself — never a pasted body (see [[spec-pointer]]). Unknown ids
+// pass through untouched. One function for every composer that addresses a live session.
+export const expandMentions = (text, specs = []) =>
+  text.replace(MENTION_RE, (m, id) => {
+    const s = specs.find((x) => x.id === id)
+    return s ? `[[${s.id}]] (${s.path})` : m
+  })
+
+// a draft that is EXACTLY `/<name>` of a board command runs HERE instead of being sent to the agent — the
+// no-menu submit twin of picking the row. trim() covers the completion's trailing space and a stray newline.
+export const boardCommandFor = (text, commands = []) => commands.find((c) => c.ui && text.trim() === `/${c.name}`) || null
 
 // the menu's spec path, minus the `.spec/` shell and `/spec.md` leaf, so a row reads like a breadcrumb.
 export const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
@@ -124,6 +141,16 @@ export function slashTokenAt(value, caret, commands) {
   const items = matchSlash(commands, query)
   if (!items.length) return null
   return { items, index: 0, start, end: caret, query }
+}
+
+// the LINE `/` trigger a session composer uses (Command Box, Conversation): the whole draft is one `/query`,
+// so a command is a command and never a `/` inside prose. Same ranking as every other palette.
+export function slashLineAt(value, commands) {
+  const m = /^\/(\S*)$/.exec(value)
+  if (!m) return null
+  const items = matchSlash(commands, m[1])
+  if (!items.length) return null
+  return { items, index: 0, start: 0, end: value.length, query: m[1] }
 }
 
 // dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
@@ -239,12 +266,19 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   )
 }
 
-// the whole autocomplete as ONE hook, for a plain textarea/input surface (the issue composers): owns the
-// menu state, recomputes it from the live caret (sync), inserts the picked token (`[[<id>]] ` / `@<id> `)
-// and drops the caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true
-// when it consumed the key — Esc closes the menu only, never the page). The console keeps its own window-
-// level state machine (it also multiplexes `/` menus) but builds from the SAME scanners and MentionMenu.
-export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], launchers = [], focusId = null, up = false, fixedAbove = null }) {
+// the whole autocomplete as ONE hook, for any textarea/input surface: owns the menu state, recomputes it
+// from the live caret (sync), inserts the picked token (`[[<id>]] ` / `@<id> ` / `/<name> `) and drops the
+// caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true when it
+// consumed the key — Esc closes the menu only, never the page; the same Esc is also registered as the top
+// [[esc-stack]] layer so the capture-phase router peels the menu before any host layer). A host that takes
+// `/` commands arms `slash`: `commands` is its ordered vocabulary (board rows first, then presets, then
+// harness commands — see inboxCommands), `mode` is where the trigger lives ('line' = the whole draft is
+// `/query`, the session composers' grammar; 'token' = a whitespace-delimited `/query` anywhere, the launch
+// preset grammar), `head` titles the menu while the query is empty, and `onPick(item, menu)` lets the host
+// CLAIM a pick by returning true (a board row RUNS, a launch preset REWRITES the draft); an unclaimed pick
+// inserts `/<name> `. The session console used to keep a second, hand-written menu state machine beside
+// this hook; it now builds every palette from this one, so a fix to the grammar lands everywhere at once.
+export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], launchers = [], focusId = null, up = false, fixedAbove = null, slash = null }) {
   const [menu, setMenu] = useState(null)
   const [fixedStyle, setFixedStyle] = useState(null)
   // React synthesizes onSelect after Escape keyup even when the native selection did not move. Without a
@@ -252,13 +286,18 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
   // only for this exact draft+caret; typing or moving naturally changes the key and re-enables completion.
   const dismissed = useRef(null)
   const caretKey = (el) => `${el.value}\0${el.selectionStart}`
+  const slashAt = (text, caret) => {
+    if (!slash?.commands?.length) return null
+    const found = slash.mode === 'token' ? slashTokenAt(text, caret, slash.commands) : slashLineAt(text, slash.commands)
+    return found ? { kind: 'slash', ...found } : null
+  }
   const sync = (el) => {
     if (!el) { setMenu(null); setFixedStyle(null); return }
     const key = caretKey(el)
     if (dismissed.current === key) { setMenu(null); setFixedStyle(null); return }
     dismissed.current = null
     const caret = el.selectionStart
-    const next = nodeMentionAt(el.value, caret, specs, focusId) || sessionMentionAt(el.value, caret, sessions, launchers)
+    const next = nodeMentionAt(el.value, caret, specs, focusId) || sessionMentionAt(el.value, caret, sessions, launchers) || slashAt(el.value, caret)
     setMenu(next)
     if (!next || !fixedAbove) { setFixedStyle(null); return }
     const input = el.getBoundingClientRect()
@@ -276,10 +315,21 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     if (launchers.length && el && document.activeElement === el) sync(el)
   }, [launchers])
   const navBy = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
+  const hover = (i) => setMenu((m) => (m ? { ...m, index: i } : m))
   const accept = (item) => {
     if (!item || !menu) return
     dismissed.current = null
     const before = value.slice(0, menu.start)
+    if (menu.kind === 'slash') {
+      if (slash?.onPick?.(item, menu)) { setMenu(null); setFixedStyle(null); return }
+      const insert = `/${item.name} `
+      setValue(before + insert + value.slice(menu.end))
+      setMenu(null)
+      setFixedStyle(null)
+      const caret = before.length + insert.length
+      requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
+      return
+    }
     if (menu.kind === 'session' && item.id === 'new') {
       const insert = '@new:'
       const nextValue = before + insert + value.slice(menu.end)
@@ -313,10 +363,15 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     setMenu(null); setFixedStyle(null)
   }
   const close = () => { dismissed.current = null; setMenu(null); setFixedStyle(null) }
-  const menuEl = menu
-    ? <MentionMenu menu={menu} up={up} fixedStyle={fixedStyle} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
-    : null
-  return { menu, sync, onKeyDown, close, dismiss, menuEl }
+  // Esc is arbitrated by the keyboard service's capture listener BEFORE any routed scope, so an open menu
+  // registers itself as the top layer: the first Esc closes the menu and nothing under it — not the Command
+  // Box, not a dialog, not the page.
+  useEscLayer(!!menu, dismiss)
+  const menuEl = !menu ? null
+    : menu.kind === 'slash'
+      ? <SlashMenu menu={menu} up={up} head={menu.query ? `/${menu.query}` : slash?.head} onPick={accept} onHover={hover} />
+      : <MentionMenu menu={menu} up={up} fixedStyle={fixedStyle} onPick={accept} onHover={hover} />
+  return { menu, sync, onKeyDown, close, dismiss, accept, nav: navBy, menuEl }
 }
 
 // the keyboard contract of ANY open completion menu — ↑/↓ walk, Enter/Tab accept, Escape closes — for a

@@ -47,7 +47,10 @@ abandoned session are explicit actions with their own verbs.
   a composer, and an agent's own prompt share one grammar. The dashboard is one shared autocomplete module
   (`spec-dashboard/src/mentions.jsx`) consumed by every grammar-taking input: its `@new` row opens the same
   dashboard-visible launcher list used by New Session, and accepting a launcher writes the durable,
-  inspectable `@new:<launcher>` token into the prose.
+  inspectable `@new:<launcher>` token into the prose. The same hook also carries a host's `/` palette when the
+  host arms one (the session console's board/preset/harness commands, the launch presets), so no input box
+  keeps a second menu machine beside the grammar, and the session-send twin of launch resolution —
+  `[[node]]` expanded to its live spec pointer — is one exported function every live-session composer calls.
 - **Actions stay explicit where their target is existing work.** `spex session send <id> "<message>"` is the
   sole session-to-session message action; `/distill <id>` inherits a finished, dead, or abandoned session.
   `@new` is the discoverable, durable shorthand for creating a fresh worker from the containing work item;

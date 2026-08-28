@@ -74,7 +74,10 @@ the record write leaves the payload replayable; a crash after that write leaves 
 both artifacts and reentry only finishes consumption; after both removals, repeated drain/resume can address
 only the stored native identity. A missing, unreadable, or session/adapter/thread/payload/generation-misbound
 receipt refuses loudly. The per-session transition and record locks serialize resume, receipt consumption, and
-delivery, so retrying a receipt or draining cannot create or replay a second first turn. During the one-release
+delivery, so retrying a receipt or draining cannot create or replay a second first turn. A readiness observer
+probes for the receipt outside those locks; a receipt that is gone by the time it holds the lock while the record
+already carries the bound identity is another serialized consumer's success, not a missing receipt — the observer
+proceeds to the liveness check instead of recording a warning for a launch that succeeded. During the one-release
 rename window, readers also accept a pre-existing `launch.proof` artifact but never write it again.
 `launch.receipt` is the final identity-plus-first-rollout commit, not an intermediate readiness hint. The adapter's
 ordinary `launchReady` check runs after that commit only to confirm current runtime liveness. If this post-receipt

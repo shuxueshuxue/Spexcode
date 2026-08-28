@@ -39,8 +39,10 @@ opens with tools and no words (Claude Code's usual shape) is not blank, it is wo
 whatever their number: the seam line above already counts them, and a fold's one job — hiding the process behind
 an answer — has no object while there is no answer yet ([[transcript-view]]); they leave the compact face the
 moment the agent speaks, when they become that answer's history. What reads as live is a
-caret at the newest prose and a spinner on a running call — a call is running exactly while the harness has
-recorded no result for it — and nothing else; reduced motion stills both. Output stays folded until asked, each
+caret and a spinner, and nothing else: the caret sits INLINE at the end of the newest prose's last line, only
+while that prose is the newest thing in the turn — once a call follows it the words are finished and a caret
+blinking on its own line under them, above a tool row, would mark nothing — and the spinner sits on a running
+call, a call being running exactly while the harness has recorded no result for it; reduced motion stills both. Output stays folded until asked, each
 call opening inline and independently; a refresh of the same interval keeps what the reader opened, because
 disclosure is keyed to the transcript's own ids, and a new seam starts closed.
 

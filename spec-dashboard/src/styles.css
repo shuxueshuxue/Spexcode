@@ -2964,14 +2964,17 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    prose and a spinner on a running call — nothing else moves, and reduced motion stills both. */
 .m-live { margin-top: var(--space-2); min-width: 0; }
 .m-live .tc-say-text { animation: rise var(--dur-rise) ease; }
-.m-live .tc-say-text:last-of-type::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-live-caret 1s steps(2, start) infinite; }
+/* the caret sits INLINE at the end of the newest prose's last line (on its last block, not on the block
+   container — an ::after on the container lands under the last paragraph as a line of its own), and only
+   while that prose is the newest thing in the turn (`is-speaking`): once a call follows, the words are done */
+.m-live.is-speaking > .tc-say:last-child .tc-say-text .rich-text > :last-child::after { content: '▍'; margin-left: 2px; color: var(--muted); animation: m-live-caret 1s steps(2, start) infinite; }
 @keyframes m-live-caret { to { visibility: hidden; } }
 .tc-tool.is-running .tc-tool-verb { color: var(--ink2); }
 .tc-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--orange); font-size: var(--type-caption); }
 .tc-tool-spin { animation: tc-tool-spin 1s linear infinite; }
 @keyframes tc-tool-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .m-live .tc-say-text, .m-live .tc-say-text:last-of-type::after, .tc-tool-spin { animation: none; }
+  .m-live .tc-say-text, .m-live.is-speaking > .tc-say:last-child .tc-say-text .rich-text > :last-child::after, .tc-tool-spin { animation: none; }
 }
 
 /* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */

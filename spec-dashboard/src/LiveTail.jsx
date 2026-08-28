@@ -34,8 +34,13 @@ export default function LiveTail({ data, lastSaid = null }) {
   if (repeated && !running) return null
   const turns = repeated ? [{ ...slice[0], text: undefined }, ...slice.slice(1)] : slice
   if (!turns.some((turn) => turn.text || turn.tools?.length)) return null
+  // THE CARET MARKS WORDS STILL BEING SAID. It sits at the end of the newest prose only while that prose is the
+  // newest thing in the turn; once a call follows it the words are finished and the running call is the live
+  // mark — a caret blinking under a finished sentence, above a tool row, marked nothing.
+  const last = turns[turns.length - 1]
+  const speaking = !!last.text && !last.tools?.length
   return (
-    <div className="m-live" data-revision={data.revision}>
+    <div className={`m-live${speaking ? ' is-speaking' : ''}`} data-revision={data.revision}>
       <TranscriptTurns turns={turns} openIds={openIds} onToggle={toggle} live />
     </div>
   )

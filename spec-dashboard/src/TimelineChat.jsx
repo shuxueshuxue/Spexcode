@@ -578,9 +578,9 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (!(seam.open && seam.from === streamFrom)) void fetchTranscript(seam, seamId)
   }
 
-  // THE RULER. Time lives in a left gutter, tabular and the same for every row, and the day it belongs to
-  // sticks in that same gutter as the reader scrolls; the right edge carries nothing. At a narrow width the
-  // gutter goes and each row keeps its own inline time instead.
+  // THE RULER. Time lives in a tabular gutter shared by ordinary rows. User quotes are right-aligned, so
+  // their gutter follows the bubble on the right; at a narrow width the gutter goes and each row keeps its
+  // own inline time instead.
   const rows = []
   let lastDay = null
   const dayRow = (ts, key) => {
@@ -594,8 +594,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
       <div className="m-ev m-ev-prompt" key="prompt">
-        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
         <Quote ts={promptTs} text={detail.prompt} />
+        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
       </div>,
     )
   }
@@ -604,8 +604,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (item.kind === 'quote') {
       rows.push(
         <div className="m-ev m-ev-sent" key={i}>
-          {gutter(item.ts)}
           <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+          {gutter(item.ts)}
         </div>,
       )
     } else if (item.kind === 'say') {

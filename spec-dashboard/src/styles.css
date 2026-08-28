@@ -2931,8 +2931,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .tc-work-body > .tc-say:not(:has(.tc-say-text)) + .tc-say:not(:has(.tc-say-text)) { margin-top: calc(2px - 14px); }
 /* the person is QUOTED with the same bubble the outer conversation uses (`.m-quote`), one step smaller
    because it is nested; the agent IS the page — full width, no bubble, no tint. */
-.tc-ask { align-self: flex-end; }
-.tc-ask .m-ev-text { font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .tc-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 /* prose keeps a readable measure even when the pane is wide; only the tool blocks below may run long. */
 .tc-say-text { max-width: 100%; color: var(--ink); font-size: var(--type-prose); line-height: var(--leading-body); overflow-wrap: anywhere; }

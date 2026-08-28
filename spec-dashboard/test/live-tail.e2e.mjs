@@ -255,7 +255,8 @@ try {
   // call in progress is a sentence in BOTH faces, and the run folds the moment the agent speaks.
   const inProgress = [
     { id: 'u1', at: 100, role: 'user', text: 'begin the next turn' },
-    // a human turn the record does not carry — typed into the harness itself — is still quoted in the interval
+    // even a human turn the record does not carry — typed into the harness itself — is only a work boundary
+    // here, never a row: the seam draws the agent's work, and the conversation lives on the record
     { id: 'u2', at: 13900, role: 'user', text: 'typed into the harness itself' },
     { id: 'b1', at: 14000, role: 'assistant', tools: [{ id: 'w1', name: 'Grep', input: '{"pattern":"seam"}', output: null, outputLines: 1, outputBytes: 1 }] },
     { id: 'b2', at: 14100, role: 'assistant', tools: [{ id: 'w2', name: 'Read', input: '{"file_path":"/repo/src/a.ts"}', output: null, outputLines: 1, outputBytes: 1 }] },
@@ -286,7 +287,7 @@ try {
   await page.screenshot({ path: `${OUT}/live-tail-in-progress-expanded.png` })
   assert.equal(await seam.locator('.m-seam-inset .tc-work-row, .m-seam-inset .tc-tool-row.is-run').count(), 0, 'the expanded live seam does not fold the work in progress either')
   assert.equal(await seam.locator('.m-seam-inset .tc-tool:visible').count(), 7)
-  assert.deepEqual(await seam.locator('.m-seam-inset .tc-ask .m-ev-text').allTextContents(), ['typed into the harness itself'], 'only the human turn the record does not carry is quoted inside the interval')
+  assert.equal(await seam.locator('.m-seam-inset .tc-ask').count(), 0, 'no user turn is drawn inside the interval — not even a harness-typed one; the seam is the agent\'s work, the conversation is on the record')
   // seven calls across five turns sit at one list spacing: no turn gap between consecutive tool-only turns
   const rowTops = await seam.locator('.m-seam-inset .tc-tool-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().top))
   const steps = rowTops.slice(1).map((top, index) => Math.round(top - rowTops[index]))

@@ -375,6 +375,7 @@ test('graph keeps the full canvas and mounts no persistent focus sidebar', () =>
 
 test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow contract', () => {
   assert.match(css, /\.rl-query\s*\{[^}]*height:\s*32px;/s)
+  assert.match(css, /\.rl-query\s*\{[^}]*background:\s*var\(--paper\);/s)
   assert.match(css, /\.lp-head\s*\{[^}]*height:\s*48px;/s)
   assert.match(css, /\.rl-row-grid\s*\{[^}]*min-height:\s*64px;/s)
   // 49px is now the phone header's FLOOR, not its cap: it grows downward only when its own content needs a

@@ -1812,7 +1812,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rl-new:hover { background: color-mix(in srgb, var(--blue) 84%, var(--ink)); }
 .rl-query {
   height: 32px; position: sticky; top: 0; z-index: 6; display: flex; align-items: stretch;
-  margin-bottom: var(--space-6); background: var(--field-bg); border: 1px solid var(--line); border-radius: var(--radius);
+  margin-bottom: var(--space-6); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
 }
 /* the pinned query needs an opaque bed on the paper around it, or the rows show through the gap the
    sticky offset leaves. An outline is that bed: outside the border box, out of layout, painted with the

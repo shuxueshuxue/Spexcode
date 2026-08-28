@@ -10,7 +10,8 @@
 // itself: after every message or note, a working agent is working on it from that instant, and a seam opens
 // there. Hence the theorem the page relies on: if the record's last word is `working`, the last item is an
 // open seam — mid-history stretches get their `worked …` disclosure, and the live tail is always present.
-// The tail seam's interval ends at the mount-time `now` so the transcript key stays stable across polls.
+// The tail seam's interval ends at `transcriptNow` — the caller's latest poll (server clock), so an expanded
+// open tail re-reads its transcript as the agent keeps working; the seam's identity is its start.
 
 export const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 

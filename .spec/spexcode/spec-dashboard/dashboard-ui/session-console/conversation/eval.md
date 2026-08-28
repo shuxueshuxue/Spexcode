@@ -111,6 +111,18 @@ scenarios:
       carries the shimmer animation; the asking session marks no seam live. The work-fold row is an
       inline-flex sentence (not a default button) and the tool output's background is the theme's `--panel2`
       in both presets. No page errors.
+  - name: an-expanded-live-seam-keeps-counting
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]
+    description: >-
+      In a real browser open the Conversation of a working session whose tail seam is live, expand that seam,
+      and watch it across at least two timeline polls: record every transcript request the page makes (its
+      `to` parameter), whether the inset ever shows the loading line again after its first read, and the
+      seam's `N turns · M tool uses` before and after.
+    expected: >-
+      The expanded live seam re-reads its transcript on each poll with a `to` that advances, its inset never
+      falls back to the loading line once it has content, and its numbers follow the agent instead of freezing
+      at the moment of expansion. No page errors.
   - name: stop-is-one-square-while-working
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/test/explorer-collapse-folders.e2e.mjs]

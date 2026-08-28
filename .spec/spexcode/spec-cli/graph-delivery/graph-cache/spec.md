@@ -310,6 +310,12 @@ setup, so a dirty HTTP burst is not blocked by the producer's synchronous pre-aw
 env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
 `SPEXCODE_BOARD_TIMEOUT_MS` / `SPEXCODE_BOARD_BUILD_TIMEOUT_MS`).
 
+The same bound applies across session roots: each completed board snapshot reconciles the immutable history
+cache against the backend checkout and the currently listed session worktrees, releasing roots that closed or
+disappeared. A shared index remains warm while at least one live root references it; an unreferenced index is
+removed immediately, so retained memory is bounded by live checkouts rather than the number of sessions that
+have existed in the process.
+
 **Where a full build's time actually goes — measured, so the budget warning names a lever instead of a mood.**
 On a 476-node adopter corpus (429 nodes carrying `eval.md`, 2,521 declared scenarios, 3,023 stored readings) a
 fresh-process full build logged 1710 / 1825 / 1870 ms against the 1500ms budget. The `sourceIndexes` +

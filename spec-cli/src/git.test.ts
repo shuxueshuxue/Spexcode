@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, exist
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, unionTopology, GitWorkspaceError, type DriftIndex } from '@spexcode/spec-core'
+import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, pruneHistoryCaches, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, unionTopology, GitWorkspaceError, type DriftIndex } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
@@ -958,6 +958,27 @@ test('linked worktrees at one head share the one immutable source-index pair', a
     try { run('worktree', 'remove', '--force', linked) } catch { /* fixture cleanup continues */ }
     rmSync(parent, { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
+  }
+})
+
+test('history caches release roots that leave the live session census', async () => {
+  const { root, run } = specRepo()
+  const parent = mkdtempSync(join(tmpdir(), 'spex-index-prune-'))
+  const linked = join(parent, 'worktree')
+  try {
+    run('worktree', 'add', '--detach', '-q', linked, 'HEAD')
+    resetHistoryCachesForTests()
+    await sourceIndexes(root)
+    await sourceIndexes(linked)
+    assert.deepEqual(historyCacheStats(), { historyHeads: 1, driftHeads: 1, historyRoots: 2, driftRoots: 2 })
+    pruneHistoryCaches([root])
+    assert.deepEqual(historyCacheStats(), { historyHeads: 1, driftHeads: 1, historyRoots: 1, driftRoots: 1 })
+    await sourceIndexes(linked)
+    assert.deepEqual(historyCacheStats(), { historyHeads: 1, driftHeads: 1, historyRoots: 2, driftRoots: 2 }, 'a later live root reclaims the shared immutable entry')
+  } finally {
+    try { run('worktree', 'remove', '--force', linked) } catch { /* fixture cleanup continues */ }
+    rmSync(parent, { recursive: true, force: true })
     resetHistoryCachesForTests()
   }
 })

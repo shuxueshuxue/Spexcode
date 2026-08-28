@@ -2431,12 +2431,18 @@ async function establishBackendConnection(target: ApiBaseInfo): Promise<boolean>
       socket.destroy()
       fn()
     }
-    const timer = setTimeout(() => finish(() => {
+    const timer = setTimeout(() => {
+      // The event loop may have been blocked past the wall after the kernel completed the handshake. In that
+      // case Node has not emitted `connect` yet, but `connecting` is already false; acceptance still proves
+      // presence and must not be relabelled as an unavailable backend.
+      if (!socket.connecting || socket.readyState === 'open') return finish(() => resolve(false))
+      finish(() => {
       const error = new Error(`backend connection was not accepted at ${target.url} within 1500ms`)
       error.name = 'BackendError'
       Object.assign(error, { code: 'backend_availability_indeterminate' })
       reject(error)
-    }), 1500)
+      })
+    }, 1500)
     timer.unref?.()
     socket.once('connect', () => finish(() => resolve(false)))
     socket.once('error', (error) => finish(() => {

@@ -19,3 +19,8 @@ bytes with the desired bytes and writes only on a difference; copied package fil
 all materialize consumers one operational idempotence law: a correct target keeps its filesystem identity, while
 a changed target receives exactly the requested bytes. It does not decide which paths belong to a materialize
 pass or which stale paths to remove; those are the owning renderer's target map.
+
+A changed target is replaced, never rewritten in place: the bytes land in a sibling staging file that is renamed
+over the target, so a concurrent reader — codex re-reading its own `config.toml`, a harness loading its hooks
+file — observes the old bytes or the new bytes and never a truncated middle. The replacement resolves a symlink
+to the file behind it and keeps that file's mode, so a user-private `0600` config stays private across the swap.

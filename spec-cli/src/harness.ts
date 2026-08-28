@@ -1,4 +1,5 @@
 import { closeSync, openSync, readSync, writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
+import { parse as parseToml } from 'smol-toml'
 import { join, dirname, basename } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
@@ -2603,6 +2604,16 @@ function stripCodexTrustFor(cur: string, proj: string, hooksJson: string): strin
   return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n*$/, '')
 }
 
+// @@@ assertCodexConfigParses - ~/.codex/config.toml has TWO uncoordinated writers, codex itself and this adapter,
+// and neither rewrite is something the other waits for. A body read mid-write (a line cut short) or one already
+// broken must never be written back: codex refuses the whole file, and every dispatched thread then dies at
+// config load. The check is on the bytes about to land, so stripping this project's own duplicate still heals.
+function assertCodexConfigParses(file: string, body: string): void {
+  try { parseToml(body) } catch (error) {
+    throw new Error(`refusing to rewrite ${file}: it does not parse as TOML (${error instanceof Error ? error.message : String(error)}); the file is broken or another writer is mid-write — repair it, then rerun`)
+  }
+}
+
 // additively stamp PROJECT trust (`[projects."<proj>"] trust_level = "trusted"`) AND the per-hook
 // `trusted_hash` blocks for each event into the user's GLOBAL ~/.codex/config.toml, so a dispatched or
 // self-launched codex trusts THIS project's config layer (enabling hook discovery) AND treats each hook as
@@ -2622,8 +2633,10 @@ export function writeCodexTrust(proj: string, events: readonly string[], cmdFor:
   }
   const blk = `# spexcode:trust:${proj} (managed — do not edit)\n${lines.join('\n')}\n# spexcode:trust:end:${proj}`
   const cleaned = stripCodexTrustFor(existsSync(file) ? readFileSync(file, 'utf8') : '', proj, hooksJson)
+  const next = cleaned ? `${cleaned}\n\n${blk}\n` : `${blk}\n`
+  assertCodexConfigParses(file, next)
   if (!existsSync(home)) mkdirSync(home, { recursive: true })
-  writeFileIfChanged(file, cleaned ? `${cleaned}\n\n${blk}\n` : `${blk}\n`)
+  writeFileIfChanged(file, next)
   return file
 }
 
@@ -2640,7 +2653,9 @@ function removeCodexTrust(proj: string): void {
   if (!cur.includes(`[projects."${proj}"]`) && !cur.includes(`[hooks.state."${hooksJson}:`) &&
       !cur.includes(`# spexcode:trust:${proj} `) && !cur.includes(`# spexcode:trust:end:${proj}`)) return
   const cleaned = stripCodexTrustFor(cur, proj, hooksJson)
-  writeFileSync(file, cleaned ? `${cleaned}\n` : '')
+  const next = cleaned ? `${cleaned}\n` : ''
+  assertCodexConfigParses(file, next)
+  writeFileIfChanged(file, next)
 }
 
 // is this file git-tracked in proj? (guards cleanHarness's deleteIfEmpty; env-stripped git, never throws)

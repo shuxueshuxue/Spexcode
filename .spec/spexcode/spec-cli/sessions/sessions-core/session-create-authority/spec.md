@@ -46,3 +46,7 @@ later separates a branch which never authored a commit from one whose commits th
 cannot: both heads are ancestors of the base. A reader that lacks the field recovers the same commit from the branch
 ref's creation reflog entry, which is where git wrote that start point; the diff document ([[diff-document]]) is the
 surface that spends it.
+
+**A node branch never tracks the base branch.** Creation passes `--no-track` when forking from any start point,
+including a remote-tracking ref, because landing explicitly merges the base and the node has no business upstream.
+This keeps concurrent creates from contending on `.git/config` while Git writes branch upstream metadata.

@@ -1,18 +1,44 @@
 import assert from 'node:assert/strict'
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { claudeTranscript, codexTranscript, opencodeTranscriptReader, piTranscript, TranscriptReadError, unsupportedTranscript } from './index.js'
+import { claudeTranscript, codexTranscript, geminiTranscript, hermesTranscriptReader, openclawTranscript, opencodeTranscriptReader, piTranscript, TranscriptReadError, unsupportedTranscript } from './index.js'
 
 const line = (value: unknown) => `${JSON.stringify(value)}\n`
 const T = (clock: string) => Date.parse(`2026-08-20T${clock}.000Z`)
+const fixture = (harness: string, name: string) => join(process.cwd(), 'fixtures', harness, name)
 
 function withEnv(name: string, value: string, run: () => Promise<void>): Promise<void> {
   const old = process.env[name]
   process.env[name] = value
   return run().finally(() => { if (old === undefined) delete process.env[name]; else process.env[name] = old })
 }
+
+test('Gemini and OpenClaw fixture readers normalize prose, calls, and results', async () => {
+  await withEnv('GEMINI_HOME', join(process.cwd(), 'fixtures', 'gemini'), async () => {
+    const read = await geminiTranscript.read('9fbeda16-d7fa-4d34-abfe-4207e5733917', { from: 0, to: 2_000_000_000_000 })
+    assert.ok(read.turns.some((turn) => turn.role === 'assistant' && turn.tools?.some((tool) => tool.name === 'mcp_g1_probe_tool' && tool.output?.includes('MCP_MARKER:alpha'))))
+    assert.ok(read.turns.some((turn) => turn.role === 'assistant' && turn.text === 'TOOL_OK'))
+  })
+  await withEnv('OPENCLAW_STATE_DIR', join(process.cwd(), 'fixtures', 'openclaw'), async () => {
+    const read = await openclawTranscript.read('c6d0ca7e-8549-4b69-aaf9-ffc04117e3c2', { from: 0, to: 2_000_000_000_000 })
+    assert.ok(read.turns.some((turn) => turn.tools?.some((tool) => tool.name === 'g1-probe__g1_marker' && tool.output === 'G1_MARKER:first-turn')))
+    assert.ok(read.turns.some((turn) => turn.text?.startsWith('RESUME_OK')))
+    assert.ok(!read.turns.some((turn) => turn.text?.includes('The user wants me to:')))
+  })
+})
+
+test('Hermes export fixture reader uses state.db revision and joins tool results', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-hermes-'))
+  writeFileSync(join(root, 'state.db'), 'fixture')
+  const reader = hermesTranscriptReader(root, () => readFileSync(fixture('hermes', 'hermes-20260829_024341_62ec96.jsonl'), 'utf8'))
+  const read = await reader.read('20260829_024341_62ec96', { from: 0, to: 2_000_000_000_000 })
+  assert.ok(read.turns.some((turn) => turn.role === 'assistant' && turn.tools?.some((tool) => tool.name === 'terminal' && tool.output?.includes('exit_code'))))
+  assert.ok(read.turns.some((turn) => turn.text === 'G1_RESUME_OK'))
+  assert.ok(!read.turns.some((turn) => turn.text?.includes('The user wants me to:')))
+  rmSync(root, { recursive: true, force: true })
+})
 
 test('claude transcript reader filters the requested interval and joins tool output', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))

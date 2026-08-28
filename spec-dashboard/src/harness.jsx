@@ -14,3 +14,7 @@ export const HARNESSES = [
 ]
 // harness id → its product mark. Unknown/absent harness falls back to claude, the default.
 export const HARNESS_BY_ID = Object.fromEntries(HARNESSES.map((h) => [h.id, h]))
+export const harnessForId = (id) => {
+  const baseId = typeof id === 'string' ? id.replace(/-headless$/, '') : ''
+  return HARNESS_BY_ID[baseId] || HARNESS_BY_ID.claude
+}

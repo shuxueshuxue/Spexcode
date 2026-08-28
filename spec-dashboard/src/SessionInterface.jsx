@@ -6,7 +6,7 @@ import { createSession, useLaunchers, useCommandPresets, useHarnessCommands } fr
 import { sessionFooterState, sessionForest, sessionHeadline } from './session.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
-import { HARNESS_BY_ID } from './harness.jsx'
+import { harnessForId } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
 import { TabCount } from './score.jsx'
@@ -400,7 +400,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
   const selected = launchers.find((l) => l.name === launcher)
-  const selHarness = HARNESS_BY_ID[selected?.harness || 'claude'] || HARNESS_BY_ID.claude
+  const selHarness = harnessForId(selected?.harness)
   const SelGlyph = selHarness.Glyph
   return (
     <div className="si-launcher-picker">
@@ -423,7 +423,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
           <div className="si-launcher-backdrop" onMouseDown={() => setPop(false)} />
           <div className="si-launcher-pop" role="dialog" aria-modal="true" aria-label={t('session.launcherLabel')}>
             {launchers.map((l) => {
-              const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
+              const h = harnessForId(l.harness)
               const HGlyph = h.Glyph
               return (
                 <button

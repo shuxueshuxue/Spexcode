@@ -3031,14 +3031,17 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .m-send:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 85%, var(--ink2)); }
 .m-send:disabled { color: var(--muted); background: var(--wash-active); cursor: default; }
-/* STOP wears the same square as send, in the quiet wash: present only while the agent works ([[conversation]]) */
+/* STOP wears the same square as send, filled in the WORKING hue — the orange the seam's running mark and the
+   working status already use — so the two actions on a live turn read as a pair: blue sends into it, orange
+   stops it. Present only while the agent works ([[conversation]]); it used to sit in the quiet wash and read
+   as one more tool button beside the paperclip. */
 .m-stop {
   flex: none; align-self: flex-end; height: 26px; width: 26px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--ink2); background: var(--wash-active); border: 0; border-radius: var(--radius); cursor: pointer;
+  color: var(--paper); background: var(--orange); border: 0; border-radius: var(--radius); cursor: pointer;
   transition: background var(--dur-tab), color var(--dur-tab);
 }
-.m-stop:hover:not(:disabled) { color: var(--paper); background: var(--orange); }
+.m-stop:hover:not(:disabled) { background: color-mix(in srgb, var(--orange) 85%, var(--ink2)); }
 .m-stop:disabled { opacity: .45; cursor: default; }
 .m-coldline {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;

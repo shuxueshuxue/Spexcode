@@ -132,8 +132,10 @@ scenarios:
       position. Intercept the interrupt request at the network edge and press stop on the working one.
     expected: >-
       The working session's composer carries one stop square left of send — a BUTTON with a tooltip and an
-      aria-label, the same 26px square as send — and pressing it posts exactly one interrupt for that session
-      through the one verb. The asking session's composer carries no stop control at all. No page errors.
+      aria-label, the same 26px square as send, filled at rest in the theme's working orange (the `--orange`
+      token, not the quiet wash) with paper-coloured glyph — and pressing it posts exactly one interrupt for
+      that session through the one verb. The asking session's composer carries no stop control at all. No
+      page errors.
   - name: a-working-agent-always-ends-with-an-open-seam
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/conversationItems.js, spec-dashboard/test/conversation-working-tail.e2e.mjs]

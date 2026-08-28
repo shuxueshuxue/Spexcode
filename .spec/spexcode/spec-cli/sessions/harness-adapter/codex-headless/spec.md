@@ -71,3 +71,7 @@ before one final write clears pending and publishes online state. An unload, sha
 duplicate/reassigned owner, refused helper, bounded timeout, or stale pending recovery retains/restores the
 original record without a false lifecycle event and returns non-success. Closing remains the terminal
 operation that removes the record, worktree, branch, pane, and shared runtime references owned by the session.
+
+Every successful queued launch publication clears the retained `stopped` marker together with the active lifecycle.
+Leaving `stopped: true` on an active record makes the readiness proof reject its own candidate while the witness probe
+can still see the shared app-server, producing a false post-receipt readiness warning.

@@ -1834,7 +1834,7 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = 
         if (!current) return
         if (current.status === 'queued') {
           publishCanonicalLifecycle(current, 'active', null, null)
-          writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null, launchReadinessStartedAt: null })
+          writeRecord({ ...current, status: 'active', proposal: null, note: null, stopped: false, launchOwner: null, launchReadinessStartedAt: null })
         } else if (current.launchReadinessStartedAt != null) writeRecord({ ...current, launchReadinessStartedAt: null })
         readyToPublish = true
       })
@@ -1932,7 +1932,7 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
     // headline precedence stands on.
     const launched = readRecord(id) || wt.rec
     publishCanonicalLifecycle(launched, 'active', null, null)
-    writeRecord({ ...launched, status: 'active', proposal: null, note: null, launchOwner: null, launchReadinessStartedAt: readinessStartedAt })
+    writeRecord({ ...launched, status: 'active', proposal: null, note: null, stopped: false, launchOwner: null, launchReadinessStartedAt: readinessStartedAt })
     if (!h.launchPayloadProof) removeLaunchFile(id)
     // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
     // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.

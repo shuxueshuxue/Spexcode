@@ -3244,10 +3244,11 @@ async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyReco
   if (!endpoint) return null
   const descriptor = codexHeadlessHarness.sharedRuntimes?.(record.runtimeDir)
     .find((candidate) => candidate.key === codexDescriptorKey(endpoint))
-  if (!descriptor?.residency) return null
+  if (!descriptor) return null
   const generationBefore = codexRuntimeGenerationProof(record.runtimeDir, endpoint)
   if (!generationBefore) return null
-  let resident: Awaited<ReturnType<NonNullable<SharedRuntimeDescriptor['residency']>>>
+  if (!descriptor.residency) return null
+  let resident: Awaited<ReturnType<NonNullable<typeof descriptor.residency>>>
   try { resident = await descriptor.residency() }
   catch { return null }
   if (!resident.healthy) return null

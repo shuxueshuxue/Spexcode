@@ -94,3 +94,11 @@ for it (gugu#636) — so a live surface shows the steer between the calls it fel
 from the transcript sees it. Other attachments (tool listings, reminders) are not turns. Measured on a real
 claude-headless session steered mid-count (bench 3.6): before this, the transcript showed the agent stopping
 for no visible reason.
+
+**Codex 0.146 says everything twice; the reader says it once.** A current rollout records the person's message
+as the `user_message` event AND as a `response_item` message (the API form, `input_text` blocks — beside harness
+injections no person typed, such as the AGENTS.md instructions), and the agent's prose as the `agent_message`
+event AND as a `response_item` message (`output_text` blocks). The reader takes the events — one user turn per
+message, one assistant turn per reply — and reads neither `response_item` message form as a turn; an empty
+`agent_message` (a final answer that was a tool call) is a clock, not a turn. Measured on bench 3.9: before this,
+every human message appeared twice, once as a JSON-encoded block array.

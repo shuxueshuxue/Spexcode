@@ -17,6 +17,16 @@ scenarios:
       path: spec-cli/src/machine-peer.test.ts
       name: the peer and session CLI surfaces use the gateway-owned peer forward
     code: spec-cli/src/machine-peer.ts
+  - name: stale-control-socket-is-reclaimed
+    description: >
+      Kill a running host gateway without letting it shut down (its peer.sock stays behind), then start
+      `spex dashboard` again on the same machine and connect a peer to it.
+    expected: >
+      The new gateway starts and owns the control socket: a leftover path that refuses a connection is
+      unlinked and reclaimed, and a peer connect then succeeds through it. Only a path that accepts a
+      connection is another live gateway, and that case still refuses loudly.
+    tags: [cli]
+    code: spec-cli/src/machine-peer.ts
   - name: linked-worktree-peer-return
     description: >
       Address a session stored under a Git common-dir runtime from a peer, where its active backend

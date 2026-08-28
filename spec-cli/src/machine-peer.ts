@@ -83,13 +83,17 @@ export function readPeerMachineId(): string {
   return machineId
 }
 
+// @@@ peer sender spelling - the authenticated peer identity travels as the message's ordinary `senderSessionId`,
+// so it must fit the protocol's frozen session_id grammar `[0-9A-Za-z_][0-9A-Za-z_-]*` (session-protocol §5.2:
+// no `:`, no leading `-`; namespaces are encoded INTO the id). `peer_<machineId>_<sessionId>` is that encoding;
+// the earlier `peer:` spelling was refused by every receiving backend with PROTOCOL_SESSION_ID_INVALID.
 export function peerSenderRef(machineId: string, sessionId?: string): string {
-  return sessionId && validMachineId(sessionId) ? `peer:${machineId}:${sessionId}` : `peer:${machineId}`
+  return sessionId && validMachineId(sessionId) ? `peer_${machineId}_${sessionId}` : `peer_${machineId}`
 }
 
 function validPeerSender(value: unknown, machineId: string): value is string {
   if (typeof value !== 'string') return false
-  const match = value.match(/^peer:([0-9a-f-]{36})(?::([0-9a-f-]{36}))?$/i)
+  const match = value.match(/^peer_([0-9a-f-]{36})(?:_([0-9a-f-]{36}))?$/i)
   return !!match && match[1] === machineId && (match[2] === undefined || validMachineId(match[2]))
 }
 
@@ -333,6 +337,16 @@ function sshArgs(peer: MachinePeer): string[] {
   ]
 }
 
+// true iff something ACCEPTS a connection at this unix path; any error (ECONNREFUSED for a leftover path, ENOENT
+// for a vanished one) means no live listener.
+function probeUnixListener(path: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection(path)
+    socket.once('connect', () => { socket.destroy(); resolve(true) })
+    socket.once('error', () => resolve(false))
+  })
+}
+
 export class MachinePeerGateway {
   private readonly inbound = new Map<string, HttpServer>()
   private readonly children = new Map<string, ChildProcess>()
@@ -340,24 +354,43 @@ export class MachinePeerGateway {
   private retry: NodeJS.Timeout | null = null
   private closing = false
 
-  start(): void {
+  // start() resolves once the control socket is claimed. With no leftover path the claim is synchronous (the
+  // listener is issued before the promise settles, so callers may issue control RPCs right away); a leftover path
+  // is probed first, which is the only asynchronous branch.
+  start(): Promise<void> {
     for (const peer of listMachinePeers()) this.startInbound(peer)
-    this.startControl()
-    for (const peer of listMachinePeers()) if (peer.owner) this.ensureTunnel(peer)
-    this.retry = setInterval(() => {
-      for (const peer of listMachinePeers()) if (peer.owner && peer.state === 'connecting') this.ensureTunnel(peer)
-    }, PEER_RETRY_MS)
-    this.retry.unref()
+    return this.startControl().then(() => {
+      for (const peer of listMachinePeers()) if (peer.owner) this.ensureTunnel(peer)
+      this.retry = setInterval(() => {
+        for (const peer of listMachinePeers()) if (peer.owner && peer.state === 'connecting') this.ensureTunnel(peer)
+      }, PEER_RETRY_MS)
+      this.retry.unref()
+    })
   }
 
-  private startControl(): void {
+  // @@@ stale control socket - a killed gateway never unlinks peer.sock, so the FILE proves nothing about
+  // ownership; only a connect does. A live gateway accepts the connection; a leftover path refuses it
+  // (ECONNREFUSED). So a missing path is claimed at once, a refusing path is unlinked and reclaimed, and only an
+  // accepting listener is "another `spex dashboard`" — the same test claude-rendezvous applies to its socket file.
+  private startControl(): Promise<void> {
     const path = peerSocketPath()
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-    if (existsSync(path)) {
-      const error = new Error(`machine peer service already owns ${path} — another \`spex dashboard\` may be running`)
-      error.name = 'BackendError'
-      throw error
+    if (!existsSync(path)) {
+      this.listenControl(path)
+      return Promise.resolve()
     }
+    return probeUnixListener(path).then((live) => {
+      if (live) {
+        const error = new Error(`machine peer service already owns ${path} — another \`spex dashboard\` is running`)
+        error.name = 'BackendError'
+        throw error
+      }
+      rmSync(path, { force: true })
+      this.listenControl(path)
+    })
+  }
+
+  private listenControl(path: string): void {
     this.control = createNetServer({ allowHalfOpen: true }, (socket) => {
       let input = ''
       socket.setEncoding('utf8')

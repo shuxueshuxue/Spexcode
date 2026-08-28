@@ -174,7 +174,7 @@ socket presence read a dead launch as online.
 
 ## Delivery, interrupt, and the failure observer
 
-Codex has no reclaude control socket, so the adapter declares `ownsRendezvous: false` and reaches its session
+Codex has no claude-style rendezvous control socket, so the adapter declares `ownsRendezvous: false` and reaches its session
 through that same project app-server: it IS the delivery channel, just not the liveness gate. Its endpoint is a WebSocket at `/rpc` —
 the upgrade the remote TUI performs — and delivery speaks JSON-RPC over it directly, never through
 `codex app-server proxy`, a byte relay that performs no HTTP upgrade and is rejected. The handshake

@@ -120,11 +120,11 @@ test('a peer ingress derives one local project then uses its ordinary session in
     assert.ok(accepted.ok && accepted.peer)
     const peer = accepted.peer
     const response = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/input`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'hello', from: `peer:${SOURCE}:${SOURCE}` }),
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'hello', from: `peer_${SOURCE}_${SOURCE}` }),
     })
     assert.equal(response.status, 200)
     assert.deepEqual(received, [{
-      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'hello', from: `peer:${SOURCE}:${SOURCE}` },
+      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'hello', from: `peer_${SOURCE}_${SOURCE}` },
     }])
 
     const claimed = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/input`, {
@@ -132,7 +132,7 @@ test('a peer ingress derives one local project then uses its ordinary session in
     })
     assert.equal(claimed.status, 200)
     assert.deepEqual(received[1], {
-      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'claim', from: `peer:${SOURCE}` },
+      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'claim', from: `peer_${SOURCE}` },
     })
 
     const shown = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}`)
@@ -258,9 +258,9 @@ test('a known peer makes client send use its forward and missing peers fail befo
       res.end(JSON.stringify({ ok: true }))
     })
     await listen(forward, peer.outboundPort)
-    assert.deepEqual(await clientSendThroughPeer('peer-fixture', SESSION, 'through tunnel', `peer:${SOURCE}:${SOURCE}`), { ok: true })
+    assert.deepEqual(await clientSendThroughPeer('peer-fixture', SESSION, 'through tunnel', `peer_${SOURCE}_${SOURCE}`), { ok: true })
     assert.deepEqual(received, [{
-      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'through tunnel', from: `peer:${SOURCE}:${SOURCE}` },
+      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'through tunnel', from: `peer_${SOURCE}_${SOURCE}` },
     }])
     assert.deepEqual(await clientSendThroughPeer('peer-fixture', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'missing'), {
       ok: false, error: 'no local project owns that session',
@@ -358,6 +358,31 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
   } finally {
     await gateway.close()
     if (forward) await close(forward)
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('the control socket claim is proven by a connect, not by the file', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-stale-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const first = new MachinePeerGateway()
+  const second = new MachinePeerGateway()
+  try {
+    // a killed gateway leaves its path behind with nothing listening: a regular file at the socket path refuses
+    // every connect exactly like a stale socket inode does
+    mkdirSync(join(home, 'gateway'), { recursive: true })
+    writeFileSync(join(home, 'gateway', 'peer.sock'), '')
+    await first.start()
+    const listed = await control({ op: 'list' })
+    assert.ok(listed.ok, JSON.stringify(listed))
+    // the path is now LIVE: a second gateway must refuse loudly and never unlink the owner's socket
+    await assert.rejects(second.start(), /already owns .*peer\.sock — another `spex dashboard` is running/)
+    assert.ok((await control({ op: 'list' })).ok)
+  } finally {
+    await first.close()
     if (previous === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previous
     rmSync(home, { recursive: true, force: true })

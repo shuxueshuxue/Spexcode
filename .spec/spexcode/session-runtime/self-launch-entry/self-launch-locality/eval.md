@@ -12,6 +12,16 @@ scenarios:
       probe; environment and config data cannot do so. The result labels real network mounts and non-Linux detectors
       as unmeasured evidence gaps rather than passes.
     code: packages/session-selflaunch/src/locality.ts
+  - name: darwin-mount-flags-admit-the-local-store
+    tags: [cli]
+    description: >
+      On a real macOS host whose ~/.spexcode sits on local APFS, run the installed spex CLI against a project
+      backend that opens the SQLite session store (`spex session ls`) and read the backend's own log.
+    expected: >
+      The store opens: `spex session ls` returns the session table (no `backend error 500`) and the backend log
+      carries no `LOCALITY_DETECTOR_UNAVAILABLE` / `no filesystem locality detector for platform darwin` line
+      after the restart. The same host before this row refused every open with that exact line.
+    code: packages/session-selflaunch/src/locality.ts
 ---
 # self-launch storage locality loss
 

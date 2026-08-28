@@ -990,8 +990,13 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     `if [ "$1" = "--resume" ]; then`,
     `  tid=$2`,
     ...(attachTui ? [] : [
-      // A headless forced reopen has no TUI to attach and the shared app-server already owns the thread. Keep it
-      // a no-op instead of calling codex-launch without a prompt (which would mint an unrelated empty thread).
+      // A headless resume has no TUI to reload the thread. The shared app-server evicts an idle thread from its
+      // loaded set, and headless readiness proves online only for a RESIDENT thread, so resume must reopen it
+      // here — the load the visible TUI's `resume "$tid"` would have done — or readiness times out for a thread
+      // that is fine on disk. codex-generation-session above already ensured the app-server, so `$sock` is live.
+      `  ${SPEX} internal codex-reopen "$sock" "$tid" || exit 1`,
+      // A headless forced reopen with NO thread id and no prompt has nothing to attach and nothing to launch.
+      // Keep it a no-op instead of calling codex-launch without a prompt (which would mint an unrelated thread).
       `elif [ "$#" -eq 0 ]; then`,
       `  exit 0`,
     ]),
@@ -1290,6 +1295,56 @@ const CODEX_MUTATION_CENSUS_MS = 15_000
 const CODEX_MUTATION_BASE_MS = 15_000
 const CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS = 1000
 const codexArchiveBudgetMs = (bytes: number) => CODEX_MUTATION_BASE_MS + Math.ceil(bytes / CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS)
+// @@@ codexReopenThread - load an evicted thread back into the shared app-server WITHOUT running a turn. The
+// app-server evicts an idle thread from its in-memory loaded set, and codex-headless readiness/liveness proves
+// online only when the thread is resident (thread/loaded/list). A visible-TUI resume reloads it implicitly via
+// `resume "$tid"`; headless has no TUI, so its resume must issue this `thread/resume` itself or readiness times
+// out for a thread that is perfectly fine on disk. `excludeTurns` + a one-row page keeps a huge rollout from
+// streaming back — we only need the load, not the history. Idempotent: reopening an already-loaded thread is a
+// no-op the server answers at once.
+export function codexReopenThread(sock: string, threadId: string, budgetMs = 20_000): Promise<{ ok: true } | { ok: false; error: string }> {
+  return new Promise((resolve) => {
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    let upgraded = false, settled = false
+    const done = (r: { ok: true } | { ok: false; error: string }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { conn.destroy() } catch { /* */ }
+      resolve(r)
+    }
+    const timer = setTimeout(() => done({ ok: false, error: `codex app-server did not reopen thread ${threadId} within ${budgetMs}ms` }), budgetMs)
+    conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
+    conn.on('close', () => done({ ok: false, error: 'codex app-server closed before thread/resume was answered' }))
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      if (m.id === 1 && m.result) {
+        send({ method: 'initialized', params: {} })
+        return send({ id: 2, method: 'thread/resume', params: { threadId, excludeTurns: true, initialTurnsPage: { limit: 1, sortDirection: 'desc', itemsView: 'notLoaded' } } })
+      }
+      if (m.id === 2 && m.result) return done({ ok: true })
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: 'codex app-server refused WebSocket upgrade for thread/resume' })
+        upgraded = true
+        fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: 'codex app-server closed during thread/resume' })
+    })
+  })
+}
+
 // Codex treats an omitted or empty sourceKinds filter as "interactive" defaults. Cold proof must census the
 // entire native thread graph, including subAgent/thread-spawn rows that have no Spex record, so the adapter
 // supplies every protocol source kind explicitly for its thread/list calls.

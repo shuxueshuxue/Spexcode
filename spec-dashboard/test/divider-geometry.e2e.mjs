@@ -72,7 +72,7 @@ try {
       assert.equal(specGeometry.seamGap, 0, `${viewport.name}: tab/content seam moved`)
       assert.equal(specGeometry.stripBottom, '0px', `${viewport.name}: tab strip still owns a bottom border`)
       assert.equal(specGeometry.hostTop, '1px', `${viewport.name}: content host has no shared top divider`)
-      assert.equal(specGeometry.groupTop, '1px', `${viewport.name}: explorer group has no shared divider`)
+      assert.equal(specGeometry.groupTop, '0px', `${viewport.name}: explorer has an extra section divider`)
     }
     assert.ok(specGeometry.overflowX <= 1, `${viewport.name}: horizontal overflow ${specGeometry.overflowX}px`)
     await page.screenshot({ path: join(OUT, `${viewport.name}-explorer-divider.png`), fullPage: true })

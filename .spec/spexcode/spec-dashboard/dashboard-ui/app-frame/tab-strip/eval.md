@@ -36,8 +36,9 @@ scenarios:
       settles; capture one screenshot per viewport.
     expected: >-
       The content host owns exactly one 1px top divider while the tab strip owns no bottom border. Explorer and
-      Sessions group headings expose the same 1px divider rule, with no negative geometry, overlap, or horizontal
-      overflow at either viewport. The tab strip bottom and content host top share one y coordinate.
+      Sessions group headings expose the same 1px divider rule; Explorer adds no extra full-width border between
+      its sections. There is no negative geometry, overlap, or horizontal overflow at either viewport. The tab
+      strip bottom and content host top share one y coordinate.
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/styles.css]
     test: spec-dashboard/test/divider-geometry.e2e.mjs

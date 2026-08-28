@@ -138,6 +138,9 @@ test('timeline display maps lifecycle and proposal once', () => {
 test('reply hints are explicit and composable', () => {
   const note = withNoteReplyHint('hello')
   assert.match(note, /REQUIRED REPLY TRANSPORT/)
+  assert.match(note, /real newline characters/)
+  assert.match(note, /Do NOT use `String\.raw`/)
+  assert.match(note, /`JSON\.stringify\(note\)`/)
   const terminal = withTerminalReplyHint(note)
   assert.match(terminal, /terminal-attached client/)
   assert.match(terminal, /hello/)

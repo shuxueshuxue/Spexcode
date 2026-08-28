@@ -205,7 +205,7 @@ assert.equal(desktop.send.tip, 'send')
 assert.equal(desktop.send.hasSvg, true)
 assert.equal(desktop.send.text, '', 'icon-only: no word inside the button')
 assert.equal(desktop.send.disabled, true, 'nothing to send yet')
-assert.ok(desktop.width <= 720 && desktop.width <= desktop.columnWidth + 1, 'no wider than the reading column')
+assert.ok(desktop.width <= desktop.columnWidth + 1, 'no wider than the reading column')
 assert.ok(desktop.centreOffset <= 1, 'centred on the pane')
 assert.equal(desktop.border, '1px')
 await page.screenshot({ path: `${OUT}/conversation-desktop.png` })
@@ -222,6 +222,7 @@ const measurePaper = async () => page.evaluate(() => {
   // the CELL is the measure minus the 52px ruler and its 16px gap: what a note may fill and a quote is capped against
   const cell = Math.round(document.querySelector('.tl-chat .m-ev-say > .m-say')?.parentElement.getBoundingClientRect().width - 68)
   return {
+    paneWidth: Math.round(h.width),
     column: Math.round(c.width), cell, centreOffset: Math.round(Math.abs((c.left + c.width / 2) - (h.left + h.width / 2))),
     sidePadding: parseFloat(getComputedStyle(chat).paddingLeft),
     widestNote: widest('.tl-chat .m-say'), widestQuote: widest('.tl-chat .m-ev > .m-quote'),
@@ -236,8 +237,12 @@ const measurePaper = async () => page.evaluate(() => {
 })
 const paper = await measurePaper()
 record('paper.desktop', paper)
-assert.equal(paper.column, 720); assert.ok(paper.centreOffset <= 1)
-assert.equal(paper.cell, 652, 'the ruler takes 52px + 16px of the 720px measure')
+// THE MEASURE GROWS WITH THE PANE: 86% of it, never under 720px, capped at 1200px ([[conversation]])
+const measureFor = (paneWidth) => Math.round(Math.min(1200, Math.max(720, paneWidth * 0.86)))
+assert.ok(Math.abs(paper.column - measureFor(paper.paneWidth)) <= 1, `the column is the pane-grown measure: ${paper.column}px of a ${paper.paneWidth}px pane`)
+assert.ok(paper.column > 720, 'at 1440px the column is past the old 720px floor')
+assert.ok(paper.centreOffset <= 1)
+assert.equal(paper.cell, paper.column - 68, 'the ruler takes 52px + 16px of the measure')
 assert.ok(paper.widestNote >= paper.cell - 1, 'the agent runs the whole cell')
 assert.ok(paper.widestQuote <= Math.round(paper.cell * 0.8) + 1, 'the quote caps at 80% of the cell')
 assert.ok(paper.timeOpacity < 1, 'the minute rests quiet')
@@ -262,7 +267,8 @@ await input.press('Enter')
 await page.waitForTimeout(600)
 record('composer.sent', { requests: sent, draftAfter: await input.inputValue() })
 assert.equal(sent.length, 1, 'one send request')
-assert.deepEqual(sent[0], { kind: 'text', text: 'YATU composer probe — first line\nsecond line', replyVia: 'note' })
+// the footer IS a Command Box: it sends through the box's own input kind ([[conversation]])
+assert.deepEqual(sent[0], { kind: 'command', text: 'YATU composer probe — first line\nsecond line', replyVia: 'note' })
 assert.equal(facts['composer.sent'].draftAfter, '')
 
 // ---- stop: one square beside send, only while the agent works; the one interrupt verb, intercepted
@@ -307,8 +313,8 @@ if (working) {
     assert.ok(first.startsWith('working') && seconds(first) !== null && seconds(second) !== null, 'the live seam reads working · Ns')
     assert.ok(Math.abs((seconds(second) - seconds(first) + 60) % 60 - 2) <= 1, 'the count advanced ~2s without a poll')
     assert.equal(anim, 'm-seam-shimmer')
-    // an EXPANDED live seam keeps counting: each poll re-reads its interval with an advancing `to`, and the
-    // inset never blinks back to its loading line once it has content
+    // an EXPANDED live seam keeps counting from its STREAM ([[message-stream]]): it issues no interval GET of
+    // its own, and the inset never blinks back to its loading line once it has content
     const reads = []
     await page.route('**/transcript?*', async (route) => { reads.push(Number(new URL(route.request().url()).searchParams.get('to'))); await route.continue() })
     const liveRow = page.locator('.tl-chat:visible .m-seam-row.is-live')
@@ -324,8 +330,7 @@ if (working) {
     const detailAfter = await page.locator('.tl-chat:visible .m-seam-row.is-live .m-seam-detail').textContent().catch(() => null)
     await page.unroute('**/transcript?*')
     record('seam.expanded', { reads, loadingFlashes, detailBefore, detailAfter, stillOpen: await liveRow.getAttribute('aria-expanded') })
-    assert.ok(reads.length >= 2, 'the expanded live seam re-read across polls')
-    assert.ok(reads.every((to, i) => i === 0 || to > reads[i - 1]), 'each re-read ends later than the last')
+    assert.equal(reads.length, 0, 'the open seam issues no interval GET of its own — the stream is its only read')
     assert.equal(loadingFlashes, 0, 'the inset never fell back to its loading line')
     assert.equal(facts['seam.expanded'].stillOpen, 'true')
   } else record('seam.live', { skipped: 'no working session has an open tail seam right now' })

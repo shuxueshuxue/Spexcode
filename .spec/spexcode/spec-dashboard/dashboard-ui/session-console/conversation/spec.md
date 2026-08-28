@@ -47,11 +47,15 @@ rule under every turn, a role word above each, a bordered box per tool — so re
 chrome. A chat carries its structure in the shapes of the turns themselves. The person is QUOTED: a narrow
 bubble, capped well under the measure, one corner squared into a tail, sitting off to its own side. The
 agent IS the page: full measure, no bubble, no tint. Boxing both would make an exchange read as a table of
-two columns. The whole flow is held to ONE centred measure — `--conversation-measure`, 720px, the column the agent's
+two columns. The whole flow is held to ONE centred measure — `--conversation-measure`, the column the agent's
 prose, the person's quotes and the composer all share — without one, at a wide pane the bubble sat
 against the right edge while the prose began at the far left, a thousand pixels away, and the two stopped
-reading as one conversation. The margins around that column grow with the pane (container units), so a
-wide window reads as a sheet with generous edges and a narrow one keeps every pixel for the words.
+reading as one conversation. **The measure grows with the pane**: 86% of the pane's width, never under
+720px, capped at 1200px. A fixed 720px column left a 1080px pane with 180px of idle margin on each side and
+the words squeezed in the middle; the column now spends the width on the words, and the margins outside it
+stay the small edge that grows only a little with the pane (`clamp(16px, 4cqi, 48px)`), so a wide window
+reads as a broad sheet and a narrow one keeps every pixel for the words. The cap keeps a line from running
+past what an eye can carry back.
 
 **Collapse the process, keep the result.** Everything that produced an answer folds the moment the answer
 exists; the answer itself, and anything durable, stays. The unit is the work SEGMENT — a consecutive run of
@@ -214,6 +218,7 @@ mechanism.
 
 A
 pane-backed Conversation mounts only on its first visit, then remains mounted after deselection or going offline
-so its timeline cursor and rendered history survive revisits; its refresh timer runs only while selected.
+so its timeline cursor, rendered history and last live tail survive revisits ([[message-stream]]); its refresh
+timer and transcript stream run only while selected.
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
 surfaces remain inert and make no timeline/detail reads or polling timers. 

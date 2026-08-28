@@ -20,6 +20,21 @@ scenarios:
       pair at 43% (or the leaf midpoint), with vertical reachability and fit-left treatment where applicable.
       The filed reading carries video of the focus-follow movement, a screenshot of its settled framing,
       and a pass verdict.
+  - name: expand-tab-never-covers-tile-content
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the graph with a real board where the focused node's siblings are collapsed and
+      carry `▸N` tabs — include tiles whose Row 1 ends in a bare age and at least one busy tile whose
+      Row 1 shows op glyphs and whose Row 2 is full of badges plus a live-editor avatar. In the real DOM,
+      take every collapsed tile's `.node-expand` bounding box and intersect it with the boxes of every
+      Row 1 / Row 2 child; then drill into one sibling so the next column fills, and measure the smallest
+      horizontal clearance between any tab's right edge and any tile in the column to its right. Zoom a
+      screenshot on a tile whose age sits at the right edge.
+    expected: >-
+      Zero intersections on every collapsed tile: the tab protrudes from the tile's right border into the
+      column gap, so the age, op glyphs, badges and avatars stay fully legible. Its clearance to the next
+      column stays positive at the fixed `X_GAP`. A leaf still shows no tab. The filed reading carries the
+      overlap report and the zoomed screenshot.
   - name: close-active-tab-returns-to-graph
     tags: [frontend-e2e, desktop]
     description: >-

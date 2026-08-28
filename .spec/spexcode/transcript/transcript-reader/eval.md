@@ -1,5 +1,23 @@
 ---
 scenarios:
+  - name: gemini-native-fixture
+    tags: [cli]
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
+    description: Read the frozen Gemini CLI session JSONL by session id.
+    expected: User and assistant prose are returned, the MCP tool call keeps its JSON input, its function response is joined by call id, and private metadata/thoughts are absent.
+  - name: hermes-export-fixture
+    tags: [cli]
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
+    description: Read the frozen Hermes one-document export through a profile state.db revision.
+    expected: The export is cached per state.db revision, user and assistant prose plus tool calls/results are normalized, and reasoning fields are never turns.
+  - name: openclaw-native-fixture
+    tags: [cli]
+    test: packages/transcript/src/readers.test.ts
+    code: packages/transcript/src/readers.ts
+    description: Read the frozen OpenClaw per-agent session JSONL by stable session id.
+    expected: User and assistant prose, tool input, and tool output joined by toolCallId are returned while thinking blocks and bootstrap records remain private.
   - name: bounded-claude-codex-interval
     tags: [backend-api]
     test: packages/transcript/src/readers.test.ts

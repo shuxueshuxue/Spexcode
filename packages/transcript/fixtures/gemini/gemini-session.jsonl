@@ -1,0 +1,21 @@
+{"sessionId":"9fbeda16-d7fa-4d34-abfe-4207e5733917","projectHash":"68a560d4dba89516444b0d953d6c53c98f95c0321c65c34726ec3087c444756a","startTime":"2026-08-28T18:51:03.787Z","lastUpdated":"2026-08-28T18:51:03.787Z","kind":"main"}
+{"$set":{"messages":[{"id":"d04923d38bb0f6017037e74183378ef4","timestamp":"2026-08-28T18:51:03.788Z","type":"user","content":[{"text":"<session_context>\nThis is the Gemini CLI. We are setting up the context for our chat.\nToday's date is Saturday, August 29, 2026 (formatted according to the user's locale).\nMy operating system is: darwin\nThe project's temporary directory is: /tmp/gemini-g1-finalrun/home/.gemini/tmp/work\n- **Workspace Directories:**\n  - /private/tmp/gemini-g1-finalrun/work\n- **Directory Structure:**\n\nShowing up to 200 items (files + folders).\n\n/private/tmp/gemini-g1-finalrun/work/\n└───.gemini/\n    └───settings.json\n\n\n</session_context>"}]}],"lastUpdated":"2026-08-28T18:51:03.788Z"}}
+{"id":"3b7bc67b-fc59-40a8-a02f-8eef1f5fc3ec","timestamp":"2026-08-28T18:51:03.796Z","type":"info","content":"Waiting for MCP servers to initialize... Slash commands are still available and prompts will be queued."}
+{"$set":{"lastUpdated":"2026-08-28T18:51:03.796Z"}}
+{"id":"80b2dbab-7464-4251-81ba-78f2f5962147","timestamp":"2026-08-28T18:51:03.890Z","type":"user","content":[{"text":"Use mcp_g1_probe_tool with value alpha, then reply with the marker."}]}
+{"$set":{"lastUpdated":"2026-08-28T18:51:03.890Z"}}
+{"id":"3f97faf5-464f-4726-8f26-a05a28819936","timestamp":"2026-08-28T18:51:03.907Z","type":"gemini","content":"","thoughts":[],"tokens":null,"model":"gemini-3.1-pro-preview"}
+{"$set":{"lastUpdated":"2026-08-28T18:51:03.908Z"}}
+{"id":"3f97faf5-464f-4726-8f26-a05a28819936","timestamp":"2026-08-28T18:51:03.907Z","type":"gemini","content":"","thoughts":[],"tokens":null,"model":"gemini-3.1-pro-preview","toolCalls":[{"id":"mcp_g1_probe_tool__mcp_g1_probe_tool_1787943063895_0","name":"mcp_g1_probe_tool","args":{"value":"alpha"},"result":[{"functionResponse":{"id":"mcp_g1_probe_tool__mcp_g1_probe_tool_1787943063895_0","name":"mcp_g1_probe_tool","response":{"output":"<untrusted_context>\nMCP_MARKER:alpha\n</untrusted_context>"}}}],"status":"success","timestamp":"2026-08-28T18:51:03.917Z","resultDisplay":"MCP_MARKER:alpha","description":"{\"value\":\"alpha\"}","displayName":"probe_tool (g1 MCP Server)","renderOutputAsMarkdown":true}]}
+{"id":"a29460fb-2190-4e37-9105-4319f23a5b87","timestamp":"2026-08-28T18:51:03.918Z","type":"user","content":[{"functionResponse":{"id":"mcp_g1_probe_tool__mcp_g1_probe_tool_1787943063895_0","name":"mcp_g1_probe_tool","response":{"output":"<untrusted_context>\nMCP_MARKER:alpha\n</untrusted_context>"}}}]}
+{"$set":{"lastUpdated":"2026-08-28T18:51:03.918Z"}}
+{"id":"1e90e0e1-752c-43d0-a417-8874484a8a28","timestamp":"2026-08-28T18:51:07.937Z","type":"gemini","content":"TOOL_OK","thoughts":[],"tokens":null,"model":"gemini-3.1-pro-preview"}
+{"$set":{"lastUpdated":"2026-08-28T18:51:07.937Z"}}
+{"id":"bc69f146-b204-4e25-bd08-f1c975711444","timestamp":"2026-08-28T18:51:33.239Z","type":"user","content":[{"text":"Second turn: summarize the MCP marker."}]}
+{"$set":{"lastUpdated":"2026-08-28T18:51:33.239Z"}}
+{"id":"8f0f0ac3-5c16-4954-beb2-ac636354b100","timestamp":"2026-08-28T18:51:37.254Z","type":"gemini","content":"TOOL_OK","thoughts":[],"tokens":null,"model":"gemini-3.1-pro-preview"}
+{"$set":{"lastUpdated":"2026-08-28T18:51:37.255Z"}}
+{"id":"53c92889-828f-45c4-85e6-dfc51a28c069","timestamp":"2026-08-28T18:51:56.871Z","type":"user","content":[{"text":"MID_TURN_STEER: prioritize this note."}]}
+{"$set":{"lastUpdated":"2026-08-28T18:51:56.871Z"}}
+{"id":"0455c3ff-9288-435e-bbc8-87a213610b65","timestamp":"2026-08-28T18:52:00.886Z","type":"gemini","content":"TOOL_OK","thoughts":[],"tokens":null,"model":"gemini-3.1-pro-preview"}
+{"$set":{"lastUpdated":"2026-08-28T18:52:00.887Z"}}

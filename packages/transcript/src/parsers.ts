@@ -51,7 +51,7 @@ export type ParsedEvent = { at: number | null; turn: MutableTurn | null; toolOut
 export type Parse = (value: unknown) => ParsedEvent | null
 
 
-// --- the four native shapes --------------------------------------------------------------------------------
+// --- the seven native shapes -------------------------------------------------------------------------------
 
 export function claudeEvent(value: unknown): ParsedEvent | null {
   const entry = object(value)
@@ -147,6 +147,101 @@ export function piEvent(value: unknown): ParsedEvent | null {
     return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? '') }] } : null
   }
   return null
+}
+
+export function geminiEvent(value: unknown): ParsedEvent | null {
+  const entry = object(value)
+  const message = (entry?.type === 'user' || entry?.type === 'gemini')
+    ? entry
+    : object(items(entry?.messages)[0]) ?? object(items(object(entry?.$set)?.messages)[0])
+  if (!entry || !message) return null
+  const eventAt = at(message) ?? at(entry)
+  if (eventAt === null) return { at: null, turn: null }
+  const content = message.content
+  const blocks = items(content)
+  const outputs = blocks.flatMap((blockValue) => {
+    const block = object(blockValue)
+    const response = object(block?.functionResponse)
+    const id = string(response?.id)
+    return id ? [{ id, text: compact(response?.response ?? '') }] : []
+  })
+  if (outputs.length) return { at: eventAt, turn: null, toolOutputs: outputs }
+  if (message.type === 'user') {
+    const text = typeof content === 'string' ? string(content) : blocks.map((block) => string(object(block)?.text)).filter(Boolean).join('\n') || null
+    return text ? { at: eventAt, turn: { id: idOf(message), at: eventAt, role: 'user', text, tools: [] } } : null
+  }
+  if (message.type === 'gemini') {
+    const turn: MutableTurn = { id: idOf(message), at: eventAt, role: 'assistant', tools: [] }
+    if (typeof content === 'string') turn.text = string(content) ?? undefined
+    for (const callValue of items(message.toolCalls)) {
+      const call = object(callValue)
+      const id = string(call?.id) ?? `tool-${turn.tools.length}`
+      turn.tools.push({ id, name: string(call?.name) ?? 'tool', input: call?.args === undefined ? undefined : compact(call.args), outputLines: 0, outputBytes: 0 })
+    }
+    if (!turn.text && !turn.tools.length) return null
+    return { at: eventAt, turn }
+  }
+  return null
+}
+
+export function openclawEvent(value: unknown): ParsedEvent | null {
+  const entry = object(value)
+  const message = object(entry?.message)
+  if (!entry || entry.type !== 'message' || !message) return null
+  const eventAt = at(message) ?? at(entry)
+  if (eventAt === null) return { at: null, turn: null }
+  if (message.role === 'user') {
+    const text = blockText(message.content)
+    return text ? { at: eventAt, turn: { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'user', text, tools: [] } } : null
+  }
+  if (message.role === 'toolResult') {
+    const id = string(message.toolCallId)
+    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? '') }] } : null
+  }
+  if (message.role === 'assistant') {
+    const turn: MutableTurn = { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'assistant', tools: [] }
+    for (const blockValue of items(message.content)) {
+      const block = object(blockValue)
+      if (block?.type === 'text') turn.text = [turn.text, string(block.text)].filter(Boolean).join('\n') || undefined
+      if (block?.type === 'toolCall') {
+        const id = string(block.id) ?? `tool-${turn.tools.length}`
+        turn.tools.push({ id, name: string(block.name) ?? 'tool', input: block.arguments === undefined ? undefined : compact(block.arguments), outputLines: 0, outputBytes: 0 })
+      }
+    }
+    return turn.text || turn.tools.length ? { at: eventAt, turn } : null
+  }
+  return null
+}
+
+export function hermesEvents(value: unknown): ParsedEvent[] {
+  const root = object(value)
+  const events: ParsedEvent[] = []
+  for (const messageValue of items(root?.messages)) {
+    const message = object(messageValue)
+    if (!message) continue
+    const eventAt = at(message)
+    if (eventAt === null) { events.push({ at: null, turn: null }); continue }
+    const role = message.role
+    if (role === 'user') {
+      const text = string(message.content)
+      if (text) events.push({ at: eventAt, turn: { id: idOf(message), at: eventAt, role: 'user', text, tools: [] } })
+    } else if (role === 'assistant') {
+      const turn: MutableTurn = { id: idOf(message), at: eventAt, role: 'assistant', tools: [] }
+      const text = string(message.content)
+      if (text) turn.text = text
+      for (const callValue of items(message.tool_calls)) {
+        const call = object(callValue)
+        const fn = object(call?.function)
+        const id = string(call?.id) ?? `tool-${turn.tools.length}`
+        turn.tools.push({ id, name: string(fn?.name) ?? 'tool', input: fn?.arguments === undefined ? undefined : compact(fn.arguments), outputLines: 0, outputBytes: 0 })
+      }
+      if (turn.text || turn.tools.length) events.push({ at: eventAt, turn })
+    } else if (role === 'tool') {
+      const id = string(message.tool_call_id)
+      if (id) events.push({ at: eventAt, turn: null, toolOutputs: [{ id, text: compact(message.content ?? '') }] })
+    }
+  }
+  return events
 }
 
 // OpenCode's export is one JSON document, not a line stream: every message arrives with its parts, and a tool

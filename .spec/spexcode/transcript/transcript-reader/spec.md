@@ -17,10 +17,11 @@ related:
 # transcript-reader
 
 Every harness keeps its conversation somewhere private — Claude Code's project JSONL, Codex's rollout, pi's
-session JSONL, OpenCode's store behind `opencode export` (read raw: the `--sanitize` form replaces every prose and
+session JSONL, Gemini's project session JSONL, OpenClaw's per-agent session JSONL, Hermes's SQLite-backed session
+export, and OpenCode's store behind `opencode export` (read raw: the `--sanitize` form replaces every prose and
 tool-output part with a redaction token and leaves nothing to read). The [[harness-adapter]] exposes ONE field for
 all of it, `transcript`. The parsers beside this module ([[transcript]]'s `parsers.ts`) are the only code that
-knows those shapes — one parser per harness, shared with the in-memory source ([[live-transcript]]) — and this
+knows those seven native shapes — one parser per harness, shared with the in-memory source ([[live-transcript]]) — and this
 module is the only code that knows WHERE each harness keeps the thread. It answers exactly one question
 for any harness: *what happened in this thread between `from` and `to`?* — as a small normalized turn stream:
 user and assistant prose, tool calls with their input, and each call's output once the harness recorded it. The
@@ -66,4 +67,11 @@ no per-thread file: one export per store revision is parsed and kept, so repeate
 export nothing new.
 
 A missing, deleted, unreadable, malformed, or timestamp-less native source is an explicit `missing`, `unreadable`,
-or `invalid` failure. The transcript remains a payload, never a field in `timeline.ndjson` or `runtime.json`.
+or `invalid` failure. Gemini's locator searches `GEMINI_HOME`/`GEMINI_CONFIG_DIR` (default `~/.gemini`) for the
+session id; OpenClaw searches `OPENCLAW_STATE_DIR` (default `~/.openclaw/state`) for its per-agent JSONL. Hermes
+uses the profile's `state.db` stat as its revision and invokes `hermes sessions export --format jsonl --session-id
+<id> --yes`, with `SPEXCODE_HERMES_CMD` as the command override and `HERMES_HOME` selecting the profile root. The
+captured fixtures verify Gemini `gemini` records and `$set.messages`, OpenClaw `message` records with `toolCall` /
+`toolResult`, and Hermes's `messages` array with OpenAI-style `tool_calls`; other native record variants are
+`unverified` rather than inferred. The transcript remains a payload, never a field in `timeline.ndjson` or
+`runtime.json`.

@@ -222,6 +222,20 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     return () => document.removeEventListener('mousedown', onDown, true)
   }, [panel, dismiss])
 
+  // Bare action groups follow the same dismissal contract as every other context menu: an outside
+  // press closes it, and a new right-click gets a fresh anchor rather than leaving the old group behind.
+  useEffect(() => {
+    if ((!menuOpen && !nodeMenuOpen) || panel) return undefined
+    const onClick = (event) => { if (!event.target.closest?.('.pa-group')) clear() }
+    const onContext = () => clear()
+    window.addEventListener('click', onClick)
+    window.addEventListener('contextmenu', onContext, true)
+    return () => {
+      window.removeEventListener('click', onClick)
+      window.removeEventListener('contextmenu', onContext, true)
+    }
+  }, [menuOpen, nodeMenuOpen, panel, clear])
+
   const nodeSelection = node && bodyReady ? {
     node: node.id,
     path: node.path,

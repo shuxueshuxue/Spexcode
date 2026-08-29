@@ -104,6 +104,8 @@
    of words still being said. Reduced motion keeps the marks and drops the movement. */
 .tx-tool.is-running .tx-tool-verb { color: var(--tx-ink2); }
 .tx-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--tx-orange); font-size: var(--tx-type-caption); }
+.tx-tool-outcome { flex: none; color: var(--tx-red); font-size: var(--tx-type-caption); }
+.tx-tool.is-failed > .tx-tool-row .tx-tool-verb, .tx-tool.is-rejected > .tx-tool-row .tx-tool-verb { color: var(--tx-red); }
 .tx-spin { animation: tx-spin 1s linear infinite; }
 @keyframes tx-spin { to { transform: rotate(360deg); } }
 .tx-live { margin-top: var(--tx-space-2); min-width: 0; }

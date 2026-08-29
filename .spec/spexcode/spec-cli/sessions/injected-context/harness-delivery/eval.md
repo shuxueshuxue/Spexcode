@@ -1,5 +1,20 @@
 ---
 scenarios:
+  - name: legacy-core-handlers-self-heal
+    tags: [backend-api]
+    code: spec-cli/src/materialize.ts
+    description: >-
+      In a fixture git project seeded by an older SpexCode release, replace the shipped core mark-active and
+      stop-gate shell handlers with their historical `session.json` snapshots, then run `spex materialize` and
+      fire the real dispatcher's PreToolUse and Stop events against a governed session.
+    expected: >-
+      Materialize reports and atomically refreshes the stale core handlers to the current toolchain bytes while
+      leaving non-core user plugins untouched. PreToolUse changes a parked session to active; a Stop followed
+      by its forced continuation records `auto: stopped without declaring` as asking. A second materialize is
+      byte-stable.
+    test:
+      path: spec-cli/src/materialize.test.ts
+      name: materialize refreshes legacy core handlers before dispatch and lifecycle hooks recover
   - name: self-launch-zero-friction-codex
     tags: [backend-api]
     description: >-

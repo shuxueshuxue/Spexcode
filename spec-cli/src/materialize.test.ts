@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { tsxBin } from './tsx-bin.js'
+import { openProjectSessionApplication } from '@spexcode/session-application'
 
 // [[residence]] / [[content-filter]] / [[commit-surgery]] / [[harness-delivery]] — the vote-less
 // footprint engine: materialized artifacts are NEVER tracked (one residence behavior), a contract file's domain is a LIVE
@@ -21,6 +22,7 @@ const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
 const PACKAGE = join(SRC, '..')
 const TSX = tsxBin(PACKAGE)
+const DISPATCH_PATH = join(PACKAGE, 'hooks', 'dispatch.sh')
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -95,6 +97,58 @@ test('same-input materialize is an operational no-op', { skip: !gitAvailable() &
   spex('materialize')
   assert.deepEqual(outputs.map((path) => statSync(path, { bigint: true }).ctimeNs), before,
     'an unchanged target map must not rewrite already-correct materialized outputs')
+})
+
+test('materialize refreshes legacy core handlers before dispatch and lifecycle hooks recover', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env, spex } = makeHost()
+  const mark = join(proj, '.spec', 'project', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  const stop = join(proj, '.spec', 'project', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
+  const templateMark = readFileSync(join(PACKAGE, 'templates', 'spec', 'project', '.plugins', 'core', 'mark-active', 'mark-active.sh'))
+  const templateStop = readFileSync(join(PACKAGE, 'templates', 'spec', 'project', '.plugins', 'core', 'stop-gate', 'stop-gate.sh'))
+  const oldMark = execFileSync('git', ['show', 'f327be820^:.spec/spexcode/.plugins/core/mark-active/mark-active.sh'], { cwd: dirname(PACKAGE), env })
+  const oldStop = execFileSync('git', ['show', 'f327be820^:.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh'], { cwd: dirname(PACKAGE), env })
+  writeFileSync(mark, oldMark)
+  writeFileSync(stop, oldStop)
+  assert.match(readFileSync(mark, 'utf8'), /session\.json/, 'fixture starts with the retired mark-active snapshot')
+  assert.match(readFileSync(stop, 'utf8'), /session\.json/, 'fixture starts with the retired stop-gate snapshot')
+
+  const result = spawnSync(process.execPath, [TSX, CLI, 'materialize'], { cwd: proj, encoding: 'utf8', env })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /refreshed core plugin handlers .*mark-active\/mark-active\.sh.*stop-gate\/stop-gate\.sh/)
+  assert.deepEqual(readFileSync(mark), templateMark)
+  assert.deepEqual(readFileSync(stop), templateStop)
+
+  const sid = 'legacy-core-recovered'
+  const databasePath = join(env.SPEXCODE_HOME!, 'sessions.sqlite')
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try { app.createSession({ sessionId: sid, status: 'parked', note: 'x' }) } finally { app.close() }
+  const runtime = join(env.SPEXCODE_HOME!, 'projects', proj.replace(/[/.]/g, '-'))
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  writeFileSync(join(runtime, 'sessions', sid, 'runtime.json'), JSON.stringify({ session_id: sid, governed: true, status: 'parked', proposal: '', note: 'x' }) + '\n')
+  const manifest = join(runtime, 'trees', proj.replace(/[/.]/g, '-'), 'hooks-manifest')
+  const hookEnv = { ...env, SPEX_HOOK_MANIFEST: manifest, SPEX_SESSION_DATABASE_PATH: databasePath, SPEX: join(PACKAGE, 'bin', 'spex.mjs') }
+  const active = spawnSync('bash', [DISPATCH_PATH, 'claude', 'PreToolUse'], {
+    cwd: proj, env: hookEnv, input: JSON.stringify({ session_id: sid, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'true' } }), encoding: 'utf8',
+  })
+  assert.equal(active.status, 0, active.stderr)
+  const afterActive = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try { assert.equal(afterActive.readState(sid)?.status, 'active') } finally { afterActive.close() }
+
+  const firstStop = spawnSync('bash', [DISPATCH_PATH, 'claude', 'Stop'], {
+    cwd: proj, env: hookEnv, input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }), encoding: 'utf8',
+  })
+  assert.equal(firstStop.status, 2, firstStop.stderr)
+  const continuation = spawnSync('bash', [DISPATCH_PATH, 'claude', 'Stop'], {
+    cwd: proj, env: hookEnv, input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: true }), encoding: 'utf8',
+  })
+  assert.equal(continuation.status, 0, continuation.stderr)
+  const afterStop = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try {
+    const state = afterStop.readState(sid)
+    assert.equal(state?.status, 'asking')
+    assert.match(state?.note ?? '', /^auto: stopped without declaring/)
+  } finally { afterStop.close() }
 })
 
 test('retired axis: any render/private value is IGNORED with a loud notice — behavior identical, no fail', { skip: !gitAvailable() && 'git not available' }, () => {

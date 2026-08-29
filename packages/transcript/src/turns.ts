@@ -10,6 +10,12 @@ export type TranscriptTool = Readonly<{
   output?: string          // absent until the harness recorded the result — the live tail reads that as "running"
   outputLines: number
   outputBytes: number
+  // HOW THE CALL ENDED, when the harness said so in a structured field — Claude's `is_error`, pi's and OpenClaw's
+  // `isError`, OpenCode's `state.status: error`, Gemini's call `status: error`, the Codex app-server item status
+  // (`failed`, and `declined` when the person refused the call). Absent means the harness recorded no such
+  // signal, never "succeeded": a Codex rollout carries none, and a harness that only writes the failure into the
+  // output prose is not text-sniffed for it. `rejected` is the call the person refused — it never ran.
+  outcome?: 'failed' | 'rejected'
 }>
 export type TranscriptTurn = Readonly<{
   id: string                // the native id, or `<role>@<at>[#n]` synthesized in thread order — never null, so a

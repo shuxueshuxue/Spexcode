@@ -98,6 +98,7 @@ test('canonical lifecycle always wins over stale JSON status bytes', () => {
 
   const closed = { ...archived, closedAt: '2026-08-29T00:00:00.000Z' }
   const projected = canonicalRecordProjection(closed, canonical)
+  assert.equal(projected.archived, true, 'a published close remains archived in the public record projection')
   assert.equal(projected.status, 'archived', 'a published close settles the canonical lifecycle at its terminal marker')
   assert.equal(projected.proposal, null, 'closing clears the pre-close proposal')
 })

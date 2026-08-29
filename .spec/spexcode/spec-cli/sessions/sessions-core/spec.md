@@ -196,7 +196,9 @@ cannot append after close returns. Both locks release
 before the adapter poke: a native turn can synchronously invoke lifecycle hooks that re-enter the record writer,
 so no record lock spans the handover. The delivery queue's own lock is what makes a handover exactly-once and
 recognizes revoked unhanded debt, while normal adapter/runtime guards remain the authority for concurrent
-lifecycle operations. Direct close asks the resolved adapter whether the current record derives one exact native
+lifecycle operations. A successful dequeue of a human-originated prompt is the wake boundary: it reopens a
+waiting (`parked`, `asking`, or `awaiting`) lifecycle to `active` immediately, even when later delivery debt
+remains queued; an accepted-but-undelivered message stays waiting. Direct close asks the resolved adapter whether the current record derives one exact native
 target identity. That adapter capability, not the presence of the storage alias `harness_session_id`, selects the
 ordinary exact cold-stop/close path; no lifecycle branch names a harness or treats lifecycle status or
 liveness as identity. A record with no derivable native target remains on the narrower unbound-residue retirement

@@ -74,6 +74,12 @@ idle-prompt hook fired since the last tool use, else working, **active-only guar
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label
 composing both axes** for one-glyph surfaces — a convenience, never a third source of truth.
 
+A published close is the one terminal refinement: when `closedAt` is non-null, every public projection sets
+`archived: true`, clears any pre-close proposal, and hides the record from the working projection. The canonical
+lifecycle settles to its internal `archived` terminal marker. `retired` remains reserved for a merged-but-open
+record whose worktree is gone; it is not a close or archive status. Legacy archived rows without `closedAt` retain
+the historical `offline` display because their close time is unknown.
+
 ### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
 
 Every hook resolves the acting session id through the harness resolver — payload first, launched id as fallback,

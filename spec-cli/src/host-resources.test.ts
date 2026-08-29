@@ -523,3 +523,40 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+test('resource walk does not charge a shared tmux tree to a retired instance token', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
+  const home = mkdtempSync(join(tmpdir(), 'spex-resource-tmux-boundary-'))
+  const socket = `spex-resource-tmux-${process.pid}-${Date.now()}`
+  const retiredToken = `retired-instance-${process.pid}`
+  const foreignToken = `foreign-instance-${process.pid}`
+  let foreign: ReturnType<typeof spawn> | null = null
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
+  const env = { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_INSTANCE_ID: retiredToken }
+  try {
+    execFileSync('tmux', ['-L', socket, 'new-session', '-d', '-s', 'retired-window', 'sleep 60'], { env, stdio: 'ignore' })
+    execFileSync('tmux', ['-L', socket, 'new-session', '-d', '-s', 'live-window', 'sleep 60'], { env, stdio: 'ignore' })
+    foreign = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore', env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_INSTANCE_ID: foreignToken },
+    })
+    for (let attempt = 0; attempt < 50 && !processStartToken(foreign.pid!); attempt++) await new Promise((resolve) => setTimeout(resolve, 20))
+
+    const report = await collectResourceReport({ persist: false })
+    const retired = report.owners.find((owner) => owner.kind === 'orphan' && owner.id === retiredToken)
+    assert.equal(retired, undefined, 'a tmux server token is not an orphan owner for the hosted tree')
+    assert.ok(!report.owners.some((owner) => owner.kind === 'orphan' && owner.processes.some((proc) => proc.command === 'tmux: server')))
+  } finally {
+    try { execFileSync('tmux', ['-L', socket, 'kill-server'], { stdio: 'ignore' }) } catch {}
+    if (foreign?.pid && processStartToken(foreign.pid)) {
+      try { foreign.kill('SIGTERM') } catch {}
+      await once(foreign, 'exit').catch(() => {})
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
+    else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
+    rmSync(home, { recursive: true, force: true })
+  }
+})

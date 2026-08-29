@@ -52,8 +52,12 @@ request never recursively removes the worktree; a backend-start scan resumes `.t
 deletion failure is logged and left for the next startup retry. The materialize slot is removed after enqueueing.
 The branch and the global session store remain. The record is retained with `archived: true`,
 `stopped: true`, a cold proof, and the same close transaction's ISO `closedAt`; list projection omits it from the
-working board while id-addressed record, timeline, transcript, and conversation reads remain available. Public
-session projection exposes that timestamp for a cheap complete archive index. Records closed before this field
+working board while id-addressed record, timeline, transcript, and conversation reads remain available. A record
+with a non-null `closedAt` is projected with `archived: true` in every public projection, regardless of the lifecycle
+or proposal it carried before close; its liveness remains the runtime reading (`offline` after the cold proof), and
+its display status is not rewritten to `retired`. The canonical lifecycle settles to the internal terminal marker
+`archived` and the proposal is cleared at close. Public session projection exposes that timestamp for a cheap complete
+archive index. Records closed before this field
 existed project `closedAt: null`; consumers identify their time as unknown rather than borrowing creation time,
 manual sort order, timeline reads, or filesystem metadata.
 

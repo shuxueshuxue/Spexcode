@@ -123,8 +123,8 @@ const seg = (id: string) => encodeURIComponent(id)
 
 // A rendezvous liveness probe can displace the real delivery client.
 function cachedStatus(rec: ReturnType<typeof fromRaw>): DisplayStatus {
-  if (!rec.worktreePath || !existsSync(rec.worktreePath)) return 'retired'
   if (rec.archived) return 'offline'
+  if (!rec.worktreePath || !existsSync(rec.worktreePath)) return 'retired'
   if (rec.status === 'awaiting') return displayStatusForProposal(rec.proposal)
   return rec.status === 'active' || rec.status === 'idle' ? 'unknown' : rec.status
 }
@@ -167,9 +167,11 @@ export function localCachedSessions(includeArchived = false): Session[] {
     const state = application?.readState(id)
     if (!state) continue
     const lifecycle = state.status as Session['lifecycle']
-    const status = state.status === 'awaiting'
+    const status = state.status === 'archived'
+      ? 'offline'
+      : state.status === 'awaiting'
       ? displayStatusForProposal(state.proposal as Session['proposal'])
-      : state.status === 'archived' ? 'offline' : state.status as DisplayStatus
+      : state.status as DisplayStatus
     rows.push({
       id,
       node: null,

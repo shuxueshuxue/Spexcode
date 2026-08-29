@@ -48,6 +48,19 @@ scenarios:
       After the guard returns, stop re-reads the leaf PID/start identity and its session ownership evidence
       immediately before signaling. A missing or changed instance blocks that escalation with zero TERM/KILL
       signal attempts; no PID value remembered before the guard grants later signal authority.
+  - name: retired-session-does-not-own-shared-tmux-tree
+    tags: [backend-api]
+    test:
+      path: spec-cli/src/host-resources.test.ts
+      name: resource walk does not charge a shared tmux tree to a retired instance token
+    description: >-
+      On an isolated host-resource backend fixture, start one tmux server with windows for a retired session and
+      a live sibling, plus a foreign process. Give the shared server the retired launch environment and read the
+      report through the backend API/resource collector.
+    expected: >-
+      The retired orphan row contains only its own exact launch lineage, or no processes when that lineage is
+      absent. The tmux server, the live sibling window/processes, and the foreign process never appear under that
+      retired orphan owner; shared host cost remains a shared-runtime/host row or explicit unattributed finding.
 ---
 
 # eval.md - host resource budget

@@ -1093,7 +1093,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, closedAt: rec.archived ? rec.closedAt : null, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
 }
 
 export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }
@@ -1163,7 +1163,7 @@ export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe)
     try { entry = readPublicRecordEntry(id) } catch { continue }
     if (entry.kind !== 'ok') continue
     const rec = fromRaw(entry.raw)
-    if (!rec.governed || !rec.archived) continue
+    if (!rec.governed || (!rec.archived && !rec.closedAt)) continue
     const parts = {
       id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
       activity: null, note: rec.note, promptPreview: null as string | null,
@@ -1279,7 +1279,11 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // missing durable cold proof is also legacy: leaf liveness alone cannot prove a Codex loaded thread was
     // unloaded, so it remains visible until an explicit archive repair.
     const cleanCold = projectedRecord.archived && !changedDuringCensus.has(id) && hasValidColdProof(projectedRecord) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
-    const projected = projectedRecord.archived && !cleanCold ? { ...projectedRecord, archived: false, stopped: false } : projectedRecord
+    // A published close is terminal public history even if a later census cannot prove the old adapter fully
+    // unloaded. Only legacy archived rows without closedAt may be exposed as a working hazard for repair.
+    const projected = projectedRecord.archived && !cleanCold && !projectedRecord.closedAt
+      ? { ...projectedRecord, archived: false, stopped: false }
+      : projectedRecord
     const projectedLv = projected === projectedRecord
       ? sessionHarness.runtimeOwnership === 'adapter'
         ? adapterResidentLiveness(projectedRecord, resident)
@@ -1782,12 +1786,16 @@ export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'st
   // The application row is the only lifecycle fact after cutover. A JSON status is historical envelope data,
   // so it must not win merely because it says waiting/error/archived while the canonical row says otherwise.
   if (!canonical) {
-    return rec as T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null }
+    return ('closedAt' in rec && rec.closedAt
+      ? { ...rec, archived: true }
+      : rec) as T & { status: Lifecycle; proposal: Proposal | null; note: string | null; parent: string | null }
   }
+  const closed = 'closedAt' in rec && !!rec.closedAt
   return {
     ...rec,
-    status: canonical.status as Lifecycle,
-    proposal: canonical.proposal as Proposal | null,
+    archived: closed ? true : rec.archived,
+    status: (closed ? 'archived' : canonical.status) as Lifecycle,
+    proposal: (closed ? null : canonical.proposal) as Proposal | null,
     note: canonical.note,
     parent: canonical.parentSessionId,
   }
@@ -4522,12 +4530,25 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (!latest) throw new ResourceConflict(`refusing to finish close for ${id}: session record disappeared before publication`)
   writeRecord({
     ...latest,
+    proposal: null,
     archived: true,
     closedAt: latest.closedAt || new Date().toISOString(),
     stopped: true,
     coldProof: latest.coldProof || coldProofFor(latest),
     adapterRecovery: null,
   })
+  // The canonical lifecycle must settle at the same terminal boundary as the durable close fact. `archived`
+  // is an internal terminal marker; public projections render its closed record as `retired`.
+  const application = configuredSessionApplicationIfCutover()
+  if (application?.readState(id)) {
+    application.transitionSession(id, {
+      status: 'archived',
+      proposal: null,
+      note: latest.note,
+      parentSessionId: latest.parent,
+      recipientSessionIds: canonicalWatchRecipients(application, id, 'archived'),
+    })
+  }
   let slot: string | null = null
   try { slot = existsSync(wt.path) ? treeSlotDir(wt.path) : null } catch { /* tree already unresolvable — nothing to key the slot by */ }
   if (existsSync(wt.path)) {
@@ -5096,6 +5117,7 @@ export async function drainSession(id: string): Promise<void> {
             if (!delivered.ok) return
             const removed = application.dequeuePendingMessage(id, msg.messageId)
             if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+            if (!msg.senderSessionId) markHumanPromptActive(id)
           }
         })
         return
@@ -5117,6 +5139,7 @@ export async function drainSession(id: string): Promise<void> {
         if (!delivered.ok) return
         const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration, msg.messageId)
         if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+        if (!msg.senderSessionId) markHumanPromptActive(id)
       }
     })
     return

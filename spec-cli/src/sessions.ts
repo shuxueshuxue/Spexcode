@@ -5112,6 +5112,7 @@ export async function drainSession(id: string): Promise<void> {
             if (!delivered.ok) return
             const removed = application.dequeuePendingMessage(id, msg.messageId)
             if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+            if (!msg.senderSessionId) markHumanPromptActive(id)
           }
         })
         return
@@ -5133,6 +5134,7 @@ export async function drainSession(id: string): Promise<void> {
         if (!delivered.ok) return
         const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration, msg.messageId)
         if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+        if (!msg.senderSessionId) markHumanPromptActive(id)
       }
     })
     return

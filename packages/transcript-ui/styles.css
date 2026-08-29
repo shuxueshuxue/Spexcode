@@ -85,6 +85,7 @@
 .tx-tool-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx-ink); }
 .tx-tool-trail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx-muted); }
 .tx-tool-size { flex: none; color: var(--tx-muted); font-variant-numeric: tabular-nums; }
+.tx-tool-server { flex: none; color: var(--tx-muted); font-size: var(--tx-type-caption); padding: 0 5px; border: 1px solid var(--tx-edge); border-radius: 999px; }
 .tx-tool-row.is-run .tx-tool-verb { color: var(--tx-muted); font-weight: inherit; }
 .tx-tool-kids { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--tx-edge); }
 .tx-tool-in, .tx-tool-out {

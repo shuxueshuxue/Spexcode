@@ -3,7 +3,7 @@ import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { renderToString } from 'react-dom/server'
 import { createElement } from 'react'
-import { LiveTail, Quote, TranscriptUi, TranscriptView, alreadySaid, parseEnvelope, spexEnvelope, type EnvelopeParser, currentTurn, defaultLabels, defaultVocabulary, extendVocabulary, liveSlice, runKinds, segments, splitTarget, toolTarget, toolVerb, useTranscriptFrames, type AnyTurn } from './index.js'
+import { LiveTail, Quote, TranscriptUi, TranscriptView, alreadySaid, parseEnvelope, prettyInput, spexEnvelope, toolName, type EnvelopeParser, currentTurn, defaultLabels, defaultVocabulary, extendVocabulary, liveSlice, runKinds, segments, splitTarget, toolTarget, toolVerb, useTranscriptFrames, type AnyTurn } from './index.js'
 
 const tool = (id: string, name: string, input: unknown, output?: string | null, outputLines = 0) =>
   ({ id, name, input: JSON.stringify(input), ...(output === undefined ? {} : { output }), outputLines, outputBytes: output ? output.length : 0 }) as AnyTurn extends { tools?: readonly (infer T)[] } ? T : never
@@ -135,6 +135,18 @@ test("fold: 'runs' keeps every working message on the page and folds only the to
   assert.match(runs, /Now the styles/)
   assert.match(runs, /3 tool uses/, 'a run of three inside one turn still folds to a row')
   assert.match(runs, /tx-tool-verb">Read</, 'a lone call stays a sentence')
+})
+
+test('an MCP call names its server apart from its tool, and opened arguments read one field per line', () => {
+  assert.deepEqual(toolName('mcp__gugu-im__message_reply'), { tool: 'message_reply', server: 'gugu-im' })
+  assert.deepEqual(toolName('Bash'), { tool: 'Bash', server: null })
+  assert.equal(toolVerb('mcp__gugu-im__message_reply'), 'message_reply', 'unnamed: the tool half, never the mangled id')
+  assert.equal(toolVerb('mcp__gugu-im__message_reply', extendVocabulary(defaultVocabulary, { verbs: { message_reply: 'Replied' } })), 'Replied', 'the bare tool name is a vocabulary key')
+  assert.equal(prettyInput(JSON.stringify({ chat: '202016', text: 'hi' })), '{\n  "chat": "202016",\n  "text": "hi"\n}')
+  assert.equal(prettyInput('print(1)\nprint(2)'), 'print(1)\nprint(2)')
+  const html = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [tool('m1', 'mcp__gugu-im__message_reply', { chat: '202016' }, 'ok', 1)])] } }))
+  assert.match(html, /tx-tool-server">gugu-im</)
+  assert.match(html, /tx-tool-verb">message_reply</)
 })
 
 test('Quote clamps a long text and names the peer', () => {

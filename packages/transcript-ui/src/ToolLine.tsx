@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranscriptUi, type ToolOutputResult } from './context.js'
 import { Caret, Spinner } from './icons.js'
 import { isRunning } from './segments.js'
-import { runKinds, splitTarget, toolTarget, toolVerb, type AnyTool } from './vocabulary.js'
+import { prettyInput, runKinds, splitTarget, toolName, toolTarget, toolVerb, type AnyTool } from './vocabulary.js'
 
 // A LIVE FRAME WITHHOLDS OUTPUT BODIES: a recorded result is `null` on the wire, its size told, and the body
 // is fetched once when a person opens the call, through the host's loader.
@@ -35,9 +35,11 @@ export function ToolLine({ tool, open, onToggle, live = false }: { tool: AnyTool
   const canOpen = !!tool.input || tool.output !== undefined || withheld
   const running = isRunning(tool, live)
   const outcome = tool.outcome
+  const { server } = toolName(tool.name)
   const row = (
     <>
       <span className="tx-tool-verb">{toolVerb(tool.name, vocabulary)}</span>
+      {server && <span className="tx-tool-server">{server}</span>}
       {lead && <span className="tx-tool-target">{lead}</span>}
       {trail && <span className="tx-tool-trail">{trail}</span>}
       {lines > 0 && <span className="tx-tool-size">{labels.lines(lines)}</span>}
@@ -52,7 +54,7 @@ export function ToolLine({ tool, open, onToggle, live = false }: { tool: AnyTool
         ? <button type="button" onClick={onToggle} aria-expanded={open} className="tx-tool-row is-openable">{row}</button>
         : <div className="tx-tool-row">{row}</div>}
       {open && canOpen && <>
-        {tool.input && <pre className="tx-tool-in">{tool.input}</pre>}
+        {tool.input && <pre className="tx-tool-in">{prettyInput(tool.input)}</pre>}
         {withheld
           ? <WithheldOutput tool={tool} />
           : tool.output !== undefined && <pre className="tx-tool-out">{tool.output}</pre>}

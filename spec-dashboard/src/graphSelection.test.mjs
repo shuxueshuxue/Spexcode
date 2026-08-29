@@ -13,6 +13,11 @@ test('graph has no transient marquee selection toolbar or dispatch state', () =>
   assert.doesNotMatch(spec, /real \*\*marquee selection\*\*/)
 })
 
+test('primary-pointer drag pans the camera without making nodes draggable', () => {
+  assert.match(graph, /panOnDrag=\{true\}/)
+  assert.match(graph, /nodesDraggable=\{false\}/)
+})
+
 test('focus camera keeps zoom, roots use reading pairs, and non-root tiles use pane centre', () => {
   assert.match(data, /const anchorZoom = fit && !currentFits && fitZoom >= minZoom \? fitZoom : zoom/)
   assert.match(data, /const desiredY = height \/ 2 - focus\.y \* anchorZoom/)

@@ -612,7 +612,7 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
-          panOnDrag={[1, 2]}
+          panOnDrag={true}
           onMoveEnd={(event, viewport) => {
             const previous = viewportRef.current
             const changed = !previous

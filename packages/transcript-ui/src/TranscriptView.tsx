@@ -23,14 +23,17 @@ export function WorkSegmentView({ segment, openIds, onToggle, live }: { segment:
   const open = openIds.has(id)
   const kinds = runKinds(segment.work.flatMap((turn): readonly AnyTool[] => turn.tools ?? []), vocabulary)
   const foldedCalls = segment.work.reduce((n, turn) => n + (turn.tools?.length || 0), 0)
+  // a fold must not hide a failure: the row counts the calls whose harness recorded one
+  const failedCalls = segment.work.reduce((n, turn) => n + (turn.tools?.filter((tool) => tool.outcome).length || 0), 0)
   // history folds its runs; the work in progress (a live segment's calls after its newest prose) does not
   const history = !segment.now || !!segment.answer
   return <>
     {segment.folded ? (
-      <div className="tx-work">
+      <div className={`tx-work${failedCalls ? ' is-failed' : ''}`}>
         <button type="button" className="tx-work-row" aria-expanded={open} onClick={() => onToggle(id)}>
           <span className="tx-work-lead">{labels.toolUses(foldedCalls)}</span>
           {kinds && <span className="tx-work-detail">{kinds}</span>}
+          {failedCalls > 0 && <span className="tx-tool-outcome is-failed">{labels.failedCount(failedCalls)}</span>}
           <Caret open={open} className="tx-work-caret" />
         </button>
         {open && <div className="tx-work-body">

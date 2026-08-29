@@ -34,6 +34,13 @@ holds a running call is marked so its fold can say it. A closed interval never s
 ended before a result was written is history, not something still happening, so the same payload read as
 history draws the same call as a plain sentence.
 
+**A failure wears the word; success stays silent.** A call whose `outcome` the reader carries
+([[transcript-reader]]) ends its sentence with `failed` (or `rejected`, for the call the person refused) from
+`labels`, in the same caption register as the running word, and its verb takes the error colour; there is still no
+success mark, because the past-tense verb is the whole claim and a mark on every line would say nothing. A folded
+run counts its failures on the fold row (`labels.failedCount`) so a failure is never hidden behind "12 tool uses".
+The word comes from the transcript's own field, never from the output prose.
+
 **An expanded call shows both sides of the record.** Its original `input` is rendered alongside the recorded
 output, so parameters remain inspectable even when a live call has no result yet. A withheld live result still
 fetches its body on demand; the input never waits for that fetch.

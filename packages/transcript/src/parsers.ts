@@ -43,11 +43,13 @@ const compact = (value: unknown): string => {
 }
 const lineCount = (value: string): number => value ? value.split(/\r?\n/).length : 0
 
-export type MutableTool = { id: string; name: string; input?: string; output?: string; outputLines: number; outputBytes: number }
+export type MutableTool = { id: string; name: string; input?: string; output?: string; outputLines: number; outputBytes: number; outcome?: ToolOutcome }
 export type MutableTurn = { id: string | null; at: number; role: 'user' | 'assistant'; text?: string; tools: MutableTool[] }
 // One native record, normalized: a turn, or a batch of tool results addressed to earlier calls. `at: null`
 // marks a record that carries no clock — it counts as seen, never as inside an interval.
-export type ParsedEvent = { at: number | null; turn: MutableTurn | null; toolOutputs?: readonly { id: string; text: string }[] }
+export type ToolOutcome = 'failed' | 'rejected'
+// A result carries `outcome` only when its native record has a structured failure field — see TranscriptTool.
+export type ParsedEvent = { at: number | null; turn: MutableTurn | null; toolOutputs?: readonly { id: string; text: string; outcome?: ToolOutcome }[] }
 export type Parse = (value: unknown) => ParsedEvent | null
 
 
@@ -79,7 +81,7 @@ export function claudeEvent(value: unknown): ParsedEvent | null {
     const outputs = blocks.flatMap((block) => {
       const b = object(block)
       const id = string(b?.tool_use_id)
-      return b?.type === 'tool_result' && id ? [{ id, text: compact(b?.content ?? '') }] : []
+      return b?.type === 'tool_result' && id ? [{ id, text: compact(b?.content ?? ''), ...(b?.is_error === true ? { outcome: 'failed' as const } : {}) }] : []
     })
     if (outputs.length) return { at: eventAt, turn: null, toolOutputs: outputs }
     if (text) return { at: eventAt, turn: { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'user', text, tools: [] } }
@@ -190,9 +192,14 @@ export function codexAppServerEvent(value: unknown): ParsedEvent | null {
   else if (type === 'functionCall' || type === 'customToolCall') output = item.output ?? item.result
   else if (type === 'mcpToolCall') output = item.result ?? item.error
   else if (type === 'dynamicToolCall') output = item.contentItems ?? item.output ?? item.error
-  return output === undefined || output === null
-    ? { at: eventAt, turn: null }
-    : { at: eventAt, turn: null, toolOutputs: [{ id, text: compact(output) }] }
+  // the item status is the app-server's own verdict: `failed`, or `declined` when the person refused the call —
+  // a declined call has no output, so the empty result is what ends its "running"
+  const status = string(item.status)
+  const outcome: ToolOutcome | undefined = status === 'failed' ? 'failed' : status === 'declined' ? 'rejected' : undefined
+  if (output === undefined || output === null) {
+    return outcome ? { at: eventAt, turn: null, toolOutputs: [{ id, text: '', outcome }] } : { at: eventAt, turn: null }
+  }
+  return { at: eventAt, turn: null, toolOutputs: [{ id, text: compact(output), ...(outcome ? { outcome } : {}) }] }
 }
 
 // Agent-message deltas are fragments of one native item. The closure remembers only that item's text and
@@ -250,7 +257,7 @@ export function piEvent(value: unknown): ParsedEvent | null {
   }
   if (message.role === 'toolResult') {
     const id = string(message.toolCallId)
-    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? '') }] } : null
+    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? ''), ...(message.isError === true ? { outcome: 'failed' as const } : {}) }] } : null
   }
   return null
 }
@@ -282,7 +289,7 @@ export function geminiEvent(value: unknown): ParsedEvent | null {
     for (const callValue of items(message.toolCalls)) {
       const call = object(callValue)
       const id = string(call?.id) ?? `tool-${turn.tools.length}`
-      turn.tools.push({ id, name: string(call?.name) ?? 'tool', input: call?.args === undefined ? undefined : compact(call.args), outputLines: 0, outputBytes: 0 })
+      turn.tools.push({ id, name: string(call?.name) ?? 'tool', input: call?.args === undefined ? undefined : compact(call.args), outputLines: 0, outputBytes: 0, ...(call?.status === 'error' ? { outcome: 'failed' as const } : {}) })
     }
     if (!turn.text && !turn.tools.length) return null
     return { at: eventAt, turn }
@@ -302,7 +309,7 @@ export function openclawEvent(value: unknown): ParsedEvent | null {
   }
   if (message.role === 'toolResult') {
     const id = string(message.toolCallId)
-    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? '') }] } : null
+    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? ''), ...(message.isError === true ? { outcome: 'failed' as const } : {}) }] } : null
   }
   if (message.role === 'assistant') {
     const turn: MutableTurn = { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'assistant', tools: [] }
@@ -376,6 +383,7 @@ export function opencodeEvents(value: unknown): ParsedEvent[] {
           tool.output = output.slice(0, MAX_OUTPUT_BYTES)
           tool.outputBytes = Buffer.byteLength(output)
           tool.outputLines = lineCount(output)
+          if (status === 'error') tool.outcome = 'failed'
         }
         turn.tools.push(tool)
       }
@@ -422,6 +430,7 @@ export class IntervalCollector {
         tool.outputBytes += bytes
         tool.outputLines += lineCount(output.text)
         if (tool.output === undefined) tool.output = ''
+        if (output.outcome) tool.outcome = output.outcome
         const remaining = Math.max(0, MAX_OUTPUT_BYTES - Buffer.byteLength(tool.output))
         tool.output += output.text.slice(0, remaining)
         if (bytes > remaining) this.omittedBytes += bytes - remaining

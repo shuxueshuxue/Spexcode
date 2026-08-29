@@ -150,11 +150,16 @@ Symmetrically, every reader takes a root, because every locator already did — 
 it, so a second root for any file harness could not be asked for at all. Passing nothing keeps the locator's
 own default evaluated per call, so a late environment change is still picked up.
 
-**A transcript that exists but is empty is a thread that has not spoken yet.** A harness creates the file
-before it writes its first record, so the seconds right after a session starts read as zero bytes — exactly
-when someone is watching. That is an empty read, not a failure: the turns are none, nothing is truncated, and
-the revision still moves the moment the first line lands. Zero bytes is unambiguous in a way a garbled file is
-not, so it is the one place the no-timestamp gate is skipped rather than tripped.
+**A thread that has not spoken yet is not a broken one.** A harness creates the file before it writes its
+first record and then opens with bookkeeping: every Claude transcript begins with clockless `mode`,
+`permission-mode` and `file-history-snapshot` lines before its first message — 40 of 40 real threads on this
+box. So the first moments of every new session are zero bytes, then lines this parser does not recognize at
+all. Both read as an empty transcript: no turns, nothing truncated, and the revision still moves the instant
+the first message lands. The clock gate is about the HARNESS, not the moment — it fires when a record this
+parser DID recognize carries no usable time, because that is what makes interval reads impossible; a file in
+which nothing is JSON at all is still loud, since that is not this thread's transcript. Failing on the opening
+instead put an error frame on the page for exactly the seconds someone watches a new task, and for exactly the
+window a spawn probe samples.
 
 **One unreadable line is omitted payload, not an unreadable transcript.** A native log is written by another
 process and can carry a line that is not JSON — a record torn off by a crash, something appended by hand. Its

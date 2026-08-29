@@ -17,6 +17,7 @@ related:
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
+  - spec-dashboard/test/seam-fold-motion.e2e.mjs
 ---
 
 # conversation
@@ -122,7 +123,18 @@ exactly those three:
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
   is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep; the tail seam of a dead session says `working` — the
-  record's last word — with no duration invented for a stretch nothing closed.
+  record's last word — with no duration invented for a stretch nothing closed. A STRETCH CLOSES BY FOLDING,
+  NOT BY BLINKING: when a message lands on a working agent — the person's, or the agent's own note — the
+  stretch it closes stops streaming, and the live tail that was under `working · 4m 12s` travels the height
+  down into the `worked 4m 12s` line it becomes. It is the same movement the work inside a transcript folds
+  with ([[transcript-view]]'s fold wrapper, over the same duration every foldable panel in this frame folds
+  with), because a reader crossing from the outer conversation into a seam should not meet a second idea of
+  what folding looks like. What makes it visible is that the outgoing tail outlives the stream that fed it:
+  the payload belongs to the seam that is streaming, and the seam on the other side of the message takes
+  that stream over at once, so the tail is held with the words it was last drawn from for exactly one fold
+  and no longer — nothing the movement mounts is still standing under a row that has closed. The row rises
+  as it changes what it says, since a green count-up has become a settled duration. Under
+  `prefers-reduced-motion: reduce` the stretch arrives at its row in one frame, as it always did.
 - An EVENT is `error` or `corrupt`: one line in the content column — timestamp, glyph, word, note — with no
   duration, because it happened rather than lasted.
 

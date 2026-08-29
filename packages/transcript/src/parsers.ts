@@ -481,6 +481,7 @@ export class IntervalCollector {
   private readonly evicted = new Set<string>()
   private readonly synthesized = new Map<string, number>()   // `<role>@<at>` → how many turns already wore it
   sawTimestamp = false
+  sawRecord = false          // a record this harness's parser RECOGNIZED arrived, with or without a clock
   omittedTurns = 0
   omittedBytes = 0
   outOfOrderEvents = 0
@@ -493,6 +494,7 @@ export class IntervalCollector {
 
   // returns true once the source has moved past `to` (the caller may then bound its lookahead)
   add(event: ParsedEvent): boolean {
+    this.sawRecord = true
     const eventAt = event.at
     if (eventAt === null) return this.pastRange
     this.sawTimestamp = true
@@ -551,7 +553,13 @@ export class IntervalCollector {
   }
 
   finish(revision: string, harness: string): TranscriptRead {
-    if (!this.sawTimestamp) throw new TranscriptReadError('invalid', `${harness} transcript has no reliable timestamps; interval reads are unavailable`)
+    // THE CLOCK GATE IS ABOUT THE HARNESS, NOT THE MOMENT. It catches a source whose conversational records
+    // carry no usable time, which makes interval reads impossible. It must NOT catch a thread that has simply
+    // not spoken yet: every Claude transcript opens with clockless bookkeeping (`mode`, `permission-mode`,
+    // `file-history-snapshot`) before its first message — 40 of 40 real threads on this box — and those lines
+    // are not records this parser recognizes at all, so failing on them put an error frame on the page for the
+    // first moments of EVERY new session, which is exactly when someone is watching.
+    if (this.sawRecord && !this.sawTimestamp) throw new TranscriptReadError('invalid', `${harness} transcript has no reliable timestamps; interval reads are unavailable`)
     return {
       revision,
       from: this.range.from,

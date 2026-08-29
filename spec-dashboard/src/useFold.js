@@ -40,3 +40,28 @@ export function useFold(open, ms = DOCK_FOLD_MS) {
   }, [open, ms])
   return [open || closing, closing, opening]
 }
+
+// → `{ key, value }` for the thing the current `key` replaced, held for exactly one fold, else null.
+//
+// `useFold` above holds a MOUNT: what folds away is still in the tree, only hidden, so keeping it rendered
+// is enough. The conversation's live tail is not. When the person's message closes a working stretch, the
+// stretch on the other side of it takes over the stream and the payload the outgoing tail was drawing is
+// replaced with the new one's — so what has to outlive the change is the CONTENT, and the caller draws the
+// collapse from what this hands back. It is also why this is a value and not three hooks: the seams are a
+// list, and a hook cannot be called once per row of a list.
+//
+// The transition is read during the render that changes `key`, never from an effect: an effect runs after
+// paint, so the reader would see the tail already gone and then watch it fold. `value` is read at that same
+// moment, while it still belongs to the outgoing key. And the held value can never outlive its timer — one
+// that survived would leave a second tail standing under a row that has already closed.
+export function useFoldOut(key, value, ms = DOCK_FOLD_MS) {
+  const [out, setOut] = useState(null)
+  const [was, setWas] = useState(key)
+  if (was !== key) { setWas(key); setOut(was == null ? null : { key: was, value }) }
+  useEffect(() => {
+    if (!out) return undefined
+    const timer = setTimeout(() => setOut(null), ms)
+    return () => clearTimeout(timer)
+  }, [out, ms])
+  return out
+}

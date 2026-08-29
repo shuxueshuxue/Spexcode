@@ -10,6 +10,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
+import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
@@ -389,6 +390,14 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (tailForRef.current !== streamFrom) { tailForRef.current = streamFrom; setTail(null) }
     return subscribeSessionTranscript(s.id, streamFrom, setTail)
   }, [s.id, streamFrom])
+  // THE TAIL TRAVELS TO ITS ROW. A message — the person's, or the agent's own note — closes the stretch it
+  // lands in, and the seam that was `working · 4m 12s` with its tail underneath becomes one `worked 4m 12s`
+  // line. That used to happen in a single frame: the payload belongs to the seam that is streaming, so the
+  // instant the next seam took the stream over, the tail it replaced was simply not drawn. The fold is now
+  // the same movement the transcript's own work folds with ([[transcript-view]]'s `.tx-fold`), and this is
+  // the half that makes it visible — the outgoing seam's tail is held, with the props it was drawn from, for
+  // exactly one panel fold and no longer.
+  const foldingTail = useFoldOut(streamFrom, { turns: tail?.turns, revision: tail?.revision })
   // ONE FIRST PAINT. The record and the open seam's stream arrive on two clocks — the timeline read lands,
   // then a few hundred milliseconds later the first frame — and painting the rows first put the tail in a
   // second paint that pushed the page. The first paint of a session waits for its tail (bounded, 600ms);
@@ -688,6 +697,8 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       const expanded = expandedSeams.has(seamId)
       const ticking = item.open && footerState === 'live'
       const streamed = item.open && item.from === streamFrom
+      // the stretch this message just closed, for as long as its tail is still on its way down
+      const collapsing = !!foldingTail && item.from === foldingTail.key
       // the streaming seam reads its payload from the stream; every other seam from its interval read
       const transcript = streamed
         ? (tail === null ? { state: 'loading' } : tail.error ? { state: 'error', error: tail.error } : { state: 'ready', data: tail })
@@ -700,7 +711,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       rows.push(
         <div className="m-ev m-ev-seam" key={i}>
           <div className="m-gut" />
-          <div className="m-seam">
+          <div className={`m-seam${collapsing ? ' is-folding' : ''}`}>
             <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
               <span className="m-seam-lead">{lead}</span>
               {transcript?.state === 'ready' && (
@@ -718,8 +729,16 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
                 </div>
               )}
               {/* THE LIVE TAIL: the open seam's collapsed face — the current turn, in the conversation's own
-                  grammar, from the same streamed payload the expanded seam shows in full */}
-              {streamed && !expanded && <LiveTail key={seamId} turns={tail?.turns} revision={tail?.revision} lastSaid={lastSaid} />}
+                  grammar, from the same streamed payload the expanded seam shows in full. It folds away
+                  inside the transcript package's own fold wrapper, so the close travels the height between
+                  the tail and the row instead of dropping it; `tx` is on the wrapper because that class is
+                  where the package keeps the duration this movement reads. */}
+              {(streamed || collapsing) && !expanded && (
+                <div className={`tx tx-fold${collapsing ? ' is-closing' : ''}`}>
+                  <LiveTail key={seamId} lastSaid={lastSaid}
+                    {...(collapsing ? foldingTail.value : { turns: tail?.turns, revision: tail?.revision })} />
+                </div>
+              )}
             </DashboardTranscriptUi>
           </div>
         </div>,

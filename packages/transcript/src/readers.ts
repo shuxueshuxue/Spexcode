@@ -182,15 +182,19 @@ class LineFileCursor {
     let fd: number | null = null
     try {
       fd = openSync(this.path, 'r')
-      let postRangeLines = 0
+      let postRangeLines = 0, parsedLines = 0, unparsableLines = 0
       this.scan = scanLines(fd, this.scan, (value, offset) => {
+        parsedLines++
         const event = this.parse(value)
         if (!event) return false
         const inRange = event.at !== null && event.at >= this.from && event.at <= to
         if (inRange && !intervalOffsets.has(this.seekKey)) intervalOffsets.set(this.seekKey, offset)
         const pastRange = this.collector.add(event)
         return pastRange && ++postRangeLines >= lookahead
-      }, (bytes) => { this.collector.omittedBytes += bytes })
+      }, (bytes) => { unparsableLines++; this.collector.omittedBytes += bytes })
+      // a file in which NOTHING is JSON is not this thread's transcript at all — that is the loud case, and it
+      // stays loud; a file whose lines parse but say nothing conversational yet is simply not started
+      if (!parsedLines && unparsableLines > 0) throw new TranscriptReadError('invalid', `${this.harness} transcript cannot be parsed: no line is JSON`)
     } catch (error) {
       if (error instanceof TranscriptReadError) throw error
       throw new TranscriptReadError('unreadable', `${this.harness} transcript could not be read: ${error instanceof Error ? error.message : String(error)}`)

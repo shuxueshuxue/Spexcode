@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-forge",
-  "version": "0.7.0-next.11",
+  "version": "0.7.0-next.12",
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
@@ -22,7 +22,7 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/spec-core": "0.7.0-next.11"
+    "@spexcode/spec-core": "0.7.0-next.12"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

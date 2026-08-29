@@ -115,6 +115,14 @@ box, every one of them. A reader that keeps only turns with something in them th
 turns a person is looking for, and the page shows a silent gap where a timeout or an interrupt happened. The
 turn is emitted with its outcome and, when the producer wrote one, its own words for it.
 
+**The app-server's tool calls are the variants its own union declares.** Its `ThreadItem` union is the
+authority on what a call is, and reading a variant list off the rollout's record types instead put two names in
+the set (`functionCall`, `customToolCall`) that the app-server never emits, while leaving out `fileChange` — so
+a Codex file edit arrived as no call at all. Each variant also keeps its result in its own field: a command's
+`aggregatedOutput`, a dynamic call's `contentItems`, a file change's per-path `diff`, and an MCP call's
+`result.content` — that last one is a wrapper (`{content, structuredContent, _meta}`), and handing the wrapper
+to the block reader printed the envelope rather than what the tool said.
+
 **One unreadable line is omitted payload, not an unreadable transcript.** A native log is written by another
 process and can carry a line that is not JSON — a record torn off by a crash, something appended by hand. Its
 bytes are counted as omitted and the read reports `truncated`, exactly as it does for a result past the cap;

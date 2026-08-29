@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/transcript",
-  "version": "0.7.0-next.7",
+  "version": "0.7.0-next.8",
   "type": "module",
   "description": "Normalized agent transcripts: one parser per harness, a bounded interval reader over a native thread file or an in-memory event stream, and the full/delta frame protocol every transport and renderer share.",
   "files": [

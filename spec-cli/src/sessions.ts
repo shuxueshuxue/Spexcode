@@ -21,7 +21,7 @@ import { withDeliveryLocks } from './delivery-lock.js'
 import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
-import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
+import { assertSessionOwnerSafe, assertSessionStopSafe, collectResourceReport, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
@@ -4513,6 +4513,24 @@ async function assertUnboundCloseSafe(id: string, rec: SessRec): Promise<void> {
     throw new ResourceConflict(`refusing to close unbound session ${id}: ${leaf.state === 'unknown' ? leaf.reason : 'target leaf identity is live or ambiguous'}`)
 }
 
+// Close has already completed its destructive boundary here. The sweep is advisory evidence only: detached
+// descendants can outlive the exact leaf teardown, so surface them without inventing a second cleanup authority.
+async function reportCloseResidue(id: string, worktreePath: string): Promise<void> {
+  try {
+    const report = await collectResourceReport({ persist: false })
+    const owners = report.owners.filter((owner) => owner.processes.length > 0
+      && ((owner.kind === 'session' || owner.kind === 'orphan') && owner.id === id))
+    if (!owners.length) return
+    console.warn(`spex: close ${id} completed, but detached process residue remains:`)
+    for (const owner of owners) for (const process of owner.processes) {
+      console.warn(`  pid=${process.pid} start=${process.startToken} command=${process.command || 'unknown'} worktree=${worktreePath}`)
+    }
+    console.warn('  inspect these PIDs and handle them through their owning harness/runtime; close does not kill detached descendants.')
+  } catch (error) {
+    console.warn(`spex: close ${id} completed, but the residual-process scan failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, _source: CloseSource, unboundStopped = false): Promise<boolean> {
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
@@ -4559,6 +4577,7 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   }
   if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
   requestQueueDrain()   // a close frees a slot — start the next queued session if any
+  await reportCloseResidue(id, wt.rec.worktreePath)
   return true
 }
 async function closeSessionUnlocked(id: string, source: CloseSource): Promise<boolean> {

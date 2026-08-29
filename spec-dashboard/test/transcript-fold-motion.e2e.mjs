@@ -55,11 +55,15 @@ const after = [...working,
 
 const { chromium } = await import(pathToFileURL(PW).href)
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true, args: ['--no-sandbox'] })
+// the behaviour under measurement is a MOVEMENT, so the run records itself: the whole-session video is the
+// evidence a still cannot carry, and the height trace below is its numeric half
 const context = await browser.newContext({
   viewport: { width: 1100, height: 900 }, deviceScaleFactor: 2,
   reducedMotion: REDUCED ? 'reduce' : 'no-preference',
+  recordVideo: { dir: `${OUT}/video-${TAG}`, size: { width: 1100, height: 900 } },
 })
 const facts = { tag: TAG, reduced: REDUCED }
+let video = null
 try {
   await context.addInitScript(() => {
     localStorage.setItem('spexcode.session-surface.v1.root', JSON.stringify({ defaultSurface: 'conversation', sessions: {} }))
@@ -162,4 +166,9 @@ try {
   }
   if (REDUCED) assert.equal(facts.foldSteps, 2, `reduced motion keeps the fold instantaneous, saw ${facts.foldSteps} heights`)
   console.log(`PASS ${TAG}${REDUCED ? ' (reduced motion)' : ''}`)
-} finally { await browser.close() }
+  video = await page.video()?.path()
+} finally {
+  await context.close()      // the recording is written out when its context closes, not when the browser does
+  await browser.close()
+  if (video) console.log(`[${TAG}] video: ${video}`)
+}

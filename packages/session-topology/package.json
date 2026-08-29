@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/session-topology",
-  "version": "0.7.0-next.9",
+  "version": "0.7.0-next.10",
   "publishConfig": { "access": "public" },
   "type": "module",
   "description": "A neutral SQLite relation model for session addresses.",
@@ -15,7 +15,7 @@
     "prepublishOnly": "node ../../scripts/release-publish.mjs --from-package-publish",
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
   },
-  "dependencies": { "@spexcode/session-protocol": "0.7.0-next.9" },
+  "dependencies": { "@spexcode/session-protocol": "0.7.0-next.10" },
   "devDependencies": {
     "@types/node": "^20.16.0",
     "tsx": "^4.19.2",

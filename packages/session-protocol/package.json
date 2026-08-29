@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/session-protocol",
-  "version": "0.7.0-next.12",
+  "version": "0.7.0-next.13",
   "type": "module",
   "description": "A durable SQLite session message protocol.",
   "files": [

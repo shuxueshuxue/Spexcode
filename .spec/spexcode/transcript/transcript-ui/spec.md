@@ -50,6 +50,17 @@ restating the outer binding.
 a socket — to the protocol's own `mergeTranscriptFrame` and returns one complete payload; a host writes no
 merging code and cannot drift from the producer.
 
+**Width comes from the host, and a child cannot fix an ancestor.** Every element this package draws carries
+`min-width: 0`, wraps its prose, and bounds a result body to a scrollable well — so on its own it never
+produces a horizontal scrollbar, measured at a narrow width against the published stylesheet. But that holds
+only while the element it is mounted into can shrink. A flex or grid item defaults to `min-width: auto`, which
+sizes it from its content's minimum, so ONE ancestor between the mount point and the scroll container without
+`min-width: 0` lets a long command line push the whole surface wide, and nothing inside can prevent it. This is
+the one integration fact the package cannot defend itself against and cannot reproduce in its own tests, so it
+is stated here: the mount point and every flex/grid ancestor above it must be allowed to shrink. When a host
+sees a horizontal scrollbar, the element to find is the first ancestor whose `scrollWidth` exceeds its
+`clientWidth`; if that element's class does not start with `tx-`, the fix is above this package.
+
 **One stylesheet, tokens with a fallback chain.** `styles.css` is the whole visual grammar under a `.tx-`
 prefix. Every colour, face, size and space is a `--tx-*` token that falls back to the same-named bare token
 a host may already define (`--ink`, `--mono`, `--type-prose`, …) and then to a dark default: a host that

@@ -135,6 +135,18 @@ test('a result is drawn as text: the colour a program printed is dropped from th
   assert.doesNotMatch(html, /tx-tool-cut/)
 })
 
+test('a fold row never stands for calls it does not hide: a run whose calls sit on its answer stays open', () => {
+  const call = (id: string) => tool(id, 'Bash', { command: 'x' }, 'ok', 1)
+  // three calls, all on the turn that speaks — folding would hide only the silent prose turns before it
+  const onAnswer = [turn('a1', 'assistant', undefined, []), turn('a2', 'assistant', 'done', [call('t1'), call('t2'), call('t3')])]
+  const html = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: onAnswer } }))
+  assert.doesNotMatch(html, /tx-work-row/)
+  assert.doesNotMatch(html, /0 tool uses/)
+  // the same three calls in the work before the answer are what a fold is for
+  const inWork = [turn('a1', 'assistant', undefined, [call('t1'), call('t2'), call('t3')]), turn('a2', 'assistant', 'done')]
+  assert.match(renderToStaticMarkup(createElement(TranscriptView, { data: { turns: inWork } })), /tx-work-lead">3 tool uses</)
+})
+
 test('a quoted turn is read through the envelope rows: the SpexCode footer by default, a host row beside it', () => {
   const footer = 'peer reply\n\n— from session "gugu-leader" (a789e37c) on machine m1. To reply: spex session send --ssh x a789e37c "<your reply>"'
   assert.deepEqual(spexEnvelope(footer), { who: 'gugu-leader', id: 'a789e37c', body: 'peer reply' })

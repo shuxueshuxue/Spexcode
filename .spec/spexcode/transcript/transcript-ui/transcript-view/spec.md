@@ -82,6 +82,13 @@ twice. They fold the moment the agent speaks — the prose that follows makes th
 turns are ONE list of calls: the harness draws a turn boundary around every call it makes, and that boundary is
 not a paragraph break, so seven calls in seven turns sit at the same list spacing as seven calls in one.
 
+**A fold decides on exactly what it will hide.** The row stands for the calls inside the folded process, so
+the threshold counts those same calls — not the segment's total, which includes the answer turn the fold leaves
+on the page. Counting the total let a run whose calls all sat on its answer fold anyway, and the row then read
+`0 tool uses` over prose: a control naming something it did not stand for, and the same defect as any two
+counters that disagree. A segment whose process hides no calls stays open; its prose is the only thing there,
+and prose is what the reader came for.
+
 **A user turn is a boundary, and whether it is also drawn is the host's call** (`userTurns`). In SpexCode every
 message is already a row on the record ([[conversation-items]]) — the launch prompt, each `spex session send`,
 each peer reply — so a user turn inside a seam's transcript is only a boundary: it marks where a stretch of the

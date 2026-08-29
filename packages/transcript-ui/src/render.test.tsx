@@ -84,6 +84,21 @@ test('LiveTail shows the current turn, elides prose the record already said, mar
   assert.doesNotMatch(html, /is-speaking/, 'a call after the prose ends the caret')
 })
 
+test('a failed or rejected call wears the word, a fold counts its failures, success stays silent', () => {
+  const failed = { ...tool('f1', 'Bash', { command: 'x' }, 'boom', 1), outcome: 'failed' as const }
+  const rejected = { ...tool('f2', 'Bash', { command: 'rm' }, ''), outcome: 'rejected' as const }
+  const fine = tool('f3', 'Read', { file_path: '/a.ts' }, 'ok', 1)
+  const html = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [failed, rejected])] } }))
+  assert.match(html, /tx-tool is-failed/)
+  assert.match(html, /tx-tool-outcome is-failed">failed</)
+  assert.match(html, /tx-tool-outcome is-rejected">rejected</)
+  const clean = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [fine])] } }))
+  assert.doesNotMatch(clean, /tx-tool-outcome/)
+  const folded = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [failed, fine, fine, fine]), turn('a2', 'assistant', 'done')] } }))
+  assert.match(folded, /4 tool uses/)
+  assert.match(folded, /tx-tool-outcome is-failed">1 failed</)
+})
+
 test('Quote clamps a long text and names the peer', () => {
   const html = renderToStaticMarkup(createElement(Quote, { who: 'peer', ts: 0, text: 'x'.repeat(800) }))
   assert.match(html, /tx-quote is-clamped/)

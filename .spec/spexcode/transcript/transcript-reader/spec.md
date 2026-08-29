@@ -63,6 +63,16 @@ no `output` field at all — that absence is what a live surface reads as "still
 a line reader scans a fixed lookahead window for timestamp disorder before stopping, so a cold tail stays
 bounded.
 
+**How a call ended is the harness's verdict, not the reader's reading.** A call carries `outcome: failed` or
+`outcome: rejected` only when the native record says so in a structured field — Claude's `tool_result.is_error`,
+pi's and OpenClaw's `toolResult.isError`, OpenCode's `state.status: error`, Gemini's call `status: error`, and
+the Codex app-server item status (`failed`; `declined` is `rejected`, the call the person refused, which never ran
+and so ends with an empty result rather than reading as running forever). Absent means the harness recorded no
+such signal — a Codex rollout carries none, and Hermes writes nothing — never "succeeded". The reader does not
+sniff the output prose for the words "error" or "denied": that is the adapter seam where every independent Claude
+adapter has silently dropped the field, and a text guess would be wrong in both directions. A renderer therefore
+has one honest signal to show ([[transcript-view]]), and a fold cannot hide a failure behind a count.
+
 **An open interval re-reads cheaply.** A native file is append-only, so the byte where an interval's first
 event sits never moves; the reader remembers that offset per (file, `from`) and a one-shot read of the same
 interval starts there, while the tail cursor goes further and parses only the bytes appended since its last

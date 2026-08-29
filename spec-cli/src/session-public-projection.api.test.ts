@@ -172,7 +172,9 @@ test('all public record APIs share pending projection and malformed fail-closed 
       proposal: 'nothing',
       note: 'archive note '.repeat(2_000),
       stopped: true,
-      archived: true,
+      // Exercise the repaired projection boundary: a published close is authoritative even if
+      // an older envelope still carries the stale false archive bit.
+      archived: false,
       closed_at: '2026-08-22T10:20:30.000Z',
       cold_proof: `cold-v1|claude|${archivedId}|no-resident-ref`,
     })
@@ -246,11 +248,13 @@ test('all public record APIs share pending projection and malformed fail-closed 
     assert.equal(archiveIndex.some((row) => row.id === archivedId), true, 'archive index includes the archived record')
     assert.equal(fullBody.includes('archive note '), true, 'full session list carries the detailed note used for the before measurement')
     const archivedRow = rows.find((row) => row.id === archivedId)
-    assert.equal(archivedRow?.status, 'retired', 'closed records use the terminal retired status')
+    assert.equal(archivedRow?.status, 'offline', 'closed records retain the offline display status')
     assert.equal(archivedRow?.lifecycle, 'archived', 'closed records settle the canonical lifecycle')
     assert.equal(archivedRow?.proposal, null, 'closed records no longer expose a pre-close proposal')
+    assert.equal(archivedRow?.archived, true, 'closed records keep the durable archive bit in public projections')
     const archivedDetail = await (await fetch(`${base}/api/sessions/${archivedId}`)).json() as any
-    assert.equal(archivedDetail.status, 'retired', 'id-addressed closed records use the same terminal status')
+    assert.equal(archivedDetail.status, 'offline', 'id-addressed closed records retain the offline display status')
+    assert.equal(archivedDetail.archived, true, 'id-addressed closed records keep the durable archive bit')
     assert.equal((await (await fetch(`${base}/api/sessions`)).json()).some((row: any) => row.id === archivedId), false,
       'closed records remain hidden from the working session projection')
     const graph = await graphResponse.json() as { sessions: any[] }

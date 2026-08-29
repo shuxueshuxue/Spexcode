@@ -10,7 +10,9 @@ related:
   - packages/transcript-ui/src/segments.ts
   - packages/transcript-ui/src/vocabulary.ts
   - packages/transcript-ui/src/Quote.tsx
+  - packages/transcript-ui/styles.css
   - packages/transcript-ui/src/render.test.tsx
+  - spec-dashboard/test/transcript-fold-motion.e2e.mjs
   - spec-dashboard/src/Transcript.jsx
   - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/conversationItems.js
@@ -88,6 +90,20 @@ on the page. Counting the total let a run whose calls all sat on its answer fold
 `0 tool uses` over prose: a control naming something it did not stand for, and the same defect as any two
 counters that disagree. A segment whose process hides no calls stays open; its prose is the only thing there,
 and prose is what the reader came for.
+
+**A fold is a movement.** The work travels behind its row — when the agent speaks, when the next message ends
+the stretch, and when the reader shuts the row again by hand — because a page that changes height in a single
+frame reads as a glitch, while the same change spread over a fold's duration reads as the fold it is. The travel
+belongs to the stylesheet ([[transcript-ui]]): a one-row grid taken from `1fr` to `0fr`, which is how CSS reaches
+a content height that nothing measured, over the host's own fold duration, so a transcript folds at the speed the
+surface around it folds. What the renderer owes that movement is one thing — the outgoing work has to outlive the
+state that hid it, because React drops it in the same frame — so it is held for exactly one duration and released
+by that duration's own timer, never by the animation's end: a copy that could outlive its timer would stand on
+the page as a second transcript. The motion is over the fold and nothing else. It decides nothing and hides
+nothing: the same row stands for the same calls, no row appears or disappears because of it, and the work in
+progress does not move, because it has not folded. Under `prefers-reduced-motion: reduce` the work is simply gone
+in the frame it folds, as it was before there was any animation, and nothing is left standing that is not
+travelling.
 
 **A user turn is a boundary, and whether it is also drawn is the host's call** (`userTurns`). In SpexCode every
 message is already a row on the record ([[conversation-items]]) — the launch prompt, each `spex session send`,

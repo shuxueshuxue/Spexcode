@@ -150,6 +150,12 @@ Symmetrically, every reader takes a root, because every locator already did — 
 it, so a second root for any file harness could not be asked for at all. Passing nothing keeps the locator's
 own default evaluated per call, so a late environment change is still picked up.
 
+**A transcript that exists but is empty is a thread that has not spoken yet.** A harness creates the file
+before it writes its first record, so the seconds right after a session starts read as zero bytes — exactly
+when someone is watching. That is an empty read, not a failure: the turns are none, nothing is truncated, and
+the revision still moves the moment the first line lands. Zero bytes is unambiguous in a way a garbled file is
+not, so it is the one place the no-timestamp gate is skipped rather than tripped.
+
 **One unreadable line is omitted payload, not an unreadable transcript.** A native log is written by another
 process and can carry a line that is not JSON — a record torn off by a crash, something appended by hand. Its
 bytes are counted as omitted and the read reports `truncated`, exactly as it does for a result past the cap;

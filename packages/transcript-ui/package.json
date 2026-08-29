@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/transcript-ui",
-  "version": "0.7.0-next.5",
+  "version": "0.7.0-next.6",
   "type": "module",
   "description": "React components that draw a normalized agent transcript — the person quoted, the agent as the page, a tool call as a sentence, the work folded behind its answer — with the fold, the prose renderer, the tool vocabulary, the labels and the design tokens all tunable.",
   "files": [
@@ -24,7 +24,7 @@
     "test": "npm run build && tsx --test src/*.test.tsx"
   },
   "dependencies": {
-    "@spexcode/transcript": "0.7.0-next.5"
+    "@spexcode/transcript": "0.7.0-next.6"
   },
   "peerDependencies": {
     "react": "^18.2.0 || ^19.0.0"

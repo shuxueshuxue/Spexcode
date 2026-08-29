@@ -7,11 +7,12 @@ import { IntervalCollector, claudeEvent, codexAppServerEvent, codexAppServerStre
 // A tool's outcome is the harness's OWN structured verdict, carried through the result event to the call.
 // Prose that merely says "error" is not read: absence means "no signal", never "succeeded".
 
-const collect = (events: (ParsedEvent | null)[]) => {
+const collectTurns = (events: (ParsedEvent | null)[]) => {
   const collector = new IntervalCollector({ from: 0, to: Number.MAX_SAFE_INTEGER })
   for (const event of events) if (event) collector.add(event)
-  return collector.turns.flatMap((turn) => turn.tools)
+  return collector.turns
 }
+const collect = (events: (ParsedEvent | null)[]) => collectTurns(events).flatMap((turn) => turn.tools)
 
 test('claude: is_error on a tool_result marks the call failed; a plain result carries no outcome', () => {
   const at = '2026-08-29T00:00:00.000Z'
@@ -127,6 +128,23 @@ test('the app-server union: an MCP result reads as what the tool said, a file ed
   assert.equal(edit[0]?.outcome, 'rejected')
   // `functionCall` and `customToolCall` are ROLLOUT record types; no such variant exists on the item union
   assert.equal(collect([started({ id: 'x1', type: 'functionCall', name: 'shell', arguments: {} })]).length, 0)
+})
+
+test('one Claude API message is one turn, however many lines it was written as', () => {
+  const at = (clock: string) => `2026-08-29T00:00:0${clock}.000Z`
+  // Claude writes ONE content block per line: prose on one line, each call on its own, every line repeating
+  // the message id and carrying its own uuid
+  const turns = collectTurns([
+    claudeEvent({ type: 'assistant', uuid: 'line-1', timestamp: at('1'), message: { id: 'msg_a', role: 'assistant', content: [{ type: 'text', text: 'looking' }] } }),
+    claudeEvent({ type: 'assistant', uuid: 'line-2', timestamp: at('2'), message: { id: 'msg_a', role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }] } }),
+    claudeEvent({ type: 'assistant', uuid: 'line-3', timestamp: at('3'), message: { id: 'msg_a', role: 'assistant', content: [{ type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/a.ts' } }] } }),
+    claudeEvent({ type: 'assistant', uuid: 'line-4', timestamp: at('4'), message: { id: 'msg_b', role: 'assistant', content: [{ type: 'text', text: 'done' }] } }),
+  ])
+  assert.equal(turns.length, 2, 'three lines of one message are one turn, and the next message is its own')
+  assert.equal(turns[0]?.id, 'msg_a')
+  assert.equal(turns[0]?.text, 'looking')
+  assert.deepEqual(turns[0]?.tools?.map((tool) => tool.id), ['t1', 't2'])
+  assert.equal(turns[1]?.id, 'msg_b')
 })
 
 test('a result recorded as content blocks reads as the text of those blocks, line breaks kept, non-text blocks named', () => {

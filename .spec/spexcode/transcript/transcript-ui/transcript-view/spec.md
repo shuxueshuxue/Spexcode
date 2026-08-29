@@ -34,6 +34,12 @@ holds a running call is marked so its fold can say it. A closed interval never s
 ended before a result was written is history, not something still happening, so the same payload read as
 history draws the same call as a plain sentence.
 
+**A command reads by its head, never by its tool's bare name.** A tool whose input is a bare string is a
+command or a script — a codex code-mode `exec` cell, a shell one-liner — and its first non-empty line names it;
+a row that says only `exec` hides what ran behind the caret. So a bare-string input shows its first line as the
+target (the CSS ellipsis takes the rest of a long line), and the `exec`/`shell`/`wait` tool names carry verbs
+(`Ran`, `Waited`) the same way `Bash` does — data rows in the vocabulary, not branches on a harness.
+
 **An MCP call is named by its server and its tool, apart.** Every harness writes an MCP call as
 `mcp__<server>__<tool>`; the sentence shows the tool half as its verb (or the vocabulary's verb for that bare
 tool name) and the server as a small chip beside it — the data every renderer has and most lose on the screen.

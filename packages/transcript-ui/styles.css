@@ -25,6 +25,8 @@
   --tx-radius: var(--radius, 6px);
   --tx-space-1: 4px; --tx-space-2: 6px; --tx-space-3: 8px; --tx-space-4: 12px; --tx-space-5: 16px; --tx-space-6: 22px;
   --tx-dur-rise: var(--dur-rise, 120ms);
+  /* a fold is the same gesture the host's own panels fold with, so it borrows that duration before its own default */
+  --tx-dur-fold: var(--dur-fold, var(--dur-panel, 170ms));
   min-width: 0;
   color: var(--tx-ink);
 }
@@ -59,7 +61,7 @@
 .tx-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--tx-blue); background: none; border: 0; font: inherit; font-family: var(--tx-ui-font); font-size: var(--tx-type-caption); cursor: pointer; }
 
 /* THE WORK SEGMENT'S ONE LINE: a bounded sentence — the count, the kinds, the chevron trailing. */
-.tx-work { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.tx-work { display: flex; flex-direction: column; align-items: flex-start; }
 .tx-work-row {
   display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; padding: var(--tx-space-2) var(--tx-space-3); margin-left: calc(var(--tx-space-3) * -1);
   color: var(--tx-muted); background: none; border: 0; border-radius: var(--tx-radius);
@@ -68,7 +70,22 @@
 .tx-work-row:hover { background: var(--tx-wash-hover); color: var(--tx-ink2); }
 .tx-work-lead { flex: none; color: var(--tx-ink2); font-weight: var(--tx-weight-medium); }
 .tx-work-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tx-work-body { align-self: stretch; display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--tx-edge); }
+.tx-work-body { display: flex; flex-direction: column; gap: 14px; padding-left: 10px; border-left: 1px solid var(--tx-edge); }
+
+/* THE FOLD TRAVELS TO ITS ROW. A stretch of work folds when the agent speaks and when the next message ends
+   the stretch, and it opens and shuts again under the reader's own hand; all three are the same movement, so
+   they are one wrapper. The height it travels is the content's, which nothing here measures: a one-row grid
+   going `1fr → 0fr` is how CSS reaches an auto height on its own. The outgoing copy is held by
+   [[transcript-view]] for exactly one duration and cannot outlive it. The space under the row travels with
+   the collapse (measured: as the column's `gap`, or as any margin outside the animated box, those last pixels
+   survive the movement and snap shut a frame after it), so the fold ends at the row's own height exactly. */
+.tx-fold { display: grid; align-self: stretch; min-width: 0; margin-top: var(--tx-space-3); }
+.tx-fold > * { min-height: 0; overflow: hidden; }
+.tx-fold.is-opening { animation: tx-unfold var(--tx-dur-fold) ease; }
+.tx-fold.is-closing { animation: tx-fold var(--tx-dur-fold) ease forwards; pointer-events: none; }
+.tx-work.is-folding > .tx-work-row { animation: tx-rise var(--tx-dur-fold) ease; }
+@keyframes tx-unfold { from { grid-template-rows: 0fr; margin-top: 0; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
+@keyframes tx-fold { from { grid-template-rows: 1fr; opacity: 1; } to { grid-template-rows: 0fr; margin-top: 0; opacity: 0; } }
 
 /* A TOOL CALL IS A SENTENCE, not a card: inline-flex, exactly as wide as what it says, capped so a long shell
    command never stretches the row into a full-width bar. The verb IS the status: no tick, no badge. */
@@ -116,7 +133,11 @@
 .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after { content: '▍'; margin-left: 2px; color: var(--tx-muted); animation: tx-caret 1s steps(2, start) infinite; }
 @keyframes tx-caret { to { visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) {
-  .tx-live .tx-say-text, .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after, .tx-spin, .tx-caret { animation: none; transition: none; }
+  .tx-live .tx-say-text, .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after, .tx-spin, .tx-caret,
+  .tx-fold, .tx-fold.is-opening, .tx-fold.is-closing, .tx-work.is-folding > .tx-work-row { animation: none; transition: none; }
+  /* the fold still folds — it just arrives: the copy on its way out is already at nothing, and the JS half
+     that holds it drops it on the same timer, so no motion and nothing lingers */
+  .tx-fold.is-closing { grid-template-rows: 0fr; margin-top: 0; opacity: 0; }
 }
 
 /* A NARROW PANE: the quote widens and shows its own time, because there is no ruler beside the flow. */

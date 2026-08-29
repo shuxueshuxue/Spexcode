@@ -36,6 +36,25 @@ scenarios:
     code: packages/transcript-ui/src/TranscriptView.tsx
     description: Render the same process under the default fold and under fold runs.
     expected: The default folds the process behind its answer; under runs every assistant message stays on the page, a run of runMin+ calls inside one turn folds to a row, and a lone call stays a sentence.
+  - name: a-fold-travels-to-its-row
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/transcript-fold-motion.e2e.mjs
+    code: packages/transcript-ui/src/TranscriptView.tsx
+    related:
+      - packages/transcript-ui/styles.css
+      - spec-dashboard/src/TimelineChat.jsx
+    description: >-
+      Through the running dashboard's real Conversation, expand the open seam of a working session whose live
+      transcript draws five tool calls as sentences, then deliver the next frame: the person's message ends that
+      stretch and the agent's first turn after it opens a new one. Sample the seam's height on every animation
+      frame across the fold, and again while the reader opens and shuts the fold row by hand; then run the whole
+      scenario once more with the browser asking for reduced motion.
+    expected: >-
+      The work travels to its row instead of vanishing — the seam passes through many heights over the fold's
+      duration, and mid-movement the outgoing calls are on screen, clipped and fading, under a row that is
+      already there. What is drawn is unchanged: one fold row over the five calls, one sentence for the work in
+      progress, and nothing the movement mounted is left behind when it ends. Under reduced motion the fold is a
+      single step, and so is shutting the opened body. Before the change every one of these was a single step.
   - name: a-seam-draws-the-agents-work-not-the-conversation
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/transcript-dedup.e2e.mjs

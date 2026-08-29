@@ -123,6 +123,17 @@ a Codex file edit arrived as no call at all. Each variant also keeps its result 
 `result.content` — that last one is a wrapper (`{content, structuredContent, _meta}`), and handing the wrapper
 to the block reader printed the envelope rather than what the tool said.
 
+**A store is a row, and a root is a parameter of every reader.** Two harnesses keep no per-thread file: a
+thread is obtained by running the harness's own export command, and the change token is the store's files. That
+is one reader with a row per store — which files make the token, what the export command is, which parser reads
+its document — not two copies. The copy is what let one of them watch a write-ahead log the other never did,
+and that is not a cosmetic difference: in WAL mode a plain commit leaves the database file's size and mtime
+untouched, so a token watching only the database is frozen and the cached export is served forever. The
+database's own absence is what "no store" means; a missing log is a checkpointed store, not a missing one.
+Symmetrically, every reader takes a root, because every locator already did — only the store readers exposed
+it, so a second root for any file harness could not be asked for at all. Passing nothing keeps the locator's
+own default evaluated per call, so a late environment change is still picked up.
+
 **One unreadable line is omitted payload, not an unreadable transcript.** A native log is written by another
 process and can carry a line that is not JSON — a record torn off by a crash, something appended by hand. Its
 bytes are counted as omitted and the read reports `truncated`, exactly as it does for a result past the cap;

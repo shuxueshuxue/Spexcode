@@ -66,6 +66,28 @@ test('opencode: a tool part in state error is failed; gemini: a call with status
   assert.equal(gemini.find((tool) => tool.id === 'gc2')?.outcome, undefined)
 })
 
+test('pi and OpenClaw: one format, one parser — the turn keeps the producer\'s verdict even with nothing to show', () => {
+  const entryAt = '2026-08-29T00:00:10.000Z'
+  const record = (stopReason: string, errorMessage?: string) => ({
+    type: 'message', id: 'e1', timestamp: entryAt,
+    message: { role: 'assistant', timestamp: Date.parse('2026-08-29T00:00:00.000Z'), content: [], stopReason, ...(errorMessage ? { errorMessage } : {}) },
+  })
+  // the two harnesses write the same bytes, so they must read the same — including WHICH clock is the turn's
+  assert.equal(openclawEvent, piEvent)
+  const failed = piEvent(record('error', 'Request timed out.'))?.turn
+  assert.equal(failed?.outcome, 'failed')
+  assert.equal(failed?.error, 'Request timed out.')
+  // a turn the provider failed carries no text and no calls; dropping it leaves a gap where the timeout was
+  assert.equal(failed?.text, undefined)
+  assert.equal(failed?.tools.length, 0)
+  assert.equal(piEvent(record('aborted'))?.turn?.outcome, 'cancelled')
+  assert.equal(piEvent(record('aborted'))?.turn?.error, undefined)
+  assert.equal(piEvent(record('stop'))?.turn?.outcome, undefined)
+  assert.equal(piEvent(record('toolUse'))?.turn?.outcome, undefined)
+  // the entry's append time is the observable an interval read answers with, not the message's construction time
+  assert.equal(piEvent(record('stop'))?.at, Date.parse(entryAt))
+})
+
 test('a result recorded as content blocks reads as the text of those blocks, line breaks kept, non-text blocks named', () => {
   const at = '2026-08-29T00:00:00.000Z'
   const claude = collect([

@@ -17,6 +17,13 @@ export type TranscriptTool = Readonly<{
   // output prose is not text-sniffed for it. `rejected` is the call the person refused — it never ran.
   outcome?: 'failed' | 'rejected'
 }>
+// HOW A TURN ENDED, when the harness recorded a verdict on the turn itself rather than on one call. `failed`
+// is the provider's own error; `cancelled` is the turn a stop ended mid-flight. Absent means no signal — never
+// "finished". A turn can end this way with nothing to show: pi writes `stopReason: error` with no text and no
+// calls, and without this the reader would hand a renderer an empty turn and the person would see a gap where
+// a timeout happened.
+export type TurnOutcome = 'failed' | 'cancelled'
+
 export type TranscriptTurn = Readonly<{
   id: string                // the native id, or `<role>@<at>[#n]` synthesized in thread order — never null, so a
                             // subscriber can key the same turn across reads (the frame protocol diffs by it)
@@ -24,6 +31,8 @@ export type TranscriptTurn = Readonly<{
   role: 'user' | 'assistant'
   text?: string
   tools?: readonly TranscriptTool[]
+  outcome?: TurnOutcome     // pi's and OpenClaw's `stopReason: error|aborted`; only from a structured field
+  error?: string            // the producer's own words for it (pi's `errorMessage`), never composed here
 }>
 export type TranscriptRead = Readonly<{
   revision: string          // the source's change token at read time — the stream re-reads only when it moves

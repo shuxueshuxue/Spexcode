@@ -88,17 +88,23 @@ sniff the output prose for the words "error" or "denied": that is the adapter se
 adapter has silently dropped the field, and a text guess would be wrong in both directions. A renderer therefore
 has one honest signal to show ([[transcript-view]]), and a fold cannot hide a failure behind a count.
 
-**A stopped call has no structured home in any harness we read, so `outcome` has no third value.** The natural
-third answer — the call a stop ended mid-flight, neither failed nor succeeded — is asked for often enough that
-the reason it is absent belongs here rather than being rediscovered. No adapter emits it per call. OpenCode's
-`ToolState` union is Pending/Running/Completed/Error with no cancelled member; Claude records an interruption as
-prose (`[Request interrupted by user]`) in message content, which this reader does not sniff by the rule above;
-pi, OpenClaw, Gemini and Hermes carry only their error field. Codex does record the stop, but one scope up: the
-app-server's `turn/completed` reports `turn.status: interrupted` for the whole turn, a fact about the run rather
-than about any one call. Adding a per-call value now would define a vocabulary nothing fills, and inferring one
-from a call that merely has no result would re-invent the text guess in a new costume — a tool still running when
-the reader looked is indistinguishable from one a stop ended. If the turn-level fact is ever wanted on the page it
-enters at its own scope, from that field, and only once a producer delivers it unfolded.
+**A stop is recorded on the TURN, not on the call — so that is where it is carried.** No harness we read marks
+a single call cancelled: OpenCode's `ToolState` union is Pending/Running/Completed/Error with no cancelled
+member, Claude writes an interruption as prose (`[Request interrupted by user]`) which the rule above forbids
+sniffing, and Gemini and Hermes carry no such field at all. Two producers do record it, both one scope up. pi
+and OpenClaw write `stopReason` on the assistant message — `StopReason = "stop" | "length" | "toolUse" |
+"error" | "aborted"` in pi's shipped types — with an `errorMessage` beside it; Codex's app-server reports
+`turn.status: interrupted` on `turn/completed`. So a turn carries `outcome: failed | cancelled` and the
+producer's own `error` text, and a call does not: `TranscriptTool.outcome` has no third value, because
+inventing one would define a vocabulary nothing fills and inferring it from a call that merely has no result
+would re-invent the text guess — a tool still running when the reader looked is indistinguishable from one a
+stop ended.
+
+**A failed turn is the one that most needs drawing, and it is the emptiest.** Every pi turn whose `stopReason`
+is `error` or `aborted` carries no text and no calls — 13 of 578 assistant messages in the sessions on this
+box, every one of them. A reader that keeps only turns with something in them therefore drops exactly the
+turns a person is looking for, and the page shows a silent gap where a timeout or an interrupt happened. The
+turn is emitted with its outcome and, when the producer wrote one, its own words for it.
 
 **An open interval re-reads cheaply.** A native file is append-only, so the byte where an interval's first
 event sits never moves; the reader remembers that offset per (file, `from`) and a one-shot read of the same

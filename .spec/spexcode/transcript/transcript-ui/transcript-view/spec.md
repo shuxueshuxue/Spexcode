@@ -57,6 +57,21 @@ The word comes from the transcript's own field, never from the output prose.
 output, so parameters remain inspectable even when a live call has no result yet. A withheld live result still
 fetches its body on demand; the input never waits for that fetch.
 
+**The cap is said where it bit.** The reader keeps `outputBytes` at the result's true size while the body it
+carries stops at the per-tool cap ([[transcript-reader]]), so the difference is exactly what this call is
+missing, and an opened call whose body falls short of its size names the omission (`labels.outputCut`). The read
+as a whole already reports its omitted bytes, but that line cannot say WHICH result was cut, and a prefix drawn
+with no mark reads as the whole output — the one way a bounded view can lie.
+
+**A result is drawn as text, because this is prose and not a terminal.** Programs print colour, and real
+transcripts carry tens of thousands of escape sequences; a `<pre>` renders them as literal debris in the middle
+of the sentence someone is reading. They are dropped at the moment of drawing — from the row's target and from
+the opened input and output alike — and never from the record, which a terminal surface ([[terminal-ui]]) is
+free to read in full. Stripping before the row's length cut matters: cutting first can leave half a sequence
+behind. Because the page then holds no escapes, text copied off it is already clean, so there is no separate
+copy path. Escapes still count toward the record's size, so removing them from the page must not be read as an
+omission.
+
 **The work in progress never folds.** Folding is for process that already produced an answer — collapse the
 process, keep the result. The last segment of a LIVE payload is what is happening now: its calls after the newest
 prose, or all of its calls while there is no prose yet, draw as sentences whatever their number, in the collapsed

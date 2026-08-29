@@ -3,7 +3,7 @@ import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { renderToString } from 'react-dom/server'
 import { createElement } from 'react'
-import { LiveTail, Quote, TranscriptUi, TranscriptView, alreadySaid, parseEnvelope, prettyInput, spexEnvelope, toolName, type EnvelopeParser, currentTurn, defaultLabels, defaultVocabulary, extendVocabulary, liveSlice, runKinds, segments, splitTarget, toolTarget, toolVerb, useTranscriptFrames, type AnyTurn } from './index.js'
+import { LiveTail, Quote, ToolLine, TranscriptUi, TranscriptView, alreadySaid, parseEnvelope, prettyInput, spexEnvelope, toolName, type EnvelopeParser, currentTurn, defaultLabels, defaultVocabulary, extendVocabulary, liveSlice, runKinds, segments, splitTarget, toolTarget, toolVerb, useTranscriptFrames, type AnyTurn } from './index.js'
 
 const tool = (id: string, name: string, input: unknown, output?: string | null, outputLines = 0) =>
   ({ id, name, input: JSON.stringify(input), ...(output === undefined ? {} : { output }), outputLines, outputBytes: output ? output.length : 0 }) as AnyTurn extends { tools?: readonly (infer T)[] } ? T : never
@@ -112,6 +112,27 @@ test('a failed or rejected call wears the word, a fold counts its failures, succ
   const folded = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [failed, fine, fine, fine]), turn('a2', 'assistant', 'done')] } }))
   assert.match(folded, /4 tool uses/)
   assert.match(folded, /tx-tool-outcome is-failed">1 failed</)
+})
+
+test('an opened call says how much of its result the cap left out, and stays silent when nothing was cut', () => {
+  const call = (id: string, output: string, outputBytes: number) =>
+    ({ id, name: 'Bash', input: JSON.stringify({ command: 'make' }), output, outputLines: 1, outputBytes }) as Parameters<typeof ToolLine>[0]['tool']
+  const open = (t: Parameters<typeof ToolLine>[0]['tool']) =>
+    renderToStaticMarkup(createElement(ToolLine, { tool: t, open: true, onToggle: () => {} }))
+  // the body stops at the per-tool cap while outputBytes keeps the result's true size: the gap is what is missing
+  assert.match(open(call('b1', 'first 3', 70_000)), /tx-tool-cut">69,993 more bytes not shown</)
+  assert.doesNotMatch(open(call('b2', 'two files', 9)), /tx-tool-cut/)
+})
+
+test('a result is drawn as text: the colour a program printed is dropped from the page, not from the record', () => {
+  const painted = '\u001b[91m\u001b[1mError:\u001b[0m boom\u001b]0;title\u0007'
+  const t = { id: 'b3', name: 'Bash', input: '\u001b[2mmake\u001b[0m', output: painted, outputLines: 1, outputBytes: Buffer.byteLength(painted) } as Parameters<typeof ToolLine>[0]['tool']
+  const html = renderToStaticMarkup(createElement(ToolLine, { tool: t, open: true, onToggle: () => {} }))
+  assert.match(html, />Error: boom</)
+  assert.doesNotMatch(html, /\[91m|\[0m|\[1m|\[2m/)
+  assert.doesNotMatch(html, /\u001b/)
+  // the escapes counted toward the record's size, so dropping them from the page must not invent a cut
+  assert.doesNotMatch(html, /tx-tool-cut/)
 })
 
 test('a quoted turn is read through the envelope rows: the SpexCode footer by default, a host row beside it', () => {

@@ -18,6 +18,7 @@ export type Labels = Readonly<{
   toolUses: (n: number) => string
   lines: (n: number) => string
   empty: string
+  outputCut: (omittedBytes: number) => string   // on ONE opened call: how much of its result the cap left out
   truncated: (info: { omittedTurns: number; omittedBytes: number; outOfOrderEvents: number }) => string
 }>
 export const defaultLabels: Labels = {
@@ -30,6 +31,7 @@ export const defaultLabels: Labels = {
   toolUses: (n) => `${n} tool use${n === 1 ? '' : 's'}`,
   lines: (n) => `${n} line${n === 1 ? '' : 's'}`,
   empty: 'nothing in this interval',
+  outputCut: (n) => `${n.toLocaleString()} more bytes not shown`,
   truncated: ({ omittedTurns, omittedBytes, outOfOrderEvents }) => `truncated: ${omittedTurns} turns and ${omittedBytes} bytes omitted${outOfOrderEvents ? `, ${outOfOrderEvents} records out of order` : ''}`,
 }
 

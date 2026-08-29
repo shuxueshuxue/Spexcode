@@ -67,10 +67,12 @@ root is proven DEAD is the one case that is repaired instead of refused, on the 
 ### Drain
 
 A draining generation remains addressable for its bound governed sessions and for every unowned or
-native peer it already hosts. Archive, close, delivery, resume, and cold proof choose the target
-session's bound endpoint, so an unrelated reference on an older root neither migrates nor blocks a
-target on another generation. Active governed sessions can move only through their normal explicit
-resume/retire path; the ledger never moves a native conversation behind their back.
+native peer it already hosts. Archive, close, and cold proof choose the target session's bound endpoint,
+so an unrelated reference on an older root neither migrates nor blocks a target on another generation.
+Delivery is the one repair boundary: when a bound generation is already positively reclaimed, it re-pins
+that exact session and thread to a newly proven current generation before handing over the accepted prompt.
+Active governed sessions otherwise move only through their normal explicit resume/retire path; the ledger
+never moves a native conversation behind their back.
 
 Resource inventory reports every generation separately and keeps loaded unowned references
 protective. A draining root is reclaimable only after the same exact PID/start/receipt/socket

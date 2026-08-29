@@ -178,7 +178,10 @@ Codex has no claude-style rendezvous control socket, so the adapter declares `ow
 through that same project app-server: it IS the delivery channel, just not the liveness gate. Its endpoint is a WebSocket at `/rpc` —
 the upgrade the remote TUI performs — and delivery speaks JSON-RPC over it directly, never through
 `codex app-server proxy`, a byte relay that performs no HTTP upgrade and is rejected. The handshake
-`initialize → initialized → thread/loaded/list` proves the OWNED thread is resident.
+`initialize → initialized → thread/loaded/list` proves the OWNED thread is resident. If the session's exact
+generation binding has already been positively reclaimed, delivery first repairs that route by re-pinning the
+same native thread onto a newly proven current generation; it never leaves an accepted prompt stranded merely
+because a host restart retired the old daemon.
 
 Delivery must not read the native conversation to choose between starting and steering: that transcript is
 unbounded and can push a durable send past its confirmation budget. The observer's `turn/started`/`turn/completed`
@@ -189,7 +192,9 @@ delivery opens a new turn with `turn/start` and reports a native rejection promp
 pending rather than replaying history or hiding an unobserved active turn. There is no tmux typing fallback:
 typed keys can truncate and prove only that tmux accepted input, never that codex accepted a turn. Routing is
 solely the owned thread id, so several backends sharing one socket never cross-send; the loaded-thread list is a
-fallback only for a pre-existing session whose id was never stored.
+fallback only for a pre-existing session whose id was never stored. A headless thread that is intact on disk but
+has been evicted from the shared server is reloaded with `thread/resume` (without replaying history) and the same
+`turn/start` is retried once, since headless has no TUI resume step to perform that load.
 
 Hard interrupt follows the same exact-native rule: read the newest `inProgress` turn through the owned
 generation, send `turn/interrupt {threadId, turnId}`, then re-read until it settles. An idle thread is already

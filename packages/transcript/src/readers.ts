@@ -170,7 +170,12 @@ class LineFileCursor {
   advance(to: number, lookahead = Number.POSITIVE_INFINITY): TranscriptRead {
     let size = 0
     try { size = statSync(this.path).size } catch (error) { throw new TranscriptReadError('unreadable', `${this.harness} transcript is unreadable: ${error instanceof Error ? error.message : String(error)}`) }
-    if (size <= 0) throw new TranscriptReadError('unreadable', `${this.harness} transcript is unreadable: file is empty`)
+    // AN EMPTY FILE IS A THREAD THAT HAS NOT SPOKEN YET, not a broken one. The harness creates the transcript
+    // before it writes the first record, so the moments right after a session starts — exactly when a person is
+    // watching — read as zero bytes. Failing there put an error on the page for a conversation that simply had
+    // not begun. Zero bytes is unambiguous in a way a garbled file is not: there is nothing to misread, so this
+    // is the one place the no-timestamp gate is skipped rather than tripped.
+    if (size <= 0) return { revision: fileRevision(this.path) ?? '0', from: this.from, to, turns: [], truncated: false, omittedTurns: 0, omittedBytes: 0, outOfOrderEvents: 0 }
     // a source that shrank was rewritten underneath the cursor: forget the position and read the interval afresh
     if (!this.started || size < this.scan.position) { this.restart(size); this.started = true }
     this.collector.extend(to)

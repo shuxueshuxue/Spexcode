@@ -290,6 +290,24 @@ test('unsupported, missing, timestamp-less, and malformed transcripts fail loudl
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
 
+test('a transcript that exists but is empty reads as a thread that has not spoken yet', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CLAUDE_CONFIG_DIR', root, async () => {
+    const dir = join(root, 'projects', 'fixture')
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, 'fresh.jsonl')
+    writeFileSync(path, '')
+    // the harness creates the file before it writes the first record — the seconds right after a session starts
+    const read = await claudeTranscript.read('fresh', { from: 1, to: 2 })
+    assert.deepEqual(read.turns, [])
+    assert.equal(read.truncated, false)
+    assert.ok(claudeTranscript.revision('fresh'), 'the thread is present, so the stream keeps watching it')
+    // and the moment it speaks, the same reader returns the turn
+    writeFileSync(path, line({ type: 'user', uuid: 'u1', timestamp: new Date(1).toISOString(), message: { role: 'user', content: 'hello' } }))
+    assert.deepEqual((await claudeTranscript.read('fresh', { from: 0, to: 10 })).turns.map((turn) => turn.text), ['hello'])
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
 test('one unparsable line is omitted payload, not an unreadable transcript', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
   await withEnv('CLAUDE_CONFIG_DIR', root, async () => {

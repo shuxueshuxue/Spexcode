@@ -22,6 +22,7 @@ export const defaultVocabulary: Vocabulary = {
     Read: 'Read', NotebookRead: 'Read',
     Grep: 'Searched', Glob: 'Searched', WebSearch: 'Searched the web',
     Bash: 'Ran', BashOutput: 'Read output',
+    exec: 'Ran', shell: 'Ran', wait: 'Waited',
     Edit: 'Edited', MultiEdit: 'Edited', NotebookEdit: 'Edited',
     Write: 'Wrote',
     WebFetch: 'Fetched',
@@ -29,7 +30,7 @@ export const defaultVocabulary: Vocabulary = {
     TodoWrite: 'Updated the plan',
   },
   quiet: new Set(['Read', 'NotebookRead', 'Grep', 'Glob', 'WebFetch', 'WebSearch']),
-  targetKeys: ['file_path', 'filePath', 'path', 'notebook_path', 'pattern', 'query', 'command', 'cmd', 'url', 'description'],
+  targetKeys: ['file_path', 'filePath', 'path', 'notebook_path', 'pattern', 'query', 'command', 'cmd', 'url', 'cell_id', 'description'],
 }
 
 export function extendVocabulary(base: Vocabulary, extra: Partial<{ verbs: Record<string, string>; quiet: Iterable<string>; targetKeys: readonly string[] }>): Vocabulary {
@@ -65,14 +66,25 @@ export function prettyInput(input: string | undefined): string {
 }
 export const isQuietTool = (name: string, vocabulary = defaultVocabulary): boolean => vocabulary.quiet.has(name)
 
+// A command's or a script's head: its first non-empty line, clamped. A one-liner is itself; a multi-line
+// script shows the line that names it, and the CSS ellipsis takes the rest.
+function firstLine(text: string): string | null {
+  const line = text.split(/\r?\n/).map((l) => l.trim()).find(Boolean)
+  if (!line) return null
+  return line.length <= 160 ? line : line.slice(0, 160)
+}
+
 // The target, from the call's own arguments. `input` is the raw JSON of the arguments (or a bare string), so
 // this reads the field the tool actually names and shows NOTHING when it cannot — a wrong target is worse
 // than no target, and a truncated blob of JSON is not a target at all.
 export function toolTarget(input: string | undefined, vocabulary = defaultVocabulary): string | null {
   if (typeof input !== 'string' || !input) return null
   let parsed: unknown = null
-  try { parsed = JSON.parse(input) } catch { return input.length <= 80 ? input : null }
-  if (!parsed || typeof parsed !== 'object') return typeof parsed === 'string' ? parsed : null
+  // A tool whose input is a bare string is a command or a script (a codex `exec` cell, a shell one-liner). Its
+  // FIRST non-empty line names it — a wall of script has a head worth reading, and nothing is worse than a row
+  // that says only "exec". JSON is parsed for its named target below; a bare string is its own head.
+  try { parsed = JSON.parse(input) } catch { return firstLine(input) }
+  if (!parsed || typeof parsed !== 'object') return typeof parsed === 'string' ? firstLine(parsed) : null
   for (const key of vocabulary.targetKeys) {
     const value = (parsed as Record<string, unknown>)[key]
     if (typeof value === 'string' && value.trim()) return value.trim()

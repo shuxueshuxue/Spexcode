@@ -23,6 +23,21 @@ test('vocabulary: verb, target, split, kinds — and an adopter extends it as da
   assert.equal(toolTarget(JSON.stringify({ absolute_path: '/x/y.md' }), gemini), '/x/y.md')
 })
 
+test('codex exec/wait read as a sentence: a bare-string command shows its first line, exec/wait get verbs', () => {
+  // codex code-mode `exec` input is a bare JS string, not JSON; before, a >80-char bare string yielded NO target,
+  // so the row said only "exec 4 lines". Now its first line names it.
+  assert.equal(toolVerb('exec'), 'Ran')
+  assert.equal(toolVerb('wait'), 'Waited')
+  const execInput = 'const r = await tools.exec_command({cmd:"spex session ask --note READY",workdir:"/tmp/proj"}); text(r.output);'
+  assert.equal(toolTarget(execInput), execInput, 'a one-line command is its own target, not null')
+  assert.equal(toolTarget('#!/usr/bin/env bash\nset -e\nnpm test'), '#!/usr/bin/env bash', 'a multi-line script shows its head')
+  assert.equal(toolTarget(JSON.stringify({ cell_id: '1', yield_time_ms: 30000 })), '1', 'wait names its cell')
+  const html = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [tool('e1', 'exec', execInput, 'ok\nok\nok\nok', 4)])] } }))
+  assert.match(html, /tx-tool-verb">Ran</)
+  assert.match(html, /exec_command/, 'the command is on the row, not hidden behind the caret')
+  assert.doesNotMatch(html, />exec</, 'the raw tool name no longer stands in for a verb')
+})
+
 test('segments: the process folds behind its answer, the work in progress never folds, user turns are boundaries or quotes', () => {
   const turns: AnyTurn[] = [
     turn('u1', 'user', 'do it'),

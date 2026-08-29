@@ -13,6 +13,14 @@ scenarios:
     expected: >-
       Each quote names the sender its envelope carries and shows only the bare body; no footer, tag, routing or
       reply instruction is drawn; an unmatched turn is quoted whole with no name.
+  - name: a-command-reads-by-its-head
+    tags: [cli]
+    test: packages/transcript-ui/src/render.test.tsx
+    code: packages/transcript-ui/src/vocabulary.ts
+    related:
+      - packages/transcript-ui/src/TranscriptView.tsx
+    description: Render a codex code-mode `exec` call whose input is a bare JS command string and a `wait` call whose input names a cell, plus a multi-line script.
+    expected: The exec row reads "Ran" with the command's first line on the row (not hidden), the raw tool name never stands in for a verb, wait reads "Waited" naming its cell, and a multi-line script shows its head line.
   - name: mcp-call-names-server-and-tool-apart
     tags: [cli]
     test: packages/transcript-ui/src/render.test.tsx

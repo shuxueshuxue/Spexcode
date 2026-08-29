@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -376,6 +376,46 @@ for (const harness of ['claude', 'codex'] as const) {
     assert.equal(t.fire('src/governed.ts', 'mutate').status, 2)
   })
 }
+
+// A DELIVERY FAILURE MUST NOT EAT THE PERSON'S OWN PROMPT. The listener runs on UserPromptSubmit, so exiting 2
+// blocks what was just typed — for a transient queue read that consumed nothing, and again for a message that
+// had already left the at-most-once queue, where blocking cannot bring it back and only doubles the loss.
+function sessionListenRig(behaviour: 'fail-dequeue' | 'garbage-body') {
+  const dir = mkdtempSync(join(tmpdir(), `spex-session-listen-${behaviour}-`))
+  const cli = join(dir, 'spex-session')
+  const body = behaviour === 'fail-dequeue'
+    ? '[ "$1" = dequeue ] && exit 1\nexit 0\n'
+    : `[ "$1" = dequeue ] && { printf '%s\\n' '{"messageId":"m-42","bodyBase64":"!!!not-base64!!!"}'; exit 0; }\nexit 0\n`
+  writeFileSync(cli, `#!/usr/bin/env bash\n${body}`)
+  chmodSync(cli, 0o755)
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'session-listen', 'session-listen.sh')
+  const run = spawnSync('bash', [hook], {
+    input: JSON.stringify({ session_id: 's1', hook_event_name: 'UserPromptSubmit', prompt: 'my own question' }),
+    encoding: 'utf8',
+    env: { ...process.env, SPEX_SESSION_DATABASE_PATH: join(dir, 'db'), SPEX_SESSION_CLI: cli, SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'), SPEXCODE_HARNESS: 'claude' },
+  })
+  rmSync(dir, { recursive: true, force: true })
+  return run
+}
+
+test('session-listen: a queue it cannot read does not cost the person their prompt', () => {
+  const run = sessionListenRig('fail-dequeue')
+  assert.equal(run.status, 0, run.stderr)
+  const emitted = JSON.parse(run.stdout)
+  assert.equal(emitted.hookSpecificOutput.hookEventName, 'UserPromptSubmit')
+  assert.match(emitted.hookSpecificOutput.additionalContext, /Nothing was consumed/)
+})
+
+test('session-listen: a message it cannot deliver is reported with what it takes to recover it', () => {
+  const run = sessionListenRig('garbage-body')
+  assert.equal(run.status, 0, run.stderr)
+  const emitted = JSON.parse(run.stdout)
+  const context = emitted.hookSpecificOutput.additionalContext
+  // the message has already left the at-most-once queue, so the notice IS the recovery path
+  assert.match(context, /messageId=m-42/)
+  assert.match(context, /bodyBase64=!!!not-base64!!!/)
+  assert.match(run.stderr, /messageId=m-42/)
+})
 
 function specOfFileRig(harness: GateHarness) {
   const dir = mkdtempSync(join(tmpdir(), `spex-spec-of-file-${harness}-`))

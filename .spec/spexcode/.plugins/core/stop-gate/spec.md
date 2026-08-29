@@ -8,6 +8,15 @@ events:
 order: 10
 block: true
 ---
+**A gate that cannot render its own text still blocks.** Rendering the reason goes through the CLI, and a
+failure there used to exit non-zero — which, for a Stop hook, means ALLOW. The one gate whose entire job is to
+stop an undeclared stop was disarmed by its own text failing to load. It now blocks with a self-contained
+fallback that names the four states without needing the CLI to produce them. Because a genuinely broken CLI
+would also stop the agent from declaring, that fallback blocks at most once per session and then steps aside
+loudly, so failing closed cannot trap anyone. And one escaper serves every emission: the escaping was written
+three times and only one of them folded newlines, so a multi-line reason — a node stack, a git message — put
+raw newlines inside a JSON string and the harness dropped the block entirely.
+
 The blocking stop gate, with two jobs, each holding a hard loop-break so it never blocks twice on the same cause and never lets a dishonest stop through.
 
 The COMMIT gate keeps a done/merge proposal honest: such a proposal is rejected while the branch still carries uncommitted work or is zero commits ahead of main, because the ritual commits the spec and code BEFORE proposing. Clean work is allowed to stop; a dirty proposal blocks once with the reason, and if the agent ignores it the gate escapes by downgrading to `asking` so a false "ready to merge" can never stand. `done --propose nothing` is a porcelain trap, not a declaration: it writes no state and names merge, close, ask, and park as the real destinations; legacy `nothing` records remain readable.

@@ -290,6 +290,30 @@ test('unsupported, missing, timestamp-less, and malformed transcripts fail loudl
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
 
+test('a thread that has only written bookkeeping has not spoken yet; a record with no clock still fails', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CLAUDE_CONFIG_DIR', root, async () => {
+    const dir = join(root, 'projects', 'fixture')
+    mkdirSync(dir, { recursive: true })
+    // every real Claude transcript opens like this — clockless bookkeeping before the first message
+    const opening = [
+      line({ type: 'mode', mode: 'default' }),
+      line({ type: 'permission-mode', permissionMode: 'default' }),
+      line({ type: 'file-history-snapshot', messageId: 'x', snapshot: {} }),
+    ].join('')
+    const path = join(dir, 'opening.jsonl')
+    writeFileSync(path, opening)
+    const read = await claudeTranscript.read('opening', { from: 0, to: 10 })
+    assert.deepEqual(read.turns, [], 'nothing has been said yet, and that is not a failure')
+    // the gate is about the HARNESS: a conversational record that carries no clock still fails loudly
+    writeFileSync(join(dir, 'clockless.jsonl'), opening + line({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'no clock' } }))
+    await assert.rejects(() => claudeTranscript.read('clockless', { from: 0, to: 10 }), /no reliable timestamps/)
+    // and the moment the opening is followed by a real message, the same file reads
+    writeFileSync(path, opening + line({ type: 'user', uuid: 'u2', timestamp: new Date(5).toISOString(), message: { role: 'user', content: 'hello' } }))
+    assert.deepEqual((await claudeTranscript.read('opening', { from: 0, to: 10 })).turns.map((turn) => turn.text), ['hello'])
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
 test('a transcript that exists but is empty reads as a thread that has not spoken yet', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
   await withEnv('CLAUDE_CONFIG_DIR', root, async () => {

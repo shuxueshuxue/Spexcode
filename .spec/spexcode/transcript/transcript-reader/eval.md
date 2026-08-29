@@ -42,6 +42,12 @@ scenarios:
     code: packages/transcript/src/parsers.ts
     description: Read a real Claude thread in which a Bash call ended with is_error, and parse structured failure fields from every harness that writes one (Claude is_error, pi/OpenClaw isError, OpenCode state error, Gemini call status error, Codex app-server failed/declined).
     expected: The failed call carries outcome "failed" and the declined app-server call carries "rejected" with an empty result; every other call has no outcome field at all, including results whose prose merely says "error"; no output text is sniffed.
+  - name: results-read-as-block-text
+    tags: [backend-api]
+    test: packages/transcript/src/parsers.test.ts
+    code: packages/transcript/src/parsers.ts
+    description: Read a real Codex 0.146 thread whose tool outputs are recorded as input_text block lists, and parse Claude tool_result content lists (text blocks, an image block).
+    expected: Every output is the joined text of its blocks with real line breaks; no output begins with the JSON of a block list; an image block reads as "[image]".
   - name: loud-transcript-failures
     tags: [backend-api]
     test: packages/transcript/src/readers.test.ts

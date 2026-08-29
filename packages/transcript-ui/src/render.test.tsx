@@ -3,7 +3,7 @@ import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { renderToString } from 'react-dom/server'
 import { createElement } from 'react'
-import { LiveTail, Quote, TranscriptUi, TranscriptView, alreadySaid, currentTurn, defaultLabels, defaultVocabulary, extendVocabulary, liveSlice, runKinds, segments, splitTarget, toolTarget, toolVerb, useTranscriptFrames, type AnyTurn } from './index.js'
+import { LiveTail, Quote, TranscriptUi, TranscriptView, alreadySaid, parseEnvelope, spexEnvelope, type EnvelopeParser, currentTurn, defaultLabels, defaultVocabulary, extendVocabulary, liveSlice, runKinds, segments, splitTarget, toolTarget, toolVerb, useTranscriptFrames, type AnyTurn } from './index.js'
 
 const tool = (id: string, name: string, input: unknown, output?: string | null, outputLines = 0) =>
   ({ id, name, input: JSON.stringify(input), ...(output === undefined ? {} : { output }), outputLines, outputBytes: output ? output.length : 0 }) as AnyTurn extends { tools?: readonly (infer T)[] } ? T : never
@@ -97,6 +97,44 @@ test('a failed or rejected call wears the word, a fold counts its failures, succ
   const folded = renderToStaticMarkup(createElement(TranscriptView, { data: { turns: [turn('a1', 'assistant', undefined, [failed, fine, fine, fine]), turn('a2', 'assistant', 'done')] } }))
   assert.match(folded, /4 tool uses/)
   assert.match(folded, /tx-tool-outcome is-failed">1 failed</)
+})
+
+test('a quoted turn is read through the envelope rows: the SpexCode footer by default, a host row beside it', () => {
+  const footer = 'peer reply\n\n— from session "gugu-leader" (a789e37c) on machine m1. To reply: spex session send --ssh x a789e37c "<your reply>"'
+  assert.deepEqual(spexEnvelope(footer), { who: 'gugu-leader', id: 'a789e37c', body: 'peer reply' })
+  assert.deepEqual(spexEnvelope('plain'), null)
+  assert.deepEqual(parseEnvelope('plain'), { who: null, body: 'plain' })
+  const xml: EnvelopeParser = (text) => {
+    const m = /^<gugu_delivery\b([^>]*)>([\s\S]*?)<\/gugu_delivery>\s*$/.exec(text.trim())
+    if (!m) return null
+    const from = /\bfrom="([^"]*)"/.exec(m[1])
+    return { who: from?.[1] ?? null, body: m[2].replace(/<reply_to\b[^>]*>[\s\S]*?<\/reply_to>/g, '').trim() }
+  }
+  const turns: AnyTurn[] = [turn('u1', 'user', '<gugu_delivery route="chat" from="Codex 9 (user:66f5)">\n<reply_to msg="m1"></reply_to>\n赞同。再补一个验证点。\n</gugu_delivery>'), turn('u2', 'user', footer)]
+  const html = renderToStaticMarkup(createElement(TranscriptUi, { userTurns: 'quote', envelopes: [spexEnvelope, xml] }, createElement(TranscriptView, { data: { turns } })))
+  assert.match(html, /tx-quote-who">Codex 9 \(user:66f5\)</)
+  assert.match(html, /赞同。再补一个验证点。/)
+  assert.doesNotMatch(html, /gugu_delivery|reply_to|route=/, 'the envelope is addressing, not what was said')
+  assert.match(html, /tx-quote-who">gugu-leader</)
+  assert.doesNotMatch(html, /To reply: spex session send/)
+})
+
+test("fold: 'runs' keeps every working message on the page and folds only the tool runs inside a turn", () => {
+  const turns: AnyTurn[] = [
+    turn('u1', 'user', 'do it'),
+    turn('a2', 'assistant', 'Looking at the layout first', [tool('t1', 'Read', { file_path: 'a' }, 'x', 1), tool('t2', 'Read', { file_path: 'b' }, 'y', 1), tool('t3', 'Grep', { pattern: 'z' }, '', 0)]),
+    turn('a3', 'assistant', 'Now the styles', [tool('t4', 'Read', { file_path: 'c' }, 'w', 1)]),
+    turn('a4', 'assistant', 'All done'),
+  ]
+  const folded = renderToStaticMarkup(createElement(TranscriptView, { data: { turns } }))
+  assert.match(folded, /tx-work-row/, 'the default folds the whole process behind its answer')
+  assert.doesNotMatch(folded, /Looking at the layout first/)
+  const runs = renderToStaticMarkup(createElement(TranscriptUi, { fold: 'runs' }, createElement(TranscriptView, { data: { turns } })))
+  assert.doesNotMatch(runs, /tx-work-row/)
+  assert.match(runs, /Looking at the layout first/)
+  assert.match(runs, /Now the styles/)
+  assert.match(runs, /3 tool uses/, 'a run of three inside one turn still folds to a row')
+  assert.match(runs, /tx-tool-verb">Read</, 'a lone call stays a sentence')
 })
 
 test('Quote clamps a long text and names the peer', () => {

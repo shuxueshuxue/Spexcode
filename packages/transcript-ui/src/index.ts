@@ -1,4 +1,5 @@
 export * from './vocabulary.js'
+export * from './envelope.js'
 export * from './segments.js'
 export * from './context.js'
 export * from './icons.js'

@@ -1,6 +1,7 @@
 import { useTranscriptUi } from './context.js'
 import { Caret } from './icons.js'
 import { Quote } from './Quote.js'
+import { parseEnvelope } from './envelope.js'
 import { segments, type AnyTurn, type Segment, type WorkSegment as Work } from './segments.js'
 import { ToolRun } from './ToolLine.js'
 import { useDisclosure } from './useDisclosure.js'
@@ -15,6 +16,13 @@ export function TurnBody({ turn, openIds, onToggle, live, fold = true }: { turn:
     {turn.text && <div className="tx-say-text">{renderText(turn.text)}</div>}
     <ToolRun tools={turn.tools} openIds={openIds} onToggle={onToggle} live={live} fold={fold} />
   </div>
+}
+
+// a quoted turn is read through the envelope rows: the sender it names, the body it carried
+export function QuotedTurn({ turn }: { turn: AnyTurn }) {
+  const { envelopes } = useTranscriptUi()
+  const envelope = parseEnvelope(turn.text || '', envelopes)
+  return <Quote who={envelope.who} ts={envelope.at ?? turn.at} text={envelope.body} className="tx-quote-nested" />
 }
 
 export function WorkSegmentView({ segment, openIds, onToggle, live }: { segment: Work; live: boolean } & Disclosure) {
@@ -47,7 +55,7 @@ export function WorkSegmentView({ segment, openIds, onToggle, live }: { segment:
 }
 
 export function SegmentView({ segment, ...rest }: { segment: Segment; live: boolean } & Disclosure) {
-  if (segment.kind === 'quote') return <Quote ts={segment.turn.at} text={segment.turn.text || ''} className="tx-quote-nested" />
+  if (segment.kind === 'quote') return <QuotedTurn turn={segment.turn} />
   return <WorkSegmentView segment={segment} {...rest} />
 }
 

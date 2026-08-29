@@ -123,6 +123,22 @@ a Codex file edit arrived as no call at all. Each variant also keeps its result 
 `result.content` — that last one is a wrapper (`{content, structuredContent, _meta}`), and handing the wrapper
 to the block reader printed the envelope rather than what the tool said.
 
+**A turn is the harness's unit, not the file's line.** Claude writes one CONTENT BLOCK per line — prose on
+one, each call on its own — and every line of the same API message repeats that message's `id` while carrying
+its own `uuid`. Keying a turn on the line made one message up to six turns: over twelve recent threads, 5,077
+assistant lines carry only 2,396 distinct message ids. The cost is not cosmetic, because the read is bounded
+by TURNS: on one real hour of one real thread the fragmented read filled its 200-turn cap, reported
+`truncated`, and dropped 38 turns and 22 calls, while the same hour keyed on the message is 148 turns and
+loses nothing. The fragments are folded back by the rule the collector already has for a re-emitted turn —
+prose kept, calls merged by their own ids — so no parser accumulates state to do it.
+
+**Which enum values exist is not which values are produced.** A protocol or a type declaring a state proves
+only that the state can be expressed. ACP's `ToolCallStatus` includes `Cancelled` and Zed keeps a local
+`Canceled`, and neither is evidence that any harness writes one into a transcript — Zed's, by its own design,
+never leaves the editor. A field this reader fills has to be counted in real records before it earns a place
+in the vocabulary, which is why the per-call `cancelled` above stays absent while the turn-level outcome, with
+two producers that do write it, does not.
+
 **A store is a row, and a root is a parameter of every reader.** Two harnesses keep no per-thread file: a
 thread is obtained by running the harness's own export command, and the change token is the store's files. That
 is one reader with a row per store — which files make the token, what the export command is, which parser reads

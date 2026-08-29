@@ -119,7 +119,14 @@ export function claudeEvent(value: unknown): ParsedEvent | null {
     if (text) return { at: eventAt, turn: { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'user', text, tools: [] } }
   }
   if (entry.type === 'assistant' && message.role === 'assistant') {
-    const turn: MutableTurn = { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'assistant', tools: [] }
+    // ONE API MESSAGE IS ONE TURN, however many lines Claude wrote it as. It writes one CONTENT BLOCK per
+    // line — prose on one, each tool call on its own — and every line of the same message repeats that
+    // message's `id` while carrying its own `uuid`. Keying on the line made one message up to six turns:
+    // measured over twelve recent threads, 5,077 assistant lines carry only 2,396 distinct message ids, so a
+    // turn count read off the lines is more than twice the truth. Keying on the message id lets the collector
+    // fold the fragments back together with the rule it already has for a re-emitted turn — text kept, calls
+    // merged by their own ids — so nothing here has to accumulate.
+    const turn: MutableTurn = { id: idOf(message) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [] }
     for (const blockValue of items(message.content)) {
       const block = object(blockValue)
       if (block?.type === 'text') turn.text = [turn.text, string(block.text)].filter(Boolean).join('\n') || undefined

@@ -138,6 +138,15 @@ the failure reaches whoever named that id.
 The sampler must stay cheaper than the work it governs. Shared-runtime probes read lightweight loaded-thread
 status only and never load whole conversation histories during a periodic sample.
 
+After a successful `close`, the lifecycle path performs one best-effort read-only resource sweep for that session.
+If the sweep finds a still-resident session-owned or owner-record-absent process, close reports each PID, its
+identifying command and recorded worktree path, and tells the operator to inspect and handle it through its owning
+harness/runtime. A sweep failure is itself an advisory warning and never changes a successful close into a failure;
+the report has no signal or cleanup route.
+This classification survives parent death and reparenting because it uses the process's retained project/session
+identity, not a live parent edge. A process that has cleared those identity variables, or never carried them, is
+outside this session-specific guarantee and remains unattributed rather than being guessed from command text or path.
+
 One process is counted once in host totals. Owner totals use proportional set size when the host exposes it,
 falling back loudly to RSS rather than pretending RSS sums are unique memory. Unsupported hosts return an
 explicit unavailable report; platform details stay behind one host-process adapter.

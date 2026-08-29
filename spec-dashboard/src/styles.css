@@ -2884,6 +2884,25 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-seam-lead { flex: none; font-variant-numeric: tabular-nums; }
 .m-seam-detail { flex: none; font-variant-numeric: tabular-nums; }
 .m-seam-inset { margin: var(--space-2) 0 var(--space-5); padding: var(--space-4) 0 var(--space-3) var(--space-6); border-left: 1px solid var(--edge); }
+/* THE STRETCH FOLDS TO ITS ROW. A message — the person's, or the agent's own note — closes the working
+   stretch it lands in, and the live tail underneath travels down into the `worked …` line instead of
+   blinking out of the page. The movement is the transcript package's own `.tx-fold`: one grid row from
+   `1fr` to `0fr`, over the same `--dur-panel` every foldable panel in this frame folds with, so the
+   conversation and the folds inside a transcript move alike and reduced motion stills both from one place.
+   Only the spacing here is the seam's, and it moves ONTO the wrapper: the gap under the row was the tail's
+   own top margin, and a margin outside the animated box survives the collapse — measured, it left the
+   closed seam 6px too tall for as long as the wrapper lingered, which under reduced motion was the entire
+   visible movement. The wrapper carries it instead, and it is set through the TOKEN the wrapper's margin
+   reads rather than over the margin itself: this stylesheet loads after the package's, so a margin declared
+   here would outrank the package's own closed state and put the 6px straight back; handing the package the
+   host's own `--space-3` is what that token is a customisation surface for. The row rises with it,
+   because afterwards it is not the same line — a green count-up has become a settled duration. */
+.m-seam > .tx-fold { --tx-space-3: var(--space-3); }
+.m-seam > .tx-fold > .tx-live { margin-top: 0; }
+.m-seam.is-folding > .m-seam-row { animation: rise var(--dur-panel) ease; }
+@media (prefers-reduced-motion: reduce) {
+  .m-seam.is-folding > .m-seam-row { animation: none; }
+}
 .m-transcript-state, .m-transcript-empty, .m-transcript-truncated { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
 

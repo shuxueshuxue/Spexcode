@@ -79,7 +79,12 @@ that sets it. At rest a closed panel is still UNMOUNTED, which is what keeps a c
 Folding is a width movement, so a folding panel must clip its own overflow; a panel with no inner scroller
 grows one in the same move, because clipping without one would make a long list unreachable rather than
 scrollable. The duration necessarily lives in both layers — the keyframe is CSS, the unmount is JS — and
-`DOCK_FOLD_MS` is the one place the JS half states it.
+`DOCK_FOLD_MS` is the one place the JS half states it. That hook holds a MOUNT. Where what folds away is not
+a mount but STATE the next thing overwrites — the Conversation's live tail, whose payload belongs to whichever
+seam is streaming ([[conversation]]) — the same file's `useFoldOut` holds the VALUE instead, handing back what
+the current key replaced, captured during the render that replaced it rather than from an effect after paint,
+for the same one duration and under the same rule that it can never outlive its timer. One duration, one file,
+two things a fold can need held.
 
 **THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
 its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how

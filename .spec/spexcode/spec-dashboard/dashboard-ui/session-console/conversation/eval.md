@@ -156,6 +156,26 @@ scenarios:
       an agent that is not working claims no seam; an error line carries none before it; the offline
       record's tail reads the bare word `working`. The shapes that were already right render exactly as
       before.
+  - name: a-closed-stretch-folds-to-its-row
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/seam-fold-motion.e2e.mjs
+    code: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/useFold.js, spec-dashboard/src/styles.css]
+    description: >-
+      In a real browser open the Conversation of a working session whose open seam is streaming a live tail —
+      the agent's newest prose and the calls under it — then type a message into the composer and press Enter,
+      so the record comes back carrying that `sent` event and closes the stretch above it. Sample the outgoing
+      seam's own height on every animation frame across the change and count the distinct heights it passes
+      through; read its lead before and after, how many seams and tails are left, the height it settles at
+      against its row's, and whether any wrapper the movement mounted is still in the DOM once it is over.
+      Then run the whole scenario again with the browser asking for reduced motion. LOOK at the mid-fold
+      frame: every number here passes while the collapse still happens between two frames.
+    expected: >-
+      The lead goes from `working · <span>` to `worked <span>`, the message splits one stretch into two seams,
+      and the closed one keeps no live tail and settles at its row. Getting there is a MOVEMENT: the seam
+      passes through many heights over about one panel fold, and mid-movement the outgoing tail is on screen,
+      clipped and fading, under a row that already reads `worked`. Nothing the movement mounted outlives it.
+      Under reduced motion the same close is a single step, at the same settled height and with nothing left
+      behind. Before the change every one of these was a single step.
   - name: the-conversation-composer-is-a-command-box
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/conversation-command-box.e2e.mjs

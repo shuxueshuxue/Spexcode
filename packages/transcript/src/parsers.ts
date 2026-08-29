@@ -411,7 +411,8 @@ export function opencodeEvents(value: unknown): ParsedEvent[] {
         const state = object(part.state)
         const status = (string(state?.status) ?? '').toLowerCase()
         const tool: MutableTool = { id: string(part.callID ?? part.id) ?? `tool-${turn.tools.length}`, name: string(part.tool) ?? 'tool', input: state?.input === undefined ? undefined : compact(state.input), outputLines: 0, outputBytes: 0 }
-        if (/completed|error|cancelled/.test(status)) {
+        // the terminal states of OpenCode's ToolState union — a call still pending or running has no result yet
+        if (/completed|error/.test(status)) {
           const output = compact(state?.output ?? state?.error ?? '')
           tool.output = output.slice(0, MAX_OUTPUT_BYTES)
           tool.outputBytes = Buffer.byteLength(output)

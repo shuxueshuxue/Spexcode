@@ -88,6 +88,18 @@ sniff the output prose for the words "error" or "denied": that is the adapter se
 adapter has silently dropped the field, and a text guess would be wrong in both directions. A renderer therefore
 has one honest signal to show ([[transcript-view]]), and a fold cannot hide a failure behind a count.
 
+**A stopped call has no structured home in any harness we read, so `outcome` has no third value.** The natural
+third answer — the call a stop ended mid-flight, neither failed nor succeeded — is asked for often enough that
+the reason it is absent belongs here rather than being rediscovered. No adapter emits it per call. OpenCode's
+`ToolState` union is Pending/Running/Completed/Error with no cancelled member; Claude records an interruption as
+prose (`[Request interrupted by user]`) in message content, which this reader does not sniff by the rule above;
+pi, OpenClaw, Gemini and Hermes carry only their error field. Codex does record the stop, but one scope up: the
+app-server's `turn/completed` reports `turn.status: interrupted` for the whole turn, a fact about the run rather
+than about any one call. Adding a per-call value now would define a vocabulary nothing fills, and inferring one
+from a call that merely has no result would re-invent the text guess in a new costume — a tool still running when
+the reader looked is indistinguishable from one a stop ended. If the turn-level fact is ever wanted on the page it
+enters at its own scope, from that field, and only once a producer delivers it unfolded.
+
 **An open interval re-reads cheaply.** A native file is append-only, so the byte where an interval's first
 event sits never moves; the reader remembers that offset per (file, `from`) and a one-shot read of the same
 interval starts there, while the tail cursor goes further and parses only the bytes appended since its last

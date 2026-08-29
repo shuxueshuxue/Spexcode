@@ -42,8 +42,15 @@ $paths
 EOF
 [ -n "$owner" ] || exit 0
 
+# @@@ spend the gate only on a demand that was actually made - the sentinel used to be written BEFORE the
+# reason was rendered, so a render failure burned the session's one chance and the agent was never told
+# anything: the gate reported nothing and then stayed silent for the rest of the session. Render first; the
+# sentinel records that a demand reached the agent, not that one was attempted.
+reason=$($S internal hook-prompt spec-first --path "$path" --owner "$owner") || {
+  printf 'spec-first: could not render its demand for %s (%s); leaving the gate armed for the next governed touch\n' "$path" "$owner" >&2
+  exit 0
+}
 mkdir -p "$sdir"; : > "$sent"
-reason=$($S internal hook-prompt spec-first --path "$path" --owner "$owner") || exit 1
 esc=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
 printf '{"decision":"block","reason":"%s"}\n' "$esc"
 exit 0

@@ -17,6 +17,28 @@
 # CLI read; this shell never treats runtime.json as a second lifecycle database.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 S="${SPEX:-spex}"
+# @@@ the block must survive its own text - two ways a decision was lost. (1) A `hook-prompt` failure exited 1,
+# which for a Stop hook means ALLOW: the CLI breaking silently disarmed the one gate whose whole job is to stop
+# an undeclared stop. It now blocks with a self-contained fallback that needs no CLI to render. Because a
+# genuinely broken CLI would also stop the agent from declaring, that fallback blocks at most once per session
+# and then gets out of the way loudly, so the gate can fail closed without trapping anyone. (2) The escaping
+# was done three times and only one of them folded newlines; a multi-line reason (a node stack, a git message)
+# produced raw newlines inside a JSON string, so the harness saw invalid JSON and the block evaporated. One
+# escaper now serves every site.
+esc_json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'; }
+block_with() { printf '{"decision":"block","reason":"%s"}\n' "$(esc_json "$1")"; exit 0; }
+render_or_fallback() {
+  local text
+  if text=$("$@" 2>/dev/null) && [ -n "$text" ]; then printf '%s' "$text"; return 0; fi
+  local once="$sdir/stop-gate-render-failed"
+  if [ -f "$once" ]; then
+    printf 'stop-gate: cannot render its own reason and has already blocked once for that; allowing this stop. Repair the spex CLI.\n' >&2
+    exit 0
+  fi
+  touch "$once" 2>/dev/null || true
+  block_with "undeclared stop, and stop-gate could not render its own text (the spex CLI failed). Declare the ONE true state as your LAST call: session done --propose merge | done --propose close | ask --note <what you await> | park --note <what you await>. Run it through the same CLI this project launched you with; if that CLI is broken, say so and stop."
+}
+
 input=$(cat 2>/dev/null || true)
 sid=$(hp_session_id "$input"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
@@ -90,9 +112,7 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
     exit 0
   fi
   reason=$($S internal hook-prompt stop-gate --variant commit --reason "$gatemsg" --cli "$S" --propose "$proposal") || exit 1
-  esc=$(printf '%s' "$reason" | sed 's/[\\"]/\\&/g')
-  printf '{"decision":"block","reason":"%s"}\n' "$esc"
-  exit 0
+  block_with "$reason"
 fi
 
 # Any other declared state (parked / error / asking / awaiting+close, plus legacy awaiting+nothing) stops.
@@ -118,10 +138,8 @@ fi
 # of the full-to-terse information gap is recoverable from the entry, none of it from memory.
 taught="$sdir/stop-gate-taught"
 if [ -f "$taught" ]; then
-  reason=$($S internal hook-prompt stop-gate --variant terse --cli "$S") || exit 1
-  esc=$(printf '%s' "$reason" | sed 's/[\\"]/\\&/g')
-  printf '{"decision":"block","reason":"%s"}\n' "$esc"
-  exit 0
+  reason=$(render_or_fallback $S internal hook-prompt stop-gate --variant terse --cli "$S")
+  block_with "$reason"
 fi
 touch "$taught" 2>/dev/null || true
 # The full reason names the PATH-independent CLI ($S) ONCE as a shared `<CLI> session <choice>` prefix, then
@@ -135,12 +153,8 @@ touch "$taught" 2>/dev/null || true
 # this block text is the one place every undeclared stopper is guaranteed to read, so the teaching that
 # kills the park->block->re-park loop at its source lives here.
 if [ -s "$sdir/files.json" ] && grep -qE '"[^"]+"' "$sdir/files.json"; then
-  reason=$($S internal hook-prompt stop-gate --variant artifact) || exit 1
-  esc=$(printf '%s' "$reason" | sed 's/[\\"]/\\&/g')
-  printf '{"decision":"block","reason":"%s"}\n' "$esc"
-  exit 0
+  reason=$(render_or_fallback $S internal hook-prompt stop-gate --variant artifact --cli "$S")
+  block_with "$reason"
 fi
-reason=$($S internal hook-prompt stop-gate --variant full --cli "$S") || exit 1
-esc=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
-printf '{"decision":"block","reason":"%s"}\n' "$esc"
-exit 0
+reason=$(render_or_fallback $S internal hook-prompt stop-gate --variant full --cli "$S")
+block_with "$reason"

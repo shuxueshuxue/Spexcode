@@ -57,12 +57,14 @@ export function segments(turns: readonly AnyTurn[], options: { live?: boolean; f
     const answer = run[lead]?.text ? run[lead] : null
     const work = answer ? run.slice(0, lead) : run
     const after = answer ? run.slice(lead + 1) : []
-    // THE FOLD DECIDES ON WHAT IT WILL HIDE, which is the WORK's calls — not the segment's. `calls` counts the
-    // whole run, answer included, and a run whose calls all sit on its answer turn hides none of them: deciding
-    // on that total drew a fold row reading "0 tool uses" over prose, a row naming something it did not stand
-    // for. The row counts the hidden calls, so the decision must count the same ones.
+    // HOW BUSY THE STRETCH WAS decides whether to collapse it; WHAT THE COLLAPSE HIDES is what the row counts.
+    // Those are two different quantities and both belong: `calls` is the whole run, answer included, and it is
+    // the honest measure of "was this worth folding". But a run whose calls ALL sit on its answer turn hides
+    // none of them, and folding it anyway drew a row reading "0 tool uses" over prose — a control naming
+    // something it did not stand for. So the threshold stays on the run, and the fold requires that there be
+    // something to hide.
     const hidden = work.reduce((n, turn) => n + (turn.tools?.length || 0), 0)
-    out.push({ kind: 'work', work, answer, after, calls, folded: fold === 'segments' && hidden >= runMin && work.length > 0, now: false })
+    out.push({ kind: 'work', work, answer, after, calls, folded: fold === 'segments' && calls >= runMin && hidden > 0, now: false })
     run = []
   }
   for (const turn of turns) {

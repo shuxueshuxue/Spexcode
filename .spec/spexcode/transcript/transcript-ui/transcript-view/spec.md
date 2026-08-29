@@ -84,12 +84,13 @@ twice. They fold the moment the agent speaks — the prose that follows makes th
 turns are ONE list of calls: the harness draws a turn boundary around every call it makes, and that boundary is
 not a paragraph break, so seven calls in seven turns sit at the same list spacing as seven calls in one.
 
-**A fold decides on exactly what it will hide.** The row stands for the calls inside the folded process, so
-the threshold counts those same calls — not the segment's total, which includes the answer turn the fold leaves
-on the page. Counting the total let a run whose calls all sat on its answer fold anyway, and the row then read
-`0 tool uses` over prose: a control naming something it did not stand for, and the same defect as any two
-counters that disagree. A segment whose process hides no calls stays open; its prose is the only thing there,
-and prose is what the reader came for.
+**A fold never stands for calls it does not hide.** Two quantities are in play and both belong: how busy the
+stretch was decides whether collapsing it is worth a row, and that is the whole run, answer included; what the
+collapse hides is what the row counts, and that is the process alone. The defect was letting the first decide
+while the second reported — a run whose calls all sat on its answer folded anyway, and the row then read
+`0 tool uses` over prose, a control naming something it did not stand for. The threshold stays on the run, and
+a fold additionally requires that there be something to hide; a segment whose process hides no calls stays
+open, because its prose is the only thing there and prose is what the reader came for.
 
 **A fold is a movement.** The work travels behind its row — when the agent speaks, when the next message ends
 the stretch, and when the reader shuts the row again by hand — because a page that changes height in a single

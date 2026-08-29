@@ -151,14 +151,15 @@ try {
   await rows.nth(0).locator('.tx-tool-row').click()
   assert.equal(await rows.nth(0).locator('.tx-tool-row').getAttribute('aria-expanded'), 'true')
   await tail.locator('pre.tx-tool-out').waitFor({ state: 'visible', timeout: 5_000 })
-  assert.equal(await rows.nth(0).locator('.tx-tool-in').textContent(), '{"file_path":"/repo/src/trace.ts"}', 'expanded call shows its parameters')
+  // opened arguments read one field per line — the expectation is derived, not a restated string
+  assert.equal(await rows.nth(0).locator('.tx-tool-in').textContent(), JSON.stringify({ file_path: '/repo/src/trace.ts' }, null, 2), 'expanded call shows its parameters')
   assert.equal(await tail.locator('pre.tx-tool-out').textContent(), 'export const x = 1')
   assert.equal(requests.filter((url) => url.includes('/transcript/tool/')).length, 1, 'one body fetch, for the one call opened')
 
   // a running call has no result body yet, but its recorded parameters remain inspectable
   await rows.nth(1).locator('.tx-tool-row').click()
   assert.equal(await rows.nth(1).locator('.tx-tool-row').getAttribute('aria-expanded'), 'true')
-  assert.equal(await rows.nth(1).locator('.tx-tool-in').textContent(), '{"command":"npm test"}')
+  assert.equal(await rows.nth(1).locator('.tx-tool-in').textContent(), JSON.stringify({ command: 'npm test' }, null, 2))
   assert.equal(await rows.nth(1).locator('.tx-tool-out').count(), 0)
 
   // a refresh of the same interval keeps what the reader opened, and the running call settles: a DELTA
@@ -229,7 +230,9 @@ try {
   assert.equal(await seam.locator('.m-seam-inset .tx-ask').count(), 0, 'the message that opened the seam is quoted on the record one row above, not again inside the interval')
   assert.equal(await seam.locator('.m-seam-inset .tx-tool-running').count(), 1, 'the running call is still running in the full view')
   assert.equal(await page.locator('.m-transcript-state').count(), 0, 'no loading line: the payload was already here')
-  assert.equal(requests.filter((url) => !url.includes('/transcript/stream') && !url.includes('/transcript/tool/')).length, 0, 'the open seam issues no interval GET of its own')
+  // an interval GET is an API request; the dev server's own module fetches are not one, and counting them made
+  // this assertion fail whenever a dependency was rebuilt between page load and here
+  assert.equal(requests.filter((url) => url.includes('/api/') && !url.includes('/transcript/stream') && !url.includes('/transcript/tool/')).length, 0, 'the open seam issues no interval GET of its own')
   await page.screenshot({ path: `${OUT}/live-tail-expanded.png` })
   await seam.locator('.m-seam-row').click()
   await tail.waitFor({ state: 'visible', timeout: 5_000 })

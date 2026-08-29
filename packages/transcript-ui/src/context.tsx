@@ -10,6 +10,9 @@ export type ToolOutputResult = { ok: true; output: string | null } | { ok: false
 export type Labels = Readonly<{
   loading: string
   running: string
+  failed: string            // the word a failed call wears; `rejected` for one the person refused
+  rejected: string
+  failedCount: (n: number) => string   // on a folded run: how many of its calls did not succeed
   more: string
   toolUses: (n: number) => string
   lines: (n: number) => string
@@ -19,6 +22,9 @@ export type Labels = Readonly<{
 export const defaultLabels: Labels = {
   loading: 'loading…',
   running: 'running',
+  failed: 'failed',
+  rejected: 'rejected',
+  failedCount: (n) => `${n} failed`,
   more: 'more',
   toolUses: (n) => `${n} tool use${n === 1 ? '' : 's'}`,
   lines: (n) => `${n} line${n === 1 ? '' : 's'}`,

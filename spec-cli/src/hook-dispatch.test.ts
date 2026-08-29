@@ -359,11 +359,21 @@ for (const harness of ['claude', 'codex'] as const) {
     assert.equal(t.fire('src/governed.ts').status, 0)
   })
 
-  test(`${harness} spec-first: event-wide non-read delivery leaves the read gate untouched`, () => {
-    const t = specFirstRig(harness, 'mutation-is-irrelevant')
-    assert.equal(t.fire('src/governed.ts', 'mutate').status, 0)
-    assert.equal(existsSync(t.sentinel), false, 'a governed mutation is not a governed read')
-    assert.equal(t.fire('src/governed.ts').status, 2)
+  test(`${harness} spec-first: a governed WRITE spends the gate, because a blind write is the case the rule is for`, () => {
+    const t = specFirstRig(harness, 'mutation-is-access')
+    const mutation = t.fire('src/governed.ts', 'mutate')
+    assert.equal(mutation.status, 2, mutation.stderr)
+    assert.match(mutation.stdout + mutation.stderr, /governed-contract/)
+    assert.equal(existsSync(t.sentinel), true, 'a governed mutation is a governed access')
+    assert.equal(t.fire('src/governed.ts', 'mutate').status, 0, 'the retry proceeds after the one-shot demand')
+    assert.equal(t.fire('src/governed.ts').status, 0, 'and the gate stays spent for reads too')
+  })
+
+  test(`${harness} spec-first: an ungoverned write leaves the gate armed for the first governed touch`, () => {
+    const t = specFirstRig(harness, 'ungoverned-write')
+    assert.equal(t.fire('src/ungoverned.ts', 'mutate').status, 0)
+    assert.equal(existsSync(t.sentinel), false, 'an ungoverned mutation must not consume the session gate')
+    assert.equal(t.fire('src/governed.ts', 'mutate').status, 2)
   })
 }
 

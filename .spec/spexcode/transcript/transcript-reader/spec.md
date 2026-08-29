@@ -83,10 +83,19 @@ reference) is named in brackets, not dumped.
 pi's and OpenClaw's `toolResult.isError`, OpenCode's `state.status: error`, Gemini's call `status: error`, and
 the Codex app-server item status (`failed`; `declined` is `rejected`, the call the person refused, which never ran
 and so ends with an empty result rather than reading as running forever). Absent means the harness recorded no
-such signal — a Codex rollout carries none, and Hermes writes nothing — never "succeeded". The reader does not
+such signal — Hermes writes nothing — never "succeeded". The reader does not
 sniff the output prose for the words "error" or "denied": that is the adapter seam where every independent Claude
 adapter has silently dropped the field, and a text guess would be wrong in both directions. A renderer therefore
 has one honest signal to show ([[transcript-view]]), and a fold cannot hide a failure behind a count.
+
+**One harness keeps the verdict in a third record, so reading it is a second join.** A Codex rollout's result
+item carries no failure field at all — `function_call_output` and `custom_tool_call_output` hold only a
+`call_id` and an `output`. The harness records how the command ended in a separate `event_msg` addressed by
+that same `call_id`: `exec_command_end.status` (`completed` | `failed`) and `patch_apply_end.success`. The
+reader therefore emits the outcome on its own, with no text, so it lands on the call the output record already
+filled — the same id-addressed mechanism that joins a result to its call, used a second time. Skipping it is
+not a small omission: on the rollouts on this box the failed status is on disk 6,194 times and none of it
+reached the page.
 
 **A stop is recorded on the TURN, not on the call — so that is where it is carried.** No harness we read marks
 a single call cancelled: OpenCode's `ToolState` union is Pending/Running/Completed/Error with no cancelled

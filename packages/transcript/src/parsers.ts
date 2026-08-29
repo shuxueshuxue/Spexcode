@@ -166,6 +166,18 @@ export function codexEvent(value: unknown): ParsedEvent | null {
     const rawInput = payload.input === undefined && payload.arguments === undefined ? undefined : compact(payload.input ?? payload.arguments)
     return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name: string(payload.name ?? payload.tool_name) ?? 'tool', input: codexExecCommand(rawInput), outputLines: 0, outputBytes: 0 }] } }
   }
+  // THE ROLLOUT PUTS THE VERDICT IN A THIRD RECORD. Unlike every other source here, a codex result item
+  // carries no failure field at all — `function_call_output` and `custom_tool_call_output` have only
+  // `{call_id, output}`. The harness records how the command ended in a separate `event_msg`, joined by the
+  // same `call_id`: `exec_command_end.status` (completed | failed, 6,194 failed of 83,990 in the rollouts on
+  // this box, matching exactly the nonzero exit codes) and `patch_apply_end.success`. Without this second
+  // join every failed command in a codex transcript reads as an ordinary one. The outcome is carried alone,
+  // with no text, so it lands on the call the output record already filled.
+  if (entry.type === 'event_msg' && (type === 'exec_command_end' || type === 'patch_apply_end')) {
+    const id = string(payload.call_id)
+    const failed = string(payload.status) === 'failed' || payload.success === false
+    return id && failed ? { at: eventAt, turn: null, toolOutputs: [{ id, text: '', outcome: 'failed' as const }] } : { at: eventAt, turn: null }
+  }
   if (entry.type === 'response_item' && (type === 'custom_tool_call_output' || type === 'function_call_output')) {
     const id = string(payload.call_id ?? payload.id)
     const output = payload.output ?? payload.result ?? ''
@@ -185,7 +197,12 @@ export function codexAppServerEvent(value: unknown): ParsedEvent | null {
   const method = entry.method
   const recognized = method === 'item/agentMessage/delta' || method === 'item/started' || method === 'item/completed'
   if (!recognized) return null
-  const eventAt = timestamp(params.emittedAtMs) ?? timestamp(params.startedAtMs) ?? timestamp(params.completedAtMs)
+  // `emittedAtMs` is a SIBLING of `method` and `params`, not a field inside them — the app-server's own
+  // generated envelope type puts it there, and every line of the capture in `fixtures/codex-app-server` has
+  // exactly the keys `method`, `params`, `emittedAtMs`. Reading it from `params` found nothing, which made
+  // every `item/agentMessage/delta` clockless and therefore dropped: the streaming path parsed and produced
+  // nothing at all. The lifecycle clocks below do sit in `params`.
+  const eventAt = timestamp(entry.emittedAtMs) ?? timestamp(params.startedAtMs) ?? timestamp(params.completedAtMs)
   if (eventAt === null) return { at: null, turn: null }
 
   if (method === 'item/agentMessage/delta') {

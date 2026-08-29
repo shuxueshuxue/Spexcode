@@ -19,9 +19,15 @@ Land the current SpexCode session's branch; do not dispatch another merge reques
 3. Immediately before landing, verify
    `git merge-base --is-ancestor <source-head> <session-head>`. If it fails, sync again. A clean textual merge
    is not product proof.
-4. In the source-of-truth checkout, make one `--no-ff` merge of the already-synced session tip. Do not resolve
-   conflicts there. If unrelated dirty work prevents the merge, preserve it byte-for-byte and report the exact
-   overlap rather than forcing, resetting, or committing it.
+4. Land with one `--no-ff` merge of the already-synced session tip, without touching the source checkout's
+   dirty work. Git refuses a merge over a dirty index, so do NOT clear it: add a temporary detached worktree of
+   the source head (`git worktree add --detach <tmp> <source-branch>`), make the `--no-ff` merge there, then
+   fast-forward the source checkout to that commit (`git merge --ff-only <tmp-head>`) and remove the temporary
+   worktree. A fast-forward never rewrites a path the merge did not change, so user-owned dirty files keep
+   their bytes and their staged/unstaged state. Never `git restore`, `reset`, `checkout`, `stash`, or overwrite
+   a user-owned path — an unstaged edit has no blob anywhere, so "save and put back" loses it, and a copy of the
+   same path from another worktree is a different version, not a restoration. Do not resolve conflicts in the
+   source checkout; if the merge genuinely overlaps a user-owned path, stop and report the exact overlap.
 5. Verify the source checkout has no `MERGE_HEAD`, the session tip is its ancestor, unrelated dirty
    fingerprints are unchanged, and the post-merge gates pass. Push the source-of-truth branch only after
    those checks.

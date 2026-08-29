@@ -18,7 +18,8 @@ import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHom
 import { git } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/spec-core'
-import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, prepareCodexGenerationClose, resolveCodexGenerationForClose, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
+import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, prepareCodexGenerationClose, resolveCodexGenerationForClose, resolveCodexGenerationForResume, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
+import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { writeFileIfChanged } from './file-write.js'
 import { claudeTranscript, codexRolloutPath, codexTranscript, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from '@spexcode/transcript'
 import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
@@ -397,6 +398,7 @@ export interface Harness {
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = {
   session: string
+  harness?: string
   stopped?: boolean
   archived?: boolean
   worktreePath?: string
@@ -2424,7 +2426,20 @@ async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string
   // the socket is PER-PROJECT (the runtime root), shared by every worktree's thread; the owned thread id on
   // the record picks out THIS session's thread.
   const runtimeDir = rec.runtimeDir ?? runtimeRoot()
-  const endpoint = rec.harnessSessionId ? codexEndpointForRecord(rec, runtimeDir) : currentCodexGeneration(runtimeDir)
+  let endpoint = rec.harnessSessionId ? codexEndpointForRecord(rec, runtimeDir) : currentCodexGeneration(runtimeDir)
+  // A generation may be reclaimed after rotation or a host restart while the session record remains valid.
+  // Repair that stale route at the delivery boundary using the same exact-thread re-pin used by resume, so an
+  // accepted message is not left indefinitely in the queue just because no later human resume was requested.
+  if ((!endpoint || !existsSync(endpoint.socketPath)) && rec.harnessSessionId) {
+    const command = codexBaseCmd(rec.launchCmd || 'codex')
+    const env = { ...process.env }
+    for (const key of sessionIdentityEnvVars()) delete env[key]
+    const start = async (candidate: CodexGenerationEndpoint) => {
+      await spawnDetachedRuntime({ cwd: runtimeDir, logFile: candidate.logFile, pidFile: candidate.pidFile,
+        receiptFile: candidate.receiptFile, command, args: ['app-server', '--listen', `unix://${candidate.socketPath}`], env })
+    }
+    endpoint = await resolveCodexGenerationForResume(runtimeDir, rec.session, rec.harnessSessionId, start)
+  }
   if (!endpoint) return { ok: false, error: `no exact Codex generation binding for session ${rec.session} — immediate poke unavailable` }
   const sock = endpoint.socketPath
   if (!existsSync(sock)) return { ok: false, error: `no Codex app-server socket for this project — immediate poke unavailable` }
@@ -2436,6 +2451,12 @@ async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string
     if (!r.ok) return { ok: false, error: `${r.error} — immediate poke unavailable` }
     threadId = r.threadId
   }
+  const delivered = await sendCodexAppServerTurn(sock, threadId!, text, rec.worktreePath, rec.mid)
+  if (delivered.ok || rec.harness !== 'codex-headless' || !/not loaded in the app-server/u.test(delivered.error || '')) return delivered
+  // Headless Codex has no TUI resume step. An idle thread can be evicted from the shared server's loaded set;
+  // reload the exact rollout, then retry the same turn once. This is idempotent and does not create a new thread.
+  const reopened = await codexReopenThread(sock, threadId!)
+  if (!reopened.ok) return { ok: false, error: `${delivered.error}; ${reopened.error}` }
   return sendCodexAppServerTurn(sock, threadId!, text, rec.worktreePath, rec.mid)
 }
 

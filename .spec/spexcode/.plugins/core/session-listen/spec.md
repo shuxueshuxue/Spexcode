@@ -27,6 +27,17 @@ is decoded to a temporary file, validated as UTF-8, and rejected loudly (with it
 toolchain without command substitution, preserving embedded and trailing newlines; a non-empty body can never become
 an empty additionalContext success.
 
+**A delivery failure never costs the person their own prompt.** This hook runs ON prompt submission, so blocking
+is not a way of being loud — it deletes what someone just typed. Two different failures did that. A dequeue that
+errors consumes nothing, and yet the prompt was thrown away for it. And a failure AFTER a successful dequeue had
+already lost the peer message, because the queue is at-most-once; blocking cannot bring it back and only takes a
+second casualty. So every failure inside the delivery path reports itself through the SAME channel the message
+would have used — an `additionalContext` notice, and the same line on stderr — and lets the prompt through. A
+failure before the dequeue says that nothing was consumed and the message is still queued. A failure after it
+carries the `messageId` and the `bodyBase64`, because at that point the notice IS the recovery path. What stays
+blocking is the environment: a configured-but-broken adopter, and the capability probes that run before the
+dequeue precisely so a message is never consumed by a shell that cannot deliver it.
+
 The CLI is resolved at runtime through one explicit seam: a non-empty `SPEX_SESSION_CLI` wins, otherwise PATH is
 searched for `spex-session`. If either protocol database environment variable is configured and no CLI can be
 resolved, the hook fails loudly with an installation or `SPEX_SESSION_CLI` repair entrypoint. With neither database

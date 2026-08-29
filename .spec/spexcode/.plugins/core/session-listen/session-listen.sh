@@ -62,6 +62,19 @@ if printf ' 0a ' | grep -Eq "$control_pattern"; then capability_error 'grep exte
 [ "$(printf 'A\nB\n' | awk "$escape_awk")" = 'A\nB' ] || capability_error 'awk JSON text escaping'
 [ "$(printf A | cat)" = A ] || capability_error 'cat byte emission'
 
+# @@@ a failed delivery must not eat the person's own prompt - this hook runs ON UserPromptSubmit, so exiting 2
+# BLOCKS what the person just typed. Two different harms came out of that. A transient dequeue failure consumed
+# nothing, yet the person lost their own unrelated prompt for it. And a failure AFTER a successful dequeue lost
+# the peer message for good (the queue is at-most-once) and then took the person's prompt as a second casualty
+# — blocking cannot bring the message back, it only doubles the loss. So a delivery failure reports itself
+# through the SAME channel the message would have used and lets the prompt through. The notice is ASCII only
+# (an id and base64), so it needs no escaping pass of its own.
+notify_failure() {
+  printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' "$1"
+  printf '%s\n' "$1" >&2
+  exit 0
+}
+
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 payload=$(cat 2>/dev/null || true)
 sid=$(hp_field "$payload" session_id)
@@ -73,47 +86,37 @@ case "$event" in
     "$cli" initialize --session-id "$sid" >/dev/null || exit 2
     ;;
   UserPromptSubmit)
-    decoded=$(mktemp "${TMPDIR:-/tmp}/spex-session-listen.XXXXXX") || {
-      printf '%s\n' 'session-listen: could not allocate a temporary body file; repair TMPDIR and retry' >&2
-      exit 2
-    }
+    decoded=$(mktemp "${TMPDIR:-/tmp}/spex-session-listen.XXXXXX") \
+      || notify_failure 'session-listen could not allocate a temporary body file, so it read nothing this turn. Repair TMPDIR. Any queued message is still queued.'
     escaped_file="$decoded.escaped"
     output_file="$decoded.output"
     if ! : >"$escaped_file" || ! : >"$output_file"; then
-      rm -f "$decoded"
-      rm -f "$escaped_file" "$output_file"
-      printf '%s\n' 'session-listen: could not prepare temporary delivery files; repair TMPDIR and retry' >&2
-      exit 2
+      rm -f "$decoded" "$escaped_file" "$output_file"
+      notify_failure 'session-listen could not prepare its temporary delivery files, so it read nothing this turn. Repair TMPDIR. Any queued message is still queued.'
     fi
     cleanup() { rm -f "$decoded" "$escaped_file" "$output_file"; }
     trap cleanup EXIT
-    raw=$("$cli" dequeue --session-id "$sid") || exit 2
+    raw=$("$cli" dequeue --session-id "$sid") || notify_failure 'session-listen could not read the message queue this turn. Nothing was consumed, so any queued message is still there and arrives on the next turn.' 
     [ "$raw" = 'null' ] && exit 0
     body64=$(printf '%s' "$raw" | sed -n "$body64_sed")
     message_id=$(printf '%s' "$raw" | sed -n 's/.*"messageId":"\([^"]*\)".*/\1/p')
     [ -n "$body64" ] || {
-      printf '%s\n' 'session-listen: spex-session dequeue returned invalid JSON (missing bodyBase64)' >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "invalid-json-missing-bodyBase64" "$message_id" "$body64")"
     }
     if ! printf '%s' "$body64" | base64 -d >"$decoded" 2>/dev/null; then
-      printf '%s\n' 'session-listen: spex-session dequeue returned invalid bodyBase64' >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "invalid-bodyBase64" "$message_id" "$body64")"
     fi
     if ! iconv -f UTF-8 -t UTF-8 "$decoded" >/dev/null 2>/dev/null; then
-      printf 'session-listen: refusing non-UTF-8 body; messageId=%s bodyBase64=%s\n' "$message_id" "$body64" >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "non-utf8-body" "$message_id" "$body64")"
     fi
     if od -An -v -tx1 "$decoded" | grep -Eq "$control_pattern"; then
-      printf 'session-listen: refusing control-byte body; messageId=%s bodyBase64=%s\n' "$message_id" "$body64" >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "control-byte-body" "$message_id" "$body64")"
     fi
     if ! awk "$escape_awk" "$decoded" >"$escaped_file"; then
-      printf 'session-listen: could not encode body for harness input; messageId=%s bodyBase64=%s\n' "$message_id" "$body64" >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "encode-failed" "$message_id" "$body64")"
     fi
     if [ -s "$decoded" ] && [ ! -s "$escaped_file" ]; then
-      printf 'session-listen: non-empty body encoded to empty additionalContext; messageId=%s bodyBase64=%s\n' "$message_id" "$body64" >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "encoded-to-empty" "$message_id" "$body64")"
     fi
     last_byte=$(tail -c 1 "$decoded" | od -An -tx1 | tr -d '[:space:]')
     if ! {
@@ -122,12 +125,10 @@ case "$event" in
       [ "$last_byte" = 0a ] && printf '\\n'
       printf '"}}\n'
     } >"$output_file"; then
-      printf 'session-listen: could not assemble harness input; messageId=%s bodyBase64=%s\n' "$message_id" "$body64" >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "assemble-failed" "$message_id" "$body64")"
     fi
     if ! cat "$output_file"; then
-      printf 'session-listen: could not emit harness input; messageId=%s bodyBase64=%s\n' "$message_id" "$body64" >&2
-      exit 2
+      notify_failure "$(printf 'session-listen dequeued a message it could not deliver, and the queue is at-most-once, so the message is gone from it. Recover it from this line. reason=%s messageId=%s bodyBase64=%s' "emit-failed" "$message_id" "$body64")"
     fi
     ;;
 esac

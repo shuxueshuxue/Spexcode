@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/session-selflaunch",
-  "version": "0.7.0-next.10",
+  "version": "0.7.0-next.11",
   "publishConfig": { "access": "public" },
   "type": "module",
   "description": "A fail-closed self-launch adopter for the SpexCode session protocol.",
@@ -24,8 +24,8 @@
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/session-protocol": "0.7.0-next.10",
-    "@spexcode/session-runtime": "0.7.0-next.10"
+    "@spexcode/session-protocol": "0.7.0-next.11",
+    "@spexcode/session-runtime": "0.7.0-next.11"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

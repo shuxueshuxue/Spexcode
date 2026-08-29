@@ -1,4 +1,4 @@
-import { TranscriptReadError, type TranscriptRange, type TranscriptRead } from './turns.js'
+import { TranscriptReadError, type TranscriptRange, type TranscriptRead, type TurnOutcome } from './turns.js'
 
 // ONE PARSER PER HARNESS. Each function turns one native record — a line of Claude's project JSONL (which is
 // also exactly what its `--output-format stream-json` prints), a Codex rollout line, a pi session line, an
@@ -76,7 +76,7 @@ function codexExecCommand(input: string | undefined): string | undefined {
 }const lineCount = (value: string): number => value ? value.split(/\r?\n/).length : 0
 
 export type MutableTool = { id: string; name: string; input?: string; output?: string; outputLines: number; outputBytes: number; outcome?: ToolOutcome }
-export type MutableTurn = { id: string | null; at: number; role: 'user' | 'assistant'; text?: string; tools: MutableTool[] }
+export type MutableTurn = { id: string | null; at: number; role: 'user' | 'assistant'; text?: string; tools: MutableTool[]; outcome?: TurnOutcome; error?: string }
 // One native record, normalized: a turn, or a batch of tool results addressed to earlier calls. `at: null`
 // marks a record that carries no clock — it counts as seen, never as inside an interval.
 export type ToolOutcome = 'failed' | 'rejected'
@@ -166,6 +166,18 @@ export function codexEvent(value: unknown): ParsedEvent | null {
     const rawInput = payload.input === undefined && payload.arguments === undefined ? undefined : compact(payload.input ?? payload.arguments)
     return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name: string(payload.name ?? payload.tool_name) ?? 'tool', input: codexExecCommand(rawInput), outputLines: 0, outputBytes: 0 }] } }
   }
+  // THE ROLLOUT PUTS THE VERDICT IN A THIRD RECORD. Unlike every other source here, a codex result item
+  // carries no failure field at all — `function_call_output` and `custom_tool_call_output` have only
+  // `{call_id, output}`. The harness records how the command ended in a separate `event_msg`, joined by the
+  // same `call_id`: `exec_command_end.status` (completed | failed, 6,194 failed of 83,990 in the rollouts on
+  // this box, matching exactly the nonzero exit codes) and `patch_apply_end.success`. Without this second
+  // join every failed command in a codex transcript reads as an ordinary one. The outcome is carried alone,
+  // with no text, so it lands on the call the output record already filled.
+  if (entry.type === 'event_msg' && (type === 'exec_command_end' || type === 'patch_apply_end')) {
+    const id = string(payload.call_id)
+    const failed = string(payload.status) === 'failed' || payload.success === false
+    return id && failed ? { at: eventAt, turn: null, toolOutputs: [{ id, text: '', outcome: 'failed' as const }] } : { at: eventAt, turn: null }
+  }
   if (entry.type === 'response_item' && (type === 'custom_tool_call_output' || type === 'function_call_output')) {
     const id = string(payload.call_id ?? payload.id)
     const output = payload.output ?? payload.result ?? ''
@@ -185,7 +197,12 @@ export function codexAppServerEvent(value: unknown): ParsedEvent | null {
   const method = entry.method
   const recognized = method === 'item/agentMessage/delta' || method === 'item/started' || method === 'item/completed'
   if (!recognized) return null
-  const eventAt = timestamp(params.emittedAtMs) ?? timestamp(params.startedAtMs) ?? timestamp(params.completedAtMs)
+  // `emittedAtMs` is a SIBLING of `method` and `params`, not a field inside them — the app-server's own
+  // generated envelope type puts it there, and every line of the capture in `fixtures/codex-app-server` has
+  // exactly the keys `method`, `params`, `emittedAtMs`. Reading it from `params` found nothing, which made
+  // every `item/agentMessage/delta` clockless and therefore dropped: the streaming path parsed and produced
+  // nothing at all. The lifecycle clocks below do sit in `params`.
+  const eventAt = timestamp(entry.emittedAtMs) ?? timestamp(params.startedAtMs) ?? timestamp(params.completedAtMs)
   if (eventAt === null) return { at: null, turn: null }
 
   if (method === 'item/agentMessage/delta') {
@@ -286,6 +303,15 @@ export function piEvent(value: unknown): ParsedEvent | null {
         turn.tools.push({ id, name: string(block.name) ?? 'tool', input: block.arguments === undefined ? undefined : compact(block.arguments), outputLines: 0, outputBytes: 0 })
       }
     }
+    // the producer's verdict on the TURN (`StopReason` in pi's shipped types): `error` is the provider's own
+    // failure, `aborted` the turn a stop ended. These are exactly the turns that carry no text and no calls —
+    // 13 of 578 assistant messages in the sessions on this box — so without them the turn is an empty gap.
+    const stop = string(message.stopReason)
+    if (stop === 'error' || stop === 'aborted') {
+      turn.outcome = stop === 'aborted' ? 'cancelled' : 'failed'
+      const reason = string(message.errorMessage)
+      if (reason) turn.error = reason
+    }
     return { at: eventAt, turn }
   }
   if (message.role === 'toolResult') {
@@ -330,33 +356,23 @@ export function geminiEvent(value: unknown): ParsedEvent | null {
   return null
 }
 
-export function openclawEvent(value: unknown): ParsedEvent | null {
-  const entry = object(value)
-  const message = object(entry?.message)
-  if (!entry || entry.type !== 'message' || !message) return null
-  const eventAt = at(message) ?? at(entry)
-  if (eventAt === null) return { at: null, turn: null }
-  if (message.role === 'user') {
-    const text = blockText(message.content)
-    return text ? { at: eventAt, turn: { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'user', text, tools: [] } } : null
-  }
-  if (message.role === 'toolResult') {
-    const id = string(message.toolCallId)
-    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: blockText(message.content) ?? compact(message.content ?? ''), ...(message.isError === true ? { outcome: 'failed' as const } : {}) }] } : null
-  }
-  if (message.role === 'assistant') {
-    const turn: MutableTurn = { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'assistant', tools: [] }
-    for (const blockValue of items(message.content)) {
-      const block = object(blockValue)
-      if (block?.type === 'text') turn.text = [turn.text, string(block.text)].filter(Boolean).join('\n') || undefined
-      if (block?.type === 'toolCall') {
-        const id = string(block.id) ?? `tool-${turn.tools.length}`
-        turn.tools.push({ id, name: string(block.name) ?? 'tool', input: block.arguments === undefined ? undefined : compact(block.arguments), outputLines: 0, outputBytes: 0 })
-      }
-    }
-    return turn.text || turn.tools.length ? { at: eventAt, turn } : null
-  }
-  return null
+// OPENCLAW WRITES PI'S FORMAT. Verified field by field against pi's shipped schema: the `{"type":"session",
+// "version":3}` header, the 8-char hex id tree, the `user|assistant|toolResult` roles, the `text`/`thinking`/
+// `toolCall` blocks, `toolResult`'s exact key set. The only OpenClaw-specific things are its own `customType`
+// namespace and where the file lives — neither of which a parser reads. So this is not a second parser: two
+// hand-written copies had already drifted into two defects (a different clock preference on identical bytes,
+// and dropping every turn with no text and no calls, which is precisely the failed and aborted ones). Where a
+// harness differs only in where its file sits, the adapter row is the LOCATOR ([[transcript-reader]]), never a
+// second copy of the parse.
+export const openclawEvent = piEvent
+
+// HERMES COUNTS IN SECONDS. Its export writes `timestamp` as a float epoch SECOND (`1787942674.556185`),
+// where every other harness here writes milliseconds and `at()` reads a bare number as one. Unconverted, a
+// Hermes turn lands in January 1970 and every interval read of a real thread — the session API hands `from`
+// and `to` as epoch ms — comes back empty. The unit is this producer's, so the conversion is this adapter's.
+const hermesAt = (message: Record<string, unknown>): number | null => {
+  const seconds = at(message)
+  return seconds === null ? null : Math.round(seconds * 1000)
 }
 
 export function hermesEvents(value: unknown): ParsedEvent[] {
@@ -365,7 +381,7 @@ export function hermesEvents(value: unknown): ParsedEvent[] {
   for (const messageValue of items(root?.messages)) {
     const message = object(messageValue)
     if (!message) continue
-    const eventAt = at(message)
+    const eventAt = hermesAt(message)
     if (eventAt === null) { events.push({ at: null, turn: null }); continue }
     const role = message.role
     if (role === 'user') {

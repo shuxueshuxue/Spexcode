@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import test from 'node:test'
-import { IntervalCollector, claudeEvent, codexAppServerEvent, codexEvent, geminiEvent, openclawEvent, opencodeEvents, piEvent, type ParsedEvent } from './parsers.js'
+import { IntervalCollector, claudeEvent, codexAppServerEvent, codexAppServerStream, codexEvent, geminiEvent, openclawEvent, opencodeEvents, piEvent, type ParsedEvent } from './parsers.js'
 
 // A tool's outcome is the harness's OWN structured verdict, carried through the result event to the call.
 // Prose that merely says "error" is not read: absence means "no signal", never "succeeded".
@@ -64,6 +66,44 @@ test('opencode: a tool part in state error is failed; gemini: a call with status
   ] })])
   assert.equal(gemini.find((tool) => tool.id === 'gc1')?.outcome, 'failed')
   assert.equal(gemini.find((tool) => tool.id === 'gc2')?.outcome, undefined)
+})
+
+test('pi and OpenClaw: one format, one parser — the turn keeps the producer\'s verdict even with nothing to show', () => {
+  const entryAt = '2026-08-29T00:00:10.000Z'
+  const record = (stopReason: string, errorMessage?: string) => ({
+    type: 'message', id: 'e1', timestamp: entryAt,
+    message: { role: 'assistant', timestamp: Date.parse('2026-08-29T00:00:00.000Z'), content: [], stopReason, ...(errorMessage ? { errorMessage } : {}) },
+  })
+  // the two harnesses write the same bytes, so they must read the same — including WHICH clock is the turn's
+  assert.equal(openclawEvent, piEvent)
+  const failed = piEvent(record('error', 'Request timed out.'))?.turn
+  assert.equal(failed?.outcome, 'failed')
+  assert.equal(failed?.error, 'Request timed out.')
+  // a turn the provider failed carries no text and no calls; dropping it leaves a gap where the timeout was
+  assert.equal(failed?.text, undefined)
+  assert.equal(failed?.tools.length, 0)
+  assert.equal(piEvent(record('aborted'))?.turn?.outcome, 'cancelled')
+  assert.equal(piEvent(record('aborted'))?.turn?.error, undefined)
+  assert.equal(piEvent(record('stop'))?.turn?.outcome, undefined)
+  assert.equal(piEvent(record('toolUse'))?.turn?.outcome, undefined)
+  // the entry's append time is the observable an interval read answers with, not the message's construction time
+  assert.equal(piEvent(record('stop'))?.at, Date.parse(entryAt))
+})
+
+test('the codex app-server stream is read against the producer\'s own capture: deltas have a clock and become prose', () => {
+  const capture = readFileSync(join(process.cwd(), 'fixtures', 'codex-app-server', 'notifications.jsonl'), 'utf8')
+  const lines = capture.split('\n').filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>)
+  const deltas = lines.filter((line) => line.method === 'item/agentMessage/delta')
+  assert.ok(deltas.length > 0, 'the capture contains deltas')
+  // the envelope carries the clock beside `method` and `params`; a delta has no clock of its own inside params,
+  // so reading it from there made every delta timeless and the whole streaming path silently empty
+  assert.ok(deltas.every((line) => typeof line.emittedAtMs === 'number'))
+  assert.ok(deltas.every((line) => (line.params as Record<string, unknown>).emittedAtMs === undefined))
+  const parse = codexAppServerStream()
+  const collector = new IntervalCollector({ from: 0, to: 2_000_000_000_000 })
+  for (const line of lines) { const event = parse(line); if (event) collector.add(event) }
+  const read = collector.finish('r1', 'codex-app-server')
+  assert.ok(read.turns.some((turn) => turn.role === 'assistant' && (turn.text || '').length > 0), 'the deltas became prose')
 })
 
 test('a result recorded as content blocks reads as the text of those blocks, line breaks kept, non-text blocks named', () => {

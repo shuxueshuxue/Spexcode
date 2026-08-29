@@ -33,8 +33,15 @@ test('Gemini and OpenClaw fixture readers normalize prose, calls, and results', 
 test('Hermes export fixture reader uses state.db revision and joins tool results', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-hermes-'))
   writeFileSync(join(root, 'state.db'), 'fixture')
-  const reader = hermesTranscriptReader(root, () => readFileSync(fixture('hermes', 'hermes-20260829_024341_62ec96.jsonl'), 'utf8'))
-  const read = await reader.read('20260829_024341_62ec96', { from: 0, to: 2_000_000_000_000 })
+  const exported = readFileSync(fixture('hermes', 'hermes-20260829_024341_62ec96.jsonl'), 'utf8')
+  const reader = hermesTranscriptReader(root, () => exported)
+  // the window is DERIVED from the fixture's own clock, in the epoch MILLISECONDS the session API passes: a
+  // window wide enough to hold both the right answer and a seconds-as-milliseconds one (1970) cannot tell them
+  // apart, and that is exactly the defect this asserts against — Hermes writes epoch seconds
+  const stamps = (JSON.parse(exported).messages as { timestamp: number }[]).map((m) => Math.round(m.timestamp * 1000))
+  const read = await reader.read('20260829_024341_62ec96', { from: Math.min(...stamps), to: Math.max(...stamps) })
+  assert.ok(read.turns.length > 0, 'the real millisecond window contains the thread')
+  assert.ok(read.turns.every((turn) => turn.at >= Math.min(...stamps) && turn.at <= Math.max(...stamps)))
   assert.ok(read.turns.some((turn) => turn.role === 'assistant' && turn.tools?.some((tool) => tool.name === 'terminal' && tool.output?.includes('exit_code'))))
   assert.ok(read.turns.some((turn) => turn.text === 'G1_RESUME_OK'))
   assert.ok(!read.turns.some((turn) => turn.text?.includes('The user wants me to:')))

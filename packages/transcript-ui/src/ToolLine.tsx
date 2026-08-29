@@ -2,7 +2,19 @@ import { useEffect, useState } from 'react'
 import { useTranscriptUi, type ToolOutputResult } from './context.js'
 import { Caret, Spinner } from './icons.js'
 import { isRunning } from './segments.js'
-import { prettyInput, runKinds, splitTarget, toolName, toolTarget, toolVerb, type AnyTool } from './vocabulary.js'
+import { prettyInput, runKinds, splitTarget, stripAnsi, toolName, toolTarget, toolVerb, type AnyTool } from './vocabulary.js'
+
+const utf8 = new TextEncoder()
+
+// THE CAP IS SAID WHERE IT BIT. The reader keeps `outputBytes` at the result's true size while the body it
+// carries stops at the per-tool cap ([[transcript-reader]]), so the difference is exactly what this call is
+// missing. The read as a whole already reports its omitted bytes, but that line cannot say WHICH result was
+// cut, and a prefix drawn with no mark reads as the whole output.
+function OutputCut({ tool, body }: { tool: AnyTool; body: string }) {
+  const { labels } = useTranscriptUi()
+  const omitted = (tool.outputBytes || 0) - utf8.encode(body).length
+  return omitted > 0 ? <div className="tx-tool-cut">{labels.outputCut(omitted)}</div> : null
+}
 
 // A LIVE FRAME WITHHOLDS OUTPUT BODIES: a recorded result is `null` on the wire, its size told, and the body
 // is fetched once when a person opens the call, through the host's loader.
@@ -18,7 +30,8 @@ function WithheldOutput({ tool }: { tool: AnyTool }) {
   if (!loadToolOutput) return null
   if (!fetched) return <div className="tx-tool-out tx-tool-out-state">{labels.loading}</div>
   if (!fetched.ok) return <div className="tx-tool-out tx-tool-out-state is-error">{fetched.error}</div>
-  return <pre className="tx-tool-out">{fetched.output ?? ''}</pre>
+  const body = fetched.output ?? ''
+  return <><pre className="tx-tool-out">{stripAnsi(body)}</pre><OutputCut tool={tool} body={body} /></>
 }
 
 // One tool call as a SENTENCE, not a card: verb, target, and the size of what came back. It is
@@ -54,10 +67,10 @@ export function ToolLine({ tool, open, onToggle, live = false }: { tool: AnyTool
         ? <button type="button" onClick={onToggle} aria-expanded={open} className="tx-tool-row is-openable">{row}</button>
         : <div className="tx-tool-row">{row}</div>}
       {open && canOpen && <>
-        {tool.input && <pre className="tx-tool-in">{prettyInput(tool.input)}</pre>}
+        {tool.input && <pre className="tx-tool-in">{stripAnsi(prettyInput(tool.input))}</pre>}
         {withheld
           ? <WithheldOutput tool={tool} />
-          : tool.output !== undefined && <pre className="tx-tool-out">{tool.output}</pre>}
+          : tool.output !== undefined && <><pre className="tx-tool-out">{stripAnsi(tool.output)}</pre><OutputCut tool={tool} body={tool.output} /></>}
       </>}
     </div>
   )

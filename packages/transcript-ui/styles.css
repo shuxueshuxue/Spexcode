@@ -106,6 +106,7 @@
 .tx-tool.is-running .tx-tool-verb { color: var(--tx-ink2); }
 .tx-tool-running { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--tx-orange); font-size: var(--tx-type-caption); }
 .tx-tool-outcome { flex: none; color: var(--tx-red); font-size: var(--tx-type-caption); }
+.tx-tool-cut { color: var(--tx-muted); font-size: var(--tx-type-caption); padding: var(--tx-space-1) 0 0; }
 .tx-tool.is-failed > .tx-tool-row .tx-tool-verb, .tx-tool.is-rejected > .tx-tool-row .tx-tool-verb { color: var(--tx-red); }
 .tx-spin { animation: tx-spin 1s linear infinite; }
 @keyframes tx-spin { to { transform: rotate(360deg); } }

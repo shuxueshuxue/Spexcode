@@ -64,12 +64,23 @@ export function prettyInput(input: string | undefined): string {
     return parsed && typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : input
   } catch { return input }
 }
+// TOOL OUTPUT IS A RECORD OF WHAT A PROGRAM PRINTED, AND PROGRAMS PRINT COLOUR. Real transcripts are full of
+// it — tens of thousands of escape sequences across a few hundred Claude and Codex files — and a `<pre>` draws
+// them as literal `[0m[91m` debris in the middle of the sentence a person is trying to read. The reader keeps
+// those bytes faithfully; this view is prose rather than a terminal (a terminal is [[terminal-ui]]'s job), so
+// the sequences are dropped at the moment of drawing and never from the record. Because the page then holds no
+// escapes, text copied off it is already clean — no separate copy path is needed. Covers the CSI forms colour
+// uses, OSC strings with either terminator, and the two-byte escapes; a lone ESC in prose is left alone.
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g
+export const stripAnsi = (text: string): string => text.replace(ANSI, '')
+
 export const isQuietTool = (name: string, vocabulary = defaultVocabulary): boolean => vocabulary.quiet.has(name)
 
 // A command's or a script's head: its first non-empty line, clamped. A one-liner is itself; a multi-line
 // script shows the line that names it, and the CSS ellipsis takes the rest.
 function firstLine(text: string): string | null {
-  const line = text.split(/\r?\n/).map((l) => l.trim()).find(Boolean)
+  // escapes go before the 160-char cut, or the cut lands inside a sequence and leaves half of one on the row
+  const line = stripAnsi(text).split(/\r?\n/).map((l) => l.trim()).find(Boolean)
   if (!line) return null
   return line.length <= 160 ? line : line.slice(0, 160)
 }
@@ -87,7 +98,9 @@ export function toolTarget(input: string | undefined, vocabulary = defaultVocabu
   if (!parsed || typeof parsed !== 'object') return typeof parsed === 'string' ? firstLine(parsed) : null
   for (const key of vocabulary.targetKeys) {
     const value = (parsed as Record<string, unknown>)[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value !== 'string') continue
+    const named = stripAnsi(value).trim()
+    if (named) return named
   }
   return null
 }

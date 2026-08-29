@@ -57,6 +57,21 @@ The word comes from the transcript's own field, never from the output prose.
 output, so parameters remain inspectable even when a live call has no result yet. A withheld live result still
 fetches its body on demand; the input never waits for that fetch.
 
+**The cap is said where it bit.** The reader keeps `outputBytes` at the result's true size while the body it
+carries stops at the per-tool cap ([[transcript-reader]]), so the difference is exactly what this call is
+missing, and an opened call whose body falls short of its size names the omission (`labels.outputCut`). The read
+as a whole already reports its omitted bytes, but that line cannot say WHICH result was cut, and a prefix drawn
+with no mark reads as the whole output — the one way a bounded view can lie.
+
+**A result is drawn as text, because this is prose and not a terminal.** Programs print colour, and real
+transcripts carry tens of thousands of escape sequences; a `<pre>` renders them as literal debris in the middle
+of the sentence someone is reading. They are dropped at the moment of drawing — from the row's target and from
+the opened input and output alike — and never from the record, which a terminal surface ([[terminal-ui]]) is
+free to read in full. Stripping before the row's length cut matters: cutting first can leave half a sequence
+behind. Because the page then holds no escapes, text copied off it is already clean, so there is no separate
+copy path. Escapes still count toward the record's size, so removing them from the page must not be read as an
+omission.
+
 **The work in progress never folds.** Folding is for process that already produced an answer — collapse the
 process, keep the result. The last segment of a LIVE payload is what is happening now: its calls after the newest
 prose, or all of its calls while there is no prose yet, draw as sentences whatever their number, in the collapsed
@@ -66,6 +81,13 @@ twice. They fold the moment the agent speaks — the prose that follows makes th
 — and a closed interval reads the same calls as history, folded by the ordinary rule. Consecutive tool-only
 turns are ONE list of calls: the harness draws a turn boundary around every call it makes, and that boundary is
 not a paragraph break, so seven calls in seven turns sit at the same list spacing as seven calls in one.
+
+**A fold decides on exactly what it will hide.** The row stands for the calls inside the folded process, so
+the threshold counts those same calls — not the segment's total, which includes the answer turn the fold leaves
+on the page. Counting the total let a run whose calls all sat on its answer fold anyway, and the row then read
+`0 tool uses` over prose: a control naming something it did not stand for, and the same defect as any two
+counters that disagree. A segment whose process hides no calls stays open; its prose is the only thing there,
+and prose is what the reader came for.
 
 **A user turn is a boundary, and whether it is also drawn is the host's call** (`userTurns`). In SpexCode every
 message is already a row on the record ([[conversation-items]]) — the launch prompt, each `spex session send`,

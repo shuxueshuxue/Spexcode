@@ -245,6 +245,14 @@ test('all public record APIs share pending projection and malformed fail-closed 
     assert.equal(archiveIndex.some((row) => row.id === pendingId), false, 'archive index excludes live sessions')
     assert.equal(archiveIndex.some((row) => row.id === archivedId), true, 'archive index includes the archived record')
     assert.equal(fullBody.includes('archive note '), true, 'full session list carries the detailed note used for the before measurement')
+    const archivedRow = rows.find((row) => row.id === archivedId)
+    assert.equal(archivedRow?.status, 'retired', 'closed records use the terminal retired status')
+    assert.equal(archivedRow?.lifecycle, 'archived', 'closed records settle the canonical lifecycle')
+    assert.equal(archivedRow?.proposal, null, 'closed records no longer expose a pre-close proposal')
+    const archivedDetail = await (await fetch(`${base}/api/sessions/${archivedId}`)).json() as any
+    assert.equal(archivedDetail.status, 'retired', 'id-addressed closed records use the same terminal status')
+    assert.equal((await (await fetch(`${base}/api/sessions`)).json()).some((row: any) => row.id === archivedId), false,
+      'closed records remain hidden from the working session projection')
     const graph = await graphResponse.json() as { sessions: any[] }
     const resources = await resourcesResponse.json() as { owners: any[] }
     const settings = await settingsResponse.json() as { layout: { worktrees: any[] } }

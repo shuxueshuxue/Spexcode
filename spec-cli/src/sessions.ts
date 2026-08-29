@@ -1016,6 +1016,9 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
 function reconcile(rec: SessRec, snap: LiveSnap, residentLiveness?: Liveness): DisplayStatus {
   // record integrity outranks both axes: a session whose worktree is gone has no work to be in any state
   // about. It reads `retired` — a terminal, human-closable row, never a lifecycle a hook can write back over.
+  // A published close is the durable terminal fact. It must win over the archived bit's historical offline
+  // liveness wording, regardless of which lifecycle proposal preceded the close.
+  if (rec.closedAt) return 'retired'
   if (rec.archived) return 'offline'
   if (retirementReason(rec)) return 'retired'
   if (rec.status === 'awaiting') return displayStatusForProposal(rec.proposal)
@@ -1093,7 +1096,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, closedAt: rec.archived ? rec.closedAt : null, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, closedAt: rec.archived ? rec.closedAt : null, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
 }
 
 export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }
@@ -1786,8 +1789,8 @@ export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'st
   }
   return {
     ...rec,
-    status: canonical.status as Lifecycle,
-    proposal: canonical.proposal as Proposal | null,
+    status: ('closedAt' in rec && rec.closedAt ? 'archived' : canonical.status) as Lifecycle,
+    proposal: ('closedAt' in rec && rec.closedAt ? null : canonical.proposal) as Proposal | null,
     note: canonical.note,
     parent: canonical.parentSessionId,
   }
@@ -4522,12 +4525,25 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (!latest) throw new ResourceConflict(`refusing to finish close for ${id}: session record disappeared before publication`)
   writeRecord({
     ...latest,
+    proposal: null,
     archived: true,
     closedAt: latest.closedAt || new Date().toISOString(),
     stopped: true,
     coldProof: latest.coldProof || coldProofFor(latest),
     adapterRecovery: null,
   })
+  // The canonical lifecycle must settle at the same terminal boundary as the durable close fact. `archived`
+  // is an internal terminal marker; public projections render its closed record as `retired`.
+  const application = configuredSessionApplicationIfCutover()
+  if (application?.readState(id)) {
+    application.transitionSession(id, {
+      status: 'archived',
+      proposal: null,
+      note: latest.note,
+      parentSessionId: latest.parent,
+      recipientSessionIds: canonicalWatchRecipients(application, id, 'archived'),
+    })
+  }
   let slot: string | null = null
   try { slot = existsSync(wt.path) ? treeSlotDir(wt.path) : null } catch { /* tree already unresolvable — nothing to key the slot by */ }
   if (existsSync(wt.path)) {

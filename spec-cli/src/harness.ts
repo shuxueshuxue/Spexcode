@@ -18,7 +18,7 @@ import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHom
 import { git } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/spec-core'
-import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
+import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, prepareCodexGenerationClose, resolveCodexGenerationForClose, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
 import { claudeTranscript, codexRolloutPath, codexTranscript, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from '@spexcode/transcript'
 import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
@@ -568,10 +568,11 @@ function codexMutationGeneration(dir = runtimeRoot(), endpoint = legacyCodexGene
 
 const codexDescriptorKey = (endpoint: CodexGenerationEndpoint) => endpoint.id === 'legacy' ? 'codex-app-server' : `codex-app-server:${endpoint.id}`
 
-function codexEndpointForRecord(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, dir = runtimeRoot()): CodexGenerationEndpoint | null {
+function codexEndpointForRecord(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, dir = runtimeRoot(), includeGone = false): CodexGenerationEndpoint | null {
   if (!rec.harnessSessionId) return null
   const ledger = readCodexGenerationLedger(dir)
   if (ledger.revision === 0 && !ledger.current && !Object.keys(ledger.generations).length) return legacyCodexGenerationEndpoint(dir)
+  if (includeGone) return resolveCodexGenerationForClose(dir, rec.session, rec.harnessSessionId)?.endpoint ?? null
   return resolveCodexGenerationForSession(dir, rec.session, rec.harnessSessionId)
 }
 
@@ -3113,7 +3114,7 @@ export const codexHarness: Harness = {
   interrupt: interruptCodexTurn,
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   targetDescriptorKey: (rec) => {
-    const endpoint = codexEndpointForRecord(rec)
+    const endpoint = codexEndpointForRecord(rec, runtimeRoot(), true)
     return endpoint ? codexDescriptorKey(endpoint) : null
   },
   coldRetirementPreflight: async (rec) => {
@@ -3133,15 +3134,25 @@ export const codexHarness: Harness = {
   },
   coldPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
-    const endpoint = codexEndpointForRecord(rec)
-    return endpoint ? codexColdPreflight(rec.harnessSessionId, runtimeRoot(), undefined, endpoint)
+    const dir = runtimeRoot()
+    const binding = resolveCodexGenerationForClose(dir, rec.session, rec.harnessSessionId)
+    if (binding?.gone) {
+      return { ok: true, alreadyCold: true }
+    }
+    const endpoint = binding?.endpoint ?? codexEndpointForRecord(rec, dir)
+    return endpoint ? codexColdPreflight(rec.harnessSessionId, dir, undefined, endpoint)
       : { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
   },
   coldRuntime: async (rec, suppliedReceipt) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
     const threadId = rec.harnessSessionId
     const dir = runtimeRoot()
-    const endpoint = codexEndpointForRecord(rec, dir)
+    const binding = resolveCodexGenerationForClose(dir, rec.session, threadId)
+    if (binding?.gone) {
+      prepareCodexGenerationClose(dir, rec.session, threadId)
+      return { ok: true }
+    }
+    const endpoint = binding?.endpoint ?? codexEndpointForRecord(rec, dir)
     if (!endpoint) return { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
     const sock = endpoint.socketPath
     if (suppliedReceipt !== undefined && (!isCodexColdPlan(suppliedReceipt) || suppliedReceipt.threadId !== threadId))

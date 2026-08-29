@@ -16,6 +16,7 @@ import {
   reclaimDrainingCodexGeneration,
   rotateCodexCurrentGeneration,
   resolveCodexGenerationForResume,
+  resolveCodexGenerationForClose,
   resolveCodexGenerationForSession,
   type CodexGenerationEndpoint,
 } from './codex-runtime-generations.js'
@@ -147,6 +148,14 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     for (const id of governed) bindCodexGeneration(root, id, `thread-${id}`, null)
     const reclaimed = await reclaimDrainingCodexGeneration(root, legacy.id, async () => ({ healthy: true, referenceIds: [], peerCount: 0 }))
     assert.equal(reclaimed.reclaimed, true, 'unrecorded registration and close transactions cannot pin a drained root forever')
+    const retiredLedger = readCodexGenerationLedger(root)
+    writeFileSync(join(root, 'codex-app-server-generations.json'), `${JSON.stringify({ ...retiredLedger,
+      revision: retiredLedger.revision + 1,
+      bindings: { ...retiredLedger.bindings, 'gone-close': { generationId: legacy.id, threadId: 'thread-gone-close' } },
+    }, null, 2)}\n`)
+    const closeBinding = resolveCodexGenerationForClose(root, 'gone-close', 'thread-gone-close')
+    assert.equal(closeBinding?.gone, true, 'close resolves a retired generation as positive death')
+    assert.equal(closeBinding?.endpoint.id, legacy.id, 'close keeps the exact retired endpoint identity')
   } finally {
     for (const endpoint of Object.values(readCodexGenerationLedger(root).generations).map((generation) => generation.endpoint)) {
       const pid = Number(requirePid(endpoint.pidFile, '0'))

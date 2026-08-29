@@ -36,4 +36,17 @@ scenarios:
       An ambiguous identity refuses reclaim and retains both the draining and current roots; only a zero-reference
       exact identity may be reclaimed.
     tags: [backend-api]
+  - name: gone-generation-close-proceeds
+    test: spec-cli/src/session-close-probe.test.ts
+    description: >
+      In the project with Codex-headless sessions whose shared app-server generation was killed and replaced,
+      invoke `spex session close` for every affected session, then inspect the session listing and git worktree
+      registry. Repeat the same loop against a throwaway backend after creating one Codex-headless session and
+      killing its app-server.
+    expected: >
+      A close on a session bound to a positively gone generation never refuses for generation proof or residency
+      census. All selected sessions close through their own cold archive path: worktrees are gone, records are
+      retired/closed, and the vanished generation is reported only as a finding. Live or ambiguous generations
+      with an active turn continue to refuse.
+    tags: [backend-api]
 ---

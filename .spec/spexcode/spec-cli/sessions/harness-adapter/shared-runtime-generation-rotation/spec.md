@@ -108,6 +108,11 @@ nothing left for a removal transaction to protect. Bootstrap enters dead legacy 
 and still records its governed bindings, so an inherited root that has since died yields repairable sessions
 instead of blocking every launch.
 
+Close treats that reclaimed state as a positive empty control plane. It does not run a native subtree census or
+require the retired PID/socket proof again; the exact binding is removed and the record's own cold-stop/archive
+path continues. A live generation that is active, ambiguous, or only temporarily unproven still follows the
+existing bounded census and refusal rules.
+
 A live root is never treated this way. A bound root that still answers keeps its session, and a root that is
 merely unaddressable — its process alive, its exact identity or socket no longer provable — is ambiguity, not
 death: nothing is retired, nothing is re-pinned, and both the launch and resume boundaries refuse loudly. No

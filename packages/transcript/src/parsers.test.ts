@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { IntervalCollector, claudeEvent, codexAppServerEvent, geminiEvent, openclawEvent, opencodeEvents, piEvent, type ParsedEvent } from './parsers.js'
+import { IntervalCollector, claudeEvent, codexAppServerEvent, codexEvent, geminiEvent, openclawEvent, opencodeEvents, piEvent, type ParsedEvent } from './parsers.js'
 
 // A tool's outcome is the harness's OWN structured verdict, carried through the result event to the call.
 // Prose that merely says "error" is not read: absence means "no signal", never "succeeded".
@@ -64,4 +64,22 @@ test('opencode: a tool part in state error is failed; gemini: a call with status
   ] })])
   assert.equal(gemini.find((tool) => tool.id === 'gc1')?.outcome, 'failed')
   assert.equal(gemini.find((tool) => tool.id === 'gc2')?.outcome, undefined)
+})
+
+test('a result recorded as content blocks reads as the text of those blocks, line breaks kept, non-text blocks named', () => {
+  const at = '2026-08-29T00:00:00.000Z'
+  const claude = collect([
+    claudeEvent({ type: 'assistant', timestamp: at, uuid: 'a', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'm1', name: 'mcp__im__send', input: { chat: '1' } }, { type: 'tool_use', id: 'm2', name: 'Read', input: { file_path: 'x.png' } }] } }),
+    claudeEvent({ type: 'user', timestamp: at, uuid: 'r', message: { role: 'user', content: [
+      { type: 'tool_result', tool_use_id: 'm1', content: [{ type: 'text', text: 'sent to 1\nid: 7' }, { type: 'text', text: 'ok' }] },
+      { type: 'tool_result', tool_use_id: 'm2', content: [{ type: 'image', source: { type: 'base64', data: 'AAAA' } }] },
+    ] } }),
+  ])
+  assert.equal(claude.find((tool) => tool.id === 'm1')?.output, 'sent to 1\nid: 7\nok')
+  assert.equal(claude.find((tool) => tool.id === 'm2')?.output, '[image]')
+  const codex = collect([
+    codexEvent({ timestamp: at, type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'c1', name: 'exec', input: 'print(1)' } }),
+    codexEvent({ timestamp: at, type: 'response_item', payload: { type: 'custom_tool_call_output', call_id: 'c1', output: [{ type: 'input_text', text: 'Script completed\nOutput:\n' }, { type: 'input_text', text: '1\n' }] } }),
+  ])
+  assert.equal(codex[0]?.output, 'Script completed\nOutput:\n\n1\n', 'never the JSON of the block list')
 })

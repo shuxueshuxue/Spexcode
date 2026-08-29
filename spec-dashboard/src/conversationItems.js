@@ -1,3 +1,5 @@
+import { spexEnvelope } from '@spexcode/transcript-ui'
+
 // MESSAGES, SEAMS, AND EVENTS — the three things the Conversation shows, derived from a session's timeline in
 // wire order. The status machine wrote the timeline (`working` ↔ `asking` ↔ `working` …), but a reader is not
 // reading the machine: a stretch in which the agent said nothing and worked is one SEAM that carries the
@@ -17,12 +19,12 @@ export const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 
 // The envelope `spex session send` appends is addressing, not what the peer said. The server's one prompt
 // seam still ships it inside the text, so this surface strips it to render the message and keeps only the
-// sender name it carries; the record itself is untouched.
-const ENVELOPE = /\n*— from session (?:"(.*?)" \(([^\s)]+)\)|(\S+))(?: on machine \S+)?\. To reply: spex session send (?:--ssh \S+ )?\S+ "<your reply>"\s*$/
+// sender name it carries; the record itself is untouched. The parser is the transcript package's own row
+// (`spexEnvelope`), so the outer conversation and a quoted turn inside a transcript read one format.
 export function splitEnvelope(text) {
-  const m = ENVELOPE.exec(text || '')
-  if (!m) return { text, envelope: null }
-  return { text: text.slice(0, m.index), envelope: { label: m[1] || null, id: m[2] || m[3] } }
+  const envelope = spexEnvelope(text || '')
+  if (!envelope) return { text, envelope: null }
+  return { text: envelope.body, envelope: { label: envelope.who === envelope.id ? null : envelope.who, id: envelope.id } }
 }
 
 export function conversationItems(events, transcriptNow) {

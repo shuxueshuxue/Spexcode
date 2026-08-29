@@ -63,6 +63,12 @@ no `output` field at all — that absence is what a live surface reads as "still
 a line reader scans a fixed lookahead window for timestamp disorder before stopping, so a cold tail stays
 bounded.
 
+**A result is what the tool said, not its wire shape.** A harness that records a result as content blocks —
+Claude's `tool_result.content` list, Codex 0.146's `input_text` output blocks, an MCP result's `content[]`
+anywhere — means the text of those blocks with their line breaks, joined; the reader never encodes the block list
+itself, which would show a person escaped newlines inside a JSON shell. A block that is not text (an image, a
+reference) is named in brackets, not dumped.
+
 **How a call ended is the harness's verdict, not the reader's reading.** A call carries `outcome: failed` or
 `outcome: rejected` only when the native record says so in a structured field — Claude's `tool_result.is_error`,
 pi's and OpenClaw's `toolResult.isError`, OpenCode's `state.status: error`, Gemini's call `status: error`, and

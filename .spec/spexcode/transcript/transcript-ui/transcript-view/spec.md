@@ -70,5 +70,14 @@ shared text test, used by that one face.
 
 **Disclosure is keyed to the transcript's own ids** — a tool's id, a run's first tool, a segment's first turn —
 never to render position, so a live refresh of the same interval keeps what the reader opened, and a payload
-for a different interval starts closed by construction. The person's turn inside a transcript strips the
-`spex session send` envelope the same way the outer conversation does, and shows the peer's name it carries.
+for a different interval starts closed by construction.
+
+**Who a quoted turn came from is data.** A message delivered into an agent arrives wrapped in the host's
+envelope — addressing for the agent, not what the sender said — and the transcript keeps it verbatim. The
+person's turn inside a transcript is therefore read through `envelopes`, an ordered list of parser rows on
+`TranscriptUi`: each row turns the text into the sender it names and the bare body, or declines; the first match
+is quoted with that name, an unmatched turn is quoted whole from nobody. SpexCode's own row — the footer
+`spex session send` appends — ships as the default and is the same row the outer conversation strips with, so
+the two surfaces cannot disagree about one format; a host with its own wrapper (an XML delivery tag, a bracketed
+header) registers one more row and never teaches the renderer the shape. The envelope's context lines (how to
+reply, routing) are for the agent and are not drawn.

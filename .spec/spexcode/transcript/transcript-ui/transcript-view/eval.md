@@ -1,5 +1,24 @@
 ---
 scenarios:
+  - name: quoted-turn-sender-is-an-envelope-row
+    tags: [cli]
+    test: packages/transcript-ui/src/render.test.tsx
+    code: packages/transcript-ui/src/TranscriptView.tsx
+    related:
+      - packages/transcript-ui/src/envelope.ts
+    description: >-
+      Render a transcript with userTurns quote through TranscriptUi with the default envelope rows plus a host row
+      for an XML delivery wrapper; one user turn carries the SpexCode "— from session … To reply …" footer, another
+      the host's <gugu_delivery from="…"> wrapper.
+    expected: >-
+      Each quote names the sender its envelope carries and shows only the bare body; no footer, tag, routing or
+      reply instruction is drawn; an unmatched turn is quoted whole with no name.
+  - name: working-messages-stay-on-the-page-under-fold-runs
+    tags: [cli]
+    test: packages/transcript-ui/src/render.test.tsx
+    code: packages/transcript-ui/src/TranscriptView.tsx
+    description: Render the same process under the default fold and under fold runs.
+    expected: The default folds the process behind its answer; under runs every assistant message stays on the page, a run of runMin+ calls inside one turn folds to a row, and a lone call stays a sentence.
   - name: a-seam-draws-the-agents-work-not-the-conversation
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/transcript-dedup.e2e.mjs

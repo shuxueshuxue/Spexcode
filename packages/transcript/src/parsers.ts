@@ -41,6 +41,24 @@ const compact = (value: unknown): string => {
   if (typeof value === 'string') return value
   try { return JSON.stringify(value) ?? String(value) } catch { return String(value) }
 }
+// A RESULT IS WHAT THE TOOL SAID, NOT ITS WIRE SHAPE. Every harness that records a result as content blocks
+// (Claude's tool_result content, Codex's input_text output blocks, MCP results everywhere) means the text of
+// those blocks, with their line breaks; encoding the block list itself as JSON would show the reader escaped
+// newlines inside a JSON shell. A block that is not text — an image, a reference — is named, not dumped.
+const resultText = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return compact(value)
+  return value.map((blockValue) => {
+    const block = object(blockValue)
+    if (!block) return compact(blockValue)
+    const text = string(block.text)
+    if (text !== null) return text
+    const type = string(block.type)
+    if (type === 'image') return '[image]'
+    if (type) return `[${type}]`
+    return compact(blockValue)
+  }).join('\n')
+}
 const lineCount = (value: string): number => value ? value.split(/\r?\n/).length : 0
 
 export type MutableTool = { id: string; name: string; input?: string; output?: string; outputLines: number; outputBytes: number; outcome?: ToolOutcome }
@@ -81,7 +99,7 @@ export function claudeEvent(value: unknown): ParsedEvent | null {
     const outputs = blocks.flatMap((block) => {
       const b = object(block)
       const id = string(b?.tool_use_id)
-      return b?.type === 'tool_result' && id ? [{ id, text: compact(b?.content ?? ''), ...(b?.is_error === true ? { outcome: 'failed' as const } : {}) }] : []
+      return b?.type === 'tool_result' && id ? [{ id, text: resultText(b?.content ?? ''), ...(b?.is_error === true ? { outcome: 'failed' as const } : {}) }] : []
     })
     if (outputs.length) return { at: eventAt, turn: null, toolOutputs: outputs }
     if (text) return { at: eventAt, turn: { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'user', text, tools: [] } }
@@ -136,7 +154,7 @@ export function codexEvent(value: unknown): ParsedEvent | null {
   if (entry.type === 'response_item' && (type === 'custom_tool_call_output' || type === 'function_call_output')) {
     const id = string(payload.call_id ?? payload.id)
     const output = payload.output ?? payload.result ?? ''
-    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: compact(output) }] } : null
+    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: resultText(output) }] } : null
   }
   return null
 }
@@ -199,7 +217,7 @@ export function codexAppServerEvent(value: unknown): ParsedEvent | null {
   if (output === undefined || output === null) {
     return outcome ? { at: eventAt, turn: null, toolOutputs: [{ id, text: '', outcome }] } : { at: eventAt, turn: null }
   }
-  return { at: eventAt, turn: null, toolOutputs: [{ id, text: compact(output), ...(outcome ? { outcome } : {}) }] }
+  return { at: eventAt, turn: null, toolOutputs: [{ id, text: resultText(output), ...(outcome ? { outcome } : {}) }] }
 }
 
 // Agent-message deltas are fragments of one native item. The closure remembers only that item's text and

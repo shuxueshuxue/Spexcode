@@ -35,7 +35,12 @@ breaks and paragraphs and renders nothing else, a host with a markdown pipeline 
 renderer serves every turn, quote and note), `loadToolOutput` (where a withheld live body is fetched from —
 absent means every body is inline), `labels` (the few words the surface says, in the host's language),
 `vocabulary` (the verbs, quiet set and target keys that turn a call into a sentence — DATA a host extends
-with `extendVocabulary`, never a branch on a harness id), `fold` (`segments` | `runs` | `none`), `runMin`, and
+with `extendVocabulary`, never a branch on a harness id), `envelopes` (the ordered parser rows that read a
+quoted turn's sender off its delivery envelope — SpexCode's `spex session send` footer ships as the default row,
+a host appends its own wrapper's row; [[transcript-view]]), `fold` (`segments`: the whole process folds behind its
+answer, for a host whose record narrates the work; `runs`: every assistant message stays on the page and only a
+run of `runMin`+ calls inside one turn folds, for a host where the transcript is the only story; `none`),
+`runMin`, and
 `userTurns` (`boundary`: a person's turn ends a run of work and is not drawn, for a host whose own record
 already shows every message; `quote`: it is drawn as a bubble, for a host where the transcript is the whole
 conversation). Nested providers override only what they pass, so a seam can set its loader without

@@ -22,7 +22,8 @@ or liveness.
 
 **The items partition the session's time, and no stretch of work is ever dropped.** Every instant from the
 first event onward belongs to exactly one item: a QUOTE (a `sent` event; the addressing envelope
-`spex session send` appends is stripped here and its sender kept), a SAY (a status event carrying a note,
+`spex session send` appends is stripped here and its sender kept, through the transcript package's own
+`spexEnvelope` row — the same row a quoted turn inside a transcript is read with, so the two never disagree), a SAY (a status event carrying a note,
 or any non-working status), an EVENT (`error`, `corrupt` — an instant, not a phase), or a SEAM — an interval
 in which the agent said nothing and worked, which owns the transcript for exactly that interval.
 

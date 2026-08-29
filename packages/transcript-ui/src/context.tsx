@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import { defaultVocabulary, type Vocabulary } from './vocabulary.js'
 import type { FoldPolicy, UserTurnPolicy } from './segments.js'
+import { defaultEnvelopes, type EnvelopeParser } from './envelope.js'
 
 // EVERY TUNABLE IN ONE PLACE. The components below read this instead of threading a dozen props: how prose
 // is rendered (an adopter's markdown, spec links, evidence), where a withheld tool body comes from, what the
@@ -41,6 +42,9 @@ export type TranscriptUiOptions = Readonly<{
   loadToolOutput: ((toolId: string) => Promise<ToolOutputResult>) | null
   labels: Labels
   vocabulary: Vocabulary
+  // how a quoted turn's sender is read off its delivery envelope — parser rows tried in order
+  // ([[transcript-view]]); the SpexCode footer ships as the default row, a host adds its own beside it
+  envelopes: readonly EnvelopeParser[]
   fold: FoldPolicy
   runMin: number
   userTurns: UserTurnPolicy
@@ -59,6 +63,7 @@ export const defaultOptions: TranscriptUiOptions = {
   loadToolOutput: null,
   labels: defaultLabels,
   vocabulary: defaultVocabulary,
+  envelopes: defaultEnvelopes,
   fold: 'segments',
   runMin: 3,
   userTurns: 'boundary',

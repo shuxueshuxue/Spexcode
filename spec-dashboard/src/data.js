@@ -551,6 +551,17 @@ export async function interruptSession(id) {
   return { ok: res.ok && body?.ok !== false, error: body?.error }
 }
 
+// Resolve a native structured question through the session's harness adapter. This never becomes a plain
+// prompt: the adapter owns the tool-specific request id and rejects when that native channel is gone.
+export async function answerSessionQuestion(id, toolId, answers) {
+  const res = await apiFetch(sessionUrl(id, 'question'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ toolId, answers }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok && body?.ok !== false, error: body?.error }
+}
+
 // the session record detail (full originating prompt on top of the board row) behind /api/sessions/:id.
 export async function loadSessionDetail(id) {
   const res = await apiFetch(sessionUrl(id))

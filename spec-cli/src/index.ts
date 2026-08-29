@@ -735,6 +735,25 @@ app.get('/api/sessions/:id/capture', async (c) => {
 app.get('/api/sessions/:id/transcript', (c) => readSessionTranscript(c))
 app.get('/api/sessions/:id/transcript/stream', (c) => sessionTranscriptStream(c))
 app.get('/api/sessions/:id/transcript/tool/:toolId', (c) => readSessionTranscriptTool(c))
+// Resolve a native structured question in the currently running turn. This is intentionally a separate input
+// kind from text/keys: answering must target the harness request by tool id and never start a new turn.
+app.post('/api/sessions/:id/question', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const toolId = typeof body?.toolId === 'string' && body.toolId.trim() ? body.toolId.trim() : ''
+  const rawAnswers = body?.answers
+  if (!toolId || !rawAnswers || typeof rawAnswers !== 'object' || Array.isArray(rawAnswers)) return c.json({ ok: false, error: 'question needs toolId and answers object' }, 400)
+  const answers: Record<string, readonly string[]> = {}
+  for (const [id, value] of Object.entries(rawAnswers)) {
+    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) return c.json({ ok: false, error: 'question answers must map ids to string arrays' }, 400)
+    answers[id] = value as string[]
+  }
+  const raw = readAliasedRawRecord(c.req.param('id'))
+  if (!raw || !raw.governed) return c.json({ ok: false, error: 'no such session' }, 404)
+  const harness = harnessById(typeof raw.harness === 'string' && raw.harness ? raw.harness : defaultHarness.id)
+  if (!harness.answerQuestion) return c.json({ ok: false, error: `harness ${harness.id} has no structured question control` }, 409)
+  const result = await harness.answerQuestion({ session: raw.session_id, harness: harness.id, harnessSessionId: typeof raw.harness_session_id === 'string' ? raw.harness_session_id : null, worktreePath: typeof raw.worktree_path === 'string' ? raw.worktree_path : undefined }, toolId, answers)
+  return c.json(result, result.ok ? 200 : 502)
+})
 // the session's persisted interaction history ([[session-timeline]]): authored status transitions (with the
 // FULL note text) + delivered prompts, timestamped, oldest first — what a terminal-free surface renders as
 // the conversation. `?limit=<n>` caps the tail (default 500). 404 for an unknown/non-governed id.

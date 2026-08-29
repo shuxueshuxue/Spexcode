@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
-import { claudeHeadlessColdRuntime, claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { claudeHeadlessColdRuntime, claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, answerViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, interruptPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
@@ -327,6 +327,9 @@ export interface Harness {
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // `ok=false` leaves the message OWED on the session's delivery queue, for a later pass to hand over.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
+  // Answer one structured human-input request already waiting inside the native turn. This is separate from
+  // prompt delivery: a question response resolves the harness request instead of starting a new turn.
+  answerQuestion?(rec: HarnessDeliveryRecord, toolId: string, answers: Readonly<Record<string, readonly string[]>>): Promise<DispatchResult>
   // Report what the adapter can prove about its native prompt transport BEFORE a new debt is accepted. An
   // inconclusive probe remains retryable; a proven-unreachable channel is joined with the session-owned pid
   // witness by sessions.ts, which is the only place allowed to call a live agent's transport stranded.
@@ -861,6 +864,14 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
 // The app-server's lightweight thread/read intentionally omits the turn list. Keep the native active id
 // observed by the failure subscription so a send can steer without replaying the whole conversation.
 const codexActiveTurns = new Map<string, string>()
+const codexQuestionResponders = new Map<string, (answers: Readonly<Record<string, readonly string[]>>) => DispatchResult>()
+const questionKey = (threadId: string, itemId: string) => `${threadId}:${itemId}`
+export function answerCodexUserInput(rec: HarnessDeliveryRecord, toolId: string, answers: Readonly<Record<string, readonly string[]>>): Promise<DispatchResult> {
+  const threadId = rec.harnessSessionId
+  if (!threadId) return Promise.resolve({ ok: false, error: `Codex session ${rec.session} has no native thread identity` })
+  const responder = codexQuestionResponders.get(questionKey(threadId, toolId))
+  return Promise.resolve(responder ? responder(answers) : { ok: false, error: `no active Codex request_user_input question ${toolId}` })
+}
 export function codexObservedActiveTurnId(threadId: string): string | null {
   return codexActiveTurns.get(threadId) || null
 }
@@ -1122,6 +1133,7 @@ export function codexTurnFailureObserver(
     clearTimeout(timer)
     cancelReconciliation()
     try { conn.destroy() } catch {}
+    for (const key of [...codexQuestionResponders.keys()]) if (key.startsWith(`${threadId}:`)) codexQuestionResponders.delete(key)
     resolveClosed(reason)
   }
   const timer = setTimeout(() => finish(`Codex turn observer did not subscribe within ${CODEX_TURN_OBSERVER_SUBSCRIBE_MS}ms`), CODEX_TURN_OBSERVER_SUBSCRIBE_MS)
@@ -1143,10 +1155,24 @@ export function codexTurnFailureObserver(
     // A resumed Codex thread can stream large goal/progress notifications while the turn runs. They are
     // irrelevant to this failure observer; avoid JSON.parse on those payloads so one active turn cannot make
     // the backend spend its memory and CPU re-materializing a transcript it does not use.
-    if (json.includes('"method"') && !json.includes('"method":"turn/started"') && !json.includes('"method":"turn/completed"')) return
+    if (json.includes('"method"') && !json.includes('"method":"turn/started"') && !json.includes('"method":"turn/completed"') && !json.includes('"method":"item/tool/requestUserInput"')) return
     let message: JsonRpc
     try { message = JSON.parse(json) } catch { return }
     if (message.error) return finish(`Codex turn observer request failed: ${message.error.message || JSON.stringify(message.error)}`)
+    if (message.method === 'item/tool/requestUserInput' && message.id !== undefined) {
+      const params = message.params as { threadId?: unknown; itemId?: unknown } | undefined
+      if (params?.threadId === threadId && typeof params.itemId === 'string') {
+        const requestId = message.id
+        const key = questionKey(threadId, params.itemId)
+        codexQuestionResponders.set(key, (answers) => {
+          if (!conn.writable) return { ok: false, error: `Codex question channel closed for session ${rec.session}` }
+          send({ id: requestId, result: { answers: Object.fromEntries(Object.entries(answers).map(([id, values]) => [id, { answers: [...values] }])) } })
+          codexQuestionResponders.delete(key)
+          return { ok: true }
+        })
+      }
+      return
+    }
     if (message.id === 1 && message.result) {
       send({ method: 'initialized', params: {} })
       return send({
@@ -1204,7 +1230,7 @@ export function codexTurnFailureObserver(
     }
     if (drainWsFrames(frames, conn, handle, (payload) => {
       const method = Buffer.from('"method"')
-      return !payload.includes(method) || payload.includes(Buffer.from('"turn/started"')) || payload.includes(Buffer.from('"turn/completed"'))
+      return !payload.includes(method) || payload.includes(Buffer.from('"turn/started"')) || payload.includes(Buffer.from('"turn/completed"')) || payload.includes(Buffer.from('"item/tool/requestUserInput"'))
     })) finish('Codex app-server closed the turn observer')
   })
   return { close: () => finish(null), closed, ready }
@@ -3004,6 +3030,7 @@ export const claudeHeadlessHarness: Harness = {
   liveness: sessionHomeLiveness,
   deliveryTransport: unprovenDeliveryTransport,
   deliver: deliverViaClaudeHeadless,
+  answerQuestion: answerViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
   cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
   coldRuntime: async (rec) => {
@@ -3418,6 +3445,7 @@ export const codexHeadlessHarness: Harness = {
   // There is no TUI to restart and the project app-server keeps an identified thread addressable. A pre-identity
   // recovery still replays the authoritative resolved launch payload through codex-launch.
   resumeArg: codexResumeArg,
+  answerQuestion: answerCodexUserInput,
 }
 
 // @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the four:

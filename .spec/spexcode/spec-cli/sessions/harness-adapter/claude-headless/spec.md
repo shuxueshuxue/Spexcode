@@ -64,6 +64,11 @@ the existing tmux capture and reaper pipeline. It is not duplicated into a SpexC
 terminal-free user record is [[session-timeline]]. Partial/non-line output is dropped loudly rather than being
 presented as a complete event.
 
+When Claude is paused in `AskUserQuestion`, the dashboard's structured answer route sends a native stream-json
+`tool_result` user event containing the selected answer map and the exact tool-use id. The controller accepts it
+only while that child is active and its stdin is writable; otherwise it returns a clear refusal. This path is
+separate from prompt steering and never rewrites an answer as free-form text.
+
 The controller is a session-owned leaf in an exact tmux home, not an adapter resident. Launch therefore uses the
 same pane-ancestry-minted PID/start receipt as interactive leaves. While the home exists the non-stopped record is
 addressable only while the receipt-bound controller process is still alive; a surviving tmux pane or shell is not

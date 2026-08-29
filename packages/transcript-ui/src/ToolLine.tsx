@@ -34,6 +34,42 @@ function WithheldOutput({ tool }: { tool: AnyTool }) {
   return <><pre className="tx-tool-out">{stripAnsi(body)}</pre><OutputCut tool={tool} body={body} /></>
 }
 
+type QuestionTool = AnyTool & { question?: { questions: readonly { id: string; question: string; header?: string; options?: readonly { label: string; description?: string }[]; multiple?: boolean }[] } }
+
+function QuestionForm({ tool }: { tool: QuestionTool }) {
+  const { answerQuestion } = useTranscriptUi()
+  const questions = tool.question?.questions ?? []
+  const [selected, setSelected] = useState<Record<string, string[]>>({})
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!answerQuestion || tool.output !== undefined || !questions.length) return null
+  const choose = (question: (typeof questions)[number], label: string) => setSelected((current) => {
+    const old = current[question.id] ?? []
+    const next = question.multiple ? (old.includes(label) ? old.filter((value) => value !== label) : [...old, label]) : [label]
+    return { ...current, [question.id]: next }
+  })
+  const submit = async () => {
+    if (questions.some((question) => !(selected[question.id]?.length))) return
+    setSending(true); setError(null)
+    const result = await answerQuestion(tool.id, selected)
+    setSending(false)
+    if (!result.ok) setError(result.error)
+  }
+  return <div className="tx-question" role="group" aria-label="Question from the agent">
+    {questions.map((question) => <fieldset key={question.id} className="tx-question-item">
+      <legend>{question.header ? `${question.header}: ` : ''}{question.question}</legend>
+      <div className="tx-question-options">{(question.options ?? []).map((option) => {
+        const active = selected[question.id]?.includes(option.label)
+        return <button key={option.label} type="button" className={`tx-question-option${active ? ' is-selected' : ''}`} aria-pressed={active} onClick={() => choose(question, option.label)}>
+          <span>{option.label}</span>{option.description && <small>{option.description}</small>}
+        </button>
+      })}</div>
+    </fieldset>)}
+    {error && <div className="tx-question-error" role="alert">{error}</div>}
+    <button type="button" className="tx-question-submit" disabled={sending || questions.some((question) => !(selected[question.id]?.length))} onClick={submit}>{sending ? 'sending…' : 'Answer'}</button>
+  </div>
+}
+
 // One tool call as a SENTENCE, not a card: verb, target, and the size of what came back. It is
 // `inline-flex` so a dozen of them read as a list of things that happened rather than a dozen boxes. There
 // is no success mark — the past-tense verb is the whole claim. A running call wears a small spinner and the
@@ -67,6 +103,7 @@ export function ToolLine({ tool, open, onToggle, live = false }: { tool: AnyTool
         ? <button type="button" onClick={onToggle} aria-expanded={open} className="tx-tool-row is-openable">{row}</button>
         : <div className="tx-tool-row">{row}</div>}
       {open && canOpen && <>
+        <QuestionForm tool={tool} />
         {tool.input && <pre className="tx-tool-in">{stripAnsi(prettyInput(tool.input))}</pre>}
         {withheld
           ? <WithheldOutput tool={tool} />

@@ -3,6 +3,13 @@
 // once the harness recorded it. Nothing here imports Node, so a browser renderer and a Node reader share it.
 
 export type TranscriptRange = Readonly<{ from: number; to: number }>
+export type TranscriptQuestion = Readonly<{
+  id: string
+  question: string
+  header?: string
+  options?: readonly { label: string; description?: string }[]
+  multiple?: boolean
+}>
 export type TranscriptTool = Readonly<{
   id: string
   name: string
@@ -16,6 +23,7 @@ export type TranscriptTool = Readonly<{
   // signal, never "succeeded": a Codex rollout carries none, and a harness that only writes the failure into the
   // output prose is not text-sniffed for it. `rejected` is the call the person refused — it never ran.
   outcome?: 'failed' | 'rejected'
+  question?: Readonly<{ questions: readonly TranscriptQuestion[] }>
 }>
 // HOW A TURN ENDED, when the harness recorded a verdict on the turn itself rather than on one call. `failed`
 // is the provider's own error; `cancelled` is the turn a stop ended mid-flight. Absent means no signal — never

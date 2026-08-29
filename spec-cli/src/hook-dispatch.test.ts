@@ -417,6 +417,55 @@ test('session-listen: a message it cannot deliver is reported with what it takes
   assert.match(run.stderr, /messageId=m-42/)
 })
 
+// THE GATE MUST SURVIVE ITS OWN TEXT FAILING TO LOAD. Rendering goes through the CLI, and a failure there
+// used to exit non-zero — which for a Stop hook means ALLOW, so the gate was disarmed by its own prompt. It
+// fails closed instead, bounded: a genuinely broken CLI would also stop the agent from declaring, so the
+// fallback blocks once and then steps aside loudly rather than trapping anyone.
+function stopGateBrokenRig() {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-broken-'))
+  const home = join(dir, 'home')
+  const sid = 'sg-broken'
+  const cli = join(dir, 'broken-spex')
+  writeFileSync(cli, [
+    '#!/usr/bin/env bash',
+    'for a in "$@"; do',
+    '  [ "$a" = "session-hook-state" ] && { printf \'1\\tactive\\t\\n\'; exit 0; }',
+    '  [ "$a" = "hook-prompt" ] && exit 3',
+    'done',
+    'exit 0',
+    '',
+  ].join('\n'))
+  chmodSync(cli, 0o755)
+  // the store key comes from the git toplevel, so the rig has to be a repo like the other gate rigs
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(home, 'projects', dir.replace(/[/.]/g, '-'), 'sessions', sid), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
+  const fire = () => spawnSync('bash', [hook], {
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }),
+    encoding: 'utf8',
+    cwd: dir,
+    env: { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: sid, SPEX: cli, SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'), SPEXCODE_HARNESS: 'claude' },
+  })
+  return { fire, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
+test('stop-gate: a CLI that cannot render the reason still blocks, once, and then says so', () => {
+  const t = stopGateBrokenRig()
+  try {
+    const first = t.fire()
+    assert.equal(first.status, 0, first.stderr)
+    const decision = JSON.parse(first.stdout)
+    assert.equal(decision.decision, 'block', 'the gate fails CLOSED on its own render failure')
+    assert.match(decision.reason, /could not render its own text/)
+    assert.match(decision.reason, /done --propose merge/, 'the fallback names the states without needing the CLI')
+    // bounded: a broken CLI would also stop the agent from declaring, so it must not trap
+    const second = t.fire()
+    assert.equal(second.status, 0)
+    assert.equal(second.stdout.trim(), '', 'the second stop is allowed through')
+    assert.match(second.stderr, /already blocked once/)
+  } finally { t.cleanup() }
+})
+
 function specOfFileRig(harness: GateHarness) {
   const dir = mkdtempSync(join(tmpdir(), `spex-spec-of-file-${harness}-`))
   const home = join(dir, 'home')

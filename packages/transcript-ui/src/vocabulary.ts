@@ -40,7 +40,29 @@ export function extendVocabulary(base: Vocabulary, extra: Partial<{ verbs: Recor
   }
 }
 
-export const toolVerb = (name: string | undefined, vocabulary = defaultVocabulary): string => (name && vocabulary.verbs[name]) || name || 'tool'
+// AN MCP TOOL IS NAMED BY ITS SERVER AND ITS TOOL. Every harness that speaks MCP writes the call as
+// `mcp__<server>__<tool>`; the reader wants both halves, apart — measured across four transcript renderers,
+// three knew the server in their data and lost it on the screen. The vocabulary may name the full id or the
+// bare tool; an unnamed MCP tool reads as its tool half, never the whole mangled id.
+export function toolName(name: string | undefined): { tool: string; server: string | null } {
+  const m = name ? /^mcp__(.+?)__(.+)$/.exec(name) : null
+  return m ? { tool: m[2], server: m[1] } : { tool: name || 'tool', server: null }
+}
+export const toolVerb = (name: string | undefined, vocabulary = defaultVocabulary): string => {
+  if (name && vocabulary.verbs[name]) return vocabulary.verbs[name]
+  const { tool } = toolName(name)
+  return vocabulary.verbs[tool] || tool
+}
+
+// THE ARGUMENTS, WHEN OPENED, READ AS THE ARGUMENTS: a JSON object pretty-printed one field per line, a bare
+// string (a script, a command) as itself. The wire form is one line; nobody reads one line of JSON.
+export function prettyInput(input: string | undefined): string {
+  if (typeof input !== 'string' || !input) return ''
+  try {
+    const parsed: unknown = JSON.parse(input)
+    return parsed && typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : input
+  } catch { return input }
+}
 export const isQuietTool = (name: string, vocabulary = defaultVocabulary): boolean => vocabulary.quiet.has(name)
 
 // The target, from the call's own arguments. `input` is the raw JSON of the arguments (or a bare string), so

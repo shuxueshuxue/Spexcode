@@ -13,6 +13,15 @@ scenarios:
     expected: >-
       Each quote names the sender its envelope carries and shows only the bare body; no footer, tag, routing or
       reply instruction is drawn; an unmatched turn is quoted whole with no name.
+  - name: mcp-call-names-server-and-tool-apart
+    tags: [cli]
+    test: packages/transcript-ui/src/render.test.tsx
+    code: packages/transcript-ui/src/TranscriptView.tsx
+    related:
+      - packages/transcript-ui/src/vocabulary.ts
+      - packages/transcript-ui/src/ToolLine.tsx
+    description: Render a call named mcp__gugu-im__message_reply with a JSON argument object, with and without a vocabulary verb for the bare tool name.
+    expected: The row shows the tool half as its verb (or the vocabulary's verb) and the server as a chip; the mangled id never appears; opened arguments print one field per line while a bare string input is shown as itself.
   - name: working-messages-stay-on-the-page-under-fold-runs
     tags: [cli]
     test: packages/transcript-ui/src/render.test.tsx

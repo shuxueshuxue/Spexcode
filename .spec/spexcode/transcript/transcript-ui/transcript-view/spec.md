@@ -34,6 +34,12 @@ holds a running call is marked so its fold can say it. A closed interval never s
 ended before a result was written is history, not something still happening, so the same payload read as
 history draws the same call as a plain sentence.
 
+**An MCP call is named by its server and its tool, apart.** Every harness writes an MCP call as
+`mcp__<server>__<tool>`; the sentence shows the tool half as its verb (or the vocabulary's verb for that bare
+tool name) and the server as a small chip beside it — the data every renderer has and most lose on the screen.
+When a call is opened, a JSON argument object is printed one field per line; a bare string (a script, a command)
+is shown as itself. The wire form is one line; nobody reads one line of JSON.
+
 **A failure wears the word; success stays silent.** A call whose `outcome` the reader carries
 ([[transcript-reader]]) ends its sentence with `failed` (or `rejected`, for the call the person refused) from
 `labels`, in the same caption register as the running word, and its verb takes the error colour; there is still no

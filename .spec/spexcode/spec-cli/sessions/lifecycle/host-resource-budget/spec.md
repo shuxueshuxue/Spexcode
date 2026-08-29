@@ -97,6 +97,12 @@ unhealthy or unknown, the refcount is unknown rather than reconstructed from rec
 fail-closed stop guard blocks mutation. A stale lifecycle label or an idle tmux shell is not proof that a
 headless turn exists, so control-plane health and turn presence are reported separately.
 
+Tmux is a shared host boundary: a server and its windows may carry an inherited session or backend token from
+the shell that created them, but that token is not launch-lineage evidence. The resource walk must not charge
+the server or unrelated hosted windows to that token; only an exact registered session leaf/controller and its
+own descendants may be charged to a session. Shared-host processes remain in a shared-runtime/host row or
+explicitly unattributed with a finding.
+
 ### Budgets and continuous report
 
 The project config declares per-session RSS, per-backend RSS, and idle CPU budgets plus the sampling interval.

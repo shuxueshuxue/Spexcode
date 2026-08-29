@@ -196,6 +196,22 @@ const descendants = (root: number, procs: Map<number, Proc>): Set<number> => {
   return ids
 }
 
+// tmux is a shared host for many independent session windows. Its inherited environment is therefore
+// not a launch receipt: a token on the server or one of its panes cannot charge the whole hosted tree.
+const isTmuxServer = (proc: Proc | undefined): boolean => proc?.command === 'tmux: server'
+const hasTmuxAncestor = (pid: number, procs: Map<number, Proc>): boolean => {
+  const seen = new Set<number>()
+  let next = procs.get(pid)?.ppid
+  while (next && !seen.has(next)) {
+    seen.add(next)
+    const parent = procs.get(next)
+    if (!parent) return false
+    if (isTmuxServer(parent)) return true
+    next = parent.ppid
+  }
+  return false
+}
+
 type PublicRecordInventory = {
   entries: PublicRecordEntry[]
   records: RawRecord[]
@@ -377,12 +393,13 @@ const buildInventory = (procs: Map<number, Proc>, publicRecords = publicRecordIn
   for (const p of procs.values()) {
     const acting = actingSession(p)
     const fallback = p.env.SPEXCODE_SESSION_ID
-    const sid = acting ?? (fallback ? byId.get(fallback) : undefined)
+    const sid = acting ?? (!hasTmuxAncestor(p.pid, procs) && !isTmuxServer(p) && fallback ? byId.get(fallback) : undefined)
     if (sid) ownership.set(p.pid, `session:${sid}`)
   }
   for (const rec of activeRecs) {
     const root = runtimePid(join(runtimeRoot(), 'sessions', rec.session_id, 'agent.pid'))
-    if (root && procs.has(root)) for (const pid of descendants(root, procs)) if (!ownership.has(pid)) ownership.set(pid, `session:${rec.session_id}`)
+    if (root && procs.has(root) && !isTmuxServer(procs.get(root)))
+      for (const pid of descendants(root, procs)) if (!ownership.has(pid)) ownership.set(pid, `session:${rec.session_id}`)
   }
 
   const shared = sharedDescriptors(recs)
@@ -415,7 +432,7 @@ const buildInventory = (procs: Map<number, Proc>, publicRecords = publicRecordIn
 
   const root = repoRoot()
   for (const p of procs.values()) {
-    if (ownership.has(p.pid) || p.env.SPEXCODE_PROJECT_ROOT !== root) continue
+    if (ownership.has(p.pid) || p.env.SPEXCODE_PROJECT_ROOT !== root || hasTmuxAncestor(p.pid, procs) || isTmuxServer(p)) continue
     const claimed = p.env.SPEXCODE_SESSION_ID
     if (claimed && !byId.has(claimed)) ownership.set(p.pid, `orphan:session:${claimed}`)
     else if (p.env.SPEXCODE_INSTANCE_ID && p.env.SPEXCODE_INSTANCE_ID !== backendInstance) ownership.set(p.pid, `orphan:backend:${p.env.SPEXCODE_INSTANCE_ID}`)

@@ -129,7 +129,14 @@ type LineScan = Readonly<{ position: number; carry: Buffer }>
 // One pass over the bytes from `scan.position` to the end of the file. Every complete line is parsed as JSON
 // and handed to `onLine` with its byte offset; `onLine` returning true stops the scan early (a bounded
 // lookahead), which abandons the rest — only a one-shot read does that.
-function scanLines(harness: string, fd: number, scan: LineScan, onLine: (value: unknown, offset: number) => boolean): LineScan {
+// ONE UNREADABLE LINE IS OMITTED PAYLOAD, NOT AN UNREADABLE TRANSCRIPT. A native log is written by another
+// process and can carry a line that is not JSON — a truncated record from a crash, a line someone appended by
+// hand. Throwing on it makes the whole thread unreadable forever, which is the loudest possible failure and
+// the least useful one: the person loses a conversation over one bad line. The reader already has an honest
+// word for this — the line's bytes are counted as omitted and the read reports `truncated`, exactly as it does
+// for a result past the cap. A file that is not this format at all still fails loudly, because nothing in it
+// parses and `finish()` refuses a read that never saw a timestamp.
+function scanLines(fd: number, scan: LineScan, onLine: (value: unknown, offset: number) => boolean, onUnparsable: (bytes: number) => void): LineScan {
   const chunk = Buffer.allocUnsafe(64 * 1024)
   let { position, carry } = scan
   let lineStart = position - carry.length
@@ -147,7 +154,7 @@ function scanLines(harness: string, fd: number, scan: LineScan, onLine: (value: 
       cut = index + 1
       if (!line.trim()) continue
       let value: unknown
-      try { value = JSON.parse(line) } catch (error) { throw new TranscriptReadError('invalid', `${harness} transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
+      try { value = JSON.parse(line) } catch { onUnparsable(Buffer.byteLength(line)); continue }
       if (onLine(value, lineOffset)) return { position, carry: Buffer.alloc(0) }
     }
     carry = Buffer.from(buffer.subarray(cut))
@@ -187,14 +194,14 @@ class LineFileCursor {
     try {
       fd = openSync(this.path, 'r')
       let postRangeLines = 0
-      this.scan = scanLines(this.harness, fd, this.scan, (value, offset) => {
+      this.scan = scanLines(fd, this.scan, (value, offset) => {
         const event = this.parse(value)
         if (!event) return false
         const inRange = event.at !== null && event.at >= this.from && event.at <= to
         if (inRange && !intervalOffsets.has(this.seekKey)) intervalOffsets.set(this.seekKey, offset)
         const pastRange = this.collector.add(event)
         return pastRange && ++postRangeLines >= lookahead
-      })
+      }, (bytes) => { this.collector.omittedBytes += bytes })
     } catch (error) {
       if (error instanceof TranscriptReadError) throw error
       throw new TranscriptReadError('unreadable', `${this.harness} transcript could not be read: ${error instanceof Error ? error.message : String(error)}`)

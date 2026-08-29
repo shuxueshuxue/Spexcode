@@ -264,9 +264,32 @@ test('unsupported, missing, timestamp-less, and malformed transcripts fail loudl
     writeFileSync(join(dir, 'missing-time.jsonl'), line({ type: 'user', message: { role: 'user', content: 'no clock' } }))
     writeFileSync(join(dir, 'bad.jsonl'), '{not-json}\n')
     await assert.rejects(() => claudeTranscript.read('missing-time', { from: 1, to: 2 }), /no reliable timestamps/)
-    await assert.rejects(() => claudeTranscript.read('bad', { from: 1, to: 2 }), /cannot be parsed/)
+    // a file that is not this format at all still fails loudly: nothing in it parses, so no line ever carried a clock
+    await assert.rejects(() => claudeTranscript.read('bad', { from: 1, to: 2 }),
+      (error: unknown) => error instanceof TranscriptReadError && error.reason === 'invalid')
     await assert.rejects(() => claudeTranscript.read('gone', { from: 1, to: 2 }), /file was not found/)
     assert.equal(claudeTranscript.revision('gone'), null)
+  }).finally(() => rmSync(root, { recursive: true, force: true }))
+})
+
+test('one unparsable line is omitted payload, not an unreadable transcript', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-transcript-'))
+  await withEnv('CLAUDE_CONFIG_DIR', root, async () => {
+    const dir = join(root, 'projects', 'fixture')
+    mkdirSync(dir, { recursive: true })
+    const at = (clock: string) => new Date(T(clock)).toISOString()
+    const corrupt = '{"type":"assistant","timestamp":"2026-08-20T00:00:01.500Z","message"'
+    writeFileSync(join(dir, 'torn.jsonl'), [
+      line({ type: 'user', uuid: 'u1', timestamp: at('00:00:01'), message: { role: 'user', content: 'before' } }),
+      `${corrupt}\n`,
+      line({ type: 'assistant', uuid: 'a1', timestamp: at('00:00:02'), message: { role: 'assistant', content: [{ type: 'text', text: 'after' }] } }),
+    ].join(''))
+    // the conversation survives the torn record, and the read says how much it could not read
+    const read = await claudeTranscript.read('torn', { from: T('00:00:00'), to: T('00:00:03') })
+    assert.deepEqual(read.turns.map((turn) => turn.text), ['before', 'after'])
+    assert.equal(read.truncated, true)
+    assert.equal(read.omittedBytes, Buffer.byteLength(corrupt))
+    assert.equal(read.omittedTurns, 0)
   }).finally(() => rmSync(root, { recursive: true, force: true }))
 })
 

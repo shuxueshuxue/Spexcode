@@ -95,6 +95,11 @@ test('canonical lifecycle always wins over stale JSON status bytes', () => {
   const waiting = { status: 'awaiting' as const, stopped: false, archived: false, proposal: 'close' as const, note: 'ready', parent: null }
   assert.equal(canonicalRecordProjection(archived, canonical).status, 'active')
   assert.equal(canonicalRecordProjection(waiting, canonical).status, 'active')
+
+  const closed = { ...archived, closedAt: '2026-08-29T00:00:00.000Z' }
+  const projected = canonicalRecordProjection(closed, canonical)
+  assert.equal(projected.status, 'archived', 'a published close settles the canonical lifecycle at its terminal marker')
+  assert.equal(projected.proposal, null, 'closing clears the pre-close proposal')
 })
 
 test('backend restart does not re-arm readiness for a witnessed active session', serial, async () => {

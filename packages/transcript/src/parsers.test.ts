@@ -106,6 +106,29 @@ test('the codex app-server stream is read against the producer\'s own capture: d
   assert.ok(read.turns.some((turn) => turn.role === 'assistant' && (turn.text || '').length > 0), 'the deltas became prose')
 })
 
+test('the app-server union: an MCP result reads as what the tool said, a file edit is a call, rollout types are not items', () => {
+  const at = 1_787_946_166_618
+  const started = (item: Record<string, unknown>) => codexAppServerEvent({ method: 'item/started', emittedAtMs: at, params: { item } })
+  const done = (item: Record<string, unknown>) => codexAppServerEvent({ method: 'item/completed', emittedAtMs: at, params: { item } })
+  // an MCP result is a wrapper: the text is in `content`, and printing the wrapper showed the JSON envelope
+  const mcp = collect([
+    started({ id: 'm1', type: 'mcpToolCall', server: 'im', tool: 'send', arguments: { chat: '1' } }),
+    done({ id: 'm1', type: 'mcpToolCall', status: 'completed', result: { content: [{ type: 'text', text: 'sent' }], structuredContent: null, _meta: null } }),
+  ])
+  assert.equal(mcp[0]?.output, 'sent')
+  assert.doesNotMatch(mcp[0]?.output ?? '', /structuredContent|_meta/)
+  // a file edit is a call: it names its paths and its result is the diff the app-server already computed
+  const edit = collect([
+    started({ id: 'f1', type: 'fileChange', changes: [{ path: 'a.ts', kind: 'update', diff: '@@ -1 +1 @@' }] }),
+    done({ id: 'f1', type: 'fileChange', status: 'declined', changes: [{ path: 'a.ts', kind: 'update', diff: '@@ -1 +1 @@' }] }),
+  ])
+  assert.equal(edit[0]?.name, 'edit')
+  assert.equal(edit[0]?.input, 'a.ts')
+  assert.equal(edit[0]?.outcome, 'rejected')
+  // `functionCall` and `customToolCall` are ROLLOUT record types; no such variant exists on the item union
+  assert.equal(collect([started({ id: 'x1', type: 'functionCall', name: 'shell', arguments: {} })]).length, 0)
+})
+
 test('a result recorded as content blocks reads as the text of those blocks, line breaks kept, non-text blocks named', () => {
   const at = '2026-08-29T00:00:00.000Z'
   const claude = collect([

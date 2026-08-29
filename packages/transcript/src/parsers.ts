@@ -186,6 +186,18 @@ export function codexEvent(value: unknown): ParsedEvent | null {
   return null
 }
 
+// A file edit names the paths it touched, and its result is the diff the app-server already computed. Both
+// come off `FileUpdateChange[]`, which is the only shape on the union whose payload is a list of records
+// rather than one field.
+const filePaths = (changes: unknown): string | undefined => {
+  const paths = items(changes).map((change) => string(object(change)?.path)).filter(Boolean)
+  return paths.length ? paths.join('\n') : undefined
+}
+const fileDiffs = (changes: unknown): string | undefined => {
+  const diffs = items(changes).map((change) => string(object(change)?.diff)).filter(Boolean)
+  return diffs.length ? diffs.join('\n') : undefined
+}
+
 // Codex app-server notifications are a different native stream from rollout lines. Keep this mapping stateless:
 // a caller that needs streamed prose uses codexAppServerStream below, while file and in-memory sources still
 // share the same one-record parser contract.
@@ -225,23 +237,31 @@ export function codexAppServerEvent(value: unknown): ParsedEvent | null {
     return { at: eventAt, turn: { id, at: eventAt, role: 'assistant', text: text ?? undefined, tools: [] } }
   }
 
-  const toolTypes = new Set(['commandExecution', 'functionCall', 'customToolCall', 'mcpToolCall', 'dynamicToolCall'])
+  // The tool-bearing variants of the app-server's own `ThreadItem` union. `functionCall` and `customToolCall`
+  // used to be listed here and are NOT members of it — those are ROLLOUT record types, and no such string
+  // exists anywhere in the app-server binary. `fileChange` is a real one that was missing, so a codex file
+  // edit appeared as no call at all.
+  const toolTypes = new Set(['commandExecution', 'fileChange', 'mcpToolCall', 'dynamicToolCall'])
   if (!toolTypes.has(type)) return null
   if (method === 'item/started') {
     const name = type === 'commandExecution' ? 'command'
-      : string(item.name) ?? string(item.tool) ?? (type === 'mcpToolCall' ? 'mcp' : 'tool')
+      : type === 'fileChange' ? 'edit'
+        : string(item.name) ?? string(item.tool) ?? (type === 'mcpToolCall' ? 'mcp' : 'tool')
     const input = item.arguments !== undefined ? item.arguments
       : item.input !== undefined ? item.input
         : item.command !== undefined ? item.command
-          : undefined
+          : type === 'fileChange' ? filePaths(item.changes)
+            : undefined
     return { at: eventAt, turn: { id, at: eventAt, role: 'assistant', tools: [{ id, name, input: input === undefined ? undefined : compact(input), outputLines: 0, outputBytes: 0 }] } }
   }
 
   let output: unknown = undefined
   if (type === 'commandExecution') output = item.aggregatedOutput
-  else if (type === 'functionCall' || type === 'customToolCall') output = item.output ?? item.result
-  else if (type === 'mcpToolCall') output = item.result ?? item.error
+  // an MCP result is `{content, structuredContent, _meta}`: the text is in `content`, and handing the wrapper
+  // to `resultText` printed the JSON envelope instead of what the tool said
+  else if (type === 'mcpToolCall') output = object(item.result)?.content ?? item.result ?? object(item.error)?.message ?? item.error
   else if (type === 'dynamicToolCall') output = item.contentItems ?? item.output ?? item.error
+  else if (type === 'fileChange') output = fileDiffs(item.changes)
   // the item status is the app-server's own verdict: `failed`, or `declined` when the person refused the call —
   // a declined call has no output, so the empty result is what ends its "running"
   const status = string(item.status)

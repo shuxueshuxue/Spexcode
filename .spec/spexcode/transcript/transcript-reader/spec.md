@@ -63,6 +63,15 @@ no `output` field at all — that absence is what a live surface reads as "still
 a line reader scans a fixed lookahead window for timestamp disorder before stopping, so a cold tail stays
 bounded.
 
+**A code-mode command is normalized to what ran, not how it was reached.** Codex's code-mode `exec` tool
+carries a JS program as its input — `const r = await tools.exec_command({cmd:"…"}); text(r.output)` — where the
+shell command is the content and the JS around it is transport the model writes to reach the sandbox. The codex
+adapter extracts the `cmd` string(s) (unescaped; a batch of several joins one per line) and hands them up as the
+tool's input, so every surface shows the command that ran and never the wrapper. This is codex-specific knowledge
+and it lives here, at the bottom of the stack in the codex parser — the normalized `TranscriptTool` is
+harness-agnostic, so the shared vocabulary and the renderer never learn a code-mode literal exists. A cell that
+calls no `exec_command` is left untouched.
+
 **A result is what the tool said, not its wire shape.** A harness that records a result as content blocks —
 Claude's `tool_result.content` list, Codex 0.146's `input_text` output blocks, an MCP result's `content[]`
 anywhere — means the text of those blocks with their line breaks, joined; the reader never encodes the block list

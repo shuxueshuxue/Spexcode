@@ -83,3 +83,14 @@ test('a result recorded as content blocks reads as the text of those blocks, lin
   ])
   assert.equal(codex[0]?.output, 'Script completed\nOutput:\n\n1\n', 'never the JSON of the block list')
 })
+
+test('codex code-mode exec: the shell command is surfaced, not the JS wrapper (specialization stays in the codex adapter)', () => {
+  const at = '2026-08-29T00:00:00.000Z'
+  const call = (id, input) => codexEvent({ timestamp: at, type: 'response_item', payload: { type: 'custom_tool_call', call_id: id, name: 'exec', input } })
+  const one = collect([call('c1', 'const r = await tools.exec_command({cmd:"echo \\"$(date +%T) tick\\" >> /tmp/w.log",yield_time_ms:1000}); text(r.output);')])
+  assert.equal(one[0].input, 'echo "$(date +%T) tick" >> /tmp/w.log', 'the cmd is unescaped and the JS wrapper is gone')
+  const many = collect([call('c2', 'await Promise.all([tools.exec_command({cmd:"ls"}), tools.exec_command({cmd:"pwd"})])')])
+  assert.equal(many[0].input, 'ls\npwd', 'a batch shows each command on its own line')
+  const notExec = collect([call('c3', 'const x = 1; console.log(x)')])
+  assert.equal(notExec[0].input, 'const x = 1; console.log(x)', 'a non-exec_command cell is left untouched')
+})

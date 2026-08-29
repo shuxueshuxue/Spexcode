@@ -243,6 +243,49 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   }
 })
 
+test('a delivered human prompt reopens a parked session even when another prompt remains queued', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-parked-send-reentry-'))
+  const databasePath = join(home, 'sessions.sqlite')
+  const restore = selectTestStore(home, databasePath)
+  const id = 'parked-send-reentry-session'
+  let connections = 0
+  const server = createServer(socket => {
+    connections++
+    if (connections > 1) { socket.destroy(); return }
+    socket.on('data', chunk => {
+      if (!String(chunk).includes('repaint')) return
+      socket.write('{"type":"repaint-done"}\n')
+    })
+  })
+  mkdirSync(home, { recursive: true })
+  writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), JSON.stringify({
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    title: 'parked', name: null, parent: null, status: 'parked', proposal: null, note: 'waiting',
+    sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
+    cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
+  }, null, 2) + '\n')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: id, status: 'parked', note: 'waiting' })
+  stampRvSock(id)
+  app.enqueueConversationMessage(id, {
+    kind: 'session.prompt.v1', body: Buffer.from('already queued'), senderSessionId: null,
+  }, { text: 'already queued', from: null })
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
+  try {
+    const result = await sendText(id, 'wake now')
+    assert.equal(result.ok, true)
+    assert.equal(app.readState(id)?.status, 'active', 'successful handoff must reopen parked even if later debt remains')
+    assert.ok(app.protocol.listPending(id).length >= 1, 'the refused follow-up remains queued for retry')
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()))
+    app.close()
+    resetConfiguredSessionApplicationForTest()
+    restore()
+  }
+})
+
 test('canonical acceptance stays successful when a runtime binding is not ready yet', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-unbound-command-'))
   const databasePath = join(home, 'sessions.sqlite')

@@ -17,24 +17,32 @@
 # CLI read; this shell never treats runtime.json as a second lifecycle database.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 S="${SPEX:-spex}"
-# @@@ the block must survive its own text - two ways a decision was lost. (1) A `hook-prompt` failure exited 1,
-# which for a Stop hook means ALLOW: the CLI breaking silently disarmed the one gate whose whole job is to stop
-# an undeclared stop. It now blocks with a self-contained fallback that needs no CLI to render. Because a
-# genuinely broken CLI would also stop the agent from declaring, that fallback blocks at most once per session
-# and then gets out of the way loudly, so the gate can fail closed without trapping anyone. (2) The escaping
-# was done three times and only one of them folded newlines; a multi-line reason (a node stack, a git message)
-# produced raw newlines inside a JSON string, so the harness saw invalid JSON and the block evaporated. One
-# escaper now serves every site.
+# @@@ the block must survive its own text - three ways a decision was lost. (1) A `hook-prompt` failure exited
+# non-zero, which for a Stop hook means ALLOW: the one gate whose job is to stop an undeclared stop was
+# disarmed by its own text failing to load. (2) The escaping was written three times and only one folded
+# newlines, so a multi-line reason put raw newlines inside a JSON string and the harness dropped the block.
+# (3) `render` must only PRINT — a helper that emits the decision itself cannot be called inside `$( )`,
+# because `exit` there ends the substitution and its output is captured as the caller's text. So rendering
+# returns a status, and every decision is taken in the main shell.
 esc_json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'; }
 block_with() { printf '{"decision":"block","reason":"%s"}\n' "$(esc_json "$1")"; exit 0; }
-render_or_fallback() {
+render() {
   local text
-  if text=$("$@" 2>/dev/null) && [ -n "$text" ]; then printf '%s' "$text"; return 0; fi
+  text=$("$@" 2>/dev/null) || return 1
+  [ -n "$text" ] || return 1
+  printf '%s' "$text"
+}
+# A genuinely broken CLI would also stop the agent from declaring, so the fail-closed fallback blocks at most
+# once per session and then steps aside loudly: failing closed must not trap anyone.
+fallback_or_allow() {
   local once="$sdir/stop-gate-render-failed"
   if [ -f "$once" ]; then
     printf 'stop-gate: cannot render its own reason and has already blocked once for that; allowing this stop. Repair the spex CLI.\n' >&2
     exit 0
   fi
+  # the bound only works if the mark can be written: without the mkdir a store dir that does not exist yet
+  # left the sentinel uncreated, and "block at most once" quietly became "block every time"
+  mkdir -p "$sdir" 2>/dev/null || true
   touch "$once" 2>/dev/null || true
   block_with "undeclared stop, and stop-gate could not render its own text (the spex CLI failed). Declare the ONE true state as your LAST call: session done --propose merge | done --propose close | ask --note <what you await> | park --note <what you await>. Run it through the same CLI this project launched you with; if that CLI is broken, say so and stop."
 }
@@ -111,7 +119,7 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
     $S internal session-state asking --session "$sid" --note "stopped with uncommitted work — commit your spec+code on the node branch, then re-declare done" >/dev/null 2>&1 || true
     exit 0
   fi
-  reason=$($S internal hook-prompt stop-gate --variant commit --reason "$gatemsg" --cli "$S" --propose "$proposal") || exit 1
+  reason=$(render $S internal hook-prompt stop-gate --variant commit --reason "$gatemsg" --cli "$S" --propose "$proposal") || fallback_or_allow
   block_with "$reason"
 fi
 
@@ -137,24 +145,25 @@ fi
 # declare-LAST discipline, and the `help session` entry that re-explains each choice's condition — every bit
 # of the full-to-terse information gap is recoverable from the entry, none of it from memory.
 taught="$sdir/stop-gate-taught"
+# @@@ an artifact is a NOTE ON the demand, not a replacement for it - the artifact line used to be its own
+# branch taken instead of the full menu, and the taught sentinel was stamped before it, so a session that had
+# posted anything never saw the four states at all. It is also not only files: `session web add` writes
+# web.json beside files.json, and checking one of them made a web-only artifact invisible here. So the
+# teaching level is chosen first, and the artifact line is appended to whichever level applies.
+artifact_note=""
+for kind in files web; do
+  store="$sdir/$kind.json"
+  if [ -s "$store" ] && grep -qE '"[^"]+"' "$store"; then
+    artifact_note=$(render $S internal hook-prompt stop-gate --variant artifact --cli "$S") || artifact_note=""
+    break
+  fi
+done
 if [ -f "$taught" ]; then
-  reason=$(render_or_fallback $S internal hook-prompt stop-gate --variant terse --cli "$S")
-  block_with "$reason"
+  reason=$(render $S internal hook-prompt stop-gate --variant terse --cli "$S") || fallback_or_allow
+else
+  reason=$(render $S internal hook-prompt stop-gate --variant full --cli "$S") || fallback_or_allow
+  mkdir -p "$sdir" 2>/dev/null || true
+  touch "$taught" 2>/dev/null || true
 fi
-touch "$taught" 2>/dev/null || true
-# The full reason names the PATH-independent CLI ($S) ONCE as a shared `<CLI> session <choice>` prefix, then
-# lists the four real states plus the `nothing` trap as a compact newline menu of bare subcommands — so the
-# terminal output stays legible instead of repeating the long abs path per option. It EMPHASIZES that each
-# state is a CLAIM others act on (not a box to tick to end the turn) and gives the precise APPLICATION CONDITION
-# for each — so the agent picks the TRUE one. park is policed hardest because a false park (no real background task) reads on the
-# board as "fine, self-resuming" when the agent actually needs the human, which is the most damaging mislabel.
-# It ends with the ORDERING discipline — declare LAST, then stop — because a declaration followed by more
-# tool calls honestly re-flips the record to active (mark-active, by design) and re-blocks the next stop;
-# this block text is the one place every undeclared stopper is guaranteed to read, so the teaching that
-# kills the park->block->re-park loop at its source lives here.
-if [ -s "$sdir/files.json" ] && grep -qE '"[^"]+"' "$sdir/files.json"; then
-  reason=$(render_or_fallback $S internal hook-prompt stop-gate --variant artifact --cli "$S")
-  block_with "$reason"
-fi
-reason=$(render_or_fallback $S internal hook-prompt stop-gate --variant full --cli "$S")
+[ -n "$artifact_note" ] && reason=$(printf '%s\n\n%s' "$reason" "$artifact_note")
 block_with "$reason"

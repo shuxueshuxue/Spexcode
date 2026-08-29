@@ -8,6 +8,13 @@ events:
 order: 10
 block: true
 ---
+**An artifact is a note ON the demand, not a replacement for it.** The artifact reminder used to be its own
+branch taken INSTEAD of the full menu, with the taught sentinel stamped before it, so a session that had
+posted anything never saw the four states at all. It also looked at files only, while `session web add` writes
+its own store beside them, so a web-only artifact was invisible to the check. The teaching level is chosen
+first — full on the first stop, terse afterwards — and the artifact line is appended to whichever level
+applies, from either store.
+
 **A gate that cannot render its own text still blocks.** Rendering the reason goes through the CLI, and a
 failure there used to exit non-zero — which, for a Stop hook, means ALLOW. The one gate whose entire job is to
 stop an undeclared stop was disarmed by its own text failing to load. It now blocks with a self-contained

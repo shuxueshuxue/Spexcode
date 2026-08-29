@@ -42,6 +42,12 @@ scenarios:
     code: packages/transcript/src/parsers.ts
     description: Read a real Claude thread in which a Bash call ended with is_error, and parse structured failure fields from every harness that writes one (Claude is_error, pi/OpenClaw isError, OpenCode state error, Gemini call status error, Codex app-server failed/declined).
     expected: The failed call carries outcome "failed" and the declined app-server call carries "rejected" with an empty result; every other call has no outcome field at all, including results whose prose merely says "error"; no output text is sniffed.
+  - name: codex-code-mode-exec-surfaces-the-command
+    tags: [backend-api]
+    test: packages/transcript/src/parsers.test.ts
+    code: packages/transcript/src/parsers.ts
+    description: Read a real codex code-mode rollout whose `exec` tool inputs are JS `tools.exec_command({cmd:"…"})` programs.
+    expected: Each exec tool's input is the extracted shell command (unescaped; a batch joined one per line), not the JS wrapper; a cell that calls no exec_command is left untouched.
   - name: results-read-as-block-text
     tags: [backend-api]
     test: packages/transcript/src/parsers.test.ts

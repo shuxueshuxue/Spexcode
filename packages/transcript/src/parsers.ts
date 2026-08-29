@@ -59,7 +59,21 @@ const resultText = (value: unknown): string => {
     return compact(blockValue)
   }).join('\n')
 }
-const lineCount = (value: string): number => value ? value.split(/\r?\n/).length : 0
+
+
+// CODEX CODE-MODE: the `exec` tool's input is a JS program that calls `tools.exec_command({cmd:"…"})`; the shell
+// command is what actually ran, the JS around it is transport the model writes to reach the sandbox. Surface the
+// command(s) so a GENERIC renderer shows what ran, not the wrapper. This is codex-adapter knowledge and lives
+// here at the bottom of the stack — never leak a code-mode literal up into the shared vocabulary or the UI.
+const CODEX_EXEC_CMD = /\bcmd\s*:\s*"((?:[^"\\]|\\.)*)"/g
+function codexExecCommand(input: string | undefined): string | undefined {
+  if (typeof input !== 'string' || !input.includes('exec_command')) return input
+  const commands: string[] = []
+  for (const match of input.matchAll(CODEX_EXEC_CMD)) {
+    try { commands.push(JSON.parse(`"${match[1]}"`)) } catch { commands.push(match[1].replace(/\\(["\\])/g, '$1')) }
+  }
+  return commands.length ? commands.join('\n') : input
+}const lineCount = (value: string): number => value ? value.split(/\r?\n/).length : 0
 
 export type MutableTool = { id: string; name: string; input?: string; output?: string; outputLines: number; outputBytes: number; outcome?: ToolOutcome }
 export type MutableTurn = { id: string | null; at: number; role: 'user' | 'assistant'; text?: string; tools: MutableTool[] }
@@ -149,7 +163,8 @@ export function codexEvent(value: unknown): ParsedEvent | null {
   if (entry.type === 'response_item' && type === 'message' && payload.role === 'assistant') return { at: eventAt, turn: null }
   if (entry.type === 'response_item' && (type === 'custom_tool_call' || type === 'function_call')) {
     const id = string(payload.call_id ?? payload.id) ?? 'tool'
-    return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name: string(payload.name ?? payload.tool_name) ?? 'tool', input: payload.input === undefined && payload.arguments === undefined ? undefined : compact(payload.input ?? payload.arguments), outputLines: 0, outputBytes: 0 }] } }
+    const rawInput = payload.input === undefined && payload.arguments === undefined ? undefined : compact(payload.input ?? payload.arguments)
+    return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name: string(payload.name ?? payload.tool_name) ?? 'tool', input: codexExecCommand(rawInput), outputLines: 0, outputBytes: 0 }] } }
   }
   if (entry.type === 'response_item' && (type === 'custom_tool_call_output' || type === 'function_call_output')) {
     const id = string(payload.call_id ?? payload.id)

@@ -76,7 +76,18 @@ calls no `exec_command` is left untouched.
 Claude's `tool_result.content` list, Codex 0.146's `input_text` output blocks, an MCP result's `content[]`
 anywhere — means the text of those blocks with their line breaks, joined; the reader never encodes the block list
 itself, which would show a person escaped newlines inside a JSON shell. A block that is not text (an image, a
-reference) is named in brackets, not dumped.
+reference) is named in brackets, not dumped — and named with what the producer said about it: the media type
+when the record states one (Claude's `source.media_type`, the `data:<mime>;` prefix of Codex's `image_url`) and
+the size, which base64 always yields. Neither is guessed; a picture whose type the producer never stated is
+`[image 1.2 MB]`, not sniffed from its bytes. On the threads on this box that turns 189 identical `[image]`
+into `[image/png 105 KB]`, `[image/jpeg 464 KB]`, and so on.
+
+**The output is text, and a picture does not fit in it — that is a decision, not an omission.** Carrying blocks
+as bytes was considered and is not done. The result is capped at 64 KB per call, which a single screenshot
+exceeds, so a block array would either truncate images into garbage or abandon the cap that keeps a read
+bounded. The live path already answers the real need a different way: a frame withholds result bodies and the
+host fetches one on demand ([[transcript-frames]]), so a surface that wants the picture has a seam to ask
+through. What the reader owes is an honest account of what was there, which the named placeholder gives.
 
 **How a call ended is the harness's verdict, not the reader's reading.** A call carries `outcome: failed` or
 `outcome: rejected` only when the native record says so in a structured field — Claude's `tool_result.is_error`,

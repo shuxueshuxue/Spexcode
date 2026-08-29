@@ -69,6 +69,25 @@ test('opencode: a tool part in state error is failed; gemini: a call with status
   assert.equal(gemini.find((tool) => tool.id === 'gc2')?.outcome, undefined)
 })
 
+test('a non-text block is named with the type and size the producer stated, never sniffed', () => {
+  const at = '2026-08-29T00:00:00.000Z'
+  const png = 'iVBORw0KGgoAAAANSUhEUg'.repeat(200)
+  const result = (id: string, content: unknown) => claudeEvent({ type: 'user', timestamp: at, uuid: `r-${id}`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content }] } })
+  const call = (id: string) => claudeEvent({ type: 'assistant', timestamp: at, uuid: `a-${id}`, message: { id: `msg-${id}`, role: 'assistant', content: [{ type: 'tool_use', id, name: 'Read', input: {} }] } })
+  const tools = collect([
+    call('b1'), result('b1', [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } }]),
+    call('b2'), result('b2', [{ type: 'image', source: { type: 'base64', data: png } }]),
+    call('b3'), result('b3', [{ type: 'tool_reference', name: 'x' }]),
+  ])
+  const out = (id: string) => tools.find((tool) => tool.id === id)?.output
+  // stated type wins; size always comes from the base64 the record carries
+  assert.equal(out('b1'), '[image/png 3 KB]')
+  // no stated type: the block is named by its own kind, and the bytes are NOT sniffed for a format
+  assert.equal(out('b2'), '[image 3 KB]')
+  // every other non-text block is named the same way, so nothing leaves the record unaccounted for
+  assert.equal(out('b3'), '[tool_reference]')
+})
+
 test('pi and OpenClaw: one format, one parser — the turn keeps the producer\'s verdict even with nothing to show', () => {
   const entryAt = '2026-08-29T00:00:10.000Z'
   const record = (stopReason: string, errorMessage?: string) => ({
@@ -157,7 +176,8 @@ test('a result recorded as content blocks reads as the text of those blocks, lin
     ] } }),
   ])
   assert.equal(claude.find((tool) => tool.id === 'm1')?.output, 'sent to 1\nid: 7\nok')
-  assert.equal(claude.find((tool) => tool.id === 'm2')?.output, '[image]')
+  // a picture cannot ride in a text field, so the placeholder carries what the producer DID say about it
+  assert.equal(claude.find((tool) => tool.id === 'm2')?.output, '[image 3 B]')
   const codex = collect([
     codexEvent({ timestamp: at, type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'c1', name: 'exec', input: 'print(1)' } }),
     codexEvent({ timestamp: at, type: 'response_item', payload: { type: 'custom_tool_call_output', call_id: 'c1', output: [{ type: 'input_text', text: 'Script completed\nOutput:\n' }, { type: 'input_text', text: '1\n' }] } }),

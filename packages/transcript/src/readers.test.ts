@@ -254,6 +254,24 @@ test('opencode transcript reader parses one export per store revision', async ()
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test('a store reader watches its write-ahead log, because a WAL commit never moves the database file', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-store-'))
+  const doc = { messages: [{ id: 1, role: 'user', content: 'one', timestamp: 1_787_942_673.8 }] }
+  let exports = 0
+  const reader = hermesTranscriptReader(root, () => { exports++; return JSON.stringify(doc) })
+  writeFileSync(join(root, 'state.db'), 'db')
+  const range = { from: 1_787_942_000_000, to: 1_787_943_000_000 }
+  const first = reader.revision('t')
+  await reader.read('t', range)
+  // a plain commit in WAL mode leaves the database file's size and mtime untouched; only the log moves, so a
+  // token that watches the database alone is frozen and the cached export is served forever
+  writeFileSync(join(root, 'state.db-wal'), 'a commit that never touched state.db')
+  assert.notEqual(reader.revision('t'), first)
+  await reader.read('t', range)
+  assert.equal(exports, 2)
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('unsupported, missing, timestamp-less, and malformed transcripts fail loudly', async () => {
   await assert.rejects(() => unsupportedTranscript('zcode').read('x', { from: 1, to: 2 }), (error: unknown) => error instanceof TranscriptReadError && error.reason === 'unsupported')
   assert.equal(unsupportedTranscript('zcode').revision('x'), null)

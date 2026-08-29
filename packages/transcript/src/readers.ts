@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { TranscriptReadError, type TranscriptRead, type TranscriptReader } from './turns.js'
+import { TranscriptReadError, type TranscriptRead, type TranscriptReader , type TranscriptRange } from './turns.js'
 import { IntervalCollector, claudeEvent, codexEvent, geminiEvent, hermesEvents, openclawEvent, opencodeEvents, piEvent, type Parse, type ParsedEvent } from './parsers.js'
 
 // THE NATIVE-THREAD READERS. Each harness keeps its conversation somewhere private — Claude's project JSONL,
@@ -92,25 +92,9 @@ export function openclawTranscriptPath(threadId: string, root = openclawRoot()):
 
 const opencodeStoreRoot = () => process.env.SPEXCODE_OPENCODE_DATA_DIR
   || join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), 'opencode')
-function opencodeStoreRevision(root: string): string | null {
-  try {
-    const database = statSync(join(root, 'opencode.db'))
-    let writeAheadLog = '0:0'
-    try {
-      const stat = statSync(join(root, 'opencode.db-wal'))
-      writeAheadLog = `${stat.size}:${Math.floor(stat.mtimeMs)}`
-    } catch { /* a checkpointed database has no separate write-ahead log */ }
-    return `${database.size}:${Math.floor(database.mtimeMs)}:${writeAheadLog}`
-  } catch { return null }
-}
 // The export is read RAW: `--sanitize` replaces every prose and tool-output part with a `[redacted:…]` token,
 // which made the whole conversation unreadable; the reader hands over the same local bytes the other harnesses'
 // files hold, and nothing here leaves the machine that ran the thread.
-function opencodeExport(threadId: string): string {
-  return execFileSync(process.env.SPEXCODE_OPENCODE_CMD || 'opencode', ['export', threadId], {
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-  })
-}
 
 
 const fileRevision = (path: string): string | null => {
@@ -232,72 +216,106 @@ function lineFileReader(harness: string, locate: (threadId: string) => string | 
   }
 }
 
-export const claudeTranscript: TranscriptReader = lineFileReader('claude', (threadId) => claudeTranscriptPath(threadId), claudeEvent)
-export const codexTranscript: TranscriptReader = lineFileReader('codex', (threadId) => codexRolloutPath(threadId), codexEvent)
-export const piTranscript: TranscriptReader = lineFileReader('pi', (threadId) => piSessionPath(threadId), piEvent)
-export const geminiTranscript: TranscriptReader = lineFileReader('gemini', (threadId) => geminiTranscriptPath(threadId), geminiEvent)
-export const openclawTranscript: TranscriptReader = lineFileReader('openclaw', (threadId) => openclawTranscriptPath(threadId), openclawEvent)
+// A ROOT IS A PARAMETER OF EVERY READER, not of some of them. Each locator already takes one; only the store
+// readers exposed it, so anything wanting a second pi root — a producer under an isolated agent dir, a test —
+// had no way to ask. Passing nothing keeps the old behaviour exactly: the locator's own default is evaluated
+// per call, so a late `CLAUDE_CONFIG_DIR` is still picked up.
+export const claudeTranscriptReader = (root?: string): TranscriptReader => lineFileReader('claude', (threadId) => claudeTranscriptPath(threadId, root ?? projectTranscriptRoot()), claudeEvent)
+export const codexTranscriptReader = (root?: string): TranscriptReader => lineFileReader('codex', (threadId) => codexRolloutPath(threadId, root ?? codexSessionsDir()), codexEvent)
+export const piTranscriptReader = (root?: string): TranscriptReader => lineFileReader('pi', (threadId) => piSessionPath(threadId, root ?? piSessionsRoot()), piEvent)
+export const geminiTranscriptReader = (root?: string): TranscriptReader => lineFileReader('gemini', (threadId) => geminiTranscriptPath(threadId, root ?? geminiRoot()), geminiEvent)
+export const openclawTranscriptReader = (root?: string): TranscriptReader => lineFileReader('openclaw', (threadId) => openclawTranscriptPath(threadId, root ?? openclawRoot()), openclawEvent)
 
-// OpenCode has no per-thread file: the store's revision is the change token, and one export per
-// revision is parsed and kept, so repeated interval reads of a quiet thread cost nothing new.
-const opencodeExports = new Map<string, { revision: string; events: ParsedEvent[] }>()
-export function opencodeTranscriptReader(root = opencodeStoreRoot(), load: (threadId: string) => string = opencodeExport): TranscriptReader {
-  const reader: Pick<TranscriptReader, 'revision' | 'read'> = {
-    revision: () => opencodeStoreRevision(root),
-    read: async (threadId, range) => {
-      const revision = opencodeStoreRevision(root)
-      if (!revision) throw new TranscriptReadError('missing', `opencode transcript for ${threadId} is unavailable: store was not found`)
-      const key = `${root}:${threadId}`
-      let cached = opencodeExports.get(key)
-      if (!cached || cached.revision !== revision) {
-        let exported: string
-        try { exported = load(threadId) } catch (error) { throw new TranscriptReadError('unreadable', `opencode transcript could not be exported: ${error instanceof Error ? error.message : String(error)}`) }
-        let value: unknown
-        try { value = JSON.parse(exported) } catch (error) { throw new TranscriptReadError('invalid', `opencode transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
-        cached = { revision, events: opencodeEvents(value) }
-        opencodeExports.set(key, cached)
-      }
-      const collector = new IntervalCollector(range)
-      for (const event of cached.events) collector.add(event)
-      return collector.finish(revision, 'opencode')
-    },
-  }
-  return {
-    ...reader,
-    // no file grows here: an open interval is re-collected from the cached export, which is one export per revision
-    tail: (threadId, from) => ({ advance: (to) => reader.read(threadId, { from, to }), close: () => {} }),
-  }
-}
-export const opencodeTranscript: TranscriptReader = opencodeTranscriptReader()
+export const claudeTranscript: TranscriptReader = claudeTranscriptReader()
+export const codexTranscript: TranscriptReader = codexTranscriptReader()
+export const piTranscript: TranscriptReader = piTranscriptReader()
+export const geminiTranscript: TranscriptReader = geminiTranscriptReader()
+export const openclawTranscript: TranscriptReader = openclawTranscriptReader()
 
-const hermesRoot = () => process.env.HERMES_HOME || join(homedir(), '.hermes', 'profiles', 'default')
-function hermesRevision(root: string): string | null {
-  try { const stat = statSync(join(root, 'state.db')); return `${stat.size}:${Math.floor(stat.mtimeMs)}` } catch { return null }
+// A STORE HAS NO PER-THREAD FILE, so a thread is obtained by running the harness's own export command and the
+// change token is the store's files. OpenCode and Hermes are that same reader; they were written twice, and the
+// copy is what let one of them grow a write-ahead-log leg the other never got — a revision that watches only the
+// main database file cannot move at all while SQLite is in WAL mode, because a plain commit leaves that file's
+// size and mtime untouched. So the store is a row: which files make the token, what the export command is, and
+// which parser reads its document.
+type StoreSource = Readonly<{
+  harness: string
+  defaultRoot: () => string
+  files: readonly string[]      // the first is the database itself; its absence means the store is not there
+  missing: string               // what to say when it is not
+  load: (threadId: string) => string
+  parse: (value: unknown) => ParsedEvent[]
+}>
+
+function storeRevision(root: string, files: readonly string[]): string | null {
+  const legs: string[] = []
+  for (const [index, name] of files.entries()) {
+    try {
+      const stat = statSync(join(root, name))
+      legs.push(`${stat.size}:${Math.floor(stat.mtimeMs)}`)
+    } catch {
+      // the database itself must exist; a checkpointed store simply has no separate write-ahead log
+      if (index === 0) return null
+      legs.push('0:0')
+    }
+  }
+  return legs.join(':')
 }
-function hermesExport(threadId: string): string {
-  return execFileSync(process.env.SPEXCODE_HERMES_CMD || 'hermes', ['sessions', 'export', '--format', 'jsonl', '--session-id', threadId, '--yes'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-}
-const hermesExports = new Map<string, { revision: string; events: ParsedEvent[] }>()
-export function hermesTranscriptReader(root = hermesRoot(), load: (threadId: string) => string = hermesExport): TranscriptReader {
-  const read = async (threadId: string, range: { from: number; to: number }): Promise<TranscriptRead> => {
-    const revision = hermesRevision(root)
-    if (!revision) throw new TranscriptReadError('missing', `hermes transcript for ${threadId} is unavailable: state.db was not found`)
-    const key = `${root}:${threadId}`
-    let cached = hermesExports.get(key)
+
+const storeExports = new Map<string, { revision: string; events: ParsedEvent[] }>()
+function storeReader(source: StoreSource, root: string, load: (threadId: string) => string): TranscriptReader {
+  const read = async (threadId: string, range: TranscriptRange): Promise<TranscriptRead> => {
+    const revision = storeRevision(root, source.files)
+    if (!revision) throw new TranscriptReadError('missing', `${source.harness} transcript for ${threadId} is unavailable: ${source.missing}`)
+    const key = `${source.harness}:${root}:${threadId}`
+    let cached = storeExports.get(key)
     if (!cached || cached.revision !== revision) {
       let exported: string
-      try { exported = load(threadId) } catch (error) { throw new TranscriptReadError('unreadable', `hermes transcript could not be exported: ${error instanceof Error ? error.message : String(error)}`) }
+      try { exported = load(threadId) } catch (error) { throw new TranscriptReadError('unreadable', `${source.harness} transcript could not be exported: ${error instanceof Error ? error.message : String(error)}`) }
       let value: unknown
-      try { value = JSON.parse(exported) } catch (error) { throw new TranscriptReadError('invalid', `hermes transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
-      cached = { revision, events: hermesEvents(value) }
-      hermesExports.set(key, cached)
+      try { value = JSON.parse(exported) } catch (error) { throw new TranscriptReadError('invalid', `${source.harness} transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
+      cached = { revision, events: source.parse(value) }
+      storeExports.set(key, cached)
     }
     const collector = new IntervalCollector(range)
     for (const event of cached.events) collector.add(event)
-    return collector.finish(revision, 'hermes')
+    return collector.finish(revision, source.harness)
   }
-  return { revision: () => hermesRevision(root), read, tail: (threadId, from) => ({ advance: (to) => read(threadId, { from, to }), close: () => {} }) }
+  return {
+    revision: () => storeRevision(root, source.files),
+    read,
+    // no file grows here: an open interval is re-collected from the cached export, one export per revision
+    tail: (threadId, from) => ({ advance: (to) => read(threadId, { from, to }), close: () => {} }),
+  }
 }
+
+// The export is read RAW: OpenCode's `--sanitize` replaces every prose and tool-output part with a
+// `[redacted:…]` token, which made the whole conversation unreadable; the reader hands over the same local
+// bytes the other harnesses' files hold, and nothing here leaves the machine that ran the thread.
+const OPENCODE_STORE: StoreSource = {
+  harness: 'opencode',
+  defaultRoot: opencodeStoreRoot,
+  files: ['opencode.db', 'opencode.db-wal'],
+  missing: 'store was not found',
+  load: (threadId) => execFileSync(process.env.SPEXCODE_OPENCODE_CMD || 'opencode', ['export', threadId], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }),
+  parse: opencodeEvents,
+}
+const HERMES_STORE: StoreSource = {
+  harness: 'hermes',
+  defaultRoot: () => process.env.HERMES_HOME || join(homedir(), '.hermes', 'profiles', 'default'),
+  files: ['state.db', 'state.db-wal'],
+  missing: 'state.db was not found',
+  load: (threadId) => execFileSync(process.env.SPEXCODE_HERMES_CMD || 'hermes', ['sessions', 'export', '--format', 'jsonl', '--session-id', threadId, '--yes'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }),
+  parse: hermesEvents,
+}
+
+export function opencodeTranscriptReader(root = OPENCODE_STORE.defaultRoot(), load = OPENCODE_STORE.load): TranscriptReader {
+  return storeReader(OPENCODE_STORE, root, load)
+}
+export function hermesTranscriptReader(root = HERMES_STORE.defaultRoot(), load = HERMES_STORE.load): TranscriptReader {
+  return storeReader(HERMES_STORE, root, load)
+}
+export const opencodeTranscript: TranscriptReader = opencodeTranscriptReader()
 export const hermesTranscript: TranscriptReader = hermesTranscriptReader()
 
 export function unsupportedTranscript(harness: string): TranscriptReader {

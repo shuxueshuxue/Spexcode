@@ -45,6 +45,28 @@ const compact = (value: unknown): string => {
 // (Claude's tool_result content, Codex's input_text output blocks, MCP results everywhere) means the text of
 // those blocks, with their line breaks; encoding the block list itself as JSON would show the reader escaped
 // newlines inside a JSON shell. A block that is not text — an image, a reference — is named, not dumped.
+// @@@ a block that is not text is NAMED, with what the producer said about it - the output contract is text,
+// so a picture cannot be carried in it; the honest substitute is a placeholder that says what was there. A
+// bare `[image]` answers none of the questions a person actually has, and both facts worth having are already
+// in the record: the media type when the producer states it (Claude's `source.media_type`, the `data:<mime>;`
+// prefix of Codex's `image_url`) and the size, which base64 always yields. Neither is guessed — an image with
+// no stated type is named `[image 1.2 MB]`, not sniffed from its bytes.
+const KB = 1024
+const humanBytes = (bytes: number): string => bytes >= KB * KB ? `${(bytes / (KB * KB)).toFixed(1)} MB`
+  : bytes >= KB ? `${Math.round(bytes / KB)} KB` : `${bytes} B`
+const base64Bytes = (data: string): number => {
+  const body = data.replace(/=+$/, '')
+  return Math.floor((body.length * 3) / 4)
+}
+const blockLabel = (block: Record<string, unknown>, type: string): string => {
+  const source = object(block.source)
+  const url = string(block.image_url) ?? string(block.url) ?? string(source?.url)
+  const dataUrl = url && url.startsWith('data:') ? /^data:([^;,]*)[;,]/.exec(url) : null
+  const mime = string(source?.media_type) ?? string(block.mimeType) ?? string(block.mime_type) ?? (dataUrl ? dataUrl[1] : null)
+  const encoded = string(source?.data) ?? (url && url.startsWith('data:') ? url.slice(url.indexOf(',') + 1) : null)
+  const size = encoded ? ` ${humanBytes(base64Bytes(encoded))}` : ''
+  return `[${mime || type}${size}]`
+}
 const resultText = (value: unknown): string => {
   if (typeof value === 'string') return value
   if (!Array.isArray(value)) return compact(value)
@@ -54,8 +76,7 @@ const resultText = (value: unknown): string => {
     const text = string(block.text)
     if (text !== null) return text
     const type = string(block.type)
-    if (type === 'image') return '[image]'
-    if (type) return `[${type}]`
+    if (type) return blockLabel(block, type)
     return compact(blockValue)
   }).join('\n')
 }

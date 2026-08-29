@@ -97,6 +97,15 @@ filled — the same id-addressed mechanism that joins a result to its call, used
 not a small omission: on the rollouts on this box the failed status is on disk 6,194 times and none of it
 reached the page.
 
+**A signal is not a record.** `stopReason: aborted` is written when the agent's own runtime cancels a turn —
+pi's extension abort path — and NOT when the process is killed: measured on the pi lane, a default SIGINT or
+SIGTERM death writes no line at all, so the turn simply stops mid-file with no verdict. The vocabulary is
+therefore narrower than the enum suggests, and the reader must keep treating a turn with no outcome as a turn
+with no signal rather than inferring one from where the file ends. A separate consequence for locators: pi's
+`--session-dir` flattens the session layout the default root implies, so a thread started that way is not
+found by the path this reader walks. That is the locator's contract holding, not failing — but it is a real
+way to hand the reader a thread it cannot see.
+
 **A stop is recorded on the TURN, not on the call — so that is where it is carried.** No harness we read marks
 a single call cancelled: OpenCode's `ToolState` union is Pending/Running/Completed/Error with no cancelled
 member, Claude writes an interruption as prose (`[Request interrupted by user]`) which the rule above forbids

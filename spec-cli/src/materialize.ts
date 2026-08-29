@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, renameSync, rmSync, rmdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, renameSync, rmSync, rmdirSync, copyFileSync, chmodSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -44,6 +44,47 @@ const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
 // CLI code and keeps the source-workspace mid-merge guard (one line + exit 75), so every hook callback
 // inherits both.
 const SPEX = join(PKG, 'bin', 'spex.mjs')
+const CORE_TEMPLATE = join(PKG, 'templates', 'spec', 'project', '.plugins', 'core')
+
+// Core hook handlers are shipped executable protocol, not adopter-owned plugin variants. Reconcile only the
+// known `core/` subtree before compiling the manifest so a project seeded by an older toolchain cannot keep
+// invoking a retired lifecycle writer. User plugins live outside this allowlist and are never enumerated.
+function refreshCorePluginHandlers(proj: string): string[] {
+  if (!existsSync(CORE_TEMPLATE)) return []
+  const specDir = join(proj, '.spec')
+  const roots = existsSync(specDir)
+    ? readdirSync(specDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(join(specDir, entry.name, '.plugins', 'core')))
+      .map((entry) => join(specDir, entry.name, '.plugins', 'core'))
+    : []
+  const handlers: string[] = []
+  const walk = (dir: string, prefix = '') => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = join(prefix, entry.name)
+      if (entry.isDirectory()) walk(join(dir, entry.name), rel)
+      else if (entry.isFile() && entry.name.endsWith('.sh')) handlers.push(rel)
+    }
+  }
+  walk(CORE_TEMPLATE)
+  const refreshed: string[] = []
+  for (const root of roots) for (const rel of handlers) {
+    const source = join(CORE_TEMPLATE, rel)
+    const dest = join(root, rel)
+    let current: Buffer | null = null
+    try { current = readFileSync(dest) } catch {}
+    if (current?.equals(readFileSync(source))) continue
+    mkdirSync(dirname(dest), { recursive: true })
+    const temp = `${dest}.spexcode-${process.pid}`
+    try {
+      copyFileSync(source, temp)
+      chmodSync(temp, 0o755)
+      renameSync(temp, dest)
+      refreshed.push(relative(proj, dest))
+    } finally { rmSync(temp, { force: true }) }
+  }
+  if (refreshed.length) console.log(`✓ refreshed core plugin handlers (${refreshed.join(', ')})`)
+  return refreshed
+}
 // the manifest + content-hash marker + plugin-folder ledger land in the materialized TREE's own slot of the
 // GLOBAL per-project store (layout.treeSlotDir — trees/<enc-worktree>), NOT the worktree and NOT one shared
 // per-project file: each is a pure function of ONE tree's .plugins, and the old single slot let the last-
@@ -285,6 +326,7 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
 // the whole pay-per-change materialize. proj defaults to cwd. Its receipt is populated at each successful
 // write so callers report the actual selected footprint instead of maintaining a second artifact inventory.
 export function materialize(proj = process.cwd()): MaterializeResult {
+  refreshCorePluginHandlers(proj)
   const rt = treeSlotDir(proj)                                            // this tree's slot in the global store, not the worktree
   mkdirSync(rt, { recursive: true })
   const planted: MaterializedArtifact[] = []

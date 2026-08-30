@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { displayStatusForProposal, liveness, launcherCmd, type LiveSnap, type SessRec } from './sessions.js'
+import { displayStatusForProposal, liveness, launcherCmd, type LiveSnap } from './sessions.js'
+import type { SessRec } from './session-record.js'
 
 // Pins the session-stability contract the mass-restore incident violated:
 //  - a PROBE FAILURE (tmux timed out under load) → `unknown`, NEVER a false `offline` (board honesty, tooth 1, [[state]]).

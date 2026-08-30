@@ -340,7 +340,8 @@ async function followKit(selectors: string[], verb: string): Promise<{
 }> {
   const { followSessions } = await import('./session-follow.js')
   const { localCachedSessions } = await import('./client.js')
-  const { fromRaw, ownSessionId, selectSessions, toSession } = await import('./sessions.js')
+  const { ownSessionId, selectSessions, toSession } = await import('./sessions.js')
+  const { fromRaw } = await import('./session-record.js')
   const { listSessionIds, readPublicRecordEntry } = await import('@spexcode/spec-core')
   const { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } = await import('./session-application.js')
   const real = selectors.filter((sel) => sel && sel !== '@all')
@@ -991,7 +992,8 @@ if (cmd === 'serve') {
       console.error('usage: spex session files add <path> | ls | retract <path>')
       process.exit(2)
     }
-    const { ownSessionId, withSessionRecordLockSync } = await import('./sessions.js')
+    const { ownSessionId } = await import('./sessions.js')
+    const { withSessionRecordLockSync } = await import('./session-record.js')
     const id = ownSessionId()
     if (!id) {
       console.error('spex session files: no governed caller session — run this from the agent session that produced the file')
@@ -1018,7 +1020,8 @@ if (cmd === 'serve') {
       console.error('usage: spex session web add <url> | ls | retract <url>')
       process.exit(2)
     }
-    const { ownSessionId, withSessionRecordLockSync } = await import('./sessions.js')
+    const { ownSessionId } = await import('./sessions.js')
+    const { withSessionRecordLockSync } = await import('./session-record.js')
     const id = ownSessionId()
     if (!id) {
       console.error('spex session web: no governed caller session — run this from the agent session that started the local service')

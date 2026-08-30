@@ -24,14 +24,16 @@ related:
 ## raw source
 
 The session subsystem's features — lifecycle state, launch, dispatch, comms, the live graph, selectors,
-the spec-pointer — all read and write ONE module, `sessions.ts`. It is shared substrate with no single
+the spec-pointer — all compose one shared session layer, with record I/O in `session-record.ts` and the remaining
+plumbing in `sessions.ts`. It is shared substrate with no single
 feature as its owner, so per-feature drift on it fanned the same change across a dozen nodes. Give it a
 foundation owner: the features govern their own surfaces and REFERENCE this module via `related:`.
 
 ## expanded spec
 
-sessions-core owns `sessions.ts` — the common session layer: the global per-session runtime/worktree envelope read/write
-(`runtime.json` keyed by session_id, [[runtime]]) with the record-integrity rules below, while lifecycle, proposal, note, event, queue, and topology facts live only in the canonical session application. It owns session↔worktree↔node resolution, the launch-script
+sessions-core owns `sessions.ts` — the common session layer around the global per-session runtime/worktree envelope;
+`session-record.ts` owns that envelope's typed read/write and quarantine controls, while lifecycle, proposal, note, event,
+queue, and topology facts live only in the canonical session application. The common layer owns session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
@@ -165,7 +167,7 @@ node still owns the user-facing policy and slot semantics. Each session feature 
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
 under `related:`, so a change here attributes its drift and eval staleness to this one owner instead of all of them
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that
-`sessions.ts` is a monolith — a future code split into per-feature modules would let each reclaim ownership.
+`sessions.ts` remains a monolith outside the record seam; future code splits can let each feature reclaim ownership.
 
 The shared layer also reconciles each executing governed record (`status: active`) with its adapter's optional
 native turn-failure subscription. Waiting states (`asking`, `awaiting`, and `parked`) have no native turn and do

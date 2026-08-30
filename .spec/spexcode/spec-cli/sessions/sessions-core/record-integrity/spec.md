@@ -4,8 +4,7 @@ status: active
 hue: 280
 desc: One typed writer for the per-session runtime envelope, three distinct readings of it (absent, corrupt, retired) that may never be collapsed, the launch-readiness publication fence, and the guard that tells a dead leaf from an unprovable one.
 code:
-  - spec-cli/src/sessions.ts#writeRecord
-  - spec-cli/src/sessions.ts#readRecord
+  - spec-cli/src/session-record.ts
 related:
   - spec-cli/src/session-record-integrity.test.ts
   - spec-cli/test/session-record-integrity-fixture.ts

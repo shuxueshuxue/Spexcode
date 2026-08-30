@@ -19,7 +19,7 @@ scenarios:
   - name: explorer-graph-entry-opens-spec-route
     description: >-
       In a running desktop dashboard, open #/spec with the Explorer dock and activate its fixed Spec graph
-      entry below the Specs and Files disclosures. Inspect the settled route and entry geometry.
+      entry below the static Specs and Files zones. Inspect the settled route and entry geometry.
     expected: >-
       The Explorer renders one fixed Spec graph entry beneath the Specs/Files sections. Activating it keeps
       the canonical #/spec route focused, without creating a second tab or a transient overlay.
@@ -44,16 +44,14 @@ scenarios:
   - name: collapse-folders-is-one-door-on-the-explorer-head
     tags: [frontend-e2e, desktop]
     description: >-
-      In a real desktop browser open several nested spec branches and the Files section with one directory
-      open, read the explorer head, then activate its collapse-folders door. Count open branches in both
-      sections, read both section heads' aria-expanded, the route, and the door's disabled state; reopen one
-      node and count again. Then open a directory inside Files, close the section, and reopen it.
+      In a real desktop browser open several nested spec branches and one Files directory, read the explorer
+      head, then activate its collapse-folders door. Count open branches in both projections, verify the static
+      Specs and Files zone heads carry no aria-expanded, read the route and door's disabled state, and reopen one node.
     expected: >-
-      The door sits on the dock head beside search — never inside a section head — with a tooltip and an
-      accessible name. One activation folds every open spec branch AND every open disk directory while both
-      sections stay open, the roots stay listed and the route is untouched; the door is disabled once nothing
-      is open; reopening one node reveals only that branch. A directory opened inside Files survives closing
-      and reopening the section: disclosure is held in the explorer's one store, not on the row.
+      The door sits on the dock head beside search — never inside a zone head — with a tooltip and an accessible
+      name. One activation folds every open spec branch AND every open disk directory while both static zones and
+      their roots stay listed and the route is untouched; the door is disabled once nothing is open; reopening one
+      node reveals only that branch.
     code:
       - spec-dashboard/src/FileTree.jsx
       - spec-dashboard/src/specTreeState.js
@@ -63,14 +61,14 @@ scenarios:
   - name: disclosure-is-a-chevron-and-nesting-is-a-line
     tags: [frontend-e2e, desktop]
     description: >-
-      In a real desktop browser open a nested branch in the Specs section and a directory in the Files
-      section. Read the disclosure mark of an open row and a closed row (element kind, rotation), the marks of
-      the section heads, and whether any row still prints a triangle character; then read, for a row three
+      In a real desktop browser open a nested branch in the Specs zone and a directory in the Files zone. Read
+      the disclosure mark of an open row and a closed row (element kind, rotation), verify the zone heads have
+      no disclosure marks, and whether any row still prints a triangle character; then read, for a row three
       levels deep, how many hairline guides run through its left margin and where they sit against the
       ancestors' caret slots. LOOK at the screenshot.
     expected: >-
       Every collapsible row carries one stroke chevron (an svg, no ▸/▾ text), rotated 90° when open and 0°
-      when closed, section heads included; a row at depth N shows exactly N one-pixel guides, each aligned
+      when closed; the static zone heads carry no chevron; a row at depth N shows exactly N one-pixel guides, each aligned
       to the caret centre of the ancestor at that level, joining into continuous lines down the branch.
     code:
       - spec-dashboard/src/FileTree.jsx

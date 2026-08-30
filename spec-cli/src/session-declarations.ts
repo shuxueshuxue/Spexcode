@@ -3,6 +3,7 @@
 // receipt, and state write together so the CLI hub only selects the verb and never becomes a second owner.
 
 type DeclarationVerb = 'done' | 'park' | 'ask'
+import { SessionRecordUnusable } from './session-record.js'
 
 const DECLARED = ' — recorded; the human sees it in the dashboard. This declaration remains in the session timeline; your next tool call flips only the current graph state back to active (the mark-active hook, by design).'
 // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
@@ -61,7 +62,7 @@ export async function sessionStateKit(sessionId?: string) {
   const mark = (fn: () => boolean): { ok: boolean; reason?: string } => {
     try { return { ok: fn() } }
     catch (e) {
-      if (e instanceof s.SessionRecordUnusable) return { ok: false, reason: e.message }
+      if (e instanceof SessionRecordUnusable) return { ok: false, reason: e.message }
       if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return { ok: false }
       throw e
     }

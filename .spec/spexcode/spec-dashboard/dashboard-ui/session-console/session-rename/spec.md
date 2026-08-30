@@ -21,7 +21,7 @@ related:
 Sessions are labelled automatically — by the spec node they touch, or a few words of their launch
 prompt, or their branch. That default is fine until a human needs to fix it: two sessions on the same
 node read alike, and a node-agnostic session wears an awkward prompt fragment forever. The selected session's
-document tools menu opens the small action menu: **lock on graph** makes the board follow it,
+document tools menu opens the small action menu: **spec related** opens the nodes this session is changing,
 **rename** gives it a human name that sticks, and **close** offers worktree removal one click away —
 the destructive twin of the typed `/close` command ([[session-console]]), distinct from `/stop`, which only
 stops the agent and keeps the worktree.
@@ -42,6 +42,20 @@ back like any other field, never held only in the browser. A session in **any** 
 The CLI reaches that same write with `spex session rename <SEL> "<name>"`; inside a launched worker `.` is the
 shared selector for its own session ([[session-selectors]]), so a prompt preset such as [[rename]] can ask the
 agent to name itself without learning an id or creating a dashboard-only action.
+
+**Spec related is a door, not a verb.** A session is only legible next to the intent it is changing, so the
+menu's first spec entry carries no action of its own: it opens a panel beside it ([[context-menu-chrome]])
+listing the nodes this session's pending ops touch, read through the shared session-to-nodes join so this
+door and the graph overlay can never name different nodes. Each row opens that node as a document at the
+same `#/spec/<id>` address an inline `[[id]]` resolves to, so the menu's door and a reference's door are one
+door. **A row says WHICH change it is**: its leading mark is the board's own overlay glyph for that op —
+the same mark the graph tile, the legend and the node popup's edit pane spend — so added, edited, deleted
+and moved read the same here as everywhere else, and the door never repeats one decorative icon down a list
+of different news. That mark is decoration: it is hidden from assistive technology, which hears the node
+named with its op spelled out beside it. The list is CAPPED — a wide session must not push the menu's own
+verbs off the screen — and what the cap hides is said rather than dropped. The panel's last row is fixed: **find on graph**, the board-wide
+answer that spotlights every one of those nodes at once and lets the eye walk them; it is the same lock the
+graph has always had, named for what it does rather than for its mechanism.
 
 **One menu, two ways in.** The selected session's **document tools** button in [[session-console]] opens it
 for the session you are reading; a **right-click on a finding-dock session row** ([[dock-modes]]) opens it for

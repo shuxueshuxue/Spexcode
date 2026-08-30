@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as xterm from '@xterm/xterm'
 import * as addonFit from '@xterm/addon-fit'
-import type { SessionTerminalProps } from './transport.js'
+import type { SessionTerminalProps } from './transport'
 
 const { Terminal } = xterm
 const { FitAddon } = addonFit
@@ -172,35 +172,88 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
     // (CJK) cell advances the column by two while the text index advances by one — assuming they are equal
     // puts the underline on the wrong glyphs. A match that spans a wrap is simply not seen: xterm asks per
     // buffer line, and inventing a cross-line range would underline the wrong cells on the row above.
+    const readBufferLine = (line) => {
+      const reusable = term.buffer.active.getNullCell()
+      let text = ''
+      const startX = [], endX = []
+      for (let x = 0; x < line.length; x++) {
+        const cellAt = line.getCell(x, reusable)
+        const width = cellAt ? cellAt.getWidth() : 1
+        if (!cellAt || width === 0) continue   // the trailing half of a wide cell carries no character
+        const chars = cellAt.getChars() || ' '
+        for (let i = 0; i < chars.length; i++) { startX.push(x + 1); endX.push(x + width) }
+        text += chars
+      }
+      return { text, startX, endX }
+    }
+    const hitsOn = (line) => {
+      const find = findLinksRef.current
+      if (!find || !line) return null
+      const read = readBufferLine(line)
+      let hits = []
+      try { hits = find(read.text) || [] } catch { hits = [] }
+      const usable = hits.filter((hit) => hit && hit.end > hit.start && hit.start >= 0 && hit.end <= read.startX.length)
+      return usable.length ? { read, hits: usable } : null
+    }
     const linkProvider = {
       provideLinks(row, done) {
-        const find = findLinksRef.current
-        const line = find ? term.buffer.active.getLine(row - 1) : null
-        if (!line) { done(undefined); return }
-        const reusable = term.buffer.active.getNullCell()
-        let text = ''
-        const startX = [], endX = []
-        for (let x = 0; x < line.length; x++) {
-          const cellAt = line.getCell(x, reusable)
-          const width = cellAt ? cellAt.getWidth() : 1
-          if (!cellAt || width === 0) continue   // the trailing half of a wide cell carries no character
-          const chars = cellAt.getChars() || ' '
-          for (let i = 0; i < chars.length; i++) { startX.push(x + 1); endX.push(x + width) }
-          text += chars
-        }
-        let hits = []
-        try { hits = find(text) || [] } catch { hits = [] }
-        const links = hits
-          .filter((hit) => hit && hit.end > hit.start && hit.start >= 0 && hit.end <= startX.length)
-          .map((hit) => ({
-            text: hit.text,
-            range: { start: { x: startX[hit.start], y: row }, end: { x: endX[hit.end - 1], y: row } },
-            activate: (event, value) => onOpenLinkRef.current?.(value, event),
-          }))
-        done(links.length ? links : undefined)
+        const found = hitsOn(term.buffer.active.getLine(row - 1))
+        if (!found) { done(undefined); return }
+        done(found.hits.map((hit) => ({
+          text: hit.text,
+          range: { start: { x: found.read.startX[hit.start], y: row }, end: { x: found.read.endX[hit.end - 1], y: row } },
+          activate: (event, value) => onOpenLinkRef.current?.(value, event),
+        })))
       },
     }
     const linkHandler = term.registerLinkProvider(linkProvider)
+
+    // @@@ links you can SEE before you point - a link only the hover reveals is a link nobody finds. xterm's
+    // own decoration API cannot do this here: it returns undefined while the ALTERNATE buffer is active, and
+    // an agent TUI is exactly that (measured on a live Claude pane). So the mark is our own overlay layer
+    // over the screen: absolutely positioned, `pointer-events: none`, and outside the terminal's own layout,
+    // so it can neither move the pane ([[terminal-input]]'s stillness) nor swallow a mouse report.
+    //
+    // The grid is uniform, so a cell's box is the screen's box divided by cols/rows — no private renderer
+    // metrics. Only the rows xterm reports as CHANGED are re-scanned, which is what keeps a spinner-heavy
+    // TUI from paying a full-viewport walk every frame; a resize invalidates everything and rescans.
+    const linkLayer = document.createElement('div')
+    linkLayer.className = 'st-linkmarks'
+    hostRef.current?.querySelector('.xterm-screen')?.appendChild(linkLayer)
+    const rowMarks = new Map()
+    let markFrame = 0
+
+    const paintMarks = () => {
+      markFrame = 0
+      const screen = hostRef.current?.querySelector('.xterm-screen')
+      if (!screen) return
+      const cw = screen.clientWidth / Math.max(1, term.cols)
+      const ch = screen.clientHeight / Math.max(1, term.rows)
+      const parts = []
+      for (const [y, marks] of rowMarks) {
+        for (const mark of marks) {
+          parts.push(`<i style="left:${((mark.x - 1) * cw).toFixed(2)}px;top:${(y * ch).toFixed(2)}px;`
+            + `width:${((mark.w) * cw).toFixed(2)}px;height:${ch.toFixed(2)}px"></i>`)
+        }
+      }
+      linkLayer.innerHTML = parts.join('')
+    }
+    const queuePaint = () => { if (!markFrame) markFrame = requestAnimationFrame(paintMarks) }
+    const scanRows = (from, to) => {
+      const base = term.buffer.active.baseY
+      for (let y = from; y <= to; y++) {
+        const found = hitsOn(term.buffer.active.getLine(base + y))
+        if (!found) { rowMarks.delete(y); continue }
+        rowMarks.set(y, found.hits.map((hit) => ({
+          x: found.read.startX[hit.start],
+          w: found.read.endX[hit.end - 1] - found.read.startX[hit.start] + 1,
+        })))
+      }
+      queuePaint()
+    }
+    const rescanAll = () => { rowMarks.clear(); scanRows(0, Math.max(0, term.rows - 1)) }
+    const renderSub = term.onRender(({ start, end }) => scanRows(start, end))
+    rescanAll()
     const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
     const clearCommittedText = (event) => {
       if (event.inputType === 'insertText' && !event.isComposing) helper.value = ''
@@ -426,10 +479,11 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
     }
     document.addEventListener('keydown', onCopyKey, true)
 
-    const raf = requestAnimationFrame(measureAndRequest)
-    const ro = new ResizeObserver(measureAndRequest)
+    const remeasure = () => { measureAndRequest(); rescanAll() }
+    const raf = requestAnimationFrame(remeasure)
+    const ro = new ResizeObserver(remeasure)
     ro.observe(hostRef.current)
-    window.addEventListener('resize', measureAndRequest)
+    window.addEventListener('resize', remeasure)
     let visibilityFocusFrame = 0
     const onDocumentVisibility = () => {
       if (!viewerIsVisible()) {
@@ -458,10 +512,13 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
       window.removeEventListener('pagehide', onPageHide)
       ro.disconnect()
       groundWatch.disconnect()
-      window.removeEventListener('resize', measureAndRequest)
+      window.removeEventListener('resize', remeasure)
       for (const handler of motionModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()
       helper?.removeEventListener('input', clearCommittedText)
+      renderSub.dispose()
+      cancelAnimationFrame(markFrame)
+      linkLayer.remove()
       linkHandler.dispose()
       inputSub.dispose()
       if (typeof unsubscribeFont === 'function') unsubscribeFont()

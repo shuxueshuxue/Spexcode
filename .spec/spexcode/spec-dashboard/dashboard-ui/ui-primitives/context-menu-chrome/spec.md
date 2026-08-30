@@ -25,7 +25,11 @@ semantic menu/group/item/separator structure, and the visual row grammar; caller
 exist and what they do. A new context menu joins this shell instead of cloning its markup or CSS dialect.
 
 Every action row has a fixed leading column containing a small semantic linear [[icon-system]] glyph and a
-restrained control-size text label. Rows are tight but tappable, the longest current command fits without
+restrained control-size text label. A row standing for a domain OBJECT may spend that column on the mark the
+board already gives that object instead — a spec node's overlay glyph, say — because repeating one
+decorative icon down a list of different things says less than the vocabulary the reader already knows.
+Such a mark is decoration: it is hidden from assistive technology, and the row carries an accessible name
+that still contains its visible label. Rows are tight but tappable, the longest current command fits without
 clipping, unbounded overlay-session headlines ellipsize on one line without overflowing, and the surface
 clamps inside the viewport. Related actions form groups; hairline separators mark
 real boundaries, especially before destructive actions. Danger colour is reserved for destructive words and
@@ -51,6 +55,16 @@ KEYBOARD opened must be walkable by the keyboard, so it takes focus on its first
 menu is aimed at. Enter/Space remain native button activation and [[esc-layers]] still owns dismissal; the
 opener returns focus to whatever it borrowed it from. The two openings differ only in who owns focus, never
 in which commands exist.
+
+**A row may be a DOOR instead of a verb.** When one entry stands for a SET whose members are each their own
+destination, listing them flat would bury the menu's commands under data — so that entry carries no action of
+its own and opens a second panel beside it. It reads as an ordinary row ending in the shell's disclosure
+chevron, stays lit while its panel is open, and answers the pointer (hover opens; leaving closes after a
+grace long enough to cross the gap to the panel) and the keyboard (ArrowRight/Enter opens, ArrowLeft closes)
+alike. The panel is the SAME shell wearing the same row grammar, placed from the row's measured rect and
+clamped into the viewport — it opens to the left at the right edge and rides up at the bottom — because the
+menu surface clips its own overflow and a panel laid out inside that box would be cut off. A door whose set
+is capped SAYS what the cap hid, in a quiet line that is visibly not a row you can press.
 
 A command row may print the binding it also answers to, in a trailing quiet column. That cap is READ from
 the key registry ([[keyboard-nav]]'s hint reader), never typed into the label, so a rebind moves the printed

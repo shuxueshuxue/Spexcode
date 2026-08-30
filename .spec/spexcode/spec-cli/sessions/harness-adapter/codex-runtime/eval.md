@@ -2,7 +2,7 @@
 scenarios:
   - name: worktree-thread-hooks-fire-from-the-root-checkout-shim
     tags: [backend-api, cli]
-    code: [spec-cli/src/harness.ts#codexHarness]
+    code: [spec-cli/src/codex-harness.ts#codexHarness]
     description: >
       On a fresh-init project with a linked worktree, dispatch one Codex worker through the shared app-server and
       let it run a tool, edit a file, and stop. Read dispatch.sh's log and the session record; then remove
@@ -14,7 +14,7 @@ scenarios:
       discovery plumbing, never the shim.
   - name: trust-write-refuses-an-unparseable-config-and-keeps-mode
     tags: [cli]
-    code: [spec-cli/src/harness.ts#writeCodexTrust]
+    code: [spec-cli/src/codex-harness.ts#writeCodexTrust]
     description: >
       Point CODEX_HOME at a directory holding a small parseable config.toml with mode 0600 and run
       `spex init --harness codex` on a fresh git repository. Then overwrite that config with one that ends in a
@@ -30,7 +30,7 @@ scenarios:
       name: writeCodexTrust refuses to persist a config.toml that codex could not load, and replaces a good one without changing its mode
   - name: codex-tui-finished-turn-closes-through-public-api
     tags: [backend-api, cli]
-    code: [spec-cli/src/harness.ts#codexHarness, spec-cli/src/sessions.ts]
+    code: [spec-cli/src/codex-harness.ts#codexHarness, spec-cli/src/sessions.ts]
     description: >-
       Through the public `spex session new --launcher codex` path, run a trivial no-edit task whose final work
       action is a tool call, wait for `done --propose close` and `close-pending`, then invoke `spex session close`

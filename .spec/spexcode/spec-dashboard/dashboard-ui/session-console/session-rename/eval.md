@@ -79,6 +79,25 @@ scenarios:
       - spec-cli/src/index.ts
       - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
       - spec-dashboard/src/SessionInterface.jsx#SessionInterface
+  - name: spec-related-door-lists-the-session-s-nodes
+    tags: [frontend-e2e, desktop, backend-api]
+    code: spec-dashboard/src/SessionContextMenu.jsx
+    related: [spec-dashboard/src/ContextMenu.jsx, spec-dashboard/src/session.js]
+    description: >-
+      With a live worktree whose pending ops touch spec nodes, right-click that session — its tab, its dock
+      row, or its document tools button — and read the menu. Hover the spec entry, read the panel that
+      opens beside it, activate one node row, then reopen and activate the panel's last row.
+    expected: >-
+      The menu carries no `lock on graph` command. Its spec entry is a DOOR: it declares `aria-haspopup`,
+      flips `aria-expanded` on hover, and opens a panel that is laid out beside the menu rather than clipped
+      away by the menu's own overflow. The panel lists the nodes this session's pending ops touch, capped,
+      with what the cap held back said in a quiet non-pressable line. Each row LEADS WITH ITS OP — the
+      board's own overlay glyph, not one repeated icon — and that glyph is hidden from assistive technology
+      while the row's accessible name carries the node plus the op in words. Activating a node row opens that node's
+      `#/spec/<id>` document. The panel's LAST row is fixed — `find on graph` — and it still does exactly
+      what the old lock did: the board spotlights this session's changed nodes and its banner offers the
+      o / O walk through them.
+
 ---
 
 # session-rename — yatsu

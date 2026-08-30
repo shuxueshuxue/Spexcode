@@ -2,7 +2,7 @@
 title: conversation
 status: active
 hue: 280
-desc: The terminal-free session surface — one shared Conversation DOM for every existing session, with a footer whose data states cover live, offline, archived and retired; messages, seams and events on a time ruler rather than status rows; a floating composer that always replies via note; and a mount lifetime that survives deselection.
+desc: The terminal-free session surface — one shared Conversation DOM for every existing session, with a footer whose data states cover live, offline, archived and retired; messages, seams and events on a time ruler rather than status rows; a floating composer that always replies via note; and a bounded warm mount lifetime that survives deselection without growing without end.
 code:
   - spec-dashboard/src/TimelineChat.jsx
 related:
@@ -238,7 +238,28 @@ pane-backed Conversation mounts only on its first visit, then remains mounted af
 so its timeline cursor, rendered history and last live tail survive revisits ([[message-stream]]); its refresh
 timer and transcript stream run only while selected.
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
-surfaces remain inert and make no timeline/detail reads or polling timers. 
+surfaces remain inert and make no timeline/detail reads or polling timers.
+
+**WARM IS A WORKING SET, NOT AN ARCHIVE.** That mount lifetime is bounded to the most recently shown
+Conversations and the selection is never the one given up ([[session-console]] owns the bound and the
+eviction). Visiting is not a claim on the document forever: an unbounded set meant one full rendered
+timeline per session ever opened — closed and archived records included — held until the tab was reloaded,
+which is a leak wearing the word "warm". An evicted Conversation is an ordinary unvisited one and re-reads
+its timeline when it is next selected; that one cold read is the whole price of the bound.
+
+**A MOUNTED CONVERSATION NOBODY IS LOOKING AT IS NEITHER RE-RENDERED NOR LAID OUT.** The console holds several of these beside
+each other and its own composers keep their draft text in the console's state, so an unguarded layer re-rendered
+its entire timeline on every character typed into the New prompt or the Command Box — the cost of typing grew
+with how many sessions had been visited, which is the one thing a warm layer must not do. The Conversation is
+therefore a memoised boundary, and every prop a hidden layer receives is referentially stable so that boundary
+can actually hold; a fresh empty list or an inline callback handed to an unshown layer is a defect, not a
+detail. The same rule holds one layer down, in the browser: an unshown Conversation has its CONTENTS SKIPPED,
+not merely painted invisible, because a subtree that is only `visibility: hidden` is still measured on every
+reflow — and the console's own composer forces one on every character it autosizes, so the price of typing was
+the whole warm set's rendered history, measured again per keystroke. Skipping preserves the layer's rendering
+state, which is the one thing keeping it mounted was for; hiding it by removal would throw away the scroll
+position and make the mount pointless. The terminal layer beside it keeps its layout deliberately — a warm pane
+owes xterm its final geometry ([[terminal-io]]) — and it was never what the reflow cost. 
 
 **The transcript grammar is bound, not owned.** The person quoted, the agent as the page, the tool sentence,
 the work fold and the live tail are `@spexcode/transcript-ui` ([[transcript-ui]], [[transcript-view]],

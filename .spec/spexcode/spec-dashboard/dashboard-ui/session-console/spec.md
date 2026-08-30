@@ -81,7 +81,16 @@ focus return without a cold start. The active transition claims `visible:false` 
 linger may release the raw PTY/tmux client while the browser terminal/socket remain resident, and reactivation's
 resize claim restores that native bridge. While the Sessions page is visible, only the selected terminal owns the
 visible geometry claim; a headless TimelineChat keeps its rendered timeline cursor, polls only while selected, and
-resumes from the latest board snapshot when selected again. A pane-backed terminal's warm hold ends when the
+resumes from the latest board snapshot when selected again. **The console's warm Conversations are a bounded
+working set.** The two layer sets answer to different rules and the console must not confuse them: a terminal
+is warm because its session HAS A LIVE PANE, so that set is bounded by the board and shrinks on its own, while a
+Conversation is warm because someone LOOKED AT IT, which is a set that only grows. The console therefore keeps
+the most recently shown Conversations up to the same working-set limit the workspace puts on mounted documents
+([[workspace-shell]]), evicts by least recently shown, and never evicts the selection. It is one bound answering
+one question — how much does an idle console hold — so a second limit keyed to memory, node count or session age
+would be a second answer to it. The console's own composer drafts live in the console's state, so it also owes
+its mounted layers referentially stable props: typing into the New prompt or the Command Box must cost the same
+whether one Conversation is mounted or the whole limit is. A pane-backed terminal's warm hold ends when the
 canonical session projection is no longer a live pane (offline or archived); its socket and native terminal are
 disposed while the read-only Conversation remains available. Open resource tabs follow the same display-hidden
 lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself

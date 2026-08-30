@@ -5,19 +5,22 @@ scenarios:
     code: [spec-dashboard/src/TimelineChat.jsx]
     related: [spec-dashboard/src/SessionInterface.jsx]
     description: >-
-      In a real browser open the console, select two sessions so one Conversation is shown and at least one is
-      mounted-but-unshown, then ask three questions of the real DOM and the real profiler. RENDER: take a CPU
-      profile over a dozen characters typed into a composer that belongs to no timeline (the New prompt) and
-      read whether any transcript render work appears in it at all. LAYOUT: read a descendant box inside an
-      unshown layer and inside the shown one. STATE: scroll a Conversation into its history, note the offset,
-      leave to another session, come back, and read the offset again.
+      In a real browser fill the console's warm set — visit enough sessions that several Conversations are
+      mounted and unshown, since two of them hold too little for any of this to be visible — then ask three
+      questions. RENDER: take a CPU profile over a dozen characters typed into a composer that belongs to no
+      timeline (the New prompt) and read whether any transcript render work appears in it at all. LAYOUT: with
+      that warm set full, measure the per-character cost as shipped, then force the unshown layers' contents
+      back into the layout tree and measure again, then restore — an A/B with its own control, because Chrome
+      reports REMEMBERED geometry for skipped contents, so a descendant's box proves nothing and the cost of
+      the reflow is the only honest observable. STATE: scroll a Conversation into its history, note the
+      offset, leave to another session, come back, and read the offset again.
     expected: >-
       The profile names no transcript render work — no timeline vocabulary, no quote rendering — because a
-      layer nobody is looking at is not re-rendered by a neighbour's keystroke. A descendant of an unshown
-      layer reports no box while the layer still holds its mounted `.tl-chat`, so its contents are skipped by
-      layout rather than merely painted invisible; the shown layer's descendants measure normally. The
-      returned-to Conversation is at the exact offset it was left at — skipping is not discarding, and keeping
-      the mount is pointless if it loses the reader's place.
+      layer nobody is looking at is not re-rendered by a neighbour's keystroke. Forcing the unshown layers'
+      contents back into layout moves the per-character cost by an order of magnitude and restoring returns
+      it: contained, the cost matches an empty console; uncontained, it matches the warm set's whole rendered
+      history being measured again per keystroke. The returned-to Conversation is at the exact offset it was
+      left at — skipping is not discarding, and keeping the mount is pointless if it loses the reader's place.
   - name: one-conversation-dom-for-live-offline-and-archived
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

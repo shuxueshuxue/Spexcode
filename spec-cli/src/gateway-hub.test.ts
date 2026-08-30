@@ -139,6 +139,43 @@ test('scoped static fallback serves assets but leaves extensionless health on th
   assert.equal((await health.json() as any).path, '/health')
 })
 
+test('a browser navigation to a scoped /web/ preview reaches the preview, not the shell', async () => {
+  const web = await fallbackHub('/p/projA/web/sess/key/', { headers: { accept: 'text/html,application/xhtml+xml' } })
+  assert.doesNotMatch(await web.text(), /shell/)
+})
+
+test('a browser navigation to a scoped /api path reaches the backend, not the shell', async () => {
+  const api = await fallbackHub('/p/projA/api/graph', { headers: { accept: 'text/html' } })
+  assert.doesNotMatch(await api.text(), /shell/)
+})
+
+test('scoped GET dispatch follows the route matrix', async () => {
+  const cases = [
+    { path: '/p/projA/', accept: 'text/html', destination: 'shell' },
+    { path: '/p/projA/assets/x.js', accept: '*/*', destination: 'shell' },
+    { path: '/p/projA/health', accept: '*/*', destination: 'backend' },
+    { path: '/p/projA/api/graph', accept: 'text/html', destination: 'backend' },
+    { path: '/p/projA/web/sess/key/', accept: 'text/html', destination: 'preview' },
+    { path: '/p/projA/login', accept: 'text/html', destination: 'redirect' },
+  ] as const
+  for (const row of cases) {
+    const response = await fallbackHub(row.path, { headers: { accept: row.accept } })
+    const body = await response.text()
+    if (row.destination === 'shell') {
+      assert.equal(response.status, 200, row.path)
+      assert.match(body, /shell/, row.path)
+    } else if (row.destination === 'backend') {
+      assert.equal(response.status, 200, row.path)
+      assert.doesNotMatch(body, /shell/, row.path)
+    } else if (row.destination === 'preview') {
+      assert.doesNotMatch(body, /shell/, row.path)
+    } else {
+      assert.equal(response.status, 302, row.path)
+      assert.equal(response.headers.get('location'), '/p/projA/', row.path)
+    }
+  }
+})
+
 test('scoped HTTP completes and an abrupt SSE downstream close reclaims the backend socket', async () => {
   const ordinary = await hub('/p/projA/api/lifecycle?x=1')
   assert.equal(ordinary.status, 200)

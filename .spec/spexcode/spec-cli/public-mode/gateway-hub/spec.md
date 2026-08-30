@@ -43,8 +43,10 @@ internal services; the hub owns the outside.
   the same way as `GET /projects` and, like the fallback it rides, pre-authorization — the shell is code,
   not data, and a direct guest must reach the in-app credential card ([[projects-hub]]), not a dead-end
   redirect: an explicit text/html GET outside `/api` and `/web`
-  serves the SPA shell; relative `/assets/...` requests are served from that same fallback below `/p/:projectId/`,
-  while api/SSE/health and other extensionless backend routes, plus the WS upgrade, keep the auth gate and the backend. A bare `/p/:projectId`
+  serves the SPA shell; only relative `/assets/...` requests are served from that same fallback below
+  `/p/:projectId/`. The HTML shell branch excludes `/api` and `/web` so API calls and posted previews keep
+  the auth gate and backend/preview routing even when a browser sends `Accept: text/html`; health and other
+  extensionless backend routes likewise remain proxied. A bare `/p/:projectId`
   navigation redirects to the slash-terminated scope before the shell is served, so relative assets resolve
   inside the project scope.
 - `/login`, `/logout` — the admin session, same designed page.

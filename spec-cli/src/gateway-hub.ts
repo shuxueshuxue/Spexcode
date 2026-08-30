@@ -263,11 +263,20 @@ export function startHubGateway(opts: HubOpts): http.Server {
       // exactly like GET /projects, and — like the fallback it rides — PRE-authorization: the shell is
       // code, not data ([[projects-hub]]'s one credential card renders in-app off the scoped api's 401,
       // and a direct guest must reach that card, not a dead-end redirect). With a host fallback mounted,
+      // Scoped GET dispatch matrix (sub shape, Accept, destination):
+      //   /                 | text/html | dashboard shell
+      //   /assets/x.js      | */*       | dashboard asset fallback
+      //   /health           | */*       | project backend
+      //   /api/graph        | text/html | project backend
+      //   /web/<s>/<k>/     | text/html | posted preview
+      //   /login            | text/html | hub login/redirect
       // Browser navigation and relative dashboard assets are static shell bytes, served from the same
       // fallback under the project prefix. API/SSE/health fetches, extensionless backend routes, posted-web
       // frames, and WS upgrades keep the auth gate and proxy to their backend untouched.
       if (req.method === 'GET' && ext.fallback) {
-        if ((req.headers.accept ?? '').includes('text/html')) return ext.fallback(req, res, '/')
+        if (!sub.startsWith('/api') && !sub.startsWith('/web/') && (req.headers.accept ?? '').includes('text/html')) {
+          return ext.fallback(req, res, '/')
+        }
         if (sub.startsWith('/assets/')) return ext.fallback(req, res, sub)
       }
       const d = authorize(store, { kind: 'project', projectId: id }, cookies, remote, port)

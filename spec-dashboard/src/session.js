@@ -50,6 +50,15 @@ export const sessionFooterState = (s) => {
   if (s?.status !== 'queued' && (s?.status === 'offline' || s?.liveness === 'offline')) return 'offline'
   return 'live'
 }
+// @@@ overlay sessions - the ONE node->session crossing join ([[node-menu]]): a node's pending overlays
+// name WORKTREE PATHS, and a session row carries that same path as `source`, so the join is path equality,
+// deduped and in overlay order. Every node action menu — the graph tile's and the document prose menu's —
+// answers "which sessions are changing this node" through THIS, so the two surfaces can never disagree
+// about the crossing. An overlay whose worktree has no live session row simply drops out.
+export const overlaySessions = (node, sessions = []) => {
+  const sources = [...new Set((node?.overlays || []).map((o) => o.source))]
+  return sources.map((source) => (sessions || []).find((s) => s.source === source)).filter(Boolean)
+}
 // the ONE liveness join: resolve an id against the board sessions and return the
 // session only while it is ALIVE (listed and not offline) — the same alive/offline judgment the originator
 // chip renders (Thread.jsx). A non-session id ('human', a github

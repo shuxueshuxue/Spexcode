@@ -26,7 +26,9 @@ close. A caller may add the one `new` row for a fresh session. The picker emits 
 remain owned by the caller.
 
 Mention autocomplete and the graph context menu may use the row primitive without taking ownership of the
-picker state. The dock keeps its tree and fold semantics, but its session face uses the same row identity.
+picker state. A node action menu — the graph tile's and the document's alike — mounts the whole picker for
+the one node->session crossing ([[node-menu]]), because that is a CHOICE among the sessions changing a node,
+not an address on a message. The dock keeps its tree and fold semantics, but its session face uses the same row identity.
 No surface renders a native `<select>` for session choice. The prose send card ([[prose-dispatch]]) does
 not mount the picker: it addresses its recipient through the shared mention autocomplete, whose session rows
 are this row primitive, so the card's session face and the `@` menu's are one and the same.

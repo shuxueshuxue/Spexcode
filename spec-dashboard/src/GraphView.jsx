@@ -19,7 +19,7 @@ import { chordSequence } from './keymap.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
-import { sessionHeadline } from './session.js'
+import { overlaySessions, sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -180,16 +180,13 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     return scope.open(routeAddress(address))
   }, [openSession, scope])
 
-  // sessions overlaying the right-clicked node — its live worktrees (overlay.source === session.source).
-  // The node-menu appends one item per session below its verbs, the one mouse path into an existing
-  // session ([[node-menu]]); recomputed only while the menu is open on a node.
-  const menuSessions = useMemo(() => {
-    if (!nodeMenu) return []
-    const node = specs.find((n) => n.id === nodeMenu.id)
-    if (!node?.overlays?.length) return []
-    const srcs = [...new Set(node.overlays.map((o) => o.source))]
-    return srcs.map((src) => sessions.find((s) => s.source === src)).filter(Boolean)
-  }, [nodeMenu, specs, sessions])
+  // sessions overlaying the right-clicked node — its live worktrees, resolved through the shared
+  // [[node-menu]] crossing join so this menu and the document's prose node menu read the same rows.
+  // Recomputed only while the menu is open on a node.
+  const menuSessions = useMemo(
+    () => (nodeMenu ? overlaySessions(specs.find((n) => n.id === nodeMenu.id), sessions) : []),
+    [nodeMenu, specs, sessions],
+  )
   // one routing for BOTH palettes (board `/` and session-board ⌥+/): each row carries an app address
   // (graph node, session tab, issue detail, or eval detail). The palette's caller supplies only the view
   // callbacks needed for non-hash state; the address helper owns the route shape.

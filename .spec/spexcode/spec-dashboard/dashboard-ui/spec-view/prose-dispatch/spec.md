@@ -104,6 +104,13 @@ The reading column is exactly as wide with a selection as without one, and no ch
 be true. Pressing an action never steals the browser selection out from under itself, which is the one bug
 an affordance that acts on a selection cannot have.
 
+**With nothing selected, the same z-layer is the NODE's menu.** A plain-prose right-click then opens the
+node actions rather than passage actions: send the whole node through this surface's composer, copy its
+canonical address, and — when a live worktree is changing the node — cross into that session through the
+shared [[session-picker]] rows and the one shared overlay join ([[node-menu]] owns that crossing's meaning;
+this surface only hosts it, because a reader who arrived by an inline `[[id]]` has no tile to right-click).
+Crossing is ordinary navigation, so it dismisses the menu before it moves.
+
 **The right-click menu is the same group.** The primary-button selection gesture only records the passage;
 the native context-menu gesture is what reveals the actions. Same items, same handlers, anchored at the
 pointer instead of at the passage — one component with two anchors rather than a menu that can drift from

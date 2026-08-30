@@ -52,7 +52,10 @@ geometry without one, and the chips are untouched by it.
 
 When no passage is selected, a plain-prose right-click still opens that same z-layer as a node action menu.
 It can send the complete current node through the shared session composer and copy the node's canonical link;
-links and controls retain their browser context menu. The node send uses the same selection-token transport as
+links and controls retain their browser context menu. When a live worktree is currently changing this node,
+that menu also carries the **crossing into it** — the same [[session-picker]] rows over the same shared
+overlay join the graph's tile menu uses ([[node-menu]]) — so arriving here by an inline `[[id]]` reference
+is a door and not a dead end. The node send uses the same selection-token transport as
 passage dispatch, with the whole body as the addressed range, so recipients receive one consistent node
 reference rather than a reader-only special case.
 

@@ -61,7 +61,7 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewC
         <>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            <SessionPicker sessions={sessions} value="" onChange={open} filter={sessions.length > 4} compact className="sess-menu-picker" ariaLabel={t('nodeMenu.overlaySessions')} />
+            <SessionPicker sessions={sessions} value="" onChange={open} filter={sessions.length > 4} compact className="sess-menu-picker" ariaLabel={t('sessionPicker.overlaySessions')} />
           </ContextMenuGroup>
         </>
       )}

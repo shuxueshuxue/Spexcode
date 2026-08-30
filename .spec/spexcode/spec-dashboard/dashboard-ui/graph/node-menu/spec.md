@@ -39,16 +39,23 @@ Session prompt the human completes and confirms — creating or deleting a node 
 work, never a direct server op, so a mis-aimed right-click can't destroy anything.
 
 **Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
-currently touch it (`overlay.source === session.source`) — the menu appends, below a divider from the
+currently touch it — the menu appends, below a divider from the
 five fixed actions, **one item per overlaying session** using the shared [[session-picker]] row: the
 deterministic avatar, `sessionDisplayState` status-coloured glyph, and stable session handle. The handle is
 the same identity used by the dock, mentions, and prose dispatch, so a session reads identically everywhere.
 Picking one opens that session in the console ([[session-console]]) through the shared [[session-picker]] row
-language. This is the **one place a crossing
+language. **A node's action menu is where a crossing
 into an *existing* session lives** — the graph deliberately has no bare keystroke for it and the
 node-info popup's Enter is inert ([[keyboard-nav]]), so the mouse menu is where "jump into the session
 editing this node" belongs. A node with no overlay shows only the five fixed actions — no divider, no empty
 section.
+
+**Which sessions those are is one join, not this menu's own.** The overlays name worktree paths and a
+session row carries that same path, and both node action menus resolve it through the single shared
+crossing join rather than each repeating the match. The document surface has a node action menu of its own
+([[spec-view]], [[prose-dispatch]]) and carries these same rows: a `[[node]]` reference lands its reader on
+`#/spec/<id>`, where there is no tile to right-click, so the crossing must be reachable there too. That is
+one crossing on two menus, never a second mechanism.
 
 Dismissal follows the dashboard's shared menu conventions ([[session-rename]]'s row menu): any click
 outside closes it, Esc peels it through the [[esc-layers]] stack (never closing the board surface

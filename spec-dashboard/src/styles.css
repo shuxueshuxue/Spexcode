@@ -3736,6 +3736,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .pa-node-group { flex-direction: column; align-items: stretch; min-width: 220px; }
 .pa-node-group .pa-act { justify-content: flex-start; }
+/* the node->session crossing rows ([[node-menu]]) sit under the fixed verbs behind the same hairline the
+   graph tile's menu spends, so one crossing reads identically on both node action menus. */
+.pa-node-group .session-picker { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
 .pa-act {
   display: inline-flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4);
   background: none; border: none; border-radius: var(--radius); cursor: pointer;

@@ -10,10 +10,11 @@ import { proseSelection, PROSE_PRESETS, regionText, stampedRange } from './prose
 import { postSpecBody, sendSessionText } from './data.js'
 import { createSession, useLaunchers } from './launch.js'
 import { useSpecContent } from './specContent.js'
-import { sessionDisplayState, sessionFooterState, sessionHeadline } from './session.js'
+import { overlaySessions, sessionDisplayState, sessionFooterState, sessionHeadline } from './session.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { menuKeyDown, slashTokenAt, SlashMenu, TriggerButton, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import SelectionAttachment from './SelectionAttachment.jsx'
+import SessionPicker from './SessionPicker.jsx'
 import { navigate } from './route.js'
 import { copyAddress, specAddress } from './address.js'
 import { markNewTab } from './tabs.js'
@@ -325,6 +326,12 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   const copyNode = async () => {
     if (await copyAddress(specAddress(node.id))) { setNodeMenuOpen(false); notify(t('proseActions.nodeCopied'), { kind: 'success' }) }
   }
+  // the node->session crossing, on the document's own menu ([[node-menu]]). A wiki-link reference lands a
+  // reader on `#/spec/<id>`, where the graph's tile menu is out of reach; the same shared join and the same
+  // [[session-picker]] rows keep that landing from being a dead end. Crossing closes the menu first — it
+  // navigates away, and the menu must not outlive the page it was opened over.
+  const crossings = overlaySessions(node, sessions)
+  const crossTo = (id) => { setNodeMenuOpen(false); navigate('sessions', id) }
   if ((!node && !activeCodeSelection) || (!selection && !loading && !nodeMenuOpen)) return null
   const anchor = {
     lines: hit?.lines || { startLine: selection?.startLine || 1, endLine: selection?.endLine || 1 },
@@ -334,7 +341,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   return (
     <>
       {!panel && menuOpen && selection && <ActionGroup t={t} hit={anchor} disabled={loading} manualEnabled={!activeCodeSelection} onPick={open} />}
-      {!panel && nodeMenuOpen && <NodeActionGroup t={t} hit={anchor} disabled={loading} onSend={(event) => open({ key: 'send', preset: null, jump: false }, event)} onCopy={copyNode} />}
+      {!panel && nodeMenuOpen && <NodeActionGroup t={t} hit={anchor} disabled={loading} onSend={(event) => open({ key: 'send', preset: null, jump: false }, event)} onCopy={copyNode} crossings={crossings} onCross={crossTo} />}
       {!panel && menuOpen && loading && <span className="pa-loading" role="status" style={{ left: anchor.x, top: anchor.y }}><span className="spinner" aria-label={t('common.loading')} /></span>}
       {panel?.kind === 'send' && (
         <SendPopover t={t} panel={panel} node={node} selection={selection} specs={specs} sessions={sessions} live={live}
@@ -368,7 +375,7 @@ function ActionGroup({ t, hit, onPick, disabled = false, manualEnabled = true })
   )
 }
 
-function NodeActionGroup({ t, hit, onSend, onCopy, disabled = false }) {
+function NodeActionGroup({ t, hit, onSend, onCopy, disabled = false, crossings = [], onCross }) {
   const [ref, style] = useAnchored(hit.x, hit.y - 44, [])
   return (
     <div ref={ref} className="pa-group pa-node-group" role="menu" aria-label={t('proseActions.nodeGroupLabel')} style={style}>
@@ -381,6 +388,10 @@ function NodeActionGroup({ t, hit, onSend, onCopy, disabled = false }) {
         <Icon name="copy" size={13} className="pa-act-icon" />
         {t('proseActions.nodeCopy')}
       </button>
+      {crossings.length > 0 && (
+        <SessionPicker sessions={crossings} value="" onChange={onCross} filter={crossings.length > 4} compact
+          className="sess-menu-picker" ariaLabel={t('sessionPicker.overlaySessions')} />
+      )}
     </div>
   )
 }

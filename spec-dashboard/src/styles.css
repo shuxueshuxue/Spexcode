@@ -21,7 +21,12 @@
   --magenta:#9e86c8; /* Minimal's purple */
   --cyan:  #73bbb2;
   --ground:#1b1b1b;   /* the chrome floor — one step below bg2, derived */
-  --term-bg: #212121; /* the embedded terminal is DARK in EVERY theme (the Claude TUI is dark-designed) */
+  --raised:#373737;   /* bg1 lifted 8% toward white — the tone of anything that has LEFT the plane */
+  /* THE EMBEDDED TERMINAL IS THE FLOOR OF THE WINDOW, and it is dark in EVERY theme (the Claude TUI is
+     dark-designed). A dark preset resolves it to its own deepest surface by inheriting this line; a LIGHT
+     preset's palette has no dark end, so it names a neutral near-black outright. Either way it is the one
+     value no rung of the ladder may equal — the terminal is a different MEDIUM, not a step on the ramp. */
+  --term-bg: var(--ground);
 
   /* TWO ROLES, ONE SWAPPABLE. --mono is fixed: it is what the machine speaks in — code, terminal
      output, ids, paths, hashes, keycaps, columns that must line up. --ui-font is everything a person
@@ -135,6 +140,7 @@
   --magenta:#876be0; /* Things' purple */
   --cyan:  #2db7b5;
   --ground:#eceef0; /* base-25 deepened — the chrome floor under the sidebar */
+  --raised:#ffffff;   /* base-00 — a light palette has no headroom above paper; the drop carries the depth */
   --term-bg: #0d1117; /* light themes keep the app's neutral near-black terminal */
   color-scheme: light;
 }
@@ -160,6 +166,7 @@
   --magenta:#9065b0;
   --cyan:  #0b6e99;
   --ground:#f7f7f5;   /* the sidebar tone under the rail, the dock, and the status row */
+  --raised:#ffffff;   /* the popover is the page tone; Notion's layered drop is what raises it */
   --term-bg: #191919; /* the app's dark page tone — the terminal stays dark in every theme */
   --ui-font: var(--ui-font-sans);
   --radius: 4px;
@@ -189,7 +196,7 @@
   --magenta:#bb9af7;
   --cyan:  #7dcfff;
   --ground:#101018; /* bg_dark deepened — the chrome floor */
-  --term-bg: #16161e;
+  --raised:#2c2d37;   /* bg lifted 8% toward white */
 }
 
 /* Catppuccin (Mocha, dark) — catppuccin/obsidian, MIT, © 2021 Catppuccin.
@@ -210,7 +217,7 @@
   --magenta:#cba6f7; /* mauve */
   --cyan:  #94e2d5;  /* teal */
   --ground:#11111b; /* crust */
-  --term-bg: #11111b; /* crust */
+  --raised:#30303f;   /* base lifted 8% toward white */
 }
 
 /* Everforest (dark) — FireIsGood/obsidian-everforest-enchanted, MIT, © 2023 FireIsGood.
@@ -231,7 +238,7 @@
   --magenta:#d699b6;  /* fg-purple */
   --cyan:  #83c092;   /* fg-aqua */
   --ground:#232a2e; /* bg_dim */
-  --term-bg: #293136; /* bg-dim */
+  --raised:#434c52;   /* bg0 lifted 8% toward white */
 }
 
 /* Gruvbox (dark) — insanum/obsidian_gruvbox, MIT, © 2020 Eric Davis.
@@ -252,7 +259,7 @@
   --magenta:#d3869b;  /* bright-purple */
   --cyan:  #8ec07c;   /* bright-aqua */
   --ground:#151718; /* dark0-hard deepened — the chrome floor */
-  --term-bg: #1d2021; /* dark0-hard */
+  --raised:#393939;   /* dark0 lifted 8% toward white */
 }
 
 /* Rosé Pine Dawn (light) — rose-pine/obsidian, MIT, © 2024 Rosé Pine.
@@ -261,8 +268,10 @@
    accent, so the orange slot reuses rose. */
 :root[data-theme=rosepine] {
   --paper: #faf4ed;   /* base */
-  --panel: #fffaf3;   /* surface */
-  --panel2:#f2e9e1;   /* overlay */
+  --panel: #f2e9e1;   /* overlay — chrome sits BELOW the plane, so Dawn's surface (which is ABOVE base) is
+                         not the sidebar tone; it is this preset's --raised. Was #fffaf3, which ran the
+                         ladder backwards and left a menu the same value as the sidebar it opened over. */
+  --panel2:#f4ede8;   /* highlight-low */
   --line:  #cecacd;   /* highlight-high */
   --ink:   #575279;   /* text — body (subtle is below readable contrast on base) */
   --ink2:  #46425f;   /* text deepened for headings (derived — Dawn's ramp stops at text) */
@@ -275,6 +284,7 @@
   --magenta:#907aa9;  /* iris */
   --cyan:  #d7827e;   /* rose */
   --ground:#eee4d9; /* overlay deepened — the chrome floor under base */
+  --raised:#fffaf3;   /* surface — Rosé Pine's own elevated tone, and the lightest value Dawn has */
   --term-bg: #0d1117; /* light themes keep the app's neutral near-black terminal */
   color-scheme: light;
 }
@@ -299,7 +309,7 @@
   --magenta:#ff79c6;  /* pink */
   --cyan:  #8be9fd;
   --ground:#191a21; /* background darker */
-  --term-bg: #20212b; /* background-secondary */
+  --raised:#393b46;   /* background lifted 8% toward white */
 }
 
 * { box-sizing: border-box; }
@@ -738,7 +748,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .document-action-menu {
   position: absolute; top: calc(100% + 4px); right: 0; z-index: 40; min-width: 210px;
   max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto;
-  padding: 4px; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius);
+  padding: 4px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
@@ -905,14 +915,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .public-about-shell { position: relative; display: inline-flex; }
 .public-about-trigger {
   display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 9px;
-  border: 1px solid var(--edge); border-radius: var(--radius); background: var(--paper); color: var(--ink2);
+  border: 1px solid var(--edge); border-radius: var(--radius); background: var(--raised); color: var(--ink2);
   cursor: pointer; font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui);
   box-shadow: var(--shadow);
 }
 .public-about-trigger:hover, .public-about-trigger[aria-expanded="true"] { background: var(--wash-hover); color: var(--ink2); }
 .public-about {
   position: absolute; right: 0; bottom: 38px; width: min(380px, calc(100vw - 84px)); padding: 14px;
-  border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  border: 1px solid var(--edge); border-radius: var(--radius); background: var(--raised); color: var(--ink);
   box-shadow: var(--shadow); font-size: var(--type-control); line-height: var(--leading-relaxed);
 }
 .public-about-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -944,7 +954,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
   display: flex; align-items: center; gap: 10px; max-width: min(48vw, 520px);
   padding: 5px 8px 5px 11px;
-  background: var(--paper); border: 1px solid var(--edge); border-left: 4px solid var(--ov, var(--blue));
+  background: var(--raised); border: 1px solid var(--edge); border-left: 4px solid var(--ov, var(--blue));
   border-radius: var(--radius); box-shadow: var(--shadow);
   font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink);
 }
@@ -970,7 +980,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sess-badge { position: absolute; top: 10px; right: 10px; z-index: 6; display: grid; justify-items: end; }
 .sess-badge-trigger {
   display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 3px 7px;
-  color: var(--ink2); background: color-mix(in srgb, var(--paper) 92%, var(--panel2)); border: 1px solid var(--edge);
+  color: var(--ink2); background: color-mix(in srgb, var(--raised) 92%, var(--panel2)); border: 1px solid var(--edge);
   border-radius: var(--radius-full); box-shadow: var(--shadow);
   font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
 }
@@ -978,7 +988,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sess-badge-count { font-variant-numeric: tabular-nums; }
 .sess-badge-face { display: inline-flex; }
 .sess-badge-panel {
-  width: min(250px, calc(100vw - 24px)); margin-top: 5px; padding: 5px; background: var(--paper);
+  width: min(250px, calc(100vw - 24px)); margin-top: 5px; padding: 5px; background: var(--raised);
   border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow);
 }
 .sess-badge-panel .session-picker-list { max-height: min(46vh, 320px); }
@@ -1096,7 +1106,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ov-backdrop { z-index: 20; }
 .ov-panel {
   width: min(900px, 90vw); height: min(600px, 84vh);
-  background: var(--paper); border: 1px solid var(--blue);
+  background: var(--raised); border: 1px solid var(--blue);
   border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column;
   box-shadow: var(--shadow);
 }
@@ -1400,7 +1410,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
    (it began at 30, sized for the retired map-side glance) rendered it behind surfaces it must float over. */
 .sess-menu {
   position: fixed; z-index: 60; min-width: 190px; max-width: min(260px, calc(100vw - 16px));
-  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius);
+  background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden; padding: 4px; color: var(--ink);
 }
@@ -1419,7 +1429,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .sess-menu-item:hover .sess-menu-icon, .sess-menu-item:focus .sess-menu-icon { color: currentColor; }
 /* close/delete are destructive — orange text + icon, isolated by a separator rather than a loud fill. */
 .sess-menu-item.danger, .sess-menu-item.danger .sess-menu-icon { color: var(--orange); }
-.sess-menu-item.danger:hover, .sess-menu-item.danger:focus { background: color-mix(in srgb, var(--orange) 14%, var(--panel)); color: var(--orange); }
+.sess-menu-item.danger:hover, .sess-menu-item.danger:focus { background: color-mix(in srgb, var(--orange) 14%, var(--raised)); color: var(--orange); }
 /* overlay-session items ([[node-menu]]): a thin divider parts them from the verbs. */
 .sess-menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .session-picker { display: grid; gap: 4px; min-width: 0; }
@@ -1495,7 +1505,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
    session-board page it can be opened from — a modal must never render behind its surface. */
 .legend {
   position: relative; width: min(660px, 92vw); max-height: 86vh; overflow-y: auto;
-  background: var(--paper); border: 1px solid var(--blue); border-radius: var(--radius);
+  background: var(--raised); border: 1px solid var(--blue); border-radius: var(--radius);
   box-shadow: var(--shadow); font-size: var(--type-control);
 }
 .legend-head {
@@ -1596,7 +1606,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
   /* adaptive: scales with the viewport (≈half-width), floored for medium screens and capped so lines
      stay scannable on a very large display; 92vw guards small screens. */
   width: min(92vw, clamp(640px, 50vw, 1100px)); max-height: 72vh; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--paper); border: 1px solid var(--blue); border-radius: var(--radius);
+  background: var(--raised); border: 1px solid var(--blue); border-radius: var(--radius);
   box-shadow: var(--shadow); font-size: var(--type-control);
 }
 .search-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--field-bg); }
@@ -1873,7 +1883,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rl-secondary-filter-count.for-mobile { display: none; }
 .rl-secondary-filters-trigger:hover, .rl-secondary-filters.active-desktop .rl-secondary-filters-trigger { color: var(--ink); background: color-mix(in srgb, var(--line) 45%, transparent); }
 .rl-secondary-filters.mobile-only, .rl-menu-group.mobile-only { display: none; }
-.rl-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; width: 230px; max-height: min(420px, 70vh); overflow-y: auto; padding: 6px; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
+.rl-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; width: 230px; max-height: min(420px, 70vh); overflow-y: auto; padding: 6px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
 .rl-menu-item { width: 100%; min-width: 0; min-height: 32px; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 5px 7px; color: var(--ink2); background: transparent; border: 0; border-radius: var(--radius); text-align: left; font-family: var(--ui-font); font-size: var(--type-control); cursor: pointer; }
 .rl-menu-item:hover { color: var(--ink); background: var(--wash-hover); }
 .rl-menu-item > span:nth-child(2) { overflow-wrap: anywhere; }
@@ -2223,7 +2233,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-archive-page {
   width: min(980px, 90vw); height: min(760px, 86vh); min-width: 0; min-height: 0;
-  display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--edge);
+  display: flex; flex-direction: column; background: var(--raised); border: 1px solid var(--edge);
   box-shadow: var(--shadow);
 }
 .si-archive-head {
@@ -2271,14 +2281,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-inputwrap {
   position: relative;
   width: 100%; display: flex; border: 1px solid var(--edge); border-radius: var(--radius);
-  background: var(--paper); padding: var(--space-5) var(--space-6); box-shadow: var(--shadow); transition: height .12s ease;
+  background: var(--raised); padding: var(--space-5) var(--space-6); box-shadow: var(--shadow); transition: height .12s ease;
 }
 .si-inputwrap:focus-within { box-shadow: var(--shadow), var(--focus-ring); }
 
 .mention-menu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;
   margin: 0; padding: 4px; list-style: none; max-height: 248px; overflow-y: auto;
-  background: var(--paper); border: 1px solid var(--blue); border-radius: var(--radius);
+  background: var(--raised); border: 1px solid var(--blue); border-radius: var(--radius);
   box-shadow: var(--shadow); animation: rise var(--dur-rise) ease;
 }
 /* the session ❯ inbox is docked at the bottom of the panel, so its slash menu opens UPWARD instead. */
@@ -2352,7 +2362,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   z-index: 30; width: max-content; min-width: 340px; max-width: min(720px, calc(100vw - 64px));
   max-height: min(70vh, 640px); overflow-y: auto;
   padding: 8px;
-  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius);
+  background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius);
   box-shadow: var(--shadow);
   animation: si-launcher-pop-in .16s ease;
 }
@@ -2401,7 +2411,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-tab svg { flex: none; }
 /* Unlike the flat tab actions above, this focus ring sits OUTSIDE the box: inset on a 20px circle it would
    crowd the glyph. 20 + offset + ring = 26px, still contained by the 32px bar. */
-.si-resource-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
+.si-resource-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
 .si-resource-menu-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 6px 7px; color: var(--ink2); background: transparent; border: 0; border-radius: var(--radius); font-family: var(--ui-font); font-size: var(--type-control); text-align: left; cursor: pointer; }
 .si-resource-menu-row:hover, .si-resource-menu-row:focus-visible { color: var(--blue); background: var(--wash-hover); }
 .si-resource-menu-row:disabled { color: var(--muted); cursor: not-allowed; }
@@ -2434,7 +2444,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 .si-actions { flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
 .si-files { position: relative; display: flex; align-items: center; padding: 0; }
-.si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: max-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
+.si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: max-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
 .si-files-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, 26px); align-items: center; gap: 2px; }
 .si-files-name { appearance: none; width: 100%; min-width: 0; max-width: min(280px, calc(100vw - 130px)); overflow: hidden; padding: 6px 7px; color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; border: 0; border-radius: var(--radius); cursor: pointer; }
 .si-files-name:hover, .si-files-name:focus-visible, .si-files-download:hover, .si-files-download:focus-visible, .si-files-copy:hover, .si-files-copy:focus-visible { color: var(--blue); background: var(--wash-hover); }
@@ -2475,7 +2485,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   position: absolute; left: 50%; bottom: 22%; z-index: 1; transform: translateX(-50%);
   width: min(680px, calc(100% - 32px)); max-height: min(38cqh, 340px); box-sizing: border-box;
   padding: 8px 10px 7px; border-color: color-mix(in srgb, var(--blue) 55%, var(--line));
-  background: color-mix(in srgb, var(--panel) 96%, transparent); box-shadow: var(--shadow);
+  background: color-mix(in srgb, var(--raised) 96%, transparent); box-shadow: var(--shadow);
   pointer-events: auto;
 }
 .si-command-box.err { border-color: var(--orange); }
@@ -2565,7 +2575,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .st-input-confirm {
   width: min(420px, calc(100% - 32px)); padding: 16px; border: 1px solid var(--edge);
-  border-radius: var(--radius); background: var(--panel); color: var(--ink); box-shadow: var(--shadow);
+  border-radius: var(--radius); background: var(--raised); color: var(--ink); box-shadow: var(--shadow);
 }
 .st-input-confirm h2 { margin: 0 0 8px; font-size: var(--type-control); line-height: var(--leading-ui); }
 .st-input-confirm p { margin: 0; color: var(--ink2); font-size: var(--type-caption); line-height: var(--leading-relaxed); }
@@ -2988,7 +2998,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   /* PAPER, NOT A PANEL: the card is the page's own ground with a hairline around it, so the composer reads
      as part of the sheet the conversation is printed on rather than a control bar laid over it. The blur
      keeps the flow legible as it scrolls under; the one elevation token says only that it floats. */
-  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  background: color-mix(in srgb, var(--raised) 94%, transparent);
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
 }
 .m-composer:focus-within { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
@@ -3302,7 +3312,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    z-index 100 floats it above modals (60) and the mobile shell (10-20). */
 .ui-tip {
   position: fixed; z-index: 100; pointer-events: none;
-  background: var(--panel2); color: var(--ink2);
+  background: var(--raised); color: var(--ink2);
   border: 1px solid var(--edge); border-radius: var(--radius);
   padding: 4px 9px; font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-relaxed);
   max-width: 320px; white-space: pre-line; overflow-wrap: break-word;
@@ -3340,7 +3350,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .tn-notice {
   --tn-tone: var(--blue);
   flex: 0 0 auto; min-block-size: 42px; width: 100%; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: start; gap: 9px;
-  position: relative; overflow: hidden; padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--panel) 96%, transparent);
+  position: relative; overflow: hidden; padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--raised) 96%, transparent);
   border: 1px solid color-mix(in srgb, var(--tn-tone) 42%, var(--line)); border-left: 3px solid var(--tn-tone); border-radius: var(--radius);
   box-shadow: var(--shadow); font-family: var(--ui-font); font-size: var(--type-control);
   line-height: var(--leading-relaxed); pointer-events: auto; animation: rise var(--dur-rise) ease-out both;
@@ -3594,7 +3604,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* --- the status row's project selector menu --- */
 .proj-menu {
   z-index: 60; min-width: 180px; max-width: 280px;
-  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); padding: 4px;
+  background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); padding: 4px;
   box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 1px; font-family: var(--ui-font);
 }
@@ -3722,7 +3732,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .diff-file-panel { border-right:0; border-bottom:1px solid var(--line); }
   .diff-editor-split .cm-mergeViewEditors { min-width:760px; }
 }
-.diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--paper); box-shadow: var(--shadow); }
+.diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--raised); box-shadow: var(--shadow); }
 .diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
 .diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }
 
@@ -3732,7 +3742,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    cards POP — the two motion words every overlay spends. */
 .pa-group {
   position: fixed; z-index: 60; display: flex; gap: var(--space-1); padding: var(--space-1);
-  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow);
+  background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow);
   animation: rise var(--dur-rise) ease;
 }
 .pa-node-group { flex-direction: column; align-items: stretch; min-width: 220px; }
@@ -3752,7 +3762,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .pa-loading { position: fixed; z-index: 60; display: inline-flex; padding: 4px; color: var(--muted); }
 
 .pa-card {
-  position: fixed; z-index: 61; background: var(--paper); border: 1px solid var(--edge); border-radius: var(--radius);
+  position: fixed; z-index: 61; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius);
   box-shadow: var(--shadow); animation: pop var(--dur-pop) ease; transform-origin: top left;
 }
 .pa-edit { display: grid; gap: var(--space-4); padding: var(--space-5); width: min(760px, calc(100vw - 32px)); }
@@ -3825,7 +3835,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
   font-family: var(--ui-font); font-size: var(--type-control);
 }
-.pa-btn:hover { background: var(--panel); }
+.pa-btn:hover { background: var(--wash-hover); }
 .pa-go { border-color: var(--blue); color: var(--blue); }
 .pa-go:hover { background: var(--blue); color: var(--paper); }
 .pa-btn:disabled { opacity: .5; cursor: default; }

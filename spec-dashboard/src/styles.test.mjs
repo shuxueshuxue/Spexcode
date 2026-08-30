@@ -97,14 +97,15 @@ test('three weights, one radius token, one elevation — the geometry is spendab
   assert.deepEqual(drops.filter((v) => !/^0 1px 4px/.test(v)), [], 'one elevation token owns every real drop shadow')
 })
 
-test('the ground ladder is three tones deep and every theme carries all three', () => {
-  // chrome recedes (--ground: rail, dock, status bar, context dock), toolbars sit between (--panel), and
-  // the ONE content plane is the brightest (--paper). The whole point is that a reader can see where the
+test('the ground ladder is four tones deep and every theme carries all four', () => {
+  // chrome recedes (--ground: rail, dock, status bar, context dock), toolbars sit between (--panel),
+  // the ONE content plane is next (--paper), and --raised is the only rung ABOVE it: what a menu, a
+  // pop-over, or a floating composer is painted. The whole point is that a reader can see where the
   // document is without a border telling them; two tones five values apart could not do that.
   const themes = [...css.matchAll(/:root(?:\[data-theme=\w+\])?\s*\{([\s\S]*?)\n\}/g)].map((m) => m[1])
   assert.equal(themes.length, 9, 'the default plus eight presets')
   for (const block of themes) {
-    for (const token of ['--paper', '--panel', '--ground']) {
+    for (const token of ['--paper', '--panel', '--ground', '--raised']) {
       assert.match(block, new RegExp(`${token}:\\s*#[0-9a-f]{6};`), `${token} must be a resolved value in every theme`)
     }
   }
@@ -123,8 +124,81 @@ test('the ground ladder is three tones deep and every theme carries all three', 
   assert.match(css, /\.tab:not\(\.on\)\s*\{[^}]*background:\s*var\(--panel\);[^}]*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/s)
   assert.doesNotMatch(css, /\.viewhost\s*\{[^}]*border-top:/s)
   assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
-  // the dark terminal is a card ON the plane: a --paper gutter runs down its leading edge
+  // the dark terminal is a WELL in the plane: a --paper gutter runs down its leading edge
   assert.match(css, /\.si-content\s*\{[^}]*padding-left:\s*var\(--space-\d\);[^}]*background:\s*var\(--paper\);/s)
+})
+
+// CIE L* — perceptual lightness, 0 (black) to 100 (white). It is the metric the ladder is stated in,
+// because a WCAG contrast RATIO compresses to nothing at the dark end (two surfaces a plainly visible
+// step apart both sit at ~1.1:1) and would call a broken ramp and a good one the same number.
+const lstar = (hex) => {
+  const channel = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const [r, g, b] = [1, 3, 5].map((i) => channel(parseInt(hex.slice(i, i + 2), 16) / 255))
+  const y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return y > 216 / 24389 ? 116 * Math.cbrt(y) - 16 : (y * 24389) / 27
+}
+const palettes = () => Object.fromEntries([...css.matchAll(/:root(?:\[data-theme=(\w+)\])?\s*\{([\s\S]*?)\n\}/g)]
+  .map(([, name, block]) => [name || 'minimal', Object.fromEntries(
+    [...block.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]]),
+  )]))
+
+test('the ladder only ever runs one way, and a surface that floats is the top of it', () => {
+  // DEPTH HAS A DIRECTION, and it is the physical one: light falls from above, so a surface that is
+  // higher catches more of it. Every reference system states the same rule — Material 3's dark surface
+  // containers climb T4→T22 with elevation, IBM Carbon's dark layers "become one step lighter with each
+  // added layer", and both fall back to the SHADOW in light themes, where the plane is already white and
+  // there is no headroom left to climb. So: the ladder never inverts, and --raised is never below the
+  // plane it floats over. Before this gate the menus were painted --panel — a rung BELOW --paper — which
+  // read as a hole punched in the window rather than a card lifted off it.
+  for (const [name, p] of Object.entries(palettes())) {
+    assert.ok(lstar(p['--ground']) < lstar(p['--panel']), `${name}: chrome floor sits under the panel tone`)
+    assert.ok(lstar(p['--panel']) < lstar(p['--paper']), `${name}: the panel tone sits under the content plane`)
+    assert.ok(lstar(p['--raised']) >= lstar(p['--paper']), `${name}: a floating surface is never darker than the plane`)
+  }
+})
+
+test('every depth step is big enough to see, and the terminal owns a tone nothing else uses', () => {
+  // HOW BIG A STEP HAS TO BE is a number, not a matter of taste, and it is TWO numbers because the
+  // sheet makes two different claims with a tone. A flat-field lightness JND is about 1 L*, and the
+  // systems that get this right spend far more than that:
+  //   * a REGION step (this surface is a different part of the window) runs 3.5-4 L* in practice —
+  //     VS Code Dark Modern's sidebar-to-editor is 3.5, Material 3's surface-to-surfaceContainerLow 4.
+  //   * an ELEVATION step (this surface has left the plane) runs 6-11 — Carbon's dark layers step
+  //     8-11, Material 3's dark surface containers 5-6, VS Code's editor-to-dropdown 8.6.
+  // A menu is making the second claim, so it pays the second price. A LIGHT preset is exempt from the
+  // lift by construction: its plane is already at the top of the range, which is exactly why its
+  // --shadow is the strong one and the dark presets' is nearly inert.
+  const REGION = 4
+  const ELEVATION = 6
+  for (const [name, p] of Object.entries(palettes())) {
+    const light = new RegExp(`:root\\[data-theme=${name}\\]\\s*\\{[^}]*color-scheme:\\s*light`, 's').test(css)
+    const term = p['--term-bg'] ?? p['--ground']   // a dark preset inherits :root's --term-bg: var(--ground)
+    // THE TERMINAL IS A MEDIUM, NOT A RUNG. It is the darkest thing in the window in every preset, and
+    // no rung the chrome is painted with may land on it — a menu the exact value of the pane underneath
+    // it is a menu with no boundary at all, which is what five of these presets shipped.
+    assert.ok(lstar(term) <= lstar(p['--ground']) , `${name}: the terminal is the floor of the window`)
+    assert.ok(lstar(p['--paper']) - lstar(term) >= REGION, `${name}: the plane reads as a step above the terminal`)
+    assert.ok(lstar(p['--raised']) - lstar(term) >= ELEVATION, `${name}: a menu over the terminal has a ground of its own`)
+    if (light) continue
+    assert.ok(lstar(p['--raised']) - lstar(p['--paper']) >= ELEVATION, `${name}: a dark preset lifts its floating surfaces`)
+  }
+})
+
+test('what floats spends the drop AND the raised rung — one token pair, no third answer', () => {
+  // --shadow is the sheet's own definition of "this thing has left the plane" ([[typography]]: one
+  // elevation, spent only by things that genuinely float). So the set of rules that spend it is exactly
+  // the set that must be painted --raised, and the gate can just check the two agree. Before this, the
+  // 26 floating surfaces drew from THREE different rungs depending on which file they were written in:
+  // --panel for most menus, --paper for the popovers, --panel2 for the tooltip.
+  const floating = [...css.matchAll(/([^{}/]*?)\{([^{}]*)\}/g)]
+    .filter(([, , body]) => body.includes('var(--shadow)'))
+    .map(([, selector, body]) => [selector.trim().split('\n').pop().trim(), body])
+  assert.ok(floating.length > 20, 'the sheet still has a floating-surface population to check')
+  for (const [selector, body] of floating) {
+    const background = /(?<![\w-])background(?:-color)?:\s*([^;}]+)/.exec(body)?.[1]?.trim()
+    if (!background || background === 'transparent') continue   // the drag ghost and the lightbox carry no plate
+    assert.match(background, /var\(--raised\)/, `${selector} floats, so it is painted the raised rung`)
+  }
 })
 
 test('how the board responds is spent through interaction tokens a preset can retune', () => {

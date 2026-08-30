@@ -32,7 +32,12 @@ real boundaries, especially before destructive actions. Danger colour is reserve
 icons, never used as decoration.
 
 The surface uses only [[dashboard-shell]] theme tokens for its background, border, shadow, hover/selected wash,
-text, and icon colour, so every preset retains its own palette. It has a modest radius, no oversized type, no
+text, and icon colour, so every preset retains its own palette. Its background is specifically the **raised**
+rung of [[typography]]'s ground ladder — a menu is a thing that has left the plane, so it is painted the one
+tone that is above the plane, never a chrome tone borrowed from below it. A menu opens over whatever happens
+to be under the cursor, which is exactly why it cannot take its ground from any one of them: painted `--panel`
+it was the sidebar's own value in every preset and the terminal's in most of them, so the surface a reader had
+just summoned had no boundary at all against the thing it covered. It has a modest radius, no oversized type, no
 emoji, and no component-local SVG. Keyboard focus is visibly equivalent to hover; menu items keep native button
 activation and accessible menu roles while [[esc-layers]] continues to own dismissal order. The menu is
 **inert chrome for pointer focus** ([[focus-return]]): pressing or picking an item acts but never moves focus,

@@ -1,4 +1,4 @@
-import { SessionTerminal, isTerminalPointerReport, isTerminalFocusReport, stripTerminalFocusReports, stripTerminalButtonReports, stripTerminalPointerReports } from '@spexcode/terminal-ui'
+import { SessionTerminal, isTerminalPointerReport, isTerminalFocusReport, stripTerminalFocusReports, stripTerminalButtonReports, stripTerminalPointerReports } from './terminal/index'
 import '@xterm/xterm/css/xterm.css'
 import { createResilientSocket } from './resilientSocket.js'
 import { apiUrl } from './project.js'

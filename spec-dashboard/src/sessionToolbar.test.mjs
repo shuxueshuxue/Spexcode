@@ -114,7 +114,9 @@ test('live offline and archived conversations share one footer with coldline and
 })
 
 test('conversation revisit refreshes a warm instance without clearing its rendered state', () => {
-  assert.match(timelineChat, /useEffect\(\(\) => \{\n    setEvents\(null\); setDetail\(null\); setCopyStatus\(null\); setSendNote\(null\); setExpandedSeams\(new Set\(\)\); setTranscripts\(new Map\(\)\);[\s\S]*?\n  \}, \[s\.id\]\)/)
+  // The window's own position travels with the session, so it is reset here with everything else: an offset,
+  // a stamp or a pending anchor carried into a DIFFERENT session would page the wrong history ([[session-timeline]]).
+  assert.match(timelineChat, /useEffect\(\(\) => \{\n    setEvents\(null\); setWin\(\{ stamp: null, offset: 0, total: 0, priorWorking: false \}\); setLoadingEarlier\(false\); stampRef\.current = null; anchorRef\.current = null; setDetail\(null\); setCopyStatus\(null\); setSendNote\(null\); setExpandedSeams\(new Set\(\)\); setTranscripts\(new Map\(\)\);[\s\S]*?\n  \}, \[s\.id\]\)/)
   assert.match(timelineChat, /useEffect\(\(\) => \{\n    if \(!active\) return undefined\n    load\(\); loadSessionDetail\(s\.id\)/)
   assert.doesNotMatch(timelineChat, /useEffect\(\(\) => \{\n    if \(!active\) return undefined\n    setEvents\(null\)/)
 })

@@ -21,6 +21,37 @@ scenarios:
       shared selection token carrying session, moment and verbatim text; no second field and no second route. A
       refused send keeps the attachment. With nothing selected the press stays the browser's and no menu of ours
       opens. Zero loss = the reader challenges one sentence out of a long turn and the agent cannot mistake which.
+  - name: a-long-history-is-reachable-and-says-what-it-omits
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    related: [spec-dashboard/src/data.js]
+    description: >-
+      Against a real backend, seed one governed session with MORE history than a window holds — several
+      hundred authored events, past whatever tail the surface reads — and open it in a real browser. Scroll to
+      the TOP of the conversation and read what is there. Then take the way back, if there is one: press it,
+      and measure (a) how many rows the page holds before and after, (b) the viewport position of a row that
+      was on screen across the press, and (c) the count the top edge states. Separately, watch the network for
+      a quiet stretch of polling and read what each timeline request asks for and how many bytes come back.
+    expected: >-
+      The top edge names the earlier history and offers the way in — the count is the record's own, not a
+      guess from what is on screen — and one press brings a page of it in. The row the reader was on does not
+      move: growth arrives above it and the scroll absorbs exactly that height, so a back-load is a page
+      appearing, never a jump. The press is the only thing that walks back; reaching the top does not fetch by
+      itself. On a quiet record the poll asks only for GROWTH and comes back with none — a few hundred bytes,
+      not the window again — so a history that is long costs no more to watch than a short one.
+  - name: the-second-hand-redraws-only-itself
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    description: >-
+      Open a LIVE working session whose history is long enough to fill a window (hundreds of rows) so its tail
+      seam is counting, and leave it on screen untouched. Over a fixed stretch of wall time, read Chrome's own
+      `ScriptDuration` before and after, with the row count and the record's event count captured at both ends
+      so the two arms of the comparison are the same page and not two different ones.
+    expected: >-
+      The per-second count costs a per-second redraw of ONE LINE, not of the history around it: the script
+      time over the stretch is a small fraction of what it is when the tick is state on the whole conversation,
+      and it does not grow with how much history is on screen. A page that is merely long must not become
+      expensive merely by ticking — the seam's number moves every second, and that is all that moves.
   - name: an-unshown-conversation-is-neither-re-rendered-nor-laid-out
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

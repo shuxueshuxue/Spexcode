@@ -41,7 +41,23 @@ the `⚑` badge that says its worktree is gone and has no relaunch action. These
 component, not separate panels. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
-once when selected and does not poll. A pane-backed offline or archived record remains Conversation and cannot
+once when selected and does not poll.
+
+**THE PAGE HOLDS A WINDOW, AND SAYS SO.** A session's history outgrows one read — a week of work is thousands
+of events — so the page shows the newest of them and states, at the top edge, how many earlier ones it is not
+showing, with the way in: one press takes one page further back ([[session-timeline]] serves the window). The
+count is the history's own, never an inference from what happens to be on screen. Reading position is what the
+press must not cost: a page arriving at the top pushes everything below it down, and the scroll is moved by
+exactly that height, so the row under the reader's eye does not move. Growth at the tail still follows the
+thumb — only a reader already at the newest entry is carried to it — and a back-load never counts as growth.
+Walking back is a PRESS, not a scroll trigger: an append-only history that reaches for more the moment the top
+comes into view fights the same thumb that pinning already answers to.
+
+The poll asks for GROWTH, not for the history again. The window carries the log's sequence, the poll sends it
+back, and an unchanged record answers with nothing at all — no rows are rebuilt on a quiet tick, which is the
+only reason several of these can stay mounted at once ([[session-console]]). Several effects can ask on the
+same frame and a fresh mount asks again before the first answer lands; they join one read rather than each
+paying for a whole window. A pane-backed offline or archived record remains Conversation and cannot
 be switched to Terminal. `queued` and `archive` are the two legislated exceptions to the ordinary offline
 projection: queued has intentionally not launched and self-starts as a slot frees, while archive is closed and
 restored explicitly.
@@ -122,7 +138,10 @@ exactly those three:
   is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
-  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep; the tail seam of a dead session says `working` — the
+  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep. THE SECOND HAND
+  OWNS ONLY ITSELF: that count is its own component, so a tick redraws one line and not the conversation
+  around it — a long history costs nothing per second merely by being long, and the seam's start is all
+  the ticker is given, so the clock correction from a later poll reaches it without redrawing anyone; the tail seam of a dead session says `working` — the
   record's last word — with no duration invented for a stretch nothing closed. A STRETCH CLOSES BY FOLDING,
   NOT BY BLINKING: when a message lands on a working agent — the person's, or the agent's own note — the
   stretch it closes stops streaming, and the live tail that was under `working · 4m 12s` travels the height

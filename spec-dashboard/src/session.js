@@ -60,11 +60,19 @@ export const overlaySessions = (node, sessions = []) => {
   return sources.map((source) => (sessions || []).find((s) => s.source === source)).filter(Boolean)
 }
 // @@@ session spec nodes - the MIRROR of overlaySessions ([[session-rename]]'s spec-related door): the
-// nodes THIS session is changing, read from the same pending ops the graph overlay is drawn from, deduped
-// in overlay order. Ids only: resolving one to a live node is the caller's business, because a node the
-// session is ADDING has no row on the trunk yet and must still be listed.
-export const sessionSpecNodes = (session) =>
-  [...new Set(((session?.ops) || []).map((op) => op?.nodeId).filter(Boolean))]
+// nodes THIS session is changing, read from the same pending ops the graph overlay is drawn from, in
+// overlay order. Each carries its OP, because "added" and "deleted" are not the same news as "edited" and
+// the board already says which is which in one shared mark. A node is listed once — the first op naming it
+// wins, since a worktree makes one pending change per spec.md. No node is resolved against the trunk here:
+// a node the session is ADDING has no row there yet and must still be listed.
+export const sessionSpecNodes = (session) => {
+  const seen = new Map()
+  for (const op of (session?.ops) || []) {
+    if (!op?.nodeId || seen.has(op.nodeId)) continue
+    seen.set(op.nodeId, { id: op.nodeId, op: op.op || 'edited' })
+  }
+  return [...seen.values()]
+}
 
 // what the spec door actually renders: the first `max` of those nodes plus how many the cap held back. The
 // cap keeps a wide session from pushing a menu's own verbs off the screen, and `hidden` is what makes the

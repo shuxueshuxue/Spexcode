@@ -63,6 +63,16 @@ activation goes; it never learns what a spec node is. The read is per rendered l
 wrapped is left unlinked rather than underlined across the wrong cells, and only an id the host recognizes
 becomes a link, so a `[[...]]` inside a displayed diff or quoted prompt stays plain text ([[mentions]]).
 
+**A link you cannot see is a link nobody finds.** Hover is where a link is CONFIRMED, never where it is
+announced, so every reference the host recognizes is marked for as long as it is on screen. xterm's own
+decoration API cannot carry that mark here — it declines while the ALTERNATE buffer is active, and an agent
+TUI is exactly that — so the mark is an overlay of the terminal's own: absolutely positioned inside the
+screen box, outside the pane's layout, and pointer-transparent, so it can neither move the pane nor swallow a
+mouse report the TUI is listening for. Cell boxes come from the screen divided by the terminal's cols and
+rows, because the grid is uniform; no private renderer metric is read. Only the rows the terminal reports as
+CHANGED are re-scanned, so a repainting TUI does not pay a full-viewport walk per frame, and a resize
+invalidates every mark rather than leaving one on the cells it used to cover.
+
 Only the visible, live viewer may write. Hidden or disconnected browsers never queue keystrokes for replay,
 and an input message from a stale viewer is ignored. A transport loss remains visibly reconnecting and fails
 loudly by withholding input until the socket is open; it never pretends a key landed. The helper bounds each

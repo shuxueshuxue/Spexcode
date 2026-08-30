@@ -7,6 +7,7 @@ import { openNewTab } from './tabs.js'
 import { sessionHeadline, specDoorRows } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
+import { GLYPH } from './specMeta.js'
 import { navigate } from './route.js'
 
 // how many node rows the spec door shows before it starts counting the rest instead.
@@ -223,8 +224,16 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
           <ContextMenuGroup>
             <ContextMenuItem icon="plus" onClick={openInNewTab}>{t('tabs.openInNewTab')}</ContextMenuItem>
             <ContextMenuSubmenu icon="graph" label={t('sessionWindow.specRelated')}>
-              {specNodes.map((id) => (
-                <ContextMenuItem key={id} icon="graph" onClick={openSpecNode(id)}>{id}</ContextMenuItem>
+              {/* the leading slot wears the board's OWN op mark — the same GLYPH + `ov-<op>` the graph tile,
+                  the legend and the node popup's edit pane spend — so a row says whether this session is
+                  adding, editing, deleting or moving that node instead of repeating one decorative icon. */}
+              {specNodes.map(({ id, op }) => (
+                <ContextMenuItem
+                  key={id} onClick={openSpecNode(id)}
+                  leading={<span className={`ov-mark ov-${op}`} aria-hidden="true">{GLYPH[op] || '•'}</span>}
+                  data-tip={t(`legend.opRows.${op}`)}
+                  aria-label={`${id} — ${t(`legend.opRows.${op}`)}`}
+                >{id}</ContextMenuItem>
               ))}
               {hiddenSpecNodes > 0 && (
                 <div className="sess-menu-note">{t('sessionWindow.specMore', { n: hiddenSpecNodes })}</div>

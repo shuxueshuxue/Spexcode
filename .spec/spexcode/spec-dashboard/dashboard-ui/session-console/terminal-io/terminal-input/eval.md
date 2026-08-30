@@ -56,9 +56,12 @@ scenarios:
       Open a real live agent session's terminal pane while its TUI has mouse tracking active, with a line on
       screen holding both a `[[node-id]]` that resolves on the current board and one that does not. Hover the
       resolving reference and read the pane's cursor, click it, then return to the pane and click the
-      unknown one.
+      unknown one. Before touching anything, read what the pane draws over the reference.
     expected: >-
-      The resolving reference is a link: hovering it shows the link cursor and clicking it opens that node's
+      The resolving reference is MARKED WITHOUT BEING TOUCHED: a pointer-transparent overlay draws a rule on
+      exactly the cells the reference occupies, so the door is visible before the pointer finds it, and that
+      overlay neither moves the pane nor swallows the click. Then the reference behaves as a link: hovering
+      it shows the link cursor and clicking it opens that node's
       `#/spec/<id>` document, the same door the transcript's anchor gives. The unknown id is not a link and
       clicking it leaves the reader on the session. An active mouse-tracking mode suppresses neither, and a
       reference the TUI wrapped across two rows is simply left unlinked rather than underlining the wrong cells.

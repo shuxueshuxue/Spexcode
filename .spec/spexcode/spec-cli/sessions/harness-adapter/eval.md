@@ -108,8 +108,8 @@ scenarios:
     tags: [backend-api, cli]
     code:
       - spec-cli/src/harness.ts#unlinkSocks
-      - spec-cli/src/harness.ts#listenerAt
-      - spec-cli/src/harness.ts#PROVEN_DEAD
+      - spec-cli/src/harness-shim.ts#listenerAt
+      - spec-cli/src/harness-shim.ts#PROVEN_DEAD
       - spec-cli/src/harness.ts#rendezvousListening
       - spec-cli/src/harness.ts#stampRvSock
       - spec-cli/src/sessions.ts
@@ -151,7 +151,7 @@ scenarios:
     tags: [backend-api, cli]
     code:
       - spec-cli/src/harness.ts#reportHeadlessTurnExit
-      - spec-cli/src/harness.ts#headlessTurnFailureShell
+      - spec-cli/src/harness-shim.ts#headlessTurnFailureShell
     description: >-
       Through real `spex session new` launches, give each registered headless adapter a controlled harness
       command whose turn process exits non-zero without calling a lifecycle declaration. Read the session only
@@ -348,10 +348,10 @@ scenarios:
       a supervisor could wrongly reopen/kill them. Both are measurable only through a real launch (a synthetic
       pane hides the wrapper-shell tree shape).
     code:
-      - spec-cli/src/harness.ts#paneTreeRuns
+      - spec-cli/src/harness-shim.ts#paneTreeRuns
       - spec-cli/src/codex-harness.ts#paneTreeRunsCodex
       - spec-cli/src/codex-harness.ts#CODEXISH
-      - spec-cli/src/harness.ts#procSnapshot
+      - spec-cli/src/harness-shim.ts#procSnapshot
   - name: codex-app-server-sock-binds-on-hardened-tmp
     tags: [backend-api]
     description: >-
@@ -419,7 +419,7 @@ scenarios:
   - name: codex-app-server-carries-no-session-identity
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#sessionIdentityEnvVars
+      - spec-cli/src/harness-shim.ts#sessionIdentityEnvVars
       - spec-cli/src/codex-harness.ts#codexLaunchCommand
       - spec-cli/src/codex-harness.ts#codexStartThreadParams
     description: >-
@@ -484,7 +484,7 @@ scenarios:
       - spec-cli/src/codex-harness.ts#writeCodexTrust
       - spec-cli/src/codex-harness.ts#codexHookHash
       - spec-cli/src/codex-harness.ts#stripCodexTrustFor
-      - spec-cli/src/codex-harness.ts#buildShim
+      - spec-cli/src/harness-shim.ts#buildShim
   - name: codex-launch-ignores-future-dated-rollout-dirs
     tags: [backend-api]
     code:

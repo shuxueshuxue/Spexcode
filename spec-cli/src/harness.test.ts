@@ -22,6 +22,13 @@ test('Codex implementation is outside the registry interface file', () => {
   assert.deepEqual(mentions, allowed)
 })
 
+test('harness interface and Codex implementation do not duplicate top-level declarations', () => {
+  const declarations = (file: string) => [...readFileSync(new URL(`./${file}`, import.meta.url), 'utf8').matchAll(/^(?:export\s+)?(?:const|function|class|type|interface)\s+([A-Za-z_$][\w$]*)/gm)].map((match) => match[1])
+  const interfaceNames = new Set(declarations('harness.ts'))
+  const duplicates = declarations('codex-harness.ts').filter((name) => interfaceNames.has(name))
+  assert.deepEqual(duplicates, [])
+})
+
 test('Codex observer subscription budget covers measured slow native resume', () => {
   assert.ok(CODEX_TURN_OBSERVER_SUBSCRIBE_MS >= 30_000)
 })

@@ -309,5 +309,8 @@ duplicating a harness-name list.
 
 The 22 active nodes that related `spec-cli/src/harness.ts` were scanned. Codex-specific anchors in this node,
 `codex-headless`, and the parent harness evals now point at `codex-harness.ts`; generic adapter, lifecycle, Claude,
-and shell-mirror nodes retain `harness.ts` because they govern the interface or shared helpers. No behavior bug was
-found or changed during the relocation.
+and shell-mirror nodes retain `harness.ts` because they govern the interface or shared helpers. The shared
+shim/file-management and process-probe helpers now live once in `spec-cli/src/harness-shim.ts`; a companion
+structural test rejects duplicate top-level declarations across the two harness modules. This third-module
+boundary is the required escape hatch for future large-adapter splits, rather than copying helpers to bypass a
+runtime import cycle. No behavior bug was found or changed during the relocation.

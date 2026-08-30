@@ -225,7 +225,7 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
             <div className="m-quote-queue" aria-label={t('session.quoteAttachments')}>
               {quotes.map((quote, index) => (
                 <SelectionAttachment key={`${quote.at}:${index}`} selection={quote}
-                  addressLabel={sessionHeadline(session)} onRemove={() => onRemoveQuote?.(index)} />
+                  onRemove={() => onRemoveQuote?.(index)} />
               ))}
             </div>
           )}

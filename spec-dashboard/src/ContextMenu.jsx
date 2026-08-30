@@ -71,6 +71,72 @@ export function ContextMenuSeparator() {
   return <div className="sess-menu-sep" role="separator" />
 }
 
+// @@@ submenu - a row that is a DOOR, not a verb: it carries no action of its own, and hovering it opens a
+// second panel beside it. It exists for the one case where a menu entry stands for a SET whose members are
+// each their own destination — listing them flat would bury the menu's verbs under data. Pointer opens on
+// enter and closes on leave after a short grace, so crossing the gap between the row and its panel does not
+// dismiss what you are reaching for; keyboard opens with ArrowRight/Enter and closes with ArrowLeft.
+//
+// The panel is POSITION-FIXED and placed from the row's measured rect, not `left: 100%`: the menu shell is
+// `overflow: hidden`, which would clip an absolutely-positioned child to the parent menu's box. A fixed
+// child escapes that clip because its containing block is the viewport. Placement is the shell's own
+// two-pass move — render hidden, measure, clamp into the viewport, reveal — so a door near the right edge
+// opens to the LEFT and one near the bottom rides up instead of running off.
+export function ContextMenuSubmenu({ icon, label, children }) {
+  const [open, setOpen] = useState(false)
+  const [style, setStyle] = useState({ left: 0, top: 0, visibility: 'hidden' })
+  const rowRef = useRef(null)
+  const panelRef = useRef(null)
+  const closeTimer = useRef(null)
+
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null } }
+  const openNow = () => { cancelClose(); setOpen(true) }
+  const closeSoon = () => { cancelClose(); closeTimer.current = setTimeout(() => setOpen(false), 160) }
+  useEffect(() => () => cancelClose(), [])
+  useEffect(() => { if (!open) setStyle({ left: 0, top: 0, visibility: 'hidden' }) }, [open])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const row = rowRef.current?.getBoundingClientRect()
+    const panel = panelRef.current?.getBoundingClientRect()
+    if (!row || !panel) return
+    const right = row.right - 4
+    const left = right + panel.width + VIEWPORT_GAP > window.innerWidth ? row.left - panel.width + 4 : right
+    const top = Math.min(row.top - 4, window.innerHeight - panel.height - VIEWPORT_GAP)
+    setStyle({
+      left: Math.max(VIEWPORT_GAP, left),
+      top: Math.max(VIEWPORT_GAP, top),
+      visibility: 'visible',
+    })
+  }, [open])
+
+  const onKeyDown = (event) => {
+    if (event.key === 'ArrowRight' || event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); openNow() }
+    else if (event.key === 'ArrowLeft') { event.preventDefault(); event.stopPropagation(); setOpen(false) }
+  }
+
+  return (
+    <div className="sess-menu-submenu" onMouseEnter={openNow} onMouseLeave={closeSoon}>
+      <button
+        ref={rowRef}
+        type="button" role="menuitem" className={`sess-menu-item sess-menu-parent${open ? ' is-open' : ''}`}
+        aria-haspopup="menu" aria-expanded={open}
+        onFocus={openNow} onKeyDown={onKeyDown}
+        onClick={(event) => { event.preventDefault(); event.stopPropagation(); openNow() }}
+      >
+        <span className="sess-menu-icon"><Icon name={icon} size={14} className="sess-menu-svg" /></span>
+        <span className="sess-menu-label">{label}</span>
+        <span className="sess-menu-more" aria-hidden="true"><Icon name="chevron-right" size={13} /></span>
+      </button>
+      {open && (
+        <div ref={panelRef} className="sess-menu sess-menu-sub" role="menu" aria-label={label} style={style}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // `hint` prints the action's CURRENT binding, read from the registry by the caller ([[keyboard-nav]]'s hint
 // reader) rather than typed into the label. A menu that names its own key teaches the keyboard instead of
 // standing in for it, and a rebind moves the printed cap with the finger.

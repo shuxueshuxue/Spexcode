@@ -152,6 +152,7 @@ test('a browser navigation to a scoped /api path reaches the backend, not the sh
 test('scoped GET dispatch follows the route matrix', async () => {
   const cases = [
     { path: '/p/projA/', accept: 'text/html', destination: 'shell' },
+    { path: '/p/projA', accept: 'text/html', destination: 'redirect' },
     { path: '/p/projA/assets/x.js', accept: '*/*', destination: 'shell' },
     { path: '/p/projA/health', accept: '*/*', destination: 'backend' },
     { path: '/p/projA/api/graph', accept: 'text/html', destination: 'backend' },

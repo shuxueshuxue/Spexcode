@@ -19,3 +19,16 @@
 .st-copyhint { position: absolute; right: 8px; bottom: 6px; z-index: 4; padding: 3px 6px; font: 12px var(--tt-mono); pointer-events: none; }
 .st-copyhint.copied { color: var(--green, #3fb950); }
 .st-copyhint.reconnecting { color: var(--orange, #d29922); }
+
+/* @@@ persistent link marks - a link only the hover reveals is a link nobody finds, so every reference the
+   host recognizes is marked while it is on screen. The layer sits OVER the grid and outside the terminal's
+   layout: absolutely positioned inside the screen box, `pointer-events: none`, so it can neither move the
+   pane nor swallow a mouse report the TUI is listening for. Cell boxes are the screen divided by cols/rows —
+   the grid is uniform, so no private renderer metric is needed. The wash stays light enough to read through;
+   the dotted rule is what says "this is a door", and xterm's own solid underline still marks the hovered one. */
+.st-linkmarks { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.st-linkmarks i {
+  position: absolute; box-sizing: border-box; border-radius: 2px;
+  border-bottom: 1px dotted var(--tt-link, var(--blue, #58a6ff));
+  background: color-mix(in srgb, var(--tt-link, var(--blue, #58a6ff)) 10%, transparent);
+}

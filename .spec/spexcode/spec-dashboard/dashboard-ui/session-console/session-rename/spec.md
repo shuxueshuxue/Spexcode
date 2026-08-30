@@ -48,8 +48,12 @@ menu's first spec entry carries no action of its own: it opens a panel beside it
 listing the nodes this session's pending ops touch, read through the shared session-to-nodes join so this
 door and the graph overlay can never name different nodes. Each row opens that node as a document at the
 same `#/spec/<id>` address an inline `[[id]]` resolves to, so the menu's door and a reference's door are one
-door. The list is CAPPED — a wide session must not push the menu's own verbs off the screen — and what the
-cap hides is said rather than dropped. The panel's last row is fixed: **find on graph**, the board-wide
+door. **A row says WHICH change it is**: its leading mark is the board's own overlay glyph for that op —
+the same mark the graph tile, the legend and the node popup's edit pane spend — so added, edited, deleted
+and moved read the same here as everywhere else, and the door never repeats one decorative icon down a list
+of different news. That mark is decoration: it is hidden from assistive technology, which hears the node
+named with its op spelled out beside it. The list is CAPPED — a wide session must not push the menu's own
+verbs off the screen — and what the cap hides is said rather than dropped. The panel's last row is fixed: **find on graph**, the board-wide
 answer that spotlights every one of those nodes at once and lets the eye walk them; it is the same lock the
 graph has always had, named for what it does rather than for its mechanism.
 

@@ -25,7 +25,11 @@ semantic menu/group/item/separator structure, and the visual row grammar; caller
 exist and what they do. A new context menu joins this shell instead of cloning its markup or CSS dialect.
 
 Every action row has a fixed leading column containing a small semantic linear [[icon-system]] glyph and a
-restrained control-size text label. Rows are tight but tappable, the longest current command fits without
+restrained control-size text label. A row standing for a domain OBJECT may spend that column on the mark the
+board already gives that object instead — a spec node's overlay glyph, say — because repeating one
+decorative icon down a list of different things says less than the vocabulary the reader already knows.
+Such a mark is decoration: it is hidden from assistive technology, and the row carries an accessible name
+that still contains its visible label. Rows are tight but tappable, the longest current command fits without
 clipping, unbounded overlay-session headlines ellipsize on one line without overflowing, and the surface
 clamps inside the viewport. Related actions form groups; hairline separators mark
 real boundaries, especially before destructive actions. Danger colour is reserved for destructive words and

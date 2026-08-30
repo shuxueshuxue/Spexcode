@@ -51,7 +51,7 @@ scenarios:
   - name: pane-node-reference-opens-the-node
     tags: [frontend-e2e, desktop, backend-api]
     code: spec-dashboard/src/SessionTerm.jsx
-    related: [packages/terminal-ui/src/SessionTerminal.tsx, packages/terminal-ui/src/transport.ts]
+    related: [spec-dashboard/src/terminal/SessionTerminal.tsx, spec-dashboard/src/terminal/transport.ts]
     description: >-
       Open a real live agent session's terminal pane while its TUI has mouse tracking active, with a line on
       screen holding both a `[[node-id]]` that resolves on the current board and one that does not. Hover the

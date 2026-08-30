@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The live xterm is the default input surface: browser-native keyboard and IME data flow into the same visible tmux client that renders the pane.
 code:
-  - packages/terminal-ui/src/SessionTerminal.tsx
+  - spec-dashboard/src/terminal/SessionTerminal.tsx
 related:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/src/pty-bridge.ts

@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as xterm from '@xterm/xterm'
 import * as addonFit from '@xterm/addon-fit'
-import type { SessionTerminalProps } from './transport.js'
+import type { SessionTerminalProps } from './transport'
 
 const { Terminal } = xterm
 const { FitAddon } = addonFit

@@ -68,7 +68,7 @@ with no mark reads as the whole output — the one way a bounded view can lie.
 **A result is drawn as text, because this is prose and not a terminal.** Programs print colour, and real
 transcripts carry tens of thousands of escape sequences; a `<pre>` renders them as literal debris in the middle
 of the sentence someone is reading. They are dropped at the moment of drawing — from the row's target and from
-the opened input and output alike — and never from the record, which a terminal surface ([[terminal-ui]]) is
+the opened input and output alike — and never from the record, which a terminal surface ([[terminal-input]]) is
 free to read in full. Stripping before the row's length cut matters: cutting first can leave half a sequence
 behind. Because the page then holds no escapes, text copied off it is already clean, so there is no separate
 copy path. Escapes still count toward the record's size, so removing them from the page must not be read as an

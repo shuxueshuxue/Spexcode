@@ -2,7 +2,7 @@
 scenarios:
   - name: quarantine-proves-absence-before-it-moves-a-byte
     tags: [cli, backend-api]
-    code: [spec-cli/src/sessions.ts#quarantineCorruptRecord]
+    code: [spec-cli/src/session-record.ts]
     description: >
       Against a corrupt governed record, run quarantine while its registered leaf process is still alive, then
       while its tmux session still exists, then with a named native thread that is loaded and active, and finally

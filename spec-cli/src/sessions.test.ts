@@ -8,11 +8,13 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
+import { claudeHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
+import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, adapterResidentLiveness, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, markInterrupted, stampInterrupt, INTERRUPTED_NOTE, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { adapterResidentLiveness, bootstrapMaterialize, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, markInterrupted, stampInterrupt, INTERRUPTED_NOTE, parseSessionLeafReceipt, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, canDrainQueued, fromRaw, rawLifecycleStatus, type SessRec } from './session-record.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -2079,7 +2081,8 @@ test('the spawner pointer names the parent worktree and stays quiet without one'
 })
 
 test('a delivered canonical state notice names the watched subject, never the recipient reading it', async () => {
-  const { canonicalMessageText, fromRaw } = await import('./sessions.js')
+  const { canonicalMessageText } = await import('./sessions.js')
+  const { fromRaw } = await import('./session-record.js')
   const supervisor = fromRaw({ session_id: 'supervisor', governed: true, worktree_path: '/tmp/supervisor', branch: 'node/supervisor', status: 'active' } as never)
   const body = Buffer.from(JSON.stringify({ sessionId: 'worker', status: 'awaiting', proposal: 'close', note: 'landed as main 8b1d2fc21', parentSessionId: 'supervisor' }), 'utf8')
   assert.equal(canonicalMessageText({ kind: 'session.state.changed.v1', body }, supervisor), '[spex watch] worker is close-pending — landed as main 8b1d2fc21')

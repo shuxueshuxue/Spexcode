@@ -7,6 +7,7 @@ related:
   - packages/session-protocol/src/engine.ts
   - packages/session-protocol/src/index.ts
   - spec-cli/src/sessions.ts
+  - spec-cli/src/session-record.ts
 ---
 # internal-transactions
 

@@ -4,13 +4,13 @@ status: active
 hue: 280
 desc: One typed writer for the per-session runtime envelope, three distinct readings of it (absent, corrupt, retired) that may never be collapsed, the launch-readiness publication fence, and the guard that tells a dead leaf from an unprovable one.
 code:
-  - spec-cli/src/sessions.ts#writeRecord
-  - spec-cli/src/sessions.ts#readRecord
+  - spec-cli/src/session-record.ts
 related:
   - spec-cli/src/session-record-integrity.test.ts
   - spec-cli/test/session-record-integrity-fixture.ts
   - packages/spec-core/src/layout.ts
   - spec-cli/src/session-record-lock.ts
+  - spec-cli/src/session-tmux.ts
 ---
 
 # record-integrity
@@ -34,6 +34,13 @@ note-carrying entries — the agent's typed declaration and the hook's capture o
 land through the canonical application, and a note round-trips byte-for-byte on every surface. The shell hooks
 call that package entry point for every event; it compares canonical state and emits no event for a semantic
 no-op. They do not inspect or write JSON lifecycle fields ([[state]]).
+
+The record module receives its legacy lifecycle notification and transition-serialization hooks from
+`sessions.ts` through explicit setters. Their initial values are an inert notifier and a pass-through wrapper so
+record-only readers and error-type consumers can import this module without constructing the session runtime;
+all mutation paths in `sessions.ts` install the real hooks before they can write or quarantine a record. An
+unwired mutation caller is outside the supported composition boundary rather than a second notification or
+transition implementation.
 
 A published create record is also the durable fence for any private pre-publication candidate receipt whose
 best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and

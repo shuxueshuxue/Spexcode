@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { toSession, deriveLabel, deriveTitle, sessionLabel, sessionTitle } from './sessions.js'
-import type { SessRec } from './sessions.js'
+import type { SessRec } from './session-record.js'
 
 // Pins the session-label contract ([[session-label]]): display strings are DERIVED in exactly one place
 // and the bare parts (rename `name`, prompt-truncation `title`) never ride the wire at the top level. The

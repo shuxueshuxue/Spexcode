@@ -19,7 +19,7 @@ scenarios:
       → those same rows lead the one timeline (the empty ring is the only distinction, not a separate band).
     code:
       - spec-dashboard/src/NodeView.jsx
-      - spec-dashboard/src/styles.css
+    related: [spec-dashboard/src/styles.css]
   - name: multi-evidence-gallery
     tags: [frontend-e2e, desktop]
     description: >-
@@ -36,7 +36,6 @@ scenarios:
       one missing entry degrades to the sentinel without hiding the others.
     code:
       - spec-dashboard/src/NodeView.jsx
-      - spec-dashboard/src/styles.css
 ---
 # eval.md — eval-tab
 
@@ -46,3 +45,4 @@ screenshots that the DECLARED scenarios are visible — name, expected, tracked 
 only a hint to go measure them. The scenario scopes its freshness `code:` to the eval tab's own component
 (`NodeView.jsx`) and its stylesheet slice — the [[eval-tab]] read engine in `evaltab.ts` already
 ships the declared set on the board, so this measures only the surface that renders it.
+    related: [spec-dashboard/src/styles.css]

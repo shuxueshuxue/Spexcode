@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LiveTail, Quote, TranscriptView, elapsed, timeOf } from '@spexcode/transcript-ui'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
@@ -7,6 +7,10 @@ import { useIsMobile } from './useIsMobile.js'
 import { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
+import { ContextMenu, ContextMenuGroup, ContextMenuItem } from './ContextMenu.jsx'
+import SelectionAttachment from './SelectionAttachment.jsx'
+import { encodePrompt } from './codeSelection.js'
+import { useEscLayer } from './escStack.js'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
@@ -20,6 +24,14 @@ import { inboxCommands } from './sessionCommands.js'
 // neighbouring events; the row time itself is the transcript's (`timeOf`, @spexcode/transcript-ui).
 const dayOf = (ts) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
 const dayKey = (ts) => new Date(ts).toDateString()
+// A ROW KNOWS WHEN IT WAS SAID. A quoted passage is addressed by its session and the moment it was said
+// ([[code-selection]]'s timeline flavour), and a Range can only answer that by asking the row it landed in —
+// so every row carries its own normalised moment. Null for a row with no usable timestamp, which is what
+// makes the quote verb honestly unavailable there rather than silently inventing an address.
+const atOf = (ts) => {
+  const at = new Date(ts)
+  return Number.isFinite(at.getTime()) ? at.toISOString() : null
+}
 
 const transcriptCache = new Map()
 
@@ -166,7 +178,7 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 // and the paperclip, a pasted screenshot or a dropped file all go through the one resumable upload path
 // ([[file-attach]]) and leave the file's path in this draft. The only Command Box control this surface does
 // not carry is the terminal-only Alt+I opener, because this composer is already open.
-function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [] }) {
+function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [], quotes = [], onRemoveQuote }) {
   const t = useT()
   const readOnly = state !== 'live'
   // STOP IS IN THE COMPOSER, and only while there is something to stop: the square every chat reader knows,
@@ -197,7 +209,9 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
     if (!raw) return
     const board = boardCommandFor(raw, commands)
     if (board) { setDraft(''); grammar.close(); board.run?.(); return }
-    send(expandMentions(raw, specs))
+    // a quoted passage rides the SAME prompt as everything else ([[code-selection]]) — one ordinary message
+    // with its tokens appended, never a second field or a second route.
+    send(encodePrompt(expandMentions(raw, specs), quotes))
   }
   return (
     <ComposerSurface
@@ -205,7 +219,19 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
       className={`m-composer is-${state}${attach.dragging ? ' dragover' : ''}`}
       data-footer-state={state}
       {...attach.dropProps}
-      preview={(sendErr || sendNote) && <div className={sendErr ? 'm-senderr' : 'm-sendnote'}>{sendErr || sendNote}</div>}
+      preview={(quotes.length > 0 || sendErr || sendNote) && (
+        <>
+          {quotes.length > 0 && (
+            <div className="m-quote-queue" aria-label={t('session.quoteAttachments')}>
+              {quotes.map((quote, index) => (
+                <SelectionAttachment key={`${quote.at}:${index}`} selection={quote}
+                  onRemove={() => onRemoveQuote?.(index)} />
+              ))}
+            </div>
+          )}
+          {(sendErr || sendNote) && <div className={sendErr ? 'm-senderr' : 'm-sendnote'}>{sendErr || sendNote}</div>}
+        </>
+      )}
       editor={!readOnly && (
         <>
         <div className="m-composer-line fv-tawrap">
@@ -277,12 +303,24 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
 
 // `specs` feeds the `[[` door and send-time expansion; `boardCommands` are the host's board rows (`[ui]`,
 // run on the board) for the `/` palette — the phone host passes none and keeps presets + harness commands.
-export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
+// A MOUNTED CONVERSATION IS A NEIGHBOUR, NOT A CHILD OF WHOEVER IS TYPING. The console keeps several of these
+// mounted at once ([[session-console]]'s layers), and its own composers hold their draft text in the console's
+// state — so without this gate one keystroke in the New prompt or the Command Box re-rendered every mounted
+// timeline, and the cost of typing grew with how many sessions the reader had visited. Measured on this
+// project's board: 3.8ms per character with none mounted, 593ms with twenty. The props below are referentially
+// stable for a layer nobody is looking at, which is what makes the gate hold; the two that were not — a fresh
+// `[]` for `boardCommands` and an inline `onRestore` — are stabilised at the call site.
+function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
   const t = useT()
   const isMobile = useIsMobile()
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
+  // the passages the reader has quoted into this draft, and the open timeline menu ({x, y, at}); `at` is
+  // resolved when the menu OPENS, so an unaddressable passage shows the quote verb unavailable instead of
+  // producing a token that points nowhere.
+  const [quotes, setQuotes] = useState([])
+  const [menu, setMenu] = useState(null)
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [sendErr, setSendErr] = useState(null)
@@ -347,7 +385,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return () => clearInterval(iv)
   }, [ticking])
   useEffect(() => {
-    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true; setQuotes([]); setMenu(null)
   }, [s.id])
   useEffect(() => {
     if (!active) return undefined
@@ -583,6 +621,57 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     }
   }, [active, copyText])
 
+  // THE TIMELINE'S OWN MENU. The console suppresses the native menu nowhere by default ([[session-console]]),
+  // and the one sanctioned exception is a surface that has a menu to put in its place — which is true here
+  // only while a passage is actually selected. With nothing selected the press stays the browser's, so copy,
+  // search and inspect over ordinary conversation text are untouched. The timeline's selection is a painted
+  // Highlight rather than a document Selection, so the native menu could never have acted on it anyway; this
+  // is what gives that selection its verbs. A right-click does not retire the selection — `beginTimelineSelection`
+  // answers only to the primary button — so the menu opens on a passage that is still there.
+  const onTimelineContextMenu = (event) => {
+    const range = timelineRangeRef.current
+    if (!range || range.collapsed) return
+    event.preventDefault()
+    const start = range.startContainer
+    const host = start?.nodeType === 1 ? start : start?.parentElement
+    setMenu({ x: event.clientX, y: event.clientY + 4, at: host?.closest?.('[data-at]')?.getAttribute('data-at') || null })
+  }
+  const closeMenu = useCallback(() => setMenu(null), [])
+  useEscLayer(!!menu, closeMenu)
+  useEffect(() => {
+    if (!menu) return undefined
+    const onClick = () => closeMenu()
+    const onContext = () => closeMenu()
+    window.addEventListener('click', onClick)
+    window.addEventListener('contextmenu', onContext, true)
+    return () => {
+      window.removeEventListener('click', onClick)
+      window.removeEventListener('contextmenu', onContext, true)
+    }
+  }, [menu, closeMenu])
+
+  // COPY LEAVES, QUOTE STAYS. Copy hands the passage to the clipboard and the reader is on their own with it;
+  // quote hands it to the composer below as the ordinary attachment every other selection surface uses
+  // ([[selection-attachment]]), so the next thing typed is a reply the agent can read the referent of. It is
+  // the same verb prose dispatch already offers a spec passage — this surface just does not have to ask who
+  // receives it, because it is already standing in the session it is quoting.
+  const copySelection = () => {
+    const range = timelineRangeRef.current
+    if (range && !range.collapsed) copyText(richTextFromRange(range, scrollRef.current))
+    closeMenu()
+  }
+  const quoteSelection = () => {
+    const range = timelineRangeRef.current
+    const at = menu?.at
+    if (!range || range.collapsed || !at) { closeMenu(); return }
+    const text = richTextFromRange(range, scrollRef.current)
+    closeMenu()
+    if (!text) return
+    setQuotes((prev) => [...prev, { session: s.id, at, text }])
+    clearSelection()
+    inputRef.current?.focus()
+  }
+
   const prepareComposerPress = () => clearSelection()
 
   // `text` is the footer's composed message — the draft with its mentions already expanded
@@ -595,7 +684,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     // and any `@new` child receipt rides back as the mention summary, shown in the composer's own line.
     const r = await sendSessionCommand(s.id, text, { replyVia: 'note' })
     setSending(false)
-    if (r.ok) { setDraft(''); setSendNote(r.outcome?.mentionSummary || null); load() }
+    if (r.ok) { setDraft(''); setQuotes([]); setSendNote(r.outcome?.mentionSummary || null); load() }
     else setSendErr(r.outcome?.error || t('mobile.sendFailed'))
   }
 
@@ -639,7 +728,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   if (detail?.prompt) {
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
-      <div className="m-ev m-ev-prompt" key="prompt">
+      <div className="m-ev m-ev-prompt" key="prompt" data-at={atOf(promptTs)}>
         <Quote ts={promptTs} text={detail.prompt} />
         {promptTs ? gutter(promptTs) : <div className="m-gut" />}
       </div>,
@@ -649,7 +738,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     dayRow(item.ts, i)
     if (item.kind === 'quote') {
       rows.push(
-        <div className="m-ev m-ev-sent" key={i}>
+        <div className="m-ev m-ev-sent" key={i} data-at={atOf(item.ts)}>
           <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
           {gutter(item.ts)}
         </div>,
@@ -658,7 +747,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       // THE AGENT IS THE PAGE. What it reported is the body — no well, no rule, no indent — with one small
       // status chip above saying in what state it said it. The chip is the whole trace of the machine.
       rows.push(
-        <div className="m-ev m-ev-say" key={i}>
+        <div className="m-ev m-ev-say" key={i} data-at={atOf(item.ts)}>
           <div className="m-gut" />
           <article className="m-say">
             <div className="m-say-head">
@@ -678,7 +767,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     } else if (item.kind === 'event') {
       // An event is something that HAPPENED, not a phase that lasted: one line with its timestamp inline.
       rows.push(
-        <div className="m-ev m-ev-line" key={i}>
+        <div className="m-ev m-ev-line" key={i} data-at={atOf(item.ts)}>
           <div className="m-gut" />
           <div className="m-line">
             <time className="m-line-time">{timeOf(item.ts)}</time>
@@ -709,7 +798,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
       const calls = transcript?.state === 'ready'
         ? transcript.data.turns.reduce((n, turn) => n + (turn.tools?.length || 0), 0) : 0
       rows.push(
-        <div className="m-ev m-ev-seam" key={i}>
+        <div className="m-ev m-ev-seam" key={i} data-at={atOf(item.ts)}>
           <div className="m-gut" />
           <div className={`m-seam${collapsing ? ' is-folding' : ''}`}>
             <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
@@ -750,7 +839,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
-        onMouseDown={beginTimelineSelection}>
+        onMouseDown={beginTimelineSelection} onContextMenu={onTimelineContextMenu}>
         <div className="m-col" ref={timelineContentRef}>
           {events === null || holdingFirstPaint
             ? <div className="m-empty">{t('common.loading')}</div>
@@ -762,7 +851,16 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
           {t(`mobile.${copyStatus === 'copied' ? 'copied' : 'copyFailed'}`)}
         </div>
       )}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} anchorKey={`${menu.x}:${menu.y}`} label={t('mobile.selectionMenu')}>
+          <ContextMenuGroup>
+            <ContextMenuItem icon="copy" onClick={copySelection}>{t('mobile.copy')}</ContextMenuItem>
+            <ContextMenuItem icon="corner-up-left" disabled={!menu.at} onClick={quoteSelection}>{t('mobile.quote')}</ContextMenuItem>
+          </ContextMenuGroup>
+        </ContextMenu>
+      )}
       <TimelineFooter session={s} state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
+        quotes={quotes} onRemoveQuote={(index) => setQuotes((prev) => prev.filter((_, n) => n !== index))}
         sending={sending} send={send} sendErr={sendErr} sendNote={sendNote} onRestore={onRestore} actionOutcome={actionOutcome}
         onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
         specs={specs} sessions={sessions} boardCommands={boardCommands} />
@@ -770,3 +868,5 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     </DashboardTranscriptUi>
   )
 }
+
+export default memo(TimelineChat)

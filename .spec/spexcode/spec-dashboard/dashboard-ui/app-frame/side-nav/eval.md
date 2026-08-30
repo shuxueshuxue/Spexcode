@@ -12,7 +12,8 @@ scenarios:
       address navigation's deliberate asymmetry. The rail remains one 40px icon strip with no dock
       modebar duplicated beside it.
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Shell.jsx]
+    related: [spec-dashboard/src/styles.css]
   - name: rail-routes-pages
     tags: [frontend-e2e, desktop]
     description: >
@@ -32,7 +33,8 @@ scenarios:
       centered route targets stay 32px square. The legacy scoped projects hash performs one
       full-page redirect to `/projects`, where the global management page renders. Zero loss = the scoped
       rail, the URL, and the visible page never disagree while project management has one home.
-    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js]
+    related: [spec-dashboard/src/styles.css]
     test: spec-dashboard/test/identity-chain.e2e.mjs
   - name: spec-rail-resident-dock
     description: >-

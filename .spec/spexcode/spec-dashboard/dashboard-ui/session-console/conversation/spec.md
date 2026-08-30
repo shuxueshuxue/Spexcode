@@ -2,7 +2,7 @@
 title: conversation
 status: active
 hue: 280
-desc: The terminal-free session surface — one shared Conversation DOM for every existing session, with a footer whose data states cover live, offline, archived and retired; messages, seams and events on a time ruler rather than status rows; a floating composer that always replies via note; and a mount lifetime that survives deselection.
+desc: The terminal-free session surface — one shared Conversation DOM for every existing session, with a footer whose data states cover live, offline, archived and retired; messages, seams and events on a time ruler rather than status rows; a floating composer that always replies via note; and a bounded warm mount lifetime that survives deselection without growing without end.
 code:
   - spec-dashboard/src/TimelineChat.jsx
 related:
@@ -166,6 +166,39 @@ also cancels the browser's click-to-collapse, every press the timeline owns reti
 document Selection lying in the timeline (one the browser made on a fourth quick click, or on a drag begun on a
 control). No selection outlives the next click; a press outside selectable text still counts as the timeline's.
 
+**A SELECTED PASSAGE HAS VERBS, AND THE RIGHT-CLICK IS HOW YOU REACH THEM.** The console suppresses the
+native menu nowhere by default ([[session-console]]), and the one sanctioned exception is a surface that has
+a menu to put in its place — which is true here only while a passage is actually selected. With nothing
+selected the press stays the browser's, so copy, search and inspect over ordinary conversation text are
+untouched; the moment there IS a selection the timeline owns the press, because the timeline's selection is
+a painted Highlight rather than a document Selection and the native menu could never have acted on it
+anyway. This menu is what gives that selection its verbs. "No selection outlives the next click" is about
+the primary button — the press that begins a selection — so the passage is still there when the menu opens
+over it.
+
+**COPY LEAVES, QUOTE STAYS.** Copy hands the passage to the clipboard and the reader is on their own with
+it. Quote hands it to the composer directly below as the shared removable attachment every other selection
+surface uses ([[selection-attachment]]), and it rides out as one ordinary message with the ordinary
+[[code-selection]] token appended — never a second field, a second route, or a reply channel of its own. Its
+point is not decoration: the agent receives the passage verbatim in its own prompt, so "why this" has a
+referent it cannot mistake, which is the thing a reader loses in a long turn. It is the same verb
+[[prose-dispatch]] already offers a spec passage, minus the one part that surface needs and this one does
+not — an address to choose — because this composer already stands inside the session it is quoting.
+
+**This footer sends to its own session and nowhere else, and the `@` in a draft does not change that.** An
+`@` naming an existing session is a passive reference ([[mentions]]) — text, not a route; delivering to
+another running session stays the explicit `spex session send`, and handing a passage to one is
+[[prose-dispatch]]'s card, which is exactly why THAT surface needs an address control and this one does not.
+The single active token is `@new`, and it does not re-aim the message either: it spawns a CHILD under this
+session whose prompt carries the whole message, quote token included. That child is where the token's
+session field earns its keep — it is reading a passage out of a conversation that is not its own, and
+without the address it would have a quotation from nowhere.
+
+A quoted passage is addressed by the session and the MOMENT it was said, so every timeline row carries its
+own moment. A row that has no usable one cannot be addressed, and there the quote verb is visibly
+unavailable rather than producing a token that points nowhere. Accepted delivery clears the quotes with the
+draft; a refused one keeps both, because a passage the reader gathered is not the send's to discard.
+
 That conversation is the whole terminal-free console: the live tail is part of its open seam ([[message-stream]]),
 not a native-event drill-down beside it. 
 
@@ -238,7 +271,28 @@ pane-backed Conversation mounts only on its first visit, then remains mounted af
 so its timeline cursor, rendered history and last live tail survive revisits ([[message-stream]]); its refresh
 timer and transcript stream run only while selected.
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
-surfaces remain inert and make no timeline/detail reads or polling timers. 
+surfaces remain inert and make no timeline/detail reads or polling timers.
+
+**WARM IS A WORKING SET, NOT AN ARCHIVE.** That mount lifetime is bounded to the most recently shown
+Conversations and the selection is never the one given up ([[session-console]] owns the bound and the
+eviction). Visiting is not a claim on the document forever: an unbounded set meant one full rendered
+timeline per session ever opened — closed and archived records included — held until the tab was reloaded,
+which is a leak wearing the word "warm". An evicted Conversation is an ordinary unvisited one and re-reads
+its timeline when it is next selected; that one cold read is the whole price of the bound.
+
+**A MOUNTED CONVERSATION NOBODY IS LOOKING AT IS NEITHER RE-RENDERED NOR LAID OUT.** The console holds several of these beside
+each other and its own composers keep their draft text in the console's state, so an unguarded layer re-rendered
+its entire timeline on every character typed into the New prompt or the Command Box — the cost of typing grew
+with how many sessions had been visited, which is the one thing a warm layer must not do. The Conversation is
+therefore a memoised boundary, and every prop a hidden layer receives is referentially stable so that boundary
+can actually hold; a fresh empty list or an inline callback handed to an unshown layer is a defect, not a
+detail. The same rule holds one layer down, in the browser: an unshown Conversation has its CONTENTS SKIPPED,
+not merely painted invisible, because a subtree that is only `visibility: hidden` is still measured on every
+reflow — and the console's own composer forces one on every character it autosizes, so the price of typing was
+the whole warm set's rendered history, measured again per keystroke. Skipping preserves the layer's rendering
+state, which is the one thing keeping it mounted was for; hiding it by removal would throw away the scroll
+position and make the mount pointless. The terminal layer beside it keeps its layout deliberately — a warm pane
+owes xterm its final geometry ([[terminal-io]]) — and it was never what the reflow cost. 
 
 **The transcript grammar is bound, not owned.** The person quoted, the agent as the page, the tool sentence,
 the work fold and the live tail are `@spexcode/transcript-ui` ([[transcript-ui]], [[transcript-view]],

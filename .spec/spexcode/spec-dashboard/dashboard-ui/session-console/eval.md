@@ -385,6 +385,25 @@ scenarios:
       visible even when the offline zone itself is folded. On desktop, Alt+Shift+ArrowDown/ArrowUp
       expands/collapses the selected parent without moving the selected tab; on a leaf the chords are consumed
       as no-ops. No session record is deleted or mutated by any of it.
+  - name: typing-cost-is-independent-of-the-warm-set
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SessionInterface.jsx]
+    related: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/Composer.jsx]
+    description: >-
+      In a real browser on a real board, open the Sessions console and walk the session rows one at a time,
+      selecting each. After every few selections return to the New Session tab and measure what one character
+      costs in its composer: drive the real textarea through its own React onChange (set the value through the
+      native setter, dispatch a real `input` event) and time the dispatch, taking the median of ~25. Record
+      beside it how many `.si-term-layer` elements are mounted, the document's total node count, and the JS
+      heap. Take a CPU profile over a dozen keystrokes and read where the self time goes. The walk is the
+      measurement: a single reading proves nothing, because the defect is a slope.
+    expected: >-
+      The per-character cost is FLAT across the walk — the last reading is within noise of the first, and of an
+      empty console. Mounted layers stop growing at the console's warm-set bound rather than at the number of
+      sessions ever visited, so node count and heap settle instead of climbing until reload. The profile shows
+      no timeline render work (no transcript vocabulary or quote rendering) attributable to a keystroke in a
+      composer that belongs to no timeline. Zero loss = a reader who has worked through a whole board's
+      sessions types as fast as one who just opened the page.
   - name: headless-conversation-mount-is-bounded
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs
@@ -396,7 +415,10 @@ scenarios:
       Before selection, unvisited headless rows render no TimelineChat and issue no timeline/detail requests.
       Selecting one mounts exactly its conversation and performs its bounded reads; switching away stops its
       refresh timer without discarding the rendered history, and returning resumes from that history without a
-      duplicate mount storm. Live pane-backed terminals keep their existing warm sockets.
+      duplicate mount storm — for as long as it is inside the warm set, which holds the most recently shown
+      conversations and no more. Selecting past that bound gives up the least recently shown one, and returning
+      to THAT row is an ordinary first visit: one mount, its bounded reads, no storm. Live pane-backed terminals
+      keep their existing warm sockets and are not part of this bound.
   - name: corrupt-record-quarantine-context-control
     tags: [frontend-e2e, desktop, backend-api]
     description: >-

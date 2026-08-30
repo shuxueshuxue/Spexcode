@@ -51,6 +51,20 @@ import { useSessionListState } from './sessionListState.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
+// HOW MANY CONVERSATIONS STAY MOUNTED. A visited Conversation is kept warm so a revisit keeps its timeline
+// cursor and rendered history ([[conversation]]), but "visited" is not a bound: a reader working through a
+// day's board mounted one full timeline per session ever opened — closed and archived records included,
+// since a retained row is still a valid id — and never gave one back. Measured on this project's board:
+// thirteen visits took the document from 1,001 DOM nodes to 25,675 and the heap from 29MB to 97MB, and the
+// browser never reclaimed either until a reload. This is the same bound the workspace already puts on mounted
+// documents (`POOL_LIMIT`, [[workspace-shell]]) and it is set the same way — large enough that the sessions a
+// reader is actually moving between are all warm, small enough that an idle console is idle. Eviction is by
+// LEAST RECENTLY SHOWN, and the selection is never the victim.
+const CONVERSATION_LIMIT = 6
+// One frozen empty list, not a fresh `[]` per render: a hidden layer's props have to be referentially stable
+// or its memo gate (TimelineChat) can never hold, and a literal here was the one prop that broke it.
+const NO_BOARD_COMMANDS = []
+
 // @@@ a warm terminal belongs to a LIVE pane — a row must SAY it has one.
 // The archive index is a row summary, not a session record: it carries an id, a title and a closedAt and
 // no liveness, harness or capabilities at all. Asking `liveness !== 'offline'` read that ABSENCE as alive,
@@ -836,9 +850,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // the other half of the same rule: whatever has no live pane to show is shown as a Conversation, so
       // no selection can land on a session with neither layer mounted (a corrupt row's `unknown` liveness
       // used to fall through both when the terminal gate stopped naming dead states one by one).
+      // THE SET'S ORDER IS THE RECENCY ORDER. Re-adding the selection at the end is what the bound below reads
+      // to pick its victim, so eviction is least-recently-SHOWN rather than first-visited.
       if (selected && (!hasLivePane(selected) || isHeadlessSession(selected)
-        || conversationSurface)) next.add(selected.id)
-      if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
+        || conversationSurface)) { next.delete(selected.id); next.add(selected.id) }
+      while (next.size > CONVERSATION_LIMIT) {
+        const victim = [...next].find((id) => id !== active)
+        if (victim === undefined) break
+        next.delete(victim)
+      }
+      // order-sensitive, because a pure membership check would silently drop the recency move above and
+      // leave the bound evicting in visit order.
+      const held = [...prev]
+      if (next.size === held.length && [...next].every((id, i) => held[i] === id)) return prev
       return next
     })
   }, [sessionsWithRetention, active, conversationSurface, surfaceVersion])
@@ -1381,13 +1405,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         </div>
                       )}
                       {(headless || openedConversations.has(id)) && (
+                        // A WARM CONVERSATION IS NOT A LAID-OUT ONE. `visibility: hidden` keeps a subtree in the
+                        // layout tree, so every mounted timeline was measured again each time the console's own
+                        // composer autosized itself — one forced reflow per character, over every retained
+                        // session's rendered history. `content-visibility` skips the contents of what nobody is
+                        // looking at while KEEPING its rendering state (unlike `display: none`, which would
+                        // throw away the scroll position and the mount is here to preserve it), so the price of
+                        // typing stops depending on how much history is warm behind the composer: measured on
+                        // this project's board, 119ms per character down to 3.6ms, the same as an empty console.
+                        // The terminal layer beside it deliberately keeps its layout — [[terminal-io]]'s warm
+                        // pane owes xterm its final geometry, and terminals are not what the reflow was costing.
                         <div className="si-term-layer" style={{
                           position: 'absolute', inset: 0,
                           visibility: conversationShown ? 'visible' : 'hidden',
+                          contentVisibility: conversationShown ? 'visible' : 'hidden',
                           pointerEvents: conversationShown ? 'auto' : 'none',
                         }}>
                           <TimelineChat s={session} sessions={sessionsWithRetention} active={open && conversationShown}
-                            specs={specs} boardCommands={id === active ? conversationBoardRows : []}
+                            specs={specs} boardCommands={id === active ? conversationBoardRows : NO_BOARD_COMMANDS}
                             footerState={sessionFooterState(session)}
                             onRestore={id === active && session.status !== 'retired' ? resumeAndReturnToWorking : undefined}
                             actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />

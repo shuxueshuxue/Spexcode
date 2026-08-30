@@ -12,7 +12,8 @@ scenarios:
       (graph and sessions) are reachable and interactive (node click / pan-zoom responds) and the hash
       reads #/graph / #/sessions/… as they switch; the console shows no errors. Zero loss = the shell,
       its polled data layer, and the global styles all load and render.
-    code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
+    related: [spec-dashboard/src/styles.css]
   - name: board-unreachable-shows-retry
     tags: [frontend-e2e, desktop]
     description: >

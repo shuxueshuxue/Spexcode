@@ -40,8 +40,8 @@ The same gesture set works on **every** authored composer — the New Session pr
 - **Pick** a file from the small attach affordance beside the box.
 
 An offline or archived session takes none of these — its Command Box does not open and its Conversation
-composer, paperclip included, is disabled — because there is no live machine to carry a file to until it
-relaunches.
+composer controls, paperclip included, are omitted — because there is no live machine to carry a file to until
+it relaunches.
 
 ## the path is the whole handoff
 

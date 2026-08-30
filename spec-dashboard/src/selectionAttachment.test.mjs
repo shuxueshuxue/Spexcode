@@ -5,13 +5,20 @@ import { readFileSync } from 'node:fs'
 const attachment = readFileSync(new URL('./SelectionAttachment.jsx', import.meta.url), 'utf8')
 const prose = readFileSync(new URL('./ProseActions.jsx', import.meta.url), 'utf8')
 const sessions = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const timeline = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
-test('source selection uses one removable attachment producer in both composer homes', () => {
+test('every selection home uses one removable attachment producer', () => {
   assert.match(attachment, /export default function SelectionAttachment\(/)
   assert.match(attachment, /className=\{`selection-attachment/)
-  assert.match(attachment, /Icon name="file-diff"/)
+  // the mark follows the flavour and BOTH live in this one component: a diff mark for a passage that lives
+  // in a file, the reply mark for one quoted out of a conversation. Neither producer may pick its own.
+  assert.match(attachment, /'corner-up-left' : 'file-diff'/)
+  assert.doesNotMatch(prose, /file-diff/)
+  assert.doesNotMatch(timeline, /file-diff|corner-up-left'\s*,\s*size/)
   assert.match(attachment, /selection-attachment-remove/)
+  assert.match(timeline, /import SelectionAttachment from ['"]\.\/SelectionAttachment\.jsx['"]/)
+  assert.match(timeline, /<SelectionAttachment key=\{`\$\{quote\.at\}/)
   assert.match(prose, /import SelectionAttachment from ['"]\.\/SelectionAttachment\.jsx['"]/)
   assert.match(prose, /<SelectionAttachment selection=\{selection\} onRemove=\{onRemove\}/)
   assert.match(prose, /onRemove=\{clear\}/)

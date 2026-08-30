@@ -28,7 +28,8 @@ scenarios:
       During the in-flight `/content` fetch the pane shows a centred spinner; after it resolves the spinner is
       gone and the two-part (or whole) body renders; the console is clean. A failed fetch would resolve to an
       empty body, never a spinner that never stops.
-    code: [spec-dashboard/src/NodeView.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/NodeView.jsx]
+    related: [spec-dashboard/src/styles.css]
   - name: eval-history-off-the-board
     tags: [frontend-e2e, backend-api]
     description: >

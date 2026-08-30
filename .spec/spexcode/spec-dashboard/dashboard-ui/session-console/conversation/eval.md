@@ -1,5 +1,49 @@
 ---
 scenarios:
+  - name: a-selected-passage-can-be-copied-or-quoted
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    related: [spec-dashboard/src/codeSelection.js, spec-dashboard/src/SelectionAttachment.jsx]
+    description: >-
+      In a real browser open a live session's Conversation and drag-select a passage of an agent note. Right-click
+      inside it and read what opens. Pick the quote verb and read the composer: what the attachment LEADS with, whether
+      it can be removed, where focus went, and whether the timeline selection was retired. Then type a message and
+      send it with the input POST intercepted and ABORTED — read the wire payload rather than delivering anything
+      to a live agent, and read whether the attachment survives that refusal. Finally right-click over ordinary
+      conversation text with NOTHING selected.
+    expected: >-
+      The right-click over a selection opens the timeline's own menu with exactly two verbs, copy and quote, and
+      the selection is still there under it. Quote puts one shared selection attachment in the composer's preview
+      slot leading with the passage's OWN opening words — not the session, which names only the room the reader
+      is already standing in — followed by the moment it was said, removable, with the full passage as its
+      title and the session recoverable from the token; the timeline selection is retired and focus lands in the composer. The wire payload is ONE ordinary
+      message — the same input kind and note-reply mark every other send uses — with the passage appended as the
+      shared selection token carrying session, moment and verbatim text; no second field and no second route. A
+      refused send keeps the attachment. With nothing selected the press stays the browser's and no menu of ours
+      opens. Zero loss = the reader challenges one sentence out of a long turn and the agent cannot mistake which.
+  - name: an-unshown-conversation-is-neither-re-rendered-nor-laid-out
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    related: [spec-dashboard/src/SessionInterface.jsx]
+    description: >-
+      In a real browser fill the console's warm set — visit enough sessions that several Conversations are
+      mounted and unshown, since two of them hold too little for any of this to be visible — then ask three
+      questions. RENDER: take a CPU profile over a dozen characters typed into a composer that belongs to no
+      timeline (the New prompt) and read whether any transcript render work appears in it at all. LAYOUT: with
+      that warm set full, measure the per-character cost as shipped, then force the unshown layers' contents
+      back into the layout tree and measure again, then restore — an A/B with its own control, because Chrome
+      reports REMEMBERED geometry for skipped contents, so a descendant's box proves nothing and the cost of
+      the reflow is the only honest observable. STATE: scroll a Conversation into its history, note the
+      offset, leave to another session and come back WITHOUT overflowing the warm set, and read the offset
+      again — leave far enough to evict it and you are measuring a first visit, which pins to the tail and
+      says nothing about whether skipping preserves state.
+    expected: >-
+      The profile names no transcript render work — no timeline vocabulary, no quote rendering — because a
+      layer nobody is looking at is not re-rendered by a neighbour's keystroke. Forcing the unshown layers'
+      contents back into layout moves the per-character cost by an order of magnitude and restoring returns
+      it: contained, the cost matches an empty console; uncontained, it matches the warm set's whole rendered
+      history being measured again per keystroke. The returned-to Conversation is at the exact offset it was
+      left at — skipping is not discarding, and keeping the mount is pointless if it loses the reader's place.
   - name: one-conversation-dom-for-live-offline-and-archived
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

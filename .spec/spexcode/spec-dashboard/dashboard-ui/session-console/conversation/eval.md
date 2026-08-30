@@ -13,7 +13,9 @@ scenarios:
       back into the layout tree and measure again, then restore — an A/B with its own control, because Chrome
       reports REMEMBERED geometry for skipped contents, so a descendant's box proves nothing and the cost of
       the reflow is the only honest observable. STATE: scroll a Conversation into its history, note the
-      offset, leave to another session, come back, and read the offset again.
+      offset, leave to another session and come back WITHOUT overflowing the warm set, and read the offset
+      again — leave far enough to evict it and you are measuring a first visit, which pins to the tail and
+      says nothing about whether skipping preserves state.
     expected: >-
       The profile names no transcript render work — no timeline vocabulary, no quote rendering — because a
       layer nobody is looking at is not re-rendered by a neighbour's keystroke. Forcing the unshown layers'

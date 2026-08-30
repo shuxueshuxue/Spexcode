@@ -4,6 +4,10 @@ import { createResilientSocket } from './resilientSocket.js'
 import { apiUrl } from './project.js'
 import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.js'
 import { useT } from './i18n/index.jsx'
+import { useBoard } from './workspace.jsx'
+import { MENTION_RE } from './mentions.jsx'
+import { navigate, routeHash } from './route.js'
+import { newTabAnchor } from './tabs.js'
 
 export { isTerminalPointerReport, isTerminalFocusReport, stripTerminalFocusReports, stripTerminalButtonReports, stripTerminalPointerReports }
 
@@ -34,9 +38,35 @@ function dashboardTransport() {
   }
 }
 
+// THE PANE'S BINDING of the one `[[node]]` grammar ([[mentions]]). The transcript already turns a
+// reference an agent wrote into a document anchor; the live pane is the same session read raw, so the
+// same reference must be the same door there — the pane is a fallback view, never a weaker one.
+//
+// It is a screen read, so it is deliberately narrow: only an id that resolves to a node ON THIS BOARD
+// becomes a link. A `[[...]]` inside a diff, a code block, or a quoted prompt therefore stays plain text
+// unless it names something real, which is the same rule `expandMentions` and `matchSpecs` already keep.
+export const findSpecLinks = (specs) => (line) => {
+  const hits = []
+  for (const match of line.matchAll(MENTION_RE)) {
+    if (!specs.some((node) => node.id === match[1])) continue
+    hits.push({ start: match.index, end: match.index + match[0].length, text: match[1] })
+  }
+  return hits
+}
+
 export default function SessionTerm({ sessionId, active = true, focused = active, writable = true, resumeRequired = false, focusRequest = 0 }) {
   const t = useT()
+  const { specs = [] } = useBoard()
+  // Same navigation contract as the transcript's anchors: an ordinary activation lands in the resident
+  // Spec tab, a hold gesture opens a second document ([[tab-strip]]).
+  const openNode = (id, event) => {
+    const href = routeHash('spec', id)
+    if (newTabAnchor(event, href)) return
+    navigate('spec', id)
+  }
   return <SessionTerminal
+    findLinks={findSpecLinks(specs)}
+    onOpenLink={openNode}
     sessionId={sessionId}
     transport={dashboardTransport()}
     active={active}

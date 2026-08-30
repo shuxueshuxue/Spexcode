@@ -1390,7 +1390,7 @@ if (cmd === 'serve') {
     // (codex loads that worktree's config/hooks/AGENTS.md), fire the launch prompt as the FIRST turn —
     // materializing the rollout — then stage the id + exact-payload proof for the session lifecycle owner and
     // print the thread id. The launch script then `resume`s it in the visible TUI.
-    const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust, codexLauncherThreadPolicy } = await import('./harness.js')
+    const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust, codexLauncherThreadPolicy } = await import('./codex-harness.js')
     const { existingHarnessLaunchTarget, stageHarnessLaunchProof } = await import('./sessions.js')
     const sock = process.argv[4], cwd = process.argv[5]
     const prompt = process.argv.slice(6).join(' ')
@@ -1479,7 +1479,7 @@ if (cmd === 'serve') {
   } else if (sub === 'codex-turn') {
     // fire a follow-up turn on an OWNED thread over the per-project socket (the delivery channel, exposed for
     // tests / scripts). steer-vs-start is chosen live from the thread read.
-    const { codexTurn } = await import('./harness.js')
+    const { codexTurn } = await import('./codex-harness.js')
     const sock = process.argv[4], tid = process.argv[5], text = process.argv.slice(6).join(' ')
     if (!sock || !tid || !text) { console.error('usage: spex internal codex-turn <sock> <threadId> <text...>'); process.exit(2) }
     const r = await codexTurn(sock, tid, text)
@@ -1488,7 +1488,7 @@ if (cmd === 'serve') {
     // A headless resume reloads its evicted thread into the shared app-server (thread/resume, no turn), so
     // readiness — which proves online only for a RESIDENT thread — can see it. The visible TUI does this
     // implicitly by attaching; headless has no TUI, so its launch.sh resume branch calls this.
-    const { codexReopenThread } = await import('./harness.js')
+    const { codexReopenThread } = await import('./codex-harness.js')
     const sock = process.argv[4], tid = process.argv[5]
     if (!sock || !tid) { console.error('usage: spex internal codex-reopen <sock> <threadId>'); process.exit(2) }
     const r = await codexReopenThread(sock, tid)

@@ -1,4 +1,4 @@
-import { codexLaunchCommand } from './harness.js'
+import { codexLaunchCommand } from './codex-harness.js'
 
 // Codex headless keeps the existing app-server bootstrap and backend-owned thread/start + first turn, but
 // deliberately omits the final interactive `--remote … resume` attach. The shared app-server remains the

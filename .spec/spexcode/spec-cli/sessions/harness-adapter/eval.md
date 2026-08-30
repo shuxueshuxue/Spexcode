@@ -90,7 +90,7 @@ scenarios:
     code:
       - spec-cli/src/harness.ts#recordOnline
       - spec-cli/src/harness.ts#claudeHeadlessHarness
-      - spec-cli/src/harness.ts#codexHeadlessHarness
+      - spec-cli/src/codex-harness.ts#codexHeadlessHarness
       - spec-cli/src/harness.ts#piHeadlessHarness
       - spec-cli/src/harness.ts#opencodeHeadlessHarness
       - spec-cli/src/sessions.ts
@@ -108,8 +108,8 @@ scenarios:
     tags: [backend-api, cli]
     code:
       - spec-cli/src/harness.ts#unlinkSocks
-      - spec-cli/src/harness.ts#listenerAt
-      - spec-cli/src/harness.ts#PROVEN_DEAD
+      - spec-cli/src/harness-shim.ts#listenerAt
+      - spec-cli/src/harness-shim.ts#PROVEN_DEAD
       - spec-cli/src/harness.ts#rendezvousListening
       - spec-cli/src/harness.ts#stampRvSock
       - spec-cli/src/sessions.ts
@@ -151,7 +151,7 @@ scenarios:
     tags: [backend-api, cli]
     code:
       - spec-cli/src/harness.ts#reportHeadlessTurnExit
-      - spec-cli/src/harness.ts#headlessTurnFailureShell
+      - spec-cli/src/harness-shim.ts#headlessTurnFailureShell
     description: >-
       Through real `spex session new` launches, give each registered headless adapter a controlled harness
       command whose turn process exits non-zero without calling a lifecycle declaration. Read the session only
@@ -165,7 +165,7 @@ scenarios:
   - name: codex-turn-completed-failure
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#codexTurnFailureObserver
+      - spec-cli/src/codex-harness.ts#codexTurnFailureObserver
       - spec-cli/src/sessions.ts#superviseTurnFailures
       - spec-cli/src/sessions.ts#markTurnFailure
     description: >-
@@ -263,12 +263,12 @@ scenarios:
       prior conversation is present and `harness_session_id` is unchanged — the SAME conversation, matching
       claude's `--resume`, not a fresh thread.
     code:
-      - spec-cli/src/harness.ts#sendCodexAppServerTurn
-      - spec-cli/src/harness.ts#deliverViaCodexAppServer
-      - spec-cli/src/harness.ts#activeTurnIdFromThread
-      - spec-cli/src/harness.ts#codexInjectMessage
-      - spec-cli/src/harness.ts#codexHandshakeMessages
-      - spec-cli/src/harness.ts#codexHarness
+      - spec-cli/src/codex-harness.ts#sendCodexAppServerTurn
+      - spec-cli/src/codex-harness.ts#deliverViaCodexAppServer
+      - spec-cli/src/codex-harness.ts#activeTurnIdFromThread
+      - spec-cli/src/codex-harness.ts#codexInjectMessage
+      - spec-cli/src/codex-harness.ts#codexHandshakeMessages
+      - spec-cli/src/codex-harness.ts#codexHarness
   - name: claude-delivery-survives-probe-race
     tags: [backend-api]
     description: >-
@@ -348,10 +348,10 @@ scenarios:
       a supervisor could wrongly reopen/kill them. Both are measurable only through a real launch (a synthetic
       pane hides the wrapper-shell tree shape).
     code:
-      - spec-cli/src/harness.ts#paneTreeRuns
-      - spec-cli/src/harness.ts#paneTreeRunsCodex
-      - spec-cli/src/harness.ts#CODEXISH
-      - spec-cli/src/harness.ts#procSnapshot
+      - spec-cli/src/harness-shim.ts#paneTreeRuns
+      - spec-cli/src/codex-harness.ts#paneTreeRunsCodex
+      - spec-cli/src/codex-harness.ts#CODEXISH
+      - spec-cli/src/harness-shim.ts#procSnapshot
   - name: codex-app-server-sock-binds-on-hardened-tmp
     tags: [backend-api]
     description: >-
@@ -370,7 +370,7 @@ scenarios:
       codex binds fine in any OWNED subdirectory (the control), so the fix belongs to the path derivation, not
       the host.
     code:
-      - spec-cli/src/harness.ts#codexAppServerSock
+      - spec-cli/src/codex-harness.ts#codexAppServerSock
   - name: session-stamp-unmatched-thread-id-is-clean-noop
     tags: [backend-api]
     code: spec-cli/templates/hooks/prepare-commit-msg
@@ -419,9 +419,9 @@ scenarios:
   - name: codex-app-server-carries-no-session-identity
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#sessionIdentityEnvVars
-      - spec-cli/src/harness.ts#codexLaunchCommand
-      - spec-cli/src/harness.ts#codexStartThreadParams
+      - spec-cli/src/harness-shim.ts#sessionIdentityEnvVars
+      - spec-cli/src/codex-harness.ts#codexLaunchCommand
+      - spec-cli/src/codex-harness.ts#codexStartThreadParams
     description: >-
       Run the REAL generated codex launch script verbatim under a launcher environment that carries a
       session's identity (SPEXCODE_SESSION_ID plus adapter session vars, as every launch.sh really does),
@@ -441,7 +441,7 @@ scenarios:
       session ended up on other sessions' commits (github#76).
   - name: codex-launcher-policy-reaches-backend-thread
     tags: [backend-api, cli]
-    code: spec-cli/src/harness.ts#codexStartThreadParams
+    code: spec-cli/src/codex-harness.ts#codexStartThreadParams
     related: spec-cli/src/cli.ts
     description: >-
       Through the REAL dashboard/app-server launch path, configure a Codex launcher whose pinned command is
@@ -481,16 +481,16 @@ scenarios:
       regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
       reading runtime.json + the commit trailer.
     code:
-      - spec-cli/src/harness.ts#writeCodexTrust
-      - spec-cli/src/harness.ts#codexHookHash
-      - spec-cli/src/harness.ts#stripCodexTrustFor
-      - spec-cli/src/harness.ts#buildShim
+      - spec-cli/src/codex-harness.ts#writeCodexTrust
+      - spec-cli/src/codex-harness.ts#codexHookHash
+      - spec-cli/src/codex-harness.ts#stripCodexTrustFor
+      - spec-cli/src/harness-shim.ts#buildShim
   - name: codex-launch-ignores-future-dated-rollout-dirs
     tags: [backend-api]
     code:
-      - spec-cli/src/harness.ts#codexRolloutExists
+      - spec-cli/src/codex-harness.ts#codexRolloutExists
       - packages/transcript/src/readers.ts#codexRolloutPath
-      - spec-cli/src/harness.ts#waitForCodexRollout
+      - spec-cli/src/codex-harness.ts#waitForCodexRollout
     test:
       path: spec-cli/src/harness.test.ts
       name: codexRolloutExists is immune to future-dated junk day-dirs above the real rollout
@@ -509,9 +509,9 @@ scenarios:
   - name: cold-retirement-cost-does-not-scale-with-transcript
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#codexThreadCollection
-      - spec-cli/src/harness.ts#codexColdPreflightOnce
-      - spec-cli/src/harness.ts#codexTargetMutationGuard
+      - spec-cli/src/codex-harness.ts#codexThreadCollection
+      - spec-cli/src/codex-harness.ts#codexColdPreflightOnce
+      - spec-cli/src/codex-harness.ts#codexTargetMutationGuard
     test:
       path: spec-cli/src/harness.test.ts
       name: Codex cold proof reads turn presence from the collection census it already performs
@@ -531,8 +531,8 @@ scenarios:
   - name: codex-rollout-tail-settles-unknown-cold-member
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#codexColdPreflightOnce
-      - spec-cli/src/harness.ts#codexRolloutTurnSettlement
+      - spec-cli/src/codex-harness.ts#codexColdPreflightOnce
+      - spec-cli/src/codex-harness.ts#codexRolloutTurnSettlement
     related: spec-cli/src/session-close-active.api.test.ts
     test:
       path: spec-cli/src/session-close-active.api.test.ts

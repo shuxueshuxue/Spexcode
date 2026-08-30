@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
-import { codexHarness, codexHeadlessHarness, HARNESSES } from './harness.js'
+import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
+import { HARNESSES } from './harness.js'
 
 test('codex-headless composes Codex materialization and shared-runtime ownership without a TUI attach', () => {
   assert.deepEqual(HARNESSES.map((h) => h.id), [

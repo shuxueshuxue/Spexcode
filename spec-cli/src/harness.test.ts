@@ -5,13 +5,22 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, HARNESSES, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { assertRvSockPath, HARNESSES, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, codexHeadlessHarness, codexLaunchCommand, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeCodexTrust } from './codex-harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
+
+test('Codex implementation is outside the registry interface file', () => {
+  const lines = readFileSync(new URL('./harness.ts', import.meta.url), 'utf8').split('\n')
+  const mentions = lines.filter((line) => /codex/i.test(line))
+  const allowed = lines.filter((line) => /^\s*import\b/.test(line) || /HARNESSES:/.test(line))
+    .filter((line) => /codex/i.test(line))
+  assert.deepEqual(mentions, allowed)
+})
 
 test('Codex observer subscription budget covers measured slow native resume', () => {
   assert.ok(CODEX_TURN_OBSERVER_SUBSCRIBE_MS >= 30_000)

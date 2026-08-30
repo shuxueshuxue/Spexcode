@@ -27,7 +27,7 @@ scenarios:
     code:
       - spec-dashboard/src/FileTree.jsx
       - spec-dashboard/src/Shell.jsx
-      - spec-dashboard/src/styles.css
+    related: [spec-dashboard/src/styles.css]
   - name: the-tree-opens-the-branch-the-address-names-and-remembers-it
     tags: [frontend-e2e, desktop]
     description: >-

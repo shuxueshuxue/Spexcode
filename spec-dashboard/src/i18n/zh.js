@@ -215,7 +215,7 @@ export default {
     opFail: '{op}：exit {code} — 失败',
     actionFailed: 'gateway 拒绝了该请求',
     removeRegistration: '移除项目登记',
-    removeRegistrationHint: '只移除 SpexCode 目录，不删除本地源码',
+    removeRegistrationHint: '只移除项目登记，不删除本地源码',
     removeTitle: '移除项目登记？',
     removeWarning: '这是一个需要停下来确认的操作。项目会从 SpexCode 项目目录中移除。',
     removeKeepsFiles: '本地项目目录、Git 历史和源码不会被删除。磁盘删除不属于这个操作。',

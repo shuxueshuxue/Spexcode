@@ -4,9 +4,7 @@ import { join, dirname, basename } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
-import { execFile, execFileSync } from 'node:child_process'
-import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
+import { execFileSync } from 'node:child_process'
 import { claudeSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
@@ -22,7 +20,7 @@ import { writeFileIfChanged } from './file-write.js'
 import { claudeTranscript, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from '@spexcode/transcript'
 import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
-import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact } from './harness-shim.js'
+import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact, pexec, SPEX } from './harness-shim.js'
 import type { ListenerProbe } from './harness-shim.js'
 export { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact } from './harness-shim.js'
 export type { ListenerProbe } from './harness-shim.js'
@@ -496,10 +494,6 @@ const rendezvousDeliveryTransport = (rec: HarnessDeliveryRecord): Promise<Delive
 // the launch shell can call back into `spex agent-launch` to own the thread + fire the first turn before it
 // exec's the visible TUI. The launcher, never a raw source entry: it runs the compiled CLI and keeps the
 // source-workspace mid-merge guard (conflicted source -> one line + exit 75, not a stacktrace).
-const PKG = fileURLToPath(new URL('..', import.meta.url))
-const SPEX = join(PKG, 'bin', 'spex.mjs')
-const pexec = promisify(execFile)
-
 // The timeline is the message's copy, so rendezvous needs no receipt protocol. It writes one idempotent poke
 // carrying the timeline mid and reports only whether that write reached the local transport.
 type ClaudeForkTransport = { sock: string; auth: string }

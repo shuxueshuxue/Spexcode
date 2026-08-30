@@ -5,7 +5,6 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
 import { parse as parseToml } from 'smol-toml'
 import { codexSlashCommands } from './slash-commands.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome, git, harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
@@ -18,10 +17,7 @@ import { writeFileIfChanged } from './file-write.js'
 import type { Harness, HarnessLivenessRecord, HarnessDeliveryRecord, HarnessLaunchReadyRecord, SharedRuntimeDescriptor, SharedRuntimeMutationGuard, SharedRuntimeProbe, HarnessOrphanThreadQuarantine, DispatchResult, PaneProbe, ProcTable, HarnessArtifacts, TurnFailure, FailureSubscription } from './harness.js'
 
 
-import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact } from './harness-shim.js'
-
-const CODEX_PKG = fileURLToPath(new URL('..', import.meta.url))
-const CODEX_SPEX = join(CODEX_PKG, 'bin', 'spex.mjs')
+import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact, SPEX } from './harness-shim.js'
 
 const CODEXISH = /^(codex|node)/i
 export function paneTreeRunsCodex(pane?: PaneProbe): boolean { return paneTreeRuns(pane, CODEXISH) }
@@ -245,9 +241,9 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // root: after a host restart the bound generation is a corpse, and resume rebuilds one to load the same
     // on-disk rollout. It prints only shell assignments for the exact proven endpoint.
     'if [ "$1" = "--resume" ]; then',
-    `  eval "$( ${CODEX_SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" ${shQuote(server)} )" || exit 1`,
+    `  eval "$( ${SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" ${shQuote(server)} )" || exit 1`,
     'else',
-    `  eval "$( ${CODEX_SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`,
+  `  eval "$( ${SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`,
     'fi',
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
@@ -265,14 +261,14 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
       // loaded set, and headless readiness proves online only for a RESIDENT thread, so resume must reopen it
       // here — the load the visible TUI's `resume "$tid"` would have done — or readiness times out for a thread
       // that is fine on disk. codex-generation-session above already ensured the app-server, so `$sock` is live.
-      `  ${CODEX_SPEX} internal codex-reopen "$sock" "$tid" || exit 1`,
+      `  ${SPEX} internal codex-reopen "$sock" "$tid" || exit 1`,
       // A headless forced reopen with NO thread id and no prompt has nothing to attach and nothing to launch.
       // Keep it a no-op instead of calling codex-launch without a prompt (which would mint an unrelated thread).
       `elif [ "$#" -eq 0 ]; then`,
       `  exit 0`,
     ]),
     `else`,
-    `  tid=$(${CODEX_SPEX} internal codex-launch "$sock" "$PWD" "$@")`,
+    `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@")`,
     `  __spex_rc=$?`,
     ...(attachTui ? [`  [ "$__spex_rc" -eq 0 ] || exit 1`] : [
       `  if [ "$__spex_rc" -ne 0 ]; then ${headlessTurnFailureShell('codex-headless')}; exit "$__spex_rc"; fi`,

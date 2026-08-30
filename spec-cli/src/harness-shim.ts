@@ -9,9 +9,9 @@ import { shQuote } from './sh.js'
 import { writeFileIfChanged } from './file-write.js'
 import type { Harness, HarnessArtifacts, PaneProbe, ProcTable } from './harness.js'
 
-const PKG = fileURLToPath(new URL('..', import.meta.url))
-const SPEX = join(PKG, 'bin', 'spex.mjs')
-const pexec = promisify(execFile)
+export const PKG = fileURLToPath(new URL('..', import.meta.url))
+export const SPEX = join(PKG, 'bin', 'spex.mjs')
+export const pexec = promisify(execFile)
 
 export type ListenerProbe = 'live' | 'dead' | 'unproven'
 const PROVEN_DEAD = new Set(['ECONNREFUSED', 'ENOENT'])

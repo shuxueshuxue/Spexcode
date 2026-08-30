@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
@@ -22,11 +22,20 @@ test('Codex implementation is outside the registry interface file', () => {
   assert.deepEqual(mentions, allowed)
 })
 
-test('harness interface and Codex implementation do not duplicate top-level declarations', () => {
-  const declarations = (file: string) => [...readFileSync(new URL(`./${file}`, import.meta.url), 'utf8').matchAll(/^(?:export\s+)?(?:const|function|class|type|interface)\s+([A-Za-z_$][\w$]*)/gm)].map((match) => match[1])
-  const interfaceNames = new Set(declarations('harness.ts'))
-  const duplicates = declarations('codex-harness.ts').filter((name) => interfaceNames.has(name))
-  assert.deepEqual(duplicates, [])
+test('harness modules do not duplicate top-level declarations', () => {
+  const sourceFiles = readdirSync(new URL('.', import.meta.url), { withFileTypes: true })
+    .filter(({ name }) => /^harness(?:-[\w-]+)?\.ts$/.test(name) || name === 'codex-harness.ts')
+    .map(({ name }) => name)
+  const declarations = (file: string) => [...readFileSync(new URL(`./${file}`, import.meta.url), 'utf8').matchAll(/^(?:export\s+)?(?:const|let|function|class|type|interface)\s+([A-Za-z_$][\w$]*)/gm)].map((match) => match[1])
+  const byFile = sourceFiles.map((file) => [file, new Set(declarations(file))] as const)
+  for (let i = 0; i < byFile.length; i++) {
+    for (let j = i + 1; j < byFile.length; j++) {
+      const [leftFile, left] = byFile[i]
+      const [rightFile, right] = byFile[j]
+      const duplicates = [...left].filter((name) => right.has(name))
+      assert.deepEqual(duplicates, [], `${leftFile} and ${rightFile} duplicate top-level declarations`)
+    }
+  }
 })
 
 test('Codex observer subscription budget covers measured slow native resume', () => {

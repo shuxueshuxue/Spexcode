@@ -9,10 +9,11 @@ scenarios:
       visible bubble in each theme.
     expected: >
       Both presets show the app-drawn .ui-tip bubble, never the browser-default title box: Minimal
-      renders the graphite palette (panel-family background, light ink, hairline border), Things the
-      white palette (paper-family background, dark ink) — background, text, border, and shadow all
-      legible in both. Zero loss = one tooltip, correctly skinned per preset, purely from the CSS
-      variables.
+      renders the graphite palette (light ink, hairline border), Things the white palette (dark ink) —
+      background, text, border, and shadow all legible in both. In each preset the bubble's background is
+      that preset's resolved `--raised`, because a tooltip is a thing that has left the plane and every
+      such surface is painted the one rung above it ([[typography]]); it does not carry a chip tone of its
+      own. Zero loss = one tooltip, correctly skinned per preset, purely from the CSS variables.
     code: [spec-dashboard/src/Tooltip.jsx, spec-dashboard/src/styles.css]
   - name: hover-delay-and-edge-flip
     tags: [frontend-e2e, desktop]

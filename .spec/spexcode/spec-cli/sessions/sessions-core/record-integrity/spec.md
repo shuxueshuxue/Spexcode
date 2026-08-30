@@ -35,6 +35,13 @@ land through the canonical application, and a note round-trips byte-for-byte on 
 call that package entry point for every event; it compares canonical state and emits no event for a semantic
 no-op. They do not inspect or write JSON lifecycle fields ([[state]]).
 
+The record module receives its legacy lifecycle notification and transition-serialization hooks from
+`sessions.ts` through explicit setters. Their initial values are an inert notifier and a pass-through wrapper so
+record-only readers and error-type consumers can import this module without constructing the session runtime;
+all mutation paths in `sessions.ts` install the real hooks before they can write or quarantine a record. An
+unwired mutation caller is outside the supported composition boundary rather than a second notification or
+transition implementation.
+
 A published create record is also the durable fence for any private pre-publication candidate receipt whose
 best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and
 the exact recorded branch/path resource lock, retires a valid matching receipt, and proves it absent before

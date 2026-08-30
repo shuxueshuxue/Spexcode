@@ -8,6 +8,7 @@
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
+//   POST /projects/:id/harnesses           add one validated harness target and materialize it
 //   DELETE /projects/:id                  remove catalog registration only (never the checkout); the
 //                                         server requires an exact `REMOVE <project title>` confirmation
 //   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
@@ -256,6 +257,36 @@ export async function saveProjectConfig(id, content, revision) {
   if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
   if (typeof data?.content !== 'string' || typeof data?.revision !== 'string') return { ok: false, error: 'unexpected answer' }
   return { ok: true, content: data.content, revision: data.revision }
+}
+
+// Add one delivery target through the host's structured admin seam. The revision is required so a session
+// page cannot overwrite a concurrent config edit; the host also returns the launcher it created (if any).
+export async function addProjectHarnessTarget(id, target, revision) {
+  let res
+  try {
+    res = await fetch(`/projects/${encodeURIComponent(id)}/harnesses`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ target, revision }),
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) {
+    const state = data && typeof data === 'object' ? {
+      ...(typeof data.content === 'string' ? { content: data.content } : {}),
+      ...(typeof data.revision === 'string' ? { revision: data.revision } : {}),
+      ...(Array.isArray(data.harnesses) ? { harnesses: data.harnesses } : {}),
+      ...(data.target !== undefined ? { target: data.target } : {}),
+      ...(data.launcher && typeof data.launcher === 'object' ? { launcher: data.launcher } : {}),
+      ...(data.materialize && typeof data.materialize === 'object'
+        ? { code: data.materialize.code ?? null, output: String(data.materialize.output ?? '') }
+        : {}),
+    } : {}
+    return { ok: false, status: res.status, error: data?.error || `http-${res.status}`, ...state }
+  }
+  if (!data || data.ok !== true || typeof data.revision !== 'string' || typeof data.content !== 'string') {
+    return { ok: false, error: 'unexpected answer' }
+  }
+  return { ok: true, ...data }
 }
 
 async function saveIcon(url, icon, revision) {

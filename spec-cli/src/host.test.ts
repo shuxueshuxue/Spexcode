@@ -146,26 +146,36 @@ test('removeKnownProject is catalog-only, exact-confirmed, and refuses live sess
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-repo-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
   writeFileSync(join(repo, 'README.md'), 'keep me\n')
-  addKnownProject(repo)
-  setProjectPassword(encodeProject(repo), 'secret')
+  const registeredRoot = addKnownProject(repo)
+  setProjectPassword(encodeProject(registeredRoot), 'secret')
   await reconcileNow()
 
-  assert.throws(() => removeKnownProject(repo, 'REMOVE wrong'), /confirmation must exactly equal/)
+  assert.throws(() => removeKnownProject(registeredRoot, 'REMOVE wrong'), /confirmation must exactly equal/)
   assert.equal(readCatalog().length, 1)
-  const removed = removeKnownProject(repo, `REMOVE ${basename(repo)}`)
-  assert.deepEqual(removed, { root: repo, projectId: encodeProject(repo), sessions: 0, runtimeRecordRemoved: false })
+  const removed = removeKnownProject(registeredRoot, `REMOVE ${basename(registeredRoot)}`)
+  assert.deepEqual(removed, { root: registeredRoot, projectId: encodeProject(registeredRoot), sessions: 0, runtimeRecordRemoved: false })
   assert.equal(readCatalog().length, 0)
-  assert.equal(loadAuthStore().projects[encodeProject(repo)], undefined, 'project credential is cleared with the registration')
-  assert.equal(existsSync(join(repo, 'README.md')), true, 'source directory is untouched')
-  assert.equal((await reconcileNow()).some((entry) => entry.root === repo), false)
+  assert.equal(loadAuthStore().projects[encodeProject(registeredRoot)], undefined, 'project credential is cleared with the registration')
+  assert.equal(existsSync(join(registeredRoot, 'README.md')), true, 'source directory is untouched')
+  assert.equal((await reconcileNow()).some((entry) => entry.root === registeredRoot), false)
 
-  // An active record is a blocker even when the user typed the right phrase. The catalog remains intact.
-  addKnownProject(repo)
-  const sessionDir = join(home, 'projects', encodeProject(repo), 'sessions', 'active')
+  // A retained, safely closed record is not an active-session blocker. The current runtime schema uses
+  // snake_case, so this also guards the migration boundary in the removal predicate.
+  addKnownProject(registeredRoot)
+  const closedDir = join(home, 'projects', encodeProject(registeredRoot), 'sessions', 'closed')
+  mkdirSync(closedDir, { recursive: true })
+  writeFileSync(join(closedDir, 'runtime.json'), JSON.stringify({ archived: false, stopped: false, closed_at: '2026-08-30T00:00:00.000Z' }))
+  await reconcileNow()
+  const closedRemoved = removeKnownProject(registeredRoot, `REMOVE ${basename(registeredRoot)}`)
+  assert.equal(closedRemoved.sessions, 0)
+
+  // An active legacy record is a blocker even when the user typed the right phrase. The catalog remains intact.
+  addKnownProject(registeredRoot)
+  const sessionDir = join(home, 'projects', encodeProject(registeredRoot), 'sessions', 'active')
   mkdirSync(sessionDir, { recursive: true })
   writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({ archived: false, stopped: false, closedAt: null }))
   await reconcileNow()
-  assert.throws(() => removeKnownProject(repo, `REMOVE ${basename(repo)}`), /active session record/)
+  assert.throws(() => removeKnownProject(registeredRoot, `REMOVE ${basename(registeredRoot)}`), /active session record/)
   assert.equal(readCatalog().length, 1)
 })
 
@@ -174,7 +184,7 @@ test('host DELETE /projects/:id is an admin-gated, catalog-only lifecycle route'
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
   writeFileSync(join(repo, 'README.md'), 'must survive\n')
-  addKnownProject(repo)
+  const registeredRoot = addKnownProject(repo)
   const dist = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-dist-'))
   writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
   const port = await new Promise<number>((resolvePort) => {
@@ -183,18 +193,18 @@ test('host DELETE /projects/:id is an admin-gated, catalog-only lifecycle route'
   })
   const dashboard = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
   await new Promise<void>((resolveReady) => dashboard.server.once('listening', () => resolveReady()))
-  const id = encodeProject(repo)
+  const id = encodeProject(registeredRoot)
   try {
     const refused = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, {
       method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: 'REMOVE wrong' }),
     })
     assert.equal(refused.status, 400)
     const removed = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, {
-      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: `REMOVE ${basename(repo)}` }),
+      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: `REMOVE ${basename(registeredRoot)}` }),
     })
     assert.equal(removed.status, 200)
     assert.equal((await removed.json()).ok, true)
-    assert.equal(existsSync(join(repo, 'README.md')), true)
+    assert.equal(existsSync(join(registeredRoot, 'README.md')), true)
     const repeated = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
     assert.equal(repeated.status, 404)
   } finally { await dashboard.close() }

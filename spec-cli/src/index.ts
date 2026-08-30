@@ -24,6 +24,7 @@ import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessi
 import { readTimeline } from './session-timeline.js'
 import { readSessionTranscript, readSessionTranscriptTool, sessionTranscriptStream } from './session-transcript.js'
 import { defaultHarness, HARNESSES, codexHarness, launcherList, launcherDefault, harnessById } from './harness.js'
+import { NATIVE_HARNESS_IDS } from './harness-select.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
 import { putBlob } from '@spexcode/spec-eval/cache'
@@ -302,6 +303,9 @@ app.post('/api/evidence', async (c) => {
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
   launchers: launcherList(),
+  // The picker uses this live registry when offering the explicit post-init target action. Keeping the
+  // vocabulary on the backend avoids a second frontend list drifting as adapters are added.
+  harnessTargets: [...NATIVE_HARNESS_IDS],
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))

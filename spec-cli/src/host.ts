@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync, readFileSync, renameSync, rmSync, readdirSync
 import { homedir } from 'node:os'
 import { dirname, join, basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
+import { spexcodeHome, encodeProject, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
 import { serveStatic, resolveDistDir } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
@@ -26,6 +26,7 @@ import {
 } from '@spexcode/spec-core'
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { clearProjectPassword } from './gateway-auth.js'
+import { resolveHarnessTargets } from './harness-select.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -196,8 +197,17 @@ function activeProjectSessions(root: string): number {
   let active = 0
   for (const id of entries) {
     try {
-      const record = JSON.parse(readFileSync(join(dir, id, 'runtime.json'), 'utf8'))
-      if (record?.archived !== true && record?.stopped !== true && record?.closedAt == null) active++
+      // `runtime.json` is the current record name/shape; the legacy `session.json` and camelCase close
+      // field are still understood so an old retained session cannot either disappear from the guard or
+      // make a safely closed project impossible to remove forever.
+      let record: any
+      try { record = JSON.parse(readFileSync(join(dir, id, 'runtime.json'), 'utf8')) }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        record = JSON.parse(readFileSync(join(dir, id, 'session.json'), 'utf8'))
+      }
+      const closedAt = record?.closed_at ?? record?.closedAt
+      if (record?.archived !== true && record?.stopped !== true && closedAt == null) active++
     } catch {
       // An unreadable record is not safe to classify as inactive. It stays a loud blocker for removal.
       active++
@@ -438,6 +448,165 @@ function writeProjectConfig(root: string, content: string, revision: string): Pr
   return { content: normalized, revision: configRevision(normalized) }
 }
 
+type HarnessTargetInput = string | { plugin?: unknown }
+type AddedHarnessLauncher = { name: string; harness: string; cmd: string }
+export type AddHarnessTargetResult = {
+  ok: boolean
+  target: string | { plugin: string }
+  harnesses: Array<string | { plugin: string }>
+  launcher?: AddedHarnessLauncher
+  content: string
+  revision: string
+  materialize: { code: number | null; output: string }
+}
+
+const own = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key)
+
+function normalizedHarnessTarget(value: unknown): string | { plugin: string } {
+  if (typeof value === 'string') {
+    const id = value.trim()
+    if (!id) throw Object.assign(new Error('target must be a non-empty harness id'), { status: 400 })
+    return id
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const folder = (value as HarnessTargetInput & { plugin?: unknown }).plugin
+    if (typeof folder !== 'string' || !folder.trim()) {
+      throw Object.assign(new Error('target plugin must be an explicit, non-empty folder string'), { status: 400 })
+    }
+    return { plugin: folder.trim() }
+  }
+  throw Object.assign(new Error('target must be a native harness id string or {"plugin":"<folder>"}'), { status: 400 })
+}
+
+function sameHarnessTarget(left: unknown, right: string | { plugin: string }): boolean {
+  if (typeof left === 'string' && typeof right === 'string') return left.trim() === right
+  if (left && typeof left === 'object' && !Array.isArray(left) && typeof right === 'object') {
+    return typeof (left as any).plugin === 'string' && (left as any).plugin.trim() === right.plugin
+  }
+  return false
+}
+
+function objectConfig(value: unknown, message: string): Record<string, any> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw Object.assign(new Error(message), { status: 400 })
+  }
+  return value as Record<string, any>
+}
+
+// The template is the one source for the safe, portable command paired with a newly selected native
+// target. It keeps this host operation aligned with `spex init` (including the headless exceptions) without
+// restating a second command table here.
+function templateLauncherForHarness(harness: string): { harness: string; cmd: string } | undefined {
+  const template = readJsonConfig(templateConfigPath)
+  const launchers = template?.sessions?.launchers
+  if (!launchers || typeof launchers !== 'object' || Array.isArray(launchers)) return undefined
+  const match = Object.values(launchers).find((entry: any) => entry?.harness === harness && typeof entry?.cmd === 'string' && entry.cmd.trim()) as any
+  return match ? { harness, cmd: match.cmd } : undefined
+}
+
+function launcherForHarness(launchers: Record<string, any>, harness: string): AddedHarnessLauncher | undefined {
+  for (const [name, value] of Object.entries(launchers)) {
+    const id = typeof value?.harness === 'string' ? value.harness : 'claude'
+    if (id === harness && typeof value?.cmd === 'string' && value.cmd.trim()) return { name, harness: id, cmd: value.cmd }
+  }
+  return undefined
+}
+
+function freeLauncherName(launchers: Record<string, any>, preferred: string): string {
+  if (!own(launchers, preferred)) return preferred
+  let i = 2
+  while (own(launchers, `${preferred}-${i}`)) i++
+  return `${preferred}-${i}`
+}
+
+// Add one persistent delivery target through the same source/config seam used by the Projects editor.
+// The operation is idempotent for an already-present target, but still re-runs materialize so a failed
+// previous attempt can be retried after its generated footprint was repaired.
+export async function addHarnessTarget(root: string, input: unknown, expectedRevision?: string): Promise<AddHarnessTargetResult> {
+  const current = readProjectConfig(root)
+  const revision = expectedRevision ?? current.revision
+  if (revision !== current.revision) {
+    throw Object.assign(new Error('spexcode.json changed on disk — reload before adding a harness target'), { status: 409 })
+  }
+
+  let cfg: Record<string, any>
+  try { cfg = objectConfig(JSON.parse(current.content), 'spexcode.json must contain one top-level JSON object') }
+  catch (e) {
+    if ((e as any)?.status) throw e
+    throw Object.assign(new Error(`spexcode.json is not valid JSON: ${(e as Error).message}`), { status: 400 })
+  }
+
+  // A local harness selection changes the effective policy and cannot be silently shadowed by a portable
+  // write. Existing local launcher definitions are fine when they already cover the target; otherwise the
+  // operation refuses and points at the intentional host-specific edit surface.
+  const local = readJsonConfig(join(root, 'spexcode.local.json'))
+  if (!local || typeof local !== 'object' || Array.isArray(local)) {
+    throw Object.assign(new Error('spexcode.local.json must contain one top-level JSON object'), { status: 400 })
+  }
+  if (own(local, 'harnesses')) {
+    throw Object.assign(new Error('spexcode.local.json overrides harnesses — edit that host-specific selection explicitly before adding a portable target'), { status: 409 })
+  }
+  if (own(local, 'sessions') && (!local.sessions || typeof local.sessions !== 'object' || Array.isArray(local.sessions))) {
+    throw Object.assign(new Error('spexcode.local.json sessions must be an object'), { status: 400 })
+  }
+  const localSessions = local?.sessions && typeof local.sessions === 'object' && !Array.isArray(local.sessions) ? local.sessions : null
+  const localLaunchersOverride = !!localSessions && own(localSessions, 'launchers')
+  // The policy field is required. This action extends an explicit selection, but never turns an
+  // unadopted project into an implicitly selected one and bypasses the init repair gate.
+  const portableRaw = own(cfg, 'harnesses') ? cfg.harnesses : undefined
+  try { resolveHarnessTargets(portableRaw) }
+  catch (e) { throw Object.assign(new Error((e as Error).message), { status: 400 }) }
+  if (!Array.isArray(portableRaw)) {
+    throw Object.assign(new Error('spexcode.json "harnesses" must be an ARRAY before a target can be added'), { status: 400 })
+  }
+  const target = normalizedHarnessTarget(input)
+  const present = portableRaw.some((entry: unknown) => sameHarnessTarget(entry, target))
+  const nextRaw = present ? [...portableRaw] : [...portableRaw, target]
+  try { resolveHarnessTargets(nextRaw) }
+  catch (e) { throw Object.assign(new Error((e as Error).message), { status: 400 }) }
+
+  const sessions = cfg.sessions === undefined ? {} : objectConfig(cfg.sessions, 'spexcode.json sessions must be an object')
+  const portableLaunchers = sessions.launchers === undefined ? {} : objectConfig(sessions.launchers, 'spexcode.json sessions.launchers must be an object')
+  const effectiveLaunchers = localLaunchersOverride
+    ? objectConfig(localSessions!.launchers, 'spexcode.local.json sessions.launchers must be an object')
+    : portableLaunchers
+  let launcher: AddedHarnessLauncher | undefined
+  if (typeof target === 'string') {
+    launcher = launcherForHarness(effectiveLaunchers, target)
+    if (!launcher && localLaunchersOverride) {
+      throw Object.assign(new Error(`spexcode.local.json overrides sessions.launchers and has no launcher for '${target}' — add that launcher in the local config first`), { status: 409 })
+    }
+    if (!launcher) {
+      const template = templateLauncherForHarness(target)
+      // zcode is a valid delivery adapter but has no safe launcher template; materialize its files without
+      // inventing a command that may not exist on the adopter's machine.
+      if (template) {
+        const name = freeLauncherName(portableLaunchers, target)
+        portableLaunchers[name] = { harness: template.harness, cmd: template.cmd }
+        launcher = { name, harness: template.harness, cmd: template.cmd }
+        sessions.launchers = portableLaunchers
+        // A new profile becomes the default only when neither config layer has one. Existing defaults are a
+        // deliberate project choice and must keep their semantics.
+        if (!own(sessions, 'defaultLauncher') && !(localSessions && own(localSessions, 'defaultLauncher'))) sessions.defaultLauncher = name
+      }
+    }
+  }
+
+  cfg.harnesses = nextRaw
+  if (Object.keys(sessions).length) cfg.sessions = sessions
+  const saved = writeProjectConfig(root, `${JSON.stringify(cfg, null, 2)}\n`, revision)
+  const materialized = await runSpex(root, ['materialize'])
+  return {
+    ok: materialized.code === 0,
+    target,
+    harnesses: nextRaw as Array<string | { plugin: string }>,
+    ...(launcher ? { launcher } : {}),
+    content: saved.content,
+    revision: saved.revision,
+    materialize: materialized,
+  }
+}
+
 function writeProjectIcon(root: string, icon: unknown, revision: string): ProjectConfigSource & { identity: ResolvedIdentity } {
   const canonical = requireIdentityChoice(icon)
   const current = readProjectConfig(root)
@@ -500,7 +669,7 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 //                  (online/offline/root), each carrying the hub's gating state.
 //   adminRoute   — /projects/stream (SSE), GET /projects/browse + POST /projects (select/setup/register), DELETE /projects/:id
 //                  (high-friction catalog removal), raw spexcode.json
-//                  GET|PUT /projects/:id/config, and POST /projects/:id/(init|doctor|serve) — all
+//                  GET|PUT /projects/:id/config, POST /projects/:id/harnesses, and POST /projects/:id/(init|doctor|serve) — all
 //                  behind the hub's admin scope
 //                  ([[gateway-auth]]: implicit from loopback until an admin password exists).
 //   fallback     — the dashboard SPA shell + assets for paths the hub doesn't own.
@@ -659,6 +828,33 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
         }
         try { json(res, 200, { ok: true, ...writeProjectConfig(entry.root, body.content, body.revision) }) }
         catch (e) { json(res, (e as any).status ?? 500, { error: (e as Error).message }) }
+        return true
+      }
+      const harnesses = path.match(/^\/projects\/([^/]+)\/harnesses$/)
+      if (harnesses && req.method === 'POST') {
+        const projectId = decodeURIComponent(harnesses[1])
+        const entry = (await reconcileNow()).find((p) => p.projectId === projectId)
+        if (!entry) { json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /projects)` }); return true }
+        let body: any
+        try { body = JSON.parse(await readBody(req) || '{}') }
+        catch { json(res, 400, { error: 'body must be {"target":"<harness id>","revision":"..."}' }); return true }
+        if (typeof body?.revision !== 'string' || !body.revision) {
+          json(res, 400, { error: 'body must include a non-empty "revision" from GET /projects/:id/config' }); return true
+        }
+        if (body?.target === undefined) {
+          json(res, 400, { error: 'body must include "target" (a native harness id or {"plugin":"<folder>"})' }); return true
+        }
+        try {
+          const result = await addHarnessTarget(entry.root, body.target, body.revision)
+          if (!result.ok) {
+            json(res, 422, { error: 'spex materialize failed', ...result })
+            return true
+          }
+          json(res, 200, result)
+        } catch (e) {
+          const error = e as Error & { status?: number }
+          json(res, error.status ?? 400, { error: error.message })
+        }
         return true
       }
       const op = path.match(/^\/projects\/([^/]+)\/(init|doctor|serve)$/)

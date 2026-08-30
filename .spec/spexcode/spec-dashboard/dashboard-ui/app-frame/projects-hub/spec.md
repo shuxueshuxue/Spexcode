@@ -70,8 +70,10 @@ mobile height that leaves its controls reachable without overlap. Inside that sa
 the final, low-emphasis action is **Remove project registration**. It opens a warning rather than
 acting immediately, explains that the checkout and source files remain, requires an acknowledgement checkbox
 and exact `REMOVE <project title>` text, and then calls `DELETE /projects/:id`. The page does not expose a
-local-directory delete command. Online backends and active sessions are shown as server-side blockers with
-their repair reason, so the user is never nudged into deleting around live work. Identity editing remains a
+local-directory delete command. The project row also exposes a trash icon that opens this same confirmation
+modal; the icon never bypasses the acknowledgement, exact-title phrase, or server-side safety checks.
+Online backends and active sessions are shown as server-side blockers with their repair reason, so the user is
+never nudged into deleting around live work. Identity editing remains a
 quiet secondary disclosure: its compact current mark and edit button reveal the shared
 searchable, source-filtered icon browser only on request. The global gateway equivalent sits in the page's low-priority
 settings/details area, never as a prominent picker block. A project pick changes only its existing

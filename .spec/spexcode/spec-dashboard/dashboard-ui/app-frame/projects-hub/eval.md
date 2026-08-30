@@ -94,6 +94,23 @@ scenarios:
       calm at 375px and skinned correctly by other theme presets with no extra rules. Zero loss = a
       repo goes from unregistered to a browsable governed project entirely through the browser,
       against the real gateway code.
+  - name: catalog-removal-confirmation
+    tags: [frontend-e2e, backend-api, desktop]
+    test:
+      path: spec-dashboard/test/projects-new-project.e2e.mjs
+      name: Projects creates a cataloged Git project from an absent folder path
+    code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/projects.js, spec-cli/src/host.ts]
+    description: >-
+      Through the real host dashboard, create a throwaway project, use the project row's trash icon, and
+      inspect the shared removal modal before submitting. Try the wrong phrase and an unacknowledged form,
+      then acknowledge the scope and submit the exact `REMOVE <project title>` phrase. Read the catalog and
+      filesystem after the response.
+    expected: >-
+      The row-level trash action opens the same high-friction modal as the settings disclosure and never
+      removes anything by itself. The confirm action stays unavailable until the checkbox and exact title
+      phrase are both present. A successful `DELETE /projects/:id` removes only the catalog registration and
+      its gateway credential; the checkout, `.git`, and source files remain. A live backend or active/unreadable
+      session is refused with its repair reason and leaves the catalog unchanged.
 ---
 # projects-hub — measurement
 

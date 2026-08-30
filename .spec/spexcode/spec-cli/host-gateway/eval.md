@@ -24,6 +24,25 @@ scenarios:
       without writing the catalog. `/projects`, stream, scoped HTTP/WS, TLS, registration, raw config, and
       shell routing retain their auth and transport contracts.
     related: [spec-cli/src/supervise.ts, spec-cli/src/gateway-hub.ts, spec-cli/src/host.test.ts]
+  - name: post-init-harness-target-addition
+    tags: [backend-api, cli]
+    test:
+      path: spec-cli/src/host-harness-target.test.ts
+      name: harness target addition persists targets, materializes, and is exposed through the admin route
+    code: [spec-cli/src/host.ts, spec-cli/src/index.ts]
+    description: >-
+      In isolated throwaway Git repositories, initialize one project with a native target and add another
+      through the host operation and its admin HTTP route. Repeat with an explicit plugin target and with a
+      missing persisted selection; inspect `spexcode.json`, generated launchers, materialize output, and the
+      revision-guard response.
+    expected: >-
+      The operation appends exactly the requested native or plugin target, preserves existing defaults, and
+      runs the real materialize before reporting success. Native targets with a safe template gain one
+      matching launcher while existing launchers remain intact; plugin targets do not get an invented
+      launcher. Plugin/native mixtures, stale revisions, malformed input, and a missing `harnesses` field
+      fail loudly without silently selecting or partially replacing a target set. The admin route returns
+      the new revision and materialize transcript, and a failed materialize retains enough metadata for a
+      safe retry.
 ---
 # measuring host-gateway
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { loadPlugins, loadSettings } from './data.js'
 import { apiUrl } from './project.js'
 
@@ -54,12 +54,17 @@ const loadLauncherSettings = () => {
   return launcherSettingsRequest
 }
 
-const launcherListFrom = (d) => Array.isArray(d?.launchers) ? d.launchers : []
+// A missing field means an older backend and lets an already-loaded value survive; an explicit empty
+// array is authoritative and must clear stale UI state after a config change.
+const launcherListFrom = (d) => Array.isArray(d?.launchers) ? d.launchers : null
+const harnessTargetListFrom = (d) => Array.isArray(d?.harnessTargets)
+  ? d.harnessTargets.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())
+  : null
 const rememberedLauncher = () => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } }
 const initialLauncher = (list, configuredDefault, remembered = rememberedLauncher()) => {
   if (list.some((l) => l.name === remembered)) return remembered
   if (configuredDefault && list.some((l) => l.name === configuredDefault)) return configuredDefault
-  return list[0]?.name || remembered
+  return list[0]?.name || ''
 }
 
 // the configured launcher profiles ([[launcher-select]]) + the current pick. The pick is remembered
@@ -67,19 +72,37 @@ const initialLauncher = (list, configuredDefault, remembered = rememberedLaunche
 // honors the config default: remembered pick (if still configured) → configured `default` → first row. The
 // list is the complete configured registry — headless launchers are ordinary rows, not a hidden tier.
 export function useLaunchers() {
-  const cached = launcherListFrom(launcherSettings)
+  const cached = launcherListFrom(launcherSettings) || []
   const [launchers, setLaunchers] = useState(cached)
   const [launcher, setLauncher] = useState(() => initialLauncher(cached, launcherSettings?.default))
+  const [harnessTargets, setHarnessTargets] = useState(() => harnessTargetListFrom(launcherSettings) || [])
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
+  const applySettings = useCallback((d, current = null) => {
+    const list = launcherListFrom(d)
+    if (list) {
+      setLaunchers(list)
+      setLauncher((cur) => initialLauncher(list, d.default, current ?? cur))
+    }
+    const targets = harnessTargetListFrom(d)
+    if (targets) setHarnessTargets(targets)
+    launcherSettings = d
+    return { list: list || [], targets: targets || [] }
+  }, [])
   useEffect(() => {
     loadLauncherSettings().then((d) => {
-      const list = launcherListFrom(d)
-      if (!list.length) return
-      setLaunchers(list)
-      setLauncher((cur) => initialLauncher(list, d.default, cur))
+      applySettings(d)
     }).catch(() => {})
-  }, [])
-  return { launchers, launcher, pickLauncher }
+  }, [applySettings])
+  // A successful host-side harness addition invalidates the module snapshot and refreshes this picker in
+  // place. Other consumers that mount later inherit the same fresh snapshot synchronously.
+  const refreshLaunchers = useCallback(async () => {
+    launcherSettings = null
+    launcherSettingsRequest = null
+    const d = await loadLauncherSettings()
+    applySettings(d)
+    return d
+  }, [applySettings])
+  return { launchers, launcher, pickLauncher, harnessTargets, refreshLaunchers }
 }
 
 // the command presets (GET /api/plugins) — shared by the launch box and Command Box `/` palettes. The route

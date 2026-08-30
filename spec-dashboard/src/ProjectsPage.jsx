@@ -376,6 +376,7 @@ function RemoveProjectModal({ project, busy, error, onClose, onRemove, t }) {
   const [understood, setUnderstood] = useState(false)
   const phrase = `REMOVE ${project.identity.title}`
   const ready = understood && confirmation === phrase && !busy
+  useEscLayer(!busy, onClose)
   return (
     <Modal
       title={t('projects.removeTitle')}
@@ -487,6 +488,13 @@ function ProjectRow({ p, health, onRefresh, t }) {
             className={panel === 'pw' ? 'proj-act icon on' : 'proj-act icon'}
             size={13}
             onClick={() => { setPanel((v) => (v === 'pw' ? null : 'pw')); setError(null) }}
+          />
+          <IconButton
+            icon="trash"
+            label={t('projects.removeRegistration')}
+            className="proj-act icon proj-remove-icon"
+            size={13}
+            onClick={() => { setRemoveError(null); setRemoving(true) }}
           />
           {offline ? (
             <button

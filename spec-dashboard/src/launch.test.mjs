@@ -44,3 +44,26 @@ test('the New tab launches on plain Enter and keeps Shift+Enter for multiline dr
   assert.match(css, /\.sess-ops\s*\{[^}]*order:\s*1;/s)
   assert.match(css, /\.sess-glyph\s*\{[^}]*order:\s*2;/s)
 })
+
+test('the scoped New tab exposes a plus action for adding a harness target', () => {
+  const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+  assert.match(source, /import Modal from '\.\/Modal\.jsx'/)
+  assert.match(source, /data-action="add-harness-target"/)
+  assert.match(source, /onAdd=\{PROJECT_ID \? \(\) => setAddHarnessOpen\(true\) : undefined\}/)
+  assert.match(source, /AddHarnessTargetModal[\s\S]*projectId=\{PROJECT_ID\}[\s\S]*onAdded=\{handleHarnessAdded\}/)
+  assert.match(source, /addProjectHarnessTarget\(projectId, attemptedTarget, config\.revision\)/)
+  assert.match(source, /loadProjectConfig\(projectId\)/)
+  assert.match(source, /hasOwnProperty\.call\(parsed, 'harnesses'\)/)
+  assert.match(source, /harnessTargetSelectionMissing/)
+  assert.match(css, /\.si-launcher-add\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s)
+  assert.match(css, /\.si-harness-modal\s*\{[^}]*width:/s)
+})
+
+test('project rows expose the guarded catalog-registration removal action', () => {
+  const source = readFileSync(new URL('./ProjectsPage.jsx', import.meta.url), 'utf8')
+  assert.match(source, /icon="trash"/)
+  assert.match(source, /removeProject\(p\.id, confirmation\)/)
+  assert.match(source, /RemoveProjectModal[\s\S]*REMOVE \$\{project\.identity\.title\}/)
+  assert.match(source, /t\('projects\.removeUnderstand'\)/)
+})

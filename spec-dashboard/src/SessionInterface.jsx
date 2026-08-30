@@ -19,7 +19,7 @@ import { routeHash } from './route.js'
 import { markNewTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS, sendSessionCommand } from './data.js'
-import { apiUrl, PROJECT_BASE } from './project.js'
+import { apiUrl, PROJECT_BASE, PROJECT_ID } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
   SESSION_SURFACE_TERMINAL,
@@ -48,6 +48,8 @@ import { useFold } from './useFold.js'
 import { usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 import { useSessionListState } from './sessionListState.js'
+import { addProjectHarnessTarget, loadProjectConfig } from './projects.js'
+import Modal from './Modal.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -407,10 +409,226 @@ function SessionEvalStats({ summary }) {
 // The Command Box, New prompt, and review/issue composers share ComposerTextarea's measurement and IME
 // boundary. Their domain grammars remain local to the home that sends them.
 
-function LauncherPicker({ launchers, launcher, pickLauncher }) {
+const targetText = (target) => typeof target === 'string' ? target : `plugin:${target?.plugin || ''}`
+const targetKey = (target) => typeof target === 'string' ? `native:${target.trim()}` : `plugin:${target?.plugin?.trim() || ''}`
+const sameTarget = (left, right) => {
+  if (typeof left === 'string' && typeof right === 'string') return left.trim() === right
+  return !!left && typeof left === 'object' && !Array.isArray(left)
+    && !!right && typeof right === 'object' && !Array.isArray(right)
+    && typeof left.plugin === 'string' && left.plugin.trim() === right.plugin
+}
+
+function AddHarnessTargetModal({ projectId, harnessTargets = [], onAdded, onClose, t }) {
+  const nativeTargets = harnessTargets.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())
+  const [mode, setMode] = useState('native')
+  const [nativeTarget, setNativeTarget] = useState(nativeTargets[0] || '')
+  const [pluginFolder, setPluginFolder] = useState('')
+  const [config, setConfig] = useState({ phase: projectId ? 'loading' : 'unavailable', revision: null, targets: [] })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [output, setOutput] = useState('')
+  const [retryTarget, setRetryTarget] = useState(null)
+
+  useEscLayer(!busy, onClose)
+
+  const readConfig = useCallback(async ({ preserveError = false } = {}) => {
+    if (!projectId) {
+      setConfig({ phase: 'unavailable', revision: null, targets: [] })
+      return false
+    }
+    setConfig((current) => ({ ...current, phase: 'loading', revision: null }))
+    const result = await loadProjectConfig(projectId)
+    if (!result.ok) {
+      setConfig({ phase: 'error', revision: null, targets: [] })
+      setError(result.status === 401 || result.status === 403
+        ? t('session.harnessTargetAdminRequired')
+        : result.error === 'network' || result.status === 404
+          ? t('session.harnessTargetHostUnavailable')
+          : result.error || t('session.harnessTargetLoadFailed'))
+      return false
+    }
+    try {
+      const parsed = JSON.parse(result.content)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setConfig({ phase: 'error', revision: null, targets: [] })
+        setError(t('session.harnessTargetInvalidConfig'))
+        return false
+      }
+      if (!Object.prototype.hasOwnProperty.call(parsed, 'harnesses')) {
+        setConfig({ phase: 'error', revision: null, targets: [] })
+        setError(t('session.harnessTargetSelectionMissing'))
+        return false
+      }
+      if (!Array.isArray(parsed.harnesses)) {
+        setConfig({ phase: 'error', revision: null, targets: [] })
+        setError(t('session.harnessTargetSelectionMalformed'))
+        return false
+      }
+      const targets = parsed.harnesses
+      setConfig({ phase: 'ready', revision: result.revision, targets })
+      setRetryTarget(null)
+      if (!preserveError) setError(null)
+      return true
+    } catch (parseError) {
+      setConfig({ phase: 'error', revision: null, targets: [] })
+      setError(`${t('session.harnessTargetInvalidConfig')}: ${parseError instanceof Error ? parseError.message : String(parseError)}`)
+      return false
+    }
+  }, [projectId, t])
+
+  useEffect(() => { void readConfig() }, [readConfig])
+
+  useEffect(() => {
+    if (mode !== 'native' || !nativeTargets.length) return
+    setNativeTarget((current) => {
+      const currentAvailable = nativeTargets.includes(current) && !config.targets.some((entry) => sameTarget(entry, current))
+      if (currentAvailable) return current
+      return nativeTargets.find((id) => !config.targets.some((entry) => sameTarget(entry, id))) || nativeTargets[0]
+    })
+  }, [mode, nativeTargets.join('\u0000'), config.targets])
+
+  const target = mode === 'plugin' ? { plugin: pluginFolder.trim() } : nativeTarget
+  const existing = config.targets || []
+  const alreadyAdded = !!(mode === 'plugin' ? pluginFolder.trim() : nativeTarget)
+    && existing.some((entry) => sameTarget(entry, target))
+  const validTarget = mode === 'plugin' ? !!pluginFolder.trim() : !!nativeTarget
+  const canSubmit = config.phase === 'ready' && validTarget && (!alreadyAdded || retryTarget === targetKey(target)) && !busy
+
+  const displayError = (result) => {
+    if (result?.status === 401 || result?.status === 403) return t('session.harnessTargetAdminRequired')
+    if (result?.status === 404 || result?.error === 'network') return t('session.harnessTargetHostUnavailable')
+    if (result?.status === 422 || result?.code != null) {
+      const detail = result.error || t('session.harnessTargetMaterializeFailed')
+      return detail
+    }
+    return result?.error || t('session.harnessTargetSaveFailed')
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!canSubmit) return
+    const attemptedTarget = target
+    const attemptedKey = targetKey(attemptedTarget)
+    setBusy(true); setError(null); setOutput('')
+    let result
+    try {
+      result = await addProjectHarnessTarget(projectId, attemptedTarget, config.revision)
+    } catch (requestError) {
+      result = { ok: false, error: requestError instanceof Error ? requestError.message : String(requestError) }
+    }
+    if (!result.ok) {
+      setBusy(false)
+      setError(displayError(result))
+      if (result.output) setOutput(result.output)
+      if (typeof result.content === 'string' && typeof result.revision === 'string') {
+        try {
+          const parsed = JSON.parse(result.content)
+          const targets = Array.isArray(parsed?.harnesses) ? parsed.harnesses : []
+          setConfig({ phase: 'ready', revision: result.revision, targets })
+          if (result.status === 422) setRetryTarget(attemptedKey)
+        } catch {
+          setRetryTarget(null)
+          void readConfig()
+        }
+      } else if (result.status === 409) {
+        setRetryTarget(null)
+        // Refresh the revision so the next submit can retry, but keep the conflict reason visible. A silent
+        // refresh makes a concurrent edit look like a successful no-op and leaves the user without a repair cue.
+        void readConfig({ preserveError: true })
+      }
+      return
+    }
+    setRetryTarget(null)
+    try {
+      const accepted = await onAdded(result)
+      if (accepted === false) {
+        setBusy(false)
+        setError(t('session.harnessTargetRefreshFailed'))
+        return
+      }
+    } catch (requestError) {
+      setBusy(false)
+      setError(requestError instanceof Error ? requestError.message : String(requestError))
+    }
+  }
+
+  const existingLabel = existing.length ? existing.map(targetText).join(', ') : t('session.harnessTargetNone')
+  return (
+    <Modal
+      title={t('session.addHarnessTargetTitle')}
+      closeLabel={t('common.close')}
+      onClose={() => { if (!busy) onClose() }}
+      className="si-harness-modal"
+    >
+      <form className="si-harness-form" data-harness-target-modal onSubmit={submit}>
+        <p className="si-harness-copy">{t('session.addHarnessTargetDescription')}</p>
+        {config.phase === 'unavailable' && <div className="si-harness-state" role="status">{t('session.harnessTargetNoProject')}</div>}
+        {config.phase === 'loading' && <div className="si-harness-state" role="status"><Icon name="loader" size={13} className="si-harness-spinner" />{t('session.harnessTargetLoading')}</div>}
+        {config.phase === 'ready' && (
+          <>
+            <fieldset className="si-harness-fieldset">
+              <legend>{t('session.harnessTargetMode')}</legend>
+              <div className="si-harness-mode" role="radiogroup" aria-label={t('session.harnessTargetMode')}>
+                <label className={mode === 'native' ? 'on' : ''}>
+                  <input type="radio" name="harness-target-mode" value="native" checked={mode === 'native'} onChange={() => { setMode('native'); setError(null) }} disabled={busy} />
+                  <span>{t('session.harnessTargetNative')}</span>
+                </label>
+                <label className={mode === 'plugin' ? 'on' : ''}>
+                  <input type="radio" name="harness-target-mode" value="plugin" checked={mode === 'plugin'} onChange={() => { setMode('plugin'); setError(null) }} disabled={busy} />
+                  <span>{t('session.harnessTargetPlugin')}</span>
+                </label>
+              </div>
+            </fieldset>
+            {mode === 'native' ? (
+              <label className="si-harness-label">
+                <span>{t('session.harnessTargetNativeSelect')}</span>
+                {nativeTargets.length ? (
+                  <select value={nativeTarget} onChange={(event) => { setNativeTarget(event.target.value); setError(null) }} disabled={busy}>
+                    {nativeTargets.map((id) => <option key={id} value={id} disabled={existing.some((entry) => sameTarget(entry, id))}>{id}</option>)}
+                  </select>
+                ) : <span className="si-harness-empty">{t('session.harnessTargetNoNative')}</span>}
+              </label>
+            ) : (
+              <label className="si-harness-label">
+                <span>{t('session.harnessTargetPluginFolder')}</span>
+                <input
+                  value={pluginFolder}
+                  onChange={(event) => { setPluginFolder(event.target.value); setError(null) }}
+                  placeholder={t('session.harnessTargetPluginPlaceholder')}
+                  autoFocus
+                  disabled={busy}
+                  spellCheck={false}
+                />
+              </label>
+            )}
+            <div className="si-harness-current"><span>{t('session.harnessTargetCurrent')}</span><code>{existingLabel}</code></div>
+            {alreadyAdded && <div className="si-harness-state" role="status">{t('session.harnessTargetAlreadyAdded')}</div>}
+          </>
+        )}
+        {config.phase === 'error' && <div className="si-harness-state error" role="alert">{error || t('session.harnessTargetLoadFailed')}</div>}
+        {error && config.phase !== 'error' && <div className="si-harness-state error" role="alert">{error}</div>}
+        {output && (
+          <details className="si-harness-output" open>
+            <summary>{t('session.harnessTargetTranscript')}</summary>
+            <pre>{output}</pre>
+          </details>
+        )}
+        <div className="si-harness-actions">
+          <button type="button" className="sess-rename-btn" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
+          <button type="submit" className="sess-rename-btn sess-rename-save" disabled={!canSubmit}>
+            {busy ? t('session.harnessTargetSaving') : t('session.harnessTargetSave')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function LauncherPicker({ launchers, launcher, pickLauncher, onAdd }) {
   const t = useT()
   const [pop, setPop] = useState(false)
   useEscLayer(pop, () => setPop(false))
+  const addTarget = () => { setPop(false); onAdd?.() }
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
   const selected = launchers.find((l) => l.name === launcher)
@@ -418,18 +636,21 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const SelGlyph = selHarness.Glyph
   return (
     <div className="si-launcher-picker">
-      <button
-        type="button"
-        className={pop ? 'si-launcher-btn on' : 'si-launcher-btn'}
-        onClick={() => setPop((v) => !v)}
-        aria-haspopup="dialog"
-        aria-expanded={pop}
-        aria-label={t('session.launcherLabel')}
-        data-tip={t('session.launcherTip')}
-      >
-        <span className="si-launcher-harness" aria-hidden="true"><SelGlyph /></span>
-        <span className="si-launcher-name">{launcher}</span>
-      </button>
+      {launchers.length > 0 && (
+        <button
+          type="button"
+          className={pop ? 'si-launcher-btn on' : 'si-launcher-btn'}
+          onClick={() => setPop((v) => !v)}
+          aria-haspopup="dialog"
+          aria-expanded={pop}
+          aria-label={t('session.launcherLabel')}
+          data-tip={t('session.launcherTip')}
+        >
+          <span className="si-launcher-harness" aria-hidden="true"><SelGlyph /></span>
+          <span className="si-launcher-name">{launcher}</span>
+        </button>
+      )}
+      {onAdd && <IconButton icon="plus" size={15} className="si-launcher-add" label={t('session.addHarnessTarget')} data-action="add-harness-target" onClick={addTarget} />}
       {pop && (
         <>
           {/* full-viewport backdrop — the outside-click close surface; a mousedown here is inert chrome
@@ -485,7 +706,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
   // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
-  const { launchers, launcher, pickLauncher } = useLaunchers()
+  const { launchers, launcher, pickLauncher, harnessTargets, refreshLaunchers } = useLaunchers()
+  const [addHarnessOpen, setAddHarnessOpen] = useState(false)
+  const handleHarnessAdded = useCallback(async (result) => {
+    let settings
+    try {
+      settings = await refreshLaunchers()
+    } catch {
+      return false
+    }
+    const name = result?.launcher?.name
+    if (name && Array.isArray(settings?.launchers) && settings.launchers.some((entry) => entry?.name === name)) {
+      pickLauncher(name)
+    }
+    notify(t('session.harnessTargetAdded'), { kind: 'success' })
+    setAddHarnessOpen(false)
+    return true
+  }, [refreshLaunchers, pickLauncher, notify, t])
   // The right pane owns in-flight state; its settled result moves to the shared notice surface.
   const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -1351,7 +1588,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {newAttach.queue}
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}
-              {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}
+              {(launchers.length || PROJECT_ID) ? (
+                <LauncherPicker
+                  launchers={launchers}
+                  launcher={launcher}
+                  pickLauncher={pickLauncher}
+                  onAdd={PROJECT_ID ? () => setAddHarnessOpen(true) : undefined}
+                />
+              ) : null}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>
@@ -1533,6 +1777,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         }).then(() => reload?.())
       }}
     />
+    {addHarnessOpen && PROJECT_ID && (
+      <AddHarnessTargetModal
+        projectId={PROJECT_ID}
+        harnessTargets={harnessTargets}
+        onAdded={handleHarnessAdded}
+        onClose={() => setAddHarnessOpen(false)}
+        t={t}
+      />
+    )}
     </>
   )
 }

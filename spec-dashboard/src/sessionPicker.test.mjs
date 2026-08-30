@@ -19,7 +19,12 @@ test('one session picker owns target selection and keyboard choice', () => {
   // SessionPickerRow), never a page-local list or a native select.
   assert.match(prose, /useMentionAutocomplete\(\{ inputRef, value: text, setValue: setText, sessions: live/)
   assert.doesNotMatch(prose, /className="pa-select"/)
-  assert.doesNotMatch(prose, /<SessionPicker /)
+  // The boundary is the send CARD, not the module: its recipient comes from the shared `@` rows, so no
+  // picker may be mounted anywhere in the card's own composition. The node MENU is a different surface —
+  // it mounts the picker for the node->session crossing, the same primitive the graph tile menu spends.
+  const sendCard = prose.slice(prose.indexOf('function SendPopover('))
+  assert.doesNotMatch(sendCard, /<SessionPicker /)
+  assert.match(prose, /<SessionPicker sessions=\{crossings\}/)
   assert.match(menu, /<SessionPicker sessions=\{sessions\}/)
   assert.match(mentions, /<SessionPickerRow key=\{it\.id\}/)
 })

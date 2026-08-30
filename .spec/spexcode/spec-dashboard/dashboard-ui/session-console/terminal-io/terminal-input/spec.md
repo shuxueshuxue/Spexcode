@@ -55,6 +55,14 @@ ordered `onData` bytes travel on the terminal WebSocket to the visible viewer's 
 which writes them to that same native tmux client's PTY. Rendering, resize, wheel navigation, and input are
 therefore four messages on one terminal relationship, not separate approximations of the terminal.
 
+**A reference in the pane opens the same door the transcript gives.** The pane is a live TUI, i.e. TEXT, so
+a `[[node]]` an agent typed is reachable only if something reads the rendered line back — and the pane is a
+fallback view of a session, never a weaker one. The terminal package owns that read (which buffer line,
+which cells, how a wide cell maps to columns) and takes from its host both what counts as a link and where
+activation goes; it never learns what a spec node is. The read is per rendered line, so a reference the TUI
+wrapped is left unlinked rather than underlined across the wrong cells, and only an id the host recognizes
+becomes a link, so a `[[...]]` inside a displayed diff or quoted prompt stays plain text ([[mentions]]).
+
 Only the visible, live viewer may write. Hidden or disconnected browsers never queue keystrokes for replay,
 and an input message from a stale viewer is ignored. A transport loss remains visibly reconnecting and fails
 loudly by withholding input until the socket is open; it never pretends a key landed. The helper bounds each

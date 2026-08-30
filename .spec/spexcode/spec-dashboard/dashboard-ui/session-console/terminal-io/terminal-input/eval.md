@@ -48,6 +48,21 @@ scenarios:
       No chrome press moves focus: the TUI helper (or the composer that owns the surface) keeps typing focus
       through every chrome interaction, and the typed proof text reaches the real tmux pane afterwards. Every
       pop that takes focus returns it to the same surface on exit — never a chrome button, never body.
+  - name: pane-node-reference-opens-the-node
+    tags: [frontend-e2e, desktop, backend-api]
+    code: spec-dashboard/src/SessionTerm.jsx
+    related: [packages/terminal-ui/src/SessionTerminal.tsx, packages/terminal-ui/src/transport.ts]
+    description: >-
+      Open a real live agent session's terminal pane while its TUI has mouse tracking active, with a line on
+      screen holding both a `[[node-id]]` that resolves on the current board and one that does not. Hover the
+      resolving reference and read the pane's cursor, click it, then return to the pane and click the
+      unknown one.
+    expected: >-
+      The resolving reference is a link: hovering it shows the link cursor and clicking it opens that node's
+      `#/spec/<id>` document, the same door the transcript's anchor gives. The unknown id is not a link and
+      clicking it leaves the reader on the session. An active mouse-tracking mode suppresses neither, and a
+      reference the TUI wrapped across two rows is simply left unlinked rather than underlining the wrong cells.
+
 ---
 
 Measure through a real browser and real tmux-backed session; a mocked key handler is not this contract.

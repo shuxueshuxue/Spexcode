@@ -84,7 +84,7 @@ function execCopyFallback(text) {
   return ok
 }
 
-export default function SessionTerminal({ sessionId, transport, active = true, focused = active, writable = true, resumeRequired = false, focusRequest = 0, labels = {}, getFontSize = () => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--type-terminal')), subscribeFontSize = () => () => {} }: SessionTerminalProps) {
+export default function SessionTerminal({ sessionId, transport, active = true, focused = active, writable = true, resumeRequired = false, focusRequest = 0, labels = {}, getFontSize = () => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--type-terminal')), subscribeFontSize = () => () => {}, findLinks = null, onOpenLink = null }: SessionTerminalProps) {
   const t = (key) => ({
     'session.resumeInputTitle': labels.resumeInputTitle ?? 'Resume session input?',
     'session.resumeInputMessage': labels.resumeInputMessage ?? 'The first key will be sent to the suspended session.',
@@ -108,6 +108,12 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
   const resumeConfirmedRef = useRef(!resumeRequired)
   const sendInputRef = useRef(null)
   const hideRef = useRef(null)
+  // The host's link contract lives in refs for the same reason `active`/`focused` do: a new callback
+  // identity must reach the running provider without tearing down the terminal and its socket.
+  const findLinksRef = useRef(findLinks)
+  const onOpenLinkRef = useRef(onOpenLink)
+  findLinksRef.current = findLinks
+  onOpenLinkRef.current = onOpenLink
   activeRef.current = active
   focusedRef.current = focused
   writableRef.current = writable
@@ -146,6 +152,40 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
     term.loadAddon(fit)
     term.open(hostRef.current)
     try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
+    // @@@ host links in a live pane - the TUI is TEXT: a reference an agent types is only reachable if
+    // something reads the rendered line back. This reads CELLS, never the string alone, because a wide
+    // (CJK) cell advances the column by two while the text index advances by one — assuming they are equal
+    // puts the underline on the wrong glyphs. A match that spans a wrap is simply not seen: xterm asks per
+    // buffer line, and inventing a cross-line range would underline the wrong cells on the row above.
+    const linkProvider = {
+      provideLinks(row, done) {
+        const find = findLinksRef.current
+        const line = find ? term.buffer.active.getLine(row - 1) : null
+        if (!line) { done(undefined); return }
+        const reusable = term.buffer.active.getNullCell()
+        let text = ''
+        const startX = [], endX = []
+        for (let x = 0; x < line.length; x++) {
+          const cellAt = line.getCell(x, reusable)
+          const width = cellAt ? cellAt.getWidth() : 1
+          if (!cellAt || width === 0) continue   // the trailing half of a wide cell carries no character
+          const chars = cellAt.getChars() || ' '
+          for (let i = 0; i < chars.length; i++) { startX.push(x + 1); endX.push(x + width) }
+          text += chars
+        }
+        let hits = []
+        try { hits = find(text) || [] } catch { hits = [] }
+        const links = hits
+          .filter((hit) => hit && hit.end > hit.start && hit.start >= 0 && hit.end <= startX.length)
+          .map((hit) => ({
+            text: hit.text,
+            range: { start: { x: startX[hit.start], y: row }, end: { x: endX[hit.end - 1], y: row } },
+            activate: (event, value) => onOpenLinkRef.current?.(value, event),
+          }))
+        done(links.length ? links : undefined)
+      },
+    }
+    const linkHandler = term.registerLinkProvider(linkProvider)
     const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
     const clearCommittedText = (event) => {
       if (event.inputType === 'insertText' && !event.isComposing) helper.value = ''
@@ -394,6 +434,7 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
       for (const handler of motionModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()
       helper?.removeEventListener('input', clearCommittedText)
+      linkHandler.dispose()
       inputSub.dispose()
       if (typeof unsubscribeFont === 'function') unsubscribeFont()
       else unsubscribeFont?.dispose?.()

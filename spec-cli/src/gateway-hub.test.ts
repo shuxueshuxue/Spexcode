@@ -19,6 +19,7 @@ import { authStorePath } from './gateway-auth.js'
 let home = ''
 let hubPort = 0
 let hubWidePort = 0
+let fallbackHubPort = 0
 const servers: http.Server[] = []
 let adminCookie = ''   // captured as the story progresses
 let projACookie = ''
@@ -76,6 +77,8 @@ function registerProject(id: string, url: string): void {
 
 const hub = (path: string, init: RequestInit = {}) =>
   fetch(`http://127.0.0.1:${hubPort}${path}`, { redirect: 'manual', ...init })
+const fallbackHub = (path: string, init: RequestInit = {}) =>
+  fetch(`http://127.0.0.1:${fallbackHubPort}${path}`, { redirect: 'manual', ...init })
 
 const firstCookie = (res: Response): string => {
   const sc = res.headers.getSetCookie()
@@ -104,6 +107,12 @@ before(async () => {
   servers.push(startHubGateway({ port: hubPort, host: '127.0.0.1' }))
   hubWidePort = await freePort()
   servers.push(startHubGateway({ port: hubWidePort, host: '0.0.0.0' })) // for the non-loopback tests only
+  fallbackHubPort = await freePort()
+  servers.push(startHubGateway({
+    port: fallbackHubPort,
+    host: '127.0.0.1',
+    extensions: { fallback: (_req, res) => { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<!doctype html><html>shell</html>') } },
+  }))
   await new Promise((r) => setTimeout(r, 100))
 })
 
@@ -116,6 +125,56 @@ test('an open project (no password) is served straight through — and gateway c
   assert.equal(body.who, 'A')
   assert.equal(body.path, '/api/thing?x=1', 'the /p/:id prefix is stripped, query preserved')
   assert.equal(body.cookie, 'theme=dark', 'spex_* cookies are stripped; foreign cookies pass')
+})
+
+test('scoped static fallback serves assets but leaves extensionless health on the backend', async () => {
+  const asset = await fallbackHub('/p/projA/assets/index.js', { headers: { accept: '*/*' } })
+  assert.equal(asset.status, 200)
+  assert.match(asset.headers.get('content-type') ?? '', /text\/html/)
+  assert.match(await asset.text(), /shell/)
+
+  const health = await fallbackHub('/p/projA/health', { headers: { accept: '*/*' } })
+  assert.equal(health.status, 200)
+  assert.match(health.headers.get('content-type') ?? '', /application\/json/)
+  assert.equal((await health.json() as any).path, '/health')
+})
+
+test('a browser navigation to a scoped /web/ preview reaches the preview, not the shell', async () => {
+  const web = await fallbackHub('/p/projA/web/sess/key/', { headers: { accept: 'text/html,application/xhtml+xml' } })
+  assert.doesNotMatch(await web.text(), /shell/)
+})
+
+test('a browser navigation to a scoped /api path reaches the backend, not the shell', async () => {
+  const api = await fallbackHub('/p/projA/api/graph', { headers: { accept: 'text/html' } })
+  assert.doesNotMatch(await api.text(), /shell/)
+})
+
+test('scoped GET dispatch follows the route matrix', async () => {
+  const cases = [
+    { path: '/p/projA/', accept: 'text/html', destination: 'shell' },
+    { path: '/p/projA', accept: 'text/html', destination: 'redirect' },
+    { path: '/p/projA/assets/x.js', accept: '*/*', destination: 'shell' },
+    { path: '/p/projA/health', accept: '*/*', destination: 'backend' },
+    { path: '/p/projA/api/graph', accept: 'text/html', destination: 'backend' },
+    { path: '/p/projA/web/sess/key/', accept: 'text/html', destination: 'preview' },
+    { path: '/p/projA/login', accept: 'text/html', destination: 'redirect' },
+  ] as const
+  for (const row of cases) {
+    const response = await fallbackHub(row.path, { headers: { accept: row.accept } })
+    const body = await response.text()
+    if (row.destination === 'shell') {
+      assert.equal(response.status, 200, row.path)
+      assert.match(body, /shell/, row.path)
+    } else if (row.destination === 'backend') {
+      assert.equal(response.status, 200, row.path)
+      assert.doesNotMatch(body, /shell/, row.path)
+    } else if (row.destination === 'preview') {
+      assert.doesNotMatch(body, /shell/, row.path)
+    } else {
+      assert.equal(response.status, 302, row.path)
+      assert.equal(response.headers.get('location'), '/p/projA/', row.path)
+    }
+  }
 })
 
 test('scoped HTTP completes and an abrupt SSE downstream close reclaims the backend socket', async () => {

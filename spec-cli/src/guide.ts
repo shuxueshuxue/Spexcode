@@ -656,9 +656,11 @@ const WEB = `spex guide web — hand a running local web service to the human
 
 Use the session web list after starting a local page the human should inspect:
 
-  spex session web add http://127.0.0.1:5173/
+  npm run build
+  npm run preview -- --host 127.0.0.1 --port 4173
+  spex session web add http://127.0.0.1:4173/
   spex session web ls
-  spex session web retract http://127.0.0.1:5173/
+  spex session web retract http://127.0.0.1:4173/
 
 Posting records the canonical loopback HTTP URL beside the global session record. It does not fetch the page,
 start a process, or move bytes. The dashboard uses its own same-origin gateway only when the human opens the
@@ -666,8 +668,11 @@ preview, including WebSocket traffic, so changes to the running service are visi
 
 Only loopback HTTP URLs with an explicit port are accepted: 127.0.0.1, localhost, or ::1. The service remains
 host-local and must stay running. A stopped service remains listed and reports that its upstream is unavailable.
-The proxy has a path prefix, so use relative asset/navigation URLs or configure your dev server's base path;
-hard-coded root-absolute Vite/Next assets cannot be made portable by a proxy guessing at JavaScript.`
+
+RULE: publish a production build, not a dev server. A service is publishable through this channel when its asset
+and navigation URLs are relative and it reads its own base from location.pathname, so the same bytes work at the
+root and under the gateway's path prefix. Configure the framework's base-path option when building, then serve
+that dist (for example, vite preview as above); the gateway forwards the prefix and bytes without rewriting them.`
 
 const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB }
 

@@ -56,8 +56,10 @@ In the host dashboard, this authorized `/web/...` route is recognized before the
 fallback, so an iframe receives the posted page rather than the dashboard shell. The service must be capable
 of running below its assigned prefix: relative resource URLs work directly, while
 an application hard-coding root-absolute asset, navigation, or HMR URLs needs its normal base-path
-configuration. This is an explicit framework constraint rather than brittle HTML/JavaScript rewriting by the
-gateway.
+configuration. The positive publish rule is: publish a production build whose asset and navigation URLs are
+relative and whose app reads its base from `location.pathname`; configure that base at build time, then keep the
+resulting service running. This is an explicit framework constraint rather than brittle HTML/JavaScript rewriting
+by the gateway.
 
 ## resource tabs
 

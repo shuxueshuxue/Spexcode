@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 const source = (name) => readFileSync(new URL(name, import.meta.url), 'utf8')
 
 test('live terminals are writable by default and only suspended input asks for confirmation', () => {
-  const term = readFileSync(new URL('../../packages/terminal-ui/src/SessionTerminal.tsx', import.meta.url), 'utf8')
+  const term = readFileSync(new URL('./terminal/SessionTerminal.tsx', import.meta.url), 'utf8')
   const session = source('./SessionInterface.jsx')
 
   assert.match(term, /SessionTerminal\([^)]*writable = true/)

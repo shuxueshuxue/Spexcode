@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { selfSummary, paneActivity, deriveHeadline } from './sessions.js'
-import { claudeHarness, codexHarness } from './harness.js'
+import { claudeHarness } from './harness.js'
+import { codexHarness } from './codex-harness.js'
 
 // The headline only shows the agent's OWN self-summary, never tmux's default pane title. The discriminator
 // is the leading status glyph Claude Code always emits; a glyph-less title is the boot-time default the row

@@ -9,7 +9,6 @@ const buildScript = fileURLToPath(new URL('./build-dist.mjs', import.meta.url))
 const packages = [
   'packages/transcript',
   'packages/transcript-ui',
-  'packages/terminal-ui',
   'packages/session-protocol',
   'packages/session-topology',
   'packages/session-runtime',

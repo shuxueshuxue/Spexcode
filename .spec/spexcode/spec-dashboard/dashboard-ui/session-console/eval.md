@@ -415,7 +415,10 @@ scenarios:
       Before selection, unvisited headless rows render no TimelineChat and issue no timeline/detail requests.
       Selecting one mounts exactly its conversation and performs its bounded reads; switching away stops its
       refresh timer without discarding the rendered history, and returning resumes from that history without a
-      duplicate mount storm. Live pane-backed terminals keep their existing warm sockets.
+      duplicate mount storm — for as long as it is inside the warm set, which holds the most recently shown
+      conversations and no more. Selecting past that bound gives up the least recently shown one, and returning
+      to THAT row is an ordinary first visit: one mount, its bounded reads, no storm. Live pane-backed terminals
+      keep their existing warm sockets and are not part of this bound.
   - name: corrupt-record-quarantine-context-control
     tags: [frontend-e2e, desktop, backend-api]
     description: >-

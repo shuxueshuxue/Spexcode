@@ -47,7 +47,7 @@ scenarios:
     code:
       - spec-dashboard/src/SessionInterface.jsx
       - spec-dashboard/src/session.js
-      - spec-dashboard/src/styles.css
+    related: [spec-dashboard/src/styles.css]
   - name: codex-headline-is-task-not-folder
     tags: [frontend-e2e, desktop]
     description: >-

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LiveTail, Quote, TranscriptView, elapsed, timeOf } from '@spexcode/transcript-ui'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
@@ -277,7 +277,14 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
 
 // `specs` feeds the `[[` door and send-time expansion; `boardCommands` are the host's board rows (`[ui]`,
 // run on the board) for the `/` palette — the phone host passes none and keeps presets + harness commands.
-export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
+// A MOUNTED CONVERSATION IS A NEIGHBOUR, NOT A CHILD OF WHOEVER IS TYPING. The console keeps several of these
+// mounted at once ([[session-console]]'s layers), and its own composers hold their draft text in the console's
+// state — so without this gate one keystroke in the New prompt or the Command Box re-rendered every mounted
+// timeline, and the cost of typing grew with how many sessions the reader had visited. Measured on this
+// project's board: 3.8ms per character with none mounted, 593ms with twenty. The props below are referentially
+// stable for a layer nobody is looking at, which is what makes the gate hold; the two that were not — a fresh
+// `[]` for `boardCommands` and an inline `onRestore` — are stabilised at the call site.
+function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
   const t = useT()
   const isMobile = useIsMobile()
   const [events, setEvents] = useState(null)
@@ -770,3 +777,5 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     </DashboardTranscriptUi>
   )
 }
+
+export default memo(TimelineChat)

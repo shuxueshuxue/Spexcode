@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname, isAbsolute, resolve } from 'node:path'
@@ -11,26 +9,13 @@ import { defaultHarness, HARNESSES, harnessById, rendezvousListening } from './h
 import { gitTry } from '@spexcode/spec-core'
 import { ResourceConflict } from './host-resources.js'
 import { recordStatus } from './session-timeline.js'
+import { tmux, probeTimedOut, TMUX_PROBE_TIMEOUT_MS } from './session-tmux.js'
 
-const pexec = promisify(execFile)
-export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
-const TMUX_PROBE_TIMEOUT_MS = 4000
-export type Lifecycle = SessionLifecycle
-export type Proposal = SessionProposal
+type Lifecycle = SessionLifecycle
+type Proposal = SessionProposal
 let scheduleWatchNotifications: (target: SessRec) => void = () => {}
 let withSessionTransition: <T>(id: string, body: () => Promise<T>) => Promise<T> = (_id, body) => body()
 
-async function tmux(args: string[], timeoutMs?: number): Promise<string> {
-  const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
-  return stdout
-}
-// a rejected pexec whose child we KILLED (timeout) vs one that exited cleanly non-zero (e.g. tmux "no server
-// running" when there are genuinely no sessions). Only the former is a PROBE FAILURE (→ unknown); a clean
-// non-zero exit is authoritative (→ everything offline). node sets `killed`/`signal` when it SIGKILLs on timeout.
-function probeTimedOut(e: unknown): boolean {
-  const err = e as { killed?: boolean; signal?: string | null; code?: string }
-  return err?.killed === true || err?.signal === 'SIGKILL' || err?.code === 'ETIMEDOUT'
-}
 export type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null

@@ -10,6 +10,7 @@ related:
   - spec-cli/test/session-record-integrity-fixture.ts
   - packages/spec-core/src/layout.ts
   - spec-cli/src/session-record-lock.ts
+  - spec-cli/src/session-tmux.ts
 ---
 
 # record-integrity

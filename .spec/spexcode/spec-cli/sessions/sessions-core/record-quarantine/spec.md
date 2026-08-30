@@ -9,6 +9,7 @@ related:
   - spec-cli/src/session-record.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/session-record-integrity.test.ts
+  - spec-cli/src/session-tmux.ts
 ---
 
 # record-quarantine

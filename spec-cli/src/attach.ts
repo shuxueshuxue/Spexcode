@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
-import { alive, apiBase, TMUX_SOCK } from './sessions.js'
+import { alive, apiBase } from './sessions.js'
+import { TMUX_SOCK } from './session-tmux.js'
 
 const AGENT_ALTERNATIVES = 'read the pane with `spex session show <SEL> --capture`, drive it with `session send` (plain text first; `--keys` only as a last resort)'
 

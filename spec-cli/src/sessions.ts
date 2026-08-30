@@ -1,6 +1,5 @@
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import { createConnection } from 'node:net'
-import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
@@ -26,9 +25,8 @@ import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { lastHumanSendVia, recordStatus } from './session-timeline.js'
+import { TMUX_SOCK, TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
 
-const pexec = promisify(execFile)
-export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
@@ -126,8 +124,8 @@ const rvEnv = (id: string, harness = HARNESS, nativeStartToken?: string | null) 
 // Re-exported for existing importers.
 export type { DispatchResult }
 
-export type Lifecycle = SessionLifecycle
-export type Proposal = SessionProposal
+type Lifecycle = SessionLifecycle
+type Proposal = SessionProposal
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown' | 'corrupt' | 'retired'
 export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
@@ -219,27 +217,6 @@ export const sessionTitle = (s: Session): string => s.title
 // Compatibility for older callers; all visible surfaces now resolve through `title`.
 export const sessionHeadline = sessionTitle
 
-// @@@ tmux probe timeout - under load (the incident: load ~30 + swap thrash) a bare `tmux list-sessions` can
-// HANG, and with no bound the whole board assembly hung behind it — the dashboard froze / dropped rows, which
-// the human read as "sessions disappeared". So the liveness/title probes pass a bounded timeout; on expiry
-// execFile SIGKILLs the child and rejects with `killed:true`, which liveSnapshot tells apart from a clean
-// "no server" exit (see probeTimedOut) so a timeout renders `unknown`, not a false `offline`.
-const TMUX_PROBE_TIMEOUT_MS = 4000
-// A destructive close already names one target, so it can afford the longer bounded probe without making
-// every dashboard refresh wait behind an overloaded tmux server.
-const TARGET_PROBE_TIMEOUT_MS = 15000
-const TARGET_TMUX_CLOSE_SETTLE_MS = 3000
-async function tmux(args: string[], timeoutMs?: number): Promise<string> {
-  const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
-  return stdout
-}
-// a rejected pexec whose child we KILLED (timeout) vs one that exited cleanly non-zero (e.g. tmux "no server
-// running" when there are genuinely no sessions). Only the former is a PROBE FAILURE (→ unknown); a clean
-// non-zero exit is authoritative (→ everything offline). node sets `killed`/`signal` when it SIGKILLs on timeout.
-function probeTimedOut(e: unknown): boolean {
-  const err = e as { killed?: boolean; signal?: string | null; code?: string }
-  return err?.killed === true || err?.signal === 'SIGKILL' || err?.code === 'ETIMEDOUT'
-}
 async function tmuxOk(args: string[]): Promise<boolean> { try { await tmux(args); return true } catch { return false } }
 export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-session', '-t', id]) }
 

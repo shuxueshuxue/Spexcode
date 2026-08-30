@@ -66,6 +66,14 @@ scenarios:
       clicking it leaves the reader on the session. An active mouse-tracking mode suppresses neither, and a
       reference the TUI wrapped across two rows is simply left unlinked rather than underlining the wrong cells.
 
+  - name: dashboard-terminal-build-and-warm-switch
+    tags: [frontend-e2e]
+    test: spec-dashboard/src/terminal/render.test.tsx
+    code: spec-dashboard/src/terminal/SessionTerminal.tsx
+    related: [spec-dashboard/package.json, spec-dashboard/src/terminal/index.ts, spec-dashboard/scripts/patch-xterm-sync-resize.mjs, spec-dashboard/test/session-term-warm-switch.e2e.mjs]
+    description: Build and server-render the dashboard terminal, then run its warm-switch terminal scenario on the rebuilt dashboard.
+    expected: The dashboard terminal test passes through react-dom/server, the dashboard build must apply the xterm 6.0.0 patch or fail loudly, and the dashboard must keep mounted terminals across a session switch while hidden output is withheld and the visible session repaints.
+
 ---
 
 Measure through a real browser and real tmux-backed session; a mocked key handler is not this contract.

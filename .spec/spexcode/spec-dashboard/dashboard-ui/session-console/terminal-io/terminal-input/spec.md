@@ -6,6 +6,7 @@ desc: The live xterm is the default input surface: browser-native keyboard and I
 code:
   - spec-dashboard/src/terminal/SessionTerminal.tsx
 related:
+  - spec-dashboard/src/terminal/index.ts
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/src/pty-bridge.ts
   - spec-cli/src/pty-helper.mjs
@@ -57,7 +58,7 @@ therefore four messages on one terminal relationship, not separate approximation
 
 **A reference in the pane opens the same door the transcript gives.** The pane is a live TUI, i.e. TEXT, so
 a `[[node]]` an agent typed is reachable only if something reads the rendered line back — and the pane is a
-fallback view of a session, never a weaker one. The terminal package owns that read (which buffer line,
+fallback view of a session, never a weaker one. The terminal adapter owns that read (which buffer line,
 which cells, how a wide cell maps to columns) and takes from its host both what counts as a link and where
 activation goes; it never learns what a spec node is. The read is per rendered line, so a reference the TUI
 wrapped is left unlinked rather than underlined across the wrong cells, and only an id the host recognizes

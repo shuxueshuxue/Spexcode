@@ -183,8 +183,16 @@ surface uses ([[selection-attachment]]), and it rides out as one ordinary messag
 point is not decoration: the agent receives the passage verbatim in its own prompt, so "why this" has a
 referent it cannot mistake, which is the thing a reader loses in a long turn. It is the same verb
 [[prose-dispatch]] already offers a spec passage, minus the one part that surface needs and this one does
-not — an address to choose — because this composer already stands inside the session it is quoting; aiming
-the message elsewhere stays the ordinary `@` grammar in the draft, not a control of its own.
+not — an address to choose — because this composer already stands inside the session it is quoting.
+
+**This footer sends to its own session and nowhere else, and the `@` in a draft does not change that.** An
+`@` naming an existing session is a passive reference ([[mentions]]) — text, not a route; delivering to
+another running session stays the explicit `spex session send`, and handing a passage to one is
+[[prose-dispatch]]'s card, which is exactly why THAT surface needs an address control and this one does not.
+The single active token is `@new`, and it does not re-aim the message either: it spawns a CHILD under this
+session whose prompt carries the whole message, quote token included. That child is where the token's
+session field earns its keep — it is reading a passage out of a conversation that is not its own, and
+without the address it would have a quotation from nowhere.
 
 A quoted passage is addressed by the session and the MOMENT it was said, so every timeline row carries its
 own moment. A row that has no usable one cannot be addressed, and there the quote verb is visibly

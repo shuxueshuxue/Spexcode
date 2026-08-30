@@ -16,7 +16,7 @@
     "test": "node --test src/*.test.mjs src/i18n/*.test.mjs",
     "test:identity-e2e": "node test/identity-chain.e2e.mjs",
     "prebuild": "node ../packages/terminal-ui/scripts/patch-xterm-sync-resize.mjs",
-    "build": "vite build",
+    "build": "vite build --base ./",
     "build:public": "VITE_PUBLIC_GRAPH_ONLY=1 vite build --outDir dist-public --base ./",
     "prepack": "npm run build && npm run build:public",
     "prepublishOnly": "node ../scripts/release-publish.mjs --from-package-publish",

@@ -2,7 +2,7 @@
 scenarios:
   - name: three-readings-stay-three
     tags: [cli, backend-api]
-    code: [spec-cli/src/sessions.ts#readRecord]
+    code: [spec-cli/src/session-record.ts]
     description: >
       In an isolated store put three governed sessions into the three states — no record file at all, a record
       whose bytes do not parse, and a record whose recorded worktree has been removed — then read `spex session
@@ -14,7 +14,7 @@ scenarios:
       A transient read fault reads as none of the three and still throws.
   - name: a-note-round-trips-byte-for-byte
     tags: [cli]
-    code: [spec-cli/src/sessions.ts#writeRecord]
+    code: [spec-cli/src/session-record.ts]
     description: >
       Declare with notes containing a double quote, a backslash, a newline, and CJK text; read the record back
       through the CLI table, `--json`, and the HTTP projection.

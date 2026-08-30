@@ -47,6 +47,16 @@ menu is aimed at. Enter/Space remain native button activation and [[esc-layers]]
 opener returns focus to whatever it borrowed it from. The two openings differ only in who owns focus, never
 in which commands exist.
 
+**A row may be a DOOR instead of a verb.** When one entry stands for a SET whose members are each their own
+destination, listing them flat would bury the menu's commands under data — so that entry carries no action of
+its own and opens a second panel beside it. It reads as an ordinary row ending in the shell's disclosure
+chevron, stays lit while its panel is open, and answers the pointer (hover opens; leaving closes after a
+grace long enough to cross the gap to the panel) and the keyboard (ArrowRight/Enter opens, ArrowLeft closes)
+alike. The panel is the SAME shell wearing the same row grammar, placed from the row's measured rect and
+clamped into the viewport — it opens to the left at the right edge and rides up at the bottom — because the
+menu surface clips its own overflow and a panel laid out inside that box would be cut off. A door whose set
+is capped SAYS what the cap hid, in a quiet line that is visibly not a row you can press.
+
 A command row may print the binding it also answers to, in a trailing quiet column. That cap is READ from
 the key registry ([[keyboard-nav]]'s hint reader), never typed into the label, so a rebind moves the printed
 cap with the finger and a menu can never name a key the keyboard no longer fires. The hint is decoration for

@@ -1412,6 +1412,14 @@ a.scenario-count:hover { background: var(--wash-hover); }
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-tight); color: var(--ink);
 }
 .sess-menu-icon { width: 17px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+/* a door row ([[context-menu-chrome]]): it reads like any command but ends in the disclosure chevron that
+   says a panel opens beside it, and it stays lit while that panel is open so the eye keeps the thread. */
+.sess-menu-submenu { position: relative; }
+.sess-menu-more { display: inline-flex; align-items: center; color: var(--muted); }
+.sess-menu-parent.is-open { background: var(--wash-hover); color: var(--ink2); }
+.sess-menu-sub { min-width: 170px; }
+/* what a cap hides is said, not dropped — quiet, and never mistaken for a row you can press. */
+.sess-menu-note { padding: 3px 7px 3px 31px; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-tight); }
 .sess-menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the binding a command also answers to — quiet, never competing with the word it belongs to. */
 .sess-menu-hint { flex: none; color: var(--muted); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); }

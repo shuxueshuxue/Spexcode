@@ -59,6 +59,21 @@ export const overlaySessions = (node, sessions = []) => {
   const sources = [...new Set((node?.overlays || []).map((o) => o.source))]
   return sources.map((source) => (sessions || []).find((s) => s.source === source)).filter(Boolean)
 }
+// @@@ session spec nodes - the MIRROR of overlaySessions ([[session-rename]]'s spec-related door): the
+// nodes THIS session is changing, read from the same pending ops the graph overlay is drawn from, deduped
+// in overlay order. Ids only: resolving one to a live node is the caller's business, because a node the
+// session is ADDING has no row on the trunk yet and must still be listed.
+export const sessionSpecNodes = (session) =>
+  [...new Set(((session?.ops) || []).map((op) => op?.nodeId).filter(Boolean))]
+
+// what the spec door actually renders: the first `max` of those nodes plus how many the cap held back. The
+// cap keeps a wide session from pushing a menu's own verbs off the screen, and `hidden` is what makes the
+// omission SAYABLE — a door that silently showed eight of twenty would read as "these are the nodes".
+export const specDoorRows = (session, max) => {
+  const all = sessionSpecNodes(session)
+  const rows = max > 0 ? all.slice(0, max) : all
+  return { rows, hidden: all.length - rows.length }
+}
 // the ONE liveness join: resolve an id against the board sessions and return the
 // session only while it is ALIVE (listed and not offline) — the same alive/offline judgment the originator
 // chip renders (Thread.jsx). A non-session id ('human', a github

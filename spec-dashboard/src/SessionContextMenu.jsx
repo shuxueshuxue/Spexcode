@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
+import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator, ContextMenuSubmenu } from './ContextMenu.jsx'
 import Modal from './Modal.jsx'
 import SessionAttach from './SessionAttach.jsx'
 import { apiFetch, loadSettings } from './data.js'
 import { openNewTab } from './tabs.js'
-import { sessionHeadline } from './session.js'
+import { sessionHeadline, specDoorRows } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
+import { navigate } from './route.js'
+
+// how many node rows the spec door shows before it starts counting the rest instead.
+const SPEC_ROWS_MAX = 8
 
 export default function SessionContextMenu({ menu, closeRequest = null, onCloseRequestDone, onClose, onChanged, onLock, onError, onMultiSelect, onDetach }) {
   const t = useT()
@@ -68,10 +72,21 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
     openNewTab('sessions', id)
   }
 
-  const lockOnGraph = (e) => {
+  // the graph SEARCH: the old lock — spotlight this session's changed nodes on the board and walk them.
+  // It keeps its place as the LAST row of the spec door, because it is the answer to "show me all of them,
+  // where they live" rather than to "take me to one".
+  const findOnGraph = (e) => {
     e.stopPropagation()
     onLock?.(menu.session)
     onClose()
+  }
+
+  // one node, read as a document. The same address an inline `[[id]]` resolves to ([[spec-view]]), so the
+  // menu's door and a reference's door are the same door.
+  const openSpecNode = (id) => (e) => {
+    e.stopPropagation()
+    onClose()
+    navigate('spec', id)
   }
 
   const startRename = (e) => {
@@ -179,6 +194,11 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
       .finally(() => onChanged?.())
   }
 
+  // The door lists the nodes this session is changing, capped so a wide session cannot push the menu's own
+  // verbs off the screen. What the cap hides is SAID, not silently dropped, and `find on graph` below still
+  // reaches every one of them.
+  const { rows: specNodes, hidden: hiddenSpecNodes } = specDoorRows(menu?.session, SPEC_ROWS_MAX)
+
   const submit = async (e) => {
     e.preventDefault()
     if (busy) return
@@ -202,7 +222,16 @@ export default function SessionContextMenu({ menu, closeRequest = null, onCloseR
         <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.session.id} label={t('sessionWindow.menuLabel')}>
           <ContextMenuGroup>
             <ContextMenuItem icon="plus" onClick={openInNewTab}>{t('tabs.openInNewTab')}</ContextMenuItem>
-            <ContextMenuItem icon="lock" onClick={lockOnGraph}>{t('sessionWindow.lock')}</ContextMenuItem>
+            <ContextMenuSubmenu icon="graph" label={t('sessionWindow.specRelated')}>
+              {specNodes.map((id) => (
+                <ContextMenuItem key={id} icon="graph" onClick={openSpecNode(id)}>{id}</ContextMenuItem>
+              ))}
+              {hiddenSpecNodes > 0 && (
+                <div className="sess-menu-note">{t('sessionWindow.specMore', { n: hiddenSpecNodes })}</div>
+              )}
+              {specNodes.length > 0 && <ContextMenuSeparator />}
+              <ContextMenuItem icon="search" onClick={findOnGraph}>{t('sessionWindow.findOnGraph')}</ContextMenuItem>
+            </ContextMenuSubmenu>
             <ContextMenuItem icon="pencil" onClick={startRename}>{t('sessionWindow.rename')}</ContextMenuItem>
             <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
             {menu.session.parent && <ContextMenuItem icon="corner-up-left" onClick={detach}>{t('sessionWindow.detach')}</ContextMenuItem>}

@@ -28,8 +28,8 @@ const renderTimelineText = (text) => <TimelineRichText>{text}</TimelineRichText>
 
 // `loadToolOutput` is per seam (its interval addresses the body); everything else is set once at the top of the
 // conversation and inherited. A seam passes only the loader, so the outer binding is never restated.
-export function DashboardTranscriptUi({ loadToolOutput, answerQuestion, children }) {
+export function DashboardTranscriptUi({ loadToolOutput, children }) {
   const t = useT()
   const labels = useMemo(() => ({ ...defaultLabels, loading: t('common.loading'), running: t('session.executionRunning'), more: t('mobile.more') }), [t])
-  return <TranscriptUi renderText={renderTimelineText} labels={labels} loadToolOutput={loadToolOutput} answerQuestion={answerQuestion}>{children}</TranscriptUi>
+  return <TranscriptUi renderText={renderTimelineText} labels={labels} loadToolOutput={loadToolOutput}>{children}</TranscriptUi>
 }

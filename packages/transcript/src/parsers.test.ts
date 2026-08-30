@@ -27,14 +27,6 @@ test('claude: is_error on a tool_result marks the call failed; a plain result ca
   assert.equal(tools.find((tool) => tool.id === 't2')?.output, 'error: not really, just prose')
 })
 
-test('native question tools keep structured prompts and options in the normalized transcript', () => {
-  const at = '2026-08-29T00:00:00.000Z'
-  const claude = collect([claudeEvent({ type: 'assistant', timestamp: at, uuid: 'qa', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'ask-c', name: 'AskUserQuestion', input: { questions: [{ question: 'Pick a color', header: 'Color', options: [{ label: 'Blue', description: 'Cool' }], multiSelect: false }] } }] } })])
-  assert.deepEqual(claude[0]?.question, { questions: [{ id: 'question-0', question: 'Pick a color', header: 'Color', options: [{ label: 'Blue', description: 'Cool' }] }] })
-  const codex = collect([codexEvent({ timestamp: at, type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'ask-x', name: 'request_user_input', input: { questions: [{ id: 'mode', question: 'Choose mode', options: [{ label: 'Fast', description: 'Quick' }], isOther: false }] } } })])
-  assert.deepEqual(codex[0]?.question, { questions: [{ id: 'mode', question: 'Choose mode', options: [{ label: 'Fast', description: 'Quick' }] }] })
-})
-
 test('codex app-server: item status failed → failed, declined → rejected (and ends the call without output)', () => {
   const started = (id: string) => codexAppServerEvent({ method: 'item/started', params: { startedAtMs: 1, item: { id, type: 'commandExecution', command: 'rm -rf /', status: 'inProgress' } } })
   const tools = collect([

@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, answerCodexUserInput, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, HARNESSES, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, HARNESSES, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
@@ -113,12 +113,9 @@ test('Codex turn observer reports only failed native completions with the native
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
   const threadId = 'observer-thread'
-  let answerResponse: any = null
   const server = codexRpcFixture((message, send) => {
-    if (!message.method && message.id === 99) { answerResponse = message; return NO_RPC_RESPONSE }
     if (message.method !== 'thread/resume') throw new Error(`unexpected RPC ${message.method}`)
     setTimeout(() => {
-      send({ id: 99, method: 'item/tool/requestUserInput', params: { threadId, turnId: 'turn-1', itemId: 'question-1', questions: [] } })
       send({ method: 'turn/completed', params: { threadId, turn: { id: 'done', status: 'completed', completedAt: 100 } } })
       send({ method: 'turn/completed', params: { threadId, turn: { id: 'stopped', status: 'interrupted', completedAt: 101 } } })
       send({ method: 'turn/completed', params: { threadId, turn: { id: 'failed', status: 'failed', completedAt: 102, error: { message: 'context window exceeded' } } } })
@@ -161,13 +158,6 @@ test('Codex turn observer reports only failed native completions with the native
       new Promise((_, reject) => setTimeout(() => reject(new Error('turn failure was not observed')), 1_000)),
     ]), { message: 'context window exceeded', completedAt: 102 })
     assert.equal(failures.length, 1, 'completed and interrupted outcomes are controls, not errors')
-    let answered = { ok: false, error: 'not ready' } as { ok: boolean; error?: string }
-    for (let attempt = 0; attempt < 50 && !answerResponse; attempt++) {
-      answered = await answerCodexUserInput({ session: 'observer-session', harnessSessionId: threadId }, 'question-1', { mode: ['Fast'] })
-      if (!answerResponse) await new Promise((resolve) => setTimeout(resolve, 10))
-    }
-    assert.deepEqual(answered, { ok: true })
-    assert.deepEqual(answerResponse, { id: 99, result: { answers: { mode: { answers: ['Fast'] } } } })
   } finally {
     observer?.close()
     await observer?.closed

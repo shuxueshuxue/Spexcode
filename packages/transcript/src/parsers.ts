@@ -1,4 +1,4 @@
-import { TranscriptReadError, type TranscriptRange, type TranscriptRead, type TurnOutcome, type TranscriptQuestion } from './turns.js'
+import { TranscriptReadError, type TranscriptRange, type TranscriptRead, type TurnOutcome } from './turns.js'
 
 // ONE PARSER PER HARNESS. Each function turns one native record — a line of Claude's project JSONL (which is
 // also exactly what its `--output-format stream-json` prints), a Codex rollout line, a pi session line, an
@@ -40,21 +40,6 @@ const at = (value: Record<string, unknown> | null): number | null => {
 const compact = (value: unknown): string => {
   if (typeof value === 'string') return value
   try { return JSON.stringify(value) ?? String(value) } catch { return String(value) }
-}
-const questionShape = (value: unknown): { questions: readonly TranscriptQuestion[] } | undefined => {
-  const root = object(value)
-  const rows = items(root?.questions).flatMap((entry, index) => {
-    const row = object(entry)
-    const question = string(row?.question)
-    if (!question) return []
-    const options = items(row?.options).flatMap((option) => {
-      const item = object(option)
-      const label = string(item?.label)
-      return label ? [{ label, ...(string(item?.description) ? { description: string(item?.description)! } : {}) }] : []
-    })
-    return [{ id: string(row?.id) ?? `question-${index}`, question, ...(string(row?.header) ? { header: string(row?.header)! } : {}), ...(options.length ? { options } : {}), ...(row?.multiSelect === true ? { multiple: true } : {}) }]
-  })
-  return rows.length ? { questions: rows } : undefined
 }
 // A RESULT IS WHAT THE TOOL SAID, NOT ITS WIRE SHAPE. Every harness that records a result as content blocks
 // (Claude's tool_result content, Codex's input_text output blocks, MCP results everywhere) means the text of
@@ -168,7 +153,7 @@ export function claudeEvent(value: unknown): ParsedEvent | null {
       if (block?.type === 'text') turn.text = [turn.text, string(block.text)].filter(Boolean).join('\n') || undefined
       if (block?.type === 'tool_use') {
         const id = string(block.id) ?? `tool-${turn.tools.length}`
-        turn.tools.push({ id, name: string(block.name) ?? 'tool', input: block.input === undefined ? undefined : compact(block.input), outputLines: 0, outputBytes: 0, ...(block.name === 'AskUserQuestion' ? { question: questionShape(block.input) } : {}) })
+        turn.tools.push({ id, name: string(block.name) ?? 'tool', input: block.input === undefined ? undefined : compact(block.input), outputLines: 0, outputBytes: 0 })
       }
     }
     return { at: eventAt, turn }
@@ -207,8 +192,7 @@ export function codexEvent(value: unknown): ParsedEvent | null {
   if (entry.type === 'response_item' && (type === 'custom_tool_call' || type === 'function_call')) {
     const id = string(payload.call_id ?? payload.id) ?? 'tool'
     const rawInput = payload.input === undefined && payload.arguments === undefined ? undefined : compact(payload.input ?? payload.arguments)
-    const name = string(payload.name ?? payload.tool_name) ?? 'tool'
-    return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name, input: codexExecCommand(rawInput), outputLines: 0, outputBytes: 0, ...(name === 'request_user_input' ? { question: questionShape(payload.input ?? payload.arguments) } : {}) }] } }
+    return { at: eventAt, turn: { id: idOf(payload) ?? idOf(entry), at: eventAt, role: 'assistant', tools: [{ id, name: string(payload.name ?? payload.tool_name) ?? 'tool', input: codexExecCommand(rawInput), outputLines: 0, outputBytes: 0 }] } }
   }
   // THE ROLLOUT PUTS THE VERDICT IN A THIRD RECORD. Unlike every other source here, a codex result item
   // carries no failure field at all — `function_call_output` and `custom_tool_call_output` have only

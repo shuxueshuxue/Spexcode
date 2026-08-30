@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LiveTail, Quote, TranscriptView, elapsed, timeOf } from '@spexcode/transcript-ui'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
-import { answerSessionQuestion, interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
+import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { richTextFromRange } from './RichText.js'
@@ -315,7 +315,6 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     }
     return loader
   }
-  const answerQuestion = useCallback((toolId, answers) => answerSessionQuestion(s.id, toolId, answers), [s.id])
   // THE OPEN TAIL'S INTERVAL ENDS AT THE LATEST POLL. It used to end at mount time so the transcript key
   // stayed stable — which also meant an EXPANDED live seam never re-read: its `0 turns · 0 tool uses` froze
   // the moment it opened and nothing the agent did afterwards was inside the interval. The end now moves
@@ -721,7 +720,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
               {/* the chevron TRAILS, as on every disclosure in the conversation: content first, one shape says open */}
               <Caret open={expanded} className="m-seam-caret" />
             </button>
-            <DashboardTranscriptUi loadToolOutput={loaderFor(item.from)} answerQuestion={answerQuestion}>
+            <DashboardTranscriptUi loadToolOutput={loaderFor(item.from)}>
               {expanded && (
                 <div className="m-seam-inset">
                   {transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}

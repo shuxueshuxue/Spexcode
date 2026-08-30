@@ -79,10 +79,6 @@ surface:
   harness without a reliable native transcript declares the unsupported reader, which fails loudly rather than
   pretending the conversation was empty. The transcript is an ephemeral adapter observation, never a second
   SpexCode session record; [[message-stream]] owns the one conversation entry it feeds.
-- **answerQuestion** (optional) — resolve one structured human-input request already open in the native turn.
-  The capability receives the exact transcript tool id and a question-id to string-array answer map, then writes
-  the harness-native response on the existing control channel. It is never implemented by falling back to
-  `deliver` or by accepting arbitrary protocol keys; absent capability is a loud refusal from the session API.
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
   the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no

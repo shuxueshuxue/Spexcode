@@ -23,14 +23,6 @@ test('vocabulary: verb, target, split, kinds — and an adopter extends it as da
   assert.equal(toolTarget(JSON.stringify({ absolute_path: '/x/y.md' }), gemini), '/x/y.md')
 })
 
-test('structured question tool renders choices and an answer action', () => {
-  const questionTool = { ...tool('q1', 'AskUserQuestion', { questions: [] }), question: { questions: [{ id: 'mode', question: 'Choose mode', header: 'Mode', options: [{ label: 'Fast', description: 'Quick path' }] }] } }
-  const html = renderToStaticMarkup(createElement(TranscriptUi, { answerQuestion: async () => ({ ok: true }), children: createElement(ToolLine, { tool: questionTool, open: true, onToggle: () => {} }) }))
-  assert.match(html, /Choose mode/)
-  assert.match(html, /Quick path/)
-  assert.match(html, /tx-question-submit[^>]*>Answer</)
-})
-
 test('codex exec/wait read as a sentence: a bare-string command shows its first line, exec/wait get verbs', () => {
   // codex code-mode `exec` input is a bare JS string, not JSON; before, a >80-char bare string yielded NO target,
   // so the row said only "exec 4 lines". Now its first line names it.

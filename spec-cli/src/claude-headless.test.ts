@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ClaudeHeadlessController, claudeHeadlessColdRuntime, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { ClaudeHeadlessController, answerViaClaudeHeadless, claudeHeadlessColdRuntime, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { claudeHarness, claudeHeadlessHarness, HARNESSES } from './harness.js'
 
 const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
@@ -85,6 +85,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     emit({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: 'fixture' })
     return
   }
+  if (event.type === 'user' && event.message?.content?.some?.((part) => part?.type === 'tool_result')) {
+    emit({ type: 'answer_seen', tool_use_id: event.message.content.find((part) => part?.type === 'tool_result')?.tool_use_id, content: event.message.content.find((part) => part?.type === 'tool_result')?.content })
+    return
+  }
   const text = textOf(event)
   if (finishing) return
   emit({ type: 'system', subtype: 'init', session_id: 'fixture' })
@@ -130,6 +134,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 
   const active = await deliverViaClaudeHeadless(wakeRecord, 'INTERRUPT')
   assert.deepEqual(active, { ok: true })
+  const answer = await answerViaClaudeHeadless({ session: id }, 'question-1', { mode: ['Fast'] })
+  assert.deepEqual(answer, { ok: true })
+  await waitFor(() => readFileSync(emitted, 'utf8').includes('"answer_seen"'))
+  assert.match(readFileSync(emitted, 'utf8'), /"tool_use_id":"question-1"/)
   const interrupted = await interruptClaudeHeadless({ session: id })
   assert.deepEqual(interrupted, { ok: true })
   await waitFor(() => readFileSync(emitted, 'utf8').includes('control_response'))

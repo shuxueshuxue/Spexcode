@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
-import { codexHarness, codexHeadlessHarness, HARNESSES } from './harness.js'
+import { answerCodexUserInput, codexHarness, codexHeadlessHarness, HARNESSES } from './harness.js'
 
-test('codex-headless composes Codex materialization and shared-runtime ownership without a TUI attach', () => {
+test('codex-headless composes Codex materialization and shared-runtime ownership without a TUI attach', async () => {
   assert.deepEqual(HARNESSES.map((h) => h.id), [
     'claude', 'codex', 'opencode', 'pi', 'zcode',
     'claude-headless', 'opencode-headless', 'pi-headless', 'codex-headless',
@@ -26,6 +26,10 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.equal(typeof codexHeadlessHarness.launchReady, 'function')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)
+  assert.equal(typeof codexHeadlessHarness.answerQuestion, 'function')
+  assert.deepEqual(await answerCodexUserInput({ session: 'abc', harnessSessionId: 'thread-1' }, 'missing-question', { mode: ['Fast'] }), {
+    ok: false, error: 'no active Codex request_user_input question missing-question',
+  })
   assert.equal(codexHeadlessHarness.observeTurnFailures, codexHarness.observeTurnFailures)
   assert.equal(codexHeadlessHarness.sharedRuntimes, codexHarness.sharedRuntimes)
   const headlessRuntime = codexHeadlessHarness.sharedRuntimes?.('/tmp/runtime') ?? []

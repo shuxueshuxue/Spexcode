@@ -9,7 +9,7 @@ import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 import { controlRequest, withTimeout } from './headless-controller.js'
 import { shQuote } from './sh.js'
 
-type ControlRequest = { type: 'deliver'; text: string; mode: 'steer' | 'wake' } | { type: 'interrupt' }
+type ControlRequest = { type: 'deliver'; text: string; mode: 'steer' | 'wake' } | { type: 'answer'; toolId: string; answers: Record<string, readonly string[]> } | { type: 'interrupt' }
 type ClaudeHeadlessDeliveryRecord = HarnessDeliveryRecord & { status?: string }
 type ChildTurn = {
   process: ChildProcessWithoutNullStreams
@@ -38,6 +38,10 @@ const userEvent = (text: string) => JSON.stringify({
   type: 'user',
   message: { role: 'user', content: [{ type: 'text', text }] },
 })
+const toolResultEvent = (toolId: string, answers: Record<string, readonly string[]>) => JSON.stringify({
+  type: 'user',
+  message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolId, content: JSON.stringify({ answers }) }] },
+})
 
 export const claudeHeadlessSock = (id: string) => join(tmpdir(), `spexcode-ch-${id}.sock`)
 
@@ -49,6 +53,12 @@ export const deliverViaClaudeHeadless = (rec: ClaudeHeadlessDeliveryRecord, text
   controlRequest(claudeHeadlessSock(rec.session), { type: 'deliver', text, mode: rec.status === 'active' ? 'steer' : 'wake' }, {
     name: 'claude-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
     rejected: 'claude-headless control rejected the request',
+  })
+
+export const answerViaClaudeHeadless = (rec: HarnessDeliveryRecord, toolId: string, answers: Record<string, readonly string[]>) =>
+  controlRequest(claudeHeadlessSock(rec.session), { type: 'answer', toolId, answers }, {
+    name: 'claude-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
+    rejected: 'claude-headless question answer rejected',
   })
 
 export const interruptClaudeHeadless = (rec: HarnessDeliveryRecord) =>
@@ -138,6 +148,12 @@ export class ClaudeHeadlessController {
   }
 
   private async handle(request: ControlRequest): Promise<DispatchResult> {
+    if (request.type === 'answer') {
+      const current = this.child
+      if (!current?.active || !current.process.stdin.writable) return { ok: false, error: `no active claude-headless question for session ${this.id}` }
+      await this.writeLine(current, toolResultEvent(request.toolId, request.answers))
+      return { ok: true }
+    }
     if (request.type === 'deliver') {
       if (!request.text) return { ok: false, error: 'empty prompt - nothing to deliver' }
       const current = this.child

@@ -31,6 +31,10 @@ it — with one decision declared HERE: a newline in the transcript was typed mi
 break rather than reflowing as an authoring wrap; [[message-stream]] owns the live tail — the open seam's collapsed face — and the transcript stream that feeds
 the open seam.
 
+Transcript tool rows for native `AskUserQuestion`/`request_user_input` calls expose their structured options in
+the expanded seam. Selecting and submitting answers calls the session-scoped question endpoint with the native
+tool id; the UI reports adapter refusal in place and does not send a substitute composer message.
+
 **Every existing session, including offline and archived
 records, renders the same Conversation DOM: one shared timeline body and one shared footer (no surface tabs).**
 For a live session that footer is the enabled message composer. For an offline session its editor and command

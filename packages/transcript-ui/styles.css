@@ -113,6 +113,16 @@
 }
 .tx-tool-out.tx-tool-out-state { font-family: var(--tx-ui-font); font-size: var(--tx-type-meta); color: var(--tx-muted); }
 .tx-tool-out.tx-tool-out-state.is-error { color: var(--tx-red); }
+.tx-question { margin: 6px 0; padding: 8px 10px; border-left: 2px solid var(--tx-blue); background: color-mix(in srgb, var(--tx-panel2) 65%, transparent); font-family: var(--tx-ui-font); font-size: var(--tx-type-meta); }
+.tx-question-item { margin: 0 0 8px; padding: 0; border: 0; }
+.tx-question-item legend { margin-bottom: 6px; color: var(--tx-ink2); font-weight: var(--tx-weight-medium); }
+.tx-question-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.tx-question-option, .tx-question-submit { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 8px; color: var(--tx-ink2); background: none; border: 1px solid var(--tx-edge); border-radius: var(--tx-radius); font: inherit; cursor: pointer; }
+.tx-question-option:hover, .tx-question-option.is-selected { border-color: var(--tx-blue); background: var(--tx-wash-hover); }
+.tx-question-option small { color: var(--tx-muted); }
+.tx-question-submit { margin-top: 2px; color: var(--tx-paper); background: var(--tx-blue); border-color: var(--tx-blue); }
+.tx-question-submit:disabled { opacity: .45; cursor: default; }
+.tx-question-error { margin: 5px 0; color: var(--tx-red); }
 
 /* THE CHEVRON trails every disclosure; the same shape says open everywhere. */
 .tx-caret { flex: none; align-self: center; transition: transform .12s ease; }

@@ -8,6 +8,7 @@ import { defaultEnvelopes, type EnvelopeParser } from './envelope.js'
 // few words the surface says are (its own language), which vocabulary names the calls, and how the fold
 // behaves. A host wraps its surface in `TranscriptUi` once; a host that wraps nothing gets the defaults.
 export type ToolOutputResult = { ok: true; output: string | null } | { ok: false; error: string }
+export type QuestionAnswer = Readonly<Record<string, readonly string[]>>
 export type Labels = Readonly<{
   loading: string
   running: string
@@ -42,6 +43,7 @@ export type TranscriptUiOptions = Readonly<{
   // a live frame withholds output bodies; the host that knows the transport fetches one when a person opens
   // the call. Absent = every body is inline (a closed read) and a withheld one shows nothing to fetch with.
   loadToolOutput: ((toolId: string) => Promise<ToolOutputResult>) | null
+  answerQuestion: ((toolId: string, answers: QuestionAnswer) => Promise<{ ok: true } | { ok: false; error: string }>) | null
   labels: Labels
   vocabulary: Vocabulary
   // how a quoted turn's sender is read off its delivery envelope — parser rows tried in order
@@ -63,6 +65,7 @@ export function PlainText({ text }: { text: string }) {
 export const defaultOptions: TranscriptUiOptions = {
   renderText: (text) => <PlainText text={text} />,
   loadToolOutput: null,
+  answerQuestion: null,
   labels: defaultLabels,
   vocabulary: defaultVocabulary,
   envelopes: defaultEnvelopes,

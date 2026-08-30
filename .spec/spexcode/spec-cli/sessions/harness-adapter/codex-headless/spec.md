@@ -44,6 +44,11 @@ Delivery directly reuses Codex's existing app-server JSON-RPC transport. It read
 starts the next turn without spawning a process or waking a pane. Socket, thread, and RPC failures fail loudly
 through the public session API; there is no PTY typing or wake fallback.
 
+Codex `request_user_input` requests are observed on the same subscribed app-server connection. The adapter keeps
+that observer attached while the lifecycle is `asking`, records the request id by its native item id, and answers
+with the schema's `{ answers: { <questionId>: { answers: string[] } } }` result. A missing or closed request channel
+is a failed answer, never a new `turn/start` or a text-delivery fallback.
+
 When the one-shot first-turn process exits non-zero, the adapter reports that exit through the shared
 [[harness-adapter]] turn-outcome seam before returning its failure. An active undeclared record becomes `error`
 with the Codex exit code; a zero exit and any declaration already written are left untouched. The shared

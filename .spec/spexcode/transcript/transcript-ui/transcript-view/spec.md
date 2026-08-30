@@ -59,6 +59,12 @@ The word comes from the transcript's own field, never from the output prose.
 output, so parameters remain inspectable even when a live call has no result yet. A withheld live result still
 fetches its body on demand; the input never waits for that fetch.
 
+**A native question is an interactive call, not prompt prose.** Claude's `AskUserQuestion` and Codex's
+`request_user_input` calls carry normalized question ids, labels, descriptions, and single/multi-select policy
+on the tool row. While the call has no result, an adopter may provide `answerQuestion`; the opened row renders
+the options and submits the selected answer map through that callback. The callback targets the native tool id,
+and a failed submission stays visible as an error; no host may silently turn it into a plain text delivery.
+
 **The cap is said where it bit.** The reader keeps `outputBytes` at the result's true size while the body it
 carries stops at the per-tool cap ([[transcript-reader]]), so the difference is exactly what this call is
 missing, and an opened call whose body falls short of its size names the omission (`labels.outputCut`). The read

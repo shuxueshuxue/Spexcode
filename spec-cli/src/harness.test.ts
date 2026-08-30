@@ -1,17 +1,42 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, HARNESSES, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { assertRvSockPath, HARNESSES, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, resolveLauncher, defaultLauncher, launcherDefault, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, codexObservedActiveTurnId, CODEX_THREAD_SOURCE_KINDS, CODEX_TURN_OBSERVER_SUBSCRIBE_MS, codexHarness, codexHeadlessHarness, codexLaunchCommand, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeCodexTrust } from './codex-harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
+
+test('Codex implementation is outside the registry interface file', () => {
+  const lines = readFileSync(new URL('./harness.ts', import.meta.url), 'utf8').split('\n')
+  const mentions = lines.filter((line) => /codex/i.test(line))
+  const allowed = lines.filter((line) => /^\s*import\b/.test(line) || /HARNESSES:/.test(line))
+    .filter((line) => /codex/i.test(line))
+  assert.deepEqual(mentions, allowed)
+})
+
+test('harness modules do not duplicate top-level declarations', () => {
+  const sourceFiles = readdirSync(new URL('.', import.meta.url), { withFileTypes: true })
+    .filter(({ name }) => /^harness(?:-[\w-]+)?\.ts$/.test(name) || name === 'codex-harness.ts')
+    .map(({ name }) => name)
+  const declarations = (file: string) => [...readFileSync(new URL(`./${file}`, import.meta.url), 'utf8').matchAll(/^(?:export\s+)?(?:const|let|function|class|type|interface)\s+([A-Za-z_$][\w$]*)/gm)].map((match) => match[1])
+  const byFile = sourceFiles.map((file) => [file, new Set(declarations(file))] as const)
+  for (let i = 0; i < byFile.length; i++) {
+    for (let j = i + 1; j < byFile.length; j++) {
+      const [leftFile, left] = byFile[i]
+      const [rightFile, right] = byFile[j]
+      const duplicates = [...left].filter((name) => right.has(name))
+      assert.deepEqual(duplicates, [], `${leftFile} and ${rightFile} duplicate top-level declarations`)
+    }
+  }
+})
 
 test('Codex observer subscription budget covers measured slow native resume', () => {
   assert.ok(CODEX_TURN_OBSERVER_SUBSCRIBE_MS >= 30_000)

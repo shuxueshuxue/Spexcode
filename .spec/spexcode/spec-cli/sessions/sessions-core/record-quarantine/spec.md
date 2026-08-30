@@ -4,12 +4,12 @@ status: active
 hue: 280
 desc: The one recovery control for a governed record that cannot be parsed — it is neither close nor repair: the caller supplies the exact resources it extracted, the layer re-proves their absence, and only the record file moves.
 code:
-  - spec-cli/src/sessions.ts#quarantineCorruptRecord
-  - spec-cli/src/sessions.ts#restoreQuarantinedRecord
+  - spec-cli/src/session-record.ts
 related:
-  - spec-cli/src/sessions.ts
+  - spec-cli/src/session-record.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/session-record-integrity.test.ts
+  - spec-cli/src/session-tmux.ts
 ---
 
 # record-quarantine

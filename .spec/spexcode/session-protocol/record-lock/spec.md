@@ -7,6 +7,7 @@ code:
   - spec-cli/src/session-record-lock.ts
 related:
   - spec-cli/src/sessions.ts
+  - spec-cli/src/session-record.ts
 ---
 # record-lock
 

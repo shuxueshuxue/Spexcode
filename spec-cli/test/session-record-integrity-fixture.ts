@@ -12,7 +12,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { processStartToken, runtimeRoot } from '@spexcode/spec-core'
-import { codexAppServerPid, codexAppServerSock, rvSock } from '../src/harness.js'
+import { codexAppServerPid, codexAppServerSock } from '../src/codex-harness.js'
+import { rvSock } from '../src/harness.js'
 
 const pexec = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))

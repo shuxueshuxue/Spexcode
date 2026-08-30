@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const source = readFileSync(new URL('../../packages/terminal-ui/src/SessionTerminal.tsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('./terminal/SessionTerminal.tsx', import.meta.url), 'utf8')
 
 test('SessionTerm keeps the identity-owned resource effect across active pane switches', () => {
   assert.match(source, /useEffect\(\(\) => \{[\s\S]*?new Terminal\(/, 'the identity effect owns Terminal construction')

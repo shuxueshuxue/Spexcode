@@ -1,5 +1,25 @@
 ---
 scenarios:
+  - name: a-selected-passage-can-be-copied-or-quoted
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    related: [spec-dashboard/src/codeSelection.js, spec-dashboard/src/SelectionAttachment.jsx]
+    description: >-
+      In a real browser open a live session's Conversation and drag-select a passage of an agent note. Right-click
+      inside it and read what opens. Pick the quote verb and read the composer: what the attachment says, whether
+      it can be removed, where focus went, and whether the timeline selection was retired. Then type a message and
+      send it with the input POST intercepted and ABORTED — read the wire payload rather than delivering anything
+      to a live agent, and read whether the attachment survives that refusal. Finally right-click over ordinary
+      conversation text with NOTHING selected.
+    expected: >-
+      The right-click over a selection opens the timeline's own menu with exactly two verbs, copy and quote, and
+      the selection is still there under it. Quote puts one shared selection attachment in the composer's preview
+      slot naming the session and the moment the passage was said, removable, with the passage itself as its
+      title; the timeline selection is retired and focus lands in the composer. The wire payload is ONE ordinary
+      message — the same input kind and note-reply mark every other send uses — with the passage appended as the
+      shared selection token carrying session, moment and verbatim text; no second field and no second route. A
+      refused send keeps the attachment. With nothing selected the press stays the browser's and no menu of ours
+      opens. Zero loss = the reader challenges one sentence out of a long turn and the agent cannot mistake which.
   - name: an-unshown-conversation-is-neither-re-rendered-nor-laid-out
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

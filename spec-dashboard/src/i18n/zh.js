@@ -893,6 +893,7 @@ export default {
     attachCancel: '取消上传',
     attachDismiss: '隐藏此附件状态',
     codeSelectionAttachments: '代码选区附件',
+    quoteAttachments: '引用附件',
     removeCodeSelection: '移除代码选区',
     // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。/merge 等智能体工作流
     // 来自 plugin preset，不在 Dashboard 内维护第二份标签或可用性文案。
@@ -952,6 +953,8 @@ export default {
     stop: '停止',
     stopFailed: '未停止——agent 没有接受中断',
     copy: '复制',
+    quote: '引用',
+    selectionMenu: '选中内容',
     copied: '已复制',
     copyFailed: '复制失败 —— 选区已保留',
     sendFailed: '未送达 —— agent 可能已离线',

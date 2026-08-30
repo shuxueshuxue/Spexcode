@@ -2521,7 +2521,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-attach-queue { display: grid; gap: 4px; min-width: 0; }
 .si-attach-queue.new { width: 100%; margin-top: 6px; }
 .si-attach-queue.command { padding: 5px 0 1px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
-.si-code-selection-queue { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: 6px; }
+.si-code-selection-queue, .m-quote-queue { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: 6px; }
+.m-quote-queue { margin-top: 0; margin-bottom: 6px; }
 .selection-attachment {
   display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 3px 4px 3px 7px;
   border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line)); border-left: 3px solid var(--blue); border-radius: var(--radius);

@@ -166,6 +166,31 @@ also cancels the browser's click-to-collapse, every press the timeline owns reti
 document Selection lying in the timeline (one the browser made on a fourth quick click, or on a drag begun on a
 control). No selection outlives the next click; a press outside selectable text still counts as the timeline's.
 
+**A SELECTED PASSAGE HAS VERBS, AND THE RIGHT-CLICK IS HOW YOU REACH THEM.** The console suppresses the
+native menu nowhere by default ([[session-console]]), and the one sanctioned exception is a surface that has
+a menu to put in its place — which is true here only while a passage is actually selected. With nothing
+selected the press stays the browser's, so copy, search and inspect over ordinary conversation text are
+untouched; the moment there IS a selection the timeline owns the press, because the timeline's selection is
+a painted Highlight rather than a document Selection and the native menu could never have acted on it
+anyway. This menu is what gives that selection its verbs. "No selection outlives the next click" is about
+the primary button — the press that begins a selection — so the passage is still there when the menu opens
+over it.
+
+**COPY LEAVES, QUOTE STAYS.** Copy hands the passage to the clipboard and the reader is on their own with
+it. Quote hands it to the composer directly below as the shared removable attachment every other selection
+surface uses ([[selection-attachment]]), and it rides out as one ordinary message with the ordinary
+[[code-selection]] token appended — never a second field, a second route, or a reply channel of its own. Its
+point is not decoration: the agent receives the passage verbatim in its own prompt, so "why this" has a
+referent it cannot mistake, which is the thing a reader loses in a long turn. It is the same verb
+[[prose-dispatch]] already offers a spec passage, minus the one part that surface needs and this one does
+not — an address to choose — because this composer already stands inside the session it is quoting; aiming
+the message elsewhere stays the ordinary `@` grammar in the draft, not a control of its own.
+
+A quoted passage is addressed by the session and the MOMENT it was said, so every timeline row carries its
+own moment. A row that has no usable one cannot be addressed, and there the quote verb is visibly
+unavailable rather than producing a token that points nowhere. Accepted delivery clears the quotes with the
+draft; a refused one keeps both, because a passage the reader gathered is not the send's to discard.
+
 That conversation is the whole terminal-free console: the live tail is part of its open seam ([[message-stream]]),
 not a native-event drill-down beside it. 
 

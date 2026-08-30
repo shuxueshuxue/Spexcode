@@ -161,7 +161,8 @@ is blank.
 survivable while a session list filled most of that panel and did own a right-click menu of its own; with the
 list withdrawn the panel is conversation text, diff text and a terminal, and the blanket cancel bought nothing
 while taking copy, paste and search-selection away from all three. A surface may suppress the native menu only
-where it offers one in its place.
+where it offers one in its place — as the Conversation's timeline does, and only while a passage is selected
+there ([[conversation]]).
 The desktop right pane has **one console slot with two mutually exclusive base surfaces plus a resource overlay**.
 A pane-backed adapter keeps the warm, input-enabled `SessionTerm` described in [[terminal-io]] and mounts the same
 `TimelineChat` used by the phone on first Conversation visit. A headless adapter mounts only that Conversation,

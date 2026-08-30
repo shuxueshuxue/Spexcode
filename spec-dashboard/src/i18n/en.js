@@ -905,6 +905,7 @@ export default {
     attachCancel: 'cancel upload',
     attachDismiss: 'dismiss attachment status',
     codeSelectionAttachments: 'code selection attachments',
+    quoteAttachments: 'quote attachments',
     removeCodeSelection: 'remove code selection',
     // board commands — the `/` commands Command Box runs HERE (not in the agent). Agent workflows such as
     // /merge are plugin presets and deliberately have no dashboard-local label or availability copy.
@@ -965,6 +966,8 @@ export default {
     stop: 'stop',
     stopFailed: 'not stopped — the agent did not take the interrupt',
     copy: 'copy',
+    quote: 'quote',
+    selectionMenu: 'selected text',
     copied: 'copied',
     copyFailed: 'copy failed — selection kept',
     sendFailed: 'not delivered — the agent may be offline',

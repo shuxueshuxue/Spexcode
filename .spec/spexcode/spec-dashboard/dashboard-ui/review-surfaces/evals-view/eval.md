@@ -219,11 +219,14 @@ scenarios:
       failed.
   - name: mobile-evals-pages
     tags: [frontend-e2e, mobile]
-    code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ViewScope.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/styles.css]
     description: >
-      In a real browser at a 390px viewport: open #/evals (via the tab bar's Evals entry or directly),
-      read query/header/row sizes, visible facets and the opened kebab, body/document scroll width; open a
-      long row's detail and read the column order (side metadata vs workspace); drive browser Back.
+      In a real browser at a 390px viewport: open #/evals and #/issues through the phone tab bar (and
+      direct links), read query/header/row sizes, visible facets and the opened kebab, body/document scroll
+      width; open a long row's detail and read the column order (side metadata vs workspace); drive browser
+      Back. Confirm the tab-bar's Specs and Sessions entries still render their phone-local planes. When the
+      review pages mount, inspect the ViewScope boundary: each page must receive the same real project route
+      scope as the desktop host rather than crashing or silently falling back to an optional scope.
     expected: >
       The phone renders the SAME routed pages (the lp-/ds- chrome, not a mobile clone) inside the phone
       shell, with an Evals entry on the tab bar. Query is viewport minus 32px, metadata ~49px; only Verdict

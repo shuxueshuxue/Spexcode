@@ -12,6 +12,9 @@ import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
 import { Icon } from './icons.jsx'
+import { ViewScopeProvider } from './ViewScope.jsx'
+import { createViewScope } from './viewScope.js'
+import { viewRouteContract } from './views.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
 // reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
@@ -250,6 +253,22 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
   // The host owns the address. Mobile is a view of the same routed surface, not a second router.
   const { page = 'graph', param = null } = route
   const plane = page === 'evals' || page === 'issues' || page === 'settings' ? page : tab
+  // Review pages are the same scoped views as desktop. The phone shell has no ViewHost component, so it
+  // provides the route-owned scope at this boundary instead of weakening the views' required hook.
+  const reviewScope = useMemo(() => createViewScope({
+    route: { page, param, query: route.query || null },
+    active: true,
+    contract: viewRouteContract,
+    owner: { kind: 'view', page, param },
+    dispatch: (intent) => {
+      const address = intent.address
+      navigate(address.page, address.param, { query: address.query, replace: intent.replace === true })
+      return { accepted: true, intent }
+    },
+  }), [])
+  useEffect(() => {
+    reviewScope.update({ route: { page, param, query: route.query || null }, active: true })
+  }, [reviewScope, page, param, route.query])
   // a `#/sessions/<id>` address opens that session's conversation here too — the phone twin of the
   // desktop console's deep link, and what makes the scoped eval pages' terminal door ([[evals-view]])
   // a REAL door on a cold phone open. One-way route→state: leaving the detail via its back control
@@ -291,13 +310,15 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
       <main className="m-main">
         {plane === 'evals' || plane === 'issues' || plane === 'settings' ? (
           <div className="m-review">
-            <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
-              {plane === 'settings'
-                ? <Settings />
-                : plane === 'evals'
-                ? <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} />
-                : <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />}
-            </Suspense>
+            <ViewScopeProvider scope={reviewScope.scope}>
+              <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
+                {plane === 'settings'
+                  ? <Settings />
+                  : plane === 'evals'
+                  ? <EvalsPage param={param} query={route.query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} />
+                  : <IssuesPage param={param} query={route.query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />}
+              </Suspense>
+            </ViewScopeProvider>
           </div>
         ) : plane === 'specs' ? (
           <div className="m-specs">

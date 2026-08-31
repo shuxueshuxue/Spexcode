@@ -53,7 +53,10 @@ Evals and an Issues entry (tapping navigates the route, the active page lights i
 browser's history exactly as on desktop. Their spec-node facts remain the same real `graphNodeAddress`
 anchors as desktop, not phone-specific focus callbacks. A direct `#/settings` address mounts the same [[settings]] page
 and [[page-scroll]] above that tab bar even though Settings is not a fifth primary tab. Specs/Sessions
-stay the phone-local planes below.
+stay the phone-local planes below. Because these routed pages require a view scope, `MobileApp` hosts them
+with a route-owned `ViewScopeProvider` carrying the same project route contract as the desktop host; the
+pages retain the throwing required hook, so a missing scope remains a visible integration failure rather than
+silently rendering an optional or incorrect scope.
 
 **One API, never its own.** Every read/write the phone makes is a route the desktop already
 uses, through the shared `data.js` helpers: the pushed/polled lean board for both planes, the paged

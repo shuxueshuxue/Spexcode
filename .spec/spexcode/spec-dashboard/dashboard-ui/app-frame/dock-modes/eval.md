@@ -79,6 +79,24 @@ scenarios:
       own mount. Two stretches for one gesture is the defect: a panel leaving its fold must not pass through
       a state that starts a dissolve on top of it.
     code: [spec-dashboard/src/useFold.js, spec-dashboard/src/styles.css, spec-dashboard/src/Dock.jsx]
+  - name: the-handover-commits-no-intermediate-projection
+    tags: [frontend-e2e, desktop]
+    description: >-
+      From a spec document with the explorer dock open in the running desktop dashboard, click the rail's
+      Sessions anchor; then return to the spec document by address (same-document hash change), and finally
+      fresh-load the spec route carrying stale persisted dockMode='sessions'. A document-start
+      MutationObserver records every COMMIT of the dock's sessions-projection body (`.dock
+      .dock-session-body`) and an rAF sampler records painted frames — commits, not paints, carry the
+      verdict, because paint timing races vsync while the mount is deterministic
+      (spec-dashboard/test/projection-handover.e2e.mjs).
+    expected: >-
+      The left band hands over dock⇄forest with ZERO commits of the dock's sessions projection in every
+      direction — the rail click away from the document, the same-document return, and the stale-persisted
+      fresh load — and each destination settles: the forest on the sessions route, the explorer FileTree on
+      the spec route. One committed `.dock .dock-session-body` during any of these transitions is the
+      defect: a third, differently-styled sessions sidebar mounted between the explorer and the forest —
+      built whole, painted or not, and thrown away one route tick later.
+    code: [spec-dashboard/src/Shell.jsx, spec-dashboard/src/SideBar.jsx, spec-dashboard/src/Dock.jsx]
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Use settled screenshots for the dock

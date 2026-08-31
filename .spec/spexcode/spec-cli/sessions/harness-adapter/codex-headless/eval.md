@@ -39,7 +39,7 @@ scenarios:
       streaming no history), the loaded-set census then includes it, and the session returns online with its
       prior declaration note intact — not "launch did not become ready".
     code:
-      - spec-cli/src/codex-harness.ts#codexReopenThread
+      - spec-cli/src/codex-harness.ts#codexResumeThread
       - spec-cli/src/codex-harness.ts#codexHeadlessHarness
       - spec-cli/src/cli.ts
     tags: [backend-api, cli]

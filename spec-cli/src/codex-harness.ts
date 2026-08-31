@@ -261,7 +261,7 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
       // loaded set, and headless readiness proves online only for a RESIDENT thread, so resume must reopen it
       // here — the load the visible TUI's `resume "$tid"` would have done — or readiness times out for a thread
       // that is fine on disk. codex-generation-session above already ensured the app-server, so `$sock` is live.
-      `  ${SPEX} internal codex-reopen "$sock" "$tid" || exit 1`,
+      `  ${SPEX} internal codex-resume "$sock" "$tid" || exit 1`,
       // A headless forced reopen with NO thread id and no prompt has nothing to attach and nothing to launch.
       // Keep it a no-op instead of calling codex-launch without a prompt (which would mint an unrelated thread).
       `elif [ "$#" -eq 0 ]; then`,
@@ -562,14 +562,14 @@ const CODEX_MUTATION_CENSUS_MS = 15_000
 const CODEX_MUTATION_BASE_MS = 15_000
 const CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS = 1000
 const codexArchiveBudgetMs = (bytes: number) => CODEX_MUTATION_BASE_MS + Math.ceil(bytes / CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS)
-// @@@ codexReopenThread - load an evicted thread back into the shared app-server WITHOUT running a turn. The
+// @@@ codexResumeThread - load an evicted thread back into the shared app-server WITHOUT running a turn. The
 // app-server evicts an idle thread from its in-memory loaded set, and codex-headless readiness/liveness proves
 // online only when the thread is resident (thread/loaded/list). A visible-TUI resume reloads it implicitly via
 // `resume "$tid"`; headless has no TUI, so its resume must issue this `thread/resume` itself or readiness times
 // out for a thread that is perfectly fine on disk. `excludeTurns` + a one-row page keeps a huge rollout from
 // streaming back — we only need the load, not the history. Idempotent: reopening an already-loaded thread is a
 // no-op the server answers at once.
-export function codexReopenThread(sock: string, threadId: string, budgetMs = 20_000): Promise<{ ok: true } | { ok: false; error: string }> {
+export function codexResumeThread(sock: string, threadId: string, budgetMs = 20_000): Promise<{ ok: true } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -581,7 +581,7 @@ export function codexReopenThread(sock: string, threadId: string, budgetMs = 20_
       try { conn.destroy() } catch { /* */ }
       resolve(r)
     }
-    const timer = setTimeout(() => done({ ok: false, error: `codex app-server did not reopen thread ${threadId} within ${budgetMs}ms` }), budgetMs)
+    const timer = setTimeout(() => done({ ok: false, error: `codex app-server did not resume thread ${threadId} within ${budgetMs}ms` }), budgetMs)
     conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
     conn.on('close', () => done({ ok: false, error: 'codex app-server closed before thread/resume was answered' }))
     const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
@@ -1718,8 +1718,8 @@ async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string
   if (delivered.ok || rec.harness !== 'codex-headless' || !/not loaded in the app-server/u.test(delivered.error || '')) return delivered
   // Headless Codex has no TUI resume step. An idle thread can be evicted from the shared server's loaded set;
   // reload the exact rollout, then retry the same turn once. This is idempotent and does not create a new thread.
-  const reopened = await codexReopenThread(sock, threadId!)
-  if (!reopened.ok) return { ok: false, error: `${delivered.error}; ${reopened.error}` }
+  const resumed = await codexResumeThread(sock, threadId!)
+  if (!resumed.ok) return { ok: false, error: `${delivered.error}; ${resumed.error}` }
   return sendCodexAppServerTurn(sock, threadId!, text, rec.worktreePath, rec.mid)
 }
 

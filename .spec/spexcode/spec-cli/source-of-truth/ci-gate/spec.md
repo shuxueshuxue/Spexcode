@@ -25,14 +25,18 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   (retired vocabulary cannot reappear on product surfaces), the **docs-release producer test** (the published
   immutable guidance bundle remains reproducible), the **[[release-publish]] producer test** (the complete
   public package set remains version-locked, ordered, and guarded against direct publication), the
-  **`tsc --noEmit`** type check on the CLI package, the session package unit suites (protocol, topology, runtime,
-  events, application, self-launch — each run in its own workspace), the CLI package's complete **unit/integration suite**, and
-  one data-driven **production clean-init matrix**. CI first installs each package-local lockfile, then applies
+  **`tsc --noEmit`** type check on the CLI package, the [[suite-parity]] check, **every workspace unit suite**
+  (each run in its own workspace), the CLI package's complete **unit/integration suite**, and
+  one data-driven **production clean-init matrix**. The workspace suites are not a curated selection: parity
+  runs first and fails if the workflow's list and the set of workspaces declaring a `test` script differ in
+  either direction, so "the workflow names it" and "the package has tests" are the same statement. CI first installs each package-local lockfile, then applies
   the canonical root workspace install and builds the internal packages before lint. That order keeps each
   package's dependency plan valid while making the root workspace links resolve to emitted internal `dist`
   entries. The suite runs from the package directory after both root and package installs, so subprocess
   fixtures resolve the same local `tsx`/TypeScript that production-facing tests invoke; a green workflow cannot
-  coexist with a known main-branch unit failure.
+  coexist with a known main-branch unit failure. That last clause is a claim about the *workflow*, and it only
+  holds while every suite is actually reached — a package whose tests no step runs satisfies it vacuously,
+  which is why [[suite-parity]] guards the roster rather than trusting the list.
   The matrix builds and installs the npm tarball, proves the installed `spex` starts, then crosses Python and
   TypeScript projects with Claude-only and Codex-only delivery in disposable real git repositories. Every row
   goes through the actual `spex init` and `spex materialize` CLI surfaces and checks the whole deterministic

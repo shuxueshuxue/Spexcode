@@ -39,17 +39,21 @@ jobs:
       - name: typecheck
         working-directory: spec-cli
         run: npx tsc --noEmit
-      - name: Session package unit suites
+      - name: Workspace suite parity (the list below is the whole set of workspaces that ship tests)
+        run: node --test scripts/ci-suite-parity.test.mjs
+      - name: Workspace unit suites
         run: |
           npm test --workspace=@spexcode/transcript
           npm test --workspace=@spexcode/transcript-ui
-          npm test --workspace=@spexcode/terminal-ui
           npm test --workspace=@spexcode/session-protocol
           npm test --workspace=@spexcode/session-topology
           npm test --workspace=@spexcode/session-runtime
           npm test --workspace=@spexcode/session-events
           npm test --workspace=@spexcode/session-application
           npm test --workspace=@spexcode/session-selflaunch
+          npm test --workspace=@spexcode/spec-eval
+          npm test --workspace=@spexcode/spec-forge
+          npm test --workspace=@spexcode/spec-dashboard
       - name: Unit and integration suite
         working-directory: spec-cli
         run: npm test

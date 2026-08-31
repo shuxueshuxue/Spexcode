@@ -31,6 +31,17 @@ function run(input: string, mutation: unknown) {
   })
 }
 
+// The runtime writes its own notices to the child's stderr (`node:sqlite` is still flagged experimental on
+// Node 22), and they arrive whatever the command does. The assertion below is about what the CLI ITSELF
+// emitted, so the runtime's lines are dropped before it — never the command's.
+function cliStderr(stderr: string): string {
+  return stderr
+    .split('\n')
+    .filter((line) => !/^\(node:\d+\) /.test(line) && !/^\(Use `node --trace-warnings/.test(line))
+    .join('\n')
+    .trim()
+}
+
 test('real spex eval scenario write matches the library and round-trips authoritative bytes', () => {
   const insert = {
     scenario: 'exact-case',
@@ -39,12 +50,12 @@ test('real spex eval scenario write matches the library and round-trips authorit
   const expected = writeScenarioMeasurementMetadata(source, insert)
   const written = run(source, insert)
   assert.equal(written.status, 0, written.stderr)
-  assert.equal(written.stderr, '')
+  assert.equal(cliStderr(written.stderr), '')
   assert.equal(written.stdout, expected)
 
   const removed = run(written.stdout, { scenario: 'exact-case', delete: 'test' })
   assert.equal(removed.status, 0, removed.stderr)
-  assert.equal(removed.stderr, '')
+  assert.equal(cliStderr(removed.stderr), '')
   assert.equal(removed.stdout, source)
 })
 

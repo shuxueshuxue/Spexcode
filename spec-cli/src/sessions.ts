@@ -4162,7 +4162,7 @@ async function reportCloseResidue(id: string, worktreePath: string): Promise<voi
     }
     console.warn('  inspect these PIDs and handle them through their owning harness/runtime; close does not kill detached descendants.')
   } catch (error) {
-    console.warn(`spex: close ${id} completed, but the residual-process scan failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(`spex: close ${id} completed, but the residual-process sweep failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 

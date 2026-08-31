@@ -543,11 +543,11 @@ test('New is a routed compose PAGE reusing the shared shells, never a pop-out ov
 test('the detail side rail is sticky on desktop, plain flow at phone width', () => {
   // desktop: sticky inside the grid column (never fixed) — pins to the scrollport top; only a rail
   // taller than the viewport scrolls internally (bounded max-height + auto overflow)
-  assert.match(css, /\.ds-side \{ position: sticky; top: 0; max-height: calc\(100dvh - 24px\); overflow-y: auto;/)
+  assert.match(css, /\.ds-side \{ position: sticky; top: 0; min-width: 0; max-height: calc\(100dvh - 24px\); overflow-y: auto;/)
   assert.doesNotMatch(css, /\.ds-side[^}]*position: fixed/)
   // the phone reflow cancels it: static, unbounded, metadata-before-content order kept
   const phone = css.slice(css.indexOf('@media (max-width: 760px)'))
-  assert.match(phone, /\.ds-side \{ position: static; max-height: none; overflow-y: visible; order: -1;/)
+  assert.match(phone, /\.ds-side \{ position: static; align-self: stretch; width: 100%; max-height: none; overflow-y: visible; order: -1;/)
 })
 
 test('pagination stays in the list page scroll flow below the list, outside the sticky stack', () => {

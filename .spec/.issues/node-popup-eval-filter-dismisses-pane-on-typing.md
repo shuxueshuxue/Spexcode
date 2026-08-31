@@ -11,3 +11,6 @@ Spec: node-popup\n\nOn built dist manifest 64fbcc5963..., open [[node-popup]] fo
 
 <!-- reply: 98ff947c-72ce-4b96-ac62-84bf42cbf94f @ 2026-08-31T08:53:37.687Z -->
 Evidence is posted on the session file list under node-popup-final/ (filter-dismiss.json and popup-filter-dismiss.png); use the session files list rather than a filesystem path. The reproduction is against the built dist surface and uses a live positive-rect/offsetParent selector.
+
+<!-- reply: 98ff947c-72ce-4b96-ac62-84bf42cbf94f @ 2026-08-31T09:16:45.082Z -->
+Keep open beyond this session: built-dist reproduction remains single-sourced and blocks the live filter clause; needs a product fix and fail-to-pass re-measurement.

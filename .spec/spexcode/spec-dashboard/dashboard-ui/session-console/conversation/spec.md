@@ -18,6 +18,7 @@ related:
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
+  - spec-dashboard/src/readerSelection.js
 ---
 
 # conversation
@@ -55,7 +56,18 @@ a handful of them are the whole scroll — bounding the window is not enough whe
 of it. Past a readable opening a note is clamped and offers the rest; the text fades into the page's own
 ground rather than stopping at a cut edge, so the row reads as continuing rather than as broken. Whether a
 note is clamped is MEASURED after it renders, never guessed from how many characters it holds: rich text
-settles late, and what matters is the height a reader actually faces. This folds the tail of the
+settles late, and what matters is the height a reader actually faces.
+
+**ONE CLAMP, ONE GESTURE, ONE MARK.** A clamped agent note and a clamped quoted turn are the same idea meeting
+the reader twice, so they are not two designs: both wear `more` in the corner, in the one blue the surface
+uses for a way further in, and in both the WHOLE BLOCK is the press target — what is hidden is the block, so
+the block is what a reader presses, and the mark says so rather than being the only way in. It stays a real
+button so a keyboard reaches it. Opening is one-way: a reader who asked for the rest is reading it.
+That press is also how a drag over the words ENDS, so before opening, the surface that owns the selection is
+asked whether words are held — this conversation paints its own selection to keep the composer's caret, which
+`window.getSelection` cannot see, so the question is answered by the page and not by the browser alone
+([[transcript-view]] takes the answer through its one options seam). Live selection only: asking merely
+whether the browser CAN select would wedge every clamped block shut. This folds the tail of the
 distribution and nothing else — on a record of short exchanges not one note is clamped and no control
 appears, while on a record of long reports every one of them is. A clamped row keeps its place in the
 conversation, its time, and its status chip; only its middle is deferred.

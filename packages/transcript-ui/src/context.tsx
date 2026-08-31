@@ -50,6 +50,10 @@ export type TranscriptUiOptions = Readonly<{
   fold: FoldPolicy
   runMin: number
   userTurns: UserTurnPolicy
+  // A CLAMPED BLOCK OPENS ON A PRESS ANYWHERE IN IT, which is the same gesture that finishes a drag-select
+  // over its words. Only the host knows whether a selection is live — a surface may paint its own rather
+  // than use the browser's — so it says here whether this press was a reader selecting rather than opening.
+  suppressExpand: () => boolean
 }>
 
 // the default prose renderer: paragraphs on blank lines, line breaks kept — a message was typed, not laid out
@@ -69,6 +73,7 @@ export const defaultOptions: TranscriptUiOptions = {
   fold: 'segments',
   runMin: 3,
   userTurns: 'boundary',
+  suppressExpand: () => false,
 }
 
 const Context = createContext<TranscriptUiOptions>(defaultOptions)

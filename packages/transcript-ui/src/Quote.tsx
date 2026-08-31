@@ -9,11 +9,16 @@ const isLongQuote = (text: string): boolean => text.length > 700 || (text.match(
 // THE PERSON IS QUOTED: a bubble off to its own side, with one corner squared. The name sits on the bubble
 // when the host knows it; the time shows only in a narrow pane, where there is no ruler beside the flow.
 export function Quote({ who = null, ts = null, text, className = '' }: { who?: string | null; ts?: number | string | null; text: string; className?: string }) {
-  const { renderText, labels } = useTranscriptUi()
+  const { renderText, labels, suppressExpand } = useTranscriptUi()
   const [open, setOpen] = useState(false)
   const clamped = !open && isLongQuote(text)
+  // THE WHOLE CLAMPED BLOCK IS THE TARGET, not a word in its corner. What is hidden is the block, so the
+  // block is what a reader presses; `more` stays as the mark that says so. A press that ENDED A SELECTION
+  // is a reader taking the text, not asking for the rest, and the host is the one that can tell.
+  const expand = clamped ? () => { if (!suppressExpand()) setOpen(true) } : undefined
   return (
-    <div className={`tx tx-quote${clamped ? ' is-clamped' : ''}${className ? ` ${className}` : ''}`}>
+    <div className={`tx tx-quote${clamped ? ' is-clamped' : ''}${className ? ` ${className}` : ''}`}
+      onClick={expand}>
       {(who || ts) && (
         <div className="tx-quote-head">
           {who && <span className="tx-quote-who">{who}</span>}
@@ -21,7 +26,8 @@ export function Quote({ who = null, ts = null, text, className = '' }: { who?: s
         </div>
       )}
       <div className="tx-quote-text">{renderText(text)}</div>
-      {clamped && <button type="button" className="tx-quote-more" onClick={() => setOpen(true)}>{labels.more}</button>}
+      {/* still a real button so the keyboard has a target; the press it receives is the same one the block takes */}
+      {clamped && <button type="button" className="tx-quote-more" aria-expanded={false}>{labels.more}</button>}
     </div>
   )
 }

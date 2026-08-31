@@ -34,15 +34,39 @@ const atOf = (ts) => {
 }
 
 const transcriptCache = new Map()
+// ONE READ PER SESSION AT A TIME, held above the component because the callers that race are not all inside
+// one instance: several effects ask on the same frame (mount, and the record's own status/note moving), and
+// StrictMode mounts a twin that asks again before the first answer lands. The cursor is only known once an
+// answer HAS landed, so without this they each set out with no cursor and each pays for a whole window.
+const timelineInflight = new Map()
 
 function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
 // The interval end moves when a later event closes the seam; expansion belongs to the seam itself.
 function seamKey(sessionId, from) { return `${sessionId}:${from}` }
 
-// a poll answer is usually the SAME history — keep the old array identity then, so nothing downstream
+// How much of the history a window holds at once, and the size of one step back through it.
+const WINDOW = 200
+
+// a re-seated window is usually the SAME history — keep the old array identity then, so nothing downstream
 // (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
 const sameEvents = (a, b) => a != null && a.length === b.length
   && (a.length === 0 || JSON.stringify(a[a.length - 1]) === JSON.stringify(b[b.length - 1]))
+
+// THE SECOND HAND IS ITS OWN COMPONENT. The open seam counts every second while the agent works, and that
+// tick used to be state on the whole conversation: one number moved, and every row in the window — hundreds
+// of them, each with its own rich text — was rebuilt to draw it. The count lives here now, so a working
+// session redraws one line per second instead of its entire history. The clock is still the server's: the
+// skew is read through a ref, so a fresh poll's correction reaches the next tick without re-rendering anyone.
+const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
+  const [now, setNow] = useState(() => Date.now() + skewRef.current)
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState !== 'hidden') setNow(Date.now() + skewRef.current) }
+    tick()
+    const iv = setInterval(tick, 1000)
+    return () => clearInterval(iv)
+  }, [from, skewRef])
+  return <>{elapsed(Math.max(0, now - from))}</>
+})
 
 const SELECTION_CONTROLS = 'button, summary, a, input, textarea, select, option, label, [role], [contenteditable]:not([contenteditable="false"])'
 const EDITING_KEYS = new Set([
@@ -314,6 +338,12 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const t = useT()
   const isMobile = useIsMobile()
   const [events, setEvents] = useState(null)
+  // WHERE THE WINDOW SITS. `offset` is how many earlier events the history holds that this window does not
+  // show — the number the back-load button names, and the reason a long session no longer just ends at the
+  // top. `stamp` is the log's sequence, which is what the poll asks growth against; `priorWorking` is the
+  // word the events before the window already said ([[session-timeline]]).
+  const [win, setWin] = useState({ stamp: null, offset: 0, total: 0, priorWorking: false })
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
   // the passages the reader has quoted into this draft, and the open timeline menu ({x, y, at}); `at` is
@@ -329,7 +359,6 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const [expandedSeams, setExpandedSeams] = useState(() => new Set())
   const [transcripts, setTranscripts] = useState(() => new Map())
   const [tail, setTail] = useState(null)   // the open seam's streamed payload ([[session-transcript]]); null until the first frame
-  const [now, setNow] = useState(() => Date.now())   // advances with each timeline read; only an open live seam reads it
   const scrollRef = useRef(null)
   const timelineContentRef = useRef(null)
   const inputRef = useRef(null)
@@ -353,39 +382,66 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     }
     return loader
   }
-  // THE OPEN TAIL'S INTERVAL ENDS AT THE LATEST POLL. It used to end at mount time so the transcript key
-  // stayed stable — which also meant an EXPANDED live seam never re-read: its `0 turns · 0 tool uses` froze
-  // the moment it opened and nothing the agent did afterwards was inside the interval. The end now moves
-  // with each timeline read (server clock), so the expanded seam refreshes each poll; the seam's identity
-  // is its start, so the disclosure survives the moving end, and a collapsed seam still reads nothing.
-  const [pollNow, setPollNow] = useState(() => Date.now())
+  // THE OPEN TAIL'S INTERVAL ENDS AT THE LATEST POLL, and that end is a REF, not state. It addresses the
+  // transcript of a seam that has no close yet; a live one reads its transcript from the stream instead, so
+  // this end moves nothing on screen by itself and has no business re-rendering the conversation to change.
+  const pollNowRef = useRef(Date.now())
   const skewRef = useRef(0)   // server clock minus ours, re-read on every timeline response
+  // an open seam has no end of its own ([[session-timeline]]'s derivation leaves it undefined) — whoever
+  // needs an interval for it says which present it ends at
+  const seamEnd = useCallback((seam) => (seam.open ? Math.max(seam.from + 1, pollNowRef.current) : seam.to), [])
   const inflightRef = useRef(new Set())   // transcript keys being read right now
   const wantedRef = useRef(new Map())     // seamId → the interval key it currently maps to
   const cachedKeyRef = useRef(new Map())  // seamId → the last key the module cache holds for it
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
-  const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
-    if (Number.isFinite(d?.serverNow)) skewRef.current = d.serverNow - Date.now()
-    const serverNow = Date.now() + skewRef.current
-    setNow(serverNow); setPollNow(serverNow)
-    if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
-  }), [s.id])
-  // THE LIVE SEAM COUNTS EVERY SECOND. The record only moves on a poll, so between polls the tail seam
-  // used to sit on one number for eight seconds and then jump. The tick is the browser's, the clock is the
-  // server's (its Date header, re-read each poll), and each tick recomputes from the seam's own start — so
-  // the count never drifts, agrees with the durations the record will write, and stops the moment the
-  // status leaves `working` because the interval exists only while it is.
-  const ticking = active && footerState === 'live' && s.status === 'working'
+  // THE POLL ASKS FOR GROWTH, NOT FOR THE HISTORY. An append-only log has a sequence, so a reader that
+  // holds a window says how far it has read and gets back only what came after — usually nothing at all,
+  // and then the held array keeps its identity and not one row is rebuilt. The server answers a reader too
+  // far behind with a whole window instead (it carries `offset`), which is seated rather than appended;
+  // that is also the FIRST read, which asks with no cursor.
+  const stampRef = useRef(null)
+  const load = useCallback(() => {
+    const joined = timelineInflight.get(s.id)
+    if (joined) return joined
+    const since = stampRef.current
+    const read = loadSessionTimeline(s.id, since === null ? { limit: WINDOW } : { since, limit: WINDOW }).then((d) => {
+      if (!d) return
+      if (Number.isFinite(d.serverNow)) skewRef.current = d.serverNow - Date.now()
+      pollNowRef.current = Date.now() + skewRef.current
+      stampRef.current = d.stamp ?? stampRef.current
+      if (d.offset !== undefined) {
+        setWin({ stamp: d.stamp, offset: d.offset, total: d.total, priorWorking: !!d.priorWorking })
+        setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
+        return
+      }
+      if (d.events.length === 0) { setWin((prev) => (prev.stamp === d.stamp ? prev : { ...prev, stamp: d.stamp })); return }
+      setWin((prev) => ({ ...prev, stamp: d.stamp, total: (prev.total || 0) + d.events.length }))
+      setEvents((prev) => (prev ? [...prev, ...d.events] : d.events))
+    }).finally(() => { timelineInflight.delete(s.id) })
+    timelineInflight.set(s.id, read)
+    return read
+  }, [s.id])
+
+  // WALKING BACK. The window names how much earlier history it is not showing; this is the reader taking
+  // one page of it. The page is prepended and the scroll is anchored to the row that was under the thumb
+  // (below), so reading position survives the growth instead of jumping to a new top.
+  const anchorRef = useRef(null)
+  const loadEarlier = useCallback(() => {
+    if (loadingEarlier || !win.offset) return
+    setLoadingEarlier(true)
+    const timeline = scrollRef.current
+    anchorRef.current = timeline ? { height: timeline.scrollHeight, top: timeline.scrollTop } : null
+    void loadSessionTimeline(s.id, { before: win.offset, limit: WINDOW }).then((d) => {
+      if (d && d.events.length) {
+        setWin((prev) => ({ ...prev, offset: d.offset ?? 0, total: d.total ?? prev.total, priorWorking: !!d.priorWorking }))
+        setEvents((prev) => (prev ? [...d.events, ...prev] : d.events))
+      } else anchorRef.current = null
+      setLoadingEarlier(false)
+    })
+  }, [s.id, win.offset, loadingEarlier])
   useEffect(() => {
-    if (!ticking) return undefined
-    const tick = () => { if (document.visibilityState !== 'hidden') setNow(Date.now() + skewRef.current) }
-    tick()
-    const iv = setInterval(tick, 1000)
-    return () => clearInterval(iv)
-  }, [ticking])
-  useEffect(() => {
-    setEvents(null); setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); setNow(Date.now()); setPollNow(Date.now()); pinnedRef.current = true; setQuotes([]); setMenu(null)
+    setEvents(null); setWin({ stamp: null, offset: 0, total: 0, priorWorking: false }); setLoadingEarlier(false); stampRef.current = null; anchorRef.current = null; setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); pollNowRef.current = Date.now(); pinnedRef.current = true; setQuotes([]); setMenu(null)
   }, [s.id])
   useEffect(() => {
     if (!active) return undefined
@@ -410,7 +466,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   }, [load, active, footerState])
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
-  const items = useMemo(() => conversationItems(events || [], pollNow), [events, pollNow])
+  const items = useMemo(() => conversationItems(events || [], win.priorWorking), [events, win.priorWorking])
   // THE OPEN SEAM STREAMS. A working record ends in an open seam; while the session is live that seam
   // subscribes to its interval's stream — the server advances the native thread only when it changed and
   // pushes what changed, merged by turn id in the subscriber — so the collapsed live tail and the expanded transcript are one
@@ -456,7 +512,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   }, [items])
 
   const fetchTranscript = useCallback(async (seam, seamId) => {
-    const key = transcriptKey(s.id, seam.from, seam.to)
+    const to = seamEnd(seam)
+    const key = transcriptKey(s.id, seam.from, to)
     wantedRef.current.set(seamId, key)
     const cached = transcriptCache.get(key)
     if (cached) {
@@ -469,7 +526,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     // until the fresh read lands, so the numbers move without the transcript blinking away every poll
     setTranscripts((previous) => (previous.get(seamId)?.state === 'ready'
       ? previous : new Map(previous).set(seamId, { state: 'loading', transcriptKey: key })))
-    const result = await loadSessionTranscript(s.id, seam.from, seam.to)
+    const result = await loadSessionTranscript(s.id, seam.from, to)
     inflightRef.current.delete(key)
     const value = result.ok
       ? { state: 'ready', data: result.data, transcriptKey: key }
@@ -486,7 +543,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       if (!result.ok && current?.state === 'ready') return new Map(previous).set(seamId, { ...current, transcriptKey: key })
       return new Map(previous).set(seamId, value)
     })
-  }, [s.id])
+  }, [s.id, seamEnd])
 
   // A later event changes only the seam's interval, never the user's disclosure choice. Refresh the
   // expanded seam against that new interval while keeping it open.
@@ -496,20 +553,31 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       if (seam.kind !== 'seam' || (seam.open && seam.from === streamFrom)) continue
       const seamId = seamKey(s.id, seam.from)
       if (!expandedSeams.has(seamId)) continue
-      const key = transcriptKey(s.id, seam.from, seam.to)
+      const key = transcriptKey(s.id, seam.from, seamEnd(seam))
       const current = transcripts.get(seamId)
       if (current?.transcriptKey === key || inflightRef.current.has(key)) continue
       void fetchTranscript(seam, seamId)
     }
     return undefined
-  }, [active, events, items, expandedSeams, fetchTranscript, s.id, transcripts, streamFrom])
+  }, [active, events, items, expandedSeams, fetchTranscript, s.id, transcripts, streamFrom, seamEnd])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const followTimelineTail = useCallback(() => {
     const timeline = scrollRef.current
+    if (anchorRef.current) return   // a page is arriving at the TOP; the anchor above owns this frame
     if (timeline && pinnedRef.current) timeline.scrollTop = timeline.scrollHeight
   }, [])
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
+  // GROWTH AT THE TOP MOVES NOTHING. Prepending a page pushes everything below it down by exactly the height
+  // that arrived; adding that height back to the scroll leaves the row the reader was on where it was. This
+  // runs before the tail-follow below and consumes the anchor, so a back-load is never also a jump to the end.
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current
+    const timeline = scrollRef.current
+    if (!anchor || !timeline) return
+    anchorRef.current = null
+    timeline.scrollTop = anchor.top + (timeline.scrollHeight - anchor.height)
+  }, [events])
   useLayoutEffect(followTimelineTail, [events, followTimelineTail])
   useLayoutEffect(() => {
     if (!active || typeof ResizeObserver !== 'function') return undefined
@@ -792,9 +860,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       const transcript = streamed
         ? (tail === null ? { state: 'loading' } : tail.error ? { state: 'error', error: tail.error } : { state: 'ready', data: tail })
         : transcripts.get(seamId)
-      const lead = ticking ? `${t('status.working')} · ${elapsed(Math.max(0, now - item.from))}`
-        : item.open ? t('status.working')
-          : `${t('mobile.worked')} ${elapsed(item.to - item.from)}`
+      const lead = item.open ? t('status.working') : `${t('mobile.worked')} ${elapsed(item.to - item.from)}`
       const calls = transcript?.state === 'ready'
         ? transcript.data.turns.reduce((n, turn) => n + (turn.tools?.length || 0), 0) : 0
       rows.push(
@@ -802,7 +868,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
           <div className="m-gut" />
           <div className={`m-seam${collapsing ? ' is-folding' : ''}`}>
             <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
-              <span className="m-seam-lead">{lead}</span>
+              <span className="m-seam-lead">{lead}{ticking && <> · <SeamElapsed from={item.from} skewRef={skewRef} /></>}</span>
               {transcript?.state === 'ready' && (
                 <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>
               )}
@@ -841,6 +907,15 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
         onMouseDown={beginTimelineSelection} onContextMenu={onTimelineContextMenu}>
         <div className="m-col" ref={timelineContentRef}>
+          {/* WHAT THE WINDOW IS NOT SHOWING, SAID OUT LOUD. A long session's history used to end here in
+              silence — the window was a tail and the rest was simply unreachable. The count is the history's
+              own, so the reader can see there is more and take it one page at a time. */}
+          {events !== null && !holdingFirstPaint && win.offset > 0 && (
+            <button type="button" className="m-earlier" onClick={loadEarlier} disabled={loadingEarlier}>
+              <Caret open={false} className="m-earlier-caret" />
+              {loadingEarlier ? t('common.loading') : t('mobile.loadEarlier', { count: win.offset })}
+            </button>
+          )}
           {events === null || holdingFirstPaint
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}

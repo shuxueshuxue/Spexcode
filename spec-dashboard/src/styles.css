@@ -2817,6 +2817,23 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    user quotes reverse the two columns, while status/event times stay inline at the content start. */
 .m-ev, .m-day { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 16px; }
 .m-ev { padding: var(--space-5) 0; }
+/* @@@no-content-visibility - skipping off-screen row layout looks free here and is not. This conversation
+   selects across rows with Ranges it resolves by geometry (::highlight(timeline-sel), richTextFromRange),
+   and a skipped row has no geometry to give them; the estimated height it reports would also be the height
+   the back-load's scroll anchor subtracts, so a page arriving at the top would land the reader in the wrong
+   place. The window is bounded instead — that is what keeps the layout small. */
+/* the window's own top edge: how much earlier history it is not showing, and the way into it. It reads as
+   the seam row does — the same quiet caption voice, because both are the conversation talking about itself
+   rather than a turn in it. */
+.m-earlier {
+  align-self: center; display: inline-flex; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-5); padding: var(--space-2) var(--space-4);
+  color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
+}
+.m-earlier:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
+.m-earlier:disabled { cursor: default; opacity: .45; }
+.m-earlier-caret { transform: rotate(180deg); }
 .m-ev-prompt, .m-ev-sent { grid-template-columns: minmax(0, 1fr) 52px; }
 .m-ev-prompt > .m-gut, .m-ev-sent > .m-gut { grid-column: 2; text-align: left; }
 .m-gut {

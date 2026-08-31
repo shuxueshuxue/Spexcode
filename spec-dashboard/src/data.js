@@ -481,8 +481,17 @@ export const sessionUrl = (id, ...parts) =>
 // a session's persisted interaction history ([[session-timeline]]): authored status transitions (full note
 // text) + delivered prompts, oldest first — what the terminal-free face renders as the conversation.
 // null on 404/failure (the caller keeps its last-known list; the poll retries).
-export async function loadSessionTimeline(id) {
-  const res = await apiFetch(sessionUrl(id, 'timeline'), { cache: 'no-store' })
+//
+// A reader holds a WINDOW over that history, and this is the one call that moves it: `limit` sizes it,
+// `before` walks back a page from a position the previous answer named, `since` asks only for what the log
+// grew by (the poll). An answer carrying `offset` is a whole window to seat; one without it is an append.
+export async function loadSessionTimeline(id, read = {}) {
+  const query = new URLSearchParams()
+  for (const key of ['limit', 'before', 'since']) {
+    if (read[key] !== undefined && read[key] !== null) query.set(key, String(read[key]))
+  }
+  const suffix = query.size ? `?${query}` : ''
+  const res = await apiFetch(`${sessionUrl(id, 'timeline')}${suffix}`, { cache: 'no-store' })
   if (!res.ok) return null
   const body = await res.json()
   // the server's clock, from the response's own Date header (1s resolution): the live seam counts against

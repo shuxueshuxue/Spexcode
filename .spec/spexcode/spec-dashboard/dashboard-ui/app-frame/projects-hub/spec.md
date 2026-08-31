@@ -72,10 +72,10 @@ surface because it holds host-specific paths and may hold secrets. The raw JSON 
 work area: about half the viewport tall on desktop, with sensible bounds, and a large viewport-constrained
 mobile height that leaves its controls reachable without overlap. Inside that same project details drawer,
 the final, low-emphasis action is **Remove project registration**. It opens a warning rather than
-acting immediately, explains that the checkout and source files remain, requires an acknowledgement checkbox
-and exact `REMOVE <project title>` text, and then calls `DELETE /projects/:id`. The page does not expose a
-local-directory delete command. The project row also exposes a trash icon that opens this same confirmation
-modal; the icon never bypasses the acknowledgement, exact-title phrase, or server-side safety checks.
+acting immediately, names the project, and states that the checkout and source files remain. One explicit
+confirmation button submits the canonical `REMOVE <project title>` phrase to `DELETE /projects/:id`; the page
+does not expose a local-directory delete command. The project row also exposes a trash icon that opens this same
+warning, and the icon never bypasses server-side safety checks.
 Online backends and active sessions are shown as server-side blockers with their repair reason, so the user is
 never nudged into deleting around live work. Identity editing remains a
 quiet secondary disclosure: its compact current mark and edit button reveal the shared

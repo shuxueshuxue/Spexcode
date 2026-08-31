@@ -372,10 +372,7 @@ function SetupDrawer({ p, busyOp, run, result, t }) {
 }
 
 function RemoveProjectModal({ project, busy, error, onClose, onRemove, t }) {
-  const [confirmation, setConfirmation] = useState('')
-  const [understood, setUnderstood] = useState(false)
   const phrase = `REMOVE ${project.identity.title}`
-  const ready = understood && confirmation === phrase && !busy
   useEscLayer(!busy, onClose)
   return (
     <Modal
@@ -385,29 +382,11 @@ function RemoveProjectModal({ project, busy, error, onClose, onRemove, t }) {
       className="proj-remove-modal"
     >
       <div className="proj-remove-copy">
-        <p className="proj-remove-warning">{t('projects.removeWarning')}</p>
-        <p>{t('projects.removeKeepsFiles')}</p>
-        <p>{t('projects.removeStopsFirst')}</p>
-        <label className="proj-remove-check">
-          <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} disabled={busy} />
-          <span>{t('projects.removeUnderstand')}</span>
-        </label>
-        <label className="proj-remove-confirm">
-          <span>{t('projects.removeTypePrompt')}</span>
-          <code>{phrase}</code>
-          <input
-            value={confirmation}
-            onChange={(e) => setConfirmation(e.target.value)}
-            aria-label={t('projects.removeTypeLabel')}
-            autoComplete="off"
-            spellCheck={false}
-            disabled={busy}
-          />
-        </label>
+        <p className="proj-remove-warning">{t('projects.removeWarning', { name: project.identity.title })}</p>
         {error && <div className="proj-err">{error}</div>}
         <div className="proj-remove-actions">
           <button className="proj-act" type="button" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
-          <button className="proj-act danger" type="button" disabled={!ready} onClick={() => onRemove(confirmation)}>
+          <button className="proj-act danger" type="button" disabled={busy} onClick={() => onRemove(phrase)}>
             {busy ? t('projects.removeBusy') : t('projects.removeConfirm')}
           </button>
         </div>

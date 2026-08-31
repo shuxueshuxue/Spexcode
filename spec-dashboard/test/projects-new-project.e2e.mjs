@@ -67,18 +67,15 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
     assert.equal(catalog.projects.some((entry) => entry.root === realpathSync(project)), true)
 
-    // Removal is intentionally several decisions away from the row's primary action: use the row's
-    // trash entry, read the warning, acknowledge the scope, then type the exact title phrase. The checkout remains.
+    // Removal opens one concise warning. The confirm button submits the server's canonical title phrase;
+    // the checkout remains.
     const row = page.locator('.proj-row', { hasText: 'new-project' })
     await row.getByRole('button', { name: 'remove project registration' }).first().click()
     const remove = page.locator('.proj-remove-modal')
-    await remove.getByText('The local directory, Git history, and source files stay exactly where they are.', { exact: false }).waitFor()
+    await remove.getByText('Its local directory, Git history, and source files stay in place.', { exact: false }).waitFor()
     const confirm = remove.getByRole('button', { name: 'confirm registration removal' })
-    assert.equal(await confirm.isDisabled(), true)
-    await remove.getByRole('checkbox').check()
-    await remove.getByLabel('removal confirmation phrase').fill('REMOVE wrong-project')
-    assert.equal(await confirm.isDisabled(), true)
-    await remove.getByLabel('removal confirmation phrase').fill('REMOVE new-project')
+    assert.equal(await remove.getByRole('checkbox').count(), 0)
+    assert.equal(await remove.locator('input').count(), 0)
     assert.equal(await confirm.isEnabled(), true)
     await confirm.click()
     await remove.waitFor({ state: 'detached' })

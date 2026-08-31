@@ -329,7 +329,6 @@ html, body, #root { height: 100%; margin: 0; }
 .rf-compact input:focus-visible,
 .cred-input:focus:focus-visible,
 .identity-search input:focus-visible,
-.proj-remove-confirm input:focus:focus-visible,
 .pa-input:focus:focus-visible,
 .pa-message:focus-visible,
 .pa-address-input:focus-visible { box-shadow: none; }
@@ -3632,12 +3631,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .proj-remove-copy { display: grid; gap: 10px; padding: 2px; color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed); }
 .proj-remove-copy p { margin: 0; }
 .proj-remove-warning { color: var(--red); font-weight: var(--weight-semibold); }
-.proj-remove-check { display: flex; align-items: flex-start; gap: 8px; color: var(--ink2); font-size: var(--type-meta); }
-.proj-remove-check input { margin-top: 3px; accent-color: var(--red); }
-.proj-remove-confirm { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-meta); }
-.proj-remove-confirm code { color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); overflow-wrap: anywhere; }
-.proj-remove-confirm input { min-width: 0; box-sizing: border-box; width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: var(--type-control); }
-.proj-remove-confirm input:focus { outline: none; border-color: var(--red); }
 .proj-remove-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
 .proj-act.danger { color: var(--red); border-color: var(--red); background: color-mix(in srgb, var(--red) 9%, transparent); font-weight: var(--weight-semibold); }
 .proj-act.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--red) 18%, transparent); }

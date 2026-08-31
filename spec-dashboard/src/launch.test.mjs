@@ -60,10 +60,13 @@ test('the scoped New tab exposes a plus action for adding a harness target', () 
   assert.match(css, /\.si-harness-modal\s*\{[^}]*width:/s)
 })
 
-test('project rows expose the guarded catalog-registration removal action', () => {
+test('project rows expose a one-step catalog-registration removal action', () => {
   const source = readFileSync(new URL('./ProjectsPage.jsx', import.meta.url), 'utf8')
   assert.match(source, /icon="trash"/)
   assert.match(source, /removeProject\(p\.id, confirmation\)/)
-  assert.match(source, /RemoveProjectModal[\s\S]*REMOVE \$\{project\.identity\.title\}/)
-  assert.match(source, /t\('projects\.removeUnderstand'\)/)
+  const modal = source.slice(source.indexOf('function RemoveProjectModal'), source.indexOf('function ProjectRow'))
+  assert.match(modal, /const phrase = `REMOVE \$\{project\.identity\.title\}`/)
+  assert.match(modal, /t\('projects\.removeWarning', \{ name: project\.identity\.title \}\)/)
+  assert.match(modal, /onClick=\{\(\) => onRemove\(phrase\)\}/)
+  assert.doesNotMatch(modal, /type="checkbox"|<input|removeUnderstand|removeTypeLabel/)
 })

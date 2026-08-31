@@ -61,8 +61,10 @@ can be cataloged directly; a plain folder enters only after the user explicitly 
 side effect. An absent candidate enters only through the explicit `createDir` + Git-initialization transaction,
 which creates the requested path before that same Git/catalog workflow. The add transaction establishes a
 branchable source-of-truth before it writes the catalog: a repository it initializes gets an initial commit
-on the conventional `main` branch, while an existing repository with an unborn `HEAD` gets an empty initial
-commit on its current branch. A newly created path also runs the real `spex init --harness none` when no
+on the conventional `main` branch, while an existing repository with an unborn `HEAD` gets an initial
+commit on its current branch. If an interrupted adoption already left `.spec` or `spexcode.json` on disk,
+that SpexCode source is recovered into the same commit; only a repository with no seed at all receives an
+empty commit. A newly created path also runs the real `spex init --harness none` when no
 explicit SpexCode setup was requested, so the project is immediately usable by the session launcher picker
 and its later Harness-target `+` action. Optional SpexCode setup still runs the real `spex init` with an
 explicit harness choice, never a dashboard-owned initializer; after it succeeds, the transaction commits

@@ -13,7 +13,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   publishEndpoint, dropOwnEndpoint, endpointRecordPath, readCatalog, addKnownProject,
-  browseProjectDirectories, addKnownProjectWithSetup, removeKnownProject,
+  browseProjectDirectories, addKnownProjectWithSetup, removeKnownProject, runSpex,
   reconcileProjects, reconcileNow, startHostDashboard, type EndpointRecord,
 } from './host.js'
 import { encodeProject } from '@spexcode/spec-core'
@@ -311,6 +311,29 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.match(gitHead(existingUnborn) ?? '', /^[0-9a-f]{40,64}$/)
   assert.equal(execFileSync('git', ['-C', existingUnborn, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' }).trim(), '')
   assert.match(execFileSync('git', ['-C', existingUnborn, 'status', '--short'], { encoding: 'utf8' }), /draft\.txt/)
+
+  // A previous `spex init` may have completed but its first commit may have been rejected by the hook.
+  // Re-registering that unborn repository must recover the existing seed instead of creating an empty
+  // commit that leaves the same source-of-truth error for the first session.
+  const interrupted = join(parent, 'interrupted-adoption')
+  mkdirSync(interrupted)
+  writeFileSync(join(interrupted, 'draft.txt'), 'keep this user content uncommitted\n')
+  execFileSync('git', ['init', '-q', '-b', 'master'], { cwd: interrupted })
+  const seeded = await runSpex(interrupted, ['init', '--harness', 'codex'])
+  assert.equal(seeded.code, 0, seeded.output)
+  assert.equal(gitHead(interrupted), null)
+  const recovered = await addKnownProjectWithSetup(interrupted)
+  assert.equal(recovered.ok, true)
+  assert.equal(recovered.initialCommitCreated, true)
+  assert.equal(execFileSync('git', ['-C', interrupted, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'master')
+  const recoveredTree = execFileSync('git', ['-C', interrupted, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' })
+  assert.match(recoveredTree, /(^|\n)\.spec\/project\/spec\.md\n/)
+  assert.match(recoveredTree, /(^|\n)spexcode\.json\n/)
+  assert.doesNotMatch(recoveredTree, /(^|\n)draft\.txt\n/)
+  assert.match(execFileSync('git', ['-C', interrupted, 'status', '--short'], { encoding: 'utf8' }), /draft\.txt/)
+  const recoveredLint = await runSpex(interrupted, ['spec', 'lint'])
+  assert.equal(recoveredLint.code, 0, recoveredLint.output)
+  assert.doesNotMatch(recoveredLint.output, /project source of truth is untracked/)
 
   const historical = join(parent, 'historical')
   mkdirSync(historical)

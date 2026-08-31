@@ -396,11 +396,14 @@ function bootstrapSeedState(root: string): SeedState {
 
 function bootstrapSeedPaths(root: string, before: SeedState): string[] {
   const candidates: Array<[string, boolean]> = [
-    ['.spec', !before.spec],
-    ['spexcode.json', !before.config],
+    // An interrupted adoption can leave the SpexCode seed on disk while HEAD is still unborn. Those
+    // paths are the project's source of truth even when they predate this add attempt, so recover them
+    // into the bootstrap commit; `--only` below still keeps every user source path out.
+    ['.spec', true],
+    ['spexcode.json', true],
     ['.gitignore', !before.ignore],
   ]
-  return candidates.filter(([path, wasAbsent]) => wasAbsent && existsSync(join(root, path))).map(([path]) => path)
+  return candidates.filter(([path, shouldStage]) => shouldStage && existsSync(join(root, path))).map(([path]) => path)
 }
 
 // The host owns this one topology commit. It is deliberately path-scoped: pre-staged user files stay out of

@@ -54,12 +54,14 @@ scenarios:
       inspect its source-of-truth branch and HEAD, then start its real backend and POST one session using
       the configured launcher. Repeat the path-only new-project action and inspect its initial ref.
     expected: >-
-      Every project created by the host has a real initial commit before it is cataloged. A SpexCode setup
-      commit contains the seed `.spec`, portable config, and ignore policy, and its `mainBranch` names the
-      checked-out source-of-truth branch. The backend can create a session worktree immediately, so no
-      `git worktree add failed: fatal: invalid reference` is returned. A path-only project receives the
-      real `spex init --harness none` foundation and an initial commit on the conventional `main` branch;
-      its empty harness selection remains addable from the scoped New Session `+` action.
+      Every project created or re-registered by the host has a real initial commit before it is cataloged. A
+      SpexCode setup commit contains the seed `.spec`, portable config, and ignore policy, and its `mainBranch`
+      names the checked-out source-of-truth branch. If an earlier setup left that seed untracked on an unborn
+      repository, the re-registration recovers it into the commit while keeping user source out. The backend
+      can create a session worktree immediately, so no `git worktree add failed: fatal: invalid reference` is
+      returned. A path-only project receives the real `spex init --harness none` foundation and an initial
+      commit on the conventional `main` branch; its empty harness selection remains addable from the scoped
+      New Session `+` action.
 ---
 # measuring host-gateway
 

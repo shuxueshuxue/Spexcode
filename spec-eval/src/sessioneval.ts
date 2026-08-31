@@ -1035,9 +1035,8 @@ export function nodeScore(hasEvalFile: boolean, latest: EvalEntry[], affectedSce
 // which spec node owns a changed file: a file inside a node's directory (its spec.md / eval.md / sidecar)
 // belongs to the NEAREST such node; otherwise the node whose governed `code:` claims it (exact path,
 // directory prefix, or `*` glob — the same matching `spex eval lint --changed` uses). A shared file is
-// governed by MANY nodes (ordinary composition); when the session has a primary node that also governs it,
-// attribute it THERE so a node/<id> session's stake in cli.ts/index.ts groups under its own node, not
-// whichever sibling sorts first.
+// governed by MANY nodes (ordinary composition), and a session has no node of its own to break the tie with,
+// so the nearest claim wins and a shared file simply lands under every node that claims it.
 // null = unclaimed.
 function nodeForFile(file: string, specs: Awaited<ReturnType<typeof loadSpecs>>): string | null {
   let best: string | null = null, bestLen = -1

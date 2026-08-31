@@ -16,8 +16,8 @@ related:
 ## raw source
 
 A node id is a single opaque token, not a path. It is the coordinate every surface uses to name one
-node — a `:id` route param, a fetch URL segment, a `[[wikilink]]`, a React key, a corpus match, a
-`node/<id>` branch. So it must survive all of them unescaped: it can never contain a `/` — which would
+node — a `:id` route param, a fetch URL segment, a `[[wikilink]]`, a React key, a corpus match. So it
+must survive all of them unescaped: it can never contain a `/` — which would
 split into two path segments — nor any other char a URL, wikilink, or DOM key treats specially. One id,
 one token, resolvable the same way everywhere.
 

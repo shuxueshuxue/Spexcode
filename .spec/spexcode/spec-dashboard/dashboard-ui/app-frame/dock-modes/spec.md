@@ -18,6 +18,7 @@ related:
   - spec-dashboard/src/ContextDock.jsx
   - spec-dashboard/src/SessionForestPanel.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/projection-handover.e2e.mjs
 ---
 # dock-modes
 
@@ -34,13 +35,29 @@ projection it shows and whether it exists at all. A node or a governed file belo
 **Bare evals, issues and settings boards have no sidebar, while their object details retain the dock.** The
 Sessions route mounts no finding dock: the Sessions document draws its own forest sidebar
 ([[session-console]]), and that forest folds from the same rail control through the same open/closed state,
-so the reader has one fold rather than two. Projection selection is secondary state: graph and sessions route links
-may select explorer or sessions, but the rail light remains route-only. The dedicated mirrored rail panel
+so the reader has one fold rather than two. Projection selection is secondary state: the spec and graph
+route links select the explorer, while the sessions anchor selects no projection at all — its destination
+mounts no finding dock, so a projection written at click time could only dress the DEPARTING document's
+dock — and the rail light remains route-only. The dedicated mirrored rail panel
 control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
 a plain click navigates to `sessions/<id>` in the focused tab, while ctrl/⌘-click opens it in a new tab. The row is chrome around the session document, so its pointer press suppresses the native
 button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
 composition from the session currently being read.
+
+**The projection the dock renders is DERIVED DURING RENDER, and the swap between band owners commits no
+intermediate projection.** The document names its projection (`explorer` for nodes and governed files), the
+reader's by-hand projection chord overrides it only on the document it was pressed on — moving to another
+document is what ends the override — and routes with no opinion (graph, empty) fall back to the projection
+last in force, persisted as `dockMode`, whose write is bookkeeping nothing rendered waits on. Deriving the
+rendered projection THROUGH that persisted state and correcting it from an effect painted whatever
+`dockMode` last held — a stale sessions projection on an arriving spec route, swapped one frame later — and
+letting the rail's sessions click write `dockMode` ahead of its own navigation committed a sessions
+projection on the departing document's dock: between the explorer and the Sessions forest a third,
+differently-dressed sessions sidebar flashed, mounted whole and thrown away one route tick later.
+`projection-handover.e2e.mjs` watches the commits themselves — not paints, which race vsync — and proves
+the band hands over dock⇄forest with zero intermediate sessions-projection mounts in both directions,
+including a fresh load carrying stale persisted `dockMode`.
 
 **The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
@@ -137,9 +154,10 @@ collapse-all view action — rather than beside either section ([[file-tree]]). 
 the static Specs and Files zone heads remain visible. The sessions head has no such door: its forest folds
 per family ([[session-forest]]).
 
-The dock's session projection is the **one full session list** in the desktop window. It consumes the board's active
-session set through `sessionForest`, including zone headings, nesting rails, fold pods, status glyphs, and the
-route-selected highlight (`activeSessionId`). `sessionForest` and each row consume the same `sessionDisplayState`:
+The dock's session projection is the **full session list beside every non-session document** in the desktop
+window. It consumes the board's active
+session set through `sessionForest`, including zone headings, nesting rails, fold pods, and status glyphs.
+`sessionForest` and each row consume the same `sessionDisplayState`:
 the status published by `/api/sessions` is ground truth. `asking`/`review`/`done`/`close-pending`/`error` form
 needs-you; `working`/`queued` and other active values form running; `offline`/`retired` form offline; archived
 records form the fourth archive zone and use the muted archive mark (`○`). Liveness never overrides the status,
@@ -158,9 +176,12 @@ separate gesture with its own section below, and it changes no address.
 Every zone heading uses the shared `--divider-rule` hairline for its trailing separator. The zone hue remains
 on the label and count pod, where it carries status meaning; the boundary itself has one token and one weight,
 matching the explorer's section heads and the tab/content seam.
-When a session document is focused through a tab, palette, or direct route, the dock reveals its parent chain and
-keeps the route-selected row visible and highlighted. An active row in the folded offline zone opens that zone as
-well; the reveal is derived from `activeSessionId`, not a second selection state.
+A focused session document means the Sessions route, which mounts no finding dock — so this projection never
+has an active row: the route-selected highlight, the parent-chain reveal, and the Option-arrow session walk
+all live with the Sessions document's own forest ([[session-forest]]), the one surface with a focused session
+to anchor them. **Historical:** the dock once rendered on the sessions route with its rows suppressed and
+carried an `activeSessionId` reveal and its own keyboard walk; when the route's dock was retired those could
+never fire again and are removed with it.
 
 The human ruling for cross-zone nesting is owned by [[session-row]]: it restores the parent relationship as the
 only nesting input and rejects both the old cross-zone split and the upward parent link. This dock follows that

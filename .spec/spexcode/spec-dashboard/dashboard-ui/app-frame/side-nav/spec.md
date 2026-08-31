@@ -40,10 +40,14 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   top-level destination remains selected while the reader is inside the Spec workspace. `empty` also has no
   light. Detail routes (`evals/<node>/<scenario>`, `issues/<id>`) light their page anchor. The rail never
   lights for dock mode.
-- **Click is navigation plus projection selection.** A plain click remains an ordinary same-document route
-  navigation (modified clicks keep browser behavior). The sessions anchor also opens the dock on the sessions
-  projection and focuses the most recently held session document when one exists; with no held session it
-  lands on the bare sessions launch face. The selection is idempotent: clicking the current
+- **Click is navigation plus band opening.** A plain click remains an ordinary same-document route
+  navigation (modified clicks keep browser behavior). The sessions anchor also opens the shared left band
+  and focuses the most recently held session document when one exists; with no held session it lands on the
+  bare sessions launch face. It pre-selects NO dock projection: its destination mounts no finding dock
+  ([[dock-modes]]), so a projection written at click time could only flip the DEPARTING document's dock to a
+  sessions projection for the frames before the route landed — a second, differently-styled sessions sidebar
+  flashing between the explorer and the forest. The spec and graph anchors still select the explorer
+  projection their destination derives. The selection is idempotent: clicking the current
   sessions anchor again navigates only and never folds the dock. Document routes select their related
   projection through the shell's derivation. Review and settings boards keep the rail — the top-level board
   switch is present on every desktop route — and mount no workspace dock, so their content takes the whole

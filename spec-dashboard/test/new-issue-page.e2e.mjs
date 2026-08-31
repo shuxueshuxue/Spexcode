@@ -28,7 +28,7 @@ const check = (name, ok, detail = '') => {
 }
 const settle = (p, ms = 500) => p.waitForTimeout(ms)
 const rect = (p, sel) => p.evaluate((s) => {
-  const el = document.querySelector(s)
+  const el = window.__spexLive(s)
   if (!el) return null
   const r = el.getBoundingClientRect()
   return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
@@ -47,15 +47,21 @@ const browser = await chromium.launch()
 
 // ---------- 1 + 2 + 5: static faces (screenshots) ----------
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+await ctx.addInitScript(() => {
+  window.__spexLive = (sel) => [...document.querySelectorAll(sel)].find((el) => {
+    const r = el.getBoundingClientRect()
+    return r.width > 0 && r.height > 0 && el.offsetParent !== null
+  }) || null
+})
 const p = await ctx.newPage()
 const pageErrors = errs(p)
 
 // — 5. the LIST page: chrome, the New door, keys inside an input —
 await p.goto(`${BASE}/#/issues`)
-await p.waitForSelector('.lp-row')
+await p.waitForFunction(() => [...document.querySelectorAll('.lp-row')].some((el) => el.getBoundingClientRect().height > 0))
 await settle(p)
 const listShape = await p.evaluate(() => {
-  const nw = document.querySelector('.rl-new')
+  const nw = window.__spexLive('.rl-new')
   const rows = [...document.querySelectorAll('.lp-row')]
   const rowLinks = rows.map((row) => {
     const link = row.querySelector(':scope > .lp-row-link')
@@ -72,10 +78,10 @@ const listShape = await p.evaluate(() => {
     newTag: nw?.tagName, newHref: nw?.getAttribute('href'), newHasOnclick: !!nw?.onclick,
     rowLinks,
     rowsHaveFullRowAnchors: rowLinks.length > 0 && rowLinks.every((link) => link.tag === 'A' && /^#\/issues\//.test(link.href) && link.covers),
-    query: document.querySelector('.rl-query input')?.value,
+    query: window.__spexLive('.rl-query input')?.value,
     tabs: [...document.querySelectorAll('.rl-section')].map((b) => b.textContent),
-    queryH: Math.round(document.querySelector('.rl-query').getBoundingClientRect().height),
-    headH: Math.round(document.querySelector('.lp-head').getBoundingClientRect().height),
+    queryH: Math.round(window.__spexLive('.rl-query').getBoundingClientRect().height),
+    headH: Math.round(window.__spexLive('.lp-head').getBoundingClientRect().height),
   }
 })
 check('list New is a REAL anchor to the compose address', listShape.newTag === 'A' && listShape.newHref === '#/issues/new', `${listShape.newTag} href=${listShape.newHref}`)
@@ -87,18 +93,18 @@ check('Open/Closed sections carry counts', listShape.tabs.length === 2 && /open/
 await p.click('.lp-head')
 await p.keyboard.press('j')
 await settle(p, 200)
-const cur1 = await p.evaluate(() => document.querySelector('.lp-row.cur .lp-row-link')?.getAttribute('href'))
+const cur1 = await p.evaluate(() => window.__spexLive('.lp-row.cur .lp-row-link')?.getAttribute('href'))
 await p.keyboard.press('j')
 await settle(p, 200)
-const cur2 = await p.evaluate(() => document.querySelector('.lp-row.cur .lp-row-link')?.getAttribute('href'))
+const cur2 = await p.evaluate(() => window.__spexLive('.lp-row.cur .lp-row-link')?.getAttribute('href'))
 check('j moves a visible row cursor', !!cur1 && !!cur2 && cur1 !== cur2, `${cur1} → ${cur2}`)
 // a key typed INSIDE the query input reaches the input and moves no cursor
 await p.click('.rl-query input')
 await p.keyboard.type('j')
 await settle(p, 200)
 const typed = await p.evaluate(() => ({
-  value: document.querySelector('.rl-query input').value,
-  cur: document.querySelector('.lp-row.cur .lp-row-link')?.getAttribute('href'),
+  value: window.__spexLive('.rl-query input').value,
+  cur: window.__spexLive('.lp-row.cur .lp-row-link')?.getAttribute('href'),
 }))
 check("'j' typed in the query input lands in the input and moves no cursor", typed.value.endsWith('j') && typed.cur === cur2, `value="${typed.value}"`)
 await p.keyboard.press('Backspace')
@@ -110,7 +116,7 @@ await p.waitForFunction(() => /state(:|%3A)closed/.test(location.hash))
 const closedHash = await p.evaluate(() => location.hash)
 await p.reload()
 await p.waitForSelector('.rl-query input')
-const replayed = await p.evaluate(() => ({ hash: location.hash, text: document.querySelector('.rl-query input').value.trim() }))
+const replayed = await p.evaluate(() => ({ hash: location.hash, text: window.__spexLive('.rl-query input').value.trim() }))
 check('Closed pushes ?q=is:issue state:closed and a reload replays the text', /q=is%3Aissue%20state%3Aclosed/.test(closedHash) && replayed.hash === closedHash && replayed.text === 'is:issue state:closed', `${closedHash} → "${replayed.text}"`)
 await p.goBack()
 await p.waitForFunction(() => location.hash === '#/issues')
@@ -119,16 +125,16 @@ check('browser Back restores the default list address', (await p.evaluate(() => 
 // push would replace instead of append (a Back-then-push keeps the same length by definition).
 const fresh = await ctx.newPage()
 await fresh.goto(`${BASE}/#/issues`)
-await fresh.waitForSelector('.lp-row')
+await fresh.waitForFunction(() => [...document.querySelectorAll('.lp-row')].some((el) => el.getBoundingClientRect().height > 0))
 const histBefore = await fresh.evaluate(() => history.length)
 await fresh.click('.lp-row')
-await fresh.waitForSelector('.ds-page')
+await fresh.waitForFunction(() => [...document.querySelectorAll('.ds-page')].some((el) => el.getBoundingClientRect().height > 0))
 const detailClasses = await fresh.evaluate(() => ({
   hash: location.hash, hist: history.length,
-  shell: ['.ds-head', '.ds-back', '.ds-cols', '.ds-main', '.ds-side'].filter((s) => document.querySelector(s)),
+  shell: ['.ds-head', '.ds-back', '.ds-cols', '.ds-main', '.ds-side'].filter((s) => window.__spexLive(s)),
 }))
 await fresh.goBack()
-await fresh.waitForSelector('.lp-row')
+await fresh.waitForFunction(() => [...document.querySelectorAll('.lp-row')].some((el) => el.getBoundingClientRect().height > 0))
 const backHash = await fresh.evaluate(() => location.hash)
 check('a row click PUSHES onto the standalone detail page and Back restores the list', detailClasses.hist === histBefore + 1 && /^#\/issues\/.+/.test(detailClasses.hash) && backHash === '#/issues', `${detailClasses.hash} history ${histBefore}→${detailClasses.hist}, back ${backHash}`)
 check('the detail page is the shared DetailShell', detailClasses.shell.length === 5, detailClasses.shell.join(' '))
@@ -142,7 +148,7 @@ await cold.goto(`${BASE}/#/issues/new`)
 await cold.waitForSelector('.fv-new-page')
 await settle(cold, 600)
 const shape = await cold.evaluate(() => {
-  const q = (s) => document.querySelector(s)
+  const q = (s) => window.__spexLive(s)
   const cs = (s, prop) => { const el = q(s); return el ? getComputedStyle(el)[prop] : null }
   return {
     dialogs: document.querySelectorAll('[role="dialog"], [aria-modal]').length,
@@ -189,7 +195,7 @@ const draft = await cold.inputValue('.fv-new-compose .fv-textarea')
 await cold.click('.fv-tab:nth-child(2)')
 await cold.waitForSelector('.fv-new-preview')
 const preview = await cold.evaluate(() => {
-  const box = document.querySelector('.fv-new-preview')
+  const box = window.__spexLive('.fv-new-preview')
   return {
     // SpecBody renders every heading level as its one .doc-h element — the same markup the detail body gets
     heading: box.querySelector('.doc-h')?.textContent,
@@ -232,10 +238,10 @@ await cold.keyboard.type('created from the routed compose page, linking [[issues
 const histAtCompose = await cold.evaluate(() => history.length)
 await cold.click('.fv-post')
 await cold.waitForFunction(() => /^#\/issues\/.+/.test(location.hash) && location.hash !== '#/issues/new', null, { timeout: 20000 })
-await cold.waitForSelector('.ds-side')
+await cold.waitForFunction(() => [...document.querySelectorAll('.ds-side')].some((el) => el.getBoundingClientRect().height > 0))
 await settle(cold, 600)
 const landed = await cold.evaluate(() => ({
-  hash: location.hash, hist: history.length, title: document.querySelector('.ds-title')?.textContent,
+  hash: location.hash, hist: history.length, title: window.__spexLive('.ds-title')?.textContent,
   railNodes: [...document.querySelectorAll('.ds-side .ds-val')].map((el) => ({ tag: el.tagName, text: el.textContent, href: el.getAttribute('href') })),
 }))
 check('Create lands on the created issue\'s OWN detail address, as a REPLACE', landed.hash.startsWith('#/issues/') && landed.hist === histAtCompose, `${landed.hash} history ${histAtCompose}→${landed.hist}`)
@@ -243,7 +249,7 @@ check('the detail shows the concern as its title', landed.title === concern, lan
 check('the linked node arrives as an internal graph anchor — inferred from the prose', landed.railNodes.some((v) => v.text === 'issues-view' && v.tag === 'A' && v.href === '#/graph/issues-view'), JSON.stringify(landed.railNodes))
 await cold.screenshot({ path: join(OUT, 'new-form-node-links.png') })
 await cold.goBack()
-await cold.waitForSelector('.lp-row')
+await cold.waitForFunction(() => [...document.querySelectorAll('.lp-row')].some((el) => el.getBoundingClientRect().height > 0))
 check('Back from the created issue returns to the LIST, not to an emptied form', (await cold.evaluate(() => location.hash)) === '#/issues')
 const created = await (await fetch(`${API}/api/issues?q=is:issue%20state:open&page=1`)).json()
 check('the issue really exists in the store, with its node link', created.items.some((i) => i.concern === concern && (i.nodes || []).includes('issues-view')))
@@ -263,27 +269,27 @@ const doorLabels = await v.evaluate(() => [...document.querySelectorAll('.fv-com
 check('the reply composer keeps its localized `@`/`[[` doors', doorLabels.length >= 2 && doorLabels.every((d) => d.label && d.tip), JSON.stringify(doorLabels))
 const replyCountBefore = await v.evaluate(() => document.querySelectorAll('.fv-reply').length)
 await v.fill('.fv-compose .fv-textarea', 'alpha beta')
-await v.evaluate(() => { const el = document.querySelector('.fv-compose .fv-textarea'); el.focus(); el.setSelectionRange(6, 6) })
+await v.evaluate(() => { const el = window.__spexLive('.fv-compose .fv-textarea'); el.focus(); el.setSelectionRange(6, 6) })
 await v.click('.fv-compose .fv-trigger-btn')
 await settle(v, 400)
 const inserted = await v.evaluate(() => {
-  const el = document.querySelector('.fv-compose .fv-textarea')
-  return { value: el.value, caret: el.selectionStart, focused: document.activeElement === el, menu: !!document.querySelector('.fv-compose .mention-menu') }
+  const el = window.__spexLive('.fv-compose .fv-textarea')
+  return { value: el.value, caret: el.selectionStart, focused: document.activeElement === el, menu: !!window.__spexLive('.fv-compose .mention-menu') }
 })
 check('`@` types the trigger AT the caret, keeps the draft, refocuses, opens the shared menu', inserted.value === 'alpha @beta' && inserted.caret === 7 && inserted.focused && inserted.menu, JSON.stringify(inserted))
 await v.keyboard.press('Escape')
-await v.evaluate(() => { const el = document.querySelector('.fv-compose .fv-textarea'); el.focus(); el.setSelectionRange(7, 11) })
+await v.evaluate(() => { const el = window.__spexLive('.fv-compose .fv-textarea'); el.focus(); el.setSelectionRange(7, 11) })
 await v.click('.fv-compose .fv-trigger-btn:nth-child(2)')
 await settle(v, 400)
 const replaced = await v.evaluate(() => {
-  const el = document.querySelector('.fv-compose .fv-textarea')
-  return { value: el.value, caret: el.selectionStart, menu: !!document.querySelector('.fv-compose .mention-menu') }
+  const el = window.__spexLive('.fv-compose .fv-textarea')
+  return { value: el.value, caret: el.selectionStart, menu: !!window.__spexLive('.fv-compose .mention-menu') }
 })
 // the draft now reads 'alpha @beta' (the `@` insertion above stays); selecting 7..11 selects 'beta'
 check('`[[` replaces the SELECTED span, preserving the rest, and opens the node menu', replaced.value === 'alpha @[[' && replaced.caret === 9 && replaced.menu, JSON.stringify(replaced))
 await v.keyboard.press('Escape')
 const rowGeom = await v.evaluate(() => {
-  const row = document.querySelector('.fv-compose .fv-actions')
+  const row = window.__spexLive('.fv-compose .fv-actions')
   const kids = [...row.children].map((el) => el.getBoundingClientRect())
   const r = row.getBoundingClientRect()
   const overlap = kids.some((a, i) => kids.slice(i + 1).some((b) => a.right > b.left + 0.5 && b.right > a.left + 0.5 && a.bottom > b.top + 0.5 && b.bottom > a.top + 0.5))
@@ -293,7 +299,7 @@ check('the action row lays out without overlap or spill at desktop', !rowGeom.ov
 await v.setViewportSize({ width: 780, height: 900 })
 await settle(v, 400)
 const rowGeom780 = await v.evaluate(() => {
-  const row = document.querySelector('.fv-compose .fv-actions')
+  const row = window.__spexLive('.fv-compose .fv-actions')
   const kids = [...row.children].map((el) => el.getBoundingClientRect())
   const r = row.getBoundingClientRect()
   return { overlap: kids.some((a, i) => kids.slice(i + 1).some((b) => a.right > b.left + 0.5 && b.right > a.left + 0.5 && a.bottom > b.top + 0.5 && b.bottom > a.top + 0.5)), spill: kids.some((k) => k.right > r.right + 0.5) }
@@ -305,31 +311,31 @@ check('the doors posted nothing — they only type', (await v.evaluate(() => doc
 // the SAME reply composer in its OTHER home ([[event-detail]]): the refactored doors and the shared shape
 // must be identical on the eval detail, or "one composer, every home" is a claim without a reading.
 await v.goto(`${BASE}/#/evals`)
-await v.waitForSelector('.lp-row')
+await v.waitForFunction(() => [...document.querySelectorAll('.lp-row')].some((el) => el.getBoundingClientRect().height > 0))
 await v.click('.lp-row')
-await v.waitForSelector('.ds-page')
+await v.waitForFunction(() => [...document.querySelectorAll('.ds-page')].some((el) => el.getBoundingClientRect().height > 0))
 await settle(v, 900)
 const evalComposer = await v.evaluate(() => {
-  const box = document.querySelector('.ds-compose .fv-compose')
-  const ta = document.querySelector('.ds-compose .fv-textarea')
+  const box = window.__spexLive('.ds-compose .fv-compose')
+  const ta = window.__spexLive('.ds-compose .fv-textarea')
   if (!box || !ta) return null
   return {
     boxBorder: getComputedStyle(box).borderStyle, taBorder: getComputedStyle(ta).borderStyle,
     idleH: Math.round(ta.getBoundingClientRect().height),
     doors: [...document.querySelectorAll('.ds-compose .fv-trigger-btn')].map((b) => ({ text: b.textContent, label: b.getAttribute('aria-label') })),
-    send: !!document.querySelector('.ds-compose .fv-send'),
-    sendDisabled: document.querySelector('.ds-compose .fv-send')?.disabled,
+    send: !!window.__spexLive('.ds-compose .fv-send'),
+    sendDisabled: window.__spexLive('.ds-compose .fv-send')?.disabled,
   }
 })
 check('the eval detail docks the SAME composer shape (bordered box, borderless idle floor, live action row)', evalComposer && evalComposer.boxBorder === 'solid' && evalComposer.taBorder === 'none' && evalComposer.idleH >= 40 && evalComposer.send && evalComposer.sendDisabled === true, JSON.stringify(evalComposer))
 check('its `@`/`[[` doors are the same localized pair', evalComposer.doors.length >= 2 && evalComposer.doors[0].text === '@' && evalComposer.doors[1].text === '[[' && evalComposer.doors.every((d) => d.label), JSON.stringify(evalComposer.doors))
 await v.fill('.ds-compose .fv-textarea', 'gamma delta')
-await v.evaluate(() => { const el = document.querySelector('.ds-compose .fv-textarea'); el.focus(); el.setSelectionRange(6, 6) })
+await v.evaluate(() => { const el = window.__spexLive('.ds-compose .fv-textarea'); el.focus(); el.setSelectionRange(6, 6) })
 await v.click('.ds-compose .fv-trigger-btn')
 await settle(v, 400)
 const evalInsert = await v.evaluate(() => {
-  const el = document.querySelector('.ds-compose .fv-textarea')
-  return { value: el.value, caret: el.selectionStart, focused: document.activeElement === el, menu: !!document.querySelector('.ds-compose .mention-menu') }
+  const el = window.__spexLive('.ds-compose .fv-textarea')
+  return { value: el.value, caret: el.selectionStart, focused: document.activeElement === el, menu: !!window.__spexLive('.ds-compose .mention-menu') }
 })
 check('the door types at the caret here too, through the one shared mechanism', evalInsert.value === 'gamma @delta' && evalInsert.caret === 7 && evalInsert.focused && evalInsert.menu, JSON.stringify(evalInsert))
 await v.keyboard.press('Escape')
@@ -345,8 +351,8 @@ await v.click('.fv-compose .fv-textarea')
 await v.keyboard.type('@')
 await v.waitForSelector('.fv-compose .mention-menu')
 const upward = await v.evaluate(() => {
-  const menu = document.querySelector('.fv-compose .mention-menu').getBoundingClientRect()
-  const ta = document.querySelector('.fv-compose .fv-textarea').getBoundingClientRect()
+  const menu = window.__spexLive('.fv-compose .mention-menu').getBoundingClientRect()
+  const ta = window.__spexLive('.fv-compose .fv-textarea').getBoundingClientRect()
   const rows = [...document.querySelectorAll('.fv-compose .mention-item')].map((el) => el.textContent)
   return { above: menu.bottom <= ta.top + 2, rows }
 })
@@ -355,13 +361,13 @@ check('the shared @ menu offers @new beside retained session references', upward
 const newRowIndex = await v.evaluate(() => [...document.querySelectorAll('.fv-compose .mention-item')].findIndex((el) => el.classList.contains('new')))
 const cursorIndex = await v.evaluate(() => [...document.querySelectorAll('.fv-compose .mention-item')].findIndex((el) => el.classList.contains('on')))
 for (let step = 0; step < (newRowIndex - cursorIndex + 100) % 100; step++) await v.keyboard.press('ArrowDown')
-const onNew = await v.evaluate(() => document.querySelector('.fv-compose .mention-item.on')?.classList.contains('new'))
+const onNew = await v.evaluate(() => window.__spexLive('.fv-compose .mention-item.on')?.classList.contains('new'))
 check('↓ roves onto the @new row', onNew === true, `cursor ${cursorIndex} → new row ${newRowIndex}`)
 await v.keyboard.press('Enter')
 await settle(v, 500)
 await v.waitForSelector('.fv-compose .mention-menu')
 const launchers = await v.evaluate(() => ({
-  value: document.querySelector('.fv-compose .fv-textarea').value,
+  value: window.__spexLive('.fv-compose .fv-textarea').value,
   rows: [...document.querySelectorAll('.fv-compose .mention-item')].map((el) => el.textContent),
 }))
 check('accepting @new opens one row per configured launcher', launchers.value.includes('@new:') && launchers.rows.length >= 1, `"${launchers.value}" ${launchers.rows.length} rows`)
@@ -382,11 +388,11 @@ await v.waitForSelector('.fv-compose .mention-menu')
 const hashBefore = await v.evaluate(() => location.hash)
 await v.keyboard.press('Escape')
 await settle(v, 300)
-const afterEsc = await v.evaluate(() => ({ menu: !!document.querySelector('.mention-menu'), hash: location.hash, value: document.querySelector('.fv-compose .fv-textarea').value }))
+const afterEsc = await v.evaluate(() => ({ menu: !!window.__spexLive('.mention-menu'), hash: location.hash, value: window.__spexLive('.fv-compose .fv-textarea').value }))
 check('Esc closes the menu only — draft and page stay', !afterEsc.menu && afterEsc.hash === hashBefore && afterEsc.value.length > 0, JSON.stringify(afterEsc))
 await v.fill('.fv-compose .fv-textarea', 'plain prose opens nothing at all')
 await settle(v, 300)
-check('plain prose opens no menu', !(await v.evaluate(() => !!document.querySelector('.mention-menu'))))
+check('plain prose opens no menu', !(await v.evaluate(() => !!window.__spexLive('.mention-menu'))))
 
 // the compose PAGE's menu: downward under the caret line, clipped by nothing
 await v.goto(`${BASE}/#/issues/new`)
@@ -395,8 +401,8 @@ await v.click('.fv-new-compose .fv-textarea')
 await v.keyboard.type('summoning @')
 await v.waitForSelector('.fv-new-compose .mention-menu')
 const down = await v.evaluate(() => {
-  const menu = document.querySelector('.fv-new-compose .mention-menu').getBoundingClientRect()
-  const ta = document.querySelector('.fv-new-compose .fv-textarea').getBoundingClientRect()
+  const menu = window.__spexLive('.fv-new-compose .mention-menu').getBoundingClientRect()
+  const ta = window.__spexLive('.fv-new-compose .fv-textarea').getBoundingClientRect()
   return { below: menu.top >= ta.top, onScreen: menu.top >= 0 && menu.bottom <= window.innerHeight + 1, rows: document.querySelectorAll('.fv-new-compose .mention-item').length }
 })
 check('the compose PAGE opens its menu DOWNWARD, fully on screen', down.below && down.onScreen && down.rows > 0, JSON.stringify(down))
@@ -409,7 +415,7 @@ const pageNewRow = await v.locator('.fv-new-compose .mention-item.new', { hasTex
 await pageNewRow.click()
 await v.waitForSelector('.fv-new-compose .mention-menu')
 const pageLaunchers = await v.evaluate(() => ({
-  value: document.querySelector('.fv-new-compose .fv-textarea').value,
+  value: window.__spexLive('.fv-new-compose .fv-textarea').value,
   rows: [...document.querySelectorAll('.fv-new-compose .mention-item')].map((el) => el.textContent),
 }))
 check('the compose page opens the launcher menu after accepting @new', pageLaunchers.value.includes('@new:') && pageLaunchers.rows.length >= 1, JSON.stringify(pageLaunchers))
@@ -433,7 +439,7 @@ await v.waitForSelector('.si-input')
 await v.click('.si-input')
 await v.keyboard.type('[[issues-vi')
 await settle(v, 600)
-const console_ = await v.evaluate(() => ({ menu: !!document.querySelector('.mention-menu'), items: document.querySelectorAll('.mention-item').length }))
+const console_ = await v.evaluate(() => ({ menu: !!window.__spexLive('.mention-menu'), items: document.querySelectorAll('.mention-item').length }))
 check("the console's authored composer keeps its own `[[` menu", console_.menu && console_.items > 0, JSON.stringify(console_))
 await v.keyboard.press('Escape')
 await v.fill('.si-input', '')

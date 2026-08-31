@@ -53,10 +53,20 @@ test('sessions document owns the only forest and rail labels resolve through i18
   const sideBar = readFileSync(join(srcDir, 'SideBar.jsx'), 'utf8')
   const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
   const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
-  assert.match(dock, /if \(suppressRows\) return null/)
+  // The ownership boundary is structural: the Sessions route mounts no finding dock at all (`dockFor`),
+  // so the dock needs no row-suppression flag, no active-session highlight, and no second keyboard walk —
+  // that machinery belonged to the era when the dock rendered ON the sessions route with its rows hidden.
+  assert.doesNotMatch(dock, /suppressRows|suppressSessionRows/)
+  assert.doesNotMatch(shell, /suppressSessionRows|activeSessionId/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
   assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
   assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
+  // The rail's sessions anchor unfolds the band and returns to the held session; it pre-selects NO dock
+  // projection — writing one painted a transient sessions-projection dock on the DEPARTING document.
+  assert.doesNotMatch(sideBar, /setDockMode\?\.\('sessions'\)/)
+  // The rendered projection is derived during render, never corrected after paint.
+  assert.match(shell, /const dockProjection = dockKind === 'sessions' \|\| dockKind === 'explorer'/)
+  assert.match(shell, /mode=\{dockProjection\}/)
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
   assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)

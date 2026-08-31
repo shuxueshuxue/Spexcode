@@ -547,6 +547,18 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // slides out ([[dock-modes]]). The linger is the shared fold, not this panel's own timer — the context
   // dock and the session forest fold identically, and three copies of one timer is how they drift apart.
   const [dockMounted, closingDock, foldingDock] = useFold(dock)
+  // THE PROJECTION IS DERIVED DURING RENDER, never corrected after paint. A document that names its own
+  // projection gets it in the same frame it appears — deriving it through workspace state and fixing that
+  // state from an effect painted whatever `dockMode` last held (a stale sessions projection on a spec
+  // route) and swapped it one frame later: the twitch [[dock-modes]] forbids, at the projection layer.
+  // A by-hand override (the projection chord) is honored only on the document it was made on; moving to
+  // another document is what ends it, which is what makes it an override rather than a second setting.
+  const [dockOverride, setDockOverride] = useState(null) // { doc, mode }
+  const dockProjection = dockKind === 'sessions' || dockKind === 'explorer'
+    ? (dockOverride?.doc === documentKey ? dockOverride.mode : dockKind)
+    : dockMode
+  // What persists is the projection LAST IN FORCE, for the routes that have no opinion of their own
+  // (graph, empty — `dockFor`'s `keep`). The write is bookkeeping; nothing rendered waits on it.
   useEffect(() => {
     if (dockKind === 'sessions' || dockKind === 'explorer') setDockMode(dockKind)
   }, [documentKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -592,7 +604,13 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       if (!graphOnly && firesEvent('shell.search', event)) { event.preventDefault(); openPalette('sessions'); return true }
     }
     if (firesEvent('shell.dockToggle', event)) { event.preventDefault(); setDock((value) => !value); return true }
-    if (firesEvent('shell.dockMode', event)) { event.preventDefault(); setDockMode(dockMode === 'explorer' ? 'sessions' : 'explorer'); return true }
+    if (firesEvent('shell.dockMode', event)) {
+      event.preventDefault()
+      const next = dockProjection === 'explorer' ? 'sessions' : 'explorer'
+      setDockOverride({ doc: documentKey, mode: next })
+      setDockMode(next)
+      return true
+    }
     if (!graphOnly && firesEvent('shell.contextToggle', event)) { event.preventDefault(); toggleContext(); return true }
     if (!graphOnly && firesEvent('shell.tabClose', event)) { event.preventDefault(); runTabCommand('closeActive'); return true }
     if (!graphOnly && firesEvent('shell.tabNext', event)) { event.preventDefault(); runTabCommand('move', 1); return true }
@@ -615,12 +633,11 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     // force, which is the same thing the dock does when it stops following ([[dock-modes]]).
     if (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey('graph.search', event.key)) {
       event.preventDefault()
-      const scope = dockKind === 'sessions' || dockKind === 'explorer' ? dockKind : dockMode
-      openPalette(scope === 'sessions' ? 'sessions' : 'nodes')
+      openPalette(dockProjection === 'sessions' ? 'sessions' : 'nodes')
       return true
     }
     return false
-  }, [closeHelp, closePalette, dockKind, dockMode, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, toggleHelp, contextOpen])
+  }, [closeHelp, closePalette, dockProjection, documentKey, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, splitTo, toggleHelp, contextOpen])
   useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
   // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review
@@ -658,9 +675,8 @@ export default function Shell({ routeOverride = null, inactive = false }) {
         <SideBar page={page} needsYou={needsYou} hideDockToggle={!foldable} />
         {dockMounted && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
-            <Dock closing={closingDock} folding={foldingDock} mode={dockMode} specs={specs} sessions={sessions}
-              focusId={page === 'spec' ? param : null} activeSessionId={page === 'sessions' ? param : null}
-              suppressSessionRows={page === 'sessions'} />
+            <Dock closing={closingDock} folding={foldingDock} mode={dockProjection} specs={specs} sessions={sessions}
+              focusId={page === 'spec' ? param : null} />
           </ViewErrorBoundary>
         )}
         <div className="app-content-column">

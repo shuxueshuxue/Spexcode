@@ -19,6 +19,7 @@ related:
   - spec-dashboard/test/board-poll-bodyless.e2e.mjs
   - spec-dashboard/test/board-divergence-self-heals.e2e.mjs
   - spec-dashboard/test/board-digest-fallback.e2e.mjs
+  - spec-dashboard/src/streamCtorThrow.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
   - spec-dashboard/THEME-CREDITS.md
@@ -175,7 +176,12 @@ ping cadences by test, never a per-channel copy. Detection is **event-driven, no
 stream event (pings included) re-arms one one-shot timer, so on a healthy link liveness costs zero wakeups and
 nothing ever fires. On a breach it reopens (board-full re-anchors and repaints), re-arms to keep watching the
 replacement, and kicks the ETag refetch, so catch-up is instant; a frozen tab runs no timers, so its overdue
-one-shot fires on resume and converges likewise. The poll's cost is zeroed by conditional
+one-shot fires on resume and converges likewise. **A stream that never came up is a breach like any other.**
+The switch is armed from the subscribe instant for exactly that case, so the breach must re-arm even when
+there is no EventSource to close — a constructor that throws (a blocked or failed origin) raises no error
+event, so nothing else is watching it. Treating that as "nothing to reopen" and returning early is the one
+shape that disarms the switch permanently: the stream is then tried once and never again, and recovery
+falls silently to the poll. The poll's cost is zeroed by conditional
 requests: `loadGraph` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
 the repaint, so no failure mode is staler than the poll period.
 

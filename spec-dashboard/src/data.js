@@ -432,7 +432,13 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
   // A breach presumes the stream dead — reopen (its board-full re-anchors and repaints), re-arm to keep
   // watching the replacement, and fire onLegacyChange so the caller's ETag refetch races the reconnect.
   const deadman = createDeadman(() => {
-    if (!es || closed) return
+    // `es` being null means the constructor itself threw — a blocked or failed origin, with no error event
+    // to fall back on. That is the case that most needs another attempt, and it used to be the one case
+    // that got none: the guard returned before re-arming, so a stream that never came up was tried exactly
+    // once and recovery fell entirely to the poll. It also contradicted the reason the switch is armed from
+    // the subscribe instant at all, which is precisely so a stream that never comes up still breaches.
+    // `reopen` tolerates a null `es`, so only a real unsubscribe stops this.
+    if (closed) return
     onStatus?.(false)
     reopen({ resume: true }); deadman.arm(); onLegacyChange?.()
   })

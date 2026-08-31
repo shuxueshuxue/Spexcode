@@ -205,7 +205,12 @@ well as its trigger tags, so a product latency reading can allocate route/store,
 transport, and browser time without treating a wall-clock gap as one opaque number. The trigger set is what
 caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
 tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
-exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db, refs, worktrees, project-root) deliberately blinds
+exactly the machines that need it. The gate is load-bearing and it is also this lane's blind spot, stated here rather than left to be
+rediscovered: with no delta subscriber the patrol does not run, so a change no watcher saw is noticed by
+nobody. That is not the patrol's bug to fix — a closed dashboard must cost nothing — but it means the
+patrol cannot be the ONLY unprompted sampler. [[graph-cache]] closes it from the other side: a read whose
+last input sample has aged past this same cadence starts one, so whoever is actually looking pays, and with
+nobody looking nothing runs. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db, refs, worktrees, project-root) deliberately blinds
 a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
 generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains

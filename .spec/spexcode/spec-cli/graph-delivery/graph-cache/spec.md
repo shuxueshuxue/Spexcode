@@ -161,6 +161,26 @@ and turn a normal reload into backend event-loop and memory pressure.
   bounded retry backoff, and never creates an unhandled rejection or a retry storm. A successful fresh
   completion replaces the JSON/ETag anchor and is the only event that makes the stale signal disappear.
 
+- **A read pays for the freshness it claims.** Cache-until-change is only sound while something notices the
+  change. Every producer above is owed by a SIGNAL, and a missed watcher event emits none — `dirty` never
+  moves, so nothing re-reads disk and the cached board is served as current for as long as it is asked for.
+  [[graph-stream]]'s patrol is the only unprompted sampler and it is gated on having a delta subscriber, so
+  a polling-only client — a script, a CI job, a dashboard behind an SSE-hostile proxy — has nobody checking
+  on its behalf. Measured on a quiet fixture with the project-root watcher deliberately blinded: a new spec
+  node written to disk stayed invisible across every poll for as long as the polling ran, the route
+  answering 304 against a board that no longer existed. So a stale-ok read whose last input sample has aged
+  past the patrol's own cadence starts one itself. It does not wait for it — that caller still returns
+  last-good bytes immediately — but the next reader gets the truth: measured, the same blinded change
+  surfaced on the following poll. The cost lands on whoever is actually reading, which preserves the
+  property that made the patrol subscriber-gated to begin with: with nobody looking, nothing runs.
+
+  **A verification is not a refresh.** `x-spexcode-graph` speaks two words — `fresh`, and `stale,
+  refreshing` — and a reader waiting on `fresh` is waiting on the BOARD, not on whether some background
+  check happens to be running. A check that may well conclude nothing moved must not tell every idle reader
+  its bytes are being superseded; conflating the two broke a real caller before the distinction existed. So
+  a read-driven verification is neither stale nor refreshing until it finds something, at which point the
+  ordinary dirty machinery reports it like any other obligation.
+
 Session rows' eval summaries compose with this cache rather than hiding inside it ([[session-eval]]): graph
 assembly batch-reads a separate content-addressed projection cache and may start only its missing/invalidated
 entries. A summary completion invalidates the board at `sessions` scope, so the sessions splice attaches the

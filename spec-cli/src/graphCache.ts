@@ -342,6 +342,10 @@ const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 // fires on a genuine wedge.
 const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 120000)
 const RETRY_BACKOFF_MS = Number(process.env.SPEXCODE_BOARD_RETRY_BACKOFF_MS || 1000)
+// How long a cached board may be SERVED on the strength of a past verification before a read pays for a
+// fresh one. Sized to [[graph-stream]]'s patrol cadence so a board's freshness contract is the same
+// whoever happens to be checking it.
+const VERIFY_MAX_AGE_MS = Number(process.env.SPEXCODE_BOARD_VERIFY_MAX_AGE_MS || 15000)
 const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS || 300)
 
 // The structural/full and sessions obligations are deliberately separate. A full build can take seconds;
@@ -350,6 +354,8 @@ type Scope = 'sessions' | 'full'
 let cached: Board | null = null   // last completed build; served while `dirty === 'none'`
 let cachedIdentity: BoardIdentity | null = null   // serialization + units + tag of `cached`, computed ONCE per build (see boardIdentity)
 let cachedRevision: BoardInputRevision | null = null // input revision represented by `cached`
+let verifiedAt = 0   // when `cached`'s inputs were last SAMPLED off disk, not merely assumed unchanged
+let verifyFlight: Flight | null = null   // a read-driven verification: not an obligation, not a refresh
 let dirty: Scope | 'none' = 'full'   // no cached board yet → the first read builds fully
 type Flight = { wait: Promise<Board>; settle: Promise<Board> }
 let inflight: Flight | null = null
@@ -500,6 +506,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         const anchor = cachedRevision
         const sampledGen = gen
         const before = await boardInputRevision(prev)
+        verifiedAt = Date.now()   // the inputs were just read; whatever this flight concludes, that is a fact
         if (controller.signal.aborted)
           throw Object.assign(new Error('graph build aborted before producer start'), { name: 'AbortError' })
         // ONE rule for every refresh: the domain a producer runs is DERIVED from the inputs that actually
@@ -721,15 +728,34 @@ export function patrolBoard(): Promise<Board> {
 
 export async function readBoard(consistency: BoardConsistency = 'fresh'): Promise<BoardRead> {
   if (consistency === 'stale-ok' && cached) {
-    const stale = dirty !== 'none' || inflight !== null || sessionFlight !== null || sessionOwed
     // A held session splice already owns this refresh. Returning stale bytes must not manufacture a full
     // producer beside it; a real full obligation still starts its one structural producer independently.
-    const flight = inflight
+    const owed = (inflight && inflight !== verifyFlight ? inflight : null)
       ?? (dirty === 'full' ? startBuild('dirty') : null)
       ?? sessionFlight
       ?? (sessionOwed ? startSessionSplice() : null)
       ?? (dirty === 'sessions' ? startBuild('dirty') : null)
-    return { board: cached, freshness: stale ? 'stale' : 'fresh', refreshing: !!flight, ...(lastFailure ? { error: lastFailure.message } : {}) }
+    // @@@ a read pays for the freshness it is claiming - none of the producers above run when the board is
+    // considered clean, and "considered clean" is exactly what a MISSED watcher event leaves behind: `dirty`
+    // never moved, so nothing is owed, so nothing re-reads disk, and the cached board is served as current
+    // for as long as it is asked for. [[graph-stream]]'s patrol is the only thing that samples the inputs
+    // unprompted, and it is gated on having a delta subscriber — so a polling-only client (a script, a CI
+    // job, a dashboard behind an SSE-hostile proxy) has NOBODY checking on its behalf, and is answered 304
+    // against a board that no longer exists. Reproduced on a quiet fixture: a spec node written while the
+    // project-root watcher was blinded stayed invisible across every poll, for as long as the polling ran.
+    //
+    // So a read whose verification has aged past the patrol's own cadence starts one. It does not wait for
+    // it — this caller still returns last-good bytes immediately — but the next reader gets the truth. The
+    // cost lands on whoever is actually reading, which keeps the property that made the patrol
+    // subscriber-gated in the first place: with nobody looking, nothing runs.
+    //
+    // A verification is NOT a refresh, and saying so cost a real contract before this distinction existed:
+    // `x-spexcode-graph` speaks two words, `fresh` and `stale, refreshing`, and a reader waiting for `fresh`
+    // waits on the board's state — not on whether some background check happens to be running. A check that
+    // may well conclude nothing moved must not tell every idle reader its bytes are being superseded.
+    if (!owed && Date.now() - verifiedAt > VERIFY_MAX_AGE_MS) verifyFlight = startBuild('patrol')
+    const stale = dirty !== 'none' || sessionOwed || sessionFlight !== null || !!owed
+    return { board: cached, freshness: stale ? 'stale' : 'fresh', refreshing: !!owed, ...(lastFailure ? { error: lastFailure.message } : {}) }
   }
   const board = await getBoard()
   return { board, freshness: 'fresh', refreshing: false }

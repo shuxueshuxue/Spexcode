@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, existsSync, readFileSync, renameSync, rmSync, readdirSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, existsSync, readFileSync, renameSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, pruneHistoryCaches, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, unionTopology, GitWorkspaceError, type DriftIndex } from '@spexcode/spec-core'
+import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, pruneHistoryCaches, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, unionTopology, GitWorkspaceError, type DriftIndex } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
@@ -808,7 +808,7 @@ test('a genuine branch-added node reads `added` and committed', async () => {
 })
 
 test('ops already LANDED on main dissolve from the overlay', async () => {
-  const { root, run, wt } = specRepo()
+  const { root, wt } = specRepo()
   const w = wt('landed', 'main')
   const wrun = (...a: string[]) => execFileSync('git', ['-C', w, ...a], { encoding: 'utf8' })
   appendFileSync(join(w, '.spec/b/spec.md'), 'landed edit\n')

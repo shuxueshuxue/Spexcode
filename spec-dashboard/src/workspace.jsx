@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useMemo, useRef, useState } from 'react'
 
 // [[workspace-shell]]'s two contexts. Every context in this app is split the same way and for the same
 // measured reason: a value that mixes a stable API with changing state makes the API's identity change

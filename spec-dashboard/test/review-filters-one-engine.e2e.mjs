@@ -167,7 +167,6 @@ const hashAtOpen = await hash()
 
 await page.locator('.ov-tab', { hasText: /issue/i }).click()
 await settle(1400)
-const paneIssueRows = () => page.evaluate(() => [...document.querySelectorAll('.pane-issues .issue-card-title, .pane-issues .rl-row-title, .pane-issues .ic-title')].map((el) => el.textContent.trim()))
 // wait for the pane's own fetch to settle — sampling the count immediately races the loading state.
 const issuesCompact = await page.locator('.pane-issues .rf-compact').first()
   .waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false)

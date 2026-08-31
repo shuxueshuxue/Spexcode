@@ -5,6 +5,7 @@ desc: One `spex dashboard` for every project a user serves — instance-validate
 code:
   - spec-cli/src/host.ts
 related:
+  - spec-cli/src/endpoint-record.ts
   - spec-cli/src/supervise.ts
   - spec-cli/src/gateway-hub.ts
   - spec-cli/src/gateway.ts

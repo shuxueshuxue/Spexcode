@@ -21,7 +21,6 @@ import {
   cancelSessionWatch,
   composeSessionPrompt,
   listSessionWatches,
-  markState,
   subscribeSessionWatch,
   withNoteReplyHint,
   withTerminalReplyHint,

@@ -48,7 +48,7 @@ async function main(): Promise<void> {
     // Previous frontend bundle: no message handler, so text `ping` is never answered with text `pong`.
     // The browser implementation still auto-pongs RFC 6455 protocol ping below JavaScript.
     legacy.send(JSON.stringify({ t: 'resize', cols: 117, rows: 37 }))
-    const attached = await waitFor(clients, (value) => value.length === 1, 'visible native client', 5000)
+    await waitFor(clients, (value) => value.length === 1, 'visible native client', 5000)
     await sleep(DEAD_MS + 1500)
     const survived = await clients()
     if (survived.length !== 1 || legacy.readyState !== WebSocket.OPEN) {

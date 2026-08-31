@@ -30,7 +30,10 @@ test('opencode-headless is an independent adapter with OpenCode materialization 
   assert.equal(opencodeHeadlessHarness.headless, true)
   assert.equal(opencodeHeadlessHarness.runtimeOwnership, 'leaf')
   assert.equal(opencodeHeadlessHarness.ownsRendezvous, true)
-  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, true), 'online')
+  // Leaf-backed headless adapters share sessionHomeLiveness: the controller PID is the witness, and a
+  // tmux pane that outlived a SIGKILL as a bare shell is not online. Same contract as claude-headless.
+  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, true, undefined, { pidAlive: true }), 'online')
+  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, true, undefined, { pidAlive: false }), 'offline')
   assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, false), 'offline')
   assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(opencodeHeadlessHarness.launchCmd('abc', '/runtime', 'opencode-custom --auto'), /__spex_cmd=\(opencode-custom --auto\)/)

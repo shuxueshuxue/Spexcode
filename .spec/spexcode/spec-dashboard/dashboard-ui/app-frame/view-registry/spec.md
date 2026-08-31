@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/viewRegistry.js
+  - spec-dashboard/src/viewCatalog.js
   - spec-dashboard/src/route.js
   - spec-dashboard/src/tabs.js
 ---
@@ -19,7 +20,9 @@ The map from an address kind to the thing that renders it, its surface, and the 
 
 ## Extension boundary
 
-The core map is seeded into one runtime registry. Product extensions use its `registerView(name,
+The core map is seeded into one runtime registry, which lives in [[view-catalog]] — a module that holds no
+view and imports nothing that renders, so the tab strip and the activity rail can ask what a page kind IS
+without importing what draws it. Product extensions use its `registerView(name,
 definition, owner)` or `registerPlugin({ id, views })` API; they do not mutate the exported core object.
 Names are lowercase kebab-case, every definition must provide a callable component or a tagged React
 component object such as `React.lazy`, and registration is
@@ -73,8 +76,11 @@ address and a rail destination. The rail keeps its own list of resident boards w
 to own icon and document/residency metadata; file routes never create a second top-level rail entry or make
 the Spec selection disappear.
 
-**Each view is lazy and pays for its own libraries.** The graph carries xyflow and mounts its own
-ReactFlowProvider; hoisting that into the shell would drag the whole graph library into every face's entry
-chunk, including the phone's and the sealed public build's. The retry that survives a stale dist lives here too, wrapped
+**Each view is lazy and pays for its own libraries, with one deliberate exception.** The graph carries
+xyflow and mounts its own ReactFlowProvider; hoisting that into the shell would drag the whole graph library
+into every face's entry chunk, including the phone's and the sealed public build's. SessionsView is imported
+eagerly instead, because a compose dispatched from another view has to find a receiver already mounted
+rather than one still fetching its chunk. That edge is the reason the address-side lookups had to leave this
+module: see [[view-catalog]]. The retry that survives a stale dist lives here too, wrapped
 around every importer, because `React.lazy` caches the rejection — a chunk that 404s once is a dead view
 for the life of the page, and the importer is the only place a second attempt is still possible.

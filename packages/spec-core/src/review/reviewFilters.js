@@ -154,7 +154,7 @@ export function issueFilterModel(items, raw = {}, context = {}) {
       value: option.value,
       label: optionLabel(context.t, option.label, option.value),
       count: sectionTotal(model.sections[option.value]),
-    }))].filter((option, index, all) => index === 0 || option.count > 0 || option.value === state.state),
+    }))].filter((option, index) => index === 0 || option.count > 0 || option.value === state.state),
   }
   return model
 }

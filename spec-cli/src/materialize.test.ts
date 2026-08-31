@@ -100,7 +100,7 @@ test('same-input materialize is an operational no-op', { skip: !gitAvailable() &
 })
 
 test('materialize refreshes legacy core handlers before dispatch and lifecycle hooks recover', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, env, spex } = makeHost()
+  const { proj, env } = makeHost()
   const mark = join(proj, '.spec', 'project', '.plugins', 'core', 'mark-active', 'mark-active.sh')
   const stop = join(proj, '.spec', 'project', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
   const templateMark = readFileSync(join(PACKAGE, 'templates', 'spec', 'project', '.plugins', 'core', 'mark-active', 'mark-active.sh'))

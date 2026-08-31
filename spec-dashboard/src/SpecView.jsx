@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { SpecPane } from './NodeView.jsx'
 import ProseActions from './ProseActions.jsx'
 import { useT } from './i18n/index.jsx'

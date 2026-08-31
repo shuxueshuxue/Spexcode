@@ -88,7 +88,7 @@ scenarios:
   - name: headless-explicit-stop-resume-liveness
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#sessionHomeLiveness
       - spec-cli/src/harness.ts#claudeHeadlessHarness
       - spec-cli/src/codex-harness.ts#codexHeadlessHarness
       - spec-cli/src/harness.ts#piHeadlessHarness

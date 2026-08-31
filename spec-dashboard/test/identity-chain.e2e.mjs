@@ -3,7 +3,7 @@ import { spawn, execFileSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -192,7 +192,6 @@ const atlasPort = await freePort()
 const rocketPort = await freePort()
 const gatewayPort = await freePort()
 let atlasBackend
-let rocketBackend
 let gateway
 let browser
 
@@ -201,7 +200,8 @@ const startAtlas = async () => {
   await waitFor(async () => (await fetch(`http://127.0.0.1:${atlasPort}/health`)).ok, 'atlas backend')
 }
 const startRocket = async () => {
-  rocketBackend = service('rocket', ['serve', '--port', String(rocketPort)], rocket.dir)
+  // the handle is never needed again: `service` registers into `services`, which the finally block stops.
+  service('rocket', ['serve', '--port', String(rocketPort)], rocket.dir)
   await waitFor(async () => (await fetch(`http://127.0.0.1:${rocketPort}/health`)).ok, 'rocket backend')
 }
 const startGateway = async () => {

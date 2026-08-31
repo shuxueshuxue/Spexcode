@@ -8,7 +8,6 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { codexAppServerPid, codexAppServerReceipt, codexAppServerSock } from './codex-harness.js'
-import { listenerAt } from './harness.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { initializeFreshSessionApplication } from './session-application.js'
 import { processStartToken } from '@spexcode/spec-core'
@@ -61,14 +60,7 @@ async function stopDetachedOwner(owner: ReturnType<typeof spawnDetachedRuntime> 
   }
 }
 
-function processAlive(child: ChildProcess): boolean {
-  if (!child.pid) return false
-  try { process.kill(child.pid, 0); return true } catch { return false }
-}
 
-function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true } catch { return false }
-}
 
 async function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'cli.ts'), ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })

@@ -236,7 +236,7 @@ test('removeKnownProject is catalog-only, exact-confirmed, and refuses live sess
 })
 
 test('host DELETE /projects/:id is an admin-gated, catalog-only lifecycle route', async () => {
-  const home = freshHome('remove-http')
+  freshHome('remove-http')
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
   writeFileSync(join(repo, 'README.md'), 'must survive\n')

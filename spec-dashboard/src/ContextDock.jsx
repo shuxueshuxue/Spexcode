@@ -73,7 +73,7 @@ function Panel({ title, open, onToggle, children }) {
 
 // [[context-dock]]: what surrounds the node the reader has open. Two sections and no third — the reader's
 // own ruling: *"它要么就是 Scenarios，要么就是 Issues"*.
-export default function ContextDock({ page, param, open = true, onToggle }) {
+export default function ContextDock({ page, param, open = true }) {
   const t = useT()
   const { specs } = useBoard()
   const [width, onDrag, reset] = useResizable('spex.ctxWidth', 276, { min: 220, max: 460, dir: -1 })

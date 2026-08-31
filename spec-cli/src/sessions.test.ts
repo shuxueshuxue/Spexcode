@@ -7,15 +7,14 @@ import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirS
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { claudeHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { adapterResidentLiveness, bootstrapMaterialize, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, markInterrupted, stampInterrupt, INTERRUPTED_NOTE, parseSessionLeafReceipt, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session } from './sessions.js'
+import { adapterResidentLiveness, bootstrapMaterialize, canonicalRecordProjection, closeSession, commitUrlForRemote, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markIdle, markState, markTurnFailure, markHeadlessTurnFailure, markInterrupted, stampInterrupt, INTERRUPTED_NOTE, parseSessionLeafReceipt, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionHasPendingDelivery, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession } from './sessions.js'
 import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, canDrainQueued, fromRaw, rawLifecycleStatus, type SessRec } from './session-record.js'
-import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
+import { mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
@@ -45,8 +44,6 @@ function writeFileSync(path: string, data: string, options?: any): void {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // This file mutates process-global harness and runtime state, so its fixtures must not overlap.
 const serial = { concurrency: false } as const
-const thisTestFile = fileURLToPath(import.meta.url)
-const packageRoot = dirname(dirname(thisTestFile))
 const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) => {
   const deadline = Date.now() + timeoutMs
   while (!check()) {

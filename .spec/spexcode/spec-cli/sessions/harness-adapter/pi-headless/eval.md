@@ -54,7 +54,7 @@ scenarios:
     expected: Stop preserves the record, exact saved session, and timeline but reads offline; resume returns the same pi conversation online with the pre-stop declaration note intact.
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#sessionHomeLiveness
       - spec-cli/src/harness.ts#piHeadlessHarness
       - spec-cli/src/sessions.ts
   - name: pi-headless-interrupt

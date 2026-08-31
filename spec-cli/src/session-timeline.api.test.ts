@@ -49,7 +49,7 @@ async function stop(child: ChildProcess): Promise<void> {
   }
 }
 
-test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async (t) => {
+test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-api-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')

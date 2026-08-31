@@ -99,8 +99,29 @@ const priorWorkingAt = (events: readonly TimelineEvent[], start: number): boolea
 }
 
 export const DEFAULT_TIMELINE_WINDOW = 200
+// @@@window-is-content-not-rows - a count of events is not a measure of how much a reader faces. Notes are
+// authored prose and their lengths differ by orders of magnitude, so the SAME 200 events are a couple of
+// screens on one record and eighty-two on another. The window therefore stops at whichever bound it reaches
+// first: the event count, or this much authored text. One event always fits, however long it is.
+export const DEFAULT_TIMELINE_WINDOW_TEXT = 40 * 1024
 
-export type TimelineRead = { limit?: number; before?: number; since?: number }
+const authoredLength = (event: TimelineEvent): number =>
+  (event.kind === 'status' ? event.note?.length : event.text?.length) ?? 0
+
+/** Walk back from `end` until the window has its events, its text budget, or the beginning. */
+const windowStart = (events: readonly TimelineEvent[], end: number, limit: number, budget: number): number => {
+  let start = end
+  let text = 0
+  while (start > 0 && end - start < limit) {
+    const next = text + authoredLength(events[start - 1])
+    if (next > budget && start < end) break
+    text = next
+    start--
+  }
+  return start
+}
+
+export type TimelineRead = { limit?: number; before?: number; since?: number; textBudget?: number }
 export type TimelineWindow = {
   events: TimelineEvent[]
   stamp: string | null
@@ -114,8 +135,9 @@ export type TimelineWindow = {
 // board's display vocabulary. The package beneath it only reads the durable event store.
 //
 // THREE READS, ONE ROUTE. A reader holds a window over a history that only grows at its end:
-//   - no cursor → the newest `limit` events, with the window's position and the history's size
-//   - `before=<position>` → the page of `limit` events that ends at that position: how a reader walks back
+//   - no cursor → the newest events, with the window's position and the history's size
+//   - `before=<position>` → the page ending at that position: how a reader walks back
+//   Both are bounded by COUNT and by TEXT, whichever comes first — see `windowStart`.
 //   - `since=<stamp>` → only what the log grew by, which is the poll and costs a sequence range scan, not
 //     the whole history. Growth past `limit` is answered with a whole window instead, because a reader that
 //     far behind is cheaper to re-seat than to catch up event by event.
@@ -134,7 +156,8 @@ export function readTimeline(id: string, read: TimelineRead = {}): TimelineWindo
   const timeline = canonicalTimeline(id)!
   const events = timeline.events
   const end = read.before === undefined ? events.length : Math.min(events.length, Math.max(0, Math.trunc(read.before)))
-  const start = Math.max(0, end - limit)
+  const budget = Math.max(1, Math.trunc(read.textBudget ?? DEFAULT_TIMELINE_WINDOW_TEXT))
+  const start = windowStart(events, end, limit, budget)
   return {
     events: spoken(events.slice(start, end)),
     stamp: timeline.stamp,

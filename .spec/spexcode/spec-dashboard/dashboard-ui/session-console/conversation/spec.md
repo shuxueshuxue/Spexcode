@@ -43,10 +43,19 @@ readable without restoring the agent; archived history is immutable and cannot r
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
 once when selected and does not poll.
 
-**THE PAGE HOLDS A WINDOW, AND SAYS SO.** A session's history outgrows one read — a week of work is thousands
-of events — so the page shows the newest of them and states, at the top edge, how many earlier ones it is not
-showing, with the way in: one press takes one page further back ([[session-timeline]] serves the window). The
-count is the history's own, never an inference from what happens to be on screen. Reading position is what the
+**THE PAGE HOLDS A WINDOW, AND SAYS SO WHERE THE HISTORY IS MISSING FROM.** A session's history outgrows one
+read — a week of work is thousands of events — so the page shows the newest of them and states how many
+earlier ones it is not showing, with the way in: one press takes one page further back ([[session-timeline]]
+serves the window, bounded by event count AND by authored text, so a record of long notes yields a shorter
+window rather than eighty screens). The count is the history's own, never an inference from what happens to
+be on screen.
+
+That statement belongs AT THE BREAK, not at the top of the page. The originating prompt is the session's
+first word and is always drawn, above the window and outside it; putting the count above THAT put it above
+the one row that never changes, so a reader who scrolled up met the same first line every time and could not
+tell the window had moved — the press looked decorative even while it was working. The omission sits between
+the prompt and the window's oldest row, and so does the count, which is also exactly where the calendar jumps
+(a prompt on one day, the window opening days later). Reading position is what the
 press must not cost: a page arriving at the top pushes everything below it down, and the scroll is moved by
 exactly that height, so the row under the reader's eye does not move. Growth at the tail still follows the
 thumb — only a reader already at the newest entry is carried to it — and a back-load never counts as growth.

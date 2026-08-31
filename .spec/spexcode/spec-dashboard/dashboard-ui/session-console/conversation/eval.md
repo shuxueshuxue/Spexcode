@@ -33,12 +33,31 @@ scenarios:
       was on screen across the press, and (c) the count the top edge states. Separately, watch the network for
       a quiet stretch of polling and read what each timeline request asks for and how many bytes come back.
     expected: >-
-      The top edge names the earlier history and offers the way in — the count is the record's own, not a
-      guess from what is on screen — and one press brings a page of it in. The row the reader was on does not
-      move: growth arrives above it and the scroll absorbs exactly that height, so a back-load is a page
-      appearing, never a jump. The press is the only thing that walks back; reaching the top does not fetch by
-      itself. On a quiet record the poll asks only for GROWTH and comes back with none — a few hundred bytes,
-      not the window again — so a history that is long costs no more to watch than a short one.
+      The count names the earlier history and offers the way in — the record's own count, not a guess from
+      what is on screen — and it sits AT THE BREAK: below the originating prompt, above the window's oldest
+      row. Press it repeatedly and scroll to the top each time: the count falls, and the first row BELOW it
+      moves further back in time on every press. Measured from the top of the page instead, the prompt is
+      always the first thing there — it is outside the window and never changes — so a count placed above it
+      would leave a reader unable to tell the window had moved at all. The row the reader was on does not
+      move: growth arrives above it and the scroll absorbs exactly that height. The press is the only thing
+      that walks back; reaching the top does not fetch by itself. On a quiet record the poll asks only for
+      GROWTH and comes back with none — a few hundred bytes, not the window again.
+  - name: a-window-is-measured-in-what-the-reader-faces
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    related: [spec-cli/src/session-timeline.ts]
+    description: >-
+      Open a REAL record whose notes are long authored prose — hundreds of events, several hundred KiB of
+      text, the ordinary shape of a week-long working session — and measure the conversation's scroll height
+      against the viewport: how many screens does the first paint hand the reader? Compare a window sized by
+      EVENT COUNT alone against one bounded by authored text as well, on the same record.
+    expected: >-
+      The window is sized by what the reader faces, not by how many rows the record happens to hold. Sized by
+      count alone the same 200 events are a couple of screens on a record of short messages and eighty-two on
+      a record of long notes — so the number is not a size at all. Bounded by text as well, a long-note record
+      yields a proportionally shorter window (tens of screens becoming a handful of events, and the wire
+      payload falling with it) while a short-message record is unaffected and still shows its full count. A
+      single event longer than the whole budget still comes back: a budget may shrink a window, never empty it.
   - name: the-second-hand-redraws-only-itself
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

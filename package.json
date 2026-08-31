@@ -37,6 +37,7 @@
     "test:init-plugins": "node --test scripts/sync-init-plugins.test.mjs",
     "test:release-publish": "node --test scripts/release-publish.test.mjs",
     "test:ci-parity": "node --test scripts/ci-suite-parity.test.mjs",
+    "test:import-cycles": "node --test scripts/import-cycles.test.mjs",
     "release:check": "node scripts/release-publish.mjs",
     "release:publish": "node scripts/release-publish.mjs --publish",
     "prepublishOnly": "node scripts/release-publish.mjs --from-package-publish",

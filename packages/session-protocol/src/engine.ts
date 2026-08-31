@@ -60,7 +60,31 @@ export interface ProtocolInspection {
 }
 
 const require = createRequire(import.meta.url)
-const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: DatabaseConstructor }
+
+// @@@ the experimental notice is ours to answer, not the operator's - `node:sqlite` is still flagged
+// experimental on Node 22, so loading it makes the runtime print a two-line notice. This module is loaded by
+// effectively every `spex` invocation, so that notice lands on stderr ahead of the command's own output: an
+// operator reading a real diagnostic gets two lines about a dependency choice this package already made and
+// pins on purpose, and a caller asserting on the command's stderr sees the runtime's voice mixed into it.
+// The interception is scoped to the one require and restored immediately, so it silences exactly this
+// notice — a different experimental warning, or any warning before or after, still prints in full.
+function loadSqlite(): { DatabaseSync: DatabaseConstructor } {
+  const emitWarning = process.emitWarning
+  process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
+    const text = typeof warning === 'string' ? warning : warning?.message ?? ''
+    const first = rest[0] as { type?: string } | string | undefined
+    const type = typeof first === 'string' ? first : first?.type
+    if (type === 'ExperimentalWarning' && /SQLite/i.test(text)) return
+    return (emitWarning as (...args: unknown[]) => void).call(process, warning, ...rest)
+  }) as typeof process.emitWarning
+  try {
+    return require('node:sqlite') as { DatabaseSync: DatabaseConstructor }
+  } finally {
+    process.emitWarning = emitWarning
+  }
+}
+
+const { DatabaseSync } = loadSqlite()
 const JOURNAL_MODE = 'delete'
 
 const SELECT_COLUMNS = `enqueue_seq, message_id, target_session_id, sender_session_id, protocol_version,

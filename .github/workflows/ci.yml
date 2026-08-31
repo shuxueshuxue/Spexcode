@@ -41,6 +41,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Workspace suite parity (the list below is the whole set of workspaces that ship tests)
         run: node --test scripts/ci-suite-parity.test.mjs
+      - name: Import-cycle gate (no module may need itself to finish loading)
+        run: node --test scripts/import-cycles.test.mjs
       - name: Workspace unit suites
         run: |
           npm test --workspace=@spexcode/transcript

@@ -12,7 +12,7 @@ import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
-import { iconFor, isResident } from './views.jsx'
+import { iconFor, isResident } from './viewCatalog.js'
 
 const resourceLabel = (url) => {
   try {

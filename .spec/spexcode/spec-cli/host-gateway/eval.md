@@ -57,8 +57,9 @@ scenarios:
       Every project created by the host has a real initial commit before it is cataloged. A SpexCode setup
       commit contains the seed `.spec`, portable config, and ignore policy, and its `mainBranch` names the
       checked-out source-of-truth branch. The backend can create a session worktree immediately, so no
-      `git worktree add failed: fatal: invalid reference` is returned. A path-only Git project receives an
-      empty initial commit on the conventional `main` branch and remains otherwise untouched.
+      `git worktree add failed: fatal: invalid reference` is returned. A path-only project receives the
+      real `spex init --harness none` foundation and an initial commit on the conventional `main` branch;
+      its empty harness selection remains addable from the scoped New Session `+` action.
 ---
 # measuring host-gateway
 

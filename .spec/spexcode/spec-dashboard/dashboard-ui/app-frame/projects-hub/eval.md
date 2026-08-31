@@ -76,8 +76,9 @@ scenarios:
       parent/home controls, and bounded child-directory list browse the real host filesystem. The selected
       plain folder is not silently mutated: submit remains unavailable until Git initialization is explicitly
       checked; SpexCode initialization independently requires at least one harness target. A missing typed
-      path is a clear New project action that creates a Git-initialized, cataloged project without making the
-      user locate an existing folder. Submitting runs
+      path is a clear New project action that creates a Git-initialized, cataloged project with the neutral
+      SpexCode foundation (`spex init --harness none`) without making the user locate an existing folder.
+      The scoped New Session launcher picker can then add the first Harness target. Submitting runs
       the real init chain, keeps a failure and its full transcript in place for retry, and closes only on
       catalog success. The resulting row appears with a calm 'stopped' dot and Start as the primary action,
       never a dead Open. The gear opens a monospace editor containing the project's actual portable

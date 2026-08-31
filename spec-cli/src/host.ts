@@ -359,11 +359,76 @@ export type AddProjectSetup = {
 }
 export type AddProjectSetupResult = {
   ok: boolean; root: string; directoryCreated: boolean; gitInitialized: boolean
+  initialCommitCreated: boolean
   init?: { code: number | null; output: string }
 }
 
-// One ordered add transaction: select an existing directory or explicitly create one with Git, run the
-// real CLI initializer when requested, and only then claim catalog success.
+const INITIAL_PROJECT_COMMIT_MESSAGE = 'chore: 初始化项目'
+const BOOTSTRAP_COMMIT_AUTHOR = 'SpexCode <spexcode@spexcode.invalid>'
+type SeedState = { spec: boolean; config: boolean; ignore: boolean }
+
+function gitErrorOutput(error: unknown): string {
+  const candidate = error as { stdout?: unknown; stderr?: unknown }
+  const text = (value: unknown): string => Buffer.isBuffer(value) ? value.toString('utf8').trim() : typeof value === 'string' ? value.trim() : ''
+  return [text(candidate?.stdout), text(candidate?.stderr)].filter(Boolean).join('\n')
+}
+
+function gitRequired(args: string[], operation: string): string {
+  try { return git(args) }
+  catch (error) {
+    const detail = gitErrorOutput(error) || (error instanceof Error ? error.message : String(error))
+    throw new Error(`${operation}: ${detail}`)
+  }
+}
+
+function hasGitCommit(root: string): boolean {
+  try { return !!git(['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}']).trim() }
+  catch { return false }
+}
+
+function bootstrapSeedState(root: string): SeedState {
+  return {
+    spec: existsSync(join(root, '.spec')),
+    config: existsSync(join(root, 'spexcode.json')),
+    ignore: existsSync(join(root, '.gitignore')),
+  }
+}
+
+function bootstrapSeedPaths(root: string, before: SeedState): string[] {
+  const candidates: Array<[string, boolean]> = [
+    ['.spec', !before.spec],
+    ['spexcode.json', !before.config],
+    ['.gitignore', !before.ignore],
+  ]
+  return candidates.filter(([path, wasAbsent]) => wasAbsent && existsSync(join(root, path))).map(([path]) => path)
+}
+
+// The host owns this one topology commit. It is deliberately path-scoped: pre-staged user files stay out of
+// it, while the newly planted SpexCode source and ignore policy become the branchable source of truth.
+function createInitialProjectCommit(root: string, before: SeedState): void {
+  const paths = bootstrapSeedPaths(root, before)
+  try {
+    if (paths.length) gitRequired(['-C', root, 'add', '-f', '--', ...paths], `cannot stage the SpexCode seed in ${root}`)
+    const commit = [
+      '-C', root,
+      '-c', 'user.name=SpexCode',
+      '-c', 'user.email=spexcode@spexcode.invalid',
+      'commit', '--quiet', '--no-verify', '--allow-empty', '--only',
+      '--author', BOOTSTRAP_COMMIT_AUTHOR, '-m', INITIAL_PROJECT_COMMIT_MESSAGE,
+    ]
+    if (paths.length) commit.push('--', ...paths)
+    gitRequired(commit, `cannot create the initial Git commit in ${root}`)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('cannot ')) throw error
+    const detail = gitErrorOutput(error) || (error instanceof Error ? error.message : String(error))
+    throw new Error(`cannot create the initial Git commit in ${root}: ${detail}`)
+  }
+}
+
+// One ordered add transaction: select an existing directory or explicitly create one with Git, establish a
+// branchable base, run the real CLI initializer when requested, and only then claim catalog success. A path
+// created by this transaction gets the neutral `--harness none` foundation so the scoped New Session picker
+// can add its first target later.
 export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
   if (setup.createDir && !setup.initGit) throw new Error('creating a project directory requires Git initialization')
   let directoryCreated = false
@@ -377,26 +442,41 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
   }
   let root = gitProjectRoot(path)
   let gitInitialized = false
-  if (!root) {
+  if (!root || directoryCreated) {
     if (!setup.initGit) throw new Error(`${dir} is not a git repository — enable Git initialization to add it`)
-    git(['init', '--quiet', '--', path])
+    gitRequired(['init', '--quiet', '--', path], `git init failed for ${path}`)
     gitInitialized = true
     root = gitProjectRoot(path)
     if (!root) throw new Error(`git init completed but ${path} is still not a Git repository`)
+    if (directoryCreated && root !== path) throw new Error(`git init did not create an independent repository at ${path}`)
+    // A repository created by the host must agree with SpexCode's conventional fallback (`main`) even when
+    // the user's global Git defaults still say `master`. Existing repositories keep their current branch.
+    if (gitInitialized && !hasGitCommit(root)) {
+      gitRequired(['-C', root, 'symbolic-ref', 'HEAD', 'refs/heads/main'], `cannot select the initial main branch in ${root}`)
+    }
   }
 
+  const needsInitialCommit = !hasGitCommit(root)
+  const seedBefore = bootstrapSeedState(root)
+  const requestedInit = setup.init ?? (directoryCreated ? { harness: 'none' } : undefined)
   let init: AddProjectSetupResult['init']
-  if (setup.init) {
-    const harness = typeof setup.init.harness === 'string' ? setup.init.harness.trim() : ''
+  if (requestedInit) {
+    const harness = typeof requestedInit.harness === 'string' ? requestedInit.harness.trim() : ''
     if (!harness) throw new Error('SpexCode initialization requires at least one explicit harness target')
-    const preset = typeof setup.init.preset === 'string' ? setup.init.preset.trim() : ''
+    const preset = typeof requestedInit.preset === 'string' ? requestedInit.preset.trim() : ''
     const result = await runSpex(root, ['init', '--harness', harness, ...(preset ? ['--preset', preset] : [])])
     init = result
-    if (result.code !== 0) return { ok: false, root, directoryCreated, gitInitialized, init }
+    if (result.code !== 0) return { ok: false, root, directoryCreated, gitInitialized, initialCommitCreated: false, init }
+  }
+
+  let initialCommitCreated = false
+  if (needsInitialCommit && !hasGitCommit(root)) {
+    createInitialProjectCommit(root, seedBefore)
+    initialCommitCreated = true
   }
 
   catalogAdd(root)
-  return { ok: true, root, directoryCreated, gitInitialized, ...(init ? { init } : {}) }
+  return { ok: true, root, directoryCreated, gitInitialized, initialCommitCreated, ...(init ? { init } : {}) }
 }
 
 // The dashboard edits the committed, portable source file verbatim. The host fixes the filename (there

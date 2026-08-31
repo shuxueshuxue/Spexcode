@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 import { once } from 'node:events'
-import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -58,6 +59,11 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     await page.locator('.proj-row .proj-name', { hasText: 'new-project' }).waitFor({ state: 'visible' })
     assert.equal(existsSync(project), true)
     assert.equal(existsSync(join(project, '.git')), true)
+    assert.equal(execFileSync('git', ['-C', project, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
+    assert.match(execFileSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' }).trim(), /^[0-9a-f]{40,64}$/)
+    const config = JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8'))
+    assert.equal(config.mainBranch, 'main')
+    assert.deepEqual(config.harnesses, [])
     const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
     assert.equal(catalog.projects.some((entry) => entry.root === realpathSync(project)), true)
 

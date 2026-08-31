@@ -1972,7 +1972,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    only a rail genuinely taller than the viewport scrolls internally — no permanent nested scrollbar.
    The 100dvh budget assumes the app shell keeps no top chrome (side nav only) — a future top bar
    must be subtracted here too. */
-.ds-side { position: sticky; top: 0; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 14px 0 20px; }
+.ds-side { position: sticky; top: 0; min-width: 0; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 14px 0 20px; }
 .ds-side-sec { display: flex; flex-direction: column; gap: 5px; padding-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
 .ds-side-label { font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); color: var(--muted); }
 .ds-side-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--type-meta); color: var(--ink2); }
@@ -2049,7 +2049,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .rl-menu { max-width: calc(100vw - 34px); }
   .ds-cols { display: flex; flex-direction: column; gap: 0; }
   /* narrow width cancels the sticky rail: back to the plain metadata-before-content document flow. */
-  .ds-side { position: static; max-height: none; overflow-y: visible; order: -1; padding: 10px 0 0; }
+  .ds-side { position: static; align-self: stretch; width: 100%; max-height: none; overflow-y: visible; order: -1; padding: 10px 0 0; }
   .ds-side-sec { padding-bottom: 8px; }
 }
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control); text-align: center; }

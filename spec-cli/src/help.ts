@@ -22,8 +22,7 @@ its backend explicitly — the flag always wins. Bare, it resolves: worker env /
 recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING). A password-gated explicit
 gateway accepts --password <pw> (or SPEXCODE_PASSWORD); its self-signed certificate needs explicit --insecure.`
 
-const DOT_NOTE = `\`.\` as a node argument means the node named by THIS worktree's node/<id> branch.
-One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
+const JSON_NOTE = `One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
 scenario ls · issue ls/show/links) take --json.`
 
 const MENTION_NOTE = `Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg included.
@@ -415,7 +414,7 @@ retract — the sanctioned undo for a botched filing: APPENDS a retraction event
 deletes a line); the previous eval becomes latest again, or the scenario honestly returns to
 unmeasured.
 
-${DOT_NOTE}`,
+${JSON_NOTE}`,
     see: 'spex guide eval (the eval.md scenario format + evidence rules) · spex evidence (bare byte transport)',
   },
   issue: {
@@ -614,7 +613,7 @@ Manuals
 
 Conventions (stated once, hold everywhere)
   ${SEL_NOTE.split('\n').join('\n  ')}
-  ${DOT_NOTE.split('\n').join('\n  ')}
+  ${JSON_NOTE.split('\n').join('\n  ')}
   ${ROUTING_NOTE.split('\n').join('\n  ')}
   ${MENTION_NOTE.split('\n').join('\n  ')}
 

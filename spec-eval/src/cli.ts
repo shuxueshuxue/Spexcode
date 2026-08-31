@@ -38,16 +38,6 @@ async function gatherNodes(root: string): Promise<ScoredNode[]> {
   return evalNodes(root).map((n) => ({ ...n, codeFiles: codeByDir.get(relative(root, n.dir)) ?? [] }))
 }
 
-// resolve `.` → the node named by this worktree's `node/<id>` branch. A session carries no spec node of its
-// own, so the branch is the only thing `.` can read; a worktree on any other branch resolves to nothing.
-function currentNodeId(root: string): string | null {
-  try {
-    const branch = git(['-C', root, 'symbolic-ref', '--short', 'HEAD']).trim()
-    if (branch.startsWith('node/')) return branch.slice('node/'.length)
-  } catch { /* detached / no branch */ }
-  return null
-}
-
 type ChangedScope = { base: string; paths: Set<string>; config: string }
 
 // Merge-base anchored so main advancing is not counted as this branch's change. Scope construction is
@@ -303,8 +293,8 @@ async function evalCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const ref = !sel || sel === '.' ? currentNodeId(root) : requireEvalHost('stripRefSigil')(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
-  if (!ref) { console.error('spex eval add .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  const ref = sel ? requireEvalHost('stripRefSigil')(sel) : null   // node args tolerate @/[[ ]] sigils ([[mentions]])
+  if (!ref) { console.error('spex eval add: name a node — usage: spex eval add <node> --scenario <name>'); return 2 }
   // resolve LOUD ([[eval-core]]): exact canonical id, else a unique bare leaf; an ambiguous leaf lists its
   // candidate canonical ids instead of filing against an arbitrary node.
   const res = resolveEvalNode(await gatherNodes(root), ref)
@@ -450,8 +440,8 @@ async function retractCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const ref = !sel || sel === '.' ? currentNodeId(root) : requireEvalHost('stripRefSigil')(sel)
-  if (!ref) { console.error('spex eval retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  const ref = sel ? requireEvalHost('stripRefSigil')(sel) : null
+  if (!ref) { console.error('spex eval retract: name a node — usage: spex eval retract <node> --scenario <name>'); return 2 }
   // node resolution mirrors eval's: exact canonical id, else a unique bare leaf, ambiguous fails loud.
   const res = resolveEvalNode(evalNodes(root), ref)
   if (!res.ok) { console.error(`spex eval retract: ${res.error}`); return 1 }
@@ -522,7 +512,7 @@ async function okCmd(args: string[]): Promise<number> {
     return 1
   }
   const sel = positional(args)
-  if (!sel || sel === '.') { console.error('spex eval ok: name a node — usage: spex eval ok <node> --scenario <name>'); return 2 }
+  if (!sel) { console.error('spex eval ok: name a node — usage: spex eval ok <node> --scenario <name>'); return 2 }
   const node = requireEvalHost('stripRefSigil')(sel)
   const scName = flag(args, 'scenario')
   const res = resolveEvalNode(evalNodes(root), node)
@@ -600,8 +590,8 @@ function checkStaged(): number {
 async function show(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
-  const ref = !sel || sel === '.' ? currentNodeId(root) : requireEvalHost('stripRefSigil')(sel)
-  if (!ref) { console.error('spex eval ls .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  const ref = sel ? requireEvalHost('stripRefSigil')(sel) : null
+  if (!ref) { console.error('spex eval ls: name a node — usage: spex eval ls <node>'); return 2 }
   // resolve LOUD before the timeline: an ambiguous bare leaf must list its candidate canonical ids, never
   // fall through to a false "declares no scenarios". A ref matching NO measurable node still renders the honest
   // hasEvalFile:false line — a spec node without an eval.md is not an error to look at.
@@ -750,8 +740,7 @@ async function scenarioLs(args: string[]): Promise<number> {
       const fixedNodes = evalNodesAt(root, before.head)
       const selected = sel
         ? (() => {
-            const ref = sel === '.' ? currentNodeId(root) : requireEvalHost('stripRefSigil')(sel)
-            if (!ref) throw new Error('no current node (no session/node-branch here) — name a node')
+            const ref = requireEvalHost('stripRefSigil')(sel)
             const res = resolveEvalNode(fixedNodes, ref)
             if (!res.ok) throw new Error(res.error)
             return [res.node]
@@ -766,8 +755,7 @@ async function scenarioLs(args: string[]): Promise<number> {
   }
   let nodes = evalNodes(root)
   if (sel) {
-    const ref = sel === '.' ? currentNodeId(root) : requireEvalHost('stripRefSigil')(sel)
-    if (!ref) { console.error('spex eval scenario ls .: no current node (no session/node-branch here) — name a node'); return 2 }
+    const ref = requireEvalHost('stripRefSigil')(sel)
     const res = resolveEvalNode(nodes, ref)
     if (!res.ok) { console.error(`spex eval scenario ls: ${res.error}`); return 1 }
     nodes = [res.node]

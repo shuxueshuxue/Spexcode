@@ -10,6 +10,7 @@ import { elementAt, startDrag } from './dragGesture.js'
 import { isNewTabGesture } from './tabs.js'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
+import { useArrival } from './useFold.js'
 import { inertChromePress } from './focus.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { resolveSessionShortcut } from './sessionShortcuts.js'
@@ -18,8 +19,10 @@ const GHOST_SCALE = 0.75
 
 // The Sessions page owns the full mutable forest. The dock remains a compact finding projection; this panel
 // is the product surface where row selection, bulk close, and parent movement have one coherent owner.
-export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, opening = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
+export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, folding = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
   const t = useT()
+  // the handover is read from this panel's own mount, like every band panel's ([[dock-modes]], `useArrival`).
+  const arrival = useArrival(folding)
   const { expanded, offlineOpen } = useSessionListState()
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState(() => new Set())
@@ -154,7 +157,7 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
 
   return (
     <>
-      <aside className={closing ? 'si-list dock-closing' : 'si-list'} data-fold={opening ? 'in' : undefined}
+      <aside className={closing ? 'si-list dock-closing' : 'si-list'} data-fold={arrival || undefined}
         ref={listRef} style={{ width }}
         onMouseDownCapture={inertChromePress}
         aria-hidden={closing ? 'true' : undefined}>

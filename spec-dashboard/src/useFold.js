@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // Every foldable panel in the frame folds the SAME way ([[dock-modes]]): opening animates from nothing, and
 // closing keeps the element on screen for exactly one panel duration so the reverse is visible too. A panel
@@ -13,33 +13,70 @@ import { useEffect, useRef, useState } from 'react'
 // They are the same number, and DOCK_FOLD_MS is the one place the JS half says it.
 export const DOCK_FOLD_MS = 170
 
-// → [mounted, closing, opening]. Render while `mounted`; put the closing class on while `closing`.
+// → [mounted, closing, folding]. Render while `mounted`; put the closing class on while `closing`; hand
+// `folding` to `useArrival` below, which is what the panel publishes as `data-fold`.
 //
-// `opening` is the half that keeps a FOLD from being confused with a HANDOVER. A panel can appear for two
-// unrelated reasons: the reader unfolded it, or the route changed and this component is now the one drawing
-// a band that was already there. Only the first is a width movement. Animating both as a fold is what made
-// switching between a session and a spec look like the sidebar was torn down and rebuilt — the band
-// collapsed to nothing and grew back while the document column slid 200px and back with it.
+// This hook owns the band's OPEN/CLOSED state and nothing else. `folding` is true for exactly one duration
+// after the reader worked the fold control, which is the only arrival that is a width movement.
+//
+// The transition is read DURING the render that changes `open`, never from an effect, for the same reason
+// `useFoldOut` below is: an effect runs after paint, so the first committed frame would carry the wrong
+// animation and be replaced by the right one one frame later — a twitch at the start of the gesture.
 export function useFold(open, ms = DOCK_FOLD_MS) {
   const [closing, setClosing] = useState(false)
-  const [opening, setOpening] = useState(false)
-  const was = useRef(open)
+  const [folding, setFolding] = useState(false)
+  const [was, setWas] = useState(open)
+  if (was !== open) {
+    setWas(open)
+    setFolding(open)
+    setClosing(!open)
+  }
   useEffect(() => {
-    if (was.current === open) return undefined
-    was.current = open
-    if (open) {
-      setClosing(false)
-      setOpening(true)
-      const timer = setTimeout(() => setOpening(false), ms)
-      return () => clearTimeout(timer)
-    }
-    setOpening(false)
-    setClosing(true)
+    if (!folding) return undefined
+    const timer = setTimeout(() => setFolding(false), ms)
+    return () => clearTimeout(timer)
+  }, [folding, ms])
+  useEffect(() => {
+    if (!closing) return undefined
     const timer = setTimeout(() => setClosing(false), ms)
     return () => clearTimeout(timer)
-  }, [open, ms])
-  return [open || closing, closing, opening]
+  }, [closing, ms])
+  return [open || closing, closing, folding]
 }
+
+// → the panel's `data-fold`: `'in'` a fold, `'swap'` a route handover, `null` at rest. Every foldable panel
+// calls this with its `useFold` folding flag and publishes the result.
+//
+// A panel can appear for two unrelated reasons and only one of them is a width movement: the reader unfolded
+// it, or the route changed and this component is now the one drawing a band that was already there. Animating
+// the second as the first is what made switching between a session and a spec look like the sidebar was torn
+// down and rebuilt — the band collapsed to nothing and grew back while the document column slid 200px with it.
+//
+// The two answers come from two places, which is why this is a second hook rather than another `useFold`
+// return value. A FOLD is a state change, and the state lives in whoever owns the open/closed flag — the
+// shell, for its dock. A HANDOVER is a MOUNT, and only the panel element knows it appeared: the shell stays
+// mounted across the route switch that replaces its dock, so its own hook sees no transition at all. Reading
+// the handover here, where the mount happens, is what lets both directions of the swap dissolve.
+//
+// Rest is the third answer and it is spelled out, because leaving it as the missing case is what made the
+// fold twitch. While `data-fold` was a boolean, "no attribute" meant both "at rest" and "just handed over",
+// so the handover rule had to be CSS's unconditional fallback — and a panel LEAVING its fold passes straight
+// through that fallback. Measured: 170ms after the reader opened the dock it blinked to opacity 0, jumped
+// 6px left and dissolved back in, because dropping the flag swapped the running animation-name and started a
+// second animation on top of the first. Three movements over 350ms for one click.
+export function useArrival(folding, ms = DOCK_FOLD_MS) {
+  // mounting with no fold under way is the handover case: nothing transitioned, this component simply took
+  // the band over. A panel that mounted mid-fold is that fold, so it never claims the swap.
+  const [swap, setSwap] = useState(!folding)
+  useEffect(() => {
+    if (!swap) return undefined
+    const timer = setTimeout(() => setSwap(false), ms)
+    return () => clearTimeout(timer)
+  }, [swap, ms])
+  if (folding) return 'in'
+  return swap ? 'swap' : null
+}
+
 
 // → `{ key, value }` for the thing the current `key` replaced, held for exactly one fold, else null.
 //

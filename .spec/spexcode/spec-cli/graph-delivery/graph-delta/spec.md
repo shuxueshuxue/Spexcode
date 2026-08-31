@@ -85,6 +85,19 @@ true server snapshot — and it is now observable at the moment it happens rathe
 never. `applyDeltaUnits` exists so that a holder carries each unit's serialization through every apply and
 can answer that question without re-serializing the whole board.
 
+**A POSITION is what a board looked like, not the board.** `positionOf` keeps each unit's serialization and
+drops its value, because the values a patch carries always come from the CURRENT snapshot — retaining a
+past board to answer "what changed since" would be paying to keep values nobody will ever send. The
+strings are shared with the snapshot they came from, so an unchanged unit is one string however many
+positions remember it: measured on the dogfood board, 14KB per remembered position against 650KB for the
+snapshot. `diffFromPosition` is the same algebra as `diffUnits` over one of these, and the two are held to
+the same answer by test — a resuming client must be carried forward by exactly the patch a live subscriber
+would have received, or the two render different boards from one server state.
+
+The consequence is what [[graph-stream]] builds on: because a position is only ever SUBTRACTED from the
+board that is true now, and never replayed, it cannot go stale. It can only become unreachable, and
+unreachable degrades to a full snapshot.
+
 That question has one answer here and nowhere else, via `unitKeyKind`. Deriving it from `unitize`'s
 body is what a reader will try, and it is wrong: the two `keyed()` calls yield four kinds and miss
 `meta`, which carries identity and drives the map title and two gates. Exhaustiveness is a property

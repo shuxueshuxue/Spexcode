@@ -61,6 +61,10 @@ scenarios:
       And the clamp is selective by MEASUREMENT, not by rule: on the long-note record every note is clamped and
       each offers the rest, expanding one grows the page by what it was holding back; on a record of short
       exchanges no note is clamped and no control appears at all.
+      OPENING MUST NOT MOVE WHAT WAS OPENED: press a clamped block and compare that block's own viewport
+      position before and after — for a note and for a quoted turn, with the reader parked at the newest
+      entry (where the tail's pin is armed) and parked mid-history. Measure the block, not the scroll offset:
+      a live record's other content settles while the test runs and legitimately moves the offset.
   - name: the-second-hand-redraws-only-itself
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

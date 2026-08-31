@@ -63,6 +63,17 @@ the reader twice, so they are not two designs: both wear `more` in the corner, i
 uses for a way further in, and in both the WHOLE BLOCK is the press target — what is hidden is the block, so
 the block is what a reader presses, and the mark says so rather than being the only way in. It stays a real
 button so a keyboard reaches it. Opening is one-way: a reader who asked for the rest is reading it.
+
+**WHAT YOU OPEN STAYS WHERE IT WAS.** Opening grows a block inside the scroller and pushes everything below
+it down, and two separate forces then try to move the reader away from the very thing they pressed. The tail
+follows MESSAGES, not the reader's own hand: the observer that carries a pinned reader to the newest entry
+when late content settles must not fire for growth the reader asked for, so a press marks the moment and
+growth just after one is read as the reader's own. And the browser's own scroll anchoring picks some element
+to hold still — often one BELOW the growth, which slides the scroller by exactly the height that appeared.
+CSS cannot nominate the anchor, so the opened block nominates itself: its top edge is measured before the
+open and restored after ([[transcript-view]] owns that as one shared behaviour, since a clamped quote needs
+it identically). The observable is the pressed block's OWN position, not the scroll offset — a page whose
+other content is settling may legitimately move the offset while the block stays exactly where it was.
 That press is also how a drag over the words ENDS, so before opening, the surface that owns the selection is
 asked whether words are held — this conversation paints its own selection to keep the composer's caret, which
 `window.getSelection` cannot see, so the question is answered by the page and not by the browser alone

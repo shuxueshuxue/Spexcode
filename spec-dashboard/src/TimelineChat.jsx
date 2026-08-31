@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { LiveTail, Quote, TranscriptView, elapsed, timeOf } from '@spexcode/transcript-ui'
+import { LiveTail, Quote, TranscriptView, elapsed, timeOf, useOpenInPlace } from '@spexcode/transcript-ui'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
@@ -47,6 +47,10 @@ function seamKey(sessionId, from) { return `${sessionId}:${from}` }
 
 // How much of the history a window holds at once, and the size of one step back through it.
 const WINDOW = 200
+// How long after a press a growth still counts as the reader's own. Opening is a React update and the
+// observer fires on the next frame; the slack is for prose that lays out late (code, math, an image).
+// Well under the poll, so a message landing in the same breath is still followed.
+const READER_GROWTH_MS = 700
 // A DECLARATION IS NOT A PAGE. Notes are authored prose and the longest of them run past a screen on their
 // own, so a handful of them are the whole scroll. Past this height a note is clamped to a readable opening
 // and says how to get the rest — the row keeps its place in the conversation either way. Under it, which is
@@ -71,12 +75,14 @@ function ClampedNote({ text }) {
     return () => observer.disconnect()
   }, [text])
   const clamped = overflows && !open
+  // the same in-place open the quoted turn gets: what the reader pressed keeps its position
+  const { ref: wrapRef, mark } = useOpenInPlace(open)
   // ONE GESTURE, THE SAME ONE THE QUOTED TURN TAKES ([[transcript-view]]'s clamped quote): what is hidden is
   // the block, so the block is what a reader presses, and `more` stays as the mark that says so rather than
   // as the only target. A press that ENDED A SELECTION is a reader taking the words, not asking for the rest.
   return (
-    <div className={`m-note-wrap${clamped ? ' is-clamped' : ''}`}
-      onClick={clamped ? () => { if (!readerIsSelecting()) setOpen(true) } : undefined}>
+    <div ref={wrapRef} className={`m-note-wrap${clamped ? ' is-clamped' : ''}`}
+      onClick={clamped ? () => { if (!readerIsSelecting()) { mark(); setOpen(true) } } : undefined}>
       <div ref={bodyRef} className={`m-ev-note${clamped ? ' is-clamped' : ''}`}>
         <TimelineRichText>{text}</TimelineRichText>
       </div>
@@ -605,6 +611,17 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (anchorRef.current) return   // a page is arriving at the TOP; the anchor above owns this frame
     if (timeline && pinnedRef.current) timeline.scrollTop = timeline.scrollHeight
   }, [])
+  // THE TAIL FOLLOWS MESSAGES, NOT THE READER'S OWN HAND. The observer below exists so content that settles
+  // late — a transcript frame, an image finishing — still carries a pinned reader to the newest entry. But
+  // a reader OPENING something is a height change too, and being thrown to the bottom for it is the opposite
+  // of what they asked for: what they opened has to stay where it was, and grow downward from there. A press
+  // marks the moment, so growth just after one is read as the reader's own rather than as new mail arriving.
+  const readerPressedAtRef = useRef(0)
+  const notePress = useCallback(() => { readerPressedAtRef.current = Date.now() }, [])
+  const followUnlessReaderGrewIt = useCallback(() => {
+    if (Date.now() - readerPressedAtRef.current < READER_GROWTH_MS) return
+    followTimelineTail()
+  }, [followTimelineTail])
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
   // GROWTH AT THE TOP MOVES NOTHING. Prepending a page pushes everything below it down by exactly the height
   // that arrived; adding that height back to the scroll leaves the row the reader was on where it was. This
@@ -621,10 +638,10 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (!active || typeof ResizeObserver !== 'function') return undefined
     const content = timelineContentRef.current
     if (!content) return undefined
-    const observer = new ResizeObserver(followTimelineTail)
+    const observer = new ResizeObserver(followUnlessReaderGrewIt)
     observer.observe(content)
     return () => observer.disconnect()
-  }, [active, followTimelineTail])
+  }, [active, followUnlessReaderGrewIt])
 
   const clearSelection = () => {
     timelineRangeRef.current = null
@@ -956,6 +973,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
+        onClickCapture={notePress}
         onMouseDown={beginTimelineSelection} onContextMenu={onTimelineContextMenu}>
         <div className="m-col" ref={timelineContentRef}>
           {events === null || holdingFirstPaint

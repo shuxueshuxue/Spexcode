@@ -10,6 +10,7 @@ related:
   - packages/transcript-ui/src/segments.ts
   - packages/transcript-ui/src/vocabulary.ts
   - packages/transcript-ui/src/Quote.tsx
+  - packages/transcript-ui/src/openInPlace.ts
   - packages/transcript-ui/styles.css
   - packages/transcript-ui/src/render.test.tsx
   - spec-dashboard/test/transcript-fold-motion.e2e.mjs
@@ -129,6 +130,14 @@ rather than the word in its corner. `more` stays as the mark that says so, and s
 keyboard reaches it; opening is one-way, because a reader who asked for the rest is reading it. Whether a
 quote is long is decided from the TEXT rather than a measured height, so the row never reflows after paint —
 a bubble is plain prose and its length predicts its height, which is not true of an adopter's rendered notes.
+
+Opening it must not move it. Growth inside a scroller pushes what is below it down, and the browser's own
+scroll anchoring then holds some other element still — often one below the growth, which slides the scroller
+by exactly the height that appeared and carries the reader off the block they pressed. CSS cannot nominate
+the anchor, so the block nominates itself (`useOpenInPlace`): its top edge is measured before the open and
+restored after, against the layout in which anchoring has already had its say. It is shared rather than
+written twice, because an adopter's own clamped rows need the identical behaviour and a disclosure that
+moves what it opens is wrong the same way everywhere.
 
 That same press is how a drag over the quote's words ends, and only the HOST can tell the two apart: a
 surface may paint its own selection rather than use the browser's, and `window.getSelection` knows nothing

@@ -52,8 +52,8 @@ export function unitKeyKind(key: string): UnitKeyKind {
   return { kind: 'unknown', key }
 }
 
-// apply a patch to a unit-value map — the exact algorithm the dashboard mirrors in data.js, kept here so
-// the round-trip property is provable against the real shape, not a paraphrase of it.
+// apply a patch to a unit-value map — the algorithm the dashboard RUNS (it imports this entry rather than
+// mirroring it), kept here so the round-trip property is provable against the real shape.
 export function applyDelta(values: Map<string, unknown>, d: Pick<Delta, 'set' | 'del'>): Map<string, unknown> {
   const out = new Map(values)
   for (const key of d.del) out.delete(key)
@@ -84,3 +84,32 @@ export function diffUnits(prev: Units, next: Units): { set: Record<string, unkno
 }
 
 export const unitValues = (units: Units): Map<string, unknown> => new Map([...units].map(([k, u]) => [k, u.v]))
+
+// the same patch onto a full Units map, keeping each unit's serialization beside its value. A holder that
+// keeps only values cannot state its own tag — it would have to re-serialize the whole board to say what it
+// has — so a consumer that must FINGERPRINT what it holds carries `j` forward through every apply.
+export function applyDeltaUnits(units: Units, d: Pick<Delta, 'set' | 'del'>): Units {
+  const out: Units = new Map(units)
+  for (const key of d.del) out.delete(key)
+  for (const [key, v] of Object.entries(d.set)) out.set(key, { j: JSON.stringify(v), v })
+  return out
+}
+
+// @@@ one answer to WHAT gets hashed - the canonical byte sequence a snapshot tag is taken over: every
+// unit as `key \0 serialization \0`, keys sorted so map order cannot matter. Which digest API produces the
+// hash from these bytes is a PLATFORM difference (node:crypto on the server, WebCrypto in a browser) and
+// belongs at that boundary; what the bytes ARE is product semantics and has exactly one definition. Two
+// definitions would let both sides "work" while disagreeing, which is the one failure this tag exists to
+// make impossible.
+export function tagBytes(units: Units): Uint8Array {
+  let joined = ''
+  for (const key of [...units.keys()].sort()) joined += `${key}\0${units.get(key)!.j}\0`
+  return new TextEncoder().encode(joined)
+}
+
+// the snapshot tag computed the browser's way. Held byte-equal to the Node-side `tagOf` by test, because a
+// holder's fingerprint is only meaningful if the other side computes the identical function.
+export async function tagOfAsync(units: Units): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-1', tagBytes(units) as unknown as ArrayBuffer)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}

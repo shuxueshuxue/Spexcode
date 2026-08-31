@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { unitize, tagOf, diffUnits, applyDelta, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
+import { unitize, tagOf, tagOfAsync, diffUnits, applyDelta, applyDeltaUnits, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
 
 // Executable evidence for the two lemmas the incremental push stands on (see the board-delta spec node's
 // equivalence.md): RECONSTRUCTION — boardFromUnits(unitize(B)) = B whenever unitize reports ok; ROUND-TRIP —
@@ -87,6 +87,34 @@ test('tag: equal content ⇒ equal tag; a content change moves the tag', () => {
   assert.strictEqual(t1, t2, 'stringify-equal snapshots tag identically')
   const changed = mutate(rng(100), board)
   assert.notStrictEqual(tagOf(unitize(changed).units), t1)
+})
+
+// The whole point of a HOLDER's fingerprint is that the other side computes the identical function over the
+// identical bytes. Two digest call-sites is a platform accommodation; two ANSWERS would silently break the
+// only guarantee the tag carries, and would break it in the direction that certifies a board nobody has.
+test('the two platforms compute one tag: tagOf === await tagOfAsync, over many random boards', async () => {
+  const r = rng(4242)
+  for (let i = 0; i < 24; i++) {
+    const units = unitize(randBoard(r, ['a', 'b', 'c'])).units
+    assert.strictEqual(await tagOfAsync(units), tagOf(units), `platform tags diverged on board ${i}`)
+  }
+})
+
+// A holder that keeps only values cannot state what it has. Carrying `j` through every apply must land on
+// exactly the units a fresh decomposition of the same board would produce — otherwise the fingerprint drifts
+// from the board it claims to describe, patch by patch, and says so only once it is far too late.
+test('applyDeltaUnits keeps a holder byte-identical to a fresh decomposition across a mutation chain', () => {
+  const r = rng(777)
+  let board = randBoard(r, ['a', 'b'])
+  let held = unitize(board).units
+  for (let step = 0; step < 12; step++) {
+    const next = mutate(r, board)
+    const nextUnits = unitize(next).units
+    held = applyDeltaUnits(held, diffUnits(unitize(board).units, nextUnits))
+    assert.strictEqual(tagOf(held), tagOf(nextUnits), `held tag diverged at step ${step}`)
+    assert.deepStrictEqual(boardFromUnits(unitValues(held)), next, `held board diverged at step ${step}`)
+    board = next
+  }
 })
 
 test('P violation (duplicate node id) is reported, never silently decomposed', () => {

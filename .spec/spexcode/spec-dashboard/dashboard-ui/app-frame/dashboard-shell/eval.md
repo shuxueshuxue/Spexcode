@@ -110,6 +110,25 @@ scenarios:
       stays stale and the pane's only recovery is a hard refresh: the blackhole this scenario forbids.
       Zero loss = no interleaving of pushed boards and in-flight fetches leaves the 304 lane certifying a
       board nobody is seeing.
+  - name: applied-frame-is-self-verified
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js]
+    related: [packages/spec-core/src/graph-delta.ts]
+    description: >-
+      Real browser against a live backend. Wrap the page's own EventSource and corrupt exactly ONE
+      graph-delta before the data layer sees it — mutate a unit inside `set` while leaving `from` and `to`
+      untouched, which is what a server-side diff bug looks like on the wire and is invisible to the chain
+      check. Then watch, without reloading: the console, how many board streams the page opens, and every
+      /api/graph response with the conditional key it carried.
+    expected: >-
+      The client detects that applying the patch produced a board the server never had — it fingerprints
+      what it now holds and finds it differs from the tag the frame was named with — says so loudly
+      (BOARD-DIVERGENCE, naming both tags), and self-heals by reopening onto a fresh anchor, all within a
+      second and without a reload. It must NOT quietly absorb the patch: a client that echoes the server's
+      tag instead of measuring its own would quote that tag with confidence and be answered a bodyless 304,
+      certifying a board nobody holds until the tab is hard-refreshed. Zero loss = a rendered board that is
+      not any true server snapshot is observable at the moment it happens, on the cheap lane, rather than
+      inferred later or masked by re-downloading the whole graph every poll.
   - name: pushed-board-keeps-poll-bodyless
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/data.js, spec-dashboard/src/App.jsx]

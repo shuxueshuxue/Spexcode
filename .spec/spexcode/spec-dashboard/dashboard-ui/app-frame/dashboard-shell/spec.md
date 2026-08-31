@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/streamHeartbeat.test.mjs
   - spec-dashboard/test/board-poll-bodyless.e2e.mjs
+  - spec-dashboard/test/board-divergence-self-heals.e2e.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
   - spec-dashboard/THEME-CREDITS.md
@@ -168,12 +169,34 @@ nothing ever fires. On a breach it reopens (board-full re-anchors and repaints),
 replacement, and kicks the ETag refetch, so catch-up is instant; a frozen tab runs no timers, so its overdue
 one-shot fires on resume and converges likewise. The poll's cost is zeroed by conditional
 requests: `loadGraph` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
-the repaint, so no failure mode is staler than the poll period. That guarantee holds only while the
-conditional key is the identity of the board actually DISPLAYED, and it is maintained by latching the key
-at every point a board is APPLIED and at no other: after a fetched body paints, and after a pushed frame
-paints. A key that outlives its paint would let the poll 304 forever against a board nobody sees, turning
-push-delivered staleness permanent (issue #70); a key that is merely DROPPED on a paint is safe but not
-free, and what it costs is the whole poll.
+the repaint, so no failure mode is staler than the poll period.
+
+**The conditional key is MEASURED, not remembered.** It is the fingerprint of the units this client is
+actually holding — `tagOf` over [[graph-delta]]'s canonical bytes, computed here — never the tag the server
+handed us. Echoing a server-issued tag is a receipt: it attests that a frame arrived, and says nothing
+about what applying it produced, so a client whose apply had diverged would quote it with perfect
+confidence and be answered 304 — the lane certifying a board nobody holds. A self-computed fingerprint
+depends on the bytes on this machine, so that state cannot survive one exchange. It also retires the
+key-outlives-its-paint hazard (issue #70) STRUCTURALLY rather than by discipline: there is no stored key to
+go stale, only a function of the display, so no latch can be forgotten and no seal misplaced. What it names
+is the board this client has ACCEPTED from the server, which is what a transfer decision is about; the
+session-eval generation guard is a rendering policy layered above that and deliberately not part of it.
+
+**Every applied frame is checked, and the check is the same computation as the key.** After applying a
+patch the shell fingerprints what it now holds and compares it to the tag the frame was named with. Equal
+discharges [[graph-delta]]'s equivalence obligation for that frame on this client, and the hash is then the
+poll's conditional key — verification and the 304 lane are ONE computation, not two mechanisms. Unequal
+means the apply produced a board the server never had: the chain check cannot see it (a patch whose
+from/to line up but whose content does not), and it is the one state the equivalence proof exists to
+exclude. So it is loud (`BOARD-DIVERGENCE`, in the same register as [[graph-stream]]'s patrol repairs —
+the target is zero) and it self-heals by reopening onto a fresh anchor. Measured with an injected patch
+whose content contradicted its tag: detected in 15ms, replacement stream open 185ms later. Where WebCrypto
+is unreachable (an insecure origin) the check is unavailable rather than falsely failing, and the poll
+simply goes unconditional — the same cost the belt always had.
+
+Before this, that state was survivable only because the poll was resyncing unconditionally every period:
+real recovery, but silent, ~15 seconds slow, and paid for with a full snapshot on every poll forever. The
+fingerprint is what lets the cheap lane and the honest lane be the same lane.
 
 **Both lanes name the board with the same tag, or the fallback stops being a fallback.** The server's
 validator IS the delta chain's content tag ([[graph-cache]] computes the one identity; [[graph-delta]] owns

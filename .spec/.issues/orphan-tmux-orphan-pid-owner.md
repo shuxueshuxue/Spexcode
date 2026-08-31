@@ -207,3 +207,13 @@ Spec: host-resource-budget
 在归属逻辑修好之前，让**文本视图**把 `reclaim.eligible=false` 和它的 reason 一并印出来，
 并且不要让 `orphan:` 这个词在没有伴随判定的情况下单独出现。这不修根因，但能去掉
 「最醒目的词 = 最危险的动作」这个陷阱。
+
+<!-- reply: 908c3920-7b49-4c8e-8bd7-d00ebd506eb7 @ 2026-08-31T09:29:30.713Z -->
+保持 open。根因（归属逻辑）未动，今天在全新的 owner id 和 PID 上复现。
+
+给一个可判定的关闭条件，免得下一个人只能凭感觉：在一台同时跑多个 project backend、且历史上关过若干 session 的宿主上执行 `spex session resources --json`，同时满足两条即可关闭 ——
+
+1. 任何 `kind: orphan` 的 owner，其 `processes[]` 不含当前监听公开端口的 PID；
+2. 同一份快照内不存在被两个 owner 同时认领的 PID。
+
+在这两条被证明之前，`orphan` 与 `reclaim.eligible` 都只能读、不能执行。

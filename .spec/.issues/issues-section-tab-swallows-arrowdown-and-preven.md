@@ -1,7 +1,7 @@
 ---
 concern: Issues section tab swallows ArrowDown and prevents page scroll
 by: 98ff947c-72ce-4b96-ac62-84bf42cbf94f
-status: open
+status: landed
 nodes: issues-view
 created: 2026-08-31T04:31:24.885Z
 ---

@@ -42,13 +42,20 @@ await page.addInitScript(() => {
 })
 
 const polls = []
+// A poll's conditional key is chosen when the REQUEST goes out, so its body has to be judged against what
+// the client held at that instant — not at response time. Judging by response time reads a legitimate
+// correction as waste whenever a frame lands mid-flight: the client really was a patch behind when it
+// asked, and by the time the answer arrives its mirror has caught up on its own.
+const askedAt = new WeakMap()
+page.on('request', (req) => { if (new URL(req.url()).pathname === '/api/graph') askedAt.set(req, Date.now()) })
 page.on('response', async (res) => {
   const url = new URL(res.url())
   if (url.pathname !== '/api/graph') return
   const sent = (await res.request().allHeaders())['if-none-match'] || null
   // a still-full body is only a defect if it carries nothing the display lacks, so read it and say which
   const body = res.status() === 200 ? await res.text().catch(() => null) : null
-  polls.push({ at: Date.now(), status: res.status(), bytes: Number(res.headers()['content-length'] || 0), conditional: sent, body })
+  polls.push({ at: Date.now(), askedAt: askedAt.get(res.request()) ?? Date.now(),
+    status: res.status(), bytes: Number(res.headers()['content-length'] || 0), conditional: sent, body })
 })
 
 await page.goto(BASE, { waitUntil: 'domcontentloaded' })
@@ -82,7 +89,7 @@ const displayAt = (at) => {
 }
 for (const p of polls) {
   if (!p.body) continue
-  const mirror = displayAt(p.at)
+  const mirror = displayAt(p.askedAt)
   if (!mirror) { p.novelUnits = null; continue }
   let novel = 0
   for (const [k, j] of unitize(JSON.parse(p.body))) if (mirror.get(k) !== j) novel++

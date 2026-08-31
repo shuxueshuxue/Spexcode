@@ -537,7 +537,6 @@ const sessionStopBlocker = async (
       continue
     }
     const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)
-    const targetRef = probe.healthy && targetThread ? probe.references.find((reference) => reference.referenceId === targetThread) : undefined
     const siblings = probe.healthy ? probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread) : []
     const liveReason = siblings.length
       ? `${siblings.length} live sibling thread(s)`

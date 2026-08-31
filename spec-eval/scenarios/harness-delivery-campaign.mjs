@@ -462,7 +462,7 @@ function resultFor(cell, status, detail, transcript, checks = {}) {
   }
 }
 
-async function runMeasuredCell(ctx, cell, deliver, opts) {
+async function runMeasuredCell(ctx, cell, deliver) {
   const slice = ctx.startSlice(`${cell.route.id}/${cell.timing.id}`)
   const timelineStart = (await ctx.timeline()).length
   const livenessStart = ctx.liveness.length

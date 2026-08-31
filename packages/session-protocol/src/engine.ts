@@ -11,7 +11,6 @@ import type {
   MessageInput,
   OpenOptions,
   ProtocolTransaction,
-  SessionAddress,
   SessionProtocol,
   SqlParam,
 } from './index.js'

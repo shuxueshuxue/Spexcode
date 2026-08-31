@@ -1,10 +1,8 @@
-import { closeSync, openSync, readSync, writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
-import { parse as parseToml } from 'smol-toml'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
-import { createHash, randomBytes } from 'node:crypto'
-import { createConnection, type Socket } from 'node:net'
-import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { createConnection } from 'node:net'
 import { claudeSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
@@ -12,15 +10,11 @@ import { claudeHeadlessColdRuntime, claudeHeadlessLaunchCommand, claudeHeadlessS
 import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, interruptPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome } from '@spexcode/spec-core'
-import { git } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
-import { processStartToken } from '@spexcode/spec-core'
-import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { writeFileIfChanged } from './file-write.js'
 import { claudeTranscript, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from '@spexcode/transcript'
-import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
+import { harnessIdentity, type HarnessId } from '@spexcode/spec-core'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
-import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact, pexec, SPEX } from './harness-shim.js'
+import { buildShim, cleanHarness, listenerAt, noLaunchEnv, pexec, SPEX } from './harness-shim.js'
 import type { ListenerProbe } from './harness-shim.js'
 export { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact } from './harness-shim.js'
 export type { ListenerProbe } from './harness-shim.js'
@@ -794,7 +788,6 @@ const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, 
 const panePidLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane) =>
   (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
-const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
 // Leaf-backed headless sessions are the controller process, not the tmux pane that hosts it. The pane can
 // survive a SIGKILL as a bare shell, so tmux presence without the launch-registered PID is never online.
 const sessionHomeLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane) =>

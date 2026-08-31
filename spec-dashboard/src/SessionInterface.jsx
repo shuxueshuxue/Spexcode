@@ -650,7 +650,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const resourceOptions = resourceCatalog.filter((option) => !openTabs.some((tab) =>
     tab.page === 'sessions' && tab.param === active && tab.query?.surface === resourceSurface(option.id)))
 
-  const activateResource = (tab) => {
+  const activateResource = () => {
     setResourceFocusRequest((request) => request + 1)
     closeCommandBox()
   }
@@ -1209,7 +1209,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useKeyboardScope((event) => {
     const onKey = (e) => {
       const {
-        active, submit, menu, navMenu, accept, closeMenu, open, searchOpen, commandOpen,
+        active, menu, navMenu, accept, closeMenu, open, searchOpen, commandOpen,
         commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens

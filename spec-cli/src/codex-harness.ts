@@ -1,23 +1,22 @@
-import { closeSync, openSync, readSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
-import { join, dirname, basename } from 'node:path'
-import { homedir, tmpdir } from 'node:os'
+import { closeSync, openSync, readSync, readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
-import { execFile, execFileSync } from 'node:child_process'
-import { promisify } from 'node:util'
+import { execFileSync } from 'node:child_process'
 import { parse as parseToml } from 'smol-toml'
 import { codexSlashCommands } from './slash-commands.js'
-import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome, git, harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
+import { runtimeRoot, mainCheckout, harnessIdentity } from '@spexcode/spec-core'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/spec-core'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, prepareCodexGenerationClose, resolveCodexGenerationForClose, resolveCodexGenerationForResume, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { codexRolloutPath, codexTranscript } from '@spexcode/transcript'
 import { shQuote } from './sh.js'
 import { writeFileIfChanged } from './file-write.js'
-import type { Harness, HarnessLivenessRecord, HarnessDeliveryRecord, HarnessLaunchReadyRecord, SharedRuntimeDescriptor, SharedRuntimeMutationGuard, SharedRuntimeProbe, HarnessOrphanThreadQuarantine, DispatchResult, PaneProbe, ProcTable, HarnessArtifacts, TurnFailure, FailureSubscription } from './harness.js'
+import type { Harness, HarnessLivenessRecord, HarnessDeliveryRecord, HarnessLaunchReadyRecord, SharedRuntimeDescriptor, SharedRuntimeMutationGuard, SharedRuntimeProbe, HarnessOrphanThreadQuarantine, DispatchResult, PaneProbe, TurnFailure, FailureSubscription } from './harness.js'
 
 
-import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact, SPEX } from './harness-shim.js'
+import { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, sessionIdentityEnvVars, SPEX } from './harness-shim.js'
 
 const CODEXISH = /^(codex|node)/i
 export function paneTreeRunsCodex(pane?: PaneProbe): boolean { return paneTreeRuns(pane, CODEXISH) }
@@ -102,7 +101,7 @@ type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknow
 // is the one the pane is showing. The failure observer owns the active native turn id from app-server
 // notifications; delivery does not read the thread or replay its history — see codexInjectMessage.
 const codexTextInput = (text: string) => [{ type: 'text', text, text_elements: [] }]
-export function codexHandshakeMessages(threadId: string): JsonRpc[] {
+export function codexHandshakeMessages(_threadId: string): JsonRpc[] {
   return [
     {
       id: 1,
@@ -1683,8 +1682,6 @@ export async function waitForCodexRollout(threadId: string, timeoutMs = 20000): 
 // The visible TUI is launched against the same project app-server Unix socket, so this injects into the same
 // thread the pane is showing — steering an in-progress turn or starting one if idle. A missing captured thread
 // id or socket makes this poke fail; there is no tmux send-keys fallback because that reports "typed", not "accepted".
-const codexPexec = promisify(execFile)
-const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult> {
   // the socket is PER-PROJECT (the runtime root), shared by every worktree's thread; the owned thread id on
   // the record picks out THIS session's thread.

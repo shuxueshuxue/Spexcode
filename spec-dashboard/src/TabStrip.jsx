@@ -39,7 +39,7 @@ export const evalDetailParts = (param) => {
   return i > 0 ? { node: param.slice(0, i), scenario: param.slice(i + 1) } : { node: param || '', scenario: '' }
 }
 
-function label(tab, { specs, sessions, names, t }) {
+function label(tab, { specs, sessions, t }) {
   if (tab.page === 'graph') return t('tabs.graph')
   // a document names itself: a node by its own title, a file by its basename. The strip does not invent a
   // naming scheme for documents it does not own.

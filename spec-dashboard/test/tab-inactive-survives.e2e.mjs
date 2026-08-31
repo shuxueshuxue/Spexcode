@@ -171,7 +171,7 @@ try {
   await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
   await page.reload({ waitUntil: 'domcontentloaded' })
   for (const id of [A, B, D, E]) await sessionRow(id).waitFor({ state: 'visible', timeout: 60_000 })
-  const seeded = await settledTabs((tabs) => tabs.length === 1 && tabs[0].key === sessionKey(A), 'A as the only session tab')
+  await settledTabs((tabs) => tabs.length === 1 && tabs[0].key === sessionKey(A), 'A as the only session tab')
   mark('A is the only session tab')
 
   const scenes = []

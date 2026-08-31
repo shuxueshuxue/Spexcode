@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { STATUS_COLOR, sessionHeadline } from './session.js'
+import { sessionHeadline } from './session.js'
 import { STATUS } from './specMeta.js'
 import { SessionPickerRow } from './SessionPicker.jsx'
 import { useT } from './i18n/index.jsx'

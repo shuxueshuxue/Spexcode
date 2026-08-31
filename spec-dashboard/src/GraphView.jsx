@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, ReactFlowProvider, MarkerType, Position, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
@@ -7,14 +7,13 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
-import { routeAddress } from './address.js'
 import {
   graphTitles, layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
   GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_TILE_SIZE,
 } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
-import { firesKey, keysOf, withShortcut } from './bindings.js'
+import { firesKey, keysOf } from './bindings.js'
 import { chordSequence } from './keymap.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
@@ -22,17 +21,13 @@ import { labelColor } from './color.js'
 import { overlaySessions, sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
-import { useBoard, useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
 // still MOUNTS immediately (warm terminals — its chunk is fetched right after the shell paints); the routed
 // pages fetch on first visit.
-const SessionInterface = lazy(() => import('./SessionInterface.jsx'))
-const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
-const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
-const Settings = lazy(() => import('./Settings.jsx'))
 
 const nodeTypes = { spec: SpecNode }
 // Layout coordinates name the node centre. Initial dimensions let React Flow place a new fixed-format tile
@@ -61,19 +56,9 @@ const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 // blank main area, and no loading intermediate touches the document head or unmounts the shell. `warm`
 // pages (the graph's camera, the session console's terminals) stay mounted and display-toggle instead of
 // unmounting — a property any page may claim, never a session-board special case.
-function PagePane({ active, warm = false, className, children }) {
-  const t = useT()
-  if (!warm && !active) return null
-  return (
-    <div className={className ? `page-pane ${className}` : 'page-pane'} style={active ? undefined : { display: 'none' }}>
-      <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>{children}</Suspense>
-    </div>
-  )
-}
 
-function GraphView({ param, query, page: routePage = 'graph' }) {
-  const { specs, sessions, boardLive, identity, graphOnly } = useBoard()
-  const { reload } = useBoardApi()
+function GraphView({ param, page: routePage = 'graph' }) {
+  const { specs, sessions, graphOnly } = useBoard()
   const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
   const { helpOpen } = useWorkspace()
   const scope = useViewScope()
@@ -81,7 +66,6 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
   // claims it — a session row in the finding dock — is not this one. The graph only READS the claim and
   // paints it; it no longer needs a session list of its own to have somewhere to click.
   const { lockedSource: highlightId } = useWorkspace()
-  const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
@@ -175,10 +159,6 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
     setSeed(text)
     scope.open({ page: 'sessions', param: 'new', query: { seed: text } })
   }, [scope, setSeed])
-  const onNavigateAddress = useCallback((address) => {
-    if (address?.kind === 'session') return openSession(address.sessionId)
-    return scope.open(routeAddress(address))
-  }, [openSession, scope])
 
   // sessions overlaying the right-clicked node — its live worktrees, resolved through the shared
   // [[node-menu]] crossing join so this menu and the document's prose node menu read the same rows.
@@ -190,9 +170,6 @@ function GraphView({ param, query, page: routePage = 'graph' }) {
   // one routing for BOTH palettes (board `/` and session-board ⌥+/): each row carries an app address
   // (graph node, session tab, issue detail, or eval detail). The palette's caller supplies only the view
   // callbacks needed for non-hash state; the address helper owns the route shape.
-  const onSearchPick = useCallback((e) => {
-    onNavigateAddress(e.address)
-  }, [onNavigateAddress])
 
   // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
   // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (the tab

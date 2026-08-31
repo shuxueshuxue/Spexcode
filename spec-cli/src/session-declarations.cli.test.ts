@@ -39,7 +39,7 @@ test('session ask keeps its receipt and attributes a shared Codex worker to its 
     process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     const application = initializeFreshSessionApplication()
     const stalePath = writeRecord(home, STALE, 'stale-thread')
-    const currentPath = writeRecord(home, CURRENT, THREAD)
+    writeRecord(home, CURRENT, THREAD)
     application.createSession({ sessionId: STALE, status: 'active' })
     application.createSession({ sessionId: CURRENT, status: 'active' })
     const staleBefore = readFileSync(stalePath, 'utf8')

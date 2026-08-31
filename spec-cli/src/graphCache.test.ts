@@ -57,20 +57,6 @@ const git = await import('@spexcode/spec-core')
 // lifecycle altitude so its deliberately-unref'ed background-start timer can run before test teardown.
 const backendLifetime = setInterval(() => {}, 60_000)
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-function descendants(root: number): number[] {
-  const out: number[] = []
-  const visit = (pid: number) => {
-    let raw = ''
-    try { raw = readFileSync(`/proc/${pid}/task/${pid}/children`, 'utf8') } catch { return }
-    for (const token of raw.trim().split(/\s+/).filter(Boolean)) {
-      const child = Number(token)
-      out.push(child)
-      visit(child)
-    }
-  }
-  visit(root)
-  return out
-}
 function shimPids(): number[] {
   if (!existsSync(pidLog)) return []
   return readFileSync(pidLog, 'utf8').split(/\s+/).filter(Boolean).map(Number).filter((pid) => existsSync(`/proc/${pid}`))

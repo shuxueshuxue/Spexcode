@@ -131,10 +131,6 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
     onSelectRequestConsumed?.()
   }, [selectRequest, onSelectRequestConsumed])
 
-  const enterSelect = (session) => {
-    setSelecting(true)
-    setPicked(new Set([session.id]))
-  }
   const exitSelect = () => {
     setSelecting(false)
     setPicked(new Set())
@@ -186,8 +182,7 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
             return <SessionZone key={`zone-${item.zone}`} item={item} baseClass="si-zone" onToggle={() => item.zone === 'offline' ? setSessionOfflineOpen(!offlineOpen) : undefined} />
           }
           const session = item.s
-          const isPicked = selecting && picked.has(session.id)
-          return <SessionConsoleTreeRow key={session.id} item={item} activeId={activeId} selecting={selecting} picked={picked}
+                return <SessionConsoleTreeRow key={session.id} item={item} activeId={activeId} selecting={selecting} picked={picked}
             dragging={drag?.id === session.id} dropTarget={drag?.target === session.id} onToggleFold={() => toggleSessionFold(session.id)}
             rowProps={{
               'data-sid': session.id,

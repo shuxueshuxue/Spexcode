@@ -62,9 +62,6 @@ const stop = async (child) => {
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
 const readRecord = (path) => JSON.parse(readFileSync(path, 'utf8'))
-const hasRecordName = (path, name) => {
-  try { return readRecord(path).name === name } catch { return false }
-}
 const recordPersistedAt = (path, name) => {
   try { return readRecord(path).name === name ? Math.round(statSync(path).mtimeMs) : 0 } catch { return 0 }
 }

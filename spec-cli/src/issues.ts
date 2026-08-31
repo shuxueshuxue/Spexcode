@@ -1,10 +1,9 @@
 import type { ForgeIssue, ForgeLabel, ForgePR } from '@spexcode/spec-forge/port'
 import { resolveLinks } from '@spexcode/spec-forge/links'
 import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '@spexcode/spec-forge/drivers'
-import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, parseEvalConcern } from './localIssues.js'
-import { dispatchNewMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
+import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, replyLocalIssue, parseEvalConcern } from './localIssues.js'
+import { dispatchNewMentions, parseMentions, type DispatchOutcome } from './mentions.js'
 import { envSessionId } from '@spexcode/spec-core'
-import { loadSpecsLite } from '@spexcode/spec-core'
 import type { Reply, Issue, RemarkTrack } from '@spexcode/spec-eval/remarks'
 export type { Reply, Issue } from '@spexcode/spec-eval/remarks'
 

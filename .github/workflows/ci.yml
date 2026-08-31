@@ -43,6 +43,8 @@ jobs:
         run: node --test scripts/ci-suite-parity.test.mjs
       - name: Import-cycle gate (no module may need itself to finish loading)
         run: node --test scripts/import-cycles.test.mjs
+      - name: Code lint (dead bindings and the correctness rules; style is out of scope)
+        run: npm run lint:code
       - name: Workspace unit suites
         run: |
           npm test --workspace=@spexcode/transcript

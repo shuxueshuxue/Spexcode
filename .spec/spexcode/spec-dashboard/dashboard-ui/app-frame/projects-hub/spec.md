@@ -39,7 +39,10 @@ page prefixes every `/api` call (fetch, SSE, terminal WebSocket) through the one
 no feature module knows it is scoped and the address bar is always the shareable project URL — the form
 the gateway gates by path. Unscoped serving (vite dev, single-project `spex serve ui`) yields base `''`
 and stays byte-identical to the pre-multi-project app; a dev proxy rule maps `/p/*/api` onto the one dev
-backend so scoped pages are drivable without a hub.
+backend so scoped pages are drivable without a hub. The canonical scoped address ends in `/`: the hub
+redirects a bare `/p/<id>` before serving the shell, and relative production assets resolve inside that
+scope while the gateway serves only `/assets/...` requests from the same static fallback; extensionless
+scoped backend routes such as `/health` remain backend probes.
 
 **One global admin page over the landed contract.** `ProjectsPage` renders the host's reconciled
 KNOWN-project view ([[host-gateway]]): a repo enters the fleet by running `spex serve` in it, or through

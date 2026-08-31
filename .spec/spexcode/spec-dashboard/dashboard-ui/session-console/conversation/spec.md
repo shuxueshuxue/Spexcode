@@ -18,6 +18,7 @@ related:
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
+  - spec-dashboard/src/readerSelection.js
 ---
 
 # conversation
@@ -41,7 +42,64 @@ the `⚑` badge that says its worktree is gone and has no relaunch action. These
 component, not separate panels. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
-once when selected and does not poll. A pane-backed offline or archived record remains Conversation and cannot
+once when selected and does not poll.
+
+**THE PAGE HOLDS A WINDOW, AND SAYS SO WHERE THE HISTORY IS MISSING FROM.** A session's history outgrows one
+read — a week of work is thousands of events — so the page shows the newest of them and states how many
+earlier ones it is not showing, with the way in: one press takes one page further back ([[session-timeline]]
+serves the window, bounded by event count AND by authored text, so a record of long notes yields a shorter
+window rather than eighty screens). The count is the history's own, never an inference from what happens to
+be on screen.
+
+**A DECLARATION IS NOT A PAGE.** Notes are authored prose and the longest run past a screen on their own, so
+a handful of them are the whole scroll — bounding the window is not enough when one row can be eighty percent
+of it. Past a readable opening a note is clamped and offers the rest; the text fades into the page's own
+ground rather than stopping at a cut edge, so the row reads as continuing rather than as broken. Whether a
+note is clamped is MEASURED after it renders, never guessed from how many characters it holds: rich text
+settles late, and what matters is the height a reader actually faces.
+
+**ONE CLAMP, ONE GESTURE, ONE MARK.** A clamped agent note and a clamped quoted turn are the same idea meeting
+the reader twice, so they are not two designs: both wear `more` in the corner, in the one blue the surface
+uses for a way further in, and in both the WHOLE BLOCK is the press target — what is hidden is the block, so
+the block is what a reader presses, and the mark says so rather than being the only way in. It stays a real
+button so a keyboard reaches it. Opening is one-way: a reader who asked for the rest is reading it.
+
+**WHAT YOU OPEN STAYS WHERE IT WAS.** Opening grows a block inside the scroller and pushes everything below
+it down, and two separate forces then try to move the reader away from the very thing they pressed. The tail
+follows MESSAGES, not the reader's own hand: the observer that carries a pinned reader to the newest entry
+when late content settles must not fire for growth the reader asked for, so a press marks the moment and
+growth just after one is read as the reader's own. And the browser's own scroll anchoring picks some element
+to hold still — often one BELOW the growth, which slides the scroller by exactly the height that appeared.
+CSS cannot nominate the anchor, so the opened block nominates itself: its top edge is measured before the
+open and restored after ([[transcript-view]] owns that as one shared behaviour, since a clamped quote needs
+it identically). The observable is the pressed block's OWN position, not the scroll offset — a page whose
+other content is settling may legitimately move the offset while the block stays exactly where it was.
+That press is also how a drag over the words ENDS, so before opening, the surface that owns the selection is
+asked whether words are held — this conversation paints its own selection to keep the composer's caret, which
+`window.getSelection` cannot see, so the question is answered by the page and not by the browser alone
+([[transcript-view]] takes the answer through its one options seam). Live selection only: asking merely
+whether the browser CAN select would wedge every clamped block shut. This folds the tail of the
+distribution and nothing else — on a record of short exchanges not one note is clamped and no control
+appears, while on a record of long reports every one of them is. A clamped row keeps its place in the
+conversation, its time, and its status chip; only its middle is deferred.
+
+That statement belongs AT THE BREAK, not at the top of the page. The originating prompt is the session's
+first word and is always drawn, above the window and outside it; putting the count above THAT put it above
+the one row that never changes, so a reader who scrolled up met the same first line every time and could not
+tell the window had moved — the press looked decorative even while it was working. The omission sits between
+the prompt and the window's oldest row, and so does the count, which is also exactly where the calendar jumps
+(a prompt on one day, the window opening days later). Reading position is what the
+press must not cost: a page arriving at the top pushes everything below it down, and the scroll is moved by
+exactly that height, so the row under the reader's eye does not move. Growth at the tail still follows the
+thumb — only a reader already at the newest entry is carried to it — and a back-load never counts as growth.
+Walking back is a PRESS, not a scroll trigger: an append-only history that reaches for more the moment the top
+comes into view fights the same thumb that pinning already answers to.
+
+The poll asks for GROWTH, not for the history again. The window carries the log's sequence, the poll sends it
+back, and an unchanged record answers with nothing at all — no rows are rebuilt on a quiet tick, which is the
+only reason several of these can stay mounted at once ([[session-console]]). Several effects can ask on the
+same frame and a fresh mount asks again before the first answer lands; they join one read rather than each
+paying for a whole window. A pane-backed offline or archived record remains Conversation and cannot
 be switched to Terminal. `queued` and `archive` are the two legislated exceptions to the ordinary offline
 projection: queued has intentionally not launched and self-starts as a slot frees, while archive is closed and
 restored explicitly.
@@ -122,7 +180,10 @@ exactly those three:
   is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
-  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep; the tail seam of a dead session says `working` — the
+  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep. THE SECOND HAND
+  OWNS ONLY ITSELF: that count is its own component, so a tick redraws one line and not the conversation
+  around it — a long history costs nothing per second merely by being long, and the seam's start is all
+  the ticker is given, so the clock correction from a later poll reaches it without redrawing anyone; the tail seam of a dead session says `working` — the
   record's last word — with no duration invented for a stretch nothing closed. A STRETCH CLOSES BY FOLDING,
   NOT BY BLINKING: when a message lands on a working agent — the person's, or the agent's own note — the
   stretch it closes stops streaming, and the live tail that was under `working · 4m 12s` travels the height

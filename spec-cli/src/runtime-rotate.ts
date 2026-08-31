@@ -1,6 +1,7 @@
 import { mainCheckout, runtimeRoot } from '@spexcode/spec-core'
 import { rotateCodexCurrentGeneration } from './codex-runtime-generations.js'
-import { codexBinary, defaultLauncher, resolveLauncher, sessionIdentityEnvVars } from './harness.js'
+import { codexBinary } from './codex-harness.js'
+import { defaultLauncher, resolveLauncher, sessionIdentityEnvVars } from './harness.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 type AppServerRepairArgs = Readonly<{ launcher: string | null }>

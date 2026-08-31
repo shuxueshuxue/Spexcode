@@ -6,7 +6,7 @@ desc: Codex's app-server thread form as an independent headless harness: Codex-i
 code:
   - spec-cli/src/codex-headless.ts
 related:
-  - spec-cli/src/harness.ts
+  - spec-cli/src/codex-harness.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/codex-headless.test.ts

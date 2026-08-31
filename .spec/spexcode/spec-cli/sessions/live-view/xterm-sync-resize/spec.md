@@ -7,7 +7,7 @@ code:
   - spec-dashboard/package.json
 related:
   - spec-dashboard/package-lock.json
-  - packages/terminal-ui/scripts/patch-xterm-sync-resize.mjs#synchronizedResizePatches
+  - spec-dashboard/scripts/patch-xterm-sync-resize.mjs#synchronizedResizePatches
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/styles.test.mjs
 ---
@@ -27,6 +27,10 @@ not run it — a reinstall recreates a pristine engine — which is exactly why 
 step: a production bundle or dev server cannot silently serve an unpatched engine; it is patched or it fails
 loudly. The resize path uses only xterm's public terminal API and carries no snapshot layer, replacement
 renderer, or private resize hook.
+
+The package's production `build` entry emits a relative Vite base (`--base ./`) so the resulting dashboard
+dist remains portable when served at the root or below a path prefix. This is a serving contract of the same
+build entry: runtime project API calls still derive their `/p/<id>/` scope from `location.pathname`.
 
 [[live-view]] owns the product transaction and its browser evidence. This node owns only the dependency
 boundary that makes xterm honor that transaction.

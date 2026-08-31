@@ -20,6 +20,10 @@ node-graph where every node is a spec, navigated by logic. It reads `main` (the 
 truth) and overlays in-progress worktrees; each version change is attributed to a
 Claude Code session.
 
+The production dashboard build uses a relative Vite base (`--base ./`). The same dist is therefore
+portable when served at the root, at a project scope such as `/p/<id>/`, or below an arbitrary gateway
+prefix; runtime API URLs still derive their scope once from `location.pathname` through `project.js`.
+
 Enter opens a node into switchable panes (**spec / history / issues**, plus an **edit**
 pane that appears only while the node has a pending overlay), and the sidebar splits into
 global statistics and focused-node information. The whole UI is rendered through an

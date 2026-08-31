@@ -9,6 +9,7 @@ const dashboardSpec = readFileSync(join(root, '..', '.spec', 'spexcode', 'spec-d
 const specCliSpec = readFileSync(join(root, '..', '.spec', 'spexcode', 'spec-cli', 'spec.md'), 'utf8')
 const source = [
   ...readdirSync(join(root, 'src')).filter((name) => /\.(js|jsx|mjs)$/.test(name)).map((name) => join('src', name)),
+  'src/terminal/SessionTerminal.tsx', 'src/terminal/transport.ts', 'src/terminal/index.ts',
   'vite.config.js', 'vite.config.iso.mjs', 'cvid.vite.config.mjs',
 ].map((path) => readFileSync(join(root, path), 'utf8')).join('\n')
 
@@ -21,7 +22,8 @@ test('direct dashboard dependencies have a live owner or explicit boundary', () 
   const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
   const requiredImports = [
     '@codemirror/lang-javascript', '@codemirror/language', '@codemirror/merge', '@codemirror/state',
-    '@codemirror/view', '@lezer/highlight', '@spexcode/spec-cli', '@spexcode/spec-core', '@spexcode/transcript', '@spexcode/transcript-ui', '@spexcode/terminal-ui',
+    '@codemirror/view', '@lezer/highlight', '@spexcode/spec-cli', '@spexcode/spec-core', '@spexcode/transcript', '@spexcode/transcript-ui',
+    '@xterm/xterm', '@xterm/addon-fit',
     '@xyflow/react', 'katex', 'markdown-it', 'react', 'react-dom', '@vitejs/plugin-react',
   ]
   for (const name of requiredImports) assert.ok(names.includes(name), `manifest lost required edge ${name}`)

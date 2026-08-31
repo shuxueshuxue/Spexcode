@@ -10,6 +10,7 @@ related:
   - packages/transcript-ui/src/segments.ts
   - packages/transcript-ui/src/vocabulary.ts
   - packages/transcript-ui/src/Quote.tsx
+  - packages/transcript-ui/src/openInPlace.ts
   - packages/transcript-ui/styles.css
   - packages/transcript-ui/src/render.test.tsx
   - spec-dashboard/test/transcript-fold-motion.e2e.mjs
@@ -68,7 +69,7 @@ with no mark reads as the whole output — the one way a bounded view can lie.
 **A result is drawn as text, because this is prose and not a terminal.** Programs print colour, and real
 transcripts carry tens of thousands of escape sequences; a `<pre>` renders them as literal debris in the middle
 of the sentence someone is reading. They are dropped at the moment of drawing — from the row's target and from
-the opened input and output alike — and never from the record, which a terminal surface ([[terminal-ui]]) is
+the opened input and output alike — and never from the record, which a terminal surface ([[terminal-input]]) is
 free to read in full. Stripping before the row's length cut matters: cutting first can leave half a sequence
 behind. Because the page then holds no escapes, text copied off it is already clean, so there is no separate
 copy path. Escapes still count toward the record's size, so removing them from the page must not be read as an
@@ -122,6 +123,28 @@ shared text test, used by that one face.
 **Disclosure is keyed to the transcript's own ids** — a tool's id, a run's first tool, a segment's first turn —
 never to render position, so a live refresh of the same interval keeps what the reader opened, and a payload
 for a different interval starts closed by construction.
+
+**A CLAMPED QUOTE OPENS ON A PRESS ANYWHERE IN IT.** A long quoted turn is clamped at first sight — the
+conversation is about what came after it — and what is hidden is the block, so the block is the press target
+rather than the word in its corner. `more` stays as the mark that says so, and stays a real button so a
+keyboard reaches it; opening is one-way, because a reader who asked for the rest is reading it. Whether a
+quote is long is decided from the TEXT rather than a measured height, so the row never reflows after paint —
+a bubble is plain prose and its length predicts its height, which is not true of an adopter's rendered notes.
+
+Opening it must not move it. Growth inside a scroller pushes what is below it down, and the browser's own
+scroll anchoring then holds some other element still — often one below the growth, which slides the scroller
+by exactly the height that appeared and carries the reader off the block they pressed. CSS cannot nominate
+the anchor, so the block nominates itself (`useOpenInPlace`): its top edge is measured before the open and
+restored after, against the layout in which anchoring has already had its say. It is shared rather than
+written twice, because an adopter's own clamped rows need the identical behaviour and a disclosure that
+moves what it opens is wrong the same way everywhere.
+
+That same press is how a drag over the quote's words ends, and only the HOST can tell the two apart: a
+surface may paint its own selection rather than use the browser's, and `window.getSelection` knows nothing
+about that. So the question goes out through the one options seam (`suppressExpand`), answered by the host,
+defaulting to never-suppress for a host that has no selection of its own. It must answer about a LIVE
+selection, not about whether selecting is possible at all — the latter is always true and would wedge every
+clamped quote shut.
 
 **Who a quoted turn came from is data.** A message delivered into an agent arrives wrapped in the host's
 envelope — addressing for the agent, not what the sender said — and the transcript keeps it verbatim. The

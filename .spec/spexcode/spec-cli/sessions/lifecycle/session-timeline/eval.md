@@ -1,5 +1,27 @@
 ---
 scenarios:
+  - name: the-window-says-what-it-omits
+    tags: [backend-api]
+    code: [spec-cli/src/session-timeline.ts]
+    related: [spec-cli/src/index.ts]
+    description: >-
+      On an ISOLATED store, drive a real backend until one governed session holds MORE authored history than
+      one window — hundreds of events through the ordinary input route and `spex internal session-state` —
+      then read `GET /api/sessions/:id/timeline` four ways and compare the answers to each other: with no
+      cursor; with `before=<the position the first answer named>`; with `since=<the stamp the first answer
+      carried>` both while the record is quiet and after one further message; and with a `since` far enough
+      behind that the growth exceeds the window. Seed the session so it has MIGRATED history too, whose
+      sequence is high where its time is early.
+    expected: >-
+      Every answer states where it sits: the tail carries the window's `offset` and the history's `total`, so
+      a reader can say how much earlier history exists rather than ending in silence at an unmarked edge. The
+      `before` page is exactly the events preceding the tail — the two windows join with no gap and no overlap
+      — and walking back terminates at position 0 instead of running past it. A `since` read on a quiet record
+      returns NO events and NO window, which is what makes a poll on a long record cheap; after one message it
+      returns exactly that message. Growth past the window size is answered with a whole window instead
+      (it carries `offset`), because a reader that far behind is re-seated, not caught up. Migrated history
+      never leaks between the two orders: the stamp is a SEQUENCE and only ever names growth, while a page is
+      addressed by POSITION in the order the reader sees, so no read hands back events scattered through time.
   - name: one-writer-one-line
     tags: [backend-api, cli]
     description: >

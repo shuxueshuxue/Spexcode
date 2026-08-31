@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The Codex adapter's project-shared app-server runtime — where the daemon lives and what it may not inherit, the three trust tiers a dispatched thread needs, backend-owned thread identity and the rollout warm-up, JSON-RPC delivery and interrupt, descendant-tree liveness, and the ownership proofs behind stop, archive, and quarantine.
 code:
-  - spec-cli/src/harness.ts#codexHarness
+  - spec-cli/src/codex-harness.ts
 related:
   - spec-cli/src/cli.ts
   - spec-cli/src/codex-runtime-generations.ts
@@ -298,3 +298,23 @@ validator repeats the full generation, loaded-reference, and owner join; an unlo
 reassignment retains or restores the original stopped/offline projection without a false transition. This launch
 fence does not replace steady-state shared-record liveness: once committed, a sleeping thread stays addressable
 through the app-server.
+
+## Relocation checkpoint
+
+The Codex protocol machine (2,107 top-level declaration lines) now lives in `spec-cli/src/codex-harness.ts`;
+`harness.ts` retains the adapter interface, shared generic helpers, and the `HARNESSES` registry only. The
+registry remains the single place that lists both Codex rows. `harness.test.ts` derives the allowed Codex mentions
+from import lines and the registry line, so a future Codex declaration added to `harness.ts` fails the test without
+duplicating a harness-name list.
+
+The 22 active nodes that related `spec-cli/src/harness.ts` were scanned. Codex-specific anchors in this node,
+`codex-headless`, and the parent harness evals now point at `codex-harness.ts`; generic adapter, lifecycle, Claude,
+and shell-mirror nodes retain `harness.ts` because they govern the interface or shared helpers. The shared
+shim/file-management and process-probe helpers now live once in `spec-cli/src/harness-shim.ts`, including the
+single `PKG`/`SPEX` path derivation and `pexec` executor; both harness implementations consume those exports.
+A companion structural test discovers the harness module cluster and rejects duplicate top-level declarations
+(including `let`) pairwise. Injecting a temporary duplicate into `harness-shim.ts` made that guard fail with the
+offending name, then the probe declaration was removed. This third-module boundary is the required escape hatch
+for future large-adapter splits, rather than copying helpers to bypass a runtime import cycle. No behavior bug was
+found or changed during the relocation. The same copy-versus-shared-helper wall also appeared in the concurrent
+record-I/O extraction lane and is recorded here as a structural lesson, not a behavior fix.

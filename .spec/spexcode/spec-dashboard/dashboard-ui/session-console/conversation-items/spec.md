@@ -17,7 +17,7 @@ related:
 
 [[conversation]] renders three things in wire order — messages, seams, events — and this module is the one
 place that decides which stretch of a session's timeline is which. It is a pure function of the timeline
-events and a `now` (the caller's latest poll, on the server's clock); it knows nothing of the DOM, the footer,
+events and the word the events BEFORE them left the agent on; it knows nothing of the DOM, the footer,
 or liveness.
 
 **The items partition the session's time, and no stretch of work is ever dropped.** Every instant from the
@@ -26,6 +26,12 @@ first event onward belongs to exactly one item: a QUOTE (a `sent` event; the add
 `spexEnvelope` row — the same row a quoted turn inside a transcript is read with, so the two never disagree), a SAY (a status event carrying a note,
 or any non-working status), an EVENT (`error`, `corrupt` — an instant, not a phase), or a SEAM — an interval
 in which the agent said nothing and worked, which owns the transcript for exactly that interval.
+
+**A window is not the whole history.** The reader holds the newest events of a session that may hold
+thousands ([[session-timeline]]), so this derivation can be handed a stretch that begins in the middle of the
+agent's work. The word the earlier events already said comes in with the window: without it the derivation
+starts from `not working` and silently drops the stretch it opened inside — the one seam whose transcript the
+reader most likely came for. What the window is told, it carries forward exactly as it carries its own.
 
 **The agent's working state is carried, not re-read.** The record says the agent is working only once: the
 backend's status transition is idempotent (`markState` in `sessions.ts` writes no event when the status,
@@ -40,12 +46,12 @@ working on what was just said from then on.
 item is an open seam, and otherwise no item is open. Corollaries: the live tail of a working session is
 always present and disclosable no matter how many messages were sent into the turn; a message or note that
 landed on a working agent mid-history is followed by a `worked …` seam whose transcript can be opened; a
-message that lands on an agent that is not working claims no work. The open tail's interval ends at the
-`now` the caller passes — the SERVER time of the latest poll, never a mount-time snapshot. Freezing it at mount
-kept the transcript key stable across polls, and that was exactly the defect: an expanded live seam read
-`[from, mount]` once and its `0 turns · 0 tool uses` never moved while the agent worked. With the end
-advancing per poll the expanded tail re-reads its interval each poll; the seam's identity is its start, so
-the reader's disclosure survives the moving end, and a collapsed seam still reads nothing.
+message that lands on an agent that is not working claims no work. **The open tail has no end here.** Its end is the reader's present, and the present moves every second; a
+moving number inside this derivation meant the whole conversation was rebuilt on each tick to draw one line
+of text. So an open seam states no end, and whoever needs an interval for it — the transcript read that
+addresses `[from, to]` — says which present it ends at. The seam's identity is its start, so the reader's
+disclosure survives whatever end is chosen; a collapsed seam still reads nothing; and an EXPANDED live seam
+does not depend on this end at all, because it reads its interval from the stream ([[message-stream]]).
 
 The converse is not claimed: an open seam at the tail does not mean the agent is alive — the footer's
 liveness decides whether that seam ticks or reads the bare word `working` ([[conversation]]).

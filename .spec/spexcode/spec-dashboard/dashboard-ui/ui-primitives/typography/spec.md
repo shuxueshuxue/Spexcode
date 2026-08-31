@@ -71,17 +71,46 @@ from becoming a number encoded inside an unrelated component ([[status-bar]]).
 
 ## the ground ladder
 
-Three tones, deepest to brightest:
+Four rungs, deepest to brightest, plus one surface that is not on the ladder at all:
 
+- **`--term-bg`** — the well: the embedded terminal, and the floor of the window. Not a rung (below).
 - **`--ground`** — the chrome floor: the rail, the finding dock, the status bar, the context dock.
-- **`--panel`** — between: the tab strip, toolbars, cards laid on paper.
-- **`--paper`** — the one content plane, brightest, and the only tone a document is drawn on.
+- **`--panel`** — between: the tab strip, toolbars, the session list, cards laid on paper.
+- **`--paper`** — the one content plane, and the only tone a document is drawn on.
+- **`--raised`** — the only rung ABOVE the plane: every menu, pop-over, tooltip, notice, and floating
+  composer. Brightest.
 
 **The active tab is painted `--paper`**, so the tab and its document read as one plane rather than as a lit
-chip on a bar. That continuity is the whole reason the ladder has three steps: the reader should be able to
+chip on a bar. That continuity is the whole reason the ladder has steps at all: the reader should be able to
 see where the document is without a border telling them. The previous two-tone frame differed by five
 values out of 255 — a 1.07:1 contrast, which is not a step, and it is why every boundary in the window had
 to be drawn as a line.
+
+**THE LADDER RUNS ONE WAY, AND THE WAY IS PHYSICAL.** Light falls from above, so a surface that is higher
+catches more of it and is lighter. That is not a house style; it is what every system that has thought about
+it concluded independently — Material 3's dark surface containers climb T4 → T22 with elevation, and IBM
+Carbon states outright that in dark themes "layers become one step lighter with each added layer". Both fall
+back to the **shadow** in light themes, and for the same reason: a light plane is already at the top of the
+range, so there is no headroom left to climb, while a drop that reads as nothing on a near-black ground reads
+perfectly well on a white one. So `--raised` is never darker than `--paper`. In a dark preset it is a real
+step up and the drop is nearly inert; in a light preset it sits at the plane and the drop does the work.
+
+**A step is a measurement, and it is two different measurements.** The unit is CIE L\*, perceptual
+lightness — never a WCAG contrast ratio, which compresses to nothing at the dark end and scores a broken ramp
+and a good one at the same 1.1:1. A flat-field lightness JND is about 1 L\*, and:
+
+- a **region** step — a different part of the same window, side by side — is **≥ 4 L\***. VS Code Dark
+  Modern's sidebar-to-editor is 3.5; Material 3's surface to surfaceContainerLow is 4.
+- an **elevation** step — this surface has left the plane — is **≥ 6 L\***. Carbon's dark layers step 8–11,
+  Material 3's dark surface containers 5–6, VS Code's editor-to-dropdown 8.6.
+
+A menu makes the second claim, so it pays the second price. This is the rule the sheet broke for a long time:
+every floating surface was painted `--panel`, a rung **below** the plane it floats over, which reads as a hole
+punched in the window rather than a card lifted off it — and `--panel` was also, in five of the nine presets,
+the exact value of `--term-bg`. A right-click over the terminal therefore opened a menu whose ground was
+**identical** to the ground beneath it (ΔL\* 0.0), carried by a half-strength hairline at 1.3:1 and a drop
+that on a near-black ground moves the pixel by 1–4 L\*. Three cues, all of them near zero. Nothing was
+separating those surfaces because nothing was left to.
 
 With real ground steps doing the separating, a chrome boundary is **felt, not seen**: `--edge` is a
 half-strength `--line`, and it is what the rail, dock, strip, status bar and context dock are bounded with.
@@ -106,14 +135,37 @@ genuinely float. Stacking shadows to fake a surface is the failure mode this rul
 window whose panels each cast their own is a window where nothing reads as a plane and everything reads as
 a sticker. A surface earns its depth from the ladder; only a thing that leaves the plane pays the shadow.
 
-**The dark terminal is a card on the plane, not a wall against the seam.** It keeps its own `--term-bg` —
-the one surface that is legitimately dark in every theme — and a small `--paper` gutter runs down its
-leading edge so the plane it sits on is visible beside it. Leading edge only: its other three sides already
-meet chrome that steps for them.
+**`--shadow` and `--raised` are spent together, and that pairing is the definition of floating.** The drop is
+already the sheet's own statement that a thing has left the plane, so the set of rules that spend it is
+exactly the set that must be painted the raised rung — which makes the rule checkable instead of remembered.
+Before the pairing, twenty-six floating surfaces drew from **three** different rungs depending on which file
+they happened to be written in: `--panel` for most menus, `--paper` for the pop-overs, `--panel2` for the
+tooltip. That is the real defect the terminal collision was only the loudest symptom of.
 
-All eight theme presets plus the default carry all three tones as resolved values; `--ground` is each
-theme's own deepest surface where its palette has one, and a derived step below `--panel` where it does not.
-A theme that resolved only two of the three would silently collapse the ladder for its readers. Each row
+**The dark terminal is a WELL, not a card, and it is a MEDIUM rather than a rung.** It is dark in every
+theme because the agent's TUI is dark-designed, which in a dark preset makes it the deepest thing in the
+window and in a light preset makes it plainly foreign — either way it cannot read as a surface lifted off the
+plane, and calling it a card is what let it be painted at a chrome tone and mean nothing. So it is the floor:
+a dark preset resolves `--term-bg` to its own deepest value (`:root` says `var(--ground)` and every dark row
+inherits that line), a light preset names a neutral near-black outright because its palette has no dark end,
+and **no rung may land on it** — a menu the exact value of the pane beneath it is a menu with no boundary.
+A small `--paper` gutter still runs down its leading edge so the plane is visible beside it; leading edge
+only, because its other three sides meet chrome that steps for them.
+
+The terminal's own ground has **one** source, and it is this token. The terminal package's stylesheet already
+resolves `--tt-bg` from it, so the xterm instance reads the same value back rather than repeating it as a
+literal — a second copy is what let the ground xterm *declares* drift from the one the pane *paints*, and the
+declared one is what an inverse-video cell paints as its foreground. A warm pane outlives any re-theming
+around it, so it re-reads when the root element changes ([[terminal-input]] owns the pane's lifetime).
+
+All eight theme presets plus the default carry all four rungs as resolved values; `--ground` is each theme's
+own deepest surface where its palette has one, and a derived step below `--panel` where it does not, while
+`--raised` is the plane lifted 8% toward white — the same move Material's dark elevation overlay makes, at
+the opacity that lands the step in the 6–9 L\* band the reference systems agree on. A preset with a real
+elevated tone of its own resolves it outright instead: Rosé Pine Dawn's `surface` IS that tone, which is also
+why that preset's chrome had to be re-slotted — it was carrying `surface` as its **sidebar**, so its ladder
+ran backwards and a menu opened over the sidebar was painted the sidebar's own value. A theme that resolved
+only some of the rungs would silently collapse the ladder for its readers. Each row
 also declares its `color-scheme`, so the browser's own chrome — scrollbars, native pickers — sits on the
 preset's side of the light/dark line instead of the platform's guess. The theme picker's swatches are read
 from those same rows — each preset's ground, paper, ink and accent as the sheet resolves them — never
@@ -168,7 +220,10 @@ are still spent (collapsing language onto `--mono` would weld the board to one f
 nothing to flip), that no all-caps or tracked label survives, that exactly three weight tokens are in
 use, that the radius and elevation tokens own their properties (a ring drawn as `var(--focus-ring)` is a
 border, not a drop), that all nine palettes resolve the full ground ladder and the chrome surfaces spend
-it, that the interaction tokens are declared on `:root` with the one `:focus-visible` ring rule and no
+it, that the ladder never inverts and every depth step in every preset clears its floor in L\* — the
+arithmetic runs in the gate, so a palette edit that flattens a step fails the build instead of shipping —
+that the terminal stays the darkest surface and no rung lands on it, that everything spending `--shadow` is
+painted `--raised`, that the interaction tokens are declared on `:root` with the one `:focus-visible` ring rule and no
 hand-written focus outline left in the sheet, that every `var()` the sheet consumes is declared somewhere
 the browser can resolve it — and that the chrome rows [[ui-state-model]]'s budget refused stay retired at
 the source. It runs with the unit suite, off the sheet's text, so a rule that drifts from this vocabulary

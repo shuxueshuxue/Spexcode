@@ -7,7 +7,8 @@ import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/s
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } from './session-application.js'
 import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
-import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { fromRaw } from './session-record.js'
 import { resolveMachinePeer } from './machine-peer.js'
 
 export class BackendError extends Error {

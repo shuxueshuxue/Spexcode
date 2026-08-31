@@ -217,12 +217,14 @@ const m1 = await m.evaluate(() => {
   return new Promise((res) => requestAnimationFrame(() => res({
     position: getComputedStyle(side).position,
     sideFirst: side.getBoundingClientRect().top < main.getBoundingClientRect().top,
+    railContained: side.getBoundingClientRect().right <= innerWidth + 1,
+    noSilentClip: getComputedStyle(side).overflowX !== 'visible' || side.getBoundingClientRect().right <= innerWidth + 1,
     docW: document.documentElement.scrollWidth, pageW: document.querySelector('.ds-page').scrollWidth,
     railScrolledAway: side.getBoundingClientRect().bottom < 0 || document.querySelector('.ds-page').scrollTop > 0,
   })))
 })
 check('390 eval: rail static, metadata-before-content, scrolls WITH the document', m1.position === 'static' && m1.sideFirst && m1.railScrolledAway)
-check('390 eval: no horizontal overflow', m1.docW <= 390 && m1.pageW <= 390, `doc=${m1.docW} page=${m1.pageW}`)
+check('390 eval: rail is contained (document width alone is insufficient)', m1.railContained && m1.noSilentClip && m1.docW <= 390 && m1.pageW <= 390, `railContained=${m1.railContained} noSilentClip=${m1.noSilentClip} doc=${m1.docW} page=${m1.pageW}`)
 await m.screenshot({ path: `${OUT}/b-390-eval.png` })
 await m.goto(`${BASE}/#/issues/${LOCAL_ISSUE}`)
 await m.waitForSelector('.ds-side'); await settle(m)

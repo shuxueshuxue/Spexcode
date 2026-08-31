@@ -962,6 +962,7 @@ export default {
     launchFailed: 'launch failed — the backend refused or is unreachable',
     back: 'back',
     noEvents: 'nothing recorded yet — status changes and messages will land here',
+    loadEarlier: ({ count }) => `${count} earlier event${count === 1 ? '' : 's'} · load`,
     you: 'you',
     inputPlaceholder: 'message the agent…',
     send: 'send',

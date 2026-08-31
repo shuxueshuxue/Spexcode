@@ -12,8 +12,14 @@ import { spexEnvelope } from '@spexcode/transcript-ui'
 // itself: after every message or note, a working agent is working on it from that instant, and a seam opens
 // there. Hence the theorem the page relies on: if the record's last word is `working`, the last item is an
 // open seam — mid-history stretches get their `worked …` disclosure, and the live tail is always present.
-// The tail seam's interval ends at `transcriptNow` — the caller's latest poll (server clock), so an expanded
-// open tail re-reads its transcript as the agent keeps working; the seam's identity is its start.
+//
+// A WINDOW IS NOT THE WHOLE HISTORY, so the word carried forward has to be given to it. `priorWorking` is what
+// the events before this window already said ([[session-timeline]] derives it server-side): without it a
+// window that opens mid-stretch starts from `false` and silently drops the stretch of work it began inside.
+//
+// The open tail seam has NO end here. Its end is the reader's present, which moves every second, and putting
+// a moving number in the derivation made the whole conversation rebuild on each tick for one line of text.
+// The caller owns that clock: an open seam is `to: undefined`, and whoever needs an interval for it says so.
 
 export const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
 
@@ -27,10 +33,10 @@ export function splitEnvelope(text) {
   return { text: envelope.body, envelope: { label: envelope.who === envelope.id ? null : envelope.who, id: envelope.id } }
 }
 
-export function conversationItems(events, transcriptNow) {
+export function conversationItems(events, priorWorking = false) {
   const items = []
   let seam = null
-  let working = false   // the record's last word about the agent, carried across the events that do not repeat it
+  let working = !!priorWorking   // the record's last word about the agent, carried across the events that do not repeat it
   const open = (ts) => { seam ??= { kind: 'seam', ts, from: epochOf(ts) } }
   const close = (to, open = false) => {
     if (seam) items.push({ ...seam, to, open })
@@ -46,6 +52,6 @@ export function conversationItems(events, transcriptNow) {
     else items.push({ kind: 'say', ts: event.ts, status, text: event.note })
     if (working) open(event.ts)
   }
-  if (seam) close(Math.max(seam.from + 1, transcriptNow), true)
+  if (seam) close(undefined, true)
   return items
 }

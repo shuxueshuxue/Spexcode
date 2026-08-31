@@ -7,7 +7,7 @@ code:
   - spec-cli/src/codex-runtime-generations.ts
 related:
   - spec-cli/src/runtime-rotate.ts
-  - spec-cli/src/harness.ts
+  - spec-cli/src/codex-harness.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/host-resources.ts
   - spec-cli/src/codex-runtime-generations.test.ts

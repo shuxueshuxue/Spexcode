@@ -160,3 +160,60 @@ Spec: host-resource-budget
 2. 报告中显式区分"记录缺失"与"已验证无主"，后者需要额外证据（如端口无监听、无活跃连接、
    父项目已不存在）；
 3. 任何回收路径都不得以记录缺失为唯一依据。
+
+<!-- reply: 908c3920-7b49-4c8e-8bd7-d00ebd506eb7 @ 2026-08-31T09:28:17.423Z -->
+2026-08-31 复现确认：**20 天后仍然成立，在一组完全不同的进程上**。我在做一次例行收尾时差点按
+`orphan:owner-record-absent` 动手，被本 issue 描述的同一个缺陷拦住，记录新证据。
+
+## 今天的实测（同一台 ThinkPad，host 13222/31576 MiB）
+
+`spex session resources --json` 报 3 个 orphan owner：
+
+| owner | reclaim.eligible | processes[] 里有什么 |
+|---|---|---|
+| `98895f97` | **false** | `580451` = `spec-cli/dist/cli.js serve`，**当前 `:8787` 监听者，`/health` 200** ＋ `2749753`（2221 MiB） |
+| `1654dec5` | **false** | 同类「superseded backend generation」 |
+| `db67cb77` | true | 单个 `reclaude` 进程，27 MiB |
+
+即：**活的主后端 supervisor 今天仍然被归进一个 `orphan:owner-record-absent` 的 owner。**
+与原报告一致，且这次的 owner id 和 PID 与原报告完全不同 —— 不是一次性错账。
+
+## 一条本 issue 尚未记的新事实：文本视图把无罪判定藏了
+
+`--json` 里那两行带着明确的免死金牌：
+
+    reclaim: { eligible: false,
+               reason: "superseded backend generation remains owned by
+                        backend supervisor teardown, never session stop" }
+
+但**人读的 `spex session resources` 文本输出里，`reclaim` / `eligible` / `superseded` 的命中数是 0**。
+操作者在终端上只看得到三条 `orphan:owner-record-absent` 的**指控**，看不到其中两条的**无罪判定**——
+要拿到它必须知道去读 `--json` 的一个未在文本面出现过的字段。
+
+**这正是危险的形状**：最醒目的那个词是最不该照着执行的那个，而唯一带着克制信息的字段只存在于另一条输出通道。
+
+## 但补读 `reclaim` 并不构成修复 —— 本 issue 第 3 点已经证明
+
+我一度以为结论是「别看 flag，改看 `reclaim.eligible`」。**这个结论是错的**，因为本 issue 第 3 点
+实测过 `eligible=true` 的行里装着活 backend 和 `reclaude _daemon`。今天我这边 `eligible` 恰好判对了，
+那是运气，不是可依赖的性质。
+
+所以今天真正救下 `:8787` 的不是任何标签，而是**动手前按端口和身份逐个核实**
+（`ss -tlnp sport = :8787` → `pid=580451` → `/health` 200）。这与本 issue 的结论一致：
+**在归属可证明正确之前，`orphan` 与 `reclaim.eligible` 都不是可执行结论，只有活体核实是。**
+
+## 建议（不改变本 issue 的主张，只加一条便宜的减害）
+
+在归属逻辑修好之前，让**文本视图**把 `reclaim.eligible=false` 和它的 reason 一并印出来，
+并且不要让 `orphan:` 这个词在没有伴随判定的情况下单独出现。这不修根因，但能去掉
+「最醒目的词 = 最危险的动作」这个陷阱。
+
+<!-- reply: 908c3920-7b49-4c8e-8bd7-d00ebd506eb7 @ 2026-08-31T09:29:30.713Z -->
+保持 open。根因（归属逻辑）未动，今天在全新的 owner id 和 PID 上复现。
+
+给一个可判定的关闭条件，免得下一个人只能凭感觉：在一台同时跑多个 project backend、且历史上关过若干 session 的宿主上执行 `spex session resources --json`，同时满足两条即可关闭 ——
+
+1. 任何 `kind: orphan` 的 owner，其 `processes[]` 不含当前监听公开端口的 PID；
+2. 同一份快照内不存在被两个 owner 同时认领的 PID。
+
+在这两条被证明之前，`orphan` 与 `reclaim.eligible` 都只能读、不能执行。

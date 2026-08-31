@@ -802,6 +802,19 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       </div>,
     )
   }
+  // WHAT THE WINDOW IS NOT SHOWING, SAID WHERE IT IS MISSING FROM. The count belongs at the SEAM in the
+  // reading — after the originating prompt, which is the session's first word and always drawn, and before
+  // the window's oldest row. Put at the top of the column instead it sat ABOVE the prompt, so a reader who
+  // scrolled up met that unchanging first word every time and could not tell the window had moved at all;
+  // the jump it hides (a prompt on one day, the window opening on another) is exactly here.
+  if (events !== null && !holdingFirstPaint && win.offset > 0) {
+    rows.push(
+      <button type="button" className="m-earlier" key="earlier" onClick={loadEarlier} disabled={loadingEarlier}>
+        <Caret open={false} className="m-earlier-caret" />
+        {loadingEarlier ? t('common.loading') : t('mobile.loadEarlier', { count: win.offset })}
+      </button>,
+    )
+  }
   for (const [i, item] of items.entries()) {
     dayRow(item.ts, i)
     if (item.kind === 'quote') {
@@ -907,15 +920,6 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
         onMouseDown={beginTimelineSelection} onContextMenu={onTimelineContextMenu}>
         <div className="m-col" ref={timelineContentRef}>
-          {/* WHAT THE WINDOW IS NOT SHOWING, SAID OUT LOUD. A long session's history used to end here in
-              silence — the window was a tail and the rest was simply unreachable. The count is the history's
-              own, so the reader can see there is more and take it one page at a time. */}
-          {events !== null && !holdingFirstPaint && win.offset > 0 && (
-            <button type="button" className="m-earlier" onClick={loadEarlier} disabled={loadingEarlier}>
-              <Caret open={false} className="m-earlier-caret" />
-              {loadingEarlier ? t('common.loading') : t('mobile.loadEarlier', { count: win.offset })}
-            </button>
-          )}
           {events === null || holdingFirstPaint
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}

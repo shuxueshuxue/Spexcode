@@ -90,9 +90,26 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
     }
     const marks = (window: Window) => window.events.filter((event) => event.kind === 'sent').map((event) => event.text?.slice(0, 3))
 
-    const body = await readWindow('?limit=50')
+    // A WINDOW IS BOUNDED BY COUNT **AND** BY TEXT, whichever it reaches first. Given text to spare, the
+    // count is what stops it.
+    const body = await readWindow('?limit=50&text=999999')
     assert.deepEqual(body.events.map((event) => event.text?.slice(0, 3)), Array.from({ length: 50 }, (_, index) => String(index + 78).padStart(3, '0')))
     assert.equal(existsSync(join(dir, 'timeline')), false, 'canonical SQLite events do not recreate legacy timeline files')
+
+    // ...and given prose that runs ahead of the count, the TEXT is what stops it. These messages are ~900
+    // characters each, so 50 of them are past a 20 KiB budget and the window ends early — which is the whole
+    // point: an event count says nothing about how much a reader is being handed.
+    const narrow = await readWindow('?limit=50&text=20480')
+    const narrowText = narrow.events.reduce((sum, event) => sum + (event.text?.length ?? 0), 0)
+    assert.ok(narrow.events.length < 50, `text budget must bind before the count, got ${narrow.events.length} events`)
+    assert.ok(narrowText <= 20480, `window text ${narrowText} must respect its budget`)
+    assert.equal(narrow.offset, narrow.total! - narrow.events.length, 'a text-bounded window still reports where it starts')
+    // the newest events are the ones kept — a window walks BACK from the end
+    assert.equal(narrow.events.at(-1)?.text?.slice(0, 3), '127')
+    // one event always fits, however long it is: a budget can shrink a window, never empty it
+    const single = await readWindow('?limit=50&text=1')
+    assert.equal(single.events.length, 1)
+    assert.equal(single.events[0].text?.slice(0, 3), '127')
 
     // A WINDOW SAYS WHAT IT IS NOT SHOWING. The tail used to end in silence: a reader at the top of a
     // truncated history had no way to learn that earlier events existed, let alone reach them.
@@ -103,12 +120,12 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
 
     // WALKING BACK. The page that ends where the tail begins is the events immediately before it, and the
     // two windows join with no gap and no overlap.
-    const earlier = await readWindow(`?limit=50&before=${body.offset}`)
+    const earlier = await readWindow(`?limit=50&text=999999&before=${body.offset}`)
     assert.equal(earlier.offset, body.offset! - 50)
     assert.equal(earlier.events.length, 50)
     assert.deepEqual(marks(earlier), Array.from({ length: 50 }, (_, index) => String(index + 28).padStart(3, '0')))
     // and the walk terminates at the beginning rather than running off it
-    const first = await readWindow('?limit=50&before=10')
+    const first = await readWindow('?limit=50&text=999999&before=10')
     assert.equal(first.offset, 0)
     assert.equal(first.events.length, 10)
 
@@ -127,7 +144,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
 
     // A READER TOO FAR BEHIND IS RE-SEATED, NOT CAUGHT UP. Growth past the window size answers with a whole
     // window (it carries `offset`), which the reader swaps in instead of appending.
-    const reseated = await readWindow('?since=0&limit=5')
+    const reseated = await readWindow('?since=0&limit=5&text=999999')
     assert.equal(reseated.events.length, 5)
     assert.equal(reseated.offset, reseated.total! - 5)
   } finally {

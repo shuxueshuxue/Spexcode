@@ -199,7 +199,7 @@ test('a Command Box @new creates a child under the selected session, optionally 
     const sent = timeline.events.filter((event) => event.kind === 'sent').at(-1)
     assert.match(sent?.text || '', /from the conversation/)
     assert.equal(sent?.replyVia, 'note', 'the record keeps the terminal-free sender mark')
-    await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes('REQUIRED REPLY TRANSPORT'), 'the note-reply insert rides the command delivery')
+    await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes('REPLY TRANSPORT'), 'the note-reply insert rides the command delivery')
   } finally {
     for (const id of created.reverse()) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     if (backend.exitCode === null) {

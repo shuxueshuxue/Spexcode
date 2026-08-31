@@ -1,5 +1,22 @@
 ---
 scenarios:
+  - name: reconnect-resumes-from-position
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    description: >-
+      Against a live backend, subscribe to /api/graph/stream?mode=delta with no position and record the
+      graph-full's size and its tag. Disconnect, and while NOBODY is subscribed make a real board change
+      through a product action and leave it in place. Reconnect naming that tag
+      (?from=<tag>) and read the first board frame. Then reconnect once more naming a tag the server has
+      never published.
+    expected: >-
+      The reconnect naming a remembered position is answered with a graph-delta whose `from` is exactly the
+      position named, carrying the whole offline gap in ONE frame at a small fraction of a snapshot — the
+      change made while nobody was listening is in it, and the frame's `to` has moved. The reconnect naming
+      an unknown position is answered with a full snapshot: unreachable degrades to everything, never to a
+      patch computed from a position the server cannot vouch for. Zero loss = a client that says where it
+      is pays for the difference rather than the board, and a client that cannot be placed still gets a
+      correct board.
   - name: stream-survives-public-gateway
     tags: [frontend-e2e, backend-api]
     code: spec-cli/src/reaper.ts

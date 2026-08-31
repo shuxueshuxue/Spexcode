@@ -5,8 +5,8 @@ import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
-import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, type Board } from './graphCache.js'
-import { diffUnits, type Units } from '@spexcode/spec-core'
+import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, readBoard, type Board } from './graphCache.js'
+import { diffFromPosition, positionOf, type Position, type Units } from '@spexcode/spec-core'
 import {
   holdSessionEvalProjectionObserver,
   invalidateSessionEvalProjections,
@@ -18,7 +18,7 @@ import {
 type Scope = 'sessions' | 'full'
 type EvalTarget = 'all' | { id?: string; path?: string }
 type Notify = () => void
-type Frame = { event: string; data: string }
+type Frame = { event: string; data: string; id?: string }
 type DeltaSend = (frame: Frame) => void
 type TreeWatchCallback = (event: 'rename' | 'change', filename: string | Buffer | null) => void
 // the one filesystem primitive the registry is allowed to call — `fs.watch`'s overloads narrowed to the
@@ -250,12 +250,25 @@ function isDisabled(name: string): boolean {
 }
 
 // ---- the rebuild→diff→broadcast pipeline (runs only while delta subscribers exist) ----
-// last successfully-broadcast snapshot: the delta chain's anchor. `lastFullFrame` is what a fresh
-// subscriber gets instantly; `lastUnits`+`lastTag` are what the next diff chains from. A snapshot that
-// failed the unitize precondition anchors nothing (lastUnits=null) so every following send is a full.
-let lastUnits: Units | null = null
-let lastTag = ''
-let lastFullFrame: Frame | null = null
+// @@@ remembered positions, not one shared anchor - the last RESUME_DEPTH boards this stream published,
+// each kept as a [[graph-delta]] Position (serializations only, shared with the snapshot they came from, so
+// remembering many costs ~14KB each against 650KB for the snapshot). The newest is what the next broadcast
+// diffs from; ANY of them is what a reconnecting client can be carried forward from.
+//
+// This is what lets the memory outlive a subscriber gap where a single cached anchor could not. The old
+// hazard was serving a stale cached FRAME to the next era's first subscriber (issue #70). A position is
+// never sent — it is only subtracted from the board that is true NOW — so age cannot make it wrong, only
+// unreachable, and unreachable degrades to a full. A snapshot that failed the unitize precondition is
+// remembered with a null position: its tag still orders the chain, but nothing may resume from it.
+type Published = { tag: string; position: Position | null }
+const published: Published[] = []
+const RESUME_DEPTH = Number(process.env.SPEXCODE_BOARD_RESUME_DEPTH || 64)
+const newestPublished = (): Published | undefined => published[published.length - 1]
+function remember(tag: string, position: Position | null): void {
+  if (newestPublished()?.tag === tag) return
+  published.push({ tag, position })
+  while (published.length > RESUME_DEPTH) published.shift()
+}
 let building = false
 let dirty = false
 let patrolPending = false
@@ -335,24 +348,20 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       if (servedSessionProjection)
         for (const tag of tags) if (tag === 'full' || tag === 'patrol') triggerTags.add(tag)
       if (sessionsFirst && full) dirty = true
-      if (tag === lastTag) continue
-      // the changed unit keys — computed against the prior anchor when we have one (a first paint has no
-      // anchor, so no repair claim can be made against it).
-      const changedKeys = lastUnits ? (() => { const { set, del } = diffUnits(lastUnits, units); return [...Object.keys(set), ...del] })() : []
-      const fullFrame: Frame = { event: 'graph-full', data: `{"to":"${tag}","graph":${boardJson}}` }
+      const anchor = newestPublished()
+      if (tag === anchor?.tag) continue
+      // the changed unit keys — computed against the prior position when we have one (a first paint has no
+      // predecessor, so no repair claim can be made against it).
+      const changedKeys = anchor?.position ? (() => { const { set, del } = diffFromPosition(anchor.position, units); return [...Object.keys(set), ...del] })() : []
+      const fullFrame: Frame = { event: 'graph-full', data: `{"to":"${tag}","graph":${boardJson}}`, id: tag }
       let frame = fullFrame
-      if (lastUnits && ok) {
-        const { set, del } = diffUnits(lastUnits, units)
-        const deltaData = JSON.stringify({ from: lastTag, to: tag, set, del })
+      if (anchor?.position && ok) {
+        const { set, del } = diffFromPosition(anchor.position, units)
+        const deltaData = JSON.stringify({ from: anchor.tag, to: tag, set, del })
         // guaranteed win: ship the patch only when it actually beats the snapshot
-        if (deltaData.length < fullFrame.data.length) frame = { event: 'graph-delta', data: deltaData }
+        if (deltaData.length < fullFrame.data.length) frame = { event: 'graph-delta', data: deltaData, id: tag }
       }
-      // the anchor is only meaningful while a delta subscriber holds the chain live: with none left,
-      // nothing rebuilds on change, so a cached anchor would silently age into a stale first frame for the
-      // NEXT era's subscriber (issue #70). A build that completes after the last unsub caches nothing
-      // (stopSourcesIfIdle cleared the anchor; leaving lastTag/lastUnits stale-cleared is consistent —
-      // rebuilds only run while delta subscribers exist, so nothing chains from them meanwhile).
-      if (deltaSubs.size) { lastUnits = ok ? units : null; lastTag = tag; lastFullFrame = fullFrame }
+      remember(tag, ok ? positionOf(units) : null)
       traceLatency('broadcast', { event: frame.event, sessionProjection: servedSessionProjection, tags, changedKeys })
       for (const send of [...deltaSubs]) { try { send(frame) } catch { /* swept on abort */ } }
       for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
@@ -1093,11 +1102,10 @@ function ensureColdTick(): void {
 }
 
 function stopSourcesIfIdle(): void {
-  // the delta anchor dies with its era's last subscriber: past this point changes invalidate the cache but
-  // never rebuild, so lastFullFrame would drift arbitrarily far from the real board — and the next era's
-  // first subscriber would be anchored on it (its warm-terminal set then drops live sessions' panes, and the
-  // client's recovery lanes can latch each other out — issue #70). A new era opens on a fresh build instead.
-  if (deltaSubs.size === 0) { lastUnits = null; lastTag = ''; lastFullFrame = null; patrolPending = false }
+  // Remembered positions deliberately SURVIVE the gap. Nothing rebuilds while no delta subscriber exists,
+  // so they age — but a position is only ever subtracted from the current board, never replayed, so an old
+  // one still produces a correct patch and an unreachable one degrades to a full.
+  if (deltaSubs.size === 0) patrolPending = false
   if (deltaSubs.size === 0) setSessionEvalProjectionWarmup(false)
   if (plainSubs.size + deltaSubs.size > 0) return
   if (hotPoller) { clearInterval(hotPoller); hotPoller = null; lastHot = '' }
@@ -1109,8 +1117,38 @@ function stopSourcesIfIdle(): void {
 // idle proxy never times the connection out. On a backend hot-reload the stream drops and EventSource
 // auto-reconnects to the fresh child; a delta subscriber's reconnect lands a fresh `graph-full`, so the
 // chain re-anchors with no client-side repair logic.
+// seed one subscriber, off the connect path's critical section. It must not be awaited before the ping loop
+// starts: a cold first build takes seconds, and a stream that opens and then goes silent for longer than the
+// client's dead window is indistinguishable from a dead one — awaiting here would make every cold start a
+// reconnect storm.
+async function seedSubscriber(send: DeltaSend, from: string): Promise<void> {
+  const read = await readBoard('stale-ok').catch(() => null)
+  if (!read) { void rebuildAndBroadcast(); return }
+  const { json, units, ok, tag } = boardIdentity(read.board)
+  const resume = from ? published.find((p) => p.tag === from && p.position) : undefined
+  // The client said where it is. If that position is still remembered, it is owed only the difference to
+  // now; otherwise it is owed everything. One local decision — no era, no lifetime, nothing to age wrong.
+  if (resume?.position && ok) {
+    const { set, del } = diffFromPosition(resume.position, units)
+    send({ event: 'graph-delta', data: JSON.stringify({ from, to: tag, set, del }), id: tag })
+  } else {
+    send({ event: 'graph-full', data: `{"to":"${tag}","graph":${json}}`, id: tag })
+  }
+  // Record where this subscriber landed so the next broadcast can chain from it rather than opening with a
+  // full. It does NOT synchronise subscribers: two tabs connecting either side of a change hold different
+  // positions, and the one the broadcast does not name takes the chain-mismatch path — which now costs a
+  // resume patch rather than a snapshot, so the case is cheap instead of merely correct.
+  remember(tag, ok ? positionOf(units) : null)
+  // a connect during a quiet stretch converges to truly-current within one build
+  fireChanged()
+}
+
 export async function boardStream(c: Context) {
   const delta = c.req.query('mode') === 'delta'
+  // where the client already is. `from` is ours and covers every reopen; Last-Event-ID is the browser's own
+  // and only shows up on ITS automatic reconnect — measured: absent from an explicit new EventSource(), and
+  // not reliably present even on auto-reconnect. So it is a bonus, never the mechanism.
+  const from = c.req.query('from') || c.req.header('last-event-id') || ''
   await ensureBoardFileWatchers()
   return streamSSE(c, async (stream) => {
     let aborted = false
@@ -1126,12 +1164,7 @@ export async function boardStream(c: Context) {
     stream.onAbort(() => { aborted = true; unsub() })
     try {
       await stream.writeSSE({ event: 'ready', data: 'x' })
-      if (delta) {
-        // seed the chain: the cached anchor snapshot immediately (same tag the next delta chains from),
-        // then a fire so a connect during a quiet stretch converges to truly-current within one build.
-        if (lastFullFrame) { await stream.writeSSE(lastFullFrame).catch(() => {}) ; fireChanged() }
-        else void rebuildAndBroadcast()
-      }
+      if (delta) void seedSubscriber(send, from)
       while (!aborted) {
         // ping every 10s — the client's heartbeat contract is 2.5× this window ([[graph-stream]]), so a
         // silent-death gap is caught inside one client watchdog interval, and idle proxies never time out.

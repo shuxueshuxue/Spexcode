@@ -72,6 +72,27 @@ export function boardFromUnits(values: Map<string, unknown>): Boardish {
   return { ...meta, nodes: pick('node:', 'nodes#order'), sessions: pick('sess:', 'sess#order') }
 }
 
+// @@@ a POSITION is what a board looked like, not the board - only each unit's serialization, which is all
+// a diff needs to answer "what changed". The values always come from the CURRENT snapshot, so retaining a
+// past board to serve a resume would be paying to keep values nobody will ever send. It also costs almost
+// nothing to keep several: the strings are shared with the snapshot they came from, so an unchanged unit is
+// one string however many positions remember it (measured on the dogfood board: 14KB per remembered
+// position against 650KB for the snapshot itself).
+export type Position = Map<string, string>
+export const positionOf = (units: Units): Position => new Map([...units].map(([k, u]) => [k, u.j]))
+
+// the patch that carries a holder at `prev` up to `next`. Same algebra as diffUnits, over a remembered
+// position rather than a live snapshot — which is what lets a reconnecting client be answered with the
+// DIFFERENCE TO NOW instead of a whole snapshot, and why a remembered position can never go stale: it is
+// never sent, only subtracted from the current board.
+export function diffFromPosition(prev: Position, next: Units): { set: Record<string, unknown>; del: string[] } {
+  const set: Record<string, unknown> = {}
+  const del: string[] = []
+  for (const [key, u] of next) if (prev.get(key) !== u.j) set[key] = u.v
+  for (const key of prev.keys()) if (!next.has(key)) del.push(key)
+  return { set, del }
+}
+
 export function diffUnits(prev: Units, next: Units): { set: Record<string, unknown>; del: string[] } {
   const set: Record<string, unknown> = {}
   const del: string[] = []

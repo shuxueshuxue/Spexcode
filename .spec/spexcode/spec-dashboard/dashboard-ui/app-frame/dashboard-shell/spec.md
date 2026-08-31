@@ -155,8 +155,15 @@ default; a fresh `ok` or `denied` always applies — denied is an answer, a mid-
 **Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
 primary is the **delta subscription** ([[graph-stream]]/[[graph-delta]]): whole boards arrive over the push
 channel — a full on connect, then patches the data layer applies to its unit-map mirror — straight into
-state, no refetch per change; a patch whose chain tag mismatches reopens the stream and re-anchors on the
-fresh full. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
+state, no refetch per change; a patch whose chain tag mismatches reopens the stream, naming the position it
+already holds so the server answers with the difference rather than a snapshot.
+
+**A reopen resumes only what was verified.** The distinction is not liveness versus correctness by
+accident — it is exactly which reopens may trust their own contents. A stream that went quiet, or a frame
+that was missed or reordered, leaves this client holding a board it fingerprinted and believes, so it names
+that position and is carried forward from it. A fingerprint that disagreed with the frame that produced it
+leaves the opposite: the thing a resume would start from is the suspect, so that reopen discards and asks
+for everything. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
 surface reflects the change at once, and an old backend that only speaks bare `board-changed` downgrades the
 subscription to exactly this refetch path. Third, a **slow fallback poll that always runs** as the final belt. Between them a **heartbeat dead-man switch**
 holds the stream to its contract: the server pings on a fixed cadence, so silence past 2.5× that window means

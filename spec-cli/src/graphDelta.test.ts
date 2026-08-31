@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { unitize, tagOf, tagOfAsync, diffUnits, applyDelta, applyDeltaUnits, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
+import { unitize, tagOf, tagOfAsync, diffUnits, diffFromPosition, positionOf, applyDelta, applyDeltaUnits, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
 
 // Executable evidence for the two lemmas the incremental push stands on (see the board-delta spec node's
 // equivalence.md): RECONSTRUCTION — boardFromUnits(unitize(B)) = B whenever unitize reports ok; ROUND-TRIP —
@@ -115,6 +115,38 @@ test('applyDeltaUnits keeps a holder byte-identical to a fresh decomposition acr
     assert.deepStrictEqual(boardFromUnits(unitValues(held)), next, `held board diverged at step ${step}`)
     board = next
   }
+})
+
+// A remembered position keeps only serializations, so the resume path answers "what changed" from strictly
+// less than the units-based diff has. That is only safe if it reaches the SAME answer — otherwise a
+// reconnecting client is carried forward by a patch that differs from the one a live subscriber received,
+// and the two would render different boards from the same server state.
+test('a diff from a remembered position equals the diff from the whole snapshot', () => {
+  const r = rng(31337)
+  let board = randBoard(r, ['a', 'b', 'c'])
+  for (let step = 0; step < 20; step++) {
+    const next = mutate(r, board)
+    const prev = unitize(board).units
+    const nextUnits = unitize(next).units
+    assert.deepStrictEqual(diffFromPosition(positionOf(prev), nextUnits), diffUnits(prev, nextUnits),
+      `position-based diff diverged at step ${step}`)
+    board = next
+  }
+})
+
+// A resume may be answered from a position many changes old, so the patch has to carry a holder across the
+// whole gap in one hop — not just across the most recent change.
+test('a position several changes old still carries a holder exactly to the present', () => {
+  const r = rng(90210)
+  const start = randBoard(r, ['a', 'b'])
+  const startUnits = unitize(start).units
+  const remembered = positionOf(startUnits)
+  let board = start
+  for (let i = 0; i < 9; i++) board = mutate(r, board)
+  const nowUnits = unitize(board).units
+  const caught = applyDeltaUnits(startUnits, diffFromPosition(remembered, nowUnits))
+  assert.strictEqual(tagOf(caught), tagOf(nowUnits), 'a nine-change gap did not close in one patch')
+  assert.deepStrictEqual(boardFromUnits(unitValues(caught)), board)
 })
 
 test('P violation (duplicate node id) is reported, never silently decomposed', () => {

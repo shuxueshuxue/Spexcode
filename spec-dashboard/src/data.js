@@ -397,7 +397,15 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
   let closed = false
   let values = null   // the client's copy of the server's decomposition, carrying each unit's serialization
   let tag = ''
-  const reopen = () => { try { es?.close() } catch { /* already closed */ } ; values = null; tag = ''; open() }
+  // @@@ resume only what was verified - a reopen after a LIVENESS event (the stream went quiet, a frame was
+  // missed) still holds a board this client fingerprinted and trusts, so it names its position and is
+  // answered with the difference to now. A reopen after a CORRECTNESS event (the fingerprint disagreed with
+  // the frame that produced it) discards instead: the thing it would resume from is the suspect.
+  const reopen = ({ resume = false } = {}) => {
+    try { es?.close() } catch { /* already closed */ }
+    if (!resume) { values = null; tag = '' }
+    open()
+  }
   // @@@ every frame is checked, not assumed - after applying a frame we fingerprint what we now hold and
   // compare it to the tag the server named that frame with. Equal is the whole delta contract discharged on
   // this client, on this frame, for free: the same hash then serves as the fallback poll's conditional key,
@@ -420,12 +428,18 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
   const deadman = createDeadman(() => {
     if (!es || closed) return
     onStatus?.(false)
-    reopen(); deadman.arm(); onLegacyChange?.()
+    reopen({ resume: true }); deadman.arm(); onLegacyChange?.()
   })
   const bump = () => deadman.arm()   // heartbeat: every event proves the stream still lives
   const open = () => {
     if (closed) return
-    try { es = new EventSource(apiUrl('/api/graph/stream?mode=delta')) } catch { es = null; return }
+    // where we already are. The browser sends Last-Event-ID only on its OWN automatic reconnect and not
+    // reliably even then (measured), so the position rides a query param we control — which also covers the
+    // reopens the browser knows nothing about. An auto-reconnect replays whatever `from` this URL was opened
+    // with; if we have since moved on, the answer's `from` will not match and the chain check reopens us at
+    // the current position, one extra hop rather than a wrong board.
+    const at = values && tag ? `&from=${encodeURIComponent(tag)}` : ''
+    try { es = new EventSource(apiUrl(`/api/graph/stream?mode=delta${at}`)) } catch { es = null; return }
     es.addEventListener('graph-full', (e) => {
       bump()
       const { to, graph } = JSON.parse(e.data)
@@ -438,7 +452,9 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
     es.addEventListener('graph-delta', (e) => {
       bump()
       const d = JSON.parse(e.data)
-      if (!values || tag !== d.from) { reopen(); return }
+      // a missed or reordered frame: what we hold is still a verified board, so resume from it rather than
+      // asking for a snapshot we mostly already have
+      if (!values || tag !== d.from) { reopen({ resume: !!(values && tag) }); return }
       values = applyDeltaUnits(values, { set: d.set || {}, del: d.del || [] })
       tag = d.to
       onBoard(boardFromUnits(unitValues(values)), { authoritative: false, tag: d.to })

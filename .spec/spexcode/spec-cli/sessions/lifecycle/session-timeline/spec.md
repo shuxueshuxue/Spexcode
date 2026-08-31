@@ -132,7 +132,7 @@ that grows for a week outgrows any one read, so the read is three, over one rout
   appends to what the reader already holds.
 
 **A WINDOW IS BOUNDED BY COUNT AND BY TEXT, whichever it reaches first** (`limit`, default 200; `text`,
-default 40 KiB of authored prose). A count of events is not a measure of what a reader faces: notes are
+default 24 KiB of authored prose). A count of events is not a measure of what a reader faces: notes are
 authored prose whose lengths differ by orders of magnitude, so the same 200 events are a couple of screens
 on one record and eighty-two on another — measured, on this project's own board. Sizing the window by rows
 therefore sizes it by nothing the reader can feel. One event always fits however long it is: a budget may

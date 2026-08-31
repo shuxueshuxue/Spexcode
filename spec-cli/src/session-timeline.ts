@@ -103,7 +103,7 @@ export const DEFAULT_TIMELINE_WINDOW = 200
 // authored prose and their lengths differ by orders of magnitude, so the SAME 200 events are a couple of
 // screens on one record and eighty-two on another. The window therefore stops at whichever bound it reaches
 // first: the event count, or this much authored text. One event always fits, however long it is.
-export const DEFAULT_TIMELINE_WINDOW_TEXT = 40 * 1024
+export const DEFAULT_TIMELINE_WINDOW_TEXT = 24 * 1024
 
 const authoredLength = (event: TimelineEvent): number =>
   (event.kind === 'status' ? event.note?.length : event.text?.length) ?? 0

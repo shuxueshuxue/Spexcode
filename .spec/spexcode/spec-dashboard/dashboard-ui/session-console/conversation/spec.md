@@ -50,6 +50,16 @@ serves the window, bounded by event count AND by authored text, so a record of l
 window rather than eighty screens). The count is the history's own, never an inference from what happens to
 be on screen.
 
+**A DECLARATION IS NOT A PAGE.** Notes are authored prose and the longest run past a screen on their own, so
+a handful of them are the whole scroll — bounding the window is not enough when one row can be eighty percent
+of it. Past a readable opening a note is clamped and offers the rest; the text fades into the page's own
+ground rather than stopping at a cut edge, so the row reads as continuing rather than as broken. Whether a
+note is clamped is MEASURED after it renders, never guessed from how many characters it holds: rich text
+settles late, and what matters is the height a reader actually faces. This folds the tail of the
+distribution and nothing else — on a record of short exchanges not one note is clamped and no control
+appears, while on a record of long reports every one of them is. A clamped row keeps its place in the
+conversation, its time, and its status chip; only its middle is deferred.
+
 That statement belongs AT THE BREAK, not at the top of the page. The originating prompt is the session's
 first word and is always drawn, above the window and outside it; putting the count above THAT put it above
 the one row that never changes, so a reader who scrolled up met the same first line every time and could not

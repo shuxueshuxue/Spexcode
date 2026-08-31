@@ -58,6 +58,9 @@ scenarios:
       yields a proportionally shorter window (tens of screens becoming a handful of events, and the wire
       payload falling with it) while a short-message record is unaffected and still shows its full count. A
       single event longer than the whole budget still comes back: a budget may shrink a window, never empty it.
+      And the clamp is selective by MEASUREMENT, not by rule: on the long-note record every note is clamped and
+      each offers the rest, expanding one grows the page by what it was holding back; on a record of short
+      exchanges no note is clamped and no control appears at all.
   - name: the-second-hand-redraws-only-itself
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]

@@ -10,7 +10,6 @@ import { tsxBin } from './tsx-bin.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const packageRoot = join(here, '..')
-const repo = join(packageRoot, '..')
 const runner = join(packageRoot, 'test', 'session-terminal-fixture.ts')
 const fakeLauncher = join(packageRoot, 'test', 'fixtures', 'fake-claude')
 

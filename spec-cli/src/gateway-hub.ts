@@ -29,7 +29,7 @@ import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
 import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
-import { readEndpointRecord } from './host.js'
+import { readEndpointRecord } from './endpoint-record.js'
 import { readGatewayIdentity, type ResolvedIdentity } from '@spexcode/spec-core'
 import { proxyHttp, proxySessionWeb, proxySessionWebUpgrade } from './gateway.js'
 

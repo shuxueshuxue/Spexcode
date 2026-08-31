@@ -2,7 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
@@ -95,15 +94,6 @@ function writeGovernedSession(home: string, id: string, parent = ''): string {
   return dir
 }
 
-function timelineText(dir: string): string {
-  const legacy = join(dir, 'timeline.ndjson')
-  const segments = join(dir, 'timeline')
-  const paths = [
-    ...(existsSync(legacy) ? [legacy] : []),
-    ...(existsSync(segments) ? readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)) : []),
-  ]
-  return paths.map((path) => readFileSync(path, 'utf8')).join('')
-}
 
 async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) {
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', ...(api ? ['--api', api] : [])], {
@@ -191,7 +181,7 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
 
 test('session new from a governed parent establishes its child watch before printing the receipt', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-create-watch-'))
-  const parentDir = writeGovernedSession(home, WATCH_PARENT)
+  writeGovernedSession(home, WATCH_PARENT)
   const childDir = writeGovernedSession(home, WATCH_CHILD, WATCH_PARENT)
   let posted: any = null
   const server = createServer((req, res) => {

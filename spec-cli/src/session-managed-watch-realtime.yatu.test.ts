@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:net'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
+import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
-import { configuredSessionApplication, initializeFreshSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { initializeFreshSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { drainSession, linkZCodeChildSession, markIdle, markState, sessionHookState } from './sessions.js'
 import { stampRvSock } from './harness.js'
 

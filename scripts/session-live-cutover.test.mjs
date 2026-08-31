@@ -4,8 +4,11 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
-const repo = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
+// `pathname` is percent-encoded; a checkout under a non-ASCII path (SpexCode names worktrees after their
+// prompt) would hand every join below an escaped string that no longer names a directory.
+const repo = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
 const runner = join(repo, 'scripts/session-live-cutover.mjs')
 const healthyServer = `
   import { createServer } from 'node:http'

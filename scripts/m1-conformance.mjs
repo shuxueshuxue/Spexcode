@@ -9,8 +9,8 @@
 // produces can be reproduced by someone who does not have this session's context.
 //
 // usage: node scripts/m1-conformance.mjs [--keep]
-import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -267,7 +267,7 @@ say('# scenario concurrent-dequeue-has-one-commit-winner')
     const p = openProtocol(${JSON.stringify(crashPath)})
     p.initialize('crash'); p.enqueue('crash', { kind: 'c.v1', body: Buffer.from('X') }); p.close()
   `)
-  const preCommit = runNode(`${preamble}
+  runNode(`${preamble}
     const p = openProtocol(${JSON.stringify(crashPath)})
     // die INSIDE the write transaction, after the row is staged and before COMMIT
     try { p.withTransaction(tx => { tx.exec("UPDATE protocol_messages SET dequeued_at_ms=1 WHERE target_session_id='crash'"); process.kill(process.pid, 'SIGKILL') }) } catch {}

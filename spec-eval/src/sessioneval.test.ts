@@ -12,7 +12,6 @@ import {
   nodeScore,
   projectSessionImpact,
   renderExportHtml,
-  scopedScenarioReadings,
   sessionEvalSummary,
   sessionEvalContentRevision,
   SessionEvalProjectionCache,

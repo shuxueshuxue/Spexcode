@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve as resolvePath } from 'node:path'
+import { dirname, join, resolve as resolvePath } from 'node:path'
 import {
   batchBlobTexts,
   batchRevisionOids,

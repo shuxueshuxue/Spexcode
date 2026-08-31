@@ -1,14 +1,14 @@
-import { execFile, execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
-import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
+import { readFileSync, writeFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
+import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, parseStatPath, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
-import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
@@ -17,15 +17,15 @@ import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIf
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, quarantineCorruptRecord, restoreQuarantinedRecord, type CorruptRecordQuarantineWitness, type CorruptRecordQuarantineResult, backendLaunchAuthority, rawLifecycleStatus, canDrainQueued } from './session-record.js'
+import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, collectResourceReport, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
-import { lastHumanSendVia, recordStatus } from './session-timeline.js'
-import { TMUX_SOCK, TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
+import { lastHumanSendVia } from './session-timeline.js'
+import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
 
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
@@ -171,9 +171,6 @@ function normalizeCloseSource(raw: unknown): CloseSource {
 
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
-function writePromptFile(id: string, prompt: string): void {
-  try { writeFileSync(join(storeDir(id), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
-}
 function readPromptFile(id: string): string | null {
   try {
     const p = sessionArtifactPath(id, 'prompt')
@@ -184,9 +181,6 @@ function readPromptFile(id: string): string | null {
 }
 // The resolved first-turn payload is authoritative across queue drain and recovery. Adapters that mint native
 // identity keep it until they prove identity + first-turn durability; other adapters consume on submission.
-function writeLaunchFile(id: string, prompt: string): void {
-  writeFileSync(join(storeDir(id), 'launch'), prompt)
-}
 function readLaunchFile(id: string): string | null {
   try { const p = sessionArtifactPath(id, 'launch'); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
 }
@@ -1263,7 +1257,7 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 
 
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
-function isOccupying(s: Session, snap: LiveSnap): boolean {
+function isOccupying(s: Session, _snap: LiveSnap): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
   // `listSessions` already joined the adapter resident census and projected the resulting liveness. Re-reading
   // the harness here would resurrect the old record-backed codex-headless shortcut and disagree with the row.
@@ -4162,7 +4156,7 @@ async function reportCloseResidue(id: string, worktreePath: string): Promise<voi
     }
     console.warn('  inspect these PIDs and handle them through their owning harness/runtime; close does not kill detached descendants.')
   } catch (error) {
-    console.warn(`spex: close ${id} completed, but the residual-process scan failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(`spex: close ${id} completed, but the residual-process sweep failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -4477,19 +4471,6 @@ type SendTextOptions = {
   // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
   // temporarily absent, the normal queue must retain the event so the parent's next runtime can wake and drain it.
   allowStranded?: boolean
-}
-class StrandedDeliveryError extends Error {}
-async function strandedDeliveryError(rec: SessRec): Promise<StrandedDeliveryError | null> {
-  const h = harnessById(rec.harness || defaultHarness.id)
-  if (!h.deliveryTransport) return null
-  const transport = await h.deliveryTransport({ ...rec, runtimeDir: runtimeRoot() })
-  if (transport.kind !== 'unreachable' || agentAlive(rec.session) !== true) return null
-  const application = configuredSessionApplicationIfCutover()
-  const queued = application?.readPendingMessages(rec.session).length ?? 0
-  const noun = queued === 1 ? 'message is' : 'messages are'
-  return new StrandedDeliveryError(
-    `session ${rec.session} is stranded: ${transport.reason} while its registered agent process is still alive; ${queued} queued ${noun} waiting with no transport to claim them. Use \`spex session send ${rec.session} --keys "<keys>"\` to steer the live tmux pane, then repair the control transport before sending text.`,
-  )
 }
 export async function sendText(id: string, text: string, from?: string, opts: SendTextOptions = {}): Promise<AcceptedDispatch> {
   if (!text.trim()) return { ok: false, error: EMPTY_PROMPT_ERROR }

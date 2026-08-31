@@ -19,15 +19,6 @@ const freePort = () => new Promise((resolvePort, reject) => {
     server.close((error) => error ? reject(error) : resolvePort(port))
   })
 })
-const waitFor = async (read, label, timeout = 30_000) => {
-  const deadline = Date.now() + timeout
-  while (Date.now() < deadline) {
-    const value = await read()
-    if (value) return value
-    await new Promise((done) => setTimeout(done, 80))
-  }
-  throw new Error(`timed out waiting for ${label}`)
-}
 
 if (!root || !PW || !CHROMIUM) throw new Error('browser fixture paths are required')
 rmSync(OUT, { recursive: true, force: true })

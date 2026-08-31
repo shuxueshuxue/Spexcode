@@ -1,5 +1,5 @@
 import { relative, dirname } from 'node:path'
-import { repoRoot, driftIndex, historyIndex, commitReachable, type DriftIndex, type HistoryIndex } from '@spexcode/spec-core'
+import { repoRoot, driftIndex, commitReachable, type DriftIndex, type HistoryIndex } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
 import { evalRemarkTracks, trackKey } from './host.js'
 import type { RemarkTrack, Issue, Reply } from './remarks.js'
@@ -114,7 +114,6 @@ export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, o
   const ynodes = ctx?.ynodes ?? evalNodes(root)
   const specs = ctx?.specs ?? await loadSpecs()
   const idx = ctx?.idx ?? await driftIndex(root)
-  const hidx = ctx?.hidx ?? await historyIndex(root)
   const scidx = ctx?.scidx ?? await scenarioIndex(root, ynodes.map((n) => n.evalPath))
   const tracks = ctx?.remarks ?? evalRemarkTracks()
   const probe = contentProbeFor(root)

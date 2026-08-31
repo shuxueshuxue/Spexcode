@@ -49,7 +49,7 @@ import { createViewScope } from './viewScope.js'
 // it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Review and
 // settings surfaces have no sidebar, including their detail routes. `keep` is the third answer — graph,
 // empty, and the bare sessions board have no opinion and preserve the current projection.
-const dockFor = (page, param) => {
+const dockFor = (page) => {
   // Review surfaces are full-width throughout their address family. A detail route must not inherit the
   // previous Spec/Explorer projection from workspace state; that state belongs only to document routes.
   if (page === 'issues' || page === 'evals') return 'none'

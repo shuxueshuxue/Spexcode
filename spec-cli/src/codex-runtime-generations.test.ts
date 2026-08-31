@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { spawn } from 'node:child_process'
 import { test } from 'node:test'
 import { createConnection } from 'node:net'
 import {
@@ -179,8 +178,7 @@ test('archived historical bindings do not pin a zero-reference draining generati
   const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-archived-'))
   try {
     mkdirSync(join(root, 'sessions'), { recursive: true })
-    let starts = 0
-    const start = async (endpoint: CodexGenerationEndpoint) => { starts++; await startEndpoint(endpoint) }
+    const start = async (endpoint: CodexGenerationEndpoint) => { await startEndpoint(endpoint) }
     const before = await ensureCodexCurrentGeneration(root, start)
     const archived = join(root, 'sessions', 'archived-history')
     mkdirSync(archived)

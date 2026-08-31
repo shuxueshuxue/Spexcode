@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { defaultHarness, HARNESSES, harnessById, harnessByIdOrNull, sessionIdentityEnvVars, type HarnessLivenessRecord, type SharedRuntimeDescriptor, type SharedRuntimeProbe } from './harness.js'
 import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, runtimeRoot, type PublicRecordEntry, type RawRecord } from '@spexcode/spec-core'
 import { repoRoot } from '@spexcode/spec-core'
-import { endpointRecordPath } from './host.js'
+import { endpointRecordPath } from './endpoint-record.js'
 import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from '@spexcode/spec-core'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
@@ -537,7 +537,6 @@ const sessionStopBlocker = async (
       continue
     }
     const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)
-    const targetRef = probe.healthy && targetThread ? probe.references.find((reference) => reference.referenceId === targetThread) : undefined
     const siblings = probe.healthy ? probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread) : []
     const liveReason = siblings.length
       ? `${siblings.length} live sibling thread(s)`

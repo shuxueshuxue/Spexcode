@@ -18,7 +18,6 @@ import {
 import {
   openRuntimeBindings,
   type RuntimeBinding,
-  type RuntimeIdentity,
   type SessionRuntimeBindings,
 } from '@spexcode/session-runtime'
 import { openTopology, type SessionTopology, type TopologyEdge } from '@spexcode/session-topology'

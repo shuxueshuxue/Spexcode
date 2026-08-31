@@ -7,15 +7,8 @@ import { RAIL_PAGES, parseRoute } from './route.js'
 import { placeTab, tabKey, tabRoute } from './tabModel.js'
 
 const srcDir = dirname(fileURLToPath(import.meta.url))
-const dashboardDir = dirname(srcDir)
 const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
 
-const governedSessionFiles = [
-  'SessionInterface.jsx',
-  'SessionContextMenu.jsx',
-  'SessionWindow.jsx',
-  'Dock.jsx',
-]
 
 test('Sessions keeps multi-select and tree movement on the real row surface', () => {
   const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')

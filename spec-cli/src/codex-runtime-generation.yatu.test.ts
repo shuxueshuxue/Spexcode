@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'

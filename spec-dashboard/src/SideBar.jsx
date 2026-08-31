@@ -5,7 +5,7 @@ import { RAIL_PAGES, navigate, routeHash } from './route.js'
 import { focusLatestTab } from './tabs.js'
 import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { iconFor } from './views.jsx'
+import { iconFor } from './viewCatalog.js'
 
 // The workspace's rail ([[side-nav]]) — a top-level board bar plus the dock visibility control. Board
 // entries are navigation only: their plain click changes the route and never creates a strip tab.

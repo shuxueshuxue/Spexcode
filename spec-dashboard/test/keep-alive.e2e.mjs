@@ -41,10 +41,6 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 900 
 const page = await context.newPage()
 const cdp = await context.newCDPSession(page)
 await cdp.send('Performance.enable')
-const scriptSeconds = async () => {
-  const { metrics } = await cdp.send('Performance.getMetrics')
-  return metrics.find((m) => m.name === 'ScriptDuration')?.value ?? 0
-}
 
 await page.goto(`${BASE}/#/empty`, { waitUntil: 'domcontentloaded' })
 await page.evaluate(() => {

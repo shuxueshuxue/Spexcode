@@ -22,7 +22,6 @@ const check = (name, ok, detail = '') => {
 }
 const qOf = (hash) => new URLSearchParams(hash.slice(hash.indexOf('?') + 1)).get('q')
 const pathOf = (hash) => hash.split('?')[0]
-const settle = (page, ms = 700) => page.waitForTimeout(ms)
 
 const listProbe = (page) => page.evaluate(() => {
   const toolbar = document.querySelector('.se-gates')

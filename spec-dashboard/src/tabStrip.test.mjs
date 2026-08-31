@@ -6,6 +6,7 @@ const source = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8')
 const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 const views = readFileSync(new URL('./views.jsx', import.meta.url), 'utf8')
+const catalog = readFileSync(new URL('./viewCatalog.js', import.meta.url), 'utf8')
 const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
@@ -87,7 +88,10 @@ test('resident tabs and the activity rail share view-owned page icons', () => {
   }
   assert.match(builtInViewPlugins, /settings:\s*\{[\s\S]*?resident: true,[\s\S]*?icon: 'settings'/)
   assert.match(views, /registerPlugin\(createSettingsViewPlugin\(SettingsView\)\)/)
-  assert.match(views, /export const iconFor = \(page\) => viewRegistry\.get\(page\)\?\.icon \|\| null/)
+  // The rail and the tab strip read the icon from the component-free catalog: asking views.jsx would put
+  // TabStrip back inside the view registry's own import cycle.
+  assert.match(catalog, /export const iconFor = \(page\) => viewRegistry\.get\(page\)\?\.icon \|\| null/)
+  assert.match(source, /import \{ iconFor, isResident \} from '\.\/viewCatalog\.js'/)
   assert.match(source, /const icon = isResident\(tab\.page\) \? iconFor\(tab\.page\) : null/)
   assert.match(source, /<TabKindIcon tab=\{tab\} \/>[\s\S]{0,100}<TabDot tab=\{tab\}/)
   assert.match(css, /\.tab-kind-icon\s*\{[^}]*flex:\s*0 0 13px;/s)

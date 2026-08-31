@@ -70,6 +70,11 @@ function refreshCorePluginHandlers(proj: string): string[] {
   for (const root of roots) for (const rel of handlers) {
     const source = join(CORE_TEMPLATE, rel)
     const dest = join(root, rel)
+    // REFRESH, never plant. `spex init` omits a hook node whose events no selected adapter can emit
+    // ([[init-preset]]), so a node that is absent here is absent on purpose. Copying its handler in anyway
+    // gave a zcode-only adopter `core/idle/idle.sh` — an executable for a Notification that never arrives,
+    // in a directory with no spec.md to govern it.
+    if (!existsSync(join(root, dirname(rel)))) continue
     let current: Buffer | null = null
     try { current = readFileSync(dest) } catch {}
     if (current?.equals(readFileSync(source))) continue

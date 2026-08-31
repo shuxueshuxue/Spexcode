@@ -58,7 +58,7 @@ scenarios:
     expected: Stop preserves the record and timeline but reads offline; resume returns the same Claude conversation online with the pre-stop declaration note intact.
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#sessionHomeLiveness
       - spec-cli/src/harness.ts#claudeHeadlessHarness
       - spec-cli/src/sessions.ts
   - name: controller-kill-converges-offline

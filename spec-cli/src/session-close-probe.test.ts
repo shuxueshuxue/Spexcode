@@ -130,7 +130,6 @@ test('close reports detached residue by PID and stays quiet when no residue rema
   const residueId = `close-with-residue-${process.pid}`
   const residueWorktree = join(home, 'residue-worktree')
   const residuePidFile = join(home, 'residue.pid')
-  let residue: ReturnType<typeof spawn> | null = null
   let residuePid = 0
 
   mkdirSync(project, { recursive: true })
@@ -180,7 +179,7 @@ fs.writeFileSync(process.argv[2], String(child.pid))
 child.unref()
 setTimeout(() => process.exit(0), 50)
 `)
-    residue = spawn(process.execPath, [residueParent, residuePidFile], {
+    spawn(process.execPath, [residueParent, residuePidFile], {
       cwd: residueWorktree,
       stdio: 'ignore',
       env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: residueId },

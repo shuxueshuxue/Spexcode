@@ -29,7 +29,6 @@ try {
   assert.equal(await selected.getAttribute('data-id'), target.id)
   await page.screenshot({ path: `${OUT}/desktop-direct.png` })
 
-  const parent = page.locator(`.react-flow__node[data-id="${target.parent}"]`)
   await page.keyboard.press('ArrowLeft')
   await page.waitForTimeout(150)
   assert.equal(await page.locator('.react-flow__node.selected').getAttribute('data-id'), target.parent)

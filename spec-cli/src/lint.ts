@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { readJsonConfig } from '@spexcode/spec-core'
-import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
+import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 

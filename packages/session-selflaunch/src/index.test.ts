@@ -25,10 +25,14 @@ test('the package entry exposes only adopter-owned resolver capabilities', async
   assert.deepEqual(packageJson.files, ['dist', 'bin'])
   assert.deepEqual(packageJson.bin, { 'spex-session': './bin/spex-session.mjs' })
   assert.deepEqual(packageJson.exports, { '.': './dist/index.js', './package.json': './package.json' })
-  assert.deepEqual(packageJson.dependencies, {
-    '@spexcode/session-protocol': '0.6.7',
-    '@spexcode/session-runtime': '0.6.7',
-  })
+  // The dependency SET is the contract (exactly the two adopter-owned runtimes, nothing else); the pin is
+  // the package's own version, read live. A frozen literal here went stale on the very next release bump and
+  // failed CI, while release-publish.mjs already proves every internal reference equals the release version.
+  assert.deepEqual(Object.keys(packageJson.dependencies).sort(), [
+    '@spexcode/session-protocol',
+    '@spexcode/session-runtime',
+  ])
+  for (const range of Object.values(packageJson.dependencies)) assert.equal(range, packageJson.version)
   assert.equal(packageJson.engines.node, '>=22')
 
   const declarations = readFileSync(join(packageRoot, 'dist', 'index.d.ts'), 'utf8')

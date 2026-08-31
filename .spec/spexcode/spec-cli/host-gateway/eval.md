@@ -43,6 +43,22 @@ scenarios:
       fail loudly without silently selecting or partially replacing a target set. The admin route returns
       the new revision and materialize transcript, and a failed materialize retains enough metadata for a
       safe retry.
+  - name: new-project-setup-publishes-a-branchable-base
+    tags: [backend-api, cli]
+    test:
+      path: spec-cli/src/host.test.ts
+      name: newly created projects have a committed source-of-truth before session creation
+    code: [spec-cli/src/host.ts, spec-cli/src/sessions.ts]
+    description: >-
+      Through the real host add transaction, create an absent project path with Git and SpexCode setup,
+      inspect its source-of-truth branch and HEAD, then start its real backend and POST one session using
+      the configured launcher. Repeat the path-only new-project action and inspect its initial ref.
+    expected: >-
+      Every project created by the host has a real initial commit before it is cataloged. A SpexCode setup
+      commit contains the seed `.spec`, portable config, and ignore policy, and its `mainBranch` names the
+      checked-out source-of-truth branch. The backend can create a session worktree immediately, so no
+      `git worktree add failed: fatal: invalid reference` is returned. A path-only Git project receives an
+      empty initial commit on the conventional `main` branch and remains otherwise untouched.
 ---
 # measuring host-gateway
 

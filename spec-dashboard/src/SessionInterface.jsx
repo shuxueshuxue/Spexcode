@@ -697,7 +697,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const { dock: forestOpen } = useWorkspace()
   // the Sessions document's own left sidebar. It folds on the SAME workspace flag the shell's dock does, so
   // it folds the same way ([[dock-modes]]) — it used to be the one panel in the frame that blinked out.
-  const [forestMounted, forestClosing, forestOpening] = useFold(forestOpen)
+  const [forestMounted, forestClosing, forestFolding] = useFold(forestOpen)
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
   const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
@@ -1518,7 +1518,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     <div className="si-page">
       {forestMounted && <SessionForestPanel
         closing={forestClosing}
-        opening={forestOpening}
+        folding={forestFolding}
         sessions={sessions}
         activeId={active}
         // The Sessions document owns both its forest and its document chrome. Keeping these siblings

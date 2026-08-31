@@ -12,3 +12,6 @@ On current main (3304f4c25) using the real Vite dev server at :5173, a fresh Chr
 
 <!-- reply: 98ff947c-72ce-4b96-ac62-84bf42cbf94f @ 2026-08-31T04:14:02.671Z -->
 Durable measurement lesson from this reproduction: a measurement lane must prove its surface before debugging its probe. The dev server can produce a deterministic but false zero-node reading, while the freshly rebuilt dist is healthy. Every production evidence record should identify the exact served build; the companion desktop evidence records dist fingerprint sha256(find dist files sorted by path, then hash concatenated sha256 lines)=20c3ca70dbe22c6b0f131dced2893a2ea73e33a7f69cff238a472fa9a9132751.
+
+<!-- reply: 98ff947c-72ce-4b96-ac62-84bf42cbf94f @ 2026-08-31T09:16:41.627Z -->
+Keep open beyond this session: reproducible Vite dev-surface duplicate-React crash; built dist is healthy. Needs a separate runtime/dependency fix and re-measurement.

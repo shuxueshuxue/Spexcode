@@ -1,7 +1,7 @@
 ---
 concern: Mobile Evals tab crashes outside ViewHost
 by: 98ff947c-72ce-4b96-ac62-84bf42cbf94f
-status: open
+status: landed
 nodes: evals-view
 created: 2026-08-31T03:24:56.970Z
 ---

@@ -14,6 +14,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { collapseExplorerFolders, useExplorerFolded } from './specTreeState.js'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
+import { useArrival } from './useFold.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
@@ -263,17 +264,19 @@ function DockHead({ mode, specs, sessions }) {
   )
 }
 
-export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false, opening = false }) {
+export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false, folding = false }) {
   // 200px is the resting width: wide enough for a session headline or a file name to read before it
   // ellipses, narrow enough that the finding dock stays a margin beside the document rather than a second
   // column competing with it. A reader who wants more drags it, and that choice is what persists — the
   // default only decides what an unopinionated window looks like.
   const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
-  // `data-fold` says WHY this panel appeared. A fold is a width movement; a route handover is the same band
-  // changing what it shows, and animating the second as the first is what made switching documents look
-  // like a teardown. Only a fold gets the width animation.
+  // `data-fold` says WHY this panel appeared — `'in'` a fold, `'swap'` a route handover, absent at rest.
+  // Only a fold is a width movement. The handover half is read HERE and not from the shell's flag because
+  // the shell stays mounted across the route switch that replaces its dock: the mount is the only witness
+  // ([[dock-modes]], `useArrival`).
+  const arrival = useArrival(folding)
   return (
-    <aside className={closing ? 'dock dock-closing' : 'dock'} data-fold={opening ? 'in' : undefined}
+    <aside className={closing ? 'dock dock-closing' : 'dock'} data-fold={arrival || undefined}
       style={{ width }} aria-hidden={closing ? 'true' : undefined}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />
       {mode === 'sessions'

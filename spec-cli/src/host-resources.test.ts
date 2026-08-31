@@ -17,6 +17,36 @@ import { initializeFreshSessionApplication } from './session-application.js'
 import { parseProcStat, processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
 import { registerBackendInstance, spawnDetachedRuntime, unregisterBackendInstance } from './runtime-ownership.js'
 
+// @@@ fixtures that own their own ancestry ([[host-resource-budget]]) - the sweep refuses to charge a
+// process to a session by INHERITED environment while that process sits under the shared tmux server: tmux
+// hosts many independent windows, so a token reachable through it is not a launch receipt. Every dispatched
+// SpexCode worker runs inside tmux, so a fixture spawned as a plain child of this runner inherits that
+// ancestry and is attributed one way on a worker's box and another on a bare CI runner — the same test
+// answering two different questions depending on who ran it. The launcher below exits immediately, so the
+// process it starts is reparented to init and carries exactly one claim: its own environment, which is what
+// these tests are about.
+function spawnReparentedFixture(env: NodeJS.ProcessEnv): number {
+  const launcher = [
+    "const { spawn } = require('node:child_process')",
+    "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', detached: true })",
+    'child.unref()',
+    'process.stdout.write(String(child.pid))',
+  ].join(';')
+  const pid = Number(execFileSync(process.execPath, ['-e', launcher], { env, encoding: 'utf8' }).trim())
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error('reparented fixture launcher did not report a pid')
+  return pid
+}
+
+// A reparented fixture has no parent to deliver an exit event, so death is proven by its process-start
+// token disappearing — the same witness the sweep itself trusts.
+async function killReparentedFixture(pid: number | null): Promise<void> {
+  if (!pid || !processStartToken(pid)) return
+  try { process.kill(pid, 'SIGTERM') } catch { /* already gone */ }
+  for (let attempt = 0; attempt < 100 && processStartToken(pid); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
 test('parseProcStat keeps PID identity separate from process name punctuation', () => {
   const fields = ['S', '7', '8', '9', '0', '0', '0', '0', '0', '0', '0', '11', '13', '0', '0', '0', '0', '0', '0', '4242', '0', '21']
   assert.deepEqual(parseProcStat(`123 (name with ) paren) ${fields.join(' ')}`), {
@@ -35,14 +65,14 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
   const home = mkdtempSync(join(tmpdir(), 'spex-resource-unknown-harness-'))
   const known = `resource-known-${process.pid}`
   const unknown = `resource-unknown-${process.pid}`
-  let child: ReturnType<typeof spawn> | null = null
+  let child: number | null = null
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   try {
     const root = runtimeRoot()
     const application = initializeFreshSessionApplication()
     const record = (id: string, harness: string) => ({
-      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`, node: null,
+      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`,
       title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0,
       note: null, sortkey: null, createdAt: Date.now(), harness, harness_session_id: null,
       stopped: false, archived: false, launcher: harness, launch_cmd: harness,
@@ -53,12 +83,9 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
       writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify(record(id, harness), null, 2)}\n`)
       application.createSession({ sessionId: id, status: 'awaiting', proposal: 'nothing' })
     }
-    child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore',
-      env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: known },
-    })
-    for (let attempt = 0; attempt < 50 && !processStartToken(child.pid!); attempt++) await new Promise((resolve) => setTimeout(resolve, 20))
-    assert.ok(processStartToken(child.pid!), 'known owner fixture acquired a process-start token')
+    child = spawnReparentedFixture({ ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: known })
+    for (let attempt = 0; attempt < 50 && !processStartToken(child); attempt++) await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.ok(processStartToken(child), 'known owner fixture acquired a process-start token')
 
     const report = await collectResourceReport({ persist: false })
     const knownOwner = report.owners.find((owner) => owner.kind === 'session' && owner.id === known)
@@ -69,10 +96,7 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
     assert.ok(unknownOwner?.findings.includes('harness-unresolved:removed-plugin-harness'))
     assert.equal(unknownOwner?.reclaim?.eligible, false, 'unknown adapter ownership is never reclaimable')
   } finally {
-    if (child?.pid && processStartToken(child.pid)) {
-      try { child.kill('SIGTERM') } catch {}
-      await once(child, 'exit').catch(() => {})
-    }
+    await killReparentedFixture(child)
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
     if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
@@ -145,7 +169,7 @@ test('session stop guard reads only the exact governed target and fails closed o
   const recordDir = join(root, 'sessions', target)
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(join(recordDir, 'runtime.json'), `${JSON.stringify({
-    session_id: target, governed: true, worktree_path: root, branch: 'node/target-scoped-stop', node: null,
+    session_id: target, governed: true, worktree_path: root, branch: 'node/target-scoped-stop',
     title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: targetThread, stopped: false,
     archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
@@ -282,7 +306,7 @@ test('resource report retains the full shared projection and reports its sibling
   const recordDir = join(root, 'sessions', id)
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(join(recordDir, 'runtime.json'), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: root, branch: 'node/full-resource-projection', node: null,
+    session_id: id, governed: true, worktree_path: root, branch: 'node/full-resource-projection',
     title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: 'resource-target-thread',
     stopped: false, archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
@@ -330,9 +354,9 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
   const foreign = 'resource-foreign'
   const nonGoverned = 'resource-non-governed'
   const orphan = 'retired-owner'
-  let child: ReturnType<typeof spawn> | null = null
-  let sharedRoot: ReturnType<typeof spawn> | null = null
-  let sessionLeaf: ReturnType<typeof spawn> | null = null
+  let child: number | null = null
+  let sharedRoot: number | null = null
+  let sessionLeaf: number | null = null
     let staleBackend: ReturnType<typeof spawn> | null = null
     const originalSharedRuntimes = codexHarness.sharedRuntimes
     const originalHeadlessSharedRuntimes = codexHeadlessHarness.sharedRuntimes
@@ -361,7 +385,6 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       governed: true,
       worktree_path: worktrees.get(id)!,
       branch: `node/${id}`,
-      node: null,
       title: null,
       name: null,
       parent: null,
@@ -385,27 +408,25 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
       application.createSession({ sessionId: id, status: record(id, thread, terminal).status as any, proposal: record(id, thread, terminal).proposal as any })
     }
-    const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationGuard: undefined, probe: async () => probe }))
+    // The stub owns the WHOLE descriptor, residency included. A retired shared generation is positive death
+    // and short-circuits the stop blocker ([[shared-runtime-generation-rotation]]), and the real census run
+    // against a disposable SPEXCODE_HOME reports exactly that shape — so leaving residency live let the
+    // fixture answer a question this test is not asking, and every fail-closed assertion below silently
+    // stopped being reached. The bypass has its own coverage in codex-runtime-generations.test.ts.
+    const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationGuard: undefined, residency: undefined, probe: async () => probe }))
     codexHarness.sharedRuntimes = fallbackSharedRuntimes
     codexHeadlessHarness.sharedRuntimes = fallbackSharedRuntimes
 
-    sharedRoot = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore',
-      detached: true,
-      env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: target },
-    })
-    sessionLeaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore',
-      env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: target, CODEX_THREAD_ID: 'thread-target' },
-    })
-    for (let i = 0; i < 50 && (!processStartToken(sharedRoot.pid!) || !processStartToken(sessionLeaf.pid!)); i++) await new Promise((resolve) => setTimeout(resolve, 20))
-    assert.ok(processStartToken(sharedRoot.pid!) && processStartToken(sessionLeaf.pid!), 'shared and leaf fixtures acquired process-start tokens')
+    sharedRoot = spawnReparentedFixture({ ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: target })
+    sessionLeaf = spawnReparentedFixture({ ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: target, CODEX_THREAD_ID: 'thread-target' })
+    for (let i = 0; i < 50 && (!processStartToken(sharedRoot) || !processStartToken(sessionLeaf)); i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.ok(processStartToken(sharedRoot) && processStartToken(sessionLeaf), 'shared and leaf fixtures acquired process-start tokens')
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /live sibling thread.*no readable owner PID/)
     writeFileSync(codexAppServerPid(root), '99999999\n')
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
-    writeFileSync(codexAppServerPid(root), `${sharedRoot.pid}\n`)
+    writeFileSync(codexAppServerPid(root), `${sharedRoot}\n`)
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
-    writeDetachedRuntimeReceipt(sharedRoot.pid!, codexAppServerReceipt(root))
+    writeDetachedRuntimeReceipt(sharedRoot, codexAppServerReceipt(root))
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     probe = { healthy: true, references: [] }
     await assert.rejects(() => assertSessionStopSafe(target, null), /no readable session record proves the adapter or leaf owner/)
@@ -447,15 +468,12 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     assert.ok(unknownShared?.references?.some((reference) => reference.referenceState === 'queued-no-thread'))
     writeFileSync(codexAppServerPid(root), '99999999\n')
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
-    writeFileSync(codexAppServerPid(root), `${sharedRoot.pid}\n`)
+    writeFileSync(codexAppServerPid(root), `${sharedRoot}\n`)
     probe = governedProbe(true)
 
-    child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore',
-      env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: orphan },
-    })
-    for (let i = 0; i < 50 && !processStartToken(child.pid!); i++) await new Promise((resolve) => setTimeout(resolve, 20))
-    assert.ok(processStartToken(child.pid!), 'fixture child acquired a process-start token')
+    child = spawnReparentedFixture({ ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: orphan })
+    for (let i = 0; i < 50 && !processStartToken(child); i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.ok(processStartToken(child), 'fixture child acquired a process-start token')
 
     const beforeProof = await collectResourceReport({ persist: false })
     const unproven = beforeProof.owners.find((owner) => owner.kind === 'shared-runtime' && owner.id === 'codex-app-server')
@@ -467,10 +485,10 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     assert.ok(unproven?.findings.includes('turn-presence-unknown'))
     const report = beforeProof
     const shared = unproven
-    assert.ok(shared?.processes.some((proc) => proc.pid === sharedRoot!.pid), 'legacy fallback session env does not steal shared-root ownership')
+    assert.ok(shared?.processes.some((proc) => proc.pid === sharedRoot), 'legacy fallback session env does not steal shared-root ownership')
     assert.ok(shared?.findings.includes('identity-leak:project-control-plane-carries-session-id'))
     const governed = report.owners.find((entry) => entry.kind === 'session' && entry.id === target)
-    assert.ok(governed?.processes.some((proc) => proc.pid === sessionLeaf!.pid), 'acting adapter thread remains charged to its session')
+    assert.ok(governed?.processes.some((proc) => proc.pid === sessionLeaf), 'acting adapter thread remains charged to its session')
     assert.equal(governed?.worktreePath, worktrees.get(target))
     assert.equal(governed?.branch, `node/${target}`)
     assert.equal(governed?.proposal, 'nothing')
@@ -480,16 +498,10 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     const owner = report.owners.find((entry) => entry.kind === 'orphan' && entry.id === orphan)
     assert.equal(owner?.reclaim?.eligible, true, 'proven absent owner is projected as eligible without creating a mutation token')
 
-    const exited = once(child, 'exit')
-    child.kill('SIGTERM')
-    await exited
+    await killReparentedFixture(child)
     child = null
 
-    for (const proc of [sessionLeaf, sharedRoot]) {
-      const exited = once(proc!, 'exit')
-      proc!.kill('SIGTERM')
-      await exited
-    }
+    for (const pid of [sessionLeaf, sharedRoot]) await killReparentedFixture(pid)
     sessionLeaf = null
     sharedRoot = null
 
@@ -511,9 +523,9 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     await staleExited
     staleBackend = null
   } finally {
-    if (child?.pid && processStartToken(child.pid)) child.kill('SIGTERM')
-    if (sessionLeaf?.pid && processStartToken(sessionLeaf.pid)) sessionLeaf.kill('SIGTERM')
-    if (sharedRoot?.pid && processStartToken(sharedRoot.pid)) sharedRoot.kill('SIGTERM')
+    await killReparentedFixture(child)
+    await killReparentedFixture(sessionLeaf)
+    await killReparentedFixture(sharedRoot)
     if (staleBackend?.pid && processStartToken(staleBackend.pid)) staleBackend.kill('SIGTERM')
     codexHarness.sharedRuntimes = originalSharedRuntimes
     codexHeadlessHarness.sharedRuntimes = originalHeadlessSharedRuntimes

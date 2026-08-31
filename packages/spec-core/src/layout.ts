@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { git, repoRoot, gitA, gitAbortError, currentGitBuildAbortSignal, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, withGitAbortSignal, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
-import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
+import { encodeProject, projectRuntimeRoot } from './project-store.js'
 
 export type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
@@ -82,7 +82,7 @@ export type Config = {
 type Convention = Required<Omit<Config, 'dashboard' | 'uploads' | 'sessions' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
 
 export type Worktree = {
-  path: string; branch: string | null; node: string | null
+  path: string; branch: string | null
   session: string | null; status: string | null; isMain: boolean
   liveness?: 'offline' | 'unknown'
   ops: NodeOp[]   // pending spec-node changes this worktree makes vs main (the board's overlay)
@@ -260,7 +260,7 @@ export function sessionArtifactPath(id: string, name: string): string { return j
 // with sed and never needs jq. Read here for the overlay; sessions.ts owns the full typed read/write.
 export type RawRecord = {
   session_id: string; governed: boolean; worktree_path: string; branch: string | null
-  node: string | null; title: string | null; name: string | null; parent?: string | null
+  title: string | null; name: string | null; parent?: string | null
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
   runtime_start_token?: string
@@ -614,8 +614,7 @@ export async function resolveLayout(options: { activeSessionIds?: readonly strin
   const activePaths = records.filter(({ raw }) => isActive(raw)).map(({ raw }) => raw.worktree_path)
   const deltas = await layoutDeltas(activePaths, main, mainRef, mainSha)
   const rows = await Promise.all(records.map(({ raw: r, liveness }) => {
-    const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
-    const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ...(liveness ? { liveness } : {}), ops: [] }
+    const base: Worktree = { path: r.worktree_path, branch: r.branch, session: r.session_id, status: r.status, isMain: false, ...(liveness ? { liveness } : {}), ops: [] }
     // @@@ projected shelves cost nothing - a cold archived session ([[archive]]) keeps its record but leaves
     // the working-set projection and skips the per-worktree spec delta. An archived runtime hazard is still
     // projected active by listSessions, so it deliberately retains the same ops in both full and splice builds.
@@ -634,11 +633,11 @@ export async function resolveLayout(options: { activeSessionIds?: readonly strin
       })
   }))
   const corruptRows: Worktree[] = publicEntries.flatMap((entry) => entry.kind === 'corrupt'
-    ? [{ path: '', branch: null, node: null, session: entry.sessionId, status: 'corrupt', liveness: 'unknown', isMain: false, ops: [] }]
+    ? [{ path: '', branch: null, session: entry.sessionId, status: 'corrupt', liveness: 'unknown', isMain: false, ops: [] }]
     : [])
   const sessionWorktrees = [...rows.filter((w): w is Worktree => w !== null), ...corruptRows]
   // the main checkout row (isMain) — always present, carries no overlay; it anchors the merged tree the board draws.
-  const mainRow: Worktree = { path: main, branch: base, node: null, session: null, status: null, isMain: true, ops: [] }
+  const mainRow: Worktree = { path: main, branch: base, session: null, status: null, isMain: true, ops: [] }
   const worktrees = [mainRow, ...sessionWorktrees]
   // drop cache entries for worktrees that may no longer hold one — closed sessions (gone from the store) AND
   // newly-cold archived ones (which no longer compute a delta), so archiving SELF-EVICTS its cached ops instead of

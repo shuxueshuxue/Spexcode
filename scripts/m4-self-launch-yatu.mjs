@@ -95,7 +95,7 @@ const fire = (event, sessionId) => run('bash', [dispatch, 'claude', event], {
   allowFail: true,
 })
 
-const backends = spawnSync('bash', ['-c', `ss -tlnH 2>/dev/null | wc -l`], { encoding: 'utf8' })
+spawnSync('bash', ['-c', `ss -tlnH 2>/dev/null | wc -l`], { encoding: 'utf8' })
 const sid = 'selflaunch_yatu_1'
 
 const start = fire('SessionStart', sid)

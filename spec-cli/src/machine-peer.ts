@@ -6,7 +6,7 @@ import { createConnection, createServer as createNetServer, type Server as NetSe
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { runtimeRoot, spexcodeHome } from '@spexcode/spec-core'
-import { readEndpointRecord } from './host.js'
+import { readEndpointRecord } from './endpoint-record.js'
 
 const execFileAsync = promisify(execFile)
 const PEER_VERSION = 1

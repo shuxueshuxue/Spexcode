@@ -6,7 +6,6 @@ const read = (name) => readFileSync(new URL(name, import.meta.url), 'utf8')
 
 const shell = read('./Shell.jsx')
 const graphStats = read('./GraphStats.jsx')
-const publicGraphMode = read('./publicGraphMode.test.mjs')
 const graphView = read('./GraphView.jsx')
 const root = read('./Root.jsx')
 const app = read('./App.jsx')

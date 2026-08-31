@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, withEventLedgerBuild, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
+import { gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, withEventLedgerBuild, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
 
 const RS = '\x1e'
 
@@ -415,7 +415,6 @@ const treeHasSyntaxError = (root: TreeSitterNode): boolean => {
   return false
 }
 const nodeLineRange = (node: TreeSitterNode, start = node.startPosition.row + 1, end = node.endPosition.row + 1): Pick<Unit, 'start' | 'end'> => ({ start, end })
-const simpleName = (node: TreeSitterNode | null | undefined): string => nodeText(node).replace(/^\s+|\s+$/g, '')
 const lastTypeName = (text: string): string => {
   const clean = text.replace(/^\s*\(/, '').replace(/\)\s*$/, '').replace(/^\s*[*&]+/, '')
   const base = clean.split(/[.[\]<>\s]/, 1)[0]

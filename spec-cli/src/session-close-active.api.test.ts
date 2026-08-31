@@ -8,7 +8,6 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { codexAppServerPid, codexAppServerReceipt, codexAppServerSock } from './codex-harness.js'
-import { listenerAt } from './harness.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { initializeFreshSessionApplication } from './session-application.js'
 import { processStartToken } from '@spexcode/spec-core'
@@ -61,14 +60,7 @@ async function stopDetachedOwner(owner: ReturnType<typeof spawnDetachedRuntime> 
   }
 }
 
-function processAlive(child: ChildProcess): boolean {
-  if (!child.pid) return false
-  try { process.kill(child.pid, 0); return true } catch { return false }
-}
 
-function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true } catch { return false }
-}
 
 async function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'cli.ts'), ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -192,7 +184,7 @@ test('close refuses active native turns and missing evidence while retaining rec
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'runtime.json'), JSON.stringify({
         session_id: id, governed: true, worktree_path: worktree, branch,
-        node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: '', merges: 0,
+        title: '', name: '', parent: '', status: 'awaiting', proposal: '', merges: 0,
         note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId,
         stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
       }, null, 2) + '\n')

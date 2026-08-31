@@ -139,7 +139,6 @@ export default {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph',
     explorer: 'Explorer',
-    spec: 'Spec',
     // NAMES ONLY. The key a control also answers to is appended by `withShortcut` from the live keymap —
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
     sessions: 'Sessions',
@@ -663,7 +662,7 @@ export default {
   specNode: {
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
     more: ({ n }) => `${n} more`,
-    editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
+    editorTitle: ({ status, id }) => `${status} — ${id}`,
     driftAhead: ({ n }) => `${n} ahead`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
     openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — open node info to read them`,

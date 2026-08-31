@@ -511,27 +511,37 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* THE FOLD, and every foldable panel in the frame runs it: the shell's left dock, the Sessions document's
    own forest sidebar, and the spec document's right context dock. A sidebar SLIDES rather than blinking —
    opening animates from nothing, and closing keeps the element on screen for exactly one duration
-   ([[dock-modes]], `useFold`) so the reverse is visible too. The animated property is MAX-WIDTH, not width:
-   every one of these panels carries the reader's own resize as an inline style, and a keyframe cannot
-   outrank one — `!important` inside a keyframe is ignored by the spec, so the first version of this
-   animated nothing at all. Children keep their laid-out size so the tree slides instead of reflowing. */
+   ([[dock-modes]], `useFold`) so the reverse is visible too. Children keep their laid-out size so the tree
+   slides instead of reflowing.
+   The animated property is WIDTH, and it has to be the panel's own width or the movement is a lie about its
+   own duration. These panels carry the reader's resize as an inline width, and this animated MAX-WIDTH for
+   a while on the belief that a keyframe cannot outrank an inline style. It can: animations outrank normal
+   author declarations, inline ones included — what actually failed in the first version was `!important`
+   inside a keyframe, which the spec drops. Animating the cap instead ran the wrong distance: the cap is
+   640px while the band is 204px, so a 170ms open finished moving at 50ms and then sat still at half opacity,
+   and a close held still for 60ms before collapsing (measured, both). A `from`-only keyframe has no such
+   gap — its other endpoint IS the element's own width, whatever the reader dragged it to. */
 /* A FOLD is a width movement; a HANDOVER is the same band changing what it shows. Only the first animates
    width. The left band is drawn by the shell dock on document routes and by the Sessions document's own
    forest on Sessions, so a route switch swaps which COMPONENT draws it — and running the fold there made
    the band collapse to nothing and grow back, dragging the whole document column 200px sideways and back
-   (measured). The arriving panel now dissolves in place instead: same width, same edge, new contents. */
+   (measured). The arriving panel dissolves in place instead: same width, same edge, new contents.
+   Each arrival names ITSELF and rest names itself too, which is why there is no unconditional rule here.
+   The handover used to be the fallback every panel with no `data-fold` fell into — and a panel leaving its
+   fold passes through exactly that state, so 170ms after the reader opened the dock it blinked to opacity 0,
+   jumped 6px left and dissolved back in. A fold ran, then a dissolve ran on top of it. */
 .dock[data-fold='in'], .si-list[data-fold='in'], .context-dock[data-fold='in'] { animation: dock-in var(--dur-panel) ease; }
-.dock, .si-list { animation: dock-swap var(--dur-panel) ease; }
+.dock[data-fold='swap'], .si-list[data-fold='swap'] { animation: dock-swap var(--dur-panel) ease; }
 @keyframes dock-swap { from { opacity: 0; transform: translateX(-6px); } }
 .dock.dock-closing, .si-list.dock-closing, .context-dock.dock-closing {
   animation: dock-out var(--dur-panel) ease forwards; pointer-events: none;
 }
 .dock > * { flex-shrink: 0; }
-@keyframes dock-in { from { max-width: 0; opacity: 0; } }
-@keyframes dock-out { to { max-width: 0; opacity: 0; } }
+@keyframes dock-in { from { width: 0; opacity: 0; } }
+@keyframes dock-out { to { width: 0; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .dock, .si-list, .context-dock,
   .dock[data-fold='in'], .si-list[data-fold='in'], .context-dock[data-fold='in'],
+  .dock[data-fold='swap'], .si-list[data-fold='swap'],
   .dock.dock-closing, .si-list.dock-closing, .context-dock.dock-closing { animation: none; }
 }
 .dock-session-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-2) 0 0; }
@@ -2271,9 +2281,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   text-align: left; cursor: pointer;
 }
 .si-archive-page-row:hover { background: var(--wash-hover); color: var(--ink); }
-.si-archive-row-title, .si-archive-row-node { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-archive-row-title, .si-archive-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-archive-row-title { font-family: var(--ui-font); font-size: var(--type-control); }
-.si-archive-row-node, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
+.si-archive-row-label, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
 .si-archive-empty { padding: 18vh 24px; color: var(--muted); font-family: var(--ui-font); text-align: center; }
 
 /* New Session: input + avatar centred, terminal vibe. */

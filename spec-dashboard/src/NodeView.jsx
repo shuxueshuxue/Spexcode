@@ -13,7 +13,7 @@ import { newTabAnchor } from './tabs.js'
 import { routeHash } from './route.js'
 import { Icon } from './icons.jsx'
 import { GLYPH } from './specMeta.js'
-import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
+import { CompactReviewFilter, nextQuery } from './ReviewShell.jsx'
 import { locatePart } from './proseSelection.js'
 import { stripProseTitle } from './proseTokens.js'
 import Prose from './Prose.js'
@@ -333,7 +333,7 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
 }
 
 // every version's diff fetches lazily when its row opens (memoised by hash; see useVersionDiff)
-function HistoryEvidence({ node, r, latest }) {
+function HistoryEvidence({ node, r }) {
   const fetched = useVersionDiff(node.id, r.hash, true)
   return <DiffEvidence diff={fetched} />
 }
@@ -369,7 +369,7 @@ export function HistoryPane({ node, rows }) {
   )
 }
 
-export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => {} }) {
+export function IssuesPane({ node, filter = {}, onFilter = () => {} }) {
   const t = useT()
   const query = paneReviewQuery('issue', node.id, filter)
   const page = useReviewPage('issues', query, 1, { pollMs: 0 })
@@ -510,7 +510,7 @@ function DanglingTrack({ track }) {
   )
 }
 
-export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {} }) {
+export function EvalPane({ node, filter = {}, onFilter = () => {} }) {
   const t = useT()
   const query = paneReviewQuery('eval', node.id, filter)
   const page = useReviewPage('evals', query, 1, { pollMs: 0, view: 'timeline' })

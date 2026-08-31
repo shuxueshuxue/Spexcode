@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { createConnection } from 'node:net'
 import { opencodePluginSource, OPENCODE_TOOL_NAMES } from './opencode.js'
 import { HARNESSES, harnessById, opencodeHarness, opencodeLaunchCommand, deliverViaRendezvous, rvSock } from './harness.js'
 import { migrateJsonSessionRecords, openProjectSessionApplication } from '@spexcode/session-application'
@@ -78,7 +77,6 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
   const legacy = join(runtime, 'sessions', 'sid_OC', 'session.json')
   writeFileSync(legacy, JSON.stringify({ session_id: 'sid_OC', governed: true, worktree_path: dir, branch: 'main', status: 'idle', proposal: '', note: '', createdAt: Date.now() }, null, 2))
   migrateJsonSessionRecords({ databasePath: join(home, 'sessions.sqlite'), recordsRoot: dirname(dirname(legacy)), locality: () => {} })
-  const rec = join(runtime, 'sessions', 'sid_OC', 'runtime.json')
   const r = spawnSync('bash', [dispatch, 'opencode', 'PreToolUse'], {
     cwd: dir,
     env: {
@@ -102,7 +100,6 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
 // the generated plugin, driven for real: a stub dispatch.sh records every payload (and can block per event),
 // a fake SDK client records injected prompts, and the REAL deliverViaRendezvous talks to the plugin's socket.
 
-type Dispatched = { code: number }
 async function loadPlugin(opts: { session: string; block?: string[]; blockJson?: string[]; blockReason?: string; promptMs?: number; resumeId?: string; continueList?: unknown[]; abortIdle?: boolean }) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oc-plugin-'))
   const dispatch = join(dir, 'dispatch.sh')

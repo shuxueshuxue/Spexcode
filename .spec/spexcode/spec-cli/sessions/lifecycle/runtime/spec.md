@@ -40,7 +40,7 @@ a file in that dir:
 
 | file | written by |
 |---|---|
-| `runtime.json` | `readRecord` / `writeRecord` — runtime/worktree metadata only: governed, worktree_path, node, branch, createdAt, harness_session_id, …; lifecycle status/proposal/note/parent live only in the SQLite session application. |
+| `runtime.json` | `readRecord` / `writeRecord` — runtime/worktree metadata only: governed, worktree_path, branch, createdAt, harness_session_id, …; lifecycle status/proposal/note/parent live only in the SQLite session application. |
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the authoritative resolved first-turn payload, retained through queue drain and failed launch until adapter proof consumes it ([[launch]]) |
 | `launch.proof` | the adapter's narrow staged receipt (native id, payload hash, runtime generation) after first-turn durability; the session lifecycle owner consumes it with `launch` under the record lock ([[harness-adapter]]) |

@@ -6,9 +6,15 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
+// A file: URL's `pathname` is percent-ENCODED, so it is a path only while every character is ASCII-safe.
+// SpexCode names a worktree after the prompt that created it, so its own dogfood checkouts routinely sit
+// under non-ASCII directories — and there `pathname` hands the runtime an already-escaped string that gets
+// escaped a second time, so the backend dies with ERR_MODULE_NOT_FOUND before this test can start it.
+// fileURLToPath is the decode that belongs here.
 const here = new URL('.', import.meta.url)
-const fakeLauncher = new URL('../test/fixtures/fake-claude', here).pathname
+const fakeLauncher = fileURLToPath(new URL('../test/fixtures/fake-claude', here))
 
 function git(cwd: string, ...args: string[]): void {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
@@ -74,7 +80,7 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
   delete env.SPEXCODE_SESSION_ID
   let backend: ChildProcess | null = null
   let backendLog = ''
-  const start = () => spawn(process.execPath, ['--import', import.meta.resolve('tsx'), new URL('./index.ts', import.meta.url).pathname], {
+  const start = () => spawn(process.execPath, ['--import', import.meta.resolve('tsx'), fileURLToPath(new URL('./index.ts', import.meta.url))], {
     cwd: project,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

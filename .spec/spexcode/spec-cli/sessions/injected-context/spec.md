@@ -20,7 +20,7 @@ Four thin injections, all deliberately *non-enforcing* (the Stop gate is the enf
 
 - **[[spec-pointer]]** — when a dispatch names an existing node, append **one line**: the absolute path to
   that node's live `spec.md` inside the new worktree. Never the body. Fail-quiet by absence — an unknown id
-  or a node-agnostic prompt (no `[[id]]`) appends nothing.
+  or a prompt with no `[[id]]` appends nothing.
 - **[[spawner-pointer]]** — when the launch has a `parent`, append **one line** naming that session's
   worktree and branch, and why the child needs it: the child's tree is branched off the base, so the
   spawner's in-flight work — including a spec node the pointer above therefore cannot resolve — is not

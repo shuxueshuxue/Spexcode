@@ -62,9 +62,6 @@ const stop = async (child) => {
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
 const readRecord = (path) => JSON.parse(readFileSync(path, 'utf8'))
-const hasRecordName = (path, name) => {
-  try { return readRecord(path).name === name } catch { return false }
-}
 const recordPersistedAt = (path, name) => {
   try { return readRecord(path).name === name ? Math.round(statSync(path).mtimeMs) : 0 } catch { return 0 }
 }
@@ -116,7 +113,7 @@ try {
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(recordPath, JSON.stringify({
     session_id: sessionId, governed: true, worktree_path: project, branch: 'main',
-    node: '', title: 'Session push latency target', name: '', parent: '', status: 'active', proposal: '',
+    title: 'Session push latency target', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true',
     launch_owner: 'http://fixture.invalid', create_request_id: '', create_payload_hash: '', launch_readiness_pending: null,

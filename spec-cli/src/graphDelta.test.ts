@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { unitize, tagOf, tagOfAsync, tagOfWithoutWebCrypto, diffUnits, diffFromPosition, positionOf, applyDelta, applyDeltaUnits, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
+import { unitize, tagOf, tagOfAsync, tagOfWithoutWebCrypto, diffUnits, diffFromPosition, positionOf, applyDelta, applyDeltaUnits, boardFromUnits, unitValues } from '@spexcode/spec-core'
 
 // Executable evidence for the two lemmas the incremental push stands on (see the board-delta spec node's
 // equivalence.md): RECONSTRUCTION — boardFromUnits(unitize(B)) = B whenever unitize reports ok; ROUND-TRIP —

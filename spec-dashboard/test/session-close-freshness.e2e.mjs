@@ -90,7 +90,7 @@ try {
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(join(recordDir, 'session.json'), JSON.stringify({
     session_id: sessionId, governed: true, worktree_path: worktree, branch,
-    node: '', title: 'close freshness target', name: '', parent: '', status: 'launch-queued', proposal: '',
+    title: 'close freshness target', name: '', parent: '', status: 'launch-queued', proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true',
     launch_owner: 'http://fixture.invalid', create_request_id: '', create_payload_hash: '', launch_readiness_pending: null,

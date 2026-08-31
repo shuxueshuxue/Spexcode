@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readRecordEntry, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
+import { readRecordEntry, sessionArtifactPath, sessionRecordPath } from '@spexcode/spec-core'
 import { projectRuntimeRoot } from '@spexcode/spec-core'
 
 export class SessionWebError extends Error {

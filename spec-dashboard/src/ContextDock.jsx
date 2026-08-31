@@ -6,7 +6,7 @@ import { scenarioStates } from './score.jsx'
 import { addressHash, evalAddress, issueAddress } from './address.js'
 import { newTabAnchor } from './tabs.js'
 import { useResizable } from './useResizable.js'
-import { useFold } from './useFold.js'
+import { useArrival, useFold } from './useFold.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
@@ -73,7 +73,7 @@ function Panel({ title, open, onToggle, children }) {
 
 // [[context-dock]]: what surrounds the node the reader has open. Two sections and no third — the reader's
 // own ruling: *"它要么就是 Scenarios，要么就是 Issues"*.
-export default function ContextDock({ page, param, open = true, onToggle }) {
+export default function ContextDock({ page, param, open = true }) {
   const t = useT()
   const { specs } = useBoard()
   const [width, onDrag, reset] = useResizable('spex.ctxWidth', 276, { min: 220, max: 460, dir: -1 })
@@ -81,7 +81,8 @@ export default function ContextDock({ page, param, open = true, onToggle }) {
   // the same fold every panel in the frame uses ([[dock-modes]]): the dock outlives `open` by one panel
   // duration so closing is a movement, not a blink. At rest it is still unmounted, which is what keeps a
   // closed dock costing nothing.
-  const [mounted, closing] = useFold(open)
+  const [mounted, closing, folding] = useFold(open)
+  const arrival = useArrival(folding)
   if (page !== 'spec' || !param || !mounted) return null
   const node = specs?.find((item) => item.id === param)
   if (!node) return null
@@ -90,7 +91,11 @@ export default function ContextDock({ page, param, open = true, onToggle }) {
     try { localStorage.setItem(PANEL_KEY, JSON.stringify(next)) } catch {}
     return next
   })
+  // the same three-valued arrival the left band carries. This panel has no handover — one component always
+  // draws it — so only the fold has a rule to match; publishing the attribute is what keeps it on the shared
+  // mechanism rather than the one panel that silently pops open ([[dock-modes]]).
   return <aside className={closing ? 'context-dock dock-closing' : 'context-dock'} style={{ width }}
+    data-fold={arrival || undefined}
     aria-hidden={closing ? 'true' : undefined} aria-label={t('contextDock.title')}>
     <div className="ctx-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
     <div className="ctx-head"><span>{t('contextDock.title')}</span><span className="ctx-node-id">{node.id}</span></div>

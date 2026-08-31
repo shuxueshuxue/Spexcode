@@ -77,7 +77,7 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
   const overlaysByNode: Record<string, any[]> = {}
   const ghostById: Record<string, any> = {}
   for (const w of opWts) {
-    const source = w.path, label = w.node || w.branch || w.path, seed = seedOf(w.path)
+    const source = w.path, label = w.branch || w.path, seed = seedOf(w.path)
     for (const op of w.ops) {
       const ov = {
         op: op.op, source, label, branch: w.branch, seed,

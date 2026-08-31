@@ -153,8 +153,8 @@ until `npm run hooks` refreshes it — visible degradation over silent wrong
 behavior.
 
 The retired `spex session new --node <id>` flag follows the same tombstone rule: it exits non-zero and tells
-the caller to put a `[[<id>]]` mention in the prompt because the first mention binds. It never launches a
-session. This is a removal signpost, not a second node-binding input.
+the caller that a session carries no spec node, so the task — and any `[[<id>]]` reference it needs — belongs
+in the prompt. It never launches a session. This is a removal signpost, and it replaces the flag with nothing.
 
 **The internal boundary.** Machine plumbing — `trunk`, `commit-surgery`, `refresh-footprint`,
 `check-staged`, `session-state`/`session-fail`/`session-idle`/`session-hook-state` (the hook-only canonical

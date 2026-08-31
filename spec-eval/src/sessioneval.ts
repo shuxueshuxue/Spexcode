@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve as resolvePath } from 'node:path'
+import { dirname, join, resolve as resolvePath } from 'node:path'
 import {
   batchBlobTexts,
   batchRevisionOids,
@@ -796,9 +796,8 @@ export type ExportGate = { label: string; ok: boolean; detail: string }
 
 export type ExportModel = {
   id: string
-  node: string | null
   branch: string | null
-  title: string                  // DERIVED headline (the node, else the branch) — no agent-authored claim
+  title: string                  // DERIVED headline (the branch, else the id) — no agent-authored claim
   generatedAt: string
   ahead: number
   dirtyNonRuntime: number
@@ -851,7 +850,7 @@ async function buildExportModelInLedger(id: string, payload: ReviewPayloadValue,
   const byNode = new Map<string, ExportFile[]>()
   const otherFiles: ExportFile[] = []
   for (const f of payload.diff) {
-    const nid = nodeForFile(f.path, specs, payload.node)
+    const nid = nodeForFile(f.path, specs)
     const pf = enriched.get(f.path)!
     if (nid) { const arr = byNode.get(nid) ?? []; arr.push(pf); byNode.set(nid, arr) }
     else otherFiles.push(pf)
@@ -897,13 +896,11 @@ async function buildExportModelInLedger(id: string, payload: ReviewPayloadValue,
   // affected scenarios first, then by amount changed — review work leads while every changed file remains.
   nodes.sort((a, b) => (b.affectedScenarios - a.affectedScenarios) || ((b.additions + b.deletions) - (a.additions + a.deletions)))
 
-  // the headline is DERIVED — the node the session is on, else its branch, else the id. No agent claim.
-  const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
-  const title = primary || payload.node || payload.branch || id.slice(0, 8)
+  // the headline is DERIVED — the session's branch, else its id. No agent claim.
+  const title = payload.branch || id.slice(0, 8)
 
   return {
     id,
-    node: payload.node,
     branch: payload.branch,
     title,
     generatedAt: new Date().toISOString(),
@@ -1038,18 +1035,16 @@ export function nodeScore(hasEvalFile: boolean, latest: EvalEntry[], affectedSce
 // which spec node owns a changed file: a file inside a node's directory (its spec.md / eval.md / sidecar)
 // belongs to the NEAREST such node; otherwise the node whose governed `code:` claims it (exact path,
 // directory prefix, or `*` glob — the same matching `spex eval lint --changed` uses). A shared file is
-// governed by MANY nodes (ordinary composition); when the session has a primary node that also governs it,
-// attribute it THERE so a node/<id> session's stake in cli.ts/index.ts groups under its own node, not
-// whichever sibling sorts first.
+// governed by MANY nodes (ordinary composition), and a session has no node of its own to break the tie with,
+// so the nearest claim wins and a shared file simply lands under every node that claims it.
 // null = unclaimed.
-function nodeForFile(file: string, specs: Awaited<ReturnType<typeof loadSpecs>>, primary: string | null): string | null {
+function nodeForFile(file: string, specs: Awaited<ReturnType<typeof loadSpecs>>): string | null {
   let best: string | null = null, bestLen = -1
   for (const s of specs) {
     const dir = dirname(s.path)
     if ((file === dir || file.startsWith(dir + '/')) && dir.length > bestLen) { best = s.id; bestLen = dir.length }
   }
   if (best) return best
-  if (primary) { const ps = specs.find((s) => s.id === primary); if (ps && codeClaims(ps.code, file)) return primary }
   for (const s of specs) if (codeClaims(s.code, file)) return s.id
   return null
 }
@@ -1306,7 +1301,7 @@ export function renderExportHtml(m: ExportModel): string {
   <header class="masthead">
     <div class="eyebrow">SpexCode · session eval export</div>
     <h1 class="claim">${esc(m.title)}</h1>
-    <div class="meta">session <code>${esc(idShort)}</code>${m.branch ? ` · <code>${esc(m.branch)}</code>` : ''}${m.node ? ` · node <code>${esc(m.node)}</code>` : ''} · ${m.ahead} commit(s) · ${m.nodes.length} node(s) · <span class="ts">${esc(m.generatedAt)}</span></div>
+    <div class="meta">session <code>${esc(idShort)}</code>${m.branch ? ` · <code>${esc(m.branch)}</code>` : ''} · ${m.ahead} commit(s) · ${m.nodes.length} node(s) · <span class="ts">${esc(m.generatedAt)}</span></div>
     <div class="ribbon">${ribbon}</div>
   </header>
   <section class="evidence-section">
@@ -1437,7 +1432,6 @@ export type SessionEvalNode = {
 }
 export type SessionEvals = {
   id: string
-  node: string | null
   branch: string | null
   title: string
   nodes: SessionEvalNode[]
@@ -1677,12 +1671,10 @@ async function buildSessionEvalModelInLedger(
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
 
-  const primary = identity.node && specById.has(identity.node) ? specById.get(identity.node)!.title : null
   return {
     id,
-    node: identity.node,
     branch: identity.branch,
-    title: primary || identity.node || identity.branch || id.slice(0, 8),
+    title: identity.branch || id.slice(0, 8),
     nodes,
     impact,
     ...(order ? { order } : {}),

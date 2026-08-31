@@ -2,7 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
@@ -88,22 +87,13 @@ function writeGovernedSession(home: string, id: string, parent = ''): string {
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
-    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`, node: 'session-follow',
+    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`,
     title: id, name: '', parent, status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(),
     harness: 'opencode', harness_session_id: '', stopped: false, archived: false, launcher: 'fixture', launch_cmd: 'true', launch_owner: '',
   }, null, 2) + '\n')
   return dir
 }
 
-function timelineText(dir: string): string {
-  const legacy = join(dir, 'timeline.ndjson')
-  const segments = join(dir, 'timeline')
-  const paths = [
-    ...(existsSync(legacy) ? [legacy] : []),
-    ...(existsSync(segments) ? readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)) : []),
-  ]
-  return paths.map((path) => readFileSync(path, 'utf8')).join('')
-}
 
 async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) {
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', ...(api ? ['--api', api] : [])], {
@@ -131,7 +121,7 @@ test('session new rejects stale mode flags through the generic unknown-flag path
   }
 })
 
-test('session new retires the out-of-band --node binding before launch', () => {
+test('session new retires the out-of-band --node flag before launch', () => {
   const r = spawnSync('tsx', [cli, 'session', 'new', 'probe', '--node', 'launch'], {
     cwd: pkgRoot,
     encoding: 'utf8',
@@ -139,7 +129,7 @@ test('session new retires the out-of-band --node binding before launch', () => {
   })
   assert.equal(r.status, 2)
   assert.equal(r.stdout, '')
-  assert.equal(r.stderr, 'spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds\n')
+  assert.equal(r.stderr, 'spex session new: --node was removed — a session carries no spec node; put the task, and any [[<id>]] reference it needs, in the prompt\n')
 })
 
 test('session new keeps exact JSON stdout and emits the dependency receipt on stderr', async () => {
@@ -191,7 +181,7 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
 
 test('session new from a governed parent establishes its child watch before printing the receipt', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-create-watch-'))
-  const parentDir = writeGovernedSession(home, WATCH_PARENT)
+  writeGovernedSession(home, WATCH_PARENT)
   const childDir = writeGovernedSession(home, WATCH_CHILD, WATCH_PARENT)
   let posted: any = null
   const server = createServer((req, res) => {

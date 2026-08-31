@@ -23,7 +23,7 @@ scenarios:
     description: Let a real governed codex-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
     expected: Stop preserves the owned thread, record, and timeline but reads offline; resume returns the same Codex conversation online with the pre-stop declaration note intact.
     code:
-      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#sessionHomeLiveness
       - spec-cli/src/codex-harness.ts#codexHeadlessHarness
       - spec-cli/src/sessions.ts
     tags: [backend-api, cli]
@@ -39,7 +39,7 @@ scenarios:
       streaming no history), the loaded-set census then includes it, and the session returns online with its
       prior declaration note intact — not "launch did not become ready".
     code:
-      - spec-cli/src/codex-harness.ts#codexReopenThread
+      - spec-cli/src/codex-harness.ts#codexResumeThread
       - spec-cli/src/codex-harness.ts#codexHeadlessHarness
       - spec-cli/src/cli.ts
     tags: [backend-api, cli]

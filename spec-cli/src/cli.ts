@@ -361,7 +361,6 @@ async function followKit(selectors: string[], verb: string): Promise<{
     if (!state) return null
     return {
       id,
-      node: null,
       branch: null,
       path: '',
       label: id,
@@ -400,7 +399,7 @@ async function localWatchTargetsOrExit(selectors: string[], verb: string): Promi
 }
 
 async function resolveSessionOrExit(selector: string): Promise<import('./sessions.js').Session> {
-  if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch | . for self)'); process.exit(2) }
+  if (!selector) { console.error('spex: missing session selector (id | id-prefix | branch | . for self)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
   const { sessionTitle } = await import('./sessions.js')
   const r = await resolveClientSession(selector)
@@ -874,7 +873,7 @@ if (cmd === 'serve') {
     // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);
     // it falls back to an in-process launch only when no backend answers.
     if (has('node')) {
-      console.error('spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds')
+      console.error('spex session new: --node was removed — a session carries no spec node; put the task, and any [[<id>]] reference it needs, in the prompt')
       process.exit(2)
     }
     const newPositionals = positionals(4)
@@ -1108,7 +1107,7 @@ if (cmd === 'serve') {
     const first = positionals(4)[0]
     if (first === 'proof') signpost('spex review proof', 'spex eval ls --session <SEL> --export') // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     const { clientReview } = await import('./client.js')
-    if (!first) { console.error('usage: spex session review <SEL>  (id | id-prefix | node | branch)'); process.exit(2) }
+    if (!first) { console.error('usage: spex session review <SEL>  (id | id-prefix | branch)'); process.exit(2) }
     const session = await resolveSessionOrExit(first)
     const r = await clientReview(session.id)
     if (!r) { console.error(`no such session ${session.id}`); process.exit(1) }
@@ -1133,7 +1132,7 @@ if (cmd === 'serve') {
   } else if (sub === 'merge') {
     const { clientMerge } = await import('./client.js')
     const sel = positionals(4)[0]
-    if (!sel) { console.error('usage: spex session merge <SEL>  (id | id-prefix | node | branch)'); process.exit(2) }
+    if (!sel) { console.error('usage: spex session merge <SEL>  (id | id-prefix | branch)'); process.exit(2) }
     const id = await resolveSelectorOrExit(sel)
     const r = await clientMerge(id)
     if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
@@ -1259,7 +1258,7 @@ if (cmd === 'serve') {
       console.error(`dispatch failed: ${r.error}`)
       process.exit(1)
     } else if (sub === 'show') {
-      // the session RECORD as one per-id read (status · node · branch · launcher · the full originating
+      // the session RECORD as one per-id read (status · branch · launcher · the full originating
       // prompt); --capture swaps in the LIVE PANE face of the same read. The pane contract is unchanged from
       // the verb it absorbed — fail and empty stay DISTINCT: a real empty pane prints nothing and exits 0;
       // unknown id exits 2, offline / capture-error exit 1, each with a named reason.
@@ -1280,7 +1279,6 @@ if (cmd === 'serve') {
           const x = r.session
           console.log(`${x.title}  [${x.id}]`)
           console.log(`  status   : ${x.status}  (lifecycle ${x.lifecycle} · liveness ${x.liveness})`)
-          console.log(`  node     : ${x.node ?? '—'}`)
           console.log(`  branch   : ${x.branch ?? '—'}`)
           console.log(`  launcher : ${x.launcher ?? '—'}  (harness ${x.harness})`)
           console.log(`  worktree : ${x.path}`)
@@ -1484,15 +1482,15 @@ if (cmd === 'serve') {
     if (!sock || !tid || !text) { console.error('usage: spex internal codex-turn <sock> <threadId> <text...>'); process.exit(2) }
     const r = await codexTurn(sock, tid, text)
     if (r.ok) { console.log('ok') } else { console.error(r.error); process.exit(1) }
-  } else if (sub === 'codex-reopen') {
+  } else if (sub === 'codex-resume') {
     // A headless resume reloads its evicted thread into the shared app-server (thread/resume, no turn), so
     // readiness — which proves online only for a RESIDENT thread — can see it. The visible TUI does this
     // implicitly by attaching; headless has no TUI, so its launch.sh resume branch calls this.
-    const { codexReopenThread } = await import('./codex-harness.js')
+    const { codexResumeThread } = await import('./codex-harness.js')
     const sock = process.argv[4], tid = process.argv[5]
-    if (!sock || !tid) { console.error('usage: spex internal codex-reopen <sock> <threadId>'); process.exit(2) }
-    const r = await codexReopenThread(sock, tid)
-    if (r.ok) { console.log('reopened') } else { console.error(r.error); process.exit(1) }
+    if (!sock || !tid) { console.error('usage: spex internal codex-resume <sock> <threadId>'); process.exit(2) }
+    const r = await codexResumeThread(sock, tid)
+    if (r.ok) { console.log('resumed') } else { console.error(r.error); process.exit(1) }
   } else if (sub === 'check-staged') {
     // the pre-commit hook's eval backstop: a staged stray evidence blob or malformed eval.md rejects the
     // commit. Logic lives in spec-eval; the hook shims here.

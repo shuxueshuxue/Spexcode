@@ -7,7 +7,7 @@ import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/s
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } from './session-application.js'
 import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
-import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult } from './sessions.js'
 import { fromRaw } from './session-record.js'
 import { resolveMachinePeer } from './machine-peer.js'
 
@@ -133,7 +133,7 @@ function cachedStatus(rec: ReturnType<typeof fromRaw>): DisplayStatus {
 function corruptCachedSession(id: string, reason: string): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
-    id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
+    id, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: 'unknown', capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: `session record is unreadable: ${reason}`, archived: false, closedAt: null, archiveHazard: null,
@@ -175,7 +175,6 @@ export function localCachedSessions(includeArchived = false): Session[] {
       : state.status as DisplayStatus
     rows.push({
       id,
-      node: null,
       branch: null,
       path: '',
       label: id,
@@ -268,7 +267,7 @@ export async function clientResources(): Promise<import('./host-resources.js').R
   }, localCachedResources)
 }
 
-// resolve a selector (full id, id-prefix, node, or branch) against the live board, then call with the full id.
+// resolve a selector (full id, id-prefix, or branch) against the live board, then call with the full id.
 export async function resolveClientSession(selector: string, includeArchived = true): Promise<Resolved> {
   return resolveSession(selector, await clientListSessions(includeArchived))
 }

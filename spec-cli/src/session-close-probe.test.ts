@@ -71,7 +71,7 @@ esac
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
       session_id: id, governed: true, worktree_path: worktree, branch,
-      node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
+      title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
     }, null, 2)}\n`)
@@ -130,7 +130,6 @@ test('close reports detached residue by PID and stays quiet when no residue rema
   const residueId = `close-with-residue-${process.pid}`
   const residueWorktree = join(home, 'residue-worktree')
   const residuePidFile = join(home, 'residue.pid')
-  let residue: ReturnType<typeof spawn> | null = null
   let residuePid = 0
 
   mkdirSync(project, { recursive: true })
@@ -164,7 +163,7 @@ esac
       mkdirSync(sessionStoreDir(id), { recursive: true })
       writeFileSync(sessionRecordPath(id), `${JSON.stringify({
         session_id: id, governed: true, worktree_path: worktree, branch,
-        node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
+        title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
         merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
         stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
       }, null, 2)}\n`)
@@ -180,7 +179,7 @@ fs.writeFileSync(process.argv[2], String(child.pid))
 child.unref()
 setTimeout(() => process.exit(0), 50)
 `)
-    residue = spawn(process.execPath, [residueParent, residuePidFile], {
+    spawn(process.execPath, [residueParent, residuePidFile], {
       cwd: residueWorktree,
       stdio: 'ignore',
       env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: residueId },

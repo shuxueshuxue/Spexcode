@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import net from 'node:net'

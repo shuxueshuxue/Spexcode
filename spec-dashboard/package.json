@@ -13,6 +13,7 @@
   "scripts": {
     "predev": "node scripts/patch-xterm-sync-resize.mjs",
     "dev": "vite",
+    "pretest": "node scripts/patch-xterm-sync-resize.mjs",
     "test": "node --test src/*.test.mjs src/i18n/*.test.mjs",
     "test:identity-e2e": "node test/identity-chain.e2e.mjs",
     "prebuild": "node scripts/patch-xterm-sync-resize.mjs",

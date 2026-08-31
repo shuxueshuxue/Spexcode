@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,10 +48,15 @@ function copyProduct(target: string): void {
   const common = git(PRODUCT_SOURCE, 'rev-parse', '--path-format=absolute', '--git-common-dir')
   const main = dirname(common)
   const rootDeps = [join(PRODUCT_SOURCE, 'node_modules'), join(main, 'node_modules')].find(existsSync)
-  const cliDeps = [join(PRODUCT_SOURCE, 'spec-cli/node_modules'), join(main, 'spec-cli/node_modules')].find(existsSync)
-  if (!rootDeps || !cliDeps) throw new Error('impact API rig requires installed root and spec-cli dependencies')
+  if (!rootDeps) throw new Error('impact API rig requires installed root dependencies')
   symlinkSync(rootDeps, join(target, 'node_modules'), 'dir')
-  symlinkSync(cliDeps, join(target, 'spec-cli/node_modules'), 'dir')
+  // A workspace install HOISTS spec-cli's dependencies to the root, so the package having no node_modules of
+  // its own is a complete install, not a missing one — and the copied tree resolves them the same way Node
+  // does, by walking up to the root link above. Only a package that really carries its own tree gets a second
+  // link. Requiring one unconditionally passed on a developer box (it found the main checkout's leftover
+  // directory) and failed on a fresh CI runner, where the root `npm ci` is the only install that survives.
+  const cliDeps = [join(PRODUCT_SOURCE, 'spec-cli/node_modules'), join(main, 'spec-cli/node_modules')].find(existsSync)
+  if (cliDeps) symlinkSync(cliDeps, join(target, 'spec-cli/node_modules'), 'dir')
 }
 
 const specSource = (selector = 'alpha') => [
@@ -105,7 +110,7 @@ function record(home: string, project: string, session: string, id: string, bran
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
     session_id: id, governed: true, worktree_path: session, branch,
-    node: 'impact-fixture', title: 'impact fixture', name: '', parent: null, status: 'active',
+    title: 'impact fixture', name: '', parent: null, status: 'active',
     proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', launcher: 'fixture', launch_cmd: 'true',
   }, null, 2) + '\n')

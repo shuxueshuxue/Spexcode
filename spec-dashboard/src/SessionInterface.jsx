@@ -101,7 +101,7 @@ function ArchivePage({ sessions, onOpenSession, onClose }) {
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(lang)
     if (!needle) return sessions
-    return sessions.filter((session) => [sessionHeadline(session), session.label, session.id, session.node]
+    return sessions.filter((session) => [sessionHeadline(session), session.label, session.id]
       .filter(Boolean).some((value) => String(value).toLocaleLowerCase(lang).includes(needle)))
   }, [sessions, query, lang])
   const groups = useMemo(() => {
@@ -162,7 +162,7 @@ function ArchivePage({ sessions, onOpenSession, onClose }) {
               <button key={session.id} ref={(element) => { rowRefs.current[archiveRows.indexOf(session)] = element }} type="button" className="si-archive-page-row" data-sid={session.id}
                 onClick={() => onOpenSession(session.id)}>
                 <span className="si-archive-row-title">{sessionHeadline(session)}</span>
-                <span className="si-archive-row-node">{session.node || session.label}</span>
+                <span className="si-archive-row-label">{session.label}</span>
                 <time dateTime={session.closedAt || undefined}>{timeLabel(session)}</time>
                 <Icon name="chevron-right" size={14} />
               </button>
@@ -476,7 +476,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const { dock: forestOpen } = useWorkspace()
   // the Sessions document's own left sidebar. It folds on the SAME workspace flag the shell's dock does, so
   // it folds the same way ([[dock-modes]]) — it used to be the one panel in the frame that blinked out.
-  const [forestMounted, forestClosing, forestOpening] = useFold(forestOpen)
+  const [forestMounted, forestClosing, forestFolding] = useFold(forestOpen)
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
   const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
@@ -650,7 +650,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const resourceOptions = resourceCatalog.filter((option) => !openTabs.some((tab) =>
     tab.page === 'sessions' && tab.param === active && tab.query?.surface === resourceSurface(option.id)))
 
-  const activateResource = (tab) => {
+  const activateResource = () => {
     setResourceFocusRequest((request) => request + 1)
     closeCommandBox()
   }
@@ -1209,7 +1209,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useKeyboardScope((event) => {
     const onKey = (e) => {
       const {
-        active, submit, menu, navMenu, accept, closeMenu, open, searchOpen, commandOpen,
+        active, menu, navMenu, accept, closeMenu, open, searchOpen, commandOpen,
         commandAvailable, setCommandOpen, closeCommandBox, sessionOrder,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
@@ -1281,7 +1281,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     <div className="si-page">
       {forestMounted && <SessionForestPanel
         closing={forestClosing}
-        opening={forestOpening}
+        folding={forestFolding}
         sessions={sessions}
         activeId={active}
         // The Sessions document owns both its forest and its document chrome. Keeping these siblings

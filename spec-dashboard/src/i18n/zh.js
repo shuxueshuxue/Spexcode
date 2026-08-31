@@ -135,7 +135,6 @@ export default {
     railLabel: '主导航',
     graph: '规格节点图',
     explorer: '资源管理器',
-    spec: '规格',
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',
     spec: '规格',
@@ -653,7 +652,7 @@ export default {
   specNode: {
     liveEditors: ({ n }) => `${n} 个实时编辑者`,
     more: ({ n }) => `还有 ${n} 个`,
-    editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
+    editorTitle: ({ status, id }) => `${status} — ${id}`,
     driftAhead: ({ n }) => `领先 ${n}`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
     openIssues: ({ n }) => `${n} 个待办 issue——打开节点信息查看`,

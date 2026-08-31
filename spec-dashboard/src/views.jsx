@@ -1,7 +1,7 @@
 import { lazy } from 'react'
 import SessionsView from './SessionsView.jsx'
 import { useBoard, useBoardApi } from './workspace.jsx'
-import { createViewRegistry } from './viewRegistry.js'
+import { registerPlugin, seedCoreViews, viewRegistry, viewRouteContract } from './viewCatalog.js'
 import { createSettingsViewPlugin } from './builtInViewPlugins.js'
 import { useViewScope } from './ViewScope.jsx'
 
@@ -111,20 +111,15 @@ export const VIEWS = Object.freeze({
 
 // Product-owned views are seeded once; extensions register through this boundary so
 // collisions and ownership are visible instead of silently replacing shell routes.
-export const viewRegistry = createViewRegistry(VIEWS)
+seedCoreViews(VIEWS)
 // One registry owns both rendering metadata and the route contract consumed by ViewScopeHost.
-// Consumers must not maintain a parallel page allow-list.
-export const viewRouteContract = viewRegistry.routeContract
-export const registerView = (...args) => viewRegistry.registerView(...args)
-export const registerPlugin = (plugin) => viewRegistry.registerPlugin(plugin)
-export const unregisterPlugin = (id) => viewRegistry.unregisterPlugin(id)
+// Consumers must not maintain a parallel page allow-list. It lives in [[view-registry]]'s catalog, which
+// knows no component, so the address-side questions can be asked without importing the views themselves.
+export { viewRegistry, viewRouteContract }
+export { registerView, registerPlugin, unregisterPlugin, iconFor, isDocument, isResident } from './viewCatalog.js'
 
 registerPlugin(createSettingsViewPlugin(SettingsView))
 
+// The component lookup stays with the components: `viewFor` is what the shell renders through, and the
+// fallback names a view this module owns.
 export const viewFor = (page) => viewRegistry.get(page) || viewRegistry.get('sessions')
-export const iconFor = (page) => viewRegistry.get(page)?.icon || null
-export const isDocument = (page, param = null) => {
-  const view = viewRegistry.get(page)
-  return typeof view?.document === 'function' ? view.document(page, param) : !!view?.document
-}
-export const isResident = (page, param = null) => !!viewRegistry.get(page)?.resident && param == null

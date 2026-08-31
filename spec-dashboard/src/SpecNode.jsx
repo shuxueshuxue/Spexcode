@@ -46,7 +46,7 @@ function Editors({ data }) {
     <span className="node-editors" data-tip={t('specNode.liveEditors', { n: editors.length })}>
       {shown.map((e) => (
         <Avatar key={e.id} seed={e.id} status={e.status}
-          title={t('specNode.editorTitle', { node: e.node || t('common.session'), status: t(`status.${e.status}`), id: e.id.slice(0, 8) })} />
+          title={t('specNode.editorTitle', { status: t(`status.${e.status}`), id: e.id.slice(0, 8) })} />
       ))}
       {extra > 0 && <span className="av-more" data-tip={t('specNode.more', { n: extra })}>+{extra}</span>}
     </span>

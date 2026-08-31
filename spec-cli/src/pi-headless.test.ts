@@ -27,7 +27,10 @@ test('pi-headless composes pi materialization and replaces only the runtime half
   assert.equal(piHeadlessHarness.headless, true)
   assert.equal(piHeadlessHarness.runtimeOwnership, 'leaf')
   assert.equal(piHeadlessHarness.ownsRendezvous, true)
-  assert.equal(piHeadlessHarness.liveness({ session: 'abc' }, true), 'online')
+  // Leaf-backed headless adapters share sessionHomeLiveness: the controller PID is the witness, and a
+  // tmux pane that outlived a SIGKILL as a bare shell is not online. Same contract as claude-headless.
+  assert.equal(piHeadlessHarness.liveness({ session: 'abc' }, true, undefined, { pidAlive: true }), 'online')
+  assert.equal(piHeadlessHarness.liveness({ session: 'abc' }, true, undefined, { pidAlive: false }), 'offline')
   assert.equal(piHeadlessHarness.liveness({ session: 'abc' }, false), 'offline')
   assert.equal(piHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(piHeadlessHarness.launchCmd('abc', '/runtime', 'pi-custom'), /pi-headless-run.*abc.*pi-custom/)

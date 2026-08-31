@@ -3,22 +3,22 @@ title: worktree-linker
 status: merged
 session: sess-design
 hue: 190
-desc: Map each governed session to its node + overlay — enumerated from the global store; an op must both differ from main's tip and be the branch's own post-fork work.
+desc: Map each governed session to its spec-node overlay — enumerated from the global store; an op must both differ from main's tip and be the branch's own post-fork work.
 ---
 # worktree-linker
 
 ## raw source
 
-A governed session's work is identified by its global **record** (its node, the live status, and the
+A governed session's work is identified by its global **record** (the live status and the
 `worktree_path` that holds the actual `.spec`/code change). The linker = enumerate the global store →
 read each governed record → derive that worktree's real `.spec` proposal against main → overlay. Composable:
 `.spec` stays in-tree, so adopting SpexCode needs no restructure, and the worktree stays pristine.
 
 ## expanded spec
 
-A governed session's record ([[state]]/[[runtime]]) carries what identifies its work: the **node** it
-proposes changes to (the authoritative ref it was bound to — the branch slug, with its `-<id4>` suffix,
-falls back only when the record names none), the live **status**, and the **`worktree_path`**. The linker
+A governed session's record ([[state]]/[[runtime]]) carries what identifies its work: the live **status**
+and the **`worktree_path`**. Which nodes a session proposes changes to is never declared on the record —
+it is read from the worktree's own pending `.spec` diff. The linker
 reads the record, then derives the per-node overlay (`ops`) the board renders. The session set comes from
 ENUMERATING the global store (filtered to `governed:true`), not from `git worktree list` — so an unmanaged
 or scratch worktree never lands on the board.

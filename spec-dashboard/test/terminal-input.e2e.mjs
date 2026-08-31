@@ -53,7 +53,6 @@ try {
     lifecycle: 'active',
     liveness: 'online',
     parent: null,
-    node: null,
     name: 'Chinese IME input proof',
     headline: 'Chinese IME input proof',
     created: Date.now(),

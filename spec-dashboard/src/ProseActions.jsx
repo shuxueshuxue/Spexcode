@@ -70,11 +70,9 @@ const ACTIONS = [
   { key: 'manual', icon: 'pencil', preset: null, jump: false },
 ]
 
-// the default recipient: a live session already on this node, else the newest live session, else a new one.
-function defaultTarget(live, nodeId) {
-  const here = nodeId ? live.filter((s) => s.node === nodeId) : []
-  const pool = here.length ? here : live
-  return [...pool].sort((a, b) => (b.created || 0) - (a.created || 0))[0]?.id || 'new'
+// the default recipient: the newest live session, else a new one.
+function defaultTarget(live) {
+  return [...live].sort((a, b) => (b.created || 0) - (a.created || 0))[0]?.id || 'new'
 }
 
 export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear }) {
@@ -259,7 +257,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       return
     }
     setDraft(action.preset ? t(`proseActions.prompt.${action.preset}`) : '')
-    if (!live.some((s) => s.id === target)) setTarget(defaultTarget(live, node?.id))
+    if (!live.some((s) => s.id === target)) setTarget(defaultTarget(live))
     setJump(action.jump)
     setPanel({ kind: 'send', x, y })
   }

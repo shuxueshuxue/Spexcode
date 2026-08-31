@@ -68,7 +68,7 @@ test('sessionHeadline: codex headline is the TASK (prompt), not the worktree fol
   // the headline derivation is deriveHeadline ([[session-label]]) — toSession's single computation site;
   // this test feeds it the same parts toSession would.
   const base = {
-    id: 'sess-x', name: null, node: null, title: null, branch: null,
+    id: 'sess-x', name: null, title: null, branch: null,
     promptPreview: 'Implement codex session naming so the headline is the task',
   }
   // codex: pane title is `⠙ codex-naming` (the folder). Gated → activity null → headline is the prompt preview.

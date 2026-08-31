@@ -3,19 +3,19 @@ import assert from 'node:assert/strict'
 
 import { resolveSession, matchesSelector, selectSessions, type Session } from './sessions.js'
 
-// minimal Session builder — only id/node/branch feed the selector matcher; the rest are inert defaults so the
+// minimal Session builder — only id/branch feed the selector matcher; the rest are inert defaults so the
 // resolver sees realistic rows without dragging in tmux/git state.
-function mk(id: string, node: string | null, branch: string | null): Session {
+function mk(id: string, branch: string | null): Session {
   return {
-    id, node, branch, label: node || branch || id, title: node || branch || id, raw: { name: null, title: null }, path: `/wt/${id}`, parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
+    id, branch, label: branch || id, title: branch || id, raw: { name: null, title: null }, path: `/wt/${id}`, parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null, archived: false, closedAt: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }
 }
 
-const a = mk('aaaa1111-1111-1111-1111-111111111111', 'sessions', 'node/sessions-aaaa')
-const b = mk('aaaa2222-2222-2222-2222-222222222222', 'graph', 'node/graph-bbbb')
-const c = mk('bbbb3333-3333-3333-3333-333333333333', 'launch', 'node/launch-cccc')
+const a = mk('aaaa1111-1111-1111-1111-111111111111', 'node/sessions-aaaa')
+const b = mk('aaaa2222-2222-2222-2222-222222222222', 'node/graph-bbbb')
+const c = mk('bbbb3333-3333-3333-3333-333333333333', 'node/launch-cccc')
 const board = [a, b, c]
 
 // ---- resolveSession: the single-target lookup the control verbs use ----
@@ -26,10 +26,6 @@ test('resolveSession: a full id is an exact, unambiguous hit', () => {
 
 test('resolveSession: a unique id-prefix resolves', () => {
   assert.deepEqual(resolveSession('bbbb3333', board), { ok: c })
-})
-
-test('resolveSession: a node selector resolves', () => {
-  assert.deepEqual(resolveSession('graph', board), { ok: b })
 })
 
 test('resolveSession: a branch selector resolves', () => {
@@ -43,8 +39,8 @@ test('resolveSession: a prefix matching several is ambiguous (carries the candid
 })
 
 test('resolveSession: an exact full id wins even when it also prefixes a longer id', () => {
-  const x = mk('dead', 'x', 'node/x')          // full id 'dead'
-  const y = mk('deadbeef', 'y', 'node/y')      // 'dead' is a PREFIX of this id
+  const x = mk('dead', 'node/x')          // full id 'dead'
+  const y = mk('deadbeef', 'node/y')      // 'dead' is a PREFIX of this id
   assert.deepEqual(resolveSession('dead', [x, y]), { ok: x })   // exact wins, not ambiguous
 })
 
@@ -64,27 +60,27 @@ test('the dot selector names only the caller own session in ONE and MANY shapes'
 
 // ---- matchesSelector: the one shared predicate ----
 
-test('matchesSelector: matches id, id-prefix, node, branch — and only those', () => {
+test('matchesSelector: matches id, id-prefix, branch — and only those', () => {
   assert.ok(matchesSelector(a, a.id))
   assert.ok(matchesSelector(a, 'aaaa1111'))
-  assert.ok(matchesSelector(a, 'sessions'))
   assert.ok(matchesSelector(a, 'node/sessions-aaaa'))
-  assert.ok(!matchesSelector(a, 'graph'))
+  assert.ok(!matchesSelector(a, 'node/graph-bbbb'))
+  assert.ok(!matchesSelector(a, 'sessions'), 'a bare spec-node id names no session')
 })
 
 test('matchesSelector: a comma list matches iff ANY part names the session', () => {
-  // the bug this guards: `watch a,b` was one literal selector that matched nothing (an id/node/branch never
+  // the bug this guards: `watch a,b` was one literal selector that matched nothing (an id/branch never
   // holds a comma) → a comma-joined watch streamed zero events in silence. Comma now ORs the parts.
-  assert.ok(matchesSelector(a, 'sessions,graph'))      // first part hits
-  assert.ok(matchesSelector(b, 'sessions,graph'))      // second part hits
-  assert.ok(matchesSelector(c, 'bbbb3333,nope'))       // id-prefix part hits
-  assert.ok(!matchesSelector(c, 'sessions,graph'))     // neither part names c
-  assert.ok(matchesSelector(a, 'sessions, graph'))     // whitespace around a part is trimmed
+  assert.ok(matchesSelector(a, 'node/sessions-aaaa,node/graph-bbbb'))      // first part hits
+  assert.ok(matchesSelector(b, 'node/sessions-aaaa,node/graph-bbbb'))      // second part hits
+  assert.ok(matchesSelector(c, 'bbbb3333,nope'))                           // id-prefix part hits
+  assert.ok(!matchesSelector(c, 'node/sessions-aaaa,node/graph-bbbb'))     // neither part names c
+  assert.ok(matchesSelector(a, 'node/sessions-aaaa, node/graph-bbbb'))     // whitespace around a part is trimmed
 })
 
 test('selectSessions: a single comma-joined selector selects the union (watch a,b == watch a b)', () => {
-  const comma = selectSessions(board, ['sessions,graph']).map((s) => s.id)
-  const space = selectSessions(board, ['sessions', 'graph']).map((s) => s.id)
+  const comma = selectSessions(board, ['node/sessions-aaaa,node/graph-bbbb']).map((s) => s.id)
+  const space = selectSessions(board, ['node/sessions-aaaa', 'node/graph-bbbb']).map((s) => s.id)
   assert.deepEqual(comma, [a.id, b.id])
   assert.deepEqual(comma, space)
 })
@@ -93,7 +89,7 @@ test('selectSessions: a single comma-joined selector selects the union (watch a,
 
 test('selectSessions and resolveSession agree on the shared predicate', () => {
   // any selector that narrows the list to exactly one row must resolve to that same row
-  for (const q of ['graph', 'bbbb3333', 'node/launch-cccc']) {
+  for (const q of ['node/graph-bbbb', 'bbbb3333', 'node/launch-cccc']) {
     const filtered = selectSessions(board, [q])
     assert.equal(filtered.length, 1)
     assert.deepEqual(resolveSession(q, board), { ok: filtered[0] })
@@ -103,17 +99,17 @@ test('selectSessions and resolveSession agree on the shared predicate', () => {
 // ---- sigil tolerance: a CLI selector sheds an optional @ / [[ ]] (see [[mentions]]) ----
 
 test('matchesSelector: @sel and [[sel]] name the same session as the bare token', () => {
-  assert.ok(matchesSelector(a, '@sessions'))
-  assert.ok(matchesSelector(a, '[[sessions]]'))
-  assert.ok(matchesSelector(a, '@aaaa1111'))            // sigil + id-prefix
-  assert.ok(matchesSelector(a, '@sessions,@graph'))     // per-part in a comma list
-  assert.ok(!matchesSelector(c, '@sessions'))           // tolerance never widens what matches
+  assert.ok(matchesSelector(a, '@node/sessions-aaaa'))
+  assert.ok(matchesSelector(a, '[[node/sessions-aaaa]]'))
+  assert.ok(matchesSelector(a, '@aaaa1111'))                                     // sigil + id-prefix
+  assert.ok(matchesSelector(a, '@node/sessions-aaaa,@node/graph-bbbb'))          // per-part in a comma list
+  assert.ok(!matchesSelector(c, '@node/sessions-aaaa'))                          // tolerance never widens what matches
 })
 
 test('resolveSession: a sigiled selector resolves like the bare one; @full-id keeps exact-wins', () => {
-  assert.deepEqual(resolveSession('@graph', board), { ok: b })
-  assert.deepEqual(resolveSession('[[graph]]', board), { ok: b })
-  const x = mk('dead', 'x', 'node/x')
-  const y = mk('deadbeef', 'y', 'node/y')
+  assert.deepEqual(resolveSession('@node/graph-bbbb', board), { ok: b })
+  assert.deepEqual(resolveSession('[[node/graph-bbbb]]', board), { ok: b })
+  const x = mk('dead', 'node/x')
+  const y = mk('deadbeef', 'node/y')
   assert.deepEqual(resolveSession('@dead', [x, y]), { ok: x })   // exact full-id wins through the sigil
 })

@@ -48,7 +48,7 @@ const SPEC = `spex guide spec — the spec.md file format
 
 A spec node is a DIRECTORY under .spec/<project>/…/<id>/ holding a spec.md. The node's id is its leaf dir
 name when that is globally unique, else the shortest parent-qualified path-suffix that disambiguates (so ids
-are unique by construction) — the same id \`spex graph\`, \`spec ack\`, and a node/<id> branch use. A spec states a node's PRESENT
+are unique by construction) — the same id \`spex graph\` and \`spec ack\` use. A spec states a node's PRESENT
 intent at CONTRACT altitude — what it guarantees and why — and is rewritten in place as intent changes;
 version history is git's job, never a changelog in the body.
 
@@ -151,7 +151,7 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
 Heuristic spec health is deliberately outside this production gate. Bare \`spex doctor\` reports opt-in
 altitude and breadth findings; the tidy workflow consumes that report and adds semantic judgment.
 
-LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
+LIFECYCLE: one node per commit; \`spex spec lint\` must reach 0 errors
 before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.
 
 SHARED LANDING: if the shared checkout is mid-merge, wait. Never abort or resolve someone else's merge; if your

@@ -3,7 +3,7 @@ import FileTree from './FileTree.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { SessionConsoleTreeRow } from './SessionWindow.jsx'
 import { expandSessionFolds, setSessionOfflineOpen, toggleSessionFold, useSessionListState } from './sessionListState.js'
-import { sessionAncestorIds, sessionForest, sessionZone } from './session.js'
+import { sessionAncestorIds, sessionForest } from './session.js'
 import { apiFetch } from './data.js'
 import { elementAt, startDrag } from './dragGesture.js'
 import { navigate } from './route.js'
@@ -14,11 +14,10 @@ import { Icon, IconButton } from './icons.jsx'
 import { collapseExplorerFolders, useExplorerFolded } from './specTreeState.js'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
+import { useArrival } from './useFold.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useBoardApi, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
-import { useKeyboardScope } from './KeyboardService.jsx'
-import { resolveSessionShortcut } from './sessionShortcuts.js'
 
 // [[dock-modes]]: one finding dock, two projections. Shell owns mode persistence; this component renders
 // the selected projection and keeps every row on the existing route/tab contracts.
@@ -27,7 +26,7 @@ import { resolveSessionShortcut } from './sessionShortcuts.js'
 // live in the single header row below, so switching projection changes what the dock LISTS and never how
 // thick the dock is. Explorer's count row, the sessions "+" and the archive door were three separate strips
 // stacked around one list; that is three answers to a question the shell already answers once.
-function SessionDock({ sessions, activeId, suppressRows = false }) {
+function SessionDock({ sessions }) {
   const t = useT()
   const { offline } = useBackendHealth()
   const { expanded, offlineOpen } = useSessionListState()
@@ -45,37 +44,13 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
   const [closeRequest, setCloseRequest] = useState(null)   // a row dropped on the archive door, awaiting its confirm
   const abandon = useRef(null)
   useEffect(() => () => abandon.current?.(), [])
-  // Reveal follows the focused document, like an editor's active-file explorer: the row remains selected from
-  // the route while its parent chain is opened in the dock's existing fold state. Offline is a zone fold, so an
-  // active document there opens that disclosure too; no second selection state is needed.
-  useEffect(() => {
-    if (!activeId) return
-    const active = (sessions || []).find((session) => session.id === activeId)
-    expandSessionFolds(sessionAncestorIds(sessions || [], activeId))
-    if (active && sessionZone(active) === 'offline') setSessionOfflineOpen(true)
-  }, [activeId, sessions])
+  // This projection only ever renders beside a NON-session document ([[dock-modes]]) — a focused session
+  // means the Sessions route, which mounts no finding dock — so there is no active row: no route-selected
+  // highlight, no reveal, no keyboard walk. Those live with the Sessions document's own forest
+  // ([[session-forest]]), the surface that has a focused session to anchor them.
   const rows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
-    keepVisible: (session) => session.id === activeId,
-  }), [sessions, expanded, offlineOpen, activeId])
-
-  // Session navigation lives on the dock now that the old full-width SessionInterface list is retired.
-  // Option arrows remain intentional even while a terminal, Command Box, or composer owns native focus.
-  useKeyboardScope((event) => {
-    if (suppressRows) return false
-    const action = resolveSessionShortcut(rows, activeId, event)
-    if (!action) return false
-    event.preventDefault()
-    if (action.type === 'move') navigate('sessions', action.id)
-    else if (action.type === 'expand') {
-      const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
-      if (item && !item.expanded) toggleSessionFold(action.id)
-    } else if (action.type === 'collapse') {
-      const item = rows.find((candidate) => candidate.type === 'row' && candidate.s.id === action.id)
-      if (item?.expanded) toggleSessionFold(action.id)
-    }
-    return true
-  }, 20)
+  }), [sessions, expanded, offlineOpen])
 
   // THE MOVE ITSELF is the backend's existing reparent, for both directions: a row dropped on another row
   // names that row as the parent, and a row dropped on the top-level door names none. There is no second
@@ -146,10 +121,6 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
   // rather than an element of its own — an affordance that costs no layout can be shown without moving
   // anything the reader is aiming at.
   const rootArmed = !!drag?.parent
-  // The routed Sessions document owns the complete forest. Do not leave a structural empty body in the
-  // finding dock: the document list is the only session navigation surface for this focused route. This
-  // guard comes after every hook so switching ownership keeps hook order stable.
-  if (suppressRows) return null
   return (
     <div className="dock-session-body">
       <div className={`dock-session-list${rootArmed ? ' root-armed' : ''}${drag?.target === null ? ' root-on' : ''}`}
@@ -168,7 +139,7 @@ function SessionDock({ sessions, activeId, suppressRows = false }) {
           // when the tab moves on. Ctrl/⌘ opens it in a new tab, and ⌥ scopes the graph to its worktree —
           // the gesture the retired map-side glance used to own.
           const locked = !!item.s.source && item.s.source === lockedSource
-          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={activeId}
+          return <SessionConsoleTreeRow key={item.s.id} item={item} activeId={null}
             dragging={drag?.id === item.s.id}
             dropTarget={drag?.target === item.s.id}
             onToggleFold={() => toggleSessionFold(item.s.id)}
@@ -263,21 +234,23 @@ function DockHead({ mode, specs, sessions }) {
   )
 }
 
-export default function Dock({ mode, specs, sessions, focusId, activeSessionId, suppressSessionRows = false, closing = false, opening = false }) {
+export default function Dock({ mode, specs, sessions, focusId, closing = false, folding = false }) {
   // 200px is the resting width: wide enough for a session headline or a file name to read before it
   // ellipses, narrow enough that the finding dock stays a margin beside the document rather than a second
   // column competing with it. A reader who wants more drags it, and that choice is what persists — the
   // default only decides what an unopinionated window looks like.
   const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
-  // `data-fold` says WHY this panel appeared. A fold is a width movement; a route handover is the same band
-  // changing what it shows, and animating the second as the first is what made switching documents look
-  // like a teardown. Only a fold gets the width animation.
+  // `data-fold` says WHY this panel appeared — `'in'` a fold, `'swap'` a route handover, absent at rest.
+  // Only a fold is a width movement. The handover half is read HERE and not from the shell's flag because
+  // the shell stays mounted across the route switch that replaces its dock: the mount is the only witness
+  // ([[dock-modes]], `useArrival`).
+  const arrival = useArrival(folding)
   return (
-    <aside className={closing ? 'dock dock-closing' : 'dock'} data-fold={opening ? 'in' : undefined}
+    <aside className={closing ? 'dock dock-closing' : 'dock'} data-fold={arrival || undefined}
       style={{ width }} aria-hidden={closing ? 'true' : undefined}>
       <DockHead mode={mode} specs={specs} sessions={sessions} />
       {mode === 'sessions'
-        ? <SessionDock sessions={sessions} activeId={activeSessionId} suppressRows={suppressSessionRows} />
+        ? <SessionDock sessions={sessions} />
         : <FileTree specs={specs} focusId={focusId} embedded />}
       <div className="ft-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
     </aside>

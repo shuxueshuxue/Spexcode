@@ -30,8 +30,8 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<Run> {
 test('session send puts only the sender/reply line on the wire; artifact guidance stays in the materialized contract', async () => {
   const delivered: Input[] = []
   const rows = [
-    { id: sender, name: 'sender headline', activity: null, promptPreview: null, node: null, title: 'sender title', branch: 'node/sender' },
-    { id: recipient, name: null, activity: null, promptPreview: null, node: null, title: 'recipient title', branch: 'node/recipient' },
+    { id: sender, name: 'sender headline', activity: null, promptPreview: null, title: 'sender title', branch: 'node/sender' },
+    { id: recipient, name: null, activity: null, promptPreview: null, title: 'recipient title', branch: 'node/recipient' },
   ]
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://fixture')

@@ -3,7 +3,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { headlessTurnFailureShell, type DispatchResult, type HarnessDeliveryRecord } from './harness.js'
+// The failure shell is harness-shim's, and harness.js only passes it through. Taking it from the shim
+// keeps this adapter downstream of the harness instead of beside it: harness.js imports THIS module to
+// build its opencode entries, so reaching back for a value re-entered its own initialization.
+import { headlessTurnFailureShell } from './harness-shim.js'
+import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 import { shQuote } from './sh.js'
 
 const pexec = promisify(execFile)

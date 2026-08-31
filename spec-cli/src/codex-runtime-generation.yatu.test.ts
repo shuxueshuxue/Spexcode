@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,7 +36,7 @@ async function startRealCodex(endpoint: CodexGenerationEndpoint, cwd: string, co
 function writeRecord(id: string, threadId: string, worktree: string, branch: string, status = 'idle'): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktree, branch, node: 'shared-runtime-generation-rotation',
+    session_id: id, governed: true, worktree_path: worktree, branch,
     title: id, name: '', parent: '', status, proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(),
     harness: 'codex', harness_session_id: threadId, stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'codex', launch_cmd: 'codex', launch_owner: '',

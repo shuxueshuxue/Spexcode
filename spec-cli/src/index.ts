@@ -8,9 +8,9 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig, readAliasedRawRecord, runtimeRoot } from '@spexcode/spec-core'
+import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig, runtimeRoot } from '@spexcode/spec-core'
 import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
+import { closeIssue, createIssue, findIssue, mergedIssues, promote } from './issues.js'
 import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '@spexcode/spec-forge/resident'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
@@ -25,7 +25,7 @@ import { TMUX_SOCK } from './session-tmux.js'
 import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable } from './session-record.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionTranscript, readSessionTranscriptTool, sessionTranscriptStream } from './session-transcript.js'
-import { defaultHarness, HARNESSES, launcherList, launcherDefault, harnessById } from './harness.js'
+import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { codexHarness } from './codex-harness.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
@@ -778,7 +778,7 @@ app.get('/api/sessions/:id/timeline', (c) => {
   })
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
+// the session RECORD detail (`spex session show`): the board row (status · branch · launcher · …)
 // plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
 // the CLI's show; 404 for an unknown id.
 app.get('/api/sessions/:id', async (c) => {

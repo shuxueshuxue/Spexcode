@@ -90,7 +90,7 @@ test('YATU: the transcript GET and stream read one native thread through the ada
     const sessionDir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
     mkdirSync(sessionDir, { recursive: true })
     writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({
-      session_id: id, governed: true, worktree_path: project, branch: 'main', node: '', title: 'transcript API', name: '', parent: '',
+      session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'transcript API', name: '', parent: '',
       status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'codex', launch_owner: '',
     }) + '\n')

@@ -20,7 +20,7 @@ let home: string
 function writeRecord(id: string, harnessSessionId: string): void {
   const rec: RawRecord = {
     session_id: id, governed: true, worktree_path: `/tmp/wt/${id}`, branch: `node/${id}`,
-    node: id, title: null, name: null, status: 'active', proposal: null, merges: 0, note: null,
+    title: null, name: null, status: 'active', proposal: null, merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: harnessSessionId,
   }
   const p = sessionRecordPath(id)

@@ -9,7 +9,7 @@ import type { SessRec } from './session-record.js'
 //  - resume replays the PINNED launcher command, never a since-changed ambient default (tooth 4, [[launcher-select]]).
 
 const rec = (over: Partial<SessRec> = {}): SessRec => ({
-  session: 'sess-live-1', governed: true, worktreePath: '/wt/x', branch: 'node/x-1', node: 'x',
+  session: 'sess-live-1', governed: true, worktreePath: '/wt/x', branch: 'node/x-1',
   title: null, name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
   sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null,
   launcher: null, launchCmd: null, launchOwner: null,

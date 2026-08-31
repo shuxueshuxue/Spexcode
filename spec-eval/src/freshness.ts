@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
-import { batchRevisionOids, gitA, gitTry, headSha, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, primeAncestorClosures, unionTopology, type DriftIndex, type DriftPathEvent, type Reachability, eventsSince } from '@spexcode/spec-core'
-import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '@spexcode/spec-core'
+import { batchRevisionOids, gitTry, headSha, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, primeAncestorClosures, unionTopology, type DriftIndex, type Reachability, eventsSince } from '@spexcode/spec-core'
+import { anchorHitExists, extOf, extractorFor, extractors, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '@spexcode/spec-core'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocks, type ScenarioIndex } from './scenariofresh.js'
@@ -454,7 +454,7 @@ export function contentProbeFor(root: string): ContentProbe {
       .filter((row) => !row.entry.gone && [...row.codePaths].some((path) => row.entry.verdicts.get(path) === true))
       .map((row) => row.entry.imageOid!)
     if (drifted.length) await primeAnchorTopology(root, scope, drifted)
-    for (const [sha, row] of grouped) {
+    for (const row of grouped.values()) {
       if (row.entry.gone) continue
       for (const evalPath of row.evalPaths) if (row.entry.verdicts.get(evalPath) === true) {
         scope.blockDemands.add(`${row.entry.imageOid}\x1f${evalPath}`)

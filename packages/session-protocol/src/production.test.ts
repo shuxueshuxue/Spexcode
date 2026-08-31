@@ -12,7 +12,7 @@ import {
   applyComponentMigrations,
   openProtocol,
 } from './index.js'
-import type { ComponentMigration, SessionProtocol } from './index.js'
+import type { ComponentMigration } from './index.js'
 
 const require = createRequire(import.meta.url)
 const { DatabaseSync } = require('node:sqlite') as {

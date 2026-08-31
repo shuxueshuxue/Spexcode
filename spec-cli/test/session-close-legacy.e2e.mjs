@@ -25,7 +25,7 @@ const store = join(home, 'projects', encoded, 'sessions', id)
 mkdirSync(store, { recursive: true })
 writeFileSync(join(store, 'prompt'), 'proof prompt\n')
 writeFileSync(join(store, 'session.json'), JSON.stringify({
-  session_id: id, governed: true, worktree_path: worktree, branch: `node/${id}`, node: '', title: 'proof', name: '', parent: '',
+  session_id: id, governed: true, worktree_path: worktree, branch: `node/${id}`, title: 'proof', name: '', parent: '',
   status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
   stopped: true, archived: true, cold_proof: 'cold-v1|claude|legacy-compat|no-resident-ref', adapter_recovery: '', launcher: 'fixture',
   launch_cmd: runner, launch_owner: '',

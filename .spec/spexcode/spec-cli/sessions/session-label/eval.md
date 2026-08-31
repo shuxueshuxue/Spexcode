@@ -43,8 +43,8 @@ scenarios:
     expected: >
       Every human-readable CLI identity — list row, show/review header, ambiguity candidate, and
       launch/state/message notification — displays the same derived `title` as the Session JSON, never its
-      stable `label`, raw node, or branch. `label` and `node` remain readable only as machine-compatible JSON
-      fields and selector inputs. Zero loss = one current session name across the dashboard and CLI.
+      stable `label` or branch. `label` remains readable only as a machine-compatible JSON
+      field and selector input. Zero loss = one current session name across the dashboard and CLI.
     code: [spec-cli/src/cli.ts, spec-cli/src/session-follow.ts]
     related: [spec-cli/src/sessions.ts]
 ---
@@ -57,5 +57,5 @@ verify the rename dialog's prefill; the wire-shape and precedence halves are pin
 
 For the CLI identity scenario, drive the real CLI against one session whose `label` and `title` differ. The
 transcript must show the same wire-derived title in every human-readable command and follow notification;
-the JSON `label`/`node` fields are retained only to prove that selector compatibility did not become a second
+the JSON `label` field is retained only to prove that selector compatibility did not become a second
 visible-name path.

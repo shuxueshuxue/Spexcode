@@ -72,7 +72,7 @@ test('ZCode child identity is durable, exact, and collision-safe in the graph pr
       const dir = join(runtime, id)
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'session.json'), JSON.stringify({
-        session_id: id, governed: true, worktree_path: project, branch: 'main', node: null,
+        session_id: id, governed: true, worktree_path: project, branch: 'main',
         title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0, review_epoch: 0,
         note: '', sortkey: '', createdAt: Date.now(), harness: 'zcode', harness_session_id: '',
         stopped: true, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'zcode', launch_cmd: 'zcode',

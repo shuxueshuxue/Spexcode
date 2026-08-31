@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname, isAbsolute, resolve } from 'node:path'
-import { mainRoot, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readRecordEntry, readAliasedRecordEntry, processStartToken, isSessionLifecycle, isSessionProposal, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
+import { mainRoot, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, rawLaunchReadinessOriginal, readRecordEntry, readAliasedRecordEntry, processStartToken, isSessionLifecycle, isSessionProposal, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { configuredSessionApplicationIfCutover } from './session-application.js'
 import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
@@ -18,7 +18,7 @@ let withSessionTransition: <T>(id: string, body: () => Promise<T>) => Promise<T>
 
 export type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
-  node: string | null; title: string | null; name: string | null
+  title: string | null; name: string | null
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null; runtimeStartToken: string | null
@@ -82,7 +82,7 @@ export function readRecord(id: string): SessRec | null {
     return {
       session: id,
       governed: true,
-      worktreePath: '', branch: null, node: null, title: null, name: null, parent: state.parentSessionId,
+      worktreePath: '', branch: null, title: null, name: null, parent: state.parentSessionId,
       status: state.status as SessionLifecycle,
       proposal: isSessionProposal(state.proposal) ? state.proposal : null,
       merges: 0, note: state.note, sortKey: null, createdAt: state.updatedAtMs,
@@ -190,7 +190,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   })
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
-    node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
+    title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
     status, proposal, merges: Number(raw.merges) || 0,
     note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
@@ -277,7 +277,7 @@ export function writeRecord(rec: SessRec): void {
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const metadataChanged = !previous || [
-    'governed', 'worktreePath', 'branch', 'node', 'title', 'name', 'merges', 'sortKey', 'createdAt',
+    'governed', 'worktreePath', 'branch', 'title', 'name', 'merges', 'sortKey', 'createdAt',
     'harness', 'harnessSessionId', 'runtimeStartToken', 'stopped', 'archived', 'closedAt', 'coldProof',
     'adapterRecovery', 'launcher', 'launchCmd', 'launchOwner', 'launchReadinessStartedAt', 'createRequestId',
     'createPayloadHash', 'zcodeChildSessionIds', 'base', 'forkCommit', 'diffComments', 'launchReadinessPending',
@@ -290,7 +290,6 @@ export function writeRecord(rec: SessRec): void {
     governed: rec.governed,
     worktree_path: rec.worktreePath,
     branch: rec.branch ?? '',
-    node: rec.node ?? '',
     title: rec.title ?? '',
     name: rec.name ?? '',
     merges: rec.merges,

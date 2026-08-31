@@ -49,7 +49,7 @@ async function stop(child: ChildProcess): Promise<void> {
   }
 }
 
-test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async (t) => {
+test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-api-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
@@ -65,7 +65,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
     const sessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
     const dir = join(sessions, id)
     mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'session.json'), JSON.stringify({ session_id: id, governed: true, worktree_path: project, branch: 'main', node: '', title: 'API timeline', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true', launch_owner: '' }, null, 2) + '\n')
+    writeFileSync(join(dir, 'session.json'), JSON.stringify({ session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'API timeline', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true', launch_owner: '' }, null, 2) + '\n')
     const bin = join(fixture, 'bin'); mkdirSync(bin); writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nexit 1\n'); chmodSync(join(bin, 'tmux'), 0o755)
     backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], { cwd: project, env: { ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, PORT: String(port), SPEXCODE_HOME: home, SPEXCODE_TIMELINE_SEGMENT_BYTES: '1024', SPEXCODE_TMUX: `timeline-api-${port}` }, stdio: 'ignore', detached: true })
     const base = `http://127.0.0.1:${port}`
@@ -172,7 +172,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
     const sessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
     const dir = join(sessions, id)
     mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'session.json'), JSON.stringify({ session_id: id, governed: true, worktree_path: project, branch: 'main', node: '', title: 'many backend timeline', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true', launch_owner: '' }, null, 2) + '\n')
+    writeFileSync(join(dir, 'session.json'), JSON.stringify({ session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'many backend timeline', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true', launch_owner: '' }, null, 2) + '\n')
     const bin = join(fixture, 'bin'); mkdirSync(bin); writeFileSync(join(bin, 'tmux'), '#!/bin/sh\n[ "$1" = "-V" ] && { echo "tmux 3.4"; exit 0; }\nexit 1\n'); chmodSync(join(bin, 'tmux'), 0o755)
     const env: NodeJS.ProcessEnv = {
       ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, SPEXCODE_HOME: home,

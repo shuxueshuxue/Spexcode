@@ -5,7 +5,7 @@ import { RAIL_PAGES, navigate, routeHash } from './route.js'
 import { focusLatestTab } from './tabs.js'
 import { withShortcut } from './bindings.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
-import { iconFor } from './views.jsx'
+import { iconFor } from './viewCatalog.js'
 
 // The workspace's rail ([[side-nav]]) — a top-level board bar plus the dock visibility control. Board
 // entries are navigation only: their plain click changes the route and never creates a strip tab.
@@ -94,9 +94,13 @@ export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDoc
           badge={p === 'sessions' ? needsYou : 0}
           disabled={graphOnly && p !== 'graph'}
           onNavigate={() => {
+            // The sessions anchor unfolds the shared band and returns to the held session document; it
+            // pre-selects NO dock projection. The Sessions route mounts no finding dock ([[dock-modes]]),
+            // so a projection written here had exactly one observable effect: the DEPARTING document's
+            // dock flipped to a sessions projection for the frames before the route landed — a second,
+            // differently-dressed sessions sidebar flashing between the explorer and the forest.
             if (p === 'sessions') {
               setDock?.(true)
-              setDockMode?.('sessions')
               return focusLatestTab((tab) => tab.page === 'sessions' && tab.param)
             }
             if (p === 'spec') {

@@ -1,14 +1,14 @@
-import { execFile, execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
-import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
+import { readFileSync, writeFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
+import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, parseStatPath, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
-import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
@@ -17,15 +17,15 @@ import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIf
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, quarantineCorruptRecord, restoreQuarantinedRecord, type CorruptRecordQuarantineWitness, type CorruptRecordQuarantineResult, backendLaunchAuthority, rawLifecycleStatus, canDrainQueued } from './session-record.js'
+import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, collectResourceReport, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
-import { lastHumanSendVia, recordStatus } from './session-timeline.js'
-import { TMUX_SOCK, TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
+import { lastHumanSendVia } from './session-timeline.js'
+import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
 
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
@@ -137,7 +137,7 @@ export function displayStatusForProposal(proposal: Proposal | null | undefined):
 }
 
 export type Session = {
-  id: string; node: string | null; branch: string | null; path: string
+  id: string; branch: string | null; path: string
   label: string; title: string   // `label` remains the stable search handle; `title` is the one visible session name
   raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
@@ -171,9 +171,6 @@ function normalizeCloseSource(raw: unknown): CloseSource {
 
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
-function writePromptFile(id: string, prompt: string): void {
-  try { writeFileSync(join(storeDir(id), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
-}
 function readPromptFile(id: string): string | null {
   try {
     const p = sessionArtifactPath(id, 'prompt')
@@ -184,9 +181,6 @@ function readPromptFile(id: string): string | null {
 }
 // The resolved first-turn payload is authoritative across queue drain and recovery. Adapters that mint native
 // identity keep it until they prove identity + first-turn durability; other adapters consume on submission.
-function writeLaunchFile(id: string, prompt: string): void {
-  writeFileSync(join(storeDir(id), 'launch'), prompt)
-}
 function readLaunchFile(id: string): string | null {
   try { const p = sessionArtifactPath(id, 'launch'); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
 }
@@ -205,10 +199,10 @@ function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-export const deriveLabel = (r: { name?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
-  r.name || r.node || r.title || r.branch || r.id
-export const deriveTitle = (r: { name?: string | null; activity?: string | null; note?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
-  r.name || r.activity || (r.note ? oneLinePreview(r.note) : '') || (r.promptPreview ? oneLinePreview(r.promptPreview) : '') || r.node || r.title || r.branch || r.id
+export const deriveLabel = (r: { name?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.title || r.branch || r.id
+export const deriveTitle = (r: { name?: string | null; activity?: string | null; note?: string | null; promptPreview?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.activity || (r.note ? oneLinePreview(r.note) : '') || (r.promptPreview ? oneLinePreview(r.promptPreview) : '') || r.title || r.branch || r.id
 // Compatibility for package consumers that still import the old name.
 export const deriveHeadline = deriveTitle
 
@@ -672,15 +666,14 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
 // session (a store read, free) and how does its branch stand against main (ahead count, dirty scan, a
 // merge-tree conflict probe — 646 ms and 8 git children on a far-diverged branch). A consumer that renders
 // no gates strip should not buy the second one. The record already holds the identity half.
-export type ReviewIdentity = { id: string; node: string | null; branch: string | null; label: string }
+export type ReviewIdentity = { id: string; branch: string | null; label: string }
 export function reviewIdentity(id: string): ReviewIdentity | null {
   const rec = readRecord(id)
   if (!rec) return null
   return {
     id,
-    node: rec.node,
     branch: rec.branch,
-    label: deriveLabel({ id, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch }),
+    label: deriveLabel({ id, name: rec.name, title: rec.title, branch: rec.branch }),
   }
 }
 
@@ -710,7 +703,7 @@ export function sessionHookState(id: string): SessionHookState | null {
 function corruptSession(id: string, entry: { path: string; error: string }): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
-    id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
+    id, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: corruptReason(entry), archived: false, closedAt: null, prompt: null, promptPreview: null, created: 0,
@@ -725,9 +718,9 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const showActivity = lv === 'online'
   const act = showActivity ? activity : null
   const pp = prompt ? oneLinePreview(prompt) : null
-  const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
+  const parts = { id: rec.session, name: rec.name, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+  return { id: rec.session, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
 }
 
 export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }
@@ -784,7 +777,7 @@ export async function sessionPrompt(id: string): Promise<string | null> {
 }
 
 export type ArchiveSessionIndexRow = {
-  id: string; title: string; label: string; closedAt: string | null; node: string | null
+  id: string; title: string; label: string; closedAt: string | null
 }
 export type ArchiveSessionIndexProbe = { promptReads?: number }
 
@@ -799,7 +792,7 @@ export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe)
     const rec = fromRaw(entry.raw)
     if (!rec.governed || (!rec.archived && !rec.closedAt)) continue
     const parts = {
-      id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
+      id: rec.session, name: rec.name, title: rec.title, branch: rec.branch,
       activity: null, note: rec.note, promptPreview: null as string | null,
     }
     // Name and note are ahead of the prompt in deriveTitle's precedence. Avoid touching the prompt artifact
@@ -814,7 +807,6 @@ export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe)
       title: deriveTitle(parts),
       label: deriveLabel(parts),
       closedAt: rec.closedAt,
-      node: rec.node,
     })
   }
   return rows
@@ -1263,7 +1255,7 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 
 
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
-function isOccupying(s: Session, snap: LiveSnap): boolean {
+function isOccupying(s: Session, _snap: LiveSnap): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
   // `listSessions` already joined the adapter resident census and projected the resulting liveness. Re-reading
   // the harness here would resurrect the old record-backed codex-headless shortcut and disagree with the row.
@@ -2465,9 +2457,11 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       traceSessionCreate(id, requestDigest, phase, 'start')
       throwIfCreateAborted(signal, phase)
       const rawPrompt = prompt
+      // @@@ the first mention is read TWICE and stored NEVER - it names the worktree slug and, when that id
+      // exists, the [[spec-pointer]] line. The record carries no spec node: a session is not bound to one.
       const ref = nodeFromPrompt(rawPrompt)
       const launchSpecs = ref ? loadSpecsLite() : null
-      const title = ref ? null : titleFromPrompt(rawPrompt)
+      const title = titleFromPrompt(rawPrompt)
       const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
       const root = mainRoot()
       // An explicit base pins the fork point so a run is reproducible against a frozen commit instead of
@@ -2561,7 +2555,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
-            node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
+            title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, runtimeStartToken: randomUUID(), stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
@@ -3281,9 +3275,9 @@ export type ReviewGates = {
   lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
 }
 export type ReviewPayload = {
-  id: string; node: string | null; branch: string | null
-  label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own node||branch||id chain
-  ahead: number              // commits the node branch is ahead of main
+  id: string; branch: string | null
+  label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own branch||id chain
+  ahead: number              // commits the session branch is ahead of main
   dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
   diff: ReviewDiffFile[]     // the worker's real changes, anchored at the merge-base
   gates: ReviewGates
@@ -3631,8 +3625,8 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   // path is genuine work — this is just the total uncommitted count.
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
-    id, node: wt.rec.node, branch: wt.branch,
-    label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
+    id, branch: wt.branch,
+    label: deriveLabel({ id, name: wt.rec.name, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
     gates: { conflictsWithMain, lint },
@@ -4162,7 +4156,7 @@ async function reportCloseResidue(id: string, worktreePath: string): Promise<voi
     }
     console.warn('  inspect these PIDs and handle them through their owning harness/runtime; close does not kill detached descendants.')
   } catch (error) {
-    console.warn(`spex: close ${id} completed, but the residual-process scan failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(`spex: close ${id} completed, but the residual-process sweep failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -4311,15 +4305,15 @@ const ANSI: Record<DisplayStatus, string> = {
 }
 
 // @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A
-// selector matches a session iff it is the session's full id, an id-PREFIX, its node, its branch, or `.` for
+// selector matches a session iff it is the session's full id, an id-PREFIX, its branch, or `.` for
 // the caller's own launched session. This is
-// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/node/branch
+// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/branch
 // resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
 // review/merge/send/close act on".
 export function matchesSelector(s: Session, q: string, own = ownSessionId(), cwd = process.cwd()): boolean {
   // a selector may be a comma-separated list (the same convention as `--status a,b`): it matches iff ANY part
   // names the session, so `watch a,b` and `watch a b` are equivalent. A single name is the one-part case. This
-  // is what stops a comma-joined selector from silently matching nothing — an id/node/branch never holds a
+  // is what stops a comma-joined selector from silently matching nothing — an id/branch never holds a
   // comma, so without the split `a,b` would be one literal selector that matches no session and streams in
   // silence forever. Each part sheds an optional reference sigil (stripRefSigil): `@<sel>` / `[[<sel>]]` name
   // the same session as the bare token, so the dashboard's mention grammar is tolerated in every CLI selector.
@@ -4328,7 +4322,7 @@ export function matchesSelector(s: Session, q: string, own = ownSessionId(), cwd
   const self = Boolean(own) && s.id === own
     || Boolean(sessionPath) && (callerPath === sessionPath || callerPath.startsWith(`${sessionPath}${sep}`))
   return q.split(',').map((p) => stripRefSigil(p.trim())).filter(Boolean)
-    .some((p) => p === '.' ? self : s.id === p || s.id.startsWith(p) || s.node === p || s.branch === p)
+    .some((p) => p === '.' ? self : s.id === p || s.id.startsWith(p) || s.branch === p)
 }
 
 // no selectors (or '@all') = everything. Optional status filter on top. This IS the ls/watch subscription.
@@ -4348,10 +4342,10 @@ export function selectChildren(all: Session[], parent: string): Session[] {
 
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
 // selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
-// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
+// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a branch/
 // prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
 // precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
-// otherwise a lone match is `ok`, several is `ambiguous` (a prefix/node hitting many), none is `none`.
+// otherwise a lone match is `ok`, several is `ambiguous` (a prefix hitting many), none is `none`.
 export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
 export function resolveSession(selector: string, sessions: Session[], own = ownSessionId(), cwd = process.cwd()): Resolved {
   // the exact-id check sheds the optional sigil too, so `@<full-id>` keeps the exact-wins-over-prefix rule
@@ -4477,19 +4471,6 @@ type SendTextOptions = {
   // Managed watch notifications are durable supervision events. Even when a live parent's native transport is
   // temporarily absent, the normal queue must retain the event so the parent's next runtime can wake and drain it.
   allowStranded?: boolean
-}
-class StrandedDeliveryError extends Error {}
-async function strandedDeliveryError(rec: SessRec): Promise<StrandedDeliveryError | null> {
-  const h = harnessById(rec.harness || defaultHarness.id)
-  if (!h.deliveryTransport) return null
-  const transport = await h.deliveryTransport({ ...rec, runtimeDir: runtimeRoot() })
-  if (transport.kind !== 'unreachable' || agentAlive(rec.session) !== true) return null
-  const application = configuredSessionApplicationIfCutover()
-  const queued = application?.readPendingMessages(rec.session).length ?? 0
-  const noun = queued === 1 ? 'message is' : 'messages are'
-  return new StrandedDeliveryError(
-    `session ${rec.session} is stranded: ${transport.reason} while its registered agent process is still alive; ${queued} queued ${noun} waiting with no transport to claim them. Use \`spex session send ${rec.session} --keys "<keys>"\` to steer the live tmux pane, then repair the control transport before sending text.`,
-  )
 }
 export async function sendText(id: string, text: string, from?: string, opts: SendTextOptions = {}): Promise<AcceptedDispatch> {
   if (!text.trim()) return { ok: false, error: EMPTY_PROMPT_ERROR }

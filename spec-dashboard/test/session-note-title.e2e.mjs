@@ -88,7 +88,7 @@ try {
   git(project, 'commit', '-qm', 'seed')
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(recordPath, JSON.stringify({
-    session_id: id, governed: true, worktree_path: project, branch: 'main', node: '', title, name: '', parent: '',
+    session_id: id, governed: true, worktree_path: project, branch: 'main', title, name: '', parent: '',
     status: 'active', proposal: '', merges: 0, note, sortkey: '', createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: 'true', launch_owner: 'http://fixture.invalid', create_request_id: '', create_payload_hash: '', launch_readiness_pending: null,

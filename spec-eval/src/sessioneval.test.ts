@@ -12,7 +12,6 @@ import {
   nodeScore,
   projectSessionImpact,
   renderExportHtml,
-  scopedScenarioReadings,
   sessionEvalSummary,
   sessionEvalContentRevision,
   SessionEvalProjectionCache,
@@ -423,7 +422,7 @@ test('an empty exact projection batch-reads declarations independent of node cou
 test('export projection counts and renders affected missing scenarios and retains changed-only nodes', () => {
   assert.deepEqual(completeExportNodeIds(['changed-only'], ['measured']), ['changed-only', 'measured'])
   const model: ExportModel = {
-    id: 'session-id', node: 'measured', branch: 'node/measured', title: 'Measured', generatedAt: '2026-07-20',
+    id: 'session-id', branch: 'node/measured', title: 'Measured', generatedAt: '2026-07-20',
     ahead: 1, dirtyNonRuntime: 0, gates: [], score: { passed: 1, total: 2, fresh: 1 }, otherFiles: [],
     impact: { base: 'base', head: 'head', revision: 'revision', nodes: [] },
     nodes: [

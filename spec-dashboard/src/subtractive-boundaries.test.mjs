@@ -7,15 +7,8 @@ import { RAIL_PAGES, parseRoute } from './route.js'
 import { placeTab, tabKey, tabRoute } from './tabModel.js'
 
 const srcDir = dirname(fileURLToPath(import.meta.url))
-const dashboardDir = dirname(srcDir)
 const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
 
-const governedSessionFiles = [
-  'SessionInterface.jsx',
-  'SessionContextMenu.jsx',
-  'SessionWindow.jsx',
-  'Dock.jsx',
-]
 
 test('Sessions keeps multi-select and tree movement on the real row surface', () => {
   const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
@@ -60,10 +53,20 @@ test('sessions document owns the only forest and rail labels resolve through i18
   const sideBar = readFileSync(join(srcDir, 'SideBar.jsx'), 'utf8')
   const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
   const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
-  assert.match(dock, /if \(suppressRows\) return null/)
+  // The ownership boundary is structural: the Sessions route mounts no finding dock at all (`dockFor`),
+  // so the dock needs no row-suppression flag, no active-session highlight, and no second keyboard walk —
+  // that machinery belonged to the era when the dock rendered ON the sessions route with its rows hidden.
+  assert.doesNotMatch(dock, /suppressRows|suppressSessionRows/)
+  assert.doesNotMatch(shell, /suppressSessionRows|activeSessionId/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
   assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
   assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
+  // The rail's sessions anchor unfolds the band and returns to the held session; it pre-selects NO dock
+  // projection — writing one painted a transient sessions-projection dock on the DEPARTING document.
+  assert.doesNotMatch(sideBar, /setDockMode\?\.\('sessions'\)/)
+  // The rendered projection is derived during render, never corrected after paint.
+  assert.match(shell, /const dockProjection = dockKind === 'sessions' \|\| dockKind === 'explorer'/)
+  assert.match(shell, /mode=\{dockProjection\}/)
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
   assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)
@@ -81,7 +84,7 @@ test('the rail panel control folds the Sessions forest and is absent only where 
   assert.match(sessionInterface, /const \{ dock: forestOpen \} = useWorkspace\(\)/)
   // it is still ONE boolean; the forest just folds on it through the shared fold, so the mount outlives
   // the flag by one panel duration instead of blinking out ([[dock-modes]]).
-  assert.match(sessionInterface, /const \[forestMounted, forestClosing, forestOpening\] = useFold\(forestOpen\)/)
+  assert.match(sessionInterface, /const \[forestMounted, forestClosing, forestFolding\] = useFold\(forestOpen\)/)
   assert.match(sessionInterface, /\{forestMounted && <SessionForestPanel/)
 })
 
@@ -182,11 +185,49 @@ test('the left band folds on a fold and dissolves on a route handover', () => {
   const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
   // the width animation is gated on the arrival being a real fold
   assert.match(css, /\.dock\[data-fold='in'\][^{]*\{[^}]*animation: dock-in/)
-  assert.match(css, /\.dock, \.si-list \{ animation: dock-swap/)
+  assert.match(css, /\.dock\[data-fold='swap'\][^{]*\{[^}]*animation: dock-swap/)
   assert.match(css, /@keyframes dock-swap \{ from \{ opacity: 0; transform: translateX\(-6px\); \} \}/)
   assert.doesNotMatch(css, /^\.dock, \.si-list, \.context-dock \{ animation: dock-in/m)
-  assert.match(fold, /return \[open \|\| closing, closing, opening\]/)
-  assert.match(dock, /data-fold=\{opening \? 'in' : undefined\}/)
+  assert.match(fold, /return \[open \|\| closing, closing, folding\]/)
+  assert.match(dock, /data-fold=\{arrival \|\| undefined\}/)
+})
+
+// THE FOLD MOVES FOR ITS WHOLE DURATION, AND ONLY ONE ANIMATION RUNS PER GESTURE. Two defects made one
+// twitch. The keyframes animated max-width, whose other endpoint is the 640px CAP rather than the band's own
+// 204px, so a 170ms open finished moving at 50ms and stalled at half opacity while a close held still for
+// 60ms and then dropped. And the handover was CSS's unconditional fallback, which is the state a panel
+// LEAVING a fold passes through — so the fold ended by blinking to opacity 0, jumping 6px left, and
+// dissolving back in. Measured before: three movements over 350ms to open. After: one, over 170ms.
+test('the fold animates the band own width, and rest is a state of its own', () => {
+  const css = readFileSync(join(srcDir, 'styles.css'), 'utf8')
+  const fold = readFileSync(join(srcDir, 'useFold.js'), 'utf8')
+  // a `from`-only keyframe: the other endpoint is the element's own width, whatever the reader dragged it to
+  assert.match(css, /@keyframes dock-in \{ from \{ width: 0; opacity: 0; \} \}/)
+  assert.match(css, /@keyframes dock-out \{ to \{ width: 0; opacity: 0; \} \}/)
+  assert.doesNotMatch(css, /@keyframes dock-(in|out) \{[^}]*max-width/)
+  // no rule may animate a panel that named no arrival — that fallback is what a finished fold falls into
+  assert.doesNotMatch(css, /^\.dock, \.si-list \{ animation:/m)
+  // three-valued, and rest is one of the three
+  assert.match(fold, /if \(folding\) return 'in'\n\s*return swap \? 'swap' : null/)
+  // read during the render that changes `open`, never from an effect — an effect runs after paint, so the
+  // first committed frame would carry the wrong animation and be replaced by the right one.
+  assert.match(fold, /if \(was !== open\) \{\n\s*setWas\(open\)/)
+})
+
+// A FOLD IS A STATE CHANGE; A HANDOVER IS A MOUNT, and they are read in different places because they happen
+// in different places. The shell stays mounted across the route switch that replaces its dock with the
+// Sessions forest, so the shell's own fold flag sees no transition at all — reading the handover from it left
+// one direction of the swap with no dissolve while the other had one. Every band panel reads its own mount.
+test('every foldable panel reads its handover from its own mount', () => {
+  const fold = readFileSync(join(srcDir, 'useFold.js'), 'utf8')
+  assert.match(fold, /export function useArrival\(folding, ms = DOCK_FOLD_MS\)/)
+  // a panel that mounted mid-fold is that fold, and never also claims the swap
+  assert.match(fold, /useState\(!folding\)/)
+  for (const f of ['Dock.jsx', 'SessionForestPanel.jsx', 'ContextDock.jsx']) {
+    const source = readFileSync(join(srcDir, f), 'utf8')
+    assert.match(source, /useArrival\(folding\)/, f)
+    assert.match(source, /data-fold=\{arrival \|\| undefined\}/, f)
+  }
 })
 
 // ONE BAND, ONE WIDTH. The shell dock persisted spex.ftWidth and the Sessions forest persisted

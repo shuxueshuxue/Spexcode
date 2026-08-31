@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { closeIssue, createIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
+import { closeIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '@spexcode/spec-forge/drivers'
-import { currentSession, issuesEnabled, reply, resolveRemark, retractRemark } from './localIssues.js'
+import { currentSession, issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
 import { summarizeDispatch, summarizeLoopIn } from './mentions.js'
 import { loadSpecsLite } from '@spexcode/spec-core'
 

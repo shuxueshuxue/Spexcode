@@ -94,7 +94,6 @@ test('a cold scoped list does not inherit an unrelated full review lint gate', {
       governed: true,
       worktree_path: worktree,
       branch: 'node/eval-cold-gate',
-      node: 'selected',
       title: 'selected',
       name: '',
       parent: null,

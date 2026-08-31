@@ -252,7 +252,13 @@ async function displayFingerprint() {
   if (heldFingerprint.version === heldVersion) return heldFingerprint.tag
   const version = heldVersion
   const units = heldUnits
-  const tag = await tagOfAsync(units)
+  let tag
+  // An unavailable digest must cost the CHEAPNESS of this lane, never the lane itself. Returning '' sends
+  // the poll unconditional — exactly what it was before there was a key — whereas letting this reject takes
+  // loadGraph down with it, and with it the belt, the deadman's kick and the retry. The verify path already
+  // degraded this way; this one did not, and the asymmetry was invisible until something drove it.
+  try { tag = await tagOfAsync(units) }
+  catch { return '' }
   if (version === heldVersion) heldFingerprint = { version, tag }
   return tag
 }

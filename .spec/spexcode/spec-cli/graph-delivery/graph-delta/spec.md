@@ -72,8 +72,14 @@ sequence — every unit as `key \0 serialization \0`, keys sorted so map order c
 bytes, the Node side takes a `node:crypto` digest and a browser takes a WebCrypto one. Which digest API is
 reachable is a platform question and belongs at that boundary; what the bytes ARE is product semantics and
 may have exactly one answer, because two answers would let both sides pass their own tests while
-disagreeing with each other — and disagreeing in the direction that certifies a board nobody holds. The two
-are held byte-equal by test, over random boards, not by inspection.
+disagreeing with each other — and disagreeing in the direction that certifies a board nobody holds. There are two HOWs on the browser side as well: `crypto.subtle` exists only in a secure context, and this
+product's dashboards are opened over plain HTTP on tailnet addresses, so a WebCrypto-free digest backs it.
+Without that the fingerprint lane would be inert exactly where the product runs — a holder could not state
+what it has, no frame could be verified, and the conditional lane would fall back to whole snapshots. All
+of them are held byte-equal by test, over random boards and over every message length that straddles a
+block boundary, not by inspection: a hand-written hash is acceptable only while something pins it to a real
+one, and the pin must run on the platforms that have a real one, or the defect surfaces only on the
+platform that does not.
 
 **A holder can therefore state its own identity, and that changes what a tag is FOR.** Until now a tag was
 something the server asserted and a client repeated. A client that computes `tagOf` over the units it

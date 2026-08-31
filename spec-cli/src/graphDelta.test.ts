@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { unitize, tagOf, tagOfAsync, diffUnits, diffFromPosition, positionOf, applyDelta, applyDeltaUnits, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
+import { unitize, tagOf, tagOfAsync, tagOfWithoutWebCrypto, diffUnits, diffFromPosition, positionOf, applyDelta, applyDeltaUnits, boardFromUnits, unitValues, unitKeyKind } from '@spexcode/spec-core'
 
 // Executable evidence for the two lemmas the incremental push stands on (see the board-delta spec node's
 // equivalence.md): RECONSTRUCTION — boardFromUnits(unitize(B)) = B whenever unitize reports ok; ROUND-TRIP —
@@ -147,6 +147,30 @@ test('a position several changes old still carries a holder exactly to the prese
   const caught = applyDeltaUnits(startUnits, diffFromPosition(remembered, nowUnits))
   assert.strictEqual(tagOf(caught), tagOf(nowUnits), 'a nine-change gap did not close in one patch')
   assert.deepStrictEqual(boardFromUnits(unitValues(caught)), board)
+})
+
+// A hand-written hash is only acceptable while something pins it to a real one. This is that pin: the
+// fallback runs on every platform under test, not only on the insecure origins where it is the ONLY path —
+// so a defect in it fails here rather than silently on the address a human actually opens.
+test('the WebCrypto-free digest agrees with the platform one, over many random boards', async () => {
+  const r = rng(5150)
+  for (let i = 0; i < 24; i++) {
+    const units = unitize(randBoard(r, ['a', 'b', 'c'])).units
+    const expected = tagOf(units)
+    assert.strictEqual(tagOfWithoutWebCrypto(units), expected, `hand-written digest diverged on board ${i}`)
+    assert.strictEqual(await tagOfAsync(units), expected, `platform digest diverged on board ${i}`)
+  }
+})
+
+// SHA-1 pads by message length, so the interesting inputs are the ones that straddle a block boundary
+test('the WebCrypto-free digest handles every length around a block boundary', () => {
+  const r = rng(6060)
+  for (const n of [0, 1, 54, 55, 56, 57, 63, 64, 65, 119, 120, 127, 128, 1000]) {
+    const bytes = new Uint8Array(n)
+    for (let i = 0; i < n; i++) bytes[i] = Math.floor(r() * 256)
+    const units = new Map([['k', { j: new TextDecoder().decode(bytes), v: null }]])
+    assert.strictEqual(tagOfWithoutWebCrypto(units), tagOf(units), `diverged at message length ${n}`)
+  }
 })
 
 test('P violation (duplicate node id) is reported, never silently decomposed', () => {

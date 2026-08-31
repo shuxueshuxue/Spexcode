@@ -18,6 +18,7 @@ related:
   - spec-dashboard/src/streamHeartbeat.test.mjs
   - spec-dashboard/test/board-poll-bodyless.e2e.mjs
   - spec-dashboard/test/board-divergence-self-heals.e2e.mjs
+  - spec-dashboard/test/board-digest-fallback.e2e.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
   - spec-dashboard/THEME-CREDITS.md
@@ -197,9 +198,18 @@ means the apply produced a board the server never had: the chain check cannot se
 from/to line up but whose content does not), and it is the one state the equivalence proof exists to
 exclude. So it is loud (`BOARD-DIVERGENCE`, in the same register as [[graph-stream]]'s patrol repairs —
 the target is zero) and it self-heals by reopening onto a fresh anchor. Measured with an injected patch
-whose content contradicted its tag: detected in 15ms, replacement stream open 185ms later. Where WebCrypto
-is unreachable (an insecure origin) the check is unavailable rather than falsely failing, and the poll
-simply goes unconditional — the same cost the belt always had.
+whose content contradicted its tag: detected in 15ms, replacement stream open 185ms later. The digest does not depend on a secure
+context. `crypto.subtle` exists only in one, and this product's dashboards are opened over plain HTTP on
+tailnet addresses — measured in Chromium, `isSecureContext` is false and `crypto.subtle` undefined on the
+very address a human uses. A WebCrypto-free digest ([[graph-delta]]) therefore backs the platform one, so
+this lane is live where the product actually runs rather than only on localhost and the TLS gateway; it
+costs 17ms against WebCrypto's 4ms on a 429-unit board, 0.15% of the interval between frames. And if the
+digest is unavailable for any reason at all, computing the key answers with NO key and the poll goes
+unconditional — what the belt cost before there was a key. A missing digest may cost this lane its
+CHEAPNESS; it may never cost the lane itself. A key computation that REJECTS takes `loadGraph` down with
+it, and with it the fallback poll, the dead-man's kick and the retry, leaving a board that is stale forever
+while the shell still reports the stream live — which is precisely the state everything here exists to make
+unreachable.
 
 Before this, that state was survivable only because the poll was resyncing unconditionally every period:
 real recovery, but silent, ~15 seconds slow, and paid for with a full snapshot on every poll forever. The

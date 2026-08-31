@@ -128,9 +128,48 @@ export function tagBytes(units: Units): Uint8Array {
   return new TextEncoder().encode(joined)
 }
 
+// @@@ SHA-1 without WebCrypto - `crypto.subtle` exists only in a SECURE CONTEXT, and the dashboards are
+// reached over plain HTTP on tailnet addresses (measured in Chromium: isSecureContext=false, crypto.subtle
+// undefined on the very address a human uses). Without this the whole fingerprint lane would be inert
+// exactly where the product runs — a holder could not state what it has, so no frame could be verified and
+// the conditional lane would fall back to full snapshots forever. Held byte-equal to the platform digests
+// by test rather than by inspection, which is the only reason hand-writing a hash is acceptable here.
+function sha1Hex(bytes: Uint8Array): string {
+  const size = (((bytes.length + 8) >> 6) + 1) << 6
+  const block = new Uint8Array(size)
+  block.set(bytes)
+  block[bytes.length] = 0x80
+  const view = new DataView(block.buffer)
+  view.setUint32(size - 8, Math.floor(bytes.length / 0x20000000), false)
+  view.setUint32(size - 4, (bytes.length * 8) >>> 0, false)
+  let h0 = 0x67452301 | 0, h1 = 0xefcdab89 | 0, h2 = 0x98badcfe | 0, h3 = 0x10325476 | 0, h4 = 0xc3d2e1f0 | 0
+  const w = new Int32Array(80)
+  for (let at = 0; at < size; at += 64) {
+    for (let j = 0; j < 16; j++) w[j] = view.getInt32(at + j * 4, false)
+    for (let j = 16; j < 80; j++) { const n = w[j - 3] ^ w[j - 8] ^ w[j - 14] ^ w[j - 16]; w[j] = (n << 1) | (n >>> 31) }
+    let a = h0, b = h1, c = h2, d = h3, e = h4
+    for (let j = 0; j < 80; j++) {
+      const f = j < 20 ? (b & c) | (~b & d) : j < 40 ? b ^ c ^ d : j < 60 ? (b & c) | (b & d) | (c & d) : b ^ c ^ d
+      const k = j < 20 ? 0x5a827999 : j < 40 ? 0x6ed9eba1 : j < 60 ? 0x8f1bbcdc : 0xca62c1d6
+      const t = (((a << 5) | (a >>> 27)) + f + e + k + w[j]) | 0
+      e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = t
+    }
+    h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0
+  }
+  return [h0, h1, h2, h3, h4].map((n) => (n >>> 0).toString(16).padStart(8, '0')).join('')
+}
+
 // the snapshot tag computed the browser's way. Held byte-equal to the Node-side `tagOf` by test, because a
 // holder's fingerprint is only meaningful if the other side computes the identical function.
 export async function tagOfAsync(units: Units): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-1', tagBytes(units) as unknown as ArrayBuffer)
+  const bytes = tagBytes(units)
+  type Digest = { digest(algorithm: string, data: ArrayBuffer): Promise<ArrayBuffer> }
+  const subtle = (globalThis as { crypto?: { subtle?: Digest } }).crypto?.subtle
+  if (!subtle) return sha1Hex(bytes)
+  const digest = await subtle.digest('SHA-1', bytes as unknown as ArrayBuffer)
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
+
+// the same function with WebCrypto deliberately out of reach — so the fallback is exercised by test on a
+// platform that has both, instead of only being discovered on the platform that has neither.
+export const tagOfWithoutWebCrypto = (units: Units): string => sha1Hex(tagBytes(units))

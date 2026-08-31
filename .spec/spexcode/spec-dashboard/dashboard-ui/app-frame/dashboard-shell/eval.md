@@ -110,6 +110,24 @@ scenarios:
       stays stale and the pane's only recovery is a hard refresh: the blackhole this scenario forbids.
       Zero loss = no interleaving of pushed boards and in-flight fetches leaves the 304 lane certifying a
       board nobody is seeing.
+  - name: digest-loss-costs-cheapness-not-the-lane
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js]
+    related: [packages/spec-core/src/graph-delta.ts]
+    description: >-
+      Drive the dashboard in a real browser at the INSECURE origin a human actually opens — a plain-HTTP
+      tailnet address, not localhost — and confirm the premise first: isSecureContext false and
+      crypto.subtle undefined. Watch every /api/graph response and the conditional key it carried. Then
+      load it again with crypto.subtle.digest replaced by a function that rejects, and watch the same
+      thing.
+    expected: >-
+      On the insecure origin the fingerprint lane is LIVE: polls carry a conditional key and are answered
+      bodyless when the board has not moved, because the digest does not depend on a secure context. With
+      the digest broken outright the lane survives at its old price: the fallback poll keeps firing on its
+      period, carrying NO key and taking full bodies. What must never happen is the third outcome — a
+      digest that rejects taking loadGraph down with it, so the belt, the dead-man's kick and the retry
+      all stop and the board is stale forever while the shell still reports the stream live. Zero loss =
+      the cheap lane works where the product runs, and losing it costs only its cheapness.
   - name: applied-frame-is-self-verified
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/data.js]

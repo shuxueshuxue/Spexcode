@@ -5,6 +5,7 @@ import { BlobMedia } from './Evidence.jsx'
 import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import { useT } from './i18n/index.jsx'
+import { readerIsSelecting } from './readerSelection.js'
 
 // THE DASHBOARD'S BINDING of the transcript grammar. The components — the person quoted, the agent as the
 // page, a tool call as a sentence, the work folded behind its answer, the live tail — are `@spexcode/transcript-ui`
@@ -31,5 +32,8 @@ const renderTimelineText = (text) => <TimelineRichText>{text}</TimelineRichText>
 export function DashboardTranscriptUi({ loadToolOutput, children }) {
   const t = useT()
   const labels = useMemo(() => ({ ...defaultLabels, loading: t('common.loading'), running: t('session.executionRunning'), more: t('mobile.more') }), [t])
-  return <TranscriptUi renderText={renderTimelineText} labels={labels} loadToolOutput={loadToolOutput}>{children}</TranscriptUi>
+  // The conversation paints its OWN selection (a Custom Highlight, so the textarea keeps its caret), which is
+  // invisible to `window.getSelection`. A clamped block opens on a press anywhere in it, and the press that
+  // ends a drag over its words is not that request — so the surface that owns the selection answers for it.
+  return <TranscriptUi renderText={renderTimelineText} labels={labels} loadToolOutput={loadToolOutput} suppressExpand={readerIsSelecting}>{children}</TranscriptUi>
 }

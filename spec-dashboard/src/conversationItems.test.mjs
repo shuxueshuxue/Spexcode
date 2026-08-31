@@ -4,7 +4,6 @@ import { conversationItems, splitEnvelope } from './conversationItems.js'
 import { SCENARIOS, at, sent, status } from '../test/fixtures/conversation-tail.scenarios.mjs'
 import en from './i18n/en.js'
 
-const NOW = Date.parse('2026-08-27T16:00:00.000Z')
 const shape = (item) => item.kind === 'seam' ? { kind: 'seam', open: item.open }
   : item.kind === 'quote' ? { kind: 'quote' }
     : { kind: item.kind, status: item.status }
@@ -13,22 +12,33 @@ const shape = (item) => item.kind === 'seam' ? { kind: 'seam', open: item.open }
 // drives the browser run; here it is read straight off the derivation.
 for (const scenario of SCENARIOS) {
   test(`${scenario.name}: ${scenario.expect.map((row) => row.kind + (row.open ? '·open' : '')).join(' → ')}`, () => {
-    assert.deepEqual(conversationItems(scenario.events, NOW).map(shape), scenario.expect)
+    assert.deepEqual(conversationItems(scenario.events).map(shape), scenario.expect)
   })
 }
 
-test('a seam owns exactly the interval between its neighbours; the open tail ends at the now it is given', () => {
-  const items = conversationItems(SCENARIOS.find((s) => s.name === 'second-message-while-working').events, NOW)
+test('a seam owns exactly the interval between its neighbours; the open tail has no end of its own', () => {
+  const items = conversationItems(SCENARIOS.find((s) => s.name === 'second-message-while-working').events)
   const seams = items.filter((item) => item.kind === 'seam')
   assert.deepEqual(seams.map((seam) => [seam.from, seam.to]), [
     [Date.parse(at(0)), Date.parse(at(60))],
     [Date.parse(at(120.2)), Date.parse(at(200))],  // the first message landed on a close-pending agent: its `active` re-entry opens the seam
-    [Date.parse(at(200)), NOW],                    // the second message: no status event follows, the seam is still owed
+    [Date.parse(at(200)), undefined],              // the second message: nothing has closed this stretch, so it has no end to state
   ])
 })
 
+// A WINDOW IS NOT THE WHOLE HISTORY. The reader holds the newest events of a long session ([[session-timeline]]),
+// and a window can open in the middle of a stretch of work. The word the earlier events already said comes in
+// with the window; without it that stretch is silently dropped.
+test('a window that opens mid-stretch is told the agent was already working', () => {
+  const events = [sent(10, 'landed mid-stretch'), status(20, 'asking', 'here')]
+  const blind = conversationItems(events, false).map((item) => item.kind)
+  const told = conversationItems(events, true).map((item) => item.kind)
+  assert.deepEqual(blind, ['quote', 'say'], 'with no word carried in, the stretch this window opened inside is lost')
+  assert.deepEqual(told, ['quote', 'seam', 'say'], 'told the agent was working, the window keeps the stretch')
+})
+
 test('the envelope is stripped from a peer quote and its sender kept', () => {
-  const [, , quote] = conversationItems(SCENARIOS.find((s) => s.name === 'peer-message-into-asking-session').events, NOW)
+  const [, , quote] = conversationItems(SCENARIOS.find((s) => s.name === 'peer-message-into-asking-session').events)
   assert.equal(quote.text, 'peer reply')
   assert.deepEqual(quote.envelope, { label: null, id: 'peer-1' })
   assert.deepEqual(splitEnvelope('plain'), { text: 'plain', envelope: null })
@@ -60,7 +70,7 @@ test('the theorem holds over 2000 generated timelines', () => {
       seconds += 1 + Math.floor(random() * 100)
       events.push(VOCABULARY[Math.floor(random() * VOCABULARY.length)](seconds))
     }
-    const items = conversationItems(events, NOW)
+    const items = conversationItems(events)
     const lastWord = [...events].reverse().find((event) => event.kind === 'status')
     const working = lastWord?.display === 'working'
     const label = `run ${run}: ${events.map((e) => e.kind === 'sent' ? (e.from ? 'peer' : 'human') : e.display + (e.note ? '!' : '')).join(' ')}`
@@ -75,6 +85,9 @@ test('the theorem holds over 2000 generated timelines', () => {
     for (let i = 1; i < items.length; i++) {
       assert.ok(!(items[i].kind === 'seam' && items[i - 1].kind === 'seam'), `${label} — seams never touch`)
     }
-    for (const seam of items.filter((item) => item.kind === 'seam')) assert.ok(seam.to > seam.from, `${label} — a seam lasts`)
+    for (const seam of items.filter((item) => item.kind === 'seam')) {
+      if (seam.open) assert.equal(seam.to, undefined, `${label} — an open seam states no end`)
+      else assert.ok(seam.to > seam.from, `${label} — a closed seam lasts`)
+    }
   }
 })

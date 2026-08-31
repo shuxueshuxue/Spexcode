@@ -744,10 +744,27 @@ app.get('/api/sessions/:id/transcript/stream', (c) => sessionTranscriptStream(c)
 app.get('/api/sessions/:id/transcript/tool/:toolId', (c) => readSessionTranscriptTool(c))
 // the session's persisted interaction history ([[session-timeline]]): authored status transitions (with the
 // FULL note text) + delivered prompts, timestamped, oldest first — what a terminal-free surface renders as
-// the conversation. `?limit=<n>` caps the tail (default 500). 404 for an unknown/non-governed id.
+// the conversation. A reader holds a WINDOW over it, bounded by COUNT and by TEXT, whichever comes first:
+// `?limit=<n>` caps the events (default 200) and `?text=<bytes>` the authored prose (default 24 KiB), because
+// the same event count is a couple of screens on one record and eighty on another. `?before=<position>`
+// walks back a page, `?since=<stamp>` asks only for what the log grew by. A window answer carries its own
+// `offset`/`total`, so a reader can say how much earlier history it is not showing instead of ending in
+// silence. 404 for an unknown/non-governed id.
 app.get('/api/sessions/:id/timeline', (c) => {
+  const cursor = (name: string): number | undefined => {
+    const raw = c.req.query(name)
+    if (raw === undefined) return undefined
+    const value = Number(raw)
+    return Number.isFinite(value) && value >= 0 ? value : undefined
+  }
   const limit = Number(c.req.query('limit'))
-  const r = readTimeline(c.req.param('id'), Number.isFinite(limit) && limit > 0 ? limit : undefined)
+  const textBudget = Number(c.req.query('text'))
+  const r = readTimeline(c.req.param('id'), {
+    limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
+    textBudget: Number.isFinite(textBudget) && textBudget > 0 ? textBudget : undefined,
+    before: cursor('before'),
+    since: cursor('since'),
+  })
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
 // the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)

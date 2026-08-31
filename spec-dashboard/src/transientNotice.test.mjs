@@ -50,7 +50,9 @@ test('review surfaces and the session console publish through the shared mechani
 
 test('notice chrome stays palette-native and below interactive overlays', () => {
   assert.match(css, /\.tn-viewport\s*\{[^}]*position:\s*fixed;[^}]*top:\s*max\(16px, env\(safe-area-inset-top\)\);[^}]*right:\s*max\(16px, env\(safe-area-inset-right\)\);[^}]*bottom:\s*auto;[^}]*z-index:\s*50;[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*6px;[^}]*max-block-size:\s*min\(50dvh, 32rem\);[^}]*overflow-y:\s*auto;/s)
-  assert.match(css, /\.tn-notice\s*\{[^}]*color:\s*var\(--ink2\);[^}]*background:\s*color-mix\(in srgb, var\(--panel\) 96%, transparent\);/s)
+  // a notice FLOATS, so it is painted the raised rung like every other pop-over ([[typography]]) — the
+  // point of the assertion is that the tone comes from the palette, never from a literal.
+  assert.match(css, /\.tn-notice\s*\{[^}]*color:\s*var\(--ink2\);[^}]*background:\s*color-mix\(in srgb, var\(--raised\) 96%, transparent\);/s)
   assert.match(css, /\.tn-notice\s*\{[^}]*flex:\s*0 0 auto;[^}]*min-block-size:\s*42px;/s)
   assert.match(css, /\.tn-notice\.success\s*\{\s*--tn-tone:\s*var\(--green\);\s*\}/)
   assert.match(css, /\.tn-notice\.error\s*\{\s*--tn-tone:\s*var\(--red\);\s*\}/)

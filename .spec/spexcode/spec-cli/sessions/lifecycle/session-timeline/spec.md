@@ -115,9 +115,40 @@ only this file can learn everything a session declared and nothing about whether
 can never take an action that needs to know. The timeline dies with the session record (close sweeps the
 store dir).
 
-Read surface: `GET /api/sessions/:id/timeline` — the tail (default 500), oldest first, each status event
-carrying its composed display word (awaiting→its proposal's label, active→working: the same vocabulary
-every other surface speaks).
+**Read surface: a reader holds a WINDOW over this log, and the window says what it is not showing.**
+`GET /api/sessions/:id/timeline` answers oldest first, each status event carrying its composed display word
+(awaiting→its proposal's label, active→working: the same vocabulary every other surface speaks). A record
+that grows for a week outgrows any one read, so the read is three, over one route:
+
+- no cursor — the newest events, answered WITH the window's own position (`offset`, how many earlier events
+  exist that this window omits) and the history's size (`total`).
+- `before=<position>` — the page ending at a position a previous answer named. This is how a reader walks
+  back, and it is the only reason the earlier history is reachable at all: a tail that reports nothing about
+  what precedes it strands every event before it with no way to say so and no way in.
+- `since=<stamp>` — only what the log grew by. The stamp is the log's SEQUENCE, and this read costs a
+  sequence range scan rather than the whole history, which is what makes a poll cheap on a long record.
+  Growth beyond `limit` is answered with a whole window instead: a reader that far behind is cheaper to
+  re-seat than to catch up event by event. An answer carrying `offset` is a whole window; one without it
+  appends to what the reader already holds.
+
+**A WINDOW IS BOUNDED BY COUNT AND BY TEXT, whichever it reaches first** (`limit`, default 200; `text`,
+default 24 KiB of authored prose). A count of events is not a measure of what a reader faces: notes are
+authored prose whose lengths differ by orders of magnitude, so the same 200 events are a couple of screens
+on one record and eighty-two on another — measured, on this project's own board. Sizing the window by rows
+therefore sizes it by nothing the reader can feel. One event always fits however long it is: a budget may
+shrink a window, never empty it. A page walked back is bounded the same way, or each press would hand back
+another eighty screens.
+
+**A position in this history is not a sequence, and the two are never interchanged.** Events are shown in
+occurrence order, but migrated legacy history holds a HIGH sequence at an EARLY time, so the log's sequence
+order and its shown order genuinely differ. The stamp is therefore only ever a growth cursor — the log grows
+at its end, so what is past the stamp is what is new — while walking back is addressed by position in the
+shown order. Reading a window by sequence would hand back events scattered through the history.
+
+A window also carries `priorWorking`: whether the events BEFORE it left the agent working. The derivation
+that turns this log into a conversation carries that word forward across the events that do not repeat it,
+so a window opening mid-stretch needs what the earlier events already said or it drops the stretch of work
+it opened inside.
 
 **Reply-channel readability belongs to the target session, not the sending surface.** One server-side prompt
 composition seam receives the raw prompt, the target session, and an optional explicit `replyVia`; it alone

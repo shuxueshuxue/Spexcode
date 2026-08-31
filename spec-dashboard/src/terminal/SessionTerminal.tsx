@@ -15,6 +15,17 @@ const SYNC_END = '\x1b[?2026l'
 // Button mode 1000 + SGR 1006 pass through: they are what makes xterm emit wheel reports at all.
 const MOTION_TRACKING_MODES = new Set([9, 1002, 1003, 1005, 1015])
 
+// THE TERMINAL'S GROUND HAS ONE SOURCE, and it is the host's stylesheet. `--term-bg` is what the package
+// sheet already resolves `--tt-bg` from, so reading it back here keeps the value xterm DECLARES identical
+// to the value the pane PAINTS. The literal is only the last link of the package's documented fallback
+// chain, for a host that ships no token at all.
+const TERMINAL_GROUND_FALLBACK = '#0d1117'
+function terminalGround() {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue('--term-bg').trim() || TERMINAL_GROUND_FALLBACK
+  } catch { return TERMINAL_GROUND_FALLBACK }
+}
+
 // xterm can emit SGR, X10, or URXVT mouse reports depending on the TUI's negotiated mode.
 // All are pointer traffic, never a user's resume key. Keeping this at the input boundary
 // prevents a click from opening the resume confirmation dialog for an asking session.
@@ -133,13 +144,17 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
       cursorBlink: true, disableStdin: !writable, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input on a live pane
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
-      // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
-      // modern dark theme (the old solarized ansi, tuned for a #002b36 bg, looked off on the neutral ground).
+      // GitHub-Dark NEUTRAL palette (the old solarized ansi, tuned for a #002b36 bg, looked off on a
+      // neutral ground). The GROUND is not ours to name: the stylesheet already paints the host, the
+      // screen and the viewport from the `--tt-bg` chain, so the same value is read back here rather
+      // than repeated as a literal. A second copy is what let the declared ground drift from the painted
+      // one in every preset that retuned `--term-bg` — and the declared one is what an INVERSE cell
+      // paints as its foreground, so the drift shows up as unreadable reverse-video, not as nothing.
       // NOTE: this does NOT fix Claude's pinned previous-message bar — that bar uses 256-colour greys in an
       // alt-screen overlay, which the xterm theme (16 ansi + fg/bg only) can't reach; deferred as issue #25.
       // selection is a GitHub blue; selectionInactive matches it.
       theme: {
-        background: '#0d1117', foreground: '#c9d1d9', cursor: '#c9d1d9',
+        background: terminalGround(), foreground: '#c9d1d9', cursor: '#c9d1d9',
         selectionBackground: '#264f78', selectionForeground: '#f0f6fc', selectionInactiveBackground: '#264f78',
         black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922',
         blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4',
@@ -328,6 +343,18 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
       if (!sock.isOpen || sock.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible: false }))
     }
 
+    // A pane is WARM: it outlives any re-theming the host does around it, so the ground read at
+    // construction would otherwise be stale for the rest of the session. A host re-themes by changing
+    // the root element (an attribute, a class, an inline custom property) — so watch the root, re-read,
+    // and act only when the resolved value actually moved. No host concept is named here; the package
+    // still knows nothing but its own token.
+    const groundWatch = new MutationObserver(() => {
+      const ground = terminalGround()
+      if (ground === term.options.theme.background) return
+      term.options.theme = { ...term.options.theme, background: ground }
+    })
+    groundWatch.observe(document.documentElement, { attributes: true })
+
     let fontRaf = 0
     const unsubscribeFont = subscribeFontSize((fontSize) => {
       term.options.fontSize = fontSize
@@ -484,6 +511,7 @@ export default function SessionTerminal({ sessionId, transport, active = true, f
       document.removeEventListener('visibilitychange', onDocumentVisibility)
       window.removeEventListener('pagehide', onPageHide)
       ro.disconnect()
+      groundWatch.disconnect()
       window.removeEventListener('resize', remeasure)
       for (const handler of motionModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()

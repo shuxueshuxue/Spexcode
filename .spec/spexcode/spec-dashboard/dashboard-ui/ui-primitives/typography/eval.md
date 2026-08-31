@@ -17,6 +17,28 @@ scenarios:
       blue ring), while the rules that consume them are the same. Zero loss = one token per interaction,
       spent by every surface, retuned by a preset alone.
     code: [spec-dashboard/src/styles.css, spec-dashboard/src/styles.test.mjs]
+  - name: the-ladder-runs-one-way-under-every-preset
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real desktop Chromium against the running dashboard, open a live session's Terminal tab so the
+      three surfaces a reader actually sees at once are on screen together — the session list, the content
+      plane with the terminal pane on it, and a right-click menu summoned over the boundary between them.
+      For each of the nine presets in turn, read the COMPUTED background of `.si-list`, `.si-content`,
+      `.si-term-body`, `.xterm-screen`, and the open `.sess-menu`, convert each to CIE L*, and screenshot
+      the menu straddling the sidebar and the terminal.
+    expected: >-
+      Under every preset the rungs climb in one direction — terminal ≤ sidebar < content plane ≤ menu — the
+      plane clears the terminal by at least 4 L* (a region step), and the menu resolves to a different value
+      from both surfaces it always overlaps, the sidebar and the terminal, clearing the terminal by at least
+      6 L* (an elevation step). WHO CARRIES THE LIFT then splits on the palette's headroom, which is the
+      light/dark line: a dark preset pays a real step, lifting the menu at least 6 L* off both the plane and
+      the sidebar; a light preset is already at the top of the range, so it may sit the menu on the plane's
+      own value and carries the lift with its drop instead — that drop must exist. The xterm screen paints
+      the same value the sheet resolves for `--term-bg`. Zero loss = every depth change is carried by at
+      least one cue at strength; the failing measurement is a change carried by NOTHING — a menu whose
+      ground is byte-identical to the pane it was just opened over, with only a half-strength chrome
+      hairline between them.
+    code: [spec-dashboard/src/styles.css, spec-dashboard/src/styles.test.mjs]
 ---
 # typography — measurement
 

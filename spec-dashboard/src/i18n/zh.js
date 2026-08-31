@@ -977,6 +977,7 @@ export default {
     launchFailed: '启动失败 —— 后端拒绝或不可达',
     back: '返回',
     noEvents: '暂无记录 —— 状态变化和消息会出现在这里',
+    loadEarlier: ({ count }) => `更早还有 ${count} 条 · 载入`,
     you: '我',
     inputPlaceholder: '给 agent 发消息…',
     send: '发送',

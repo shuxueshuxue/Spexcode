@@ -56,7 +56,7 @@
 .tx-quote-who { font-size: var(--tx-type-caption); font-weight: var(--tx-weight-semibold); color: var(--tx-blue); }
 .tx-time { display: none; margin-left: auto; flex: none; font-family: var(--tx-ui-font); font-size: var(--tx-type-caption); color: var(--tx-muted); font-variant-numeric: tabular-nums; }
 .tx-quote-text { font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
-.tx-quote.is-clamped { max-height: 13em; overflow: hidden; }
+.tx-quote.is-clamped { max-height: 13em; overflow: hidden; cursor: pointer; }
 .tx-quote.is-clamped::after { content: ""; position: absolute; inset: auto 0 0; height: 4.5em; background: linear-gradient(transparent, var(--tx-quote-bg)); pointer-events: none; }
 .tx-quote-more { position: absolute; right: 10px; bottom: 6px; z-index: 1; padding: 0; color: var(--tx-blue); background: none; border: 0; font: inherit; font-family: var(--tx-ui-font); font-size: var(--tx-type-caption); cursor: pointer; }
 

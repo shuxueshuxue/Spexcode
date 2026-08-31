@@ -2834,6 +2834,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-earlier:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
 .m-earlier:disabled { cursor: default; opacity: .45; }
 .m-earlier-caret { transform: rotate(180deg); }
+/* A CLAMPED NOTE FADES, IT DOES NOT CUT — and it wears the SAME mark a clamped quoted turn wears
+   (`.tx-quote-more`), because a reader meeting the two in one conversation is meeting one idea. The whole
+   block is the press target; `more` sits in its corner as the mark that says so, not as the only way in. */
+.m-note-wrap { position: relative; }
+.m-note-wrap.is-clamped { cursor: pointer; }
+.m-ev-note.is-clamped {
+  max-height: 400px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
+}
+.m-note-more {
+  position: absolute; right: 0; bottom: 0; z-index: 1; padding: 0;
+  color: var(--blue); background: none; border: 0;
+  font: inherit; font-family: var(--ui-font); font-size: var(--type-caption); cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) { .m-ev-note.is-clamped { -webkit-mask-image: none; mask-image: none; } }
 .m-ev-prompt, .m-ev-sent { grid-template-columns: minmax(0, 1fr) 52px; }
 .m-ev-prompt > .m-gut, .m-ev-sent > .m-gut { grid-column: 2; text-align: left; }
 .m-gut {

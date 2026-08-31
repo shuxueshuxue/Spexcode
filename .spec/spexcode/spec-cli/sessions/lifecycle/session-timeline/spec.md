@@ -120,16 +120,24 @@ store dir).
 (awaiting→its proposal's label, active→working: the same vocabulary every other surface speaks). A record
 that grows for a week outgrows any one read, so the read is three, over one route:
 
-- no cursor — the newest `limit` events (default 200), answered WITH the window's own position (`offset`,
-  how many earlier events exist that this window omits) and the history's size (`total`).
-- `before=<position>` — the page of `limit` events ending at a position a previous answer named. This is
-  how a reader walks back, and it is the only reason the earlier history is reachable at all: a tail that
-  reports nothing about what precedes it strands every event before it with no way to say so and no way in.
+- no cursor — the newest events, answered WITH the window's own position (`offset`, how many earlier events
+  exist that this window omits) and the history's size (`total`).
+- `before=<position>` — the page ending at a position a previous answer named. This is how a reader walks
+  back, and it is the only reason the earlier history is reachable at all: a tail that reports nothing about
+  what precedes it strands every event before it with no way to say so and no way in.
 - `since=<stamp>` — only what the log grew by. The stamp is the log's SEQUENCE, and this read costs a
   sequence range scan rather than the whole history, which is what makes a poll cheap on a long record.
   Growth beyond `limit` is answered with a whole window instead: a reader that far behind is cheaper to
   re-seat than to catch up event by event. An answer carrying `offset` is a whole window; one without it
   appends to what the reader already holds.
+
+**A WINDOW IS BOUNDED BY COUNT AND BY TEXT, whichever it reaches first** (`limit`, default 200; `text`,
+default 24 KiB of authored prose). A count of events is not a measure of what a reader faces: notes are
+authored prose whose lengths differ by orders of magnitude, so the same 200 events are a couple of screens
+on one record and eighty-two on another — measured, on this project's own board. Sizing the window by rows
+therefore sizes it by nothing the reader can feel. One event always fits however long it is: a budget may
+shrink a window, never empty it. A page walked back is bounded the same way, or each press would hand back
+another eighty screens.
 
 **A position in this history is not a sequence, and the two are never interchanged.** Events are shown in
 occurrence order, but migrated legacy history holds a HIGH sequence at an EARLY time, so the log's sequence

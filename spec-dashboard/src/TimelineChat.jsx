@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { LiveTail, Quote, TranscriptView, elapsed, timeOf } from '@spexcode/transcript-ui'
+import { LiveTail, Quote, TranscriptView, elapsed, timeOf, useOpenInPlace } from '@spexcode/transcript-ui'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { interruptSession, loadSessionTimeline, loadSessionDetail, loadSessionTranscript, loadSessionTranscriptTool, sendSessionCommand, subscribeSessionTranscript } from './data.js'
 import { useT } from './i18n/index.jsx'
@@ -14,6 +14,7 @@ import { useEscLayer } from './escStack.js'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
+import { readerIsSelecting } from './readerSelection.js'
 import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -46,6 +47,49 @@ function seamKey(sessionId, from) { return `${sessionId}:${from}` }
 
 // How much of the history a window holds at once, and the size of one step back through it.
 const WINDOW = 200
+// How long after a press a growth still counts as the reader's own. Opening is a React update and the
+// observer fires on the next frame; the slack is for prose that lays out late (code, math, an image).
+// Well under the poll, so a message landing in the same breath is still followed.
+const READER_GROWTH_MS = 700
+// A DECLARATION IS NOT A PAGE. Notes are authored prose and the longest of them run past a screen on their
+// own, so a handful of them are the whole scroll. Past this height a note is clamped to a readable opening
+// and says how to get the rest — the row keeps its place in the conversation either way. Under it, which is
+// most of them, nothing changes: this folds the tail of the distribution, not the ordinary reading.
+const NOTE_CLAMP = 400
+
+function ClampedNote({ text }) {
+  const t = useT()
+  const bodyRef = useRef(null)
+  const [overflows, setOverflows] = useState(false)
+  const [open, setOpen] = useState(false)
+  // measured, never guessed from the text's length: what matters is how tall it RENDERED, and rich text
+  // (code, math, images) settles after the first paint — so the observer keeps the answer honest.
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (!el) return undefined
+    const measure = () => setOverflows(el.scrollHeight > NOTE_CLAMP + 24)
+    measure()
+    if (typeof ResizeObserver !== 'function') return undefined
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text])
+  const clamped = overflows && !open
+  // the same in-place open the quoted turn gets: what the reader pressed keeps its position
+  const { ref: wrapRef, mark } = useOpenInPlace(open)
+  // ONE GESTURE, THE SAME ONE THE QUOTED TURN TAKES ([[transcript-view]]'s clamped quote): what is hidden is
+  // the block, so the block is what a reader presses, and `more` stays as the mark that says so rather than
+  // as the only target. A press that ENDED A SELECTION is a reader taking the words, not asking for the rest.
+  return (
+    <div ref={wrapRef} className={`m-note-wrap${clamped ? ' is-clamped' : ''}`}
+      onClick={clamped ? () => { if (!readerIsSelecting()) { mark(); setOpen(true) } } : undefined}>
+      <div ref={bodyRef} className={`m-ev-note${clamped ? ' is-clamped' : ''}`}>
+        <TimelineRichText>{text}</TimelineRichText>
+      </div>
+      {clamped && <button type="button" className="m-note-more" aria-expanded={false}>{t('mobile.more')}</button>}
+    </div>
+  )
+}
 
 // a re-seated window is usually the SAME history — keep the old array identity then, so nothing downstream
 // (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
@@ -567,6 +611,17 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (anchorRef.current) return   // a page is arriving at the TOP; the anchor above owns this frame
     if (timeline && pinnedRef.current) timeline.scrollTop = timeline.scrollHeight
   }, [])
+  // THE TAIL FOLLOWS MESSAGES, NOT THE READER'S OWN HAND. The observer below exists so content that settles
+  // late — a transcript frame, an image finishing — still carries a pinned reader to the newest entry. But
+  // a reader OPENING something is a height change too, and being thrown to the bottom for it is the opposite
+  // of what they asked for: what they opened has to stay where it was, and grow downward from there. A press
+  // marks the moment, so growth just after one is read as the reader's own rather than as new mail arriving.
+  const readerPressedAtRef = useRef(0)
+  const notePress = useCallback(() => { readerPressedAtRef.current = Date.now() }, [])
+  const followUnlessReaderGrewIt = useCallback(() => {
+    if (Date.now() - readerPressedAtRef.current < READER_GROWTH_MS) return
+    followTimelineTail()
+  }, [followTimelineTail])
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
   // GROWTH AT THE TOP MOVES NOTHING. Prepending a page pushes everything below it down by exactly the height
   // that arrived; adding that height back to the scroll leaves the row the reader was on where it was. This
@@ -583,10 +638,10 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (!active || typeof ResizeObserver !== 'function') return undefined
     const content = timelineContentRef.current
     if (!content) return undefined
-    const observer = new ResizeObserver(followTimelineTail)
+    const observer = new ResizeObserver(followUnlessReaderGrewIt)
     observer.observe(content)
     return () => observer.disconnect()
-  }, [active, followTimelineTail])
+  }, [active, followUnlessReaderGrewIt])
 
   const clearSelection = () => {
     timelineRangeRef.current = null
@@ -802,6 +857,19 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       </div>,
     )
   }
+  // WHAT THE WINDOW IS NOT SHOWING, SAID WHERE IT IS MISSING FROM. The count belongs at the SEAM in the
+  // reading — after the originating prompt, which is the session's first word and always drawn, and before
+  // the window's oldest row. Put at the top of the column instead it sat ABOVE the prompt, so a reader who
+  // scrolled up met that unchanging first word every time and could not tell the window had moved at all;
+  // the jump it hides (a prompt on one day, the window opening on another) is exactly here.
+  if (events !== null && !holdingFirstPaint && win.offset > 0) {
+    rows.push(
+      <button type="button" className="m-earlier" key="earlier" onClick={loadEarlier} disabled={loadingEarlier}>
+        <Caret open={false} className="m-earlier-caret" />
+        {loadingEarlier ? t('common.loading') : t('mobile.loadEarlier', { count: win.offset })}
+      </button>,
+    )
+  }
   for (const [i, item] of items.entries()) {
     dayRow(item.ts, i)
     if (item.kind === 'quote') {
@@ -828,7 +896,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
                 <button type="button" className="m-copy-note" onClick={() => copyText(item.text)}>{t('mobile.copy')}</button>
               )}
             </div>
-            {item.text && <div className="m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
+            {item.text && <ClampedNote text={item.text} />}
           </article>
         </div>,
       )
@@ -841,7 +909,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
             <time className="m-line-time">{timeOf(item.ts)}</time>
             <span className="m-ev-glyph" style={{ color: STATUS_COLOR[item.status] }}>{STATUS_GLYPH[item.status] || '·'}</span>
             <span className="m-ev-word" style={{ color: STATUS_COLOR[item.status] }}>{t(`status.${item.status}`)}</span>
-            {item.text && <div className="m-line-text m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
+            {item.text && <div className="m-line-text"><ClampedNote text={item.text} /></div>}
           </div>
         </div>,
       )
@@ -905,17 +973,9 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
+        onClickCapture={notePress}
         onMouseDown={beginTimelineSelection} onContextMenu={onTimelineContextMenu}>
         <div className="m-col" ref={timelineContentRef}>
-          {/* WHAT THE WINDOW IS NOT SHOWING, SAID OUT LOUD. A long session's history used to end here in
-              silence — the window was a tail and the rest was simply unreachable. The count is the history's
-              own, so the reader can see there is more and take it one page at a time. */}
-          {events !== null && !holdingFirstPaint && win.offset > 0 && (
-            <button type="button" className="m-earlier" onClick={loadEarlier} disabled={loadingEarlier}>
-              <Caret open={false} className="m-earlier-caret" />
-              {loadingEarlier ? t('common.loading') : t('mobile.loadEarlier', { count: win.offset })}
-            </button>
-          )}
           {events === null || holdingFirstPaint
             ? <div className="m-empty">{t('common.loading')}</div>
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}

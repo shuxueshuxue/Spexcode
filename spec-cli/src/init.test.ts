@@ -197,10 +197,13 @@ test('--harness seeds hook nodes only when a selected native adapter can emit th
   const node = (proj: string, name: string) => join(proj, '.spec', 'project', '.plugins', 'core', name)
   const pluginNodeCount = (proj: string) => readdirSync(join(proj, '.spec', 'project', '.plugins'), { recursive: true })
     .filter((path) => path === 'spec.md' || String(path).endsWith('/spec.md')).length
+  // The counts move whenever a plugin node is added or retired, and that is the point: a node that leaks
+  // into a selection whose adapter cannot emit its events shows up here as an off-by-one before it ships.
+  // Last moved by the session-spec-link prompt node, which every harness receives.
   const cases: ReadonlyArray<readonly [string, number]> = [
-    ['zcode', 22],
-    ['claude', 24],
-    ['zcode,claude', 24],
+    ['zcode', 23],
+    ['claude', 25],
+    ['zcode,claude', 25],
   ]
   for (const [selected, expectedNodes] of cases) {
     const { proj, spex } = freshRepo()

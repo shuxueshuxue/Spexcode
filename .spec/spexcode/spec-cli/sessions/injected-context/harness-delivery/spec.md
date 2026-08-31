@@ -133,11 +133,17 @@ stays exclusive ([[plugin-harness]]) and its arbitrary bundle folders remain in 
 
 Before compiling the manifest, materialize reconciles the executable handlers in the shipped `.plugins/core`
 subtree against the toolchain template. These handlers are SpexCode's published hook protocol (the
-`init-preset` contract says they ship from exactly what SpexCode runs), so a missing or byte-different
-`core/**/*.sh` is atomically replaced and the refresh is reported loudly. The comparison is path-scoped to the
-known template files: user-created plugin nodes outside `core/` are not read or changed, and core prose
-(`spec.md`) is not rewritten. This makes an older adoption self-heal at its next materialize, including the
-automatic materialize anchors, before its manifest can dispatch a mixed handler generation.
+`init-preset` contract says they ship from exactly what SpexCode runs), so a byte-different `core/**/*.sh` is
+atomically replaced and the refresh is reported loudly. The comparison is path-scoped to the known template
+files: user-created plugin nodes outside `core/` are not read or changed, and core prose (`spec.md`) is not
+rewritten. This makes an older adoption self-heal at its next materialize, including the automatic materialize
+anchors, before its manifest can dispatch a mixed handler generation.
+
+**It refreshes what the tree has; it never plants what the tree omitted.** [[init-preset]]'s event gate leaves
+out a hook node whose events no selected adapter can emit, so an ABSENT core node is a decision, not rot. Read
+the other way, this pass handed a zcode-only adoption `core/idle/idle.sh` — an executable waiting on a
+`Notification` that harness never sends, sitting in a directory with no `spec.md` to govern it, recreated on
+every materialize. A handler is therefore reconciled only where its node directory already exists.
 
 The pass returns a **materialization receipt** alongside its content hash: the manifest and the exact contract,
 shim, skill/agent, plugin-bundle, and trust paths asserted by this run. The receipt is populated at those writes,

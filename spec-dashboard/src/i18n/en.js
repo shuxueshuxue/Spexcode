@@ -963,6 +963,8 @@ export default {
     back: 'back',
     noEvents: 'nothing recorded yet — status changes and messages will land here',
     loadEarlier: ({ count }) => `${count} earlier event${count === 1 ? '' : 's'} · load`,
+    noteMore: 'show the rest',
+    noteLess: 'collapse',
     you: 'you',
     inputPlaceholder: 'message the agent…',
     send: 'send',

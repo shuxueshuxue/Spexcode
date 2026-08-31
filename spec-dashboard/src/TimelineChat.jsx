@@ -46,6 +46,43 @@ function seamKey(sessionId, from) { return `${sessionId}:${from}` }
 
 // How much of the history a window holds at once, and the size of one step back through it.
 const WINDOW = 200
+// A DECLARATION IS NOT A PAGE. Notes are authored prose and the longest of them run past a screen on their
+// own, so a handful of them are the whole scroll. Past this height a note is clamped to a readable opening
+// and says how to get the rest — the row keeps its place in the conversation either way. Under it, which is
+// most of them, nothing changes: this folds the tail of the distribution, not the ordinary reading.
+const NOTE_CLAMP = 400
+
+function ClampedNote({ text }) {
+  const t = useT()
+  const bodyRef = useRef(null)
+  const [overflows, setOverflows] = useState(false)
+  const [open, setOpen] = useState(false)
+  // measured, never guessed from the text's length: what matters is how tall it RENDERED, and rich text
+  // (code, math, images) settles after the first paint — so the observer keeps the answer honest.
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (!el) return undefined
+    const measure = () => setOverflows(el.scrollHeight > NOTE_CLAMP + 24)
+    measure()
+    if (typeof ResizeObserver !== 'function') return undefined
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text])
+  const clamped = overflows && !open
+  return (
+    <>
+      <div ref={bodyRef} className={`m-ev-note${clamped ? ' is-clamped' : ''}`}>
+        <TimelineRichText>{text}</TimelineRichText>
+      </div>
+      {overflows && (
+        <button type="button" className="m-note-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {t(open ? 'mobile.noteLess' : 'mobile.noteMore')}
+        </button>
+      )}
+    </>
+  )
+}
 
 // a re-seated window is usually the SAME history — keep the old array identity then, so nothing downstream
 // (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
@@ -841,7 +878,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
                 <button type="button" className="m-copy-note" onClick={() => copyText(item.text)}>{t('mobile.copy')}</button>
               )}
             </div>
-            {item.text && <div className="m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
+            {item.text && <ClampedNote text={item.text} />}
           </article>
         </div>,
       )
@@ -854,7 +891,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
             <time className="m-line-time">{timeOf(item.ts)}</time>
             <span className="m-ev-glyph" style={{ color: STATUS_COLOR[item.status] }}>{STATUS_GLYPH[item.status] || '·'}</span>
             <span className="m-ev-word" style={{ color: STATUS_COLOR[item.status] }}>{t(`status.${item.status}`)}</span>
-            {item.text && <div className="m-line-text m-ev-note"><TimelineRichText>{item.text}</TimelineRichText></div>}
+            {item.text && <div className="m-line-text"><ClampedNote text={item.text} /></div>}
           </div>
         </div>,
       )

@@ -1,7 +1,7 @@
 ---
 concern: phone detail side rail overflows its 390px column
 by: 98ff947c-72ce-4b96-ac62-84bf42cbf94f
-status: open
+status: landed
 nodes: review-chrome
 created: 2026-08-31T05:24:41.597Z
 ---

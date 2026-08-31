@@ -25,6 +25,8 @@ last appended sequence, which is what a follower's cheap tick compares.
 reader holds; the projection is what answers it. A growth read (`since`) is served from the event store's own
 sequence range — it never materializes the history, which is the whole point of it on a record with thousands of
 events. A positioned read (tail, or `before`) is served from the ordered history, because a position is a position
-in what the reader SEES, and migrated history makes that order differ from the sequence. The projection reports
+in what the reader SEES, and migrated history makes that order differ from the sequence. Cutting it is one
+walk back from the window's end that stops at whichever bound arrives first — the event count, or the
+authored text — and never at zero events, so a single note longer than the whole budget is still served. The projection reports
 the window's `offset`, the history's `total`, and the `priorWorking` the events before the window already said,
 so no reader has to infer any of the three from the events it happens to have been given.

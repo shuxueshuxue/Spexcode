@@ -71,7 +71,7 @@ test('human re-entry trusts canonical lifecycle when the legacy envelope is stal
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/stale-envelope', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/stale-envelope',
     title: 'stale envelope', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
     sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: 'thread-stale-envelope', stopped: false,
     archived: false, cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
@@ -104,7 +104,7 @@ test('canonical lifecycle writers resolve a Codex thread alias before transition
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/codex-thread-writer', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/codex-thread-writer',
     title: 'codex thread writer', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'waiting',
     sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: thread, stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
@@ -135,7 +135,7 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main',
     title: 'legacy', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
@@ -167,7 +167,7 @@ test('an unbound human prompt stays waiting without treating queue acceptance as
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/asking-reentry', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'node/asking-reentry',
     title: 'asking', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'needs a reply',
     sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: 'thread-asking-reentry', stopped: false,
     archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
@@ -209,7 +209,7 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main',
     title: 'queued', name: null, parent: null, status: 'asking', proposal: null, merges: 0, note: 'waiting for input',
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
@@ -261,7 +261,7 @@ test('a delivered human prompt reopens a parked session even when another prompt
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main',
     title: 'parked', name: null, parent: null, status: 'parked', proposal: null, note: 'waiting',
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
@@ -295,7 +295,7 @@ test('canonical acceptance stays successful when a runtime binding is not ready 
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: null,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main',
     title: 'unbound', name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
     sortkey: null, createdAt: 1, harness: 'codex', harness_session_id: 'native-thread-not-bound', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',

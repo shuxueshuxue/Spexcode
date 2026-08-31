@@ -48,7 +48,6 @@ try {
     lifecycle: 'active',
     liveness: 'online',
     parent: null,
-    node: null,
     name: 'Native multi-viewer proof',
     headline: 'Native multi-viewer proof',
     created: Date.now(),

@@ -67,7 +67,7 @@ rows are the shared autocomplete's over the LIVE sessions only — `sessionFoote
 so idle sessions remain targets while offline and archived records do not — with its `@new` and
 `@new:<launcher>` rows. The launcher a new session takes is therefore chosen in the open, and it is the
 same remembered launcher the New tab keeps, so the two launch doors never disagree. The default recipient
-is a live session already working on this node, else the newest live session, else a new one.
+is the newest live session, else a new one.
 
 **The presets are `/` commands.** Edit, polish and explain are rows of the shared `/` palette, filed as
 `[preset]`; accepting one writes its text into the message at the token, where the human can still change

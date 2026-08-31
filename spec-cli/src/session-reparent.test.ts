@@ -28,7 +28,7 @@ function writeSession(home: string, id: string, parent: string | null, projectRo
   const dir = sessionDir(home, id, projectRoot)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
-    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`, node: 'session-reparent',
+    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`,
     title: id, name: '', parent: parent ?? '', status: 'active', proposal: '', merges: 0, note: '', sortkey: '',
     createdAt: Date.now(), harness: 'opencode', harness_session_id: '', stopped: false, archived: false,
     launcher: 'fixture', launch_cmd: 'true', launch_owner: '',

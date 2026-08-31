@@ -72,7 +72,7 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
     const root = runtimeRoot()
     const application = initializeFreshSessionApplication()
     const record = (id: string, harness: string) => ({
-      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`, node: null,
+      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`,
       title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0,
       note: null, sortkey: null, createdAt: Date.now(), harness, harness_session_id: null,
       stopped: false, archived: false, launcher: harness, launch_cmd: harness,
@@ -169,7 +169,7 @@ test('session stop guard reads only the exact governed target and fails closed o
   const recordDir = join(root, 'sessions', target)
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(join(recordDir, 'runtime.json'), `${JSON.stringify({
-    session_id: target, governed: true, worktree_path: root, branch: 'node/target-scoped-stop', node: null,
+    session_id: target, governed: true, worktree_path: root, branch: 'node/target-scoped-stop',
     title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: targetThread, stopped: false,
     archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
@@ -306,7 +306,7 @@ test('resource report retains the full shared projection and reports its sibling
   const recordDir = join(root, 'sessions', id)
   mkdirSync(recordDir, { recursive: true })
   writeFileSync(join(recordDir, 'runtime.json'), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: root, branch: 'node/full-resource-projection', node: null,
+    session_id: id, governed: true, worktree_path: root, branch: 'node/full-resource-projection',
     title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: 'resource-target-thread',
     stopped: false, archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
@@ -385,7 +385,6 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       governed: true,
       worktree_path: worktrees.get(id)!,
       branch: `node/${id}`,
-      node: null,
       title: null,
       name: null,
       parent: null,

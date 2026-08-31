@@ -87,7 +87,7 @@ function writeGovernedSession(home: string, id: string, parent = ''): string {
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
-    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`, node: 'session-follow',
+    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`,
     title: id, name: '', parent, status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(),
     harness: 'opencode', harness_session_id: '', stopped: false, archived: false, launcher: 'fixture', launch_cmd: 'true', launch_owner: '',
   }, null, 2) + '\n')
@@ -121,7 +121,7 @@ test('session new rejects stale mode flags through the generic unknown-flag path
   }
 })
 
-test('session new retires the out-of-band --node binding before launch', () => {
+test('session new retires the out-of-band --node flag before launch', () => {
   const r = spawnSync('tsx', [cli, 'session', 'new', 'probe', '--node', 'launch'], {
     cwd: pkgRoot,
     encoding: 'utf8',
@@ -129,7 +129,7 @@ test('session new retires the out-of-band --node binding before launch', () => {
   })
   assert.equal(r.status, 2)
   assert.equal(r.stdout, '')
-  assert.equal(r.stderr, 'spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds\n')
+  assert.equal(r.stderr, 'spex session new: --node was removed — a session carries no spec node; put the task, and any [[<id>]] reference it needs, in the prompt\n')
 })
 
 test('session new keeps exact JSON stdout and emits the dependency receipt on stderr', async () => {

@@ -137,7 +137,7 @@ export function displayStatusForProposal(proposal: Proposal | null | undefined):
 }
 
 export type Session = {
-  id: string; node: string | null; branch: string | null; path: string
+  id: string; branch: string | null; path: string
   label: string; title: string   // `label` remains the stable search handle; `title` is the one visible session name
   raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
@@ -199,10 +199,10 @@ function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-export const deriveLabel = (r: { name?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
-  r.name || r.node || r.title || r.branch || r.id
-export const deriveTitle = (r: { name?: string | null; activity?: string | null; note?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
-  r.name || r.activity || (r.note ? oneLinePreview(r.note) : '') || (r.promptPreview ? oneLinePreview(r.promptPreview) : '') || r.node || r.title || r.branch || r.id
+export const deriveLabel = (r: { name?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.title || r.branch || r.id
+export const deriveTitle = (r: { name?: string | null; activity?: string | null; note?: string | null; promptPreview?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.activity || (r.note ? oneLinePreview(r.note) : '') || (r.promptPreview ? oneLinePreview(r.promptPreview) : '') || r.title || r.branch || r.id
 // Compatibility for package consumers that still import the old name.
 export const deriveHeadline = deriveTitle
 
@@ -666,15 +666,14 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
 // session (a store read, free) and how does its branch stand against main (ahead count, dirty scan, a
 // merge-tree conflict probe — 646 ms and 8 git children on a far-diverged branch). A consumer that renders
 // no gates strip should not buy the second one. The record already holds the identity half.
-export type ReviewIdentity = { id: string; node: string | null; branch: string | null; label: string }
+export type ReviewIdentity = { id: string; branch: string | null; label: string }
 export function reviewIdentity(id: string): ReviewIdentity | null {
   const rec = readRecord(id)
   if (!rec) return null
   return {
     id,
-    node: rec.node,
     branch: rec.branch,
-    label: deriveLabel({ id, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch }),
+    label: deriveLabel({ id, name: rec.name, title: rec.title, branch: rec.branch }),
   }
 }
 
@@ -704,7 +703,7 @@ export function sessionHookState(id: string): SessionHookState | null {
 function corruptSession(id: string, entry: { path: string; error: string }): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
-    id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
+    id, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: corruptReason(entry), archived: false, closedAt: null, prompt: null, promptPreview: null, created: 0,
@@ -719,9 +718,9 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const showActivity = lv === 'online'
   const act = showActivity ? activity : null
   const pp = prompt ? oneLinePreview(prompt) : null
-  const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
+  const parts = { id: rec.session, name: rec.name, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+  return { id: rec.session, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
 }
 
 export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }
@@ -778,7 +777,7 @@ export async function sessionPrompt(id: string): Promise<string | null> {
 }
 
 export type ArchiveSessionIndexRow = {
-  id: string; title: string; label: string; closedAt: string | null; node: string | null
+  id: string; title: string; label: string; closedAt: string | null
 }
 export type ArchiveSessionIndexProbe = { promptReads?: number }
 
@@ -793,7 +792,7 @@ export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe)
     const rec = fromRaw(entry.raw)
     if (!rec.governed || (!rec.archived && !rec.closedAt)) continue
     const parts = {
-      id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch,
+      id: rec.session, name: rec.name, title: rec.title, branch: rec.branch,
       activity: null, note: rec.note, promptPreview: null as string | null,
     }
     // Name and note are ahead of the prompt in deriveTitle's precedence. Avoid touching the prompt artifact
@@ -808,7 +807,6 @@ export async function listArchivedSessionIndex(probe?: ArchiveSessionIndexProbe)
       title: deriveTitle(parts),
       label: deriveLabel(parts),
       closedAt: rec.closedAt,
-      node: rec.node,
     })
   }
   return rows
@@ -2459,9 +2457,11 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       traceSessionCreate(id, requestDigest, phase, 'start')
       throwIfCreateAborted(signal, phase)
       const rawPrompt = prompt
+      // @@@ the first mention is read TWICE and stored NEVER - it names the worktree slug and, when that id
+      // exists, the [[spec-pointer]] line. The record carries no spec node: a session is not bound to one.
       const ref = nodeFromPrompt(rawPrompt)
       const launchSpecs = ref ? loadSpecsLite() : null
-      const title = ref ? null : titleFromPrompt(rawPrompt)
+      const title = titleFromPrompt(rawPrompt)
       const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
       const root = mainRoot()
       // An explicit base pins the fork point so a run is reproducible against a frozen commit instead of
@@ -2555,7 +2555,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
-            node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
+            title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, runtimeStartToken: randomUUID(), stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
@@ -3275,9 +3275,9 @@ export type ReviewGates = {
   lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
 }
 export type ReviewPayload = {
-  id: string; node: string | null; branch: string | null
-  label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own node||branch||id chain
-  ahead: number              // commits the node branch is ahead of main
+  id: string; branch: string | null
+  label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own branch||id chain
+  ahead: number              // commits the session branch is ahead of main
   dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
   diff: ReviewDiffFile[]     // the worker's real changes, anchored at the merge-base
   gates: ReviewGates
@@ -3625,8 +3625,8 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   // path is genuine work — this is just the total uncommitted count.
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
-    id, node: wt.rec.node, branch: wt.branch,
-    label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
+    id, branch: wt.branch,
+    label: deriveLabel({ id, name: wt.rec.name, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
     gates: { conflictsWithMain, lint },
@@ -4305,15 +4305,15 @@ const ANSI: Record<DisplayStatus, string> = {
 }
 
 // @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A
-// selector matches a session iff it is the session's full id, an id-PREFIX, its node, its branch, or `.` for
+// selector matches a session iff it is the session's full id, an id-PREFIX, its branch, or `.` for
 // the caller's own launched session. This is
-// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/node/branch
+// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/branch
 // resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
 // review/merge/send/close act on".
 export function matchesSelector(s: Session, q: string, own = ownSessionId(), cwd = process.cwd()): boolean {
   // a selector may be a comma-separated list (the same convention as `--status a,b`): it matches iff ANY part
   // names the session, so `watch a,b` and `watch a b` are equivalent. A single name is the one-part case. This
-  // is what stops a comma-joined selector from silently matching nothing — an id/node/branch never holds a
+  // is what stops a comma-joined selector from silently matching nothing — an id/branch never holds a
   // comma, so without the split `a,b` would be one literal selector that matches no session and streams in
   // silence forever. Each part sheds an optional reference sigil (stripRefSigil): `@<sel>` / `[[<sel>]]` name
   // the same session as the bare token, so the dashboard's mention grammar is tolerated in every CLI selector.
@@ -4322,7 +4322,7 @@ export function matchesSelector(s: Session, q: string, own = ownSessionId(), cwd
   const self = Boolean(own) && s.id === own
     || Boolean(sessionPath) && (callerPath === sessionPath || callerPath.startsWith(`${sessionPath}${sep}`))
   return q.split(',').map((p) => stripRefSigil(p.trim())).filter(Boolean)
-    .some((p) => p === '.' ? self : s.id === p || s.id.startsWith(p) || s.node === p || s.branch === p)
+    .some((p) => p === '.' ? self : s.id === p || s.id.startsWith(p) || s.branch === p)
 }
 
 // no selectors (or '@all') = everything. Optional status filter on top. This IS the ls/watch subscription.
@@ -4342,10 +4342,10 @@ export function selectChildren(all: Session[], parent: string): Session[] {
 
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
 // selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
-// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
+// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a branch/
 // prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
 // precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
-// otherwise a lone match is `ok`, several is `ambiguous` (a prefix/node hitting many), none is `none`.
+// otherwise a lone match is `ok`, several is `ambiguous` (a prefix hitting many), none is `none`.
 export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
 export function resolveSession(selector: string, sessions: Session[], own = ownSessionId(), cwd = process.cwd()): Resolved {
   // the exact-id check sheds the optional sigil too, so `@<full-id>` keeps the exact-wins-over-prefix rule

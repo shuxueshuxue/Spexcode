@@ -293,7 +293,7 @@ test('Codex registration does not persist an unbound thread when exact generatio
   try {
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-      session_id: id, governed: true, worktree_path: worktree, branch: 'main', node: '', title: '', name: '', parent: '',
+      session_id: id, governed: true, worktree_path: worktree, branch: 'main', title: '', name: '', parent: '',
       status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
     }, null, 2)}\n`)
@@ -330,7 +330,7 @@ test('Codex launch retry reuses a staged native target after the first payload i
   try {
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-      session_id: id, governed: true, worktree_path: worktree, branch: 'main', node: '', title: '', name: '', parent: '',
+      session_id: id, governed: true, worktree_path: worktree, branch: 'main', title: '', name: '', parent: '',
       status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex',
       harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex',
       launch_cmd: 'codex', launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
@@ -478,7 +478,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
-    node: 'sessions-core', title: '', name: '', parent: '', status: 'active', proposal: '',
+    title: '', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
     harness_session_id: `thread-${id}`, runtime_start_token: 'fixture-start', stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
@@ -564,7 +564,7 @@ exec sleep 30
   writeFileSync(sessionArtifactPath(id, 'launch'), resolvedLaunch)
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch,
-    node: 'launch', title: '', name: '', parent: '', status: 'active', proposal: '',
+    title: '', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '', runtime_start_token: 'fixture-start',
     stopped: true, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
@@ -708,7 +708,7 @@ exec sleep 30
   writeFileSync(sessionArtifactPath(id, 'launch'), launchPayload)
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch,
-    node: 'launch', title: '', name: '', parent: '', status: 'queued', proposal: '',
+    title: '', name: '', parent: '', status: 'queued', proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '', runtime_start_token: 'fixture-start',
     stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
@@ -717,7 +717,7 @@ exec sleep 30
   mkdirSync(sessionStoreDir(watcherId), { recursive: true })
   writeFileSync(sessionRecordPath(watcherId), `${JSON.stringify({
     session_id: watcherId, governed: true, worktree_path: worktree, branch,
-    node: 'watcher', title: '', name: '', parent: '', status: 'active', proposal: '',
+    title: '', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
     runtime_start_token: 'watcher-start', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
@@ -1083,7 +1083,7 @@ test('a stopped queued record is ineligible for automatic and repeated queue dra
   writeFileSync(sessionArtifactPath(id, 'launch'), 'prepared capacity-queued prompt')
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: project, branch: 'main',
-    node: 'launch', title: '', name: '', parent: '', status: OWNED_QUEUE_RAW_STATUS, proposal: '',
+    title: '', name: '', parent: '', status: OWNED_QUEUE_RAW_STATUS, proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: helper, launch_owner: backendLaunchAuthority(),
@@ -1274,7 +1274,7 @@ test('expired launch readiness residue becomes terminal error/offline during que
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionArtifactPath(id, 'launch'), 'authoritative first turn')
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktree, branch, node: 'launch', title: '', name: '', parent: '',
+    session_id: id, governed: true, worktree_path: worktree, branch, title: '', name: '', parent: '',
     status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex',
     harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex',
     launch_cmd: 'codex', launch_owner: '', launch_readiness_started_at: Date.now() - 31_000, launch_readiness_pending: '',
@@ -1315,7 +1315,7 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
       mkdirSync(dir, { recursive: true })
       writeFileSync(sessionRecordPath(id), `${JSON.stringify({
         session_id: id, governed: true, worktree_path: worktree, branch,
-        node: 'host-resource-budget', title: '', name: '', parent: '', status: 'active', proposal: '',
+        title: '', name: '', parent: '', status: 'active', proposal: '',
         merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: id,
         stopped: false, archived: false, launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
       }, null, 2)}\n`)
@@ -1444,7 +1444,7 @@ esac
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
       session_id: id, governed: true, worktree_path: worktree, branch,
-      node: 'archive', title: '', name: '', parent: '', status: 'active', proposal: '',
+      title: '', name: '', parent: '', status: 'active', proposal: '',
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
       launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
@@ -1608,7 +1608,7 @@ test('public close files queued and unbound rows without entering the unrelated 
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
       session_id: id, governed: true, worktree_path: path, branch,
-      node: 'archive', title: '', name: '', parent: '', status: OWNED_QUEUE_RAW_STATUS, proposal: '',
+      title: '', name: '', parent: '', status: OWNED_QUEUE_RAW_STATUS, proposal: '',
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex',
       launch_cmd: 'codex', launch_owner: 'queued-close-test-owner',
@@ -1823,7 +1823,7 @@ test('a launch failure the harness itself called settled is attempted exactly on
 test('launchPreflight refuses a launch that cannot succeed, naming which fact settled it', serial, () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-preflight-'))
   const base: SessRec = {
-    session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
+    session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null,
     title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, note: null,
     sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null,
     launcher: null, launchCmd: '/bin/true', launchOwner: null,
@@ -1873,7 +1873,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
   try {
     const rec: SessRec = {
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
-      node: null, title: 'mat fail', name: null, parent: null,
+      title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
       harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null,
       launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
@@ -1907,7 +1907,7 @@ test('machine turn failures share one active-only error projection', serial, () 
   const worktree = join(home, 'headless-turn-state')
   const raw = {
     session_id: id, governed: true, worktree_path: worktree, branch: 'node/headless-turn-state',
-    node: 'harness-adapter', title: null, name: null, parent: null, status: 'active', proposal: null,
+    title: null, name: null, parent: null, status: 'active', proposal: null,
     merges: 0, note: null, sortkey: null, createdAt: 1, harness: 'opencode-headless',
     harness_session_id: null, launcher: 'turn-dead', launch_cmd: '/bin/false', launch_owner: null,
   }
@@ -1978,7 +1978,7 @@ test('lifecycle hook writers reject self-launched records in the canonical layer
   const worktree = join(home, 'unmanaged-hook-state')
   const raw = {
     session_id: id, governed: false, worktree_path: worktree, branch: null,
-    node: null, title: null, name: null, parent: null, status: 'active', proposal: null,
+    title: null, name: null, parent: null, status: 'active', proposal: null,
     merges: 0, note: null, sortkey: null, createdAt: 1, harness: 'claude',
     harness_session_id: null, launcher: null, launch_cmd: 'claude', launch_owner: null,
   }
@@ -2011,7 +2011,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   assert.doesNotMatch(publicAuthority, /operator|secret|token|44725/)
 
   const base: SessRec = {
-    session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
+    session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', title: null,
     name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
     createdAt: 1, harness: 'codex', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null, launcher: 'codex', launchCmd: 'codex',
     launchOwner: publicAuthority,
@@ -2020,7 +2020,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   assert.notEqual(rawLifecycleStatus(base), 'queued', 'a legacy status === queued selector cannot claim it')
 
   const reread = fromRaw({
-    session_id: base.session, governed: true, worktree_path: base.worktreePath, branch: base.branch, node: null,
+    session_id: base.session, governed: true, worktree_path: base.worktreePath, branch: base.branch,
     title: null, name: null, status: OWNED_QUEUE_RAW_STATUS, proposal: null, merges: 0, note: null,
     sortkey: null, createdAt: 1, harness: 'codex', launcher: 'codex', launch_cmd: 'codex',
     launch_owner: publicAuthority,
@@ -2054,7 +2054,7 @@ test('the spawner pointer names the parent worktree and stays quiet without one'
   const parent = fromRaw({
     session_id: 'aaaaaaaa-1111-2222-3333-444444444444', governed: true,
     worktree_path: '/repo/.worktrees/parent-node-aaaa', branch: 'node/parent-node-aaaa',
-    node: 'spawner-pointer', title: 'teach the child where I work', name: null, parent: null,
+    title: 'teach the child where I work', name: null, parent: null,
     status: 'active', proposal: null, merges: 0, note: null, sortkey: null, createdAt: 1,
     harness: 'claude', launcher: 'reclaude', launch_cmd: 'claude',
   })

@@ -11,10 +11,9 @@ export type EvalHost = {
   apiBase?: () => Promise<string>
 }
 
-export type ReviewIdentity = { id: string; node: string | null; branch: string | null; label: string }
+export type ReviewIdentity = { id: string; branch: string | null; label: string }
 export type ReviewPayload = {
   id: string
-  node: string | null
   branch: string | null
   label: string
   ahead: number

@@ -40,7 +40,7 @@ const take = (opts: Partial<Parameters<typeof followSessions>[1]> = {}): Promise
   followSessions(() => {}, { targets: () => [T], self: ME, take: true, timeoutMs: 1000, intervalMs: 5, ...opts })
 
 const titled = (): Session => ({
-  id: T, node: 'legacy-node-handle', branch: 'node/legacy-node-handle', path: '/wt/title',
+  id: T, branch: 'node/legacy-node-handle', path: '/wt/title',
   label: 'legacy-node-handle', title: 'current work summary', raw: { name: null, title: 'stored title' },
   parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
   lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null,

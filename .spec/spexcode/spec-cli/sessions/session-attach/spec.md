@@ -20,7 +20,7 @@ to handle every anomaly programmatically — many problems the user solves by ju
 ## expanded spec
 
 **The verb.** `spex session attach <SEL>` resolves the selector through the shared grammar
-([[session-selectors]] — id · prefix · node · branch, `none`/`ambiguous` loud like every control verb),
+([[session-selectors]] — id · prefix · branch, `none`/`ambiguous` loud like every control verb),
 prints one detach hint (`C-b d` — the session keeps running), then foreground-attaches the terminal to the
 worker's real tmux window and blocks until the human detaches or the session ends, exiting with tmux's
 status. No wrapping, no filtering — the human gets the worker's actual screen and keyboard.

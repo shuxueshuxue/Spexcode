@@ -329,7 +329,6 @@ const writeCodexReadinessRecord = (root: string, sessionId: string, threadId: st
     governed: true,
     worktree_path: root,
     branch: 'main',
-    node: 'codex-headless',
     title: null,
     name: null,
     status: 'idle',

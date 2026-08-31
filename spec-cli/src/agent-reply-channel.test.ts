@@ -54,11 +54,11 @@ test('withPeerSenderHint: the reply keeps the opaque peer address and the sender
 
 // deriveHeadline is the unified cross-surface title the footer (and watch greeting) use — the SAME chain
 // the board card shows, computed ONCE in toSession ([[session-label]]): a chosen NAME wins, else the live
-// self-summary `activity`, else a fuller promptPreview, else node/title/branch/id. The fix it encodes: a
+// self-summary `activity`, else a fuller promptPreview, else title/branch/id. The fix it encodes: a
 // session with no name but a live activity is named by that activity (what the board shows), NOT by the
 // bare 7-word prompt `title` the old stable label stopped at. Tests feed the derivation the same PARTS
 // toSession would — the bare fields no longer exist on the wire to feed accessors with.
-const sess = (o: Record<string, unknown>) => ({ name: null, activity: null, promptPreview: null, node: null, title: null, branch: null, id: 'idfallback', ...o }) as any
+const sess = (o: Record<string, unknown>) => ({ name: null, activity: null, promptPreview: null, title: null, branch: null, id: 'idfallback', ...o }) as any
 
 test('sessionHeadline: a chosen name wins over everything', () => {
   assert.equal(deriveHeadline(sess({ name: 'my-rename', activity: 'doing x', title: 'do a thing now please' })), 'my-rename')
@@ -72,8 +72,7 @@ test('sessionHeadline: with no name or activity, the fuller promptPreview beats 
   assert.equal(deriveHeadline(sess({ promptPreview: 'support semantic search inside SpexCode for code-as-spec', title: 'support semantic search inside SpexCode for' })), 'support semantic search inside SpexCode for code-as-spec')
 })
 
-test('sessionHeadline: falls through node → title → branch → id when nothing richer exists', () => {
-  assert.equal(deriveHeadline(sess({ node: 'main-guard' })), 'main-guard')
+test('sessionHeadline: falls through title → branch → id when nothing richer exists', () => {
   assert.equal(deriveHeadline(sess({ title: 'a title' })), 'a title')
   assert.equal(deriveHeadline(sess({ branch: 'node/x' })), 'node/x')
   assert.equal(deriveHeadline(sess({})), 'idfallback')

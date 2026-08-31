@@ -137,7 +137,7 @@ setInterval(() => {}, 1000)
     writeFileSync(join(recordDir, 'rv.path'), `${socket}\n`)
     writeFileSync(record, JSON.stringify({
       session_id: id, governed: true, worktree_path: worktree, branch,
-      node: 'archive', title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0,
+      title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0,
       note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
     }, null, 2) + '\n')

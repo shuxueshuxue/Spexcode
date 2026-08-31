@@ -8,7 +8,7 @@ import type { Session } from './sessions.js'
 // and misaligned every column after a CJK TITLE or PROMPT.
 
 const sess = (over: Partial<Session> = {}): Session => ({
-  id: 'abcdef1234', node: 'x', branch: 'node/x', path: '/wt/x',
+  id: 'abcdef1234', branch: 'node/x', path: '/wt/x',
   label: 'x', title: 'x', raw: { name: null, title: null }, parent: null,
   harness: 'claude', capabilities: { headless: false }, launcher: null,
   lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null, archived: false, closedAt: null,
@@ -74,7 +74,7 @@ test('formatTable: a pure-ASCII title renders exactly as before (padEnd-equivale
 
 test('formatTable: the TITLE column renders the derived title, never the selector label', () => {
   const table = formatTable([sess({
-    label: 'legacy-node-handle', title: 'current live summary', node: 'legacy-node-handle',
+    label: 'legacy-node-handle', title: 'current live summary',
   })], false)
   assert.match(table, /\bTITLE\b/)
   assert.ok(table.includes('current live summary'))

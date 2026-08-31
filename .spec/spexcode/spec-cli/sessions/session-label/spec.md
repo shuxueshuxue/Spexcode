@@ -32,7 +32,7 @@ internally consistent. The cure is one visible `title` computation; every surfac
 
 **One computation site.** `toSession` is the single place the visible title is derived. Its precedence is
 `name` (a human name supplied by CLI creation or rename) > live `activity` (pane self-summary, while online) > the first meaningful line of
-`note` > the first non-URL line of the launch prompt > node > stored prompt title > branch > id. A prompt
+`note` > the first non-URL line of the launch prompt > stored prompt title > branch > id. A prompt
 whose first line is a bare URL therefore uses the next prose line when one exists. The wire carries this
 derived `title`; every surface — CLI tables, watch/notify lines, the reply-channel footer, board rows, the
 @-mention dropdown, search, review, and tooltips — reads the same field. `label` remains only as the stable
@@ -50,7 +50,7 @@ rename/prompt/activity/note candidates so a renamed or re-narrated session remai
 already saw.
 
 The review/merge `ReviewPayload` retains its precomputed `label` (`deriveLabel` over the record's
-name/node/title/branch/id) for machine compatibility, but it is not a display identity. `spex session review`
+name/title/branch/id) for machine compatibility, but it is not a display identity. `spex session review`
 already resolves its target to a full current Session before it fetches the cockpit payload, so it renders that
 Session's `title` rather than re-deriving or borrowing the payload label. This keeps a review title on the same
 wire-derived path as every other visible surface without an extra liveness probe. The @-mention `sub` line and

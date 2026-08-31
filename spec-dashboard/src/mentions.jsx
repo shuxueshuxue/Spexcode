@@ -82,7 +82,7 @@ export function matchSessions(sessions, query) {
     scored.push({ s, score })
   }
   scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
-  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status, session: x.s }))
+  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.status, session: x.s }))
   const exactCount = scored.filter((x) => x.score === 0).length
   const beforeNew = items.slice(0, Math.min(exactCount, 7))
   return [...beforeNew, { id: 'new', label: 'new', sub: 'choose a launcher' }, ...items.slice(beforeNew.length)].slice(0, 8)

@@ -652,7 +652,7 @@ export default {
   specNode: {
     liveEditors: ({ n }) => `${n} 个实时编辑者`,
     more: ({ n }) => `还有 ${n} 个`,
-    editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
+    editorTitle: ({ status, id }) => `${status} — ${id}`,
     driftAhead: ({ n }) => `领先 ${n}`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
     openIssues: ({ n }) => `${n} 个待办 issue——打开节点信息查看`,

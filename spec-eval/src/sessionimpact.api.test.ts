@@ -110,7 +110,7 @@ function record(home: string, project: string, session: string, id: string, bran
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
     session_id: id, governed: true, worktree_path: session, branch,
-    node: 'impact-fixture', title: 'impact fixture', name: '', parent: null, status: 'active',
+    title: 'impact fixture', name: '', parent: null, status: 'active',
     proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', launcher: 'fixture', launch_cmd: 'true',
   }, null, 2) + '\n')

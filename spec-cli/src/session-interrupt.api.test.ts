@@ -65,7 +65,7 @@ test('YATU: interrupt reaches a pane-backed TUI as its own key, and refuses wher
     const sessionDir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
     mkdirSync(sessionDir, { recursive: true })
     writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({
-      session_id: id, governed: true, worktree_path: project, branch: 'main', node: '', title: 'interrupt API', name: '', parent: '',
+      session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'interrupt API', name: '', parent: '',
       status, proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness, harness_session_id: '',
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: harness, launch_owner: '',
     }) + '\n')

@@ -87,10 +87,11 @@ same transaction's top-level detach: it removes the former relation and its pend
 a root record, new watcher, or notification.
 A launch record carries the selected launcher name, its resolved harness, and the exact pinned
 `launch_cmd`; session lifecycle and comms call that one interactive adapter directly rather than routing on a
-second product dimension. The session's node is derived only from the raw prompt's first `[[id]]` topic
-mention ([[mentions]]) — no caller-supplied node argument exists at the CLI, HTTP, or function boundary.
-That one visible mention drives the record attribution and the node part of the branch/worktree slug; without
-one the session stays node-agnostic and falls through to its prompt-derived title. The branch/worktree slug
+second product dimension. A session record carries no spec node: nothing about the session is bound to one.
+The raw prompt's first `[[id]]` topic mention ([[mentions]]) is read at create time for exactly two
+throwaway purposes — it names the branch/worktree slug, and when that id exists it selects the
+[[spec-pointer]] line — and is never retained. Without a mention the slug falls through to the
+prompt-derived title. The branch/worktree slug
 and that title are the session's OWN identity: derivation strips actor mentions (`@session`, [[mentions]]) and
 UUID-shaped tokens first — a prompt that mentions another session must never name this one after it, or a
 worker sent to clean that session can match its own worktree — and the slug keeps unicode letters/numbers,
@@ -123,7 +124,7 @@ the old registration. The close path never recursively removes the renamed tree.
 does that work asynchronously; it scans `.trash` when the backend starts so a crash leaves a retryable residue.
 Each removal failure is logged with its path and retained for the next startup rather than being swallowed.
 The archive index has its own lean projection, following [[graph-lean]]'s summary-first pattern: one archived-only
-read returns only `id`, visible `title`, stable search `label`, `closedAt`, and `node`. It never enumerates live
+read returns only `id`, visible `title`, stable search `label`, and `closedAt`. It never enumerates live
 rows, reads the prompt into a public object, or carries files, web resources, notes, or lifecycle state; id-addressed
 session detail remains the demand path for a selected row. Title derivation is lazy at the prompt-file boundary:
 records with a name or usable note do not read their prompt at all; a prompt is read only when those earlier title
@@ -181,7 +182,7 @@ restart reconciliation cannot overwrite it.
 
 The record's existing `name` is the one human display override: CLI creation may set it once with `--name`, and
 rename later replaces or clears that same field. It affects only the shared label/title projection;
-the prompt-derived node, branch, worktree slug, and stored prompt title retain their own responsibilities.
+the branch, worktree slug, and stored prompt title retain their own responsibilities.
 
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation lives at
 `spec-cli/src/session-record-lock.ts`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process

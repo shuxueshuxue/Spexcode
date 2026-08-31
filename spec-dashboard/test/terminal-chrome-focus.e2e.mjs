@@ -41,7 +41,6 @@ try {
     lifecycle: 'active',
     liveness: 'online',
     parent: null,
-    node: null,
     name: 'chrome focus proof',
     headline: 'chrome focus proof',
     created: Date.now(),

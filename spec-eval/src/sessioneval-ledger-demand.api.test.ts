@@ -47,7 +47,6 @@ function record(home: string, project: string, worktree: string): void {
     governed: true,
     worktree_path: worktree,
     branch: 'node/eval-ledger-demand',
-    node: 'eval-ledger-demand-fixture',
     title: 'eval ledger demand fixture',
     name: '',
     parent: null,

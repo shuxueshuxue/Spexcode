@@ -65,7 +65,7 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
   ])
 
   const scoped = scopedEvalReviewItems({
-    id: 's', node: 'n', branch: 'node/n', title: 'n',
+    id: 's', branch: 'node/n', title: 'n',
     summary: { measured: 3, total: 4, pass: 3, fail: 0, review: 0, blind: 1, unknown: 0 },
     evalRevision: { epoch: 'test', generation: 1, content: 'fixture' },
     impact: { base: 'base', head: 'head', revision: 'revision', nodes: [] },

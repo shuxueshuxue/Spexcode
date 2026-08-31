@@ -28,7 +28,7 @@ function writeTarget(home: string): string {
   const dir = sessionDir(home, TARGET)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
-    session_id: TARGET, governed: true, worktree_path: pkgRoot, branch: `node/${TARGET}`, node: 'remote-client',
+    session_id: TARGET, governed: true, worktree_path: pkgRoot, branch: `node/${TARGET}`,
     title: 'password-gated remote target', name: '', parent: '', status: 'active', proposal: '', merges: 0, note: '',
     sortkey: '', createdAt: Date.now(), harness: 'opencode', harness_session_id: '', stopped: false, archived: false,
     launcher: 'fixture', launch_cmd: 'true', launch_owner: '',

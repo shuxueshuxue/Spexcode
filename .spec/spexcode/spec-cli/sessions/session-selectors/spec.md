@@ -2,7 +2,7 @@
 title: session-selectors
 status: active
 hue: 280
-desc: One selector grammar (id·id-prefix·node·branch·self) and one matcher, so every session command names the same sessions.
+desc: One selector grammar (id·id-prefix·branch·self) and one matcher, so every session command names the same sessions.
 code:
   - spec-cli/src/selectors.test.ts
 related:
@@ -13,30 +13,31 @@ related:
 
 ## raw source
 
-A user names a session several ways — its full id, a short id-prefix, its node, its branch, or `.` for the
+A user names a session several ways — its full id, a short id-prefix, its branch, or `.` for the
 session making the call — and every
 session command should understand the SAME names. The bug this node removes: the list verbs (`ls` / `watch` /
-`wait` / the graph) matched on all four, but the control verbs (`review` / `merge` / `send` / `close` /
+`wait` / the graph) matched on all of them, but the control verbs (`review` / `merge` / `send` / `close` /
 `reopen` / `capture` / `prompt`) took a RAW id straight to the backend's exact-match endpoint, so a
-prefix / node / branch selector worked for `ls` but NOT for `merge` — forcing callers to hand-resolve full
+prefix / branch selector worked for `ls` but NOT for `merge` — forcing callers to hand-resolve full
 ids. One grammar, one matcher, no per-command matching logic anywhere.
 
 ## expanded spec
 
 **One predicate.** `matchesSelector(session, q)` is the single rule: `q` matches a session iff it is the
-session's full id, an id-PREFIX, its node, or its branch. Nothing re-derives it — both shapes below call it,
+session's full id, an id-PREFIX, or its branch. A spec node id names no session: a session carries none.
+Nothing re-derives it — both shapes below call it,
 so the grammar can never drift between "which sessions does `ls` show" and "which session does `merge` act on".
 
 **A selector may be a comma list.** `q` is split on commas and matches iff ANY part names the session — the
 same `a,b` convention as `--status`, so `spex watch a,b` and `spex watch a b` are equivalent. A single name
 is just the one-part case. This closes a silent failure: before, `watch a,b` was one literal selector that
-matched no session at all (an id/node/branch never contains a comma), so a comma-joined watch streamed
+matched no session at all (an id/branch never contains a comma), so a comma-joined watch streamed
 **zero events forever** with no error — exactly the trap a `--status`-trained user falls into.
 
 **A part sheds an optional reference sigil.** Each comma-part passes through [[mentions]]'s `stripRefSigil`
 before matching, so `@<sel>` and `[[<sel>]]` name exactly the session the bare token names — the reference
-grammar a user learns in the dashboard's input boxes works verbatim as a CLI selector (`spex review @graph`
-≡ `spex review graph`). The single-target exact-id check strips too, so `@<full-id>` keeps the
+grammar a user learns in the dashboard's input boxes works verbatim as a CLI selector (`spex review @<branch>`
+≡ `spex review <branch>`). The single-target exact-id check strips too, so `@<full-id>` keeps the
 exact-wins-over-prefix rule. Because the strip lives in the ONE matcher, every selector-taking verb
 tolerates the sigil at once, and tolerance never widens what matches.
 
@@ -50,7 +51,7 @@ known session worktree, with no matching own id, `.` fails loudly instead of sel
 **Two shapes over the one predicate.** `selectSessions` is the MANY shape — the list / stream / graph filter
 ([[session-follow]], `spex ls`): empty selectors (or `@all`) means everything, with an optional status filter on top.
 `resolveSession` is the ONE shape — the single-target lookup the control verbs need. Its result is
-DISCRIMINATED so a caller fails precisely: `ok` (one match), `ambiguous` (a prefix or node hitting several —
+DISCRIMINATED so a caller fails precisely: `ok` (one match), `ambiguous` (a prefix hitting several —
 carried so the user can be told which), `none` (nothing). An exact full-id match wins outright, so a full id
 is never reported ambiguous merely because it prefixes a longer one.
 

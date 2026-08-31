@@ -49,7 +49,6 @@ function baseRecord() {
     governed: true,
     worktree_path: proj,
     branch: 'node/child-bs01',
-    node: 'child',
     title: 'test session',
     name: '',
     parent: '',

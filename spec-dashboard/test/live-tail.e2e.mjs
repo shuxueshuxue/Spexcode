@@ -22,7 +22,7 @@ mkdirSync(OUT, { recursive: true })
 const NOW = Date.now()
 const iso = (offsetMs) => new Date(NOW + offsetMs).toISOString()
 const board = { sessions: [{
-  id: SESSION_ID, label: SESSION_ID, headline: SESSION_ID, title: SESSION_ID, raw: { name: SESSION_ID, title: null }, node: null, branch: `node/${SESSION_ID}`,
+  id: SESSION_ID, label: SESSION_ID, headline: SESSION_ID, title: SESSION_ID, raw: { name: SESSION_ID, title: null }, branch: `node/${SESSION_ID}`,
   path: '/tmp/fixture', parent: null, harness: 'claude-headless', capabilities: { headless: true }, launcher: 'claude-headless',
   lifecycle: 'active', proposal: null, merges: 0, note: null, status: 'working', liveness: 'online', archived: false, closedAt: null,
   archiveHazard: null, prompt: null, promptPreview: null, created: iso(-300_000), activity: null, sortKey: '', files: [], web: [],

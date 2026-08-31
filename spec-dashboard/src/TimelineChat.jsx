@@ -14,6 +14,7 @@ import { useEscLayer } from './escStack.js'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
+import { readerIsSelecting } from './readerSelection.js'
 import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -70,17 +71,17 @@ function ClampedNote({ text }) {
     return () => observer.disconnect()
   }, [text])
   const clamped = overflows && !open
+  // ONE GESTURE, THE SAME ONE THE QUOTED TURN TAKES ([[transcript-view]]'s clamped quote): what is hidden is
+  // the block, so the block is what a reader presses, and `more` stays as the mark that says so rather than
+  // as the only target. A press that ENDED A SELECTION is a reader taking the words, not asking for the rest.
   return (
-    <>
+    <div className={`m-note-wrap${clamped ? ' is-clamped' : ''}`}
+      onClick={clamped ? () => { if (!readerIsSelecting()) setOpen(true) } : undefined}>
       <div ref={bodyRef} className={`m-ev-note${clamped ? ' is-clamped' : ''}`}>
         <TimelineRichText>{text}</TimelineRichText>
       </div>
-      {overflows && (
-        <button type="button" className="m-note-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {t(open ? 'mobile.noteLess' : 'mobile.noteMore')}
-        </button>
-      )}
-    </>
+      {clamped && <button type="button" className="m-note-more" aria-expanded={false}>{t('mobile.more')}</button>}
+    </div>
   )
 }
 

@@ -5,8 +5,8 @@ import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
-import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
-import { unitize, tagOf, diffUnits, type Units } from '@spexcode/spec-core'
+import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, type Board } from './graphCache.js'
+import { diffUnits, type Units } from '@spexcode/spec-core'
 import {
   holdSessionEvalProjectionObserver,
   invalidateSessionEvalProjections,
@@ -323,9 +323,10 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       }
       const buildMs = Date.now() - t0
       if (servedSessionProjection) traceLatency('session-projection-complete', { patrol: validate })
-      const boardJson = JSON.stringify(board)
-      const { units, ok } = unitize(board as Record<string, unknown>)
-      const tag = tagOf(units)
+      // the board names itself ONCE, where it was built ([[graph-cache]]): this `tag` is the very value
+      // /api/graph publishes as its ETag, so a client that applied this frame can quote it back on the
+      // fallback poll and be answered bodyless instead of re-fetching what the patch just delivered.
+      const { json: boardJson, units, ok, tag } = boardIdentity(board as Board)
       // A session-first frame consumes its own cause, but a full/patrol cause remains owed until structural
       // convergence. Otherwise the first cheap projection would erase patrol accountability before the full
       // result could name it. A normal frame consumes its whole trigger set, including a no-op frame.

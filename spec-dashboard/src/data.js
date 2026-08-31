@@ -228,11 +228,14 @@ export async function apiFetch(input, init) {
 // The conditional key MUST be the identity of the board the app actually DISPLAYS, or the poll goes blind
 // (issue #70): a response superseded by a pushed board never paints, so if its ETag latched anyway, every
 // later poll 304s against a board nobody is seeing while the display stays stale — a blackhole only a hard
-// refresh exits. So the tag is returned to the caller and latches only when the caller APPLIES the body
-// (`seal`), and a pushed board clears it (its identity is a delta-chain tag the HTTP lane can't express, so
-// the next poll goes unconditional once, re-earning its 304s from a painted response).
+// refresh exits. So the key latches only where a board is APPLIED: `seal` after a fetched body paints, and
+// sealPushedTag after a pushed frame paints. Both name the SAME thing — the server's validator IS the delta
+// chain's content tag ([[graph-delta]]) — so a push-delivered board keeps answering 304 instead of making
+// the next poll re-download what the patch already delivered.
 let boardTag = ''
-const clearBoardTag = () => { boardTag = '' }   // a pushed board took the display — see subscribeBoardLive
+const asValidator = (tag) => (tag ? `"${tag}"` : '')
+// a pushed board took the display; its chain tag is the display's identity — see subscribeBoardLive
+const sealPushedTag = (tag) => { boardTag = asValidator(tag) }
 export async function loadGraph() {
   const res = await apiFetch('/api/graph', { cache: 'no-store', headers: boardTag ? { 'If-None-Match': boardTag } : {} })
   if (res.status === 304) return null
@@ -401,8 +404,8 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
       const { to, graph } = JSON.parse(e.data)
       values = unitize(graph)
       tag = to
-      clearBoardTag()   // the display's identity is now this frame's tag — the HTTP lane must re-earn its 304s
       onBoard(graph, { authoritative: true, tag: to })
+      sealPushedTag(to)   // latch AFTER the apply, so the key can never outlive the paint it names
       onStatus?.(true)
     })
     es.addEventListener('graph-delta', (e) => {
@@ -412,8 +415,8 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
       for (const k of d.del || []) values.delete(k)
       for (const [k, v] of Object.entries(d.set || {})) values.set(k, v)
       tag = d.to
-      clearBoardTag()
       onBoard(boardFrom(values), { authoritative: false, tag: d.to })
+      sealPushedTag(d.to)   // latch AFTER the apply, so the key can never outlive the paint it names
       onStatus?.(true)
     })
     es.addEventListener('graph-changed', () => { bump(); onLegacyChange?.() })

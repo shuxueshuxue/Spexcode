@@ -126,6 +126,23 @@ The graph is built **once per change, not once per poll — and only as much of 
   rebuilds, while the just-finished build still answers its own waiters. The stream and
   the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
 
+- **A board names itself once, where it is built.** A snapshot's bytes, its unit decomposition
+  ([[graph-delta]]) and the content tag over that decomposition are three views of one build, so they are
+  produced together and memoised together against the cached board. Two consequences, and the second is the
+  reason the first is worth having. The cheap one: a poll storm of cache hits costs zero serialization and
+  zero hashing, and a patrol tick that returns the anchor object re-serializes nothing. The load-bearing
+  one: both delivery lanes then quote the SAME tag instead of each hashing its own answer to "which board
+  is this" — the SSE chain's frame tag and the HTTP validator are one value, which is what makes a
+  push-delivered board expressible on the conditional-request lane at all ([[dashboard-shell]]). Identity
+  computed twice is identity that can disagree; the disagreement is not a hash collision but a category
+  error, and it costs a full snapshot every time it happens.
+
+  The tag is publishable only while the decomposition is faithful. `unitize`'s bijection precondition is
+  checked per build, and a board that fails it has units that dropped a colliding id — such a tag no longer
+  distinguishes this board from another, so the route publishes NO validator rather than one that cannot
+  tell two boards apart. A malformed board degrades to full transfers, which is the same degradation the
+  delta chain already makes for it, and never to a wrong 304.
+
 Generated workspace build output is not a graph input. The project-root watcher excludes package `dist/` trees
 and the atomic `.dist-next-*`/`.dist-previous-*` staging trees used by the compiler. A build must not invalidate
 the board that is only serving the source tree, otherwise every artifact swap can start another full graph build

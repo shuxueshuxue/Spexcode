@@ -4,6 +4,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { rebasePublishedSessions } from '@spexcode/spec-core'
 import { buildBoard, spliceSessions } from './graphSnapshot.js'
 import { headSha, repoRoot, requireGitWorkspace, withGitAbortSignal } from '@spexcode/spec-core'
+import { unitize, tagOf, type Units } from '@spexcode/spec-core'
 import { listSessionIds, mainBranch, mainCheckout, readPublicRecordEntry, sessionArtifactPath, sessionRecordPath } from '@spexcode/spec-core'
 import { boardThreads } from './issues.js'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
@@ -16,7 +17,12 @@ import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'
 export type BoardRead = { board: Board; freshness: 'fresh' | 'stale'; refreshing: boolean; error?: string }
-export type BoardJsonRead = BoardRead & { json: string }
+// the board's identity: its serialization, its unit decomposition, and the content tag over that
+// decomposition. `ok` is [[graph-delta]]'s bijection precondition — false means the units dropped a
+// colliding id, so the tag no longer distinguishes this board from another and may not be quoted as one.
+export type BoardIdentity = { json: string; units: Units; ok: boolean; tag: string }
+// `tag` is null exactly when the identity is not faithful, so a caller cannot accidentally publish one.
+export type BoardJsonRead = BoardRead & { json: string; tag: string | null }
 export type RevisionPublication = {
   revision: () => number
   invalidate: () => void
@@ -342,7 +348,7 @@ const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_S
 // a persisted session row cannot be silently converted into time behind that unrelated topology work.
 type Scope = 'sessions' | 'full'
 let cached: Board | null = null   // last completed build; served while `dirty === 'none'`
-let cachedJson: string | null = null   // JSON.stringify(cached), serialized ONCE per build (see getBoardJson)
+let cachedIdentity: BoardIdentity | null = null   // serialization + units + tag of `cached`, computed ONCE per build (see boardIdentity)
 let cachedRevision: BoardInputRevision | null = null // input revision represented by `cached`
 let dirty: Scope | 'none' = 'full'   // no cached board yet → the first read builds fully
 type Flight = { wait: Promise<Board>; settle: Promise<Board> }
@@ -404,7 +410,7 @@ function startSessionSplice(): Flight | null {
       const rootTransition = carrySubtractiveWorktrees(revision, projectedRoots)
       const carried = stable ? rootTransition.revision : revision
       cached = board
-      cachedJson = null
+      cachedIdentity = null
       cachedRevision = revisionCarriedBySessionSplice(carried, before, board, stable)
       sessionProjectionPublication++
       if (rootTransition.added) mergeDirty('full')
@@ -607,7 +613,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         mergeDirty('sessions')
       }
       cached = board
-      cachedJson = null
+      cachedIdentity = null
       cachedRevision = completedRevision
       if (buildScope === 'full') topologyGeneration++
       else sessionProjectionPublication++
@@ -729,14 +735,25 @@ export async function readBoard(consistency: BoardConsistency = 'fresh'): Promis
   return { board, freshness: 'fresh', refreshing: false }
 }
 
-// the SERIALIZED board for the /api/graph route — JSON.stringify runs ONCE per build, not once per poll,
-// so a poll storm of cache hits costs zero serialization CPU (only the etag hash for the 304 path). The SSE
-// path still takes the object (getBoard) because it decomposes it into delta units ([[graph-delta]]).
+// @@@ one identity per build - a board's bytes, its unit decomposition and its content tag are three
+// views of the same snapshot, so they are produced together, once, where the board is built. Both delivery
+// lanes then quote the SAME tag rather than each hashing its own answer to "which board is this": the SSE
+// chain's `to` and the HTTP ETag become one value, which is what lets a push-delivered board keep the
+// fallback poll bodyless ([[graph-delta]]). Computing it once is also the cheaper half — a poll storm of
+// cache hits costs zero serialization and zero hashing, and a patrol tick that returns the anchor object
+// re-serializes nothing.
+export function boardIdentity(board: Board): BoardIdentity {
+  if (board === cached && cachedIdentity !== null) return cachedIdentity
+  const json = JSON.stringify(board)
+  const { units, ok } = unitize(board as Record<string, unknown>)
+  const identity: BoardIdentity = { json, units, ok, tag: tagOf(units) }
+  if (board === cached) cachedIdentity = identity   // memoize only the CURRENT build's identity
+  return identity
+}
+
+// the SERIALIZED board plus its publishable tag for the /api/graph route.
 export async function getBoardJson(consistency: BoardConsistency = 'fresh'): Promise<BoardJsonRead> {
   const result = await readBoard(consistency)
-  const board = result.board
-  if (board === cached && cachedJson !== null) return { ...result, json: cachedJson }
-  const json = JSON.stringify(board)
-  if (board === cached) cachedJson = json   // memoize only the CURRENT build's serialization
-  return { ...result, json }
+  const { json, ok, tag } = boardIdentity(result.board)
+  return { ...result, json, tag: ok ? tag : null }
 }

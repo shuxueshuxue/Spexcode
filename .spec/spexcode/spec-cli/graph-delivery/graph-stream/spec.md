@@ -32,7 +32,11 @@ the legacy contract, kept verbatim for old clients: a bare `graph-changed` signa
 `/api/graph` on its ETag/304 path. **Delta mode** (`?mode=delta`) inverts who fetches: the server sends a
 full snapshot on every (re)connect (`graph-full {to, graph}`), then per change either the hash-chained patch
 (`graph-delta {from, to, set, del}`) or a fresh full when the patch wouldn't win — the algebra, and the
-proof that this renders exactly what refetching would, is [[graph-delta]]'s contract. The cached anchor
+proof that this renders exactly what refetching would, is [[graph-delta]]'s contract. The `to` a frame
+carries is not this module's own hash of the board: it is the board's identity as [[graph-cache]] computed
+it at build time, the same value `/api/graph` publishes as its validator. One tag for both lanes is what
+lets a client name a push-delivered board on the conditional-request lane, so the cold fallback poll behind
+this stream stays bodyless while the stream is doing its job ([[dashboard-shell]] holds that end). The cached anchor
 snapshot a connecting subscriber is seeded with lives exactly as long as its subscriber era: with zero
 delta subscribers nothing rebuilds on change, so the anchor dies with the era's last unsub (and a build
 that completes after it caches nothing) — a new era's first frame is a fresh build, never a kept frame

@@ -110,6 +110,27 @@ scenarios:
       stays stale and the pane's only recovery is a hard refresh: the blackhole this scenario forbids.
       Zero loss = no interleaving of pushed boards and in-flight fetches leaves the 304 lane certifying a
       board nobody is seeing.
+  - name: pushed-board-keeps-poll-bodyless
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js, spec-dashboard/src/App.jsx]
+    related: [spec-cli/src/index.ts, spec-cli/src/graphCache.ts]
+    description: >-
+      Real browser against a live backend on a board that is genuinely moving, so patches actually flow.
+      Load the dashboard and watch BOTH channels for ~95 seconds without touching the tab: every
+      /api/graph response with the conditional key the request carried, and every push frame the page's
+      own EventSource received. For each response that still carries a full body, decompose it into
+      units and compare against the board the page was holding at that instant, so a full body is judged
+      by what it ADDS rather than by its size.
+    expected: >-
+      While the push channel is delivering, the fallback poll beside it stays bodyless. Every poll that
+      fires once a pushed board is the display carries a conditional key naming that board — the same
+      content tag the frame did, because both lanes name a board the same way — and is answered with a
+      bodyless 304. A full body is permitted ONLY where it is earned: the boot poll before any board has
+      landed, and a poll that catches real divergence, which must then carry units the display genuinely
+      lacked (its sibling obligation is push-stale-poll-corrects, which requires exactly that 200). Zero
+      loss = no poll ever re-downloads the whole graph while holding every unit of it; the belt behind a
+      working stream costs headers, and the cost of the fallback never scales UP with how well the
+      primary is working.
   - name: idle-heartbeat-costs-nothing
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/data.js, spec-dashboard/src/heartbeat.js]

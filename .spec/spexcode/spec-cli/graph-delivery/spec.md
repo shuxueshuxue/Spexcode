@@ -20,7 +20,9 @@ Three halves of one budget:
 - **[[graph-lean]]** — the payload: the graph carries only the summary the tree overview actually
   renders; per-node detail is lazy-loaded where it is viewed, and stays fresh by construction.
 - **[[graph-stream]]** — the freshness: a push signal fires on real change so the client re-fetches on
-  transition instead of a tight poll, with conditional requests keeping a no-change reload bodyless.
+  transition instead of a tight poll, with conditional requests keeping a no-change reload bodyless — which
+  requires the push and the fetch to name a board the same way, so the identity is computed once per build
+  and quoted by both.
 - **[[graph-cache]]** — the compute: the graph is BUILT once per change, not once per poll — a
   single-flight, change-invalidated cache in front of the assembly, so a poll storm shares one build
   (and mostly zero) instead of each request re-walking git, and the build never starves the liveness probe.

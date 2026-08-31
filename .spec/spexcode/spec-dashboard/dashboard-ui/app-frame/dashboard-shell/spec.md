@@ -16,6 +16,7 @@ related:
   - spec-dashboard/src/project.js
   - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/streamHeartbeat.test.mjs
+  - spec-dashboard/test/board-poll-bodyless.e2e.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
   - spec-dashboard/THEME-CREDITS.md
@@ -168,11 +169,24 @@ replacement, and kicks the ETag refetch, so catch-up is instant; a frozen tab ru
 one-shot fires on resume and converges likewise. The poll's cost is zeroed by conditional
 requests: `loadGraph` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
 the repaint, so no failure mode is staler than the poll period. That guarantee holds only while the
-conditional key is the identity of the board actually DISPLAYED: the ETag latches when its body paints
-(never from a response a fresher board superseded), and a pushed board clears it — the display's identity
-is then a delta-chain tag the HTTP lane can't express, so the next poll goes unconditional once and
-re-earns its 304s from a painted response. A key that outlives its paint would let the poll 304 forever
-against a board nobody sees, turning push-delivered staleness permanent. Because pushed boards and in-flight fetches can
+conditional key is the identity of the board actually DISPLAYED, and it is maintained by latching the key
+at every point a board is APPLIED and at no other: after a fetched body paints, and after a pushed frame
+paints. A key that outlives its paint would let the poll 304 forever against a board nobody sees, turning
+push-delivered staleness permanent (issue #70); a key that is merely DROPPED on a paint is safe but not
+free, and what it costs is the whole poll.
+
+**Both lanes name the board with the same tag, or the fallback stops being a fallback.** The server's
+validator IS the delta chain's content tag ([[graph-cache]] computes the one identity; [[graph-delta]] owns
+the algebra), so a push-delivered board is expressible on the conditional-request lane and the poll keeps
+earning its 304s while the stream works. When the two lanes named the board differently the shell had no
+way to say what it was holding, so every pushed frame dropped the key and the next poll went unconditional
+— and because a patch arrives more often than the poll period on any board worth watching, "unconditional
+once" was in practice unconditional always. Measured on the dogfood board before this was one tag: over 105
+seconds, one tab, the stream delivered its whole job in a single full plus six patches totalling 53KB,
+while the poll beside it re-downloaded the complete board five times out of seven — 3.2MB carrying, by unit
+comparison against the board the client had already applied, zero changed units. The pathology inverted the
+design: the better the push channel worked, the more full snapshots the belt behind it shipped. A fallback
+whose cost scales UP with the primary's success is not a belt, it is a second primary nobody sized for. Because pushed boards and in-flight fetches can
 interleave, the shell stamps every application with a monotonic sequence — a pushed board is freshest by
 channel order, so it bumps the sequence and invalidates any older fetch still in flight; a superseded
 response is dropped, never painted. Without that guard a just-closed session resurrects: the post-close

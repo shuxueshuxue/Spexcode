@@ -246,6 +246,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
       const sub = pm[2] || '/'
       const base = `/p/${encodeURIComponent(id)}`
       const gated = !!store.projects[id]
+      if (!pm[2]) return redirect(res, `${base}/${query}`)
       if (sub === '/login') {
         if (!gated) return redirect(res, `${base}/`)
         if (req.method === 'POST') {
@@ -262,11 +263,21 @@ export function startHubGateway(opts: HubOpts): http.Server {
       // exactly like GET /projects, and — like the fallback it rides — PRE-authorization: the shell is
       // code, not data ([[projects-hub]]'s one credential card renders in-app off the scoped api's 401,
       // and a direct guest must reach that card, not a dead-end redirect). With a host fallback mounted,
-      // an explicit text/html GET outside /api and /web serves the SPA shell (its root-absolute assets
-      // resolve outside /p onto the same fallback); API/SSE/health fetches, posted-web frames, and WS
-      // upgrades keep the auth gate and proxy to their backend untouched.
-      if (req.method === 'GET' && !sub.startsWith('/api') && !sub.startsWith('/web/') && ext.fallback && (req.headers.accept ?? '').includes('text/html')) {
-        return ext.fallback(req, res, '/')
+      // Scoped GET dispatch matrix (sub shape, Accept, destination):
+      //   /                 | text/html | dashboard shell
+      //   /assets/x.js      | */*       | dashboard asset fallback
+      //   /health           | */*       | project backend
+      //   /api/graph        | text/html | project backend
+      //   /web/<s>/<k>/     | text/html | posted preview
+      //   /login            | text/html | hub login/redirect
+      // Browser navigation and relative dashboard assets are static shell bytes, served from the same
+      // fallback under the project prefix. API/SSE/health fetches, extensionless backend routes, posted-web
+      // frames, and WS upgrades keep the auth gate and proxy to their backend untouched.
+      if (req.method === 'GET' && ext.fallback) {
+        if (!sub.startsWith('/api') && !sub.startsWith('/web/') && (req.headers.accept ?? '').includes('text/html')) {
+          return ext.fallback(req, res, '/')
+        }
+        if (sub.startsWith('/assets/')) return ext.fallback(req, res, sub)
       }
       const d = authorize(store, { kind: 'project', projectId: id }, cookies, remote, port)
       if (!d.ok) {

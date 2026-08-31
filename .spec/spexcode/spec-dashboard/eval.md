@@ -22,6 +22,18 @@ scenarios:
     expected: >-
       The spec-graph board renders every node card with its version and freshness badge; the
       filed reading carries the screenshot as image evidence and a pass verdict.
+  - name: dashboard-build-prefix-portable
+    tags: [frontend-e2e, backend-api]
+    description: >-
+      Build the dashboard dist, serve it at the root and below an arbitrary path prefix, and open a project
+      through the real host gateway at both `/p/<id>/` and the bare `/p/<id>` address. Probe `/p/<id>/health`
+      through the hub, exercise a lazy route, and inspect browser request failures and console errors.
+    expected: >-
+      The relative production dist boots at every served position with no failed requests; scoped `/assets/...`
+      requests are served as shell bytes while extensionless backend routes still proxy (the real `/p/<id>/health`
+      response is `ok` with a non-HTML content type); the scoped page uses `/p/<id>/api/...` calls, and the bare
+      scoped address redirects to its slash-terminated form before assets load. The pre-change root-absolute dist
+      fails under the arbitrary prefix, providing the A/B loss signal.
 ---
 # eval.md — spec-dashboard
 

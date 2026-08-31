@@ -60,6 +60,25 @@ scenarios:
       collapses toward zero and grows back is the defect this scenario exists to catch: it is the fold
       animation, a width movement, being run for something that was never a fold.
     code: [spec-dashboard/src/useFold.js, spec-dashboard/src/dockBand.js, spec-dashboard/src/styles.css]
+  - name: one-gesture-is-one-movement
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real browser, work the rail's fold control once each way and switch the route both ways between a
+      spec document and a Sessions document. For each of the four gestures sample FROM INSIDE THE PAGE across
+      animation frames, recording the set of animations running on the band and its painted width. Count the
+      DISTINCT stretches of animation, not just which names appear: the defect this catches is a second
+      animation starting after the first one finished, which a name check passes and a reader sees.
+    expected: >-
+      Each gesture is exactly ONE stretch of animation, and the band's width tracks it for the whole
+      `--dur-panel`. A fold runs `dock-in` from zero to the band's settled width, or `dock-out` back to zero,
+      with opacity moving alongside the width rather than ahead of it — a run where the width finishes in the
+      first third and the panel then sits still at partial opacity means the keyframe is animating the
+      max-width CAP instead of the panel's own width, which is a distance the band does not travel. A
+      handover runs `dock-swap` in BOTH directions at constant width; a direction with no animation at all
+      means the handover is being read from state that did not change rather than from the arriving panel's
+      own mount. Two stretches for one gesture is the defect: a panel leaving its fold must not pass through
+      a state that starts a dissolve on top of it.
+    code: [spec-dashboard/src/useFold.js, spec-dashboard/src/styles.css, spec-dashboard/src/Dock.jsx]
 ---
 
 Measure through the running dashboard in a real desktop browser (YATU). Use settled screenshots for the dock

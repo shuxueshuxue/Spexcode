@@ -46,9 +46,17 @@ composition from the session currently being read.
 mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
 projection doors only. Opening and closing slide with one shared `--dur-panel` token rather than a duration
 invented per panel, and the element outlives the state that
-hides it by exactly that long so the reverse is visible too. The animated property is max-width: the dock's
-width is the reader's own inline resize, and a keyframe cannot outrank an inline style — `!important`
-inside a keyframe is ignored by the spec, which is how the first version of this animated nothing at all.
+hides it by exactly that long so the reverse is visible too.
+
+**One gesture is one movement, and it moves for the whole duration.** The animated property is WIDTH, and it
+has to be the panel's OWN width or the duration is a claim the movement does not keep. These panels carry the
+reader's resize as an inline width, so the keyframe states one endpoint and lets the element's own width be
+the other; animating max-width instead runs to the 640px CAP, which is a distance the band does not travel.
+The band is 200px at rest, so that version finished opening in the first fifty milliseconds of a hundred and
+seventy and then held still at half opacity, and closed by holding still for sixty and then dropping — the
+width and the fade were describing different gestures. A keyframe can outrank an inline width: animations
+outrank normal author declarations, inline ones included. What the earliest version tripped on was
+`!important` INSIDE a keyframe, which the spec drops, so the declaration was never in the animation at all.
 Reduced-motion drops the animation and keeps both doors.
 
 **A FOLD IS NOT A HANDOVER, and only one of them is a width movement.** A panel can appear for two
@@ -58,9 +66,23 @@ Sessions document and a spec, because Sessions draws its own forest while docume
 dock — the band persists, only its projection changes hands. Animating that as a fold is a lie about what
 happened, and it looked like one: the band collapsed to nothing and grew back, so switching documents read
 as the sidebar being torn down and rebuilt. A handover therefore dissolves in place — same width, same
-edge, new contents — and the fold keeps the width animation that actually means something. `useFold`
-reports which arrival this is; the panel carries it as an attribute, so neither CSS nor a component has to
-guess from context.
+edge, new contents — and the fold keeps the width animation that actually means something.
+
+**A panel names its arrival, and REST is one of the names.** The panel carries it as an attribute with three
+values — a fold, a handover, or nothing — so neither CSS nor a component has to guess from context, and no
+rule may animate a panel that named no arrival. Leaving rest as the unnamed case is what made the fold
+twitch: "no attribute" then meant both "at rest" and "just handed over", so the handover had to be the
+unconditional rule every panel fell into, and a panel LEAVING its fold passes straight through that state.
+One click produced three movements — the dock slid open, then blinked to nothing, jumped sideways and
+dissolved back in, because letting the flag go swapped the running animation and started a second one on top
+of it.
+
+**The two arrivals are read in two places, because they happen in two places.** A fold is a state change and
+belongs to whoever owns the open/closed flag; a handover is a MOUNT, and only the panel element witnesses it.
+The shell stays mounted across the route switch that replaces its dock with the Sessions forest, so the
+shell's own fold state sees no transition there at all — reading the handover from it gives the swap a
+dissolve in the direction where the drawing component mounts and none in the direction where it does not.
+Every band panel therefore reads the handover from its own mount and the fold from the state that owns it.
 
 **THE BAND HAS ONE WIDTH, because it is one band.** Two components draw it, which is a layout fact, not a
 product one: a reader who widens the sidebar means the sidebar, not the sidebar-while-reading-specs. Two
@@ -79,7 +101,10 @@ that sets it. At rest a closed panel is still UNMOUNTED, which is what keeps a c
 Folding is a width movement, so a folding panel must clip its own overflow; a panel with no inner scroller
 grows one in the same move, because clipping without one would make a long list unreachable rather than
 scrollable. The duration necessarily lives in both layers — the keyframe is CSS, the unmount is JS — and
-`DOCK_FOLD_MS` is the one place the JS half states it. That hook holds a MOUNT. Where what folds away is not
+`DOCK_FOLD_MS` is the one place the JS half states it. Which arrival a panel is having is likewise decided
+during the render that changes it and never from an effect: an effect runs after paint, so the first
+committed frame would carry the wrong animation and be corrected one frame later, which is the same twitch at
+the other end of the same gesture. That hook holds a MOUNT. Where what folds away is not
 a mount but STATE the next thing overwrites — the Conversation's live tail, whose payload belongs to whichever
 seam is streaming ([[conversation]]) — the same file's `useFoldOut` holds the VALUE instead, handing back what
 the current key replaced, captured during the render that replaced it rather than from an effect after paint,

@@ -60,14 +60,22 @@ scenarios:
     description: >-
       Drive the board's conditional-request contract through the real backend. GET `/api/graph`
       once and capture the response status, the `ETag` header, and the body size. Then GET it
-      again sending `If-None-Match: <that ETag>`, and once more sending a deliberately stale
-      `If-None-Match` value. File the transcript with
+      again sending `If-None-Match: <that ETag>`, once more sending that validator weakened and
+      inside a list (`W/"<tag>", "other"`), and once more sending a deliberately stale value. Then
+      cross the lanes: open `/api/graph/stream?mode=delta`, take the `to` off the `graph-full`
+      frame, and send THAT back as `If-None-Match` without ever having called the route for it.
+      File the transcript with
       `spex eval add spec-cli --scenario board-conditional-request --result <txt> --pass`.
     expected: >-
-      The first GET is `200` with an `ETag` header over the serialized body. The matching
-      `If-None-Match` request returns `304 Not Modified` with NO body (the saved transfer), still
-      echoing the same `ETag`. A stale `If-None-Match` returns the full `200` body — so the
-      endpoint speaks standard conditional-request HTTP, with no special-casing of the poll path.
+      The first GET is `200` carrying an `ETag`. The matching `If-None-Match` request returns
+      `304 Not Modified` with NO body (the saved transfer), still echoing the same `ETag`; the
+      weakened/listed form of the same validator is also honoured; a stale `If-None-Match` returns
+      the full `200` body — so the endpoint speaks standard conditional-request HTTP, with no
+      special-casing of the poll path. And the validator is not a private hash of the bytes: it is
+      the board's OWN content tag, so the tag the push channel named its frame with is accepted
+      verbatim on the HTTP lane and answered `304`. That equality is the contract — a client
+      holding a push-delivered board must be able to SAY so here, or the conditional lane is
+      unreachable for exactly the clients that need it most.
     code: spec-cli/src/index.ts
 ---
 # eval.md — spec-cli

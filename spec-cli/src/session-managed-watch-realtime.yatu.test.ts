@@ -18,7 +18,7 @@ function seedRecord(home: string, id: string, parentId = ''): void {
   const dir = sessionStoreDir(id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', node: 'watch', title: id,
+    session_id: id, governed: true, worktree_path: process.cwd(), branch: 'main', title: id,
     name: '', parent: parentId, status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(),
     harness: 'opencode', harness_session_id: '', runtime_start_token: '', stopped: false, archived: false,
     closed_at: '', cold_proof: '', adapter_recovery: '', launcher: 'opencode', launch_cmd: 'opencode', launch_owner: '',

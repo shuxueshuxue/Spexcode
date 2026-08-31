@@ -18,9 +18,9 @@ related:
 
 ## raw source
 
-Sessions are labelled automatically — by the spec node they touch, or a few words of their launch
-prompt, or their branch. That default is fine until a human needs to fix it: two sessions on the same
-node read alike, and a node-agnostic session wears an awkward prompt fragment forever. The selected session's
+Sessions are labelled automatically — by a few words of their launch
+prompt, or their branch. That default is fine until a human needs to fix it: two sessions started from the
+same phrasing read alike, and a session wears an awkward prompt fragment forever. The selected session's
 document tools menu opens the small action menu: **spec related** opens the nodes this session is changing,
 **rename** gives it a human name that sticks, and **close** offers worktree removal one click away —
 the destructive twin of the typed `/close` command ([[session-console]]), distinct from `/stop`, which only

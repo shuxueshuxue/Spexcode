@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git, commitReachable } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
-import { mainBranch, envSessionId, readRawRecord } from '@spexcode/spec-core'
+import { mainBranch, envSessionId } from '@spexcode/spec-core'
 import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems, type AnchorDemand, type ContentProbeDemand } from './freshness.js'
@@ -38,13 +38,9 @@ async function gatherNodes(root: string): Promise<ScoredNode[]> {
   return evalNodes(root).map((n) => ({ ...n, codeFiles: codeByDir.get(relative(root, n.dir)) ?? [] }))
 }
 
-// resolve `.` → the node this worktree works on: the session record's `node` (the authoritative ref a
-// dashboard session was bound to — NOT derivable from the branch, whose slug carries a `-<id4>` suffix),
-// else the `node/<id>` branch. The record now lives in the GLOBAL store keyed by the harness session id
-// ([[state]]), so we read it via the env session id; a self-launched agent with no record falls back to the branch.
+// resolve `.` → the node named by this worktree's `node/<id>` branch. A session carries no spec node of its
+// own, so the branch is the only thing `.` can read; a worktree on any other branch resolves to nothing.
 function currentNodeId(root: string): string | null {
-  const id = envSessionId()
-  if (id) { const rec = readRawRecord(id); if (rec?.node) return rec.node }
   try {
     const branch = git(['-C', root, 'symbolic-ref', '--short', 'HEAD']).trim()
     if (branch.startsWith('node/')) return branch.slice('node/'.length)

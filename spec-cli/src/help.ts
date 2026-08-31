@@ -13,8 +13,8 @@
 // One command's help entry. `see` renders as a trailing "see also:" journey pointer.
 type Entry = { line: string; body: string; see?: string }
 
-const SEL_NOTE = `SEL = session id (or unique id-prefix) | node id | branch — every session read/control verb
-accepts any of the four; inside a session worktree, . means that worktree's session. On the list verbs (ls/watch),
+const SEL_NOTE = `SEL = session id (or unique id-prefix) | branch — every session read/control verb
+accepts any of the three; inside a session worktree, . means that worktree's session. On the list verbs (ls/watch),
 none (or @all) means every session.`
 
 const ROUTING_NOTE = `Backend routing: every backend-touching verb accepts --api <url> (--port <n> = localhost sugar) to name
@@ -22,8 +22,8 @@ its backend explicitly — the flag always wins. Bare, it resolves: worker env /
 recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING). A password-gated explicit
 gateway accepts --password <pw> (or SPEXCODE_PASSWORD); its self-signed certificate needs explicit --insecure.`
 
-const DOT_NOTE = `\`.\` as a node argument means the node THIS worktree works on (the session's bound node, else the
-node/<id> branch). One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
+const DOT_NOTE = `\`.\` as a node argument means the node named by THIS worktree's node/<id> branch.
+One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
 scenario ls · issue ls/show/links) take --json.`
 
 const MENTION_NOTE = `Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg included.
@@ -40,8 +40,9 @@ function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
     new: [['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]',
       'spex session new --ssh <address> <FULL-SESSION-ID> "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]'],
       `Launch a worker in its own node worktree. The materialized system contract reaches it
-automatically; the prompt supplies the task context. Its first [[id]] mention binds the
-session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
+automatically; the prompt supplies the task context. Its first [[id]] mention names the
+worktree and, when that node exists, points the worker at its spec.
+--prompt-file <path>|- carries a long prompt without shell quoting
 (exclusive with the inline prompt). --name sets the session's initial display name without changing the prompt.
 --base <commit-ish> pins the fork point instead of the source-of-truth branch's current head, so a run can be
 reproduced against a frozen commit; a base that names no commit is refused before anything is created.
@@ -78,7 +79,7 @@ is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use ke
 provably cannot land.`, ['selector', 'project-bound']],
     interrupt: ['spex session interrupt <SEL>', 'Hard-interrupt the current turn through native harness control.', ['selector', 'project-bound']],
     rename: ['spex session rename <SEL> "<name>"', 'Set the display name; an empty name clears it.', ['selector', 'project-bound']],
-    show: [['spex session show <SEL> [--capture] [--json]', 'spex session show --ssh <address> <FULL-SESSION-ID> [--json]'], `The session record: status · node · branch · launcher · the full originating prompt.
+    show: [['spex session show <SEL> [--capture] [--json]', 'spex session show --ssh <address> <FULL-SESSION-ID> [--json]'], `The session record: status · branch · launcher · the full originating prompt.
 --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2). --ssh uses an
 existing gateway-to-gateway communication tunnel and requires a full session id; live-pane capture stays local.`, ['selector']],
     resume: ['spex session resume <SEL> [--force]', 'Relaunch ONLY if confirmed offline; --force is for a wedged session.', ['selector', 'project-bound']],

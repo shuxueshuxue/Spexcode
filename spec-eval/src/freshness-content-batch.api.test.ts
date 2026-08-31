@@ -200,7 +200,6 @@ test('cold public eval populations batch off-history content probes across ancho
       governed: true,
       worktree_path: worktree,
       branch: 'node/freshness-content-batch',
-      node: 'batch',
       title: 'batch',
       name: '',
       parent: null,

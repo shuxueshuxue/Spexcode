@@ -112,7 +112,7 @@ export const zoneSort = (sessions) => {
 // `sessionHandle` is the STABLE identity — the value a row or tab uses for "which session is this". On a
 // current backend the wire always carries `label`, so this door short-circuits there: a rename name or prompt
 // summary remains stable while activity, readiness and infra notes change in the secondary status slot.
-// Raw id/node/branch fragments are deliberately NOT promised searchable except as the final fallback.
+// Raw id/branch fragments are deliberately NOT promised searchable except as the final fallback.
 // `sessionHeadline` remains available for live prose surfaces (chat, timeline, and archive search) where the
 // changing activity line is the content being read, not the session identity.
 

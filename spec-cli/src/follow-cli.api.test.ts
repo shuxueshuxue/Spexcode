@@ -19,7 +19,7 @@ const seededParents = new Map<string, string | null>()
 
 function row(status: string, archived = false): Record<string, unknown> {
   return {
-    id: ID, node: null, branch: 'node/watch-cli', label: ID, title: ID,
+    id: ID, branch: 'node/watch-cli', label: ID, title: ID,
     raw: { name: null, title: null }, path: `/wt/${ID}`, parent: null, harness: 'claude',
     capabilities: { headless: false }, launcher: null, lifecycle: 'active', proposal: null, merges: 0,
     status, liveness: status === 'offline' ? 'offline' : 'online', note: null, archived, archiveHazard: null,
@@ -74,7 +74,7 @@ function seedSession(home: string, id = ID, parent: string | null = null, root =
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   seededParents.set(id, parent)
   writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktree, branch: 'node/follow-cli', node: 'session-follow',
+    session_id: id, governed: true, worktree_path: worktree, branch: 'node/follow-cli',
     title: 'followed', name: '', parent,
     sortkey: null, createdAt: Date.now(), harness: 'claude', harness_session_id: '', stopped: false,
     archived: false, launcher: 'fixture', launch_cmd: 'true',

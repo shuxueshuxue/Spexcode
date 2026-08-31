@@ -3,7 +3,7 @@ title: portable-layout
 status: active
 session: sess-merge
 hue: 160
-desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
+desc: Where things live — main, the worktree enumeration, the spec root node — is detected policy, never a baked-in name.
 code:
   - packages/spec-core/src/layout.ts#resolveLayout
   - packages/spec-core/src/layout.ts#layoutDeltas
@@ -36,7 +36,7 @@ are tracked, and nothing machine-specific leaks into the tree — so a clean che
 ## expanded spec
 
 `packages/spec-core/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
-its source of truth**, how to enumerate the other checkouts, how each declares its node — and exposes the
+its source of truth**, and how to enumerate the other checkouts — and exposes the
 result at `GET /api/settings` (its `layout` half). Everything downstream consumes the resolved layout, never a hardcoded path or
 branch name.
 
@@ -94,9 +94,8 @@ resolves its optional `main` relative to that checkout. It must not call `resolv
 session/worktree rows; creation authority and any other identity guard can compare canonical main roots without
 turning a small identity question into a board read.
 
-A managed session's node id comes from its global **record** (`node`, the ref the session was bound to —
-which the branch slug's `-<id4>` suffix can't give), falling back to the branch (strip `branchPrefix`) when
-absent. Beyond resolution, the seam produces the board's raw
+A managed session declares no spec node of its own; a worktree row carries its path, branch, and status
+only. Beyond resolution, the seam produces the board's raw
 material: for each governed record it computes that worktree's pending spec-node changes vs main (`ops`,
 consumed by [[sessions]]' `buildBoard`) — the board ENUMERATES the global store (filtered to `governed:true`),
 NOT `git worktree list`, so an unmanaged scratch worktree (`agent-*`) never appears. A **shelved** record

@@ -22,7 +22,7 @@ function writeRecord(home: string, id: string, harnessSessionId: string): string
   const path = recordPath(home, id)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify({
-    session_id: id, governed: true, worktree_path: dirname(pkgRoot), branch: `node/${id}`, node: null,
+    session_id: id, governed: true, worktree_path: dirname(pkgRoot), branch: `node/${id}`,
     title: 'declaration fixture', name: '', parent: null, status: 'active', proposal: null, merges: 0, note: null,
     sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: harnessSessionId, stopped: false,
     archived: false, launcher: 'fixture', launch_cmd: 'true',
@@ -108,7 +108,7 @@ test('merge declaration records without the removed acceptance configuration', (
     assert.equal(config.review, undefined, 'the project config no longer carries the removed review gate')
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, `${JSON.stringify({
-      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`, node: null,
+      session_id: id, governed: true, worktree_path: root, branch: `node/${id}`,
       title: 'merge declaration', name: '', parent: null, status: 'active', proposal: null, merges: 0, note: null,
       sortkey: null, createdAt: Date.now(), harness: 'claude', harness_session_id: '', stopped: false,
       archived: false, launcher: 'fixture', launch_cmd: 'true',

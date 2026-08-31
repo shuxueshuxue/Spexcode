@@ -17,7 +17,7 @@ const liveGraph = await response.json()
 const id = `resource-terminal-lifecycle-${process.pid}`
 const secondId = `${id}-second`
 const baseSession = {
-  id, node: null, branch: null, path: process.cwd(), label: 'resource lifecycle fixture',
+  id, branch: null, path: process.cwd(), label: 'resource lifecycle fixture',
   headline: 'resource lifecycle fixture', title: 'resource lifecycle fixture', raw: { name: 'resource lifecycle fixture', title: null },
   harness: 'claude', capabilities: { headless: false }, launcher: null, status: 'working', lifecycle: 'active',
   proposal: null, merges: 0, liveness: 'online', parent: null, note: null, archived: false,

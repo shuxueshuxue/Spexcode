@@ -37,7 +37,7 @@ function writeCachedSession(home: string): void {
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', ID)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
-    session_id: ID, governed: true, worktree_path: worktree, branch: 'main', node: 'remote-client', title: 'cached read', name: '', parent: null,
+    session_id: ID, governed: true, worktree_path: worktree, branch: 'main', title: 'cached read', name: '', parent: null,
     status: 'awaiting', proposal: 'nothing', merges: 0, note: 'durable cache', sortkey: null, createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', stopped: false, archived: false, launcher: 'fixture', launch_cmd: 'true',
   }, null, 2)}\n`)

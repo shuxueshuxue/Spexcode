@@ -34,7 +34,7 @@ try {
   const fixture = structuredClone(graph)
   fixture.sessions = [{
     ...seed, id: scratch, session: scratch, status: 'working', lifecycle: 'active',
-    liveness: 'online', parent: null, node: null, name: 'right-edge pane-still proof',
+    liveness: 'online', parent: null, name: 'right-edge pane-still proof',
     headline: 'right-edge pane-still proof', created: Date.now(),
   }]
 

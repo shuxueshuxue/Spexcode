@@ -40,7 +40,7 @@ async function waitForHealth(base: string, child: ChildProcess, log: () => strin
 function record(id: string, worktreePath: string, branch: string): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(join(sessionStoreDir(id), 'session.json'), JSON.stringify({
-    session_id: id, governed: true, worktree_path: worktreePath, branch, node: '', title: 'diff API', name: '', parent: '',
+    session_id: id, governed: true, worktree_path: worktreePath, branch, title: 'diff API', name: '', parent: '',
     status: 'active', proposal: '', note: '', createdAt: Date.now(), harness: 'claude', harness_session_id: null,
   }) + '\n')
 }

@@ -54,7 +54,6 @@ function writeRecord(home: string, project: string, id: string, path: string, br
     governed: true,
     worktree_path: path,
     branch,
-    node: null,
     title: id,
     name: id,
     parent: null,

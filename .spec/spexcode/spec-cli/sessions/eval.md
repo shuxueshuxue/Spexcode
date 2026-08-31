@@ -4,18 +4,17 @@ scenarios:
     tags: [backend-api]
     code: spec-cli/src/sessions.ts
     description: >-
-      Through the real backend against an isolated spex-init project, first POST a stale explicit `node`
+      Through the real backend against an isolated spex-init project, first POST an explicit `node`
       field and confirm it is rejected without creating a session. Then create sessions whose raw prompts
       cover two mentions (ASCII first), a CJK id, a leading-dot `.plugins` id, a nonexistent id, and no
-      mention. Read `node` and `branch` from `/api/sessions` and `/api/graph`, and inspect each generated
-      launch script for the spec pointer.
+      mention. Read the session record and `branch` from `/api/sessions` and `/api/graph`, and inspect each
+      generated launch script for the spec pointer.
     expected: >-
-      `node` is not an accepted create field. The first `[[<id>]]` in the prompt is the ONLY binding input:
-      the record and board bind `node` to that exact id (any script, optional leading dot, existence not
-      required) and the branch is `node/<slug(id)>-<shortid>` (`.plugins` binds exactly but slugs to
-      `plugins`). An existing id gets one live-worktree spec pointer;
-      a nonexistent id gets none. A prompt with no mention launches node-agnostic — `node` empty, branch
-      derived from the prompt's own words — and is the only way a launch may end up unbound.
+      `node` is not an accepted create field, and no session record, board row, or archive index row carries
+      a spec node at all. The first `[[<id>]]` in the prompt reaches exactly two places: the branch is
+      `node/<slug(id)>-<shortid>` (any script, optional leading dot, existence not required — `.plugins`
+      slugs to `plugins`), and an existing id gets one live-worktree spec pointer while a nonexistent id gets
+      none. A prompt with no mention launches with its branch derived from the prompt's own words.
   - name: zcode-child-eval-identity
     tags: [backend-api]
     test: spec-cli/src/session-zcode-child-session.api.test.ts

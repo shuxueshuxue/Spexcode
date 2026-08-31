@@ -228,9 +228,9 @@ function GraphView({ param, page: routePage = 'graph' }) {
     }
     // a node with live editor(s) carries an `editors` list (SpecNode's second row draws their avatars),
     // driven by the live overlay (pending ops), NOT node.session. `editors` is the minimal slice each
-    // avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
+    // avatar needs: id (the avatar seed + tooltip) and status (liveness ring).
     const editors = liveEditorsOf(s)
-    const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
+    const editorData = editors.map((e) => ({ id: e.id, status: e.status }))
     // collapsed = has children but its subtree is hidden (not on the expanded spine) -> show the ▸N hint.
     const kids = childCount[s.id] || 0
     const extra = {

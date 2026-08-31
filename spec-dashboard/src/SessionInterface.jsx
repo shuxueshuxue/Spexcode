@@ -101,7 +101,7 @@ function ArchivePage({ sessions, onOpenSession, onClose }) {
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(lang)
     if (!needle) return sessions
-    return sessions.filter((session) => [sessionHeadline(session), session.label, session.id, session.node]
+    return sessions.filter((session) => [sessionHeadline(session), session.label, session.id]
       .filter(Boolean).some((value) => String(value).toLocaleLowerCase(lang).includes(needle)))
   }, [sessions, query, lang])
   const groups = useMemo(() => {
@@ -162,7 +162,7 @@ function ArchivePage({ sessions, onOpenSession, onClose }) {
               <button key={session.id} ref={(element) => { rowRefs.current[archiveRows.indexOf(session)] = element }} type="button" className="si-archive-page-row" data-sid={session.id}
                 onClick={() => onOpenSession(session.id)}>
                 <span className="si-archive-row-title">{sessionHeadline(session)}</span>
-                <span className="si-archive-row-node">{session.node || session.label}</span>
+                <span className="si-archive-row-label">{session.label}</span>
                 <time dateTime={session.closedAt || undefined}>{timeLabel(session)}</time>
                 <Icon name="chevron-right" size={14} />
               </button>

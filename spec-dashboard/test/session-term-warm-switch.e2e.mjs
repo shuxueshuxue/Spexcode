@@ -40,7 +40,7 @@ mkdirSync(OUT, { recursive: true })
 const idA = `warm-switch-a-${process.pid}`
 const idB = `warm-switch-b-${process.pid}`
 const session = (id, label) => ({
-  id, node: null, branch: null, path: process.cwd(), label, headline: label, title: label,
+  id, branch: null, path: process.cwd(), label, headline: label, title: label,
   raw: { name: label, title: null }, harness: 'claude', capabilities: { headless: false }, launcher: null,
   status: 'working', lifecycle: 'active', proposal: null, merges: 0, liveness: 'online', parent: null,
   note: null, archived: false, archiveHazard: null, prompt: null, promptPreview: null,

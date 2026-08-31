@@ -662,7 +662,7 @@ export default {
   specNode: {
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
     more: ({ n }) => `${n} more`,
-    editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
+    editorTitle: ({ status, id }) => `${status} — ${id}`,
     driftAhead: ({ n }) => `${n} ahead`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
     openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — open node info to read them`,

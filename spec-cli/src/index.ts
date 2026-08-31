@@ -763,7 +763,7 @@ app.get('/api/sessions/:id/timeline', (c) => {
   })
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
+// the session RECORD detail (`spex session show`): the board row (status · branch · launcher · …)
 // plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
 // the CLI's show; 404 for an unknown id.
 app.get('/api/sessions/:id', async (c) => {

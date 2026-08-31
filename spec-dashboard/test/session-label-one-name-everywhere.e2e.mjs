@@ -119,7 +119,7 @@ try {
     const dir = join(recordRoot, session.id)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'session.json'), JSON.stringify({
-      session_id: session.id, governed: true, worktree_path: project, branch: 'main', node: '', title: rawUrl, name: session.name, parent: '',
+      session_id: session.id, governed: true, worktree_path: project, branch: 'main', title: rawUrl, name: session.name, parent: '',
       // Headless Codex is the deterministic online fixture: unlike a Claude pane it does not require a
       // real tmux window just to expose the Command Box used by this naming contract.
       status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',

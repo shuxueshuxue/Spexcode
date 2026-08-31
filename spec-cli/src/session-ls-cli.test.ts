@@ -17,7 +17,7 @@ const OTHER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 function session(id: string, parent: string | null, status: string) {
   return {
-    id, node: null, branch: null, label: id, title: id, raw: { name: null, title: null }, path: `/tmp/${id}`,
+    id, branch: null, label: id, title: id, raw: { name: null, title: null }, path: `/tmp/${id}`,
     parent, harness: 'fixture', capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status, liveness: 'online', note: null,
     archived: false, archiveHazard: null, prompt: null, promptPreview: null, created: 1, activity: null, sortKey: null,

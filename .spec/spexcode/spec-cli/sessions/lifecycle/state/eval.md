@@ -103,7 +103,7 @@ scenarios:
       `spex ls` and open the dashboard board.
     expected: >-
       The board lists exactly the GOVERNED sessions, read from ${SPEXCODE_HOME}/projects/<enc>/sessions/*,
-      ordered by createdAt; node id / branch / title / liveness come from the record. Non-governed
+      ordered by createdAt; branch / title / liveness come from the record. Non-governed
       self-launched records are NOT listed. Removing a session cleans up its global record.
   - name: resume-offline-session-rests-idle
     tags: [backend-api]

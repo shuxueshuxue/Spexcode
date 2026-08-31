@@ -42,6 +42,6 @@ A `from-pr` session references the governing nodes of the files its PR touches a
 by default ([[deliver-port]]); it authors a node only if a maintainer retargets it to the trunk.
 
 This also names an accident already in the tree: a session whose branch was a raw forge URL had to make
-the node id **double as the origin** (the URL stood in as the node name), which is why its `spex ls` label
-read as a URL. With origin a first-class session-record field, the node id goes back to being purely a
-[[source-of-truth|spec-tree name]] — the neighbouring scenario the fix also explains.
+the branch slug **double as the origin** (the URL stood in as the session's name), which is why its `spex ls`
+label read as a URL. With origin a first-class session-record field, the slug goes back to being purely a
+readable worktree name — the neighbouring scenario the fix also explains.

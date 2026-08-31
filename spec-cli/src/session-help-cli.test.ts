@@ -50,7 +50,7 @@ test('done nothing traps before it can write a terminal state', () => {
   try {
     mkdirSync(dirname(record), { recursive: true })
     writeFileSync(record, `${JSON.stringify({
-      session_id: id, governed: true, worktree_path: project, branch: 'node/nothing-trap', node: null,
+      session_id: id, governed: true, worktree_path: project, branch: 'node/nothing-trap',
       title: 'nothing trap', name: '', parent: null, status: 'active', proposal: null, merges: 0, note: null,
       sortkey: null, createdAt: Date.now(), harness: 'claude', harness_session_id: '', stopped: false,
       archived: false, launcher: 'fixture', launch_cmd: 'true',

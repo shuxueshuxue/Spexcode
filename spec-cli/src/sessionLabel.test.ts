@@ -9,7 +9,7 @@ import type { SessRec } from './session-record.js'
 // fails here before any surface can grow a bypass chain on it.
 
 const rec = (over: Partial<SessRec> = {}): SessRec => ({
-  session: 'sess-1', governed: true, worktreePath: '/wt/x', branch: 'node/x-1', node: 'x',
+  session: 'sess-1', governed: true, worktreePath: '/wt/x', branch: 'node/x-1',
   title: 'seven word prompt truncation title here', name: null, parent: null,
   status: 'active', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
   harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null, launcher: null, launchCmd: null, launchOwner: null,
@@ -32,26 +32,25 @@ test('wire shape projects console capabilities from the harness adapter', () => 
   assert.deepEqual(s.capabilities, { headless: true })
 })
 
-test('label precedence: name > node > title > branch > id', () => {
-  assert.equal(deriveLabel({ id: 'i', name: 'N', node: 'nd', title: 't', branch: 'b' }), 'N')
-  assert.equal(deriveLabel({ id: 'i', name: null, node: 'nd', title: 't', branch: 'b' }), 'nd')
-  assert.equal(deriveLabel({ id: 'i', name: null, node: null, title: 't', branch: 'b' }), 't')
-  assert.equal(deriveLabel({ id: 'i', name: null, node: null, title: null, branch: 'b' }), 'b')
-  assert.equal(deriveLabel({ id: 'i', name: null, node: null, title: null, branch: null }), 'i')
+test('label precedence: name > title > branch > id', () => {
+  assert.equal(deriveLabel({ id: 'i', name: 'N', title: 't', branch: 'b' }), 'N')
+  assert.equal(deriveLabel({ id: 'i', name: null, title: 't', branch: 'b' }), 't')
+  assert.equal(deriveLabel({ id: 'i', name: null, title: null, branch: 'b' }), 'b')
+  assert.equal(deriveLabel({ id: 'i', name: null, title: null, branch: null }), 'i')
 })
 
-test('title precedence: name > activity > note > promptPreview > node > …', () => {
-  const parts = { id: 'i', name: null, node: 'nd', title: 't', branch: 'b', activity: 'doing X', promptPreview: 'the ask' }
+test('title precedence: name > activity > note > promptPreview > title > …', () => {
+  const parts = { id: 'i', name: null, title: 't', branch: 'b', activity: 'doing X', promptPreview: 'the ask' }
   assert.equal(deriveTitle(parts), 'doing X')
   assert.equal(deriveTitle({ ...parts, activity: null, note: 'waiting for review' }), 'waiting for review')
   assert.equal(deriveTitle({ ...parts, activity: null, note: null }), 'the ask')
   assert.equal(deriveTitle({ ...parts, name: 'N' }), 'N', 'a user rename wins over the live activity')
-  assert.equal(deriveTitle({ ...parts, activity: null, note: null, promptPreview: null }), 'nd')
+  assert.equal(deriveTitle({ ...parts, activity: null, note: null, promptPreview: null }), 't')
 })
 
 test('title skips a bare URL prompt when the next line carries the task', () => {
   assert.equal(deriveTitle({
-    id: 'i', name: null, activity: null, note: null, node: null, title: null, branch: null,
+    id: 'i', name: null, activity: null, note: null, title: null, branch: null,
     promptPreview: 'https://github.com/nmhjklnm/gugu/issues/2702\n这里我们要做的一个重大的修改',
   }), '这里我们要做的一个重大的修改')
 })
@@ -60,7 +59,7 @@ test('a lifecycle note supplies the title when no live summary exists', () => {
   const url = 'http://127.0.0.1:9/p/session-label-repro'
   const declared = {
     id: 'i', name: null, note: 'M4b-A landed; next is M4b-B — waiting for a human go', activity: 'debugging the launch failure',
-    promptPreview: url, node: null, title: url, branch: `node/${url.replace(/\W+/g, '-')}`,
+    promptPreview: url, title: url, branch: `node/${url.replace(/\W+/g, '-')}`,
   }
   assert.equal(deriveTitle(declared), 'debugging the launch failure')
   assert.equal(deriveTitle({ ...declared, name: 'my-rename' }), 'my-rename', 'the human rename still wins')
@@ -79,7 +78,7 @@ test('toSession derives one title while retaining the full record note', () => {
   const s = toSession(rec({ status: 'awaiting', proposal: 'nothing', note: 'parked on the human: which of the two shapes do you want?' }), 'done', 'online', 'debugging the launch failure')
   assert.equal(s.title, 'debugging the launch failure')
   assert.equal(s.note, 'parked on the human: which of the two shapes do you want?')
-  assert.equal(s.label, 'x', 'the stable handle is untouched by a declaration')
+  assert.equal(s.label, 'seven word prompt truncation title here', 'the stable handle is untouched by a declaration')
 })
 
 test('toSession derives with liveness-gated activity; accessors are the precomputed fields', () => {

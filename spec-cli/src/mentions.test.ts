@@ -17,8 +17,8 @@ test('parseMentions: a mid-word @ is not a session reference', () => {
 
 // ---- implicit originator loop-in ----
 
-const on = (id: string, name: string | null) => ({ id, node: null, name, title: null, liveness: 'online' })
-const off = (id: string, name: string | null) => ({ id, node: null, name, title: null, liveness: 'offline' })
+const on = (id: string, name: string | null) => ({ id, name, title: null, liveness: 'online' })
+const off = (id: string, name: string | null) => ({ id, name, title: null, liveness: 'offline' })
 
 test('summarizeLoopIn: courtesy is distinct from @ references', () => {
   assert.equal(summarizeLoopIn({ originator: 'alice' }), 'looped in originator @alice (online)')

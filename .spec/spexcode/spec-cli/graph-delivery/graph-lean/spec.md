@@ -102,7 +102,7 @@ measured as a whole-app ledger: initial graph bytes/forbidden-row counts plus th
 never an isolated endpoint claim.
 
 The same summary-first rule applies to the dashboard's archive index ([[session-console]]): its complete one-shot
-index is an archived-only `id`/`title`/`label`/`closedAt`/`node` projection, while the selected session's complete
+index is an archived-only `id`/`title`/`label`/`closedAt` projection, while the selected session's complete
 record is fetched by id for the read-only conversation. The zone's preview and the overlay reuse that cached index;
 there is no second archive query and no pagination.
 

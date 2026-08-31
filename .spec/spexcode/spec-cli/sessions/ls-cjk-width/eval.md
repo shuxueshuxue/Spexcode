@@ -19,12 +19,12 @@ scenarios:
     tags: [cli]
     description: >
       Run the real `spex session ls` against a session whose stable `label` differs from its visible
-      derived `title`, such as a node-bound session with current live activity. Read the table header and
+      derived `title`, such as a renamed session with current live activity. Read the table header and
       the row while also reading its `--json` projection.
     expected: >
       The human table header is TITLE and its 22-cell field displays the same derived `title` as the JSON
-      projection, never the selector `label` or raw `node`. The JSON `node` field remains intact for
-      selectors and machine consumers. Zero loss = a human does not mistake a legacy node handle for the
+      projection, never the selector `label`. The JSON `label` field remains intact for
+      selectors and machine consumers. Zero loss = a human does not mistake a stable handle for the
       session's current title.
     test: spec-cli/src/table-width.test.ts
     code: [spec-cli/src/sessions.ts, spec-cli/src/table-width.test.ts]
@@ -51,5 +51,5 @@ The transcript of that render + per-row cell measurements is the evidence; the u
 same contract for CI.
 
 The title-column scenario is measured through a real `spex session ls` process and its `--json` projection:
-the transcript compares the rendered TITLE field against the derived wire title while retaining the raw node
-as machine-visible evidence.
+the transcript compares the rendered TITLE field against the derived wire title while retaining the stable
+`label` as machine-visible evidence.

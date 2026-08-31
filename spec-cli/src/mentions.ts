@@ -86,7 +86,7 @@ export const summarizeDispatch = (outcomes: DispatchOutcome[]): string =>
 
 // The originator courtesy is the only automatic notification left in this module. It
 // resolves explicit stored session ids against online rows; prose @ references never call it.
-type Session = { id: string; node: string | null; name: string | null; title: string | null; liveness: string }
+type Session = { id: string; name: string | null; title: string | null; liveness: string }
 
 function resolveOnlineSession(token: string, sessions: Session[]): Session | null {
   const online = sessions.filter((session) => session.liveness === 'online')

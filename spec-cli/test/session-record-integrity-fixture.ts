@@ -334,7 +334,7 @@ async function duplicateLoadedThreadIsBlocked(home: string, project: string): Pr
     governed: true,
     worktree_path: worktrees.get(id),
     branch: branches.get(id),
-    node: '', title: '', name: '', parent: '',
+    title: '', name: '', parent: '',
     status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(),
     harness: 'codex', harness_session_id: thread, stopped: false, archived: false,
     launcher: 'codex', launch_cmd: 'codex --yolo', launch_owner: '',

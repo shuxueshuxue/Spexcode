@@ -16,7 +16,7 @@ const PROMPT = '就是我想把咱们目前的 harness adapter、transcript 读�
 mkdirSync(OUT, { recursive: true })
 const NOW = Date.now(), iso = (o) => new Date(NOW + o).toISOString()
 const board = { sessions: [{
-  id: SID, label: SID, headline: SID, title: SID, raw: { name: SID, title: null }, node: null, branch: `node/${SID}`,
+  id: SID, label: SID, headline: SID, title: SID, raw: { name: SID, title: null }, branch: `node/${SID}`,
   path: '/tmp/fixture', parent: null, harness: 'codex-headless', capabilities: { headless: true }, launcher: 'codex-headless',
   lifecycle: 'awaiting', proposal: null, merges: 0, note: '分析完成', status: 'asking', liveness: 'offline', archived: false, closedAt: null,
   archiveHazard: null, prompt: PROMPT, promptPreview: null, created: iso(-300_000), activity: null, sortKey: '', files: [], web: [],

@@ -19,7 +19,7 @@ mkdirSync(OUT, { recursive: true })
 
 const NOW = Date.now(), iso = (o) => new Date(NOW + o).toISOString()
 const session = {
-  id: SID, label: SID, headline: SID, title: SID, raw: { name: SID, title: null }, node: null, branch: `node/${SID}`,
+  id: SID, label: SID, headline: SID, title: SID, raw: { name: SID, title: null }, branch: `node/${SID}`,
   path: '/tmp/fixture', parent: null, harness: 'claude', capabilities: { headless: true }, launcher: 'reclaude',
   lifecycle: 'active', proposal: null, merges: 0, note: null, status: 'working', liveness: 'online', archived: false,
   closedAt: null, archiveHazard: null, prompt: '给 conversation ui 加个折叠动效', promptPreview: null,

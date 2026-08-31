@@ -28,11 +28,11 @@ CJK ideographs, kana, Hangul, fullwidth forms, emoji — deliberately no depende
 cut and pad through them. ID and direct PARENT use stable eight-character display cells, so they keep their
 structural relationship visible without consuming prompt width. The heading names the current collection and
 derives its nonzero status counts from exactly those rows. The TITLE field is the session's shared derived `title`, not its stable
-selector `label` or raw `node`: the latter two remain available for matching and JSON consumers but are
+selector `label`: the label remains available for matching and JSON consumers but is
 not a second visible identity. A pure-ASCII table renders byte-for-byte as the classic `padEnd` output,
 so the width fix is invisible until a wide glyph appears.
 
-**Out of scope.** Label *derivation* is untouched — a node-agnostic session falling back to its
+**Out of scope.** Label *derivation* is untouched — an unnamed session falling back to its
 prompt-derived title is [[session-label]]'s contract, and this node only owns how any derived string
 is fitted into a column. Ambiguous-width code points (e.g. `×`) count one cell, matching common
 terminal wcwidth behaviour.

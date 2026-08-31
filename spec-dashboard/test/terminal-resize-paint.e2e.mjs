@@ -101,7 +101,6 @@ try {
   const fixture = structuredClone(graph)
   fixture.sessions = [{
     id: scratch,
-    node: null,
     branch: null,
     path: scratchDir,
     label: 'native resize paint proof',

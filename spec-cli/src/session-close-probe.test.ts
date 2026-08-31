@@ -71,7 +71,7 @@ esac
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
       session_id: id, governed: true, worktree_path: worktree, branch,
-      node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
+      title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
     }, null, 2)}\n`)
@@ -163,7 +163,7 @@ esac
       mkdirSync(sessionStoreDir(id), { recursive: true })
       writeFileSync(sessionRecordPath(id), `${JSON.stringify({
         session_id: id, governed: true, worktree_path: worktree, branch,
-        node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
+        title: '', name: '', parent: '', status: 'awaiting', proposal: 'close',
         merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
         stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
       }, null, 2)}\n`)

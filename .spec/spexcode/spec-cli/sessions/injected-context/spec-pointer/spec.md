@@ -27,7 +27,7 @@ identical there, so the absolute pointer is just the worktree dir joined with it
 
 The `[[mention]]` grammar must name **every** node, so it admits an **optional leading dot**: a node id is its
 directory basename, so a dot-prefixed config root keeps the dot (`.plugins`), and without the leading dot
-`[[.plugins]]` would capture nothing and silently lose both the pointer and the session's node attribution.
+`[[.plugins]]` would capture nothing and silently lose both the pointer and the worktree name it derives.
 
 Only the **pointer** is appended — never the spec **body**. The agent opens the live file, so it always sees
 the current contract, and the launch prompt stays small (well under the shell-arg truncation limit [[launch]]

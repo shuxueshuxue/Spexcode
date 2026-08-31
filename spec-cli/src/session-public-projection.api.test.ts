@@ -61,7 +61,6 @@ function record(id: string, project: string, pending: unknown, harness = 'claude
     governed: true,
     worktree_path: project,
     branch: 'main',
-    node: null,
     title: null,
     name: null,
     parent: null,
@@ -240,8 +239,8 @@ test('all public record APIs share pending projection and malformed fail-closed 
     const archiveIndex = JSON.parse(archiveIndexBody) as any[]
     console.log(JSON.stringify({ archiveIndexBytes: Buffer.byteLength(archiveIndexBody), fullSessionBytes: Buffer.byteLength(fullBody) }))
     assert.ok(Buffer.byteLength(archiveIndexBody) < Buffer.byteLength(fullBody), 'archive index is smaller than the full session list')
-    assert.ok(archiveIndex.every((row) => JSON.stringify(Object.keys(row).sort()) === JSON.stringify(['closedAt', 'id', 'label', 'node', 'title'])),
-      'archive index rows carry only the five index fields')
+    assert.ok(archiveIndex.every((row) => JSON.stringify(Object.keys(row).sort()) === JSON.stringify(['closedAt', 'id', 'label', 'title'])),
+      'archive index rows carry only the four index fields')
     assert.equal(archiveIndex.some((row) => 'prompt' in row || 'note' in row || 'files' in row || 'web' in row), false,
       'archive index carries no full-session fields')
     assert.equal(archiveIndex.some((row) => row.id === pendingId), false, 'archive index excludes live sessions')

@@ -2281,9 +2281,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   text-align: left; cursor: pointer;
 }
 .si-archive-page-row:hover { background: var(--wash-hover); color: var(--ink); }
-.si-archive-row-title, .si-archive-row-node { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-archive-row-title, .si-archive-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-archive-row-title { font-family: var(--ui-font); font-size: var(--type-control); }
-.si-archive-row-node, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
+.si-archive-row-label, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
 .si-archive-empty { padding: 18vh 24px; color: var(--muted); font-family: var(--ui-font); text-align: center; }
 
 /* New Session: input + avatar centred, terminal vibe. */

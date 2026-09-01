@@ -1476,22 +1476,37 @@ async function adapterRuntimeLiveness(rec: SessRec): Promise<Liveness> {
   return adapterResidentLiveness(rec, states.get(`${harness.id}:${rec.harnessSessionId}`))
 }
 
+// A bounded readiness wait has two stages with different natures: binding the adapter's native identity
+// (model-paced) and confirming runtime liveness (transport-paced). It either hands back a revalidatable fence
+// or names the stage that did not complete, so no caller has to re-derive the cause from record state read
+// after the fact — a read that can name a stage which never ran.
+type LaunchReadinessStage = 'identity' | 'liveness'
+type LaunchReadinessOutcome =
+  | { ok: true; fence: HarnessLaunchReadinessFence }
+  | { ok: false; stage: LaunchReadinessStage }
+
+// An expired readiness window is recognized by type. Matching the words back out of a message would let a
+// harness's own English decide lifecycle, which only the transport and the adapter may do.
+class LaunchReadinessTimeout extends ResourceConflict {
+  constructor(readonly stage: LaunchReadinessStage, message: string) { super(message) }
+}
+
+const launchReadinessTimeoutReason = (harness: Harness, stage: LaunchReadinessStage): string =>
+  stage === 'identity'
+    ? 'native identity and first-turn rollout receipt did not arrive before launch readiness timed out'
+    : harness.launchPayloadProof
+      ? 'post-receipt adapter liveness did not become ready before launch readiness timed out'
+      : 'adapter liveness did not become ready before launch readiness timed out'
+
 function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): void {
   void waitForReady(id, harness, undefined, timeoutMs)
-    .then(async (readiness) => {
-      if (!readiness) {
-        const committed = !!readRecord(id)?.harnessSessionId
-        throw new ResourceConflict(harness.launchPayloadProof
-          ? committed
-            ? 'post-receipt adapter liveness did not become ready before launch readiness timed out'
-            : 'native identity and first-turn rollout receipt did not arrive before launch readiness timed out'
-          : 'adapter liveness did not become ready before launch readiness timed out')
-      }
+    .then(async (outcome) => {
+      if (!outcome.ok) throw new LaunchReadinessTimeout(outcome.stage, launchReadinessTimeoutReason(harness, outcome.stage))
       let readyToPublish = false
       await withRecordLock(id, async () => {
         const candidate = readRecord(id)
         if (!candidate) return
-        const stillReady = await readiness.validate(() => {
+        const stillReady = await outcome.fence.validate(() => {
           const current = readRecord(id)
           return current ? { ...current, runtimeDir: runtimeRoot() } : null
         })
@@ -1509,7 +1524,7 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness, timeoutMs = 
     })
     .catch(async (error) => {
       const reason = error instanceof Error ? error.message : String(error)
-      const timedOut = /timed out|did not become ready/i.test(reason)
+      const timedOut = error instanceof LaunchReadinessTimeout
       let live = false
       let terminal = timedOut
       try {
@@ -2651,7 +2666,7 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS, recordLockHeld = false): Promise<HarnessLaunchReadinessFence | null> {
+async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS, recordLockHeld = false): Promise<LaunchReadinessOutcome> {
   const current = () => {
     const stored = readRecord(id)
     const rec = stored && pending
@@ -2660,27 +2675,32 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
     return rec ? { ...rec, runtimeDir: runtimeRoot() } : null
   }
   const deadline = Date.now() + timeoutMs
-  if (harness.launchPayloadProof && !current()?.harnessSessionId) {
+  // @@@identity stage waits on state, not on the artifact - the receipt is ONE mechanism that binds the
+  // native id, and this observer is one of several serialized consumers (the drain, a resume recovery). So
+  // consuming an available receipt is an action this stage takes, never its completion test: whichever
+  // consumer binds the identity first is this launch's success, and a single-use artifact that is already
+  // gone says nothing about whether that happened. Only an identity still unbound at the deadline is failure.
+  if (harness.launchPayloadProof) {
     for (;;) {
+      if (current()?.harnessSessionId) break
       if (hasReadableLaunchReceipt(id)) {
-        // The probe above ran outside the fence, so another consumer (the drain, a resume recovery) may have
-        // taken the receipt first. Under the fence a receipt that is already gone with the identity bound is
-        // that consumer's success, not a missing receipt; gone and unbound means keep waiting.
-        const consume = (): boolean => {
+        const consume = (): void => {
           readinessWakeSuppressed.add(id)
-          try {
-            if (!hasReadableLaunchReceipt(id)) return !!readRecord(id)?.harnessSessionId
-            consumeHarnessLaunchProofUnlocked(id)
-            return true
-          } finally { readinessWakeSuppressed.delete(id) }
+          try { if (hasReadableLaunchReceipt(id)) consumeHarnessLaunchProofUnlocked(id) }
+          finally { readinessWakeSuppressed.delete(id) }
         }
-        if (recordLockHeld ? consume() : await withRecordLock(id, async () => consume())) break
+        if (recordLockHeld) consume()
+        else await withRecordLock(id, async () => consume())
+        if (current()?.harnessSessionId) break
       }
-      if (Date.now() >= deadline) return null
+      if (Date.now() >= deadline) return { ok: false, stage: 'identity' }
       await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
     }
   }
-  if (harness.launchReady) return harness.launchReady(current, deadline)
+  if (harness.launchReady) {
+    const fence = await harness.launchReady(current, deadline)
+    return fence ? { ok: true, fence } : { ok: false, stage: 'liveness' }
+  }
   const genericFence = (): HarnessLaunchReadinessFence => ({
     proof: Object.freeze({ kind: 'adapter-liveness', harnessId: harness.id, sessionId: id }),
     validate: async (latest) => {
@@ -2692,8 +2712,8 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
   for (;;) {
     const rec = current()
     const snap = await liveSnapshot()   // window + pane probe + live-listener set in one snapshot — all the adapter needs
-    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return genericFence()
-    if (Date.now() >= deadline) return null
+    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return { ok: true, fence: genericFence() }
+    if (Date.now() >= deadline) return { ok: false, stage: 'liveness' }
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
 }
@@ -2843,11 +2863,11 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     }
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
     await launch(id, wt.path, resumeTail, h, launcherCmd(wt.rec))
-    let readiness: HarnessLaunchReadinessFence | null = null
+    let readiness: LaunchReadinessOutcome = { ok: false, stage: 'liveness' }
     let readinessError = ''
     try { readiness = await waitForReady(id, h, resumed, SOCKET_READY_TIMEOUT_MS, true) }
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
-    if (!readiness) {
+    if (!readiness.ok) {
       const failed = readRecord(id) || current
       writeRecord({ ...failed, ...preResume, harnessSessionId: failed.harnessSessionId, launchReadinessPending: null })
       return {
@@ -2869,7 +2889,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     }
     writeRecord(candidate)
     let stillReady = false
-    try { stillReady = await readiness.validate(() => {
+    try { stillReady = await readiness.fence.validate(() => {
       const stored = readRecord(id)
       return stored ? { ...stored, runtimeDir: runtimeRoot() } : null
     }) }

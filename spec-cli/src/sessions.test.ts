@@ -2085,3 +2085,66 @@ test('a delivered canonical state notice names the watched subject, never the re
   assert.equal(canonicalMessageText({ kind: 'session.state.changed.v1', body }, supervisor), '[spex watch] worker is close-pending — landed as main 8b1d2fc21')
   assert.throws(() => canonicalMessageText({ kind: 'session.state.changed.v1', body: Buffer.from('{"status":"active"}') }, supervisor), /names no subject session/)
 })
+
+test('the launch readiness identity stage exits on the bound identity, whoever consumed the receipt', { timeout: 20_000, concurrency: false }, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchCmd = codexHarness.launchCmd
+  const originalLaunchReady = (codexHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-readiness-identity-'))
+  process.env.SPEXCODE_HOME = home
+  const id = `readiness-identity-${process.pid}`
+  assertIsolatedResumeStore(home, id)
+  const bin = join(home, 'bin')
+  writeResumeTmuxFixture(bin, join(home, 'tmux-command'), join(home, 'launch.pid'))
+  process.env.PATH = `${bin}:${previousPath}`
+  const helper = join(home, 'adapter-launch.sh')
+  writeFileSync(helper, '#!/usr/bin/env bash\nexec sleep 30\n')
+  chmodSync(helper, 0o755)
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionArtifactPath(id, 'launch'), 'authoritative first turn')
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch,
+    title: '', name: '', parent: '', status: 'queued', proposal: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+    runtime_start_token: 'fixture-start', stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
+    launcher: 'fixture', launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '',
+    launch_readiness_pending: '',
+  }, null, 2)}\n`)
+
+  let livenessChecks = 0
+  try {
+    codexHarness.launchCmd = () => helper
+    ;(codexHarness as any).launchReady = async () => {
+      livenessChecks++
+      return { proof: { kind: 'test-identity-stage' }, validate: async () => true }
+    }
+    await drainQueue()
+    await waitUntil(() => canonicalState(id).status === 'active', 'queued launch publication')
+    assert.equal(livenessChecks, 0, 'the liveness stage does not run before the native identity is bound')
+
+    // Another serialized consumer — the drain, a resume recovery — finishes consumption: the identity lands on
+    // the record and the single-use receipt is gone for good. That is THIS launch's success, so the fence must
+    // read the bound identity and proceed, not wait out its window on an artifact that can never come back.
+    const published = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({ ...published, harness_session_id: 'thread-bound-elsewhere' }, null, 2)}\n`)
+    rmSync(sessionArtifactPath(id, 'launch'), { force: true })
+
+    await waitUntil(() => livenessChecks > 0, 'liveness stage entry after an externally bound identity', 4000)
+    await waitUntil(() => JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).launch_readiness_started_at == null,
+      'readiness marker cleared by a satisfied fence', 4000)
+    assert.equal(canonicalState(id).status, 'active', 'a launch that bound its identity stays active')
+    assert.equal(canonicalState(id).note, null, 'a launch that bound its identity records no readiness diagnostic')
+  } finally {
+    codexHarness.launchCmd = originalLaunchCmd
+    ;(codexHarness as any).launchReady = originalLaunchReady
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'readiness identity stage fixture')
+  }
+})

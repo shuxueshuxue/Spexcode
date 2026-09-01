@@ -76,9 +76,12 @@ both artifacts and reentry only finishes consumption; after both removals, repea
 only the stored native identity. A missing, unreadable, or session/adapter/thread/payload/generation-misbound
 receipt refuses loudly. The per-session transition and record locks serialize resume, receipt consumption, and
 delivery, so retrying a receipt or draining cannot create or replay a second first turn. A readiness observer
-probes for the receipt outside those locks; a receipt that is gone by the time it holds the lock while the record
-already carries the bound identity is another serialized consumer's success, not a missing receipt — the observer
-proceeds to the liveness check instead of recording a warning for a launch that succeeded. During the one-release
+waits for the **bound identity**, never for the receipt artifact: the receipt is one mechanism that binds that
+identity and the observer is one of several serialized consumers, so consuming an available receipt is an action
+the observer takes, not its completion test. Whichever consumer binds the identity first — a drain, a resume
+recovery, or this observer — is that launch's success, and the observer proceeds to the liveness check instead of
+warning about a launch that succeeded. A single-use artifact that is already gone reports nothing about whether
+the identity was bound, so only an identity still unbound when the window expires is an identity failure. During the one-release
 rename window, readers also accept a pre-existing `launch.proof` artifact but never write it again.
 `launch.receipt` is the final identity-plus-first-rollout commit, not an intermediate readiness hint. The adapter's
 ordinary `launchReady` check runs after that commit only to confirm current runtime liveness. If this post-receipt
@@ -93,7 +96,11 @@ When the bounded readiness window expires **before** the adapter has committed i
 receipt, the record is terminalized as `error`/offline with the complete `queued launch readiness failed: ...`
 reason and its normal parent-watch transition. Once that receipt exists, a later liveness timeout is only an
 adapter warning: the record keeps its lifecycle, proposal, and native identity, retains the diagnostic for a
-retry or operator inspection, and does not emit a parent-watch transition. On backend restart, an existing
+retry or operator inspection, and does not emit a parent-watch transition. Either way the recorded diagnostic
+names the stage that actually expired — an identity never bound, or adapter liveness after it was bound — as
+decided by the expiring stage itself, never re-derived from record state read after the fact, which can name a
+stage that never ran. An expired window is likewise recognized by kind, never by matching those words back out
+of a reason string. On backend restart, an existing
 launch residue is reattached to a live runtime's readiness observer only while that launch/resume transaction still
 has a durable readiness marker and its witness is not yet online. A row that is already online with a bound identity
 or a live pane is settled: reload clears only the stale marker (and any old readiness diagnostic) and never starts a

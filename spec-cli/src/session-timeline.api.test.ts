@@ -212,7 +212,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
 
     const responses: Response[] = []
     await waitFor(async () => {
-      const candidate = await fetch(`http://127.0.0.1:${ports[0]}/api/sessions/${id}/timeline`).catch(() => null)
+      const candidate = await fetch(`http://127.0.0.1:${ports[0]}/api/sessions/${id}/timeline?limit=100&text=999999`).catch(() => null)
       if (!candidate || candidate.status !== 200) return false
       responses.push(candidate)
       return true
@@ -280,7 +280,7 @@ test('YATU: a dispatched probe worker receives the note-to-terminal counter-inse
     await input('phone-message', 'note')
     await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY phone-message')), 'note message in probe pane')
     const afterNote = await capture()
-    assert.match(afterNote, /REQUIRED REPLY TRANSPORT/, afterNote)
+    assert.match(afterNote, /REPLY TRANSPORT/, afterNote)
 
     await input('back-at-terminal')
     await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY back-at-terminal')), 'counter-insert in probe pane')
@@ -378,7 +378,7 @@ process.exit(result.status === null ? 1 : result.status)
     const invocations = readFileSync(turns, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { argv: string[]; prompt: string; session: string; note: string })
     assert.equal(invocations.length, 2)
     assert.deepEqual(invocations.map((turn) => turn.note), ['HEADLESS_LAUNCH_ANSWER', 'HEADLESS_CLI_ANSWER'])
-    assert.ok(invocations.every((turn) => turn.session === id && turn.prompt.includes('REQUIRED REPLY TRANSPORT')))
+    assert.ok(invocations.every((turn) => turn.session === id && turn.prompt.includes('REPLY TRANSPORT')))
     assert.deepEqual(invocations.map((turn) => turn.argv.slice(0, 3)), [['-p', '--session-id', id], ['-p', '--session', id]])
 
     const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)

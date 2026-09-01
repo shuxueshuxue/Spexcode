@@ -6,14 +6,14 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   publishEndpoint, dropOwnEndpoint, endpointRecordPath, readCatalog, addKnownProject,
-  browseProjectDirectories, addKnownProjectWithSetup, removeKnownProject,
+  browseProjectDirectories, addKnownProjectWithSetup, removeKnownProject, runSpex,
   reconcileProjects, reconcileNow, startHostDashboard, type EndpointRecord,
 } from './host.js'
 import { encodeProject } from '@spexcode/spec-core'
@@ -39,6 +39,57 @@ function listen(handler: http.RequestListener): Promise<{ server: http.Server; p
     })
   })
 }
+
+function freePort(): Promise<number> {
+  return new Promise((resolvePort, reject) => {
+    const server = net.createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address !== 'object') {
+        server.close(() => reject(new Error('test port has no address')))
+        return
+      }
+      server.close((error) => error ? reject(error) : resolvePort(address.port))
+    })
+  })
+}
+
+function childOutput(child: ReturnType<typeof spawn>): () => string {
+  let output = ''
+  child.stdout?.setEncoding('utf8').on('data', (chunk) => { output += chunk })
+  child.stderr?.setEncoding('utf8').on('data', (chunk) => { output += chunk })
+  return () => output
+}
+
+async function stopChild(child: ReturnType<typeof spawn>): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  const signal = (name: 'SIGTERM' | 'SIGKILL') => {
+    if (child.pid) {
+      try { process.kill(-child.pid, name); return } catch { /* fall back to the direct child */ }
+    }
+    try { child.kill(name) } catch { /* already gone */ }
+  }
+  const waitForExit = () => new Promise<void>((resolveExit) => child.once('close', () => resolveExit()))
+  signal('SIGTERM')
+  await Promise.race([waitForExit(), new Promise<void>((resolveExit) => setTimeout(resolveExit, 5_000))])
+  if (child.exitCode === null && child.signalCode === null) {
+    signal('SIGKILL')
+    await Promise.race([waitForExit(), new Promise<void>((resolveExit) => setTimeout(resolveExit, 5_000))])
+  }
+}
+
+async function waitForHealth(base: string, child: ReturnType<typeof spawn>, output: () => string): Promise<void> {
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) throw new Error(`backend exited before health (${child.exitCode})\n${output()}`)
+    try {
+      if ((await fetch(`${base}/health`)).ok) return
+    } catch { /* backend is still booting */ }
+    await new Promise((resolveReady) => setTimeout(resolveReady, 100))
+  }
+  throw new Error(`backend did not become healthy\n${output()}`)
+}
 // a fake project backend: answers /api/instance with the given identity and echoes any other /api path.
 function fakeBackend(identity: { instanceId: string; root: string; identity?: { title: string; icon: string } }) {
   const seen: string[] = []
@@ -56,6 +107,11 @@ function fakeBackend(identity: { instanceId: string; root: string; identity?: { 
 }
 const getJson = (url: string): Promise<{ status: number; body: any }> =>
   fetch(url).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))
+
+const gitHead = (root: string): string | null => {
+  const result = spawnSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : null
+}
 
 test('publishEndpoint writes atomically; dropOwnEndpoint removes only its own record', () => {
   freshHome('record')
@@ -146,26 +202,36 @@ test('removeKnownProject is catalog-only, exact-confirmed, and refuses live sess
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-repo-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
   writeFileSync(join(repo, 'README.md'), 'keep me\n')
-  addKnownProject(repo)
-  setProjectPassword(encodeProject(repo), 'secret')
+  const registeredRoot = addKnownProject(repo)
+  setProjectPassword(encodeProject(registeredRoot), 'secret')
   await reconcileNow()
 
-  assert.throws(() => removeKnownProject(repo, 'REMOVE wrong'), /confirmation must exactly equal/)
+  assert.throws(() => removeKnownProject(registeredRoot, 'REMOVE wrong'), /confirmation must exactly equal/)
   assert.equal(readCatalog().length, 1)
-  const removed = removeKnownProject(repo, `REMOVE ${basename(repo)}`)
-  assert.deepEqual(removed, { root: repo, projectId: encodeProject(repo), sessions: 0, runtimeRecordRemoved: false })
+  const removed = removeKnownProject(registeredRoot, `REMOVE ${basename(registeredRoot)}`)
+  assert.deepEqual(removed, { root: registeredRoot, projectId: encodeProject(registeredRoot), sessions: 0, runtimeRecordRemoved: false })
   assert.equal(readCatalog().length, 0)
-  assert.equal(loadAuthStore().projects[encodeProject(repo)], undefined, 'project credential is cleared with the registration')
-  assert.equal(existsSync(join(repo, 'README.md')), true, 'source directory is untouched')
-  assert.equal((await reconcileNow()).some((entry) => entry.root === repo), false)
+  assert.equal(loadAuthStore().projects[encodeProject(registeredRoot)], undefined, 'project credential is cleared with the registration')
+  assert.equal(existsSync(join(registeredRoot, 'README.md')), true, 'source directory is untouched')
+  assert.equal((await reconcileNow()).some((entry) => entry.root === registeredRoot), false)
 
-  // An active record is a blocker even when the user typed the right phrase. The catalog remains intact.
-  addKnownProject(repo)
-  const sessionDir = join(home, 'projects', encodeProject(repo), 'sessions', 'active')
+  // A retained, safely closed record is not an active-session blocker. The current runtime schema uses
+  // snake_case, so this also guards the migration boundary in the removal predicate.
+  addKnownProject(registeredRoot)
+  const closedDir = join(home, 'projects', encodeProject(registeredRoot), 'sessions', 'closed')
+  mkdirSync(closedDir, { recursive: true })
+  writeFileSync(join(closedDir, 'runtime.json'), JSON.stringify({ archived: false, stopped: false, closed_at: '2026-08-30T00:00:00.000Z' }))
+  await reconcileNow()
+  const closedRemoved = removeKnownProject(registeredRoot, `REMOVE ${basename(registeredRoot)}`)
+  assert.equal(closedRemoved.sessions, 0)
+
+  // An active legacy record is a blocker even when the user typed the right phrase. The catalog remains intact.
+  addKnownProject(registeredRoot)
+  const sessionDir = join(home, 'projects', encodeProject(registeredRoot), 'sessions', 'active')
   mkdirSync(sessionDir, { recursive: true })
   writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({ archived: false, stopped: false, closedAt: null }))
   await reconcileNow()
-  assert.throws(() => removeKnownProject(repo, `REMOVE ${basename(repo)}`), /active session record/)
+  assert.throws(() => removeKnownProject(registeredRoot, `REMOVE ${basename(registeredRoot)}`), /active session record/)
   assert.equal(readCatalog().length, 1)
 })
 
@@ -174,7 +240,7 @@ test('host DELETE /projects/:id is an admin-gated, catalog-only lifecycle route'
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
   writeFileSync(join(repo, 'README.md'), 'must survive\n')
-  addKnownProject(repo)
+  const registeredRoot = addKnownProject(repo)
   const dist = mkdtempSync(join(tmpdir(), 'spex-host-remove-http-dist-'))
   writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
   const port = await new Promise<number>((resolvePort) => {
@@ -183,18 +249,18 @@ test('host DELETE /projects/:id is an admin-gated, catalog-only lifecycle route'
   })
   const dashboard = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
   await new Promise<void>((resolveReady) => dashboard.server.once('listening', () => resolveReady()))
-  const id = encodeProject(repo)
+  const id = encodeProject(registeredRoot)
   try {
     const refused = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, {
       method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: 'REMOVE wrong' }),
     })
     assert.equal(refused.status, 400)
     const removed = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, {
-      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: `REMOVE ${basename(repo)}` }),
+      method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: `REMOVE ${basename(registeredRoot)}` }),
     })
     assert.equal(removed.status, 200)
     assert.equal((await removed.json()).ok, true)
-    assert.equal(existsSync(join(repo, 'README.md')), true)
+    assert.equal(existsSync(join(registeredRoot, 'README.md')), true)
     const repeated = await fetch(`http://127.0.0.1:${port}/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
     assert.equal(repeated.status, 404)
   } finally { await dashboard.close() }
@@ -205,6 +271,7 @@ test('directory browse reports folder state; explicit setup initializes Git then
   const parent = mkdtempSync(join(tmpdir(), 'spex-host-browse-'))
   const plain = join(parent, 'plain-project')
   mkdirSync(plain)
+  writeFileSync(join(plain, 'notes.md'), 'user content stays uncommitted\n')
 
   const parentListing = browseProjectDirectories(parent)
   assert.equal(parentListing.entries.find((entry) => entry.name === 'plain-project')?.git, false)
@@ -215,21 +282,99 @@ test('directory browse reports folder state; explicit setup initializes Git then
   const added = await addKnownProjectWithSetup(plain, { initGit: true, init: { harness: 'codex' } })
   assert.equal(added.ok, true)
   assert.equal(added.gitInitialized, true)
+  assert.equal(added.initialCommitCreated, true)
   assert.equal(added.init?.code, 0)
   assert.equal(existsSync(join(plain, '.git')), true)
   assert.equal(existsSync(join(plain, '.spec')), true)
+  assert.equal(execFileSync('git', ['-C', plain, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
+  assert.match(gitHead(plain) ?? '', /^[0-9a-f]{40,64}$/)
+  assert.equal(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim(), 'chore: 初始化项目')
+  assert.equal(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%an <%ae>'], { encoding: 'utf8' }).trim(), 'SpexCode <spexcode@spexcode.invalid>')
+  const plainTree = execFileSync('git', ['-C', plain, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' })
+  assert.match(plainTree, /(^|\n)\.spec\//)
+  assert.match(plainTree, /(^|\n)spexcode\.json\n/)
+  assert.doesNotMatch(plainTree, /(^|\n)notes\.md\n/, 'the bootstrap commit does not stage user source')
+  assert.match(execFileSync('git', ['-C', plain, 'status', '--short'], { encoding: 'utf8' }), /notes\.md/)
   assert.deepEqual(JSON.parse(readFileSync(join(plain, 'spexcode.json'), 'utf8')).harnesses, ['codex'])
-  assert.deepEqual(readCatalog().map((entry) => entry.root), [plain])
+  assert.deepEqual(readCatalog().map((entry) => entry.root), [realpathSync(plain)])
+
+  const existingUnborn = join(parent, 'existing-unborn')
+  mkdirSync(existingUnborn)
+  writeFileSync(join(existingUnborn, 'draft.txt'), 'existing user content\n')
+  execFileSync('git', ['init', '-q', '-b', 'master'], { cwd: existingUnborn })
+  const repaired = await addKnownProjectWithSetup(existingUnborn)
+  assert.equal(repaired.ok, true)
+  assert.equal(repaired.directoryCreated, false)
+  assert.equal(repaired.gitInitialized, false)
+  assert.equal(repaired.initialCommitCreated, true)
+  assert.equal(execFileSync('git', ['-C', existingUnborn, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'master')
+  assert.match(gitHead(existingUnborn) ?? '', /^[0-9a-f]{40,64}$/)
+  assert.equal(execFileSync('git', ['-C', existingUnborn, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' }).trim(), '')
+  assert.match(execFileSync('git', ['-C', existingUnborn, 'status', '--short'], { encoding: 'utf8' }), /draft\.txt/)
+
+  // A previous `spex init` may have completed but its first commit may have been rejected by the hook.
+  // Re-registering that unborn repository must recover the existing seed instead of creating an empty
+  // commit that leaves the same source-of-truth error for the first session.
+  const interrupted = join(parent, 'interrupted-adoption')
+  mkdirSync(interrupted)
+  writeFileSync(join(interrupted, 'draft.txt'), 'keep this user content uncommitted\n')
+  execFileSync('git', ['init', '-q', '-b', 'master'], { cwd: interrupted })
+  const seeded = await runSpex(interrupted, ['init', '--harness', 'codex'])
+  assert.equal(seeded.code, 0, seeded.output)
+  assert.equal(gitHead(interrupted), null)
+  const recovered = await addKnownProjectWithSetup(interrupted)
+  assert.equal(recovered.ok, true)
+  assert.equal(recovered.initialCommitCreated, true)
+  assert.equal(execFileSync('git', ['-C', interrupted, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'master')
+  const recoveredTree = execFileSync('git', ['-C', interrupted, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' })
+  assert.match(recoveredTree, /(^|\n)\.spec\/project\/spec\.md\n/)
+  assert.match(recoveredTree, /(^|\n)spexcode\.json\n/)
+  assert.doesNotMatch(recoveredTree, /(^|\n)draft\.txt\n/)
+  assert.match(execFileSync('git', ['-C', interrupted, 'status', '--short'], { encoding: 'utf8' }), /draft\.txt/)
+  const recoveredLint = await runSpex(interrupted, ['spec', 'lint'])
+  assert.equal(recoveredLint.code, 0, recoveredLint.output)
+  assert.doesNotMatch(recoveredLint.output, /project source of truth is untracked/)
+
+  const historical = join(parent, 'historical')
+  mkdirSync(historical)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: historical })
+  writeFileSync(join(historical, 'tracked.txt'), 'existing history\n')
+  execFileSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', 'add', '--', 'tracked.txt'], { cwd: historical })
+  execFileSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'existing history'], { cwd: historical })
+  const historicalHead = gitHead(historical)
+  writeFileSync(join(historical, 'later.txt'), 'must stay uncommitted\n')
+  const registeredHistorical = await addKnownProjectWithSetup(historical)
+  assert.equal(registeredHistorical.initialCommitCreated, false)
+  assert.equal(gitHead(historical), historicalHead)
+  assert.match(execFileSync('git', ['-C', historical, 'status', '--short'], { encoding: 'utf8' }), /later\.txt/)
 
   const unborn = join(parent, 'new-project')
   const candidate = browseProjectDirectories(unborn)
   assert.equal(candidate.exists, false)
   assert.equal(candidate.path, unborn)
-  const created = await addKnownProjectWithSetup(unborn, { createDir: true, initGit: true })
+  // New-project setup must be independent of the operator's legacy Git default (`master`). The host owns
+  // the `main` source-of-truth branch before `spex init` stamps the portable config.
+  const gitConfigGlobal = join(parent, 'gitconfig-master-default')
+  writeFileSync(gitConfigGlobal, '[init]\n\tdefaultBranch = master\n')
+  const previousGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL
+  process.env.GIT_CONFIG_GLOBAL = gitConfigGlobal
+  const created = await (async () => {
+    try { return await addKnownProjectWithSetup(unborn, { createDir: true, initGit: true }) }
+    finally {
+      if (previousGitConfigGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
+      else process.env.GIT_CONFIG_GLOBAL = previousGitConfigGlobal
+    }
+  })()
   assert.equal(created.ok, true)
   assert.equal(created.directoryCreated, true)
+  assert.equal(created.initialCommitCreated, true)
+  assert.equal(created.init?.code, 0)
   assert.equal(existsSync(join(unborn, '.git')), true)
-  assert.equal(readCatalog().some((entry) => entry.root === unborn), true)
+  assert.equal(execFileSync('git', ['-C', unborn, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
+  assert.equal(JSON.parse(readFileSync(join(unborn, 'spexcode.json'), 'utf8')).mainBranch, 'main')
+  assert.deepEqual(JSON.parse(readFileSync(join(unborn, 'spexcode.json'), 'utf8')).harnesses, [])
+  assert.match(gitHead(unborn) ?? '', /^[0-9a-f]{40,64}$/)
+  assert.equal(readCatalog().some((entry) => entry.root === realpathSync(unborn)), true)
 
   const notCreated = join(parent, 'not-created')
   await assert.rejects(addKnownProjectWithSetup(notCreated, { createDir: true }), /requires Git initialization/)
@@ -366,15 +511,18 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     // an op on an unknown project 404s with the repair.
     const repo = mkdtempSync(join(tmpdir(), 'spex-host-addrepo-'))
     execFileSync('git', ['init', '-q'], { cwd: repo })
+    const canonicalRepo = realpathSync(repo)
     const browse = await getJson(`${base}/projects/browse?path=${encodeURIComponent(repo)}`)
     assert.equal(browse.status, 200)
-    assert.equal(browse.body.path, repo)
-    assert.equal(browse.body.gitRoot, repo)
+    assert.equal(browse.body.path, canonicalRepo)
+    assert.equal(browse.body.gitRoot, canonicalRepo)
     assert.equal(Array.isArray(browse.body.entries), true)
     assert.equal(browse.body.exists, true)
     const added = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
     assert.equal(added.status, 200)
-    assert.equal((await added.json()).online, false)
+    const addedBody = await added.json()
+    assert.equal(addedBody.online, false)
+    assert.equal(addedBody.setup.initialCommitCreated, true)
 
     const unborn = join(mkdtempSync(join(tmpdir(), 'spex-host-new-project-parent-')), 'new-project')
     const unbornBrowse = await getJson(`${base}/projects/browse?path=${encodeURIComponent(unborn)}`)
@@ -386,8 +534,13 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
       body: JSON.stringify({ root: unborn, createDir: true, initGit: true }),
     })
     assert.equal(created.status, 200)
+    const createdBody = await created.json()
+    assert.equal(createdBody.setup.initialCommitCreated, true)
+    assert.equal(createdBody.setup.init.code, 0)
     assert.equal(existsSync(join(unborn, '.git')), true)
-    const repoId = encodeProject(repo)
+    assert.equal(JSON.parse(readFileSync(join(unborn, 'spexcode.json'), 'utf8')).mainBranch, 'main')
+    assert.equal(execFileSync('git', ['-C', unborn, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
+    const repoId = encodeProject(canonicalRepo)
 
     // Raw portable config rides the same admin surface and works while the repo is offline. Missing is
     // an editable {}, saves are atomic + normalized, malformed content and a stale revision lose nothing.
@@ -516,9 +669,55 @@ test('startHostDashboard passes tls through to the hub: the ONE host gateway ser
   }
 })
 
+test('a host-created project can create its first real session from the committed base', { timeout: 120_000 }, async () => {
+  const home = freshHome('n')
+  const parent = mkdtempSync(join(tmpdir(), 'spex-host-new-session-parent-'))
+  const requested = join(parent, 'new-project')
+  const setup = await addKnownProjectWithSetup(requested, { createDir: true, initGit: true })
+  const project = realpathSync(requested)
+  assert.equal(setup.ok, true)
+  assert.equal(setup.root, project)
+  assert.equal(setup.initialCommitCreated, true)
+  assert.equal(gitHead(project) !== null, true)
+  assert.equal(execFileSync('git', ['-C', project, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
+  assert.equal(JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8')).mainBranch, 'main')
+  assert.deepEqual(JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8')).harnesses, [])
+
+  // The path-only flow deliberately has no selected harness. A local fixture launcher models the later
+  // scoped New Session `+` action without changing the portable empty selection that the host created.
+  const fakeLauncher = join(here, '..', 'test', 'fixtures', 'fake-claude')
+  writeFileSync(join(project, 'spexcode.local.json'), JSON.stringify({
+    sessions: { launchers: { fixture: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fixture' },
+  }, null, 2) + '\n')
+
+  const port = await freePort()
+  const tmux = `spex-host-new-session-${process.pid}-${Date.now()}`
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux }
+  delete env.PORT; delete env.SPEXCODE_API_URL; delete env.SPEXCODE_SESSION_ID; delete env.SPEXCODE_INSTANCE_ID
+  const backend = spawn(process.execPath, [tsxBin(join(here, '..')), join(here, 'cli.ts'), 'serve', '--port', String(port)], {
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const backendOutput = childOutput(backend)
+  const base = `http://127.0.0.1:${port}`
+  try {
+    await waitForHealth(base, backend, backendOutput)
+    const runner = spawn(process.execPath, [tsxBin(join(here, '..')), join(here, '..', 'test', 'session-terminal-fixture.ts')], {
+      cwd: project, env: { ...env, BASE: base, LAUNCHER: 'fixture' }, stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const runnerOutput = childOutput(runner)
+    await new Promise<void>((resolveRunner) => runner.once('close', () => resolveRunner()))
+    assert.equal(runner.exitCode, 0, `real session fixture failed\n${runnerOutput()}\nbackend:\n${backendOutput()}`)
+    assert.match(runnerOutput(), /PASS: POST \/api\/sessions -> online -> 101 -> PTY output -> close/)
+    assert.doesNotMatch(runnerOutput(), /invalid reference/)
+  } finally {
+    await stopChild(backend)
+  }
+})
+
 test('a linked-worktree `spex serve` registers its actual served root without replacing main', async () => {
   const home = freshHome('serve-e2e')
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-serve-'))
+  const canonicalRepo = realpathSync(repo)
   execFileSync('git', ['init', '-q'], { cwd: repo })
   execFileSync('git', ['config', 'user.email', 't@t.co'], { cwd: repo })
   execFileSync('git', ['config', 'user.name', 't'], { cwd: repo })
@@ -527,17 +726,18 @@ test('a linked-worktree `spex serve` registers its actual served root without re
   execFileSync('git', ['commit', '-qm', 'seed'], { cwd: repo })
   const linked = join(mkdtempSync(join(tmpdir(), 'spex-host-linked-parent-')), 'feature-tree')
   execFileSync('git', ['worktree', 'add', '-q', '-b', 'node/feature', linked], { cwd: repo })
-  publishEndpoint(rec({ root: repo, url: 'http://127.0.0.1:1', instanceId: 'main-generation', identity: { title: 'Main', icon: 'compass' } }))
+  const canonicalLinked = realpathSync(linked)
+  publishEndpoint(rec({ root: canonicalRepo, url: 'http://127.0.0.1:1', instanceId: 'main-generation', identity: { title: 'Main', icon: 'compass' } }))
   const port = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
   const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home }
   delete env.PORT; delete env.SPEXCODE_API_URL; delete env.SPEXCODE_SESSION_ID; delete env.SPEXCODE_INSTANCE_ID
-  const child = spawn(process.execPath, [tsxBin(join(here, '..')), join(here, 'cli.ts'), 'serve', '--port', String(port)], { cwd: linked, env })
+  const child = spawn(process.execPath, [tsxBin(join(here, '..')), join(here, 'cli.ts'), 'serve', '--port', String(port)], { cwd: canonicalLinked, env })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   child.stderr.on('data', (d) => { out += d })
   try {
     // wait for the record — published only AFTER the public bind succeeds
-    const file = endpointRecordPath(linked)
+    const file = endpointRecordPath(canonicalLinked)
     const deadline = Date.now() + 90_000
     while (!existsSync(file)) {
       assert.ok(Date.now() < deadline, `no endpoint record within 90s; serve output:\n${out}`)
@@ -546,14 +746,14 @@ test('a linked-worktree `spex serve` registers its actual served root without re
     const record = JSON.parse(readFileSync(file, 'utf8'))
     assert.equal(record.url, `http://127.0.0.1:${port}`)
     assert.equal(record.version, 2)
-    assert.equal(record.root, linked)
-    assert.equal(JSON.parse(readFileSync(endpointRecordPath(repo), 'utf8')).instanceId, 'main-generation', 'main slot was never touched')
+    assert.equal(record.root, canonicalLinked)
+    assert.equal(JSON.parse(readFileSync(endpointRecordPath(canonicalRepo), 'utf8')).instanceId, 'main-generation', 'main slot was never touched')
     assert.equal(typeof record.instanceId, 'string')
     // the live backend answers the SAME identity the record claims → the reconciler lists it online
     const inst = await fetch(`${record.url}/api/instance`).then((r) => r.json()) as any
     assert.equal(inst.instanceId, record.instanceId)
-    assert.equal(inst.root, linked)
-    const entry = (await reconcileNow()).find((p) => p.root === linked)
+    assert.equal(inst.root, canonicalLinked)
+    const entry = (await reconcileNow()).find((p) => p.root === canonicalLinked)
     assert.equal(entry?.online, true)
     // clean stop removes ONLY its own record
     child.kill('SIGTERM')
@@ -564,6 +764,6 @@ test('a linked-worktree `spex serve` registers its actual served root without re
     }
   } finally {
     try { child.kill('SIGKILL') } catch { /* already gone */ }
-    dropOwnEndpoint('main-generation', repo)
+    dropOwnEndpoint('main-generation', canonicalRepo)
   }
 })

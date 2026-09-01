@@ -4,7 +4,7 @@ import {
   normalizeProject, normalizeProjects, loadProjects, probeProjectHealth,
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
-  saveGatewayIcon, saveProjectIcon, removeProject,
+  saveGatewayIcon, saveProjectIcon, removeProject, addProjectHarnessTarget,
   selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult, paginateProjects,
 } from './projects.js'
 
@@ -290,6 +290,44 @@ test('project config surfaces conflicts and rejects malformed server answers', a
   assert.match(conflict.error, /changed on disk/)
   const malformed = await withFetch(async () => jsonRes(200, { content: '{}' }), () => loadProjectConfig('a'))
   assert.deepEqual(malformed, { ok: false, error: 'unexpected answer' })
+})
+
+test('addProjectHarnessTarget posts the structured target and preserves materialize diagnostics', async () => {
+  const calls = []
+  const impl = async (url, init) => {
+    calls.push({ url, method: init?.method, body: JSON.parse(init.body) })
+    return jsonRes(200, {
+      ok: true,
+      target: { plugin: '.adopter-a' },
+      harnesses: [{ plugin: '.adopter-a' }],
+      content: '{"harnesses":[{"plugin":".adopter-a"}]}\n',
+      revision: 'rev-2',
+      materialize: { code: 0, output: 'materialized' },
+    })
+  }
+  const added = await withFetch(impl, () => addProjectHarnessTarget('a b', { plugin: '.adopter-a' }, 'rev-1'))
+  assert.deepEqual(calls[0], {
+    url: '/projects/a%20b/harnesses', method: 'POST',
+    body: { target: { plugin: '.adopter-a' }, revision: 'rev-1' },
+  })
+  assert.equal(added.ok, true)
+  assert.equal(added.revision, 'rev-2')
+  assert.deepEqual(added.materialize, { code: 0, output: 'materialized' })
+
+  const failed = await withFetch(async () => jsonRes(422, {
+    error: 'spex materialize failed', content: '{"harnesses":["codex"]}\n', revision: 'rev-3',
+    harnesses: ['codex'], materialize: { code: 1, output: 'invalid target' },
+ }), () => addProjectHarnessTarget('a', 'codex', 'rev-1'))
+  assert.deepEqual(failed, { ok: false, status: 422, error: 'spex materialize failed', content: '{"harnesses":["codex"]}\n', revision: 'rev-3', harnesses: ['codex'], code: 1, output: 'invalid target' })
+})
+
+test('addProjectHarnessTarget rejects malformed answers and reports network failures', async () => {
+  const malformed = await withFetch(async () => jsonRes(200, { ok: true, content: '{}\n' }),
+    () => addProjectHarnessTarget('a', 'codex', 'r'))
+  assert.deepEqual(malformed, { ok: false, error: 'unexpected answer' })
+  const dead = await withFetch(async () => { throw new TypeError('fetch failed') },
+    () => addProjectHarnessTarget('a', 'codex', 'r'))
+  assert.deepEqual(dead, { ok: false, error: 'network' })
 })
 
 test('structured icon writes use canonical responses and encode project ids', async () => {

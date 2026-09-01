@@ -34,7 +34,14 @@ leaves an orphaned background process. A later session on either machine reuses 
 same peer rather than performing a new human pairing.
 
 **One SSH connection has two directions.** Initial connection uses an opaque SSH address exactly as supplied by
-the agent. It establishes one local-to-remote forward and one remote-to-local forward. The receiver replies on
+the agent, together with the ordinary ssh options supplied beside it. Reachability is the agent's to state and
+never the tool's to guess: an address that resolves only under a custom ssh config, identity, port, or jump host
+states those options once at connect, and the peer records them and replays them verbatim on every later dial —
+the tunnel, the accept handshake, and the remote cleanup — so no later cross-machine command repeats them and
+disconnect accepts none. They are ssh's grammar rather than SpexCode's own flag space, and they are a
+reachability hint exactly like the address: never an identity and never an authorization proof. A peer minted
+before options existed carries none, which is a legacy record to normalize rather than a malformed store. It
+establishes one local-to-remote forward and one remote-to-local forward. The receiver replies on
 the reverse forward of that same connection; it never opens a second SSH connection or requires credentials for
 the initiator. The peer has a stable randomly-minted machine id for semantic naming; an SSH address is only a
 mutable reachability hint. A hostname, gateway URL, and backend `instanceId` are neither an identity nor an
@@ -72,7 +79,7 @@ agent decides to run `spex peer connect <address>` and reissue its original send
 
 **The CLI carries no dashboard-URL protocol.** A shared dashboard session URL is context for the agent, which
 may use its own information to find an SSH address and full session UUID. SpexCode does not parse, store, or
-route that URL. Its machine-facing surface is `spex peer connect|ls|disconnect` and
+route that URL. Its machine-facing surface is `spex peer connect [ssh-option...] <address>`, `spex peer ls|disconnect` and
 `spex session show --ssh <address> <full-session-id>`, `spex session send --ssh <address>
 <full-session-id> <text>`, `spex session close --ssh <address> <full-session-id>`,
 `spex session ls --ssh <address> <full-session-id>`, and `spex session new --ssh <address>

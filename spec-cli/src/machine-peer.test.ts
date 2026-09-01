@@ -10,7 +10,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { encodeProject, runtimeRoot } from '@spexcode/spec-core'
 import { clientSendThroughPeer } from './client.js'
-import { MachinePeerGateway, listMachinePeers, peerRpc, peerStorePath, readPeerMachineId } from './machine-peer.js'
+import { MachinePeerGateway, listMachinePeers, peerRpc, peerStorePath, readPeerMachineId, splitSshOptions } from './machine-peer.js'
 
 const SESSION = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const SOURCE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -383,6 +383,48 @@ test('the control socket claim is proven by a connect, not by the file', async (
     assert.ok((await control({ op: 'list' })).ok)
   } finally {
     await first.close()
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('ordinary ssh options are parsed in ssh grammar, recorded on the peer, and replayed on every dial', async () => {
+  // value-taking options swallow the token after them, so the address is whatever is left
+  assert.deepEqual(splitSshOptions(['-F', '/tmp/ssh_config', 'macmini-tail']),
+    { sshOptions: ['-F', '/tmp/ssh_config'], addresses: ['macmini-tail'] })
+  // booleans, attached forms and repeats need no table; order is preserved verbatim
+  assert.deepEqual(splitSshOptions(['-4', '-vvv', '-i/tmp/key', '-o', 'BatchMode=yes', '-p', '2222', 'host']),
+    { sshOptions: ['-4', '-vvv', '-i/tmp/key', '-o', 'BatchMode=yes', '-p', '2222'], addresses: ['host'] })
+  // `--` ends the options for an address that would otherwise read as one
+  assert.deepEqual(splitSshOptions(['-F', '/tmp/cfg', '--', '-weird-host']),
+    { sshOptions: ['-F', '/tmp/cfg'], addresses: ['-weird-host'] })
+  assert.throws(() => splitSshOptions(['-F']), /ssh option -F needs a value/)
+
+  const home = mkdtempSync(join(tmpdir(), 'spex-peer-ssh-options-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  try {
+    // a peer minted before ssh options existed is legacy, not malformed: it loads and normalizes to none
+    mkdirSync(join(home, 'gateway'), { recursive: true })
+    writeFileSync(peerStorePath(), `${JSON.stringify({
+      version: 1, machineId: SOURCE, peers: [{
+        machineId: SESSION, sshAddress: 'legacy-peer', inboundPort: 1, outboundPort: 2,
+        remoteInboundPort: 3, remoteOutboundPort: 4, owner: true, state: 'connected',
+        createdAt: new Date().toISOString(), lastOkAt: null, lastError: null,
+      }],
+    })}\n`)
+    assert.deepEqual(listMachinePeers()[0].sshOptions, [], 'an absent field normalizes to no options')
+
+    // disconnect never re-states them; they belong to the peer recorded at connect
+    const env = { ...process.env, SPEXCODE_HOME: home } as NodeJS.ProcessEnv
+    const restated = await runCli(['peer', 'disconnect', '-F', '/tmp/cfg', 'legacy-peer'], env)
+    assert.equal(restated.code, 2)
+    assert.match(restated.stderr, /replayed from the peer recorded at connect/)
+    const noAddress = await runCli(['peer', 'connect', '-F', '/tmp/cfg'], env)
+    assert.equal(noAddress.code, 2)
+    assert.match(noAddress.stderr, /usage: spex peer connect \[SSH-OPTION\.\.\.\] <SSH-ADDRESS>/)
+  } finally {
     if (previous === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previous
     rmSync(home, { recursive: true, force: true })

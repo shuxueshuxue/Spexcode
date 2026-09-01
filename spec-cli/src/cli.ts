@@ -841,11 +841,23 @@ if (cmd === 'serve') {
     console.log((await import('./help.js')).commandHelp('peer'))
   } else if (sub === 'connect' || sub === 'disconnect') {
     rejectUnknownFlags(`spex peer ${sub}`, 4, [])
-    const address = positionals(4)
-    if (address.length !== 1) { console.error(`usage: spex peer ${sub} <SSH-ADDRESS>`); process.exit(2) }
-    const { peerControlOrThrow } = await import('./machine-peer.js')
+    const { peerControlOrThrow, splitSshOptions } = await import('./machine-peer.js')
+    const parsed = (() => {
+      try { return splitSshOptions(process.argv.slice(4)) }
+      catch (error) { console.error(`spex peer ${sub}: ${(error as Error).message}`); process.exit(2) }
+    })()
+    if (parsed.addresses.length !== 1) {
+      console.error(`usage: spex peer ${sub} ${sub === 'connect' ? '[SSH-OPTION...] ' : ''}<SSH-ADDRESS>`)
+      process.exit(2)
+    }
+    if (sub === 'disconnect' && parsed.sshOptions.length) {
+      console.error('spex peer disconnect: ssh options are replayed from the peer recorded at connect, never passed again here')
+      process.exit(2)
+    }
     try {
-      const peer = await peerControlOrThrow({ op: sub, sshAddress: address[0] })
+      const peer = await peerControlOrThrow(sub === 'connect'
+        ? { op: 'connect', sshAddress: parsed.addresses[0], sshOptions: parsed.sshOptions }
+        : { op: 'disconnect', sshAddress: parsed.addresses[0] })
       if (!Array.isArray(peer)) console.log(`${sub === 'connect' ? 'connected' : 'disconnected'} ${peer.sshAddress} (${peer.machineId})`)
     } catch (error) { console.error(`spex peer ${sub}: ${(error as Error).message}`); process.exit(1) }
   } else if (sub === 'ls') {
@@ -855,7 +867,7 @@ if (cmd === 'serve') {
       const peers = await peerControlOrThrow({ op: 'list' })
       if (!Array.isArray(peers)) throw new Error('peer service returned an invalid list')
       if (has('json')) console.log(JSON.stringify(peers, null, 2))
-      else for (const peer of peers) console.log(`${peer.state.padEnd(10)} ${peer.sshAddress}  ${peer.machineId}  ${peer.owner ? 'owner' : 'reverse'}`)
+      else for (const peer of peers) console.log(`${peer.state.padEnd(10)} ${peer.sshAddress}  ${peer.machineId}  ${peer.owner ? 'owner' : 'reverse'}${peer.sshOptions.length ? `  ssh: ${peer.sshOptions.join(' ')}` : ''}`)
     } catch (error) { console.error(`spex peer ls: ${(error as Error).message}`); process.exit(1) }
   } else {
     console.error(`spex peer: unknown verb '${sub}' — connect | ls | disconnect  (spex help peer)`)

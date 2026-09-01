@@ -16,6 +16,7 @@ const PEER_BODY_LIMIT = 1_048_576
 export type MachinePeer = {
   machineId: string
   sshAddress: string
+  sshOptions: string[]
   inboundPort: number
   outboundPort: number
   remoteInboundPort: number
@@ -37,10 +38,16 @@ function validPort(value: unknown): value is number {
 function validMachineId(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 }
+// @@@absent sshOptions is legacy, not malformed - peers minted before options existed carry none, so the
+// store still loads and normalizes to an empty list instead of failing every read.
+function validSshOptions(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+}
 function validPeer(value: unknown): value is MachinePeer {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const peer = value as Record<string, unknown>
   return validMachineId(peer.machineId) && typeof peer.sshAddress === 'string' && peer.sshAddress.length > 0 &&
+    validSshOptions(peer.sshOptions) &&
     validPort(peer.inboundPort) && validPort(peer.outboundPort) && validPort(peer.remoteInboundPort) && validPort(peer.remoteOutboundPort) &&
     typeof peer.owner === 'boolean' && (peer.state === 'connecting' || peer.state === 'connected') &&
     typeof peer.createdAt === 'string' && (typeof peer.lastOkAt === 'string' || peer.lastOkAt === null) &&
@@ -56,7 +63,12 @@ function readStore(): PeerStore {
     (typeof (parsed as any).machineId !== 'string' && (parsed as any).machineId !== undefined) || !Array.isArray((parsed as any).peers) || !(parsed as any).peers.every(validPeer)) {
     throw new Error(`malformed ${file}: expected {version:${PEER_VERSION},peers:[...]}`)
   }
-  return { ...(parsed as Omit<PeerStore, 'machineId'>), machineId: typeof (parsed as any).machineId === 'string' ? (parsed as any).machineId : '' }
+  const store = parsed as Omit<PeerStore, 'machineId'>
+  return {
+    ...store,
+    peers: store.peers.map((peer) => ({ ...peer, sshOptions: peer.sshOptions ?? [] })),
+    machineId: typeof (parsed as any).machineId === 'string' ? (parsed as any).machineId : '',
+  }
 }
 
 function writeStore(store: PeerStore): void {
@@ -95,6 +107,30 @@ function validPeerSender(value: unknown, machineId: string): value is string {
   if (typeof value !== 'string') return false
   const match = value.match(/^peer_([0-9a-f-]{36})(?:_([0-9a-f-]{36}))?$/i)
   return !!match && match[1] === machineId && (match[2] === undefined || validMachineId(match[2]))
+}
+
+// ssh options that take a separate value; a bare one of these swallows the token after it, so the SSH address
+// is whatever is left. Attached forms (-Fpath) and repeated booleans (-vvv) need no table.
+const SSH_VALUE_OPTIONS = new Set('BbcDEeFIiJLlmOopQRSWw'.split(''))
+
+// @@@ssh options are ssh's grammar, not spex's - spex owns only its `--` flag space, so single-dash tokens pass
+// through verbatim in ssh's own order. `--` ends the options for an address that would otherwise look like one.
+export function splitSshOptions(tokens: readonly string[]): { sshOptions: string[]; addresses: string[] } {
+  const sshOptions: string[] = []
+  const addresses: string[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (token === '--') { addresses.push(...tokens.slice(i + 1)); break }
+    if (!token.startsWith('-') || token === '-') { addresses.push(token); continue }
+    sshOptions.push(token)
+    if (token.length === 2 && SSH_VALUE_OPTIONS.has(token[1])) {
+      const value = tokens[i + 1]
+      if (value === undefined) throw new Error(`ssh option ${token} needs a value`)
+      sshOptions.push(value)
+      i++
+    }
+  }
+  return { sshOptions, addresses }
 }
 
 export function findMachinePeer(sshAddress: string): MachinePeer | null {
@@ -308,7 +344,7 @@ async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: Se
 
 export type PeerRpcRequest =
   | { op: 'list' }
-  | { op: 'connect'; sshAddress: string }
+  | { op: 'connect'; sshAddress: string; sshOptions?: string[] }
   | { op: 'accept'; sourceMachineId: string; sshAddress: string; remoteInboundPort: number; remoteOutboundPort: number }
   | { op: 'disconnect'; sshAddress: string }
   | { op: 'drop'; machineId: string }
@@ -318,7 +354,8 @@ function validRpc(value: unknown): value is PeerRpcRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const request = value as Record<string, unknown>
   if (request.op === 'list') return true
-  if (request.op === 'connect' || request.op === 'disconnect') return typeof request.sshAddress === 'string' && request.sshAddress.length > 0
+  if (request.op === 'connect') return typeof request.sshAddress === 'string' && request.sshAddress.length > 0 && validSshOptions(request.sshOptions)
+  if (request.op === 'disconnect') return typeof request.sshAddress === 'string' && request.sshAddress.length > 0
   if (request.op === 'drop') return validMachineId(request.machineId)
   return request.op === 'accept' && validMachineId(request.sourceMachineId) && typeof request.sshAddress === 'string' && request.sshAddress.length > 0 &&
     validPort(request.remoteInboundPort) && validPort(request.remoteOutboundPort)
@@ -330,6 +367,7 @@ function remoteCommand(op: 'peer-accept' | 'peer-drop', body: object): string {
 
 function sshArgs(peer: MachinePeer): string[] {
   return [
+    ...peer.sshOptions,
     '-N', '-o', 'ExitOnForwardFailure=yes',
     '-L', `127.0.0.1:${peer.outboundPort}:127.0.0.1:${peer.remoteInboundPort}`,
     '-R', `127.0.0.1:${peer.remoteOutboundPort}:127.0.0.1:${peer.inboundPort}`,
@@ -410,7 +448,7 @@ export class MachinePeerGateway {
     if (!validRpc(request)) return { ok: false, error: 'invalid peer control request' }
     try {
       if (request.op === 'list') return { ok: true, peers: listMachinePeers() }
-      if (request.op === 'connect') return { ok: true, peer: await this.connect(request.sshAddress) }
+      if (request.op === 'connect') return { ok: true, peer: await this.connect(request.sshAddress, request.sshOptions ?? []) }
       if (request.op === 'accept') return { ok: true, peer: await this.accept(request), machineId: readPeerMachineId() }
       if (request.op === 'disconnect') {
         const peer = await this.disconnect(request.sshAddress)
@@ -455,7 +493,7 @@ export class MachinePeerGateway {
     replacePeer({ ...peer, state: 'connecting', lastError: error })
   }
 
-  private async connect(sshAddress: string): Promise<MachinePeer> {
+  private async connect(sshAddress: string, sshOptions: string[]): Promise<MachinePeer> {
     const existing = findMachinePeer(sshAddress)
     if (existing) {
       if (existing.owner) this.ensureTunnel(existing)
@@ -465,14 +503,14 @@ export class MachinePeerGateway {
     const inboundPort = await freePort()
     const outboundPort = await freePort()
     const sourceMachineId = readPeerMachineId()
-    const remote = await execFileAsync('ssh', ['--', sshAddress, remoteCommand('peer-accept', {
+    const remote = await execFileAsync('ssh', [...sshOptions, '--', sshAddress, remoteCommand('peer-accept', {
       sourceMachineId, sshAddress, remoteInboundPort: inboundPort, remoteOutboundPort: outboundPort,
     })], { maxBuffer: 64 * 1024 })
     let reply: RpcResponse
     try { reply = JSON.parse(remote.stdout.trim()) as RpcResponse } catch { throw new Error(`remote peer accept returned invalid JSON: ${remote.stdout.trim() || remote.stderr.trim()}`) }
     if (!reply.ok || !reply.peer || !validMachineId(reply.machineId)) throw new Error(reply.ok ? 'remote peer accept returned no machine identity' : reply.error)
     const peer: MachinePeer = {
-      machineId: reply.machineId, sshAddress, inboundPort, outboundPort,
+      machineId: reply.machineId, sshAddress, sshOptions, inboundPort, outboundPort,
       remoteInboundPort: reply.peer.inboundPort, remoteOutboundPort: reply.peer.outboundPort,
       owner: true, state: 'connecting', createdAt: new Date().toISOString(), lastOkAt: null, lastError: null,
     }
@@ -486,7 +524,7 @@ export class MachinePeerGateway {
     const existing = listMachinePeers().find((peer) => peer.machineId === request.sourceMachineId)
     if (existing) return existing
     const peer: MachinePeer = {
-      machineId: request.sourceMachineId, sshAddress: request.sshAddress,
+      machineId: request.sourceMachineId, sshAddress: request.sshAddress, sshOptions: [],
       inboundPort: await freePort(), outboundPort: await freePort(),
       remoteInboundPort: request.remoteInboundPort, remoteOutboundPort: request.remoteOutboundPort,
       owner: false, state: 'connected', createdAt: new Date().toISOString(), lastOkAt: new Date().toISOString(), lastError: null,
@@ -508,7 +546,7 @@ export class MachinePeerGateway {
     if (!peer) return null
     const removed = await this.drop(peer.machineId)
     if (peer.owner) {
-      try { await execFileAsync('ssh', ['--', peer.sshAddress, remoteCommand('peer-drop', { machineId: readPeerMachineId() })], { maxBuffer: 64 * 1024 }) }
+      try { await execFileAsync('ssh', [...peer.sshOptions, '--', peer.sshAddress, remoteCommand('peer-drop', { machineId: readPeerMachineId() })], { maxBuffer: 64 * 1024 }) }
       catch (error) { console.error(`[peer] remote peer cleanup failed for ${peer.sshAddress}: ${(error as Error).message}`) }
     }
     return removed

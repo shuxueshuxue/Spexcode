@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { ACT, displayKeysOf, keyCap } from './keymap.js'
@@ -6,8 +6,8 @@ import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
 import { PageScroll } from './PageScroll.jsx'
 import { PROJECT_ID } from './project.js'
-import { useLaunchers, isDashboardVisibleHarness } from './launch.js'
-import { addProjectHarnessTarget, loadProjectConfig, saveProjectConfig } from './projects.js'
+import { useLaunchers } from './launch.js'
+import { loadProjectConfig, saveProjectConfig } from './projects.js'
 import { harnessForId } from './harness.jsx'
 import {
   getTerminalFontSize,
@@ -148,13 +148,12 @@ function LauncherProfiles({ t, launchers, refreshLaunchers }) {
           const harness = harnessForId(entry.harness)
           const Glyph = harness.Glyph
           return (
-            <div className="set-launcher" key={entry.name}>
-              <span className="set-launcher-mark" aria-hidden="true"><Glyph /></span>
-              <span className="set-launcher-main">
-                <strong>{entry.name}</strong>
-                <span>{harness.label}</span>
+            <div className="si-launcher-row" key={entry.name}>
+              <span className="si-launcher-row-main">
+                <span className="si-launcher-harness" data-tip={harness.label} aria-hidden="true"><Glyph /></span>
+                <span className="si-launcher-name">{entry.name}</span>
               </span>
-              {entry.cmd ? <code>{entry.cmd}</code> : null}
+              {entry.cmd ? <span className="si-launcher-cmd">{entry.cmd}</span> : null}
             </div>
           )
         }) : <p className="set-hint">{t('settings.noLaunchers')}</p>}
@@ -213,69 +212,6 @@ function ProjectConfigEditor({ t }) {
   )
 }
 
-function HarnessDelivery({ t, harnessTargets, refreshLaunchers }) {
-  const [targets, setTargets] = useState([])
-  const [revision, setRevision] = useState('')
-  const [phase, setPhase] = useState(PROJECT_ID ? 'loading' : 'unavailable')
-  const [selected, setSelected] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const native = useMemo(() => harnessTargets.filter((id) => isDashboardVisibleHarness(id)), [harnessTargets])
-  const available = useMemo(() => native.filter((id) => !targets.includes(id)), [native, targets])
-
-  const read = useCallback(async () => {
-    if (!PROJECT_ID) return
-    setPhase('loading'); setError('')
-    const result = await loadProjectConfig(PROJECT_ID)
-    if (!result.ok) { setPhase('error'); setError(result.error || t('settings.harnessLoadFailed')); return }
-    try {
-      const parsed = JSON.parse(result.content)
-      const values = Array.isArray(parsed?.harnesses) ? parsed.harnesses.filter((value) => typeof value === 'string').map((value) => value.trim()).filter(Boolean) : []
-      setTargets(values.filter((value) => isDashboardVisibleHarness(value)))
-      setRevision(result.revision); setPhase('ready')
-    } catch { setPhase('error'); setError(t('settings.harnessInvalidConfig')) }
-  }, [t])
-  useEffect(() => { void read() }, [read])
-  useEffect(() => { setSelected((current) => available.includes(current) ? current : (available[0] || '')) }, [available])
-
-  const add = async () => {
-    if (!PROJECT_ID || !selected || busy) return
-    setBusy(true); setError('')
-    const result = await addProjectHarnessTarget(PROJECT_ID, selected, revision)
-    if (!result.ok) {
-      setError(result.error || t('settings.harnessSaveFailed')); setBusy(false); return
-    }
-    setRevision(result.revision)
-    setTargets(result.harnesses.filter((value) => typeof value === 'string').map((value) => value.trim()).filter((value) => isDashboardVisibleHarness(value)))
-    setPhase('ready'); setBusy(false); setSelected('')
-    await refreshLaunchers().catch(() => {})
-  }
-
-  return (
-    <Section title={t('settings.secHarnesses')}>
-      <p className="set-hint set-section-copy">{t('settings.harnessesDescription')}</p>
-      {!PROJECT_ID ? <p className="set-hint">{t('settings.harnessesNoProject')}</p> : null}
-      {phase === 'loading' ? <p className="set-hint">{t('settings.harnessesLoading')}</p> : null}
-      {phase === 'error' ? <p className="set-error">{error}</p> : null}
-      {phase === 'ready' ? (
-        <>
-          <div className="set-targets" data-settings-harnesses>
-            {targets.length ? targets.map((id) => <span className="set-target" key={id}>{harnessForId(id).label}</span>) : <span className="set-hint">{t('settings.harnessesNone')}</span>}
-          </div>
-          {available.length ? (
-            <div className="set-add-target">
-              <select value={selected} onChange={(event) => setSelected(event.target.value)} aria-label={t('settings.harnessesSelect')}>
-                {available.map((id) => <option key={id} value={id}>{harnessForId(id).label}</option>)}
-              </select>
-              <button type="button" className="set-action" onClick={add} disabled={busy || !selected}>{busy ? t('settings.harnessesSaving') : t('settings.harnessesAdd')}</button>
-            </div>
-          ) : <p className="set-hint">{t('settings.harnessesNoAvailable')}</p>}
-        </>
-      ) : null}
-    </Section>
-  )
-}
-
 export default function Settings() {
   const { t, lang, setLang } = useI18n()
   const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
@@ -326,7 +262,6 @@ export default function Settings() {
           </Row>
         </Section>
         <LauncherProfiles t={t} launchers={launcherState.launchers} refreshLaunchers={launcherState.refreshLaunchers} />
-        <HarnessDelivery t={t} harnessTargets={launcherState.harnessTargets} refreshLaunchers={launcherState.refreshLaunchers} />
         <ProjectConfigEditor t={t} />
         <Shortcuts t={t} />
       </div>

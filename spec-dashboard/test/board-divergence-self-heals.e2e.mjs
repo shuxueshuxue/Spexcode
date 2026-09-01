@@ -72,7 +72,7 @@ const shot = join(OUT, `${LABEL}.png`)
 await page.screenshot({ path: shot })
 await browser.close()
 
-const divergence = errors.filter((e) => e.text.includes('BOARD-DIVERGENCE'))
+const divergence = errors.filter((e) => e.text.includes('GRAPH-DIVERGENCE'))
 const report = {
   label: LABEL, base: BASE,
   injected: { unit: corrupted.key, namedTag: corrupted.to, atMs: corrupted.at - start },

@@ -1,4 +1,5 @@
 import { mergeTranscriptFrame } from '@spexcode/transcript/frames'
+import { applyDeltaUnits, boardFromUnits, tagOfAsync, unitize, unitValues } from '@spexcode/spec-core/graph-delta'
 import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
 import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
@@ -225,16 +226,45 @@ export async function apiFetch(input, init) {
 // out of the loop, so the 304 reaches US instead of being swallowed into a cache-served 200 that would
 // repaint an identical board every tick.
 //
-// The conditional key MUST be the identity of the board the app actually DISPLAYS, or the poll goes blind
-// (issue #70): a response superseded by a pushed board never paints, so if its ETag latched anyway, every
-// later poll 304s against a board nobody is seeing while the display stays stale — a blackhole only a hard
-// refresh exits. So the tag is returned to the caller and latches only when the caller APPLIES the body
-// (`seal`), and a pushed board clears it (its identity is a delta-chain tag the HTTP lane can't express, so
-// the next poll goes unconditional once, re-earning its 304s from a painted response).
-let boardTag = ''
-const clearBoardTag = () => { boardTag = '' }   // a pushed board took the display — see subscribeBoardLive
+// @@@ the conditional key is MEASURED, not remembered - it is the fingerprint of the units this client is
+// actually holding, computed here over `tagBytes` ([[graph-delta]]'s one canonical hash input), not the tag
+// the server handed us. The difference is receipt versus measurement: echoing a server-issued tag proves
+// only that a frame arrived, so a client whose apply had diverged would still quote it and still be
+// answered 304 — certifying a board nobody has. A self-computed fingerprint depends on the bytes we hold,
+// so divergence cannot survive one exchange. It also retires the key-outlives-its-paint hazard (issue #70)
+// STRUCTURALLY rather than by discipline: there is no stored key to go stale, only a function of the
+// display, so no latch can be forgotten and no seal can be misplaced.
+//
+// What it names is the board this client has ACCEPTED from the server — which is what the transfer decision
+// is about. The session-eval generation guard in acceptSessionEvalBoard is a rendering policy layered above
+// that and deliberately not part of the identity.
+let heldUnits = null
+let heldVersion = 0
+let heldFingerprint = { version: -1, tag: '' }
+// a board became what this client holds. Returns the version so an async fingerprint can tell whether a
+// newer board overtook it before it finished.
+const holdUnits = (units) => { heldUnits = units; heldVersion += 1; return heldVersion }
+const holdBoard = (board) => holdUnits(unitize(board).units)
+// memoised per held board: the stream normally computes this while verifying a frame, so the poll pays
+// nothing at all; a fetched board pays one hash.
+async function displayFingerprint() {
+  if (!heldUnits) return ''
+  if (heldFingerprint.version === heldVersion) return heldFingerprint.tag
+  const version = heldVersion
+  const units = heldUnits
+  let tag
+  // An unavailable digest must cost the CHEAPNESS of this lane, never the lane itself. Returning '' sends
+  // the poll unconditional — exactly what it was before there was a key — whereas letting this reject takes
+  // loadGraph down with it, and with it the belt, the deadman's kick and the retry. The verify path already
+  // degraded this way; this one did not, and the asymmetry was invisible until something drove it.
+  try { tag = await tagOfAsync(units) }
+  catch { return '' }
+  if (version === heldVersion) heldFingerprint = { version, tag }
+  return tag
+}
 export async function loadGraph() {
-  const res = await apiFetch('/api/graph', { cache: 'no-store', headers: boardTag ? { 'If-None-Match': boardTag } : {} })
+  const fingerprint = await displayFingerprint()
+  const res = await apiFetch('/api/graph', { cache: 'no-store', headers: fingerprint ? { 'If-None-Match': `"${fingerprint}"` } : {} })
   if (res.status === 304) return null
   // a gated scope ([[public-mode]]'s project/admin cookie) answers 401/403 with a JSON reason — surface
   // it as data so the shell can raise the credential gate instead of the generic load-error panel.
@@ -249,9 +279,10 @@ export async function loadGraph() {
     const body = await res.json().catch(() => null)
     throw new Error(body?.error || `graph load failed (${res.status})`)
   }
-  const tag = res.headers.get('etag') || ''
   const board = await res.json()
-  return { board, seal: () => { boardTag = tag } }
+  // `seal` still means "this response became the display" — it just records the BOARD now, and the key is
+  // derived from it on demand rather than copied off the response.
+  return { board, seal: () => { holdBoard(board) } }
 }
 
 // The public Spec Graph is a sealed static artifact, not a narrowed live board. Keep it off apiUrl() and
@@ -370,50 +401,76 @@ export async function fetchDirEntries(dir = '') {
 export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
   let es = null
   let closed = false
-  let values = null   // unit-value map, the client's copy of the server's decomposition
+  let values = null   // the client's copy of the server's decomposition, carrying each unit's serialization
   let tag = ''
-  const unitize = (b) => {
-    const { nodes = [], sessions = [], ...meta } = b
-    const m = new Map([['meta', meta], ['nodes#order', nodes.map((n) => n.id)], ['sess#order', sessions.map((s) => s.id)]])
-    nodes.forEach((n) => m.set('node:' + n.id, n))
-    sessions.forEach((s) => m.set('sess:' + s.id, s))
-    return m
+  // @@@ resume only what was verified - a reopen after a LIVENESS event (the stream went quiet, a frame was
+  // missed) still holds a board this client fingerprinted and trusts, so it names its position and is
+  // answered with the difference to now. A reopen after a CORRECTNESS event (the fingerprint disagreed with
+  // the frame that produced it) discards instead: the thing it would resume from is the suspect.
+  const reopen = ({ resume = false } = {}) => {
+    try { es?.close() } catch { /* already closed */ }
+    if (!resume) { values = null; tag = '' }
+    open()
   }
-  const boardFrom = (m) => {
-    const pick = (prefix, orderKey) => (m.get(orderKey) || []).map((id) => m.get(prefix + id))
-    return { ...(m.get('meta') || {}), nodes: pick('node:', 'nodes#order'), sessions: pick('sess:', 'sess#order') }
+  // @@@ every frame is checked, not assumed - after applying a frame we fingerprint what we now hold and
+  // compare it to the tag the server named that frame with. Equal is the whole delta contract discharged on
+  // this client, on this frame, for free: the same hash then serves as the fallback poll's conditional key,
+  // so verification and the 304 lane are ONE computation rather than two mechanisms. Unequal means our apply
+  // produced a board the server never had — the one failure the equivalence argument exists to exclude — so
+  // it is loud and it self-heals within one round trip by reopening onto a fresh anchor, instead of waiting
+  // for a poll period or, worse, being certified by a 304 it could not have detected.
+  const verify = async (units, claimed, version) => {
+    let mine
+    try { mine = await tagOfAsync(units) }
+    catch { return }   // no WebCrypto (an insecure origin): the check is unavailable, never falsely failing
+    if (version === heldVersion) heldFingerprint = { version, tag: mine }
+    if (mine === claimed || closed || version !== heldVersion) return
+    console.error(`BOARD-DIVERGENCE: applied frame ${claimed} but hold ${mine} — reopening onto a fresh anchor`)
+    reopen()
   }
-  const reopen = () => { try { es?.close() } catch { /* already closed */ } ; values = null; tag = ''; open() }
   // the dead-man's switch: any stream event (data OR ping) re-arms it; on a healthy stream it never fires.
   // A breach presumes the stream dead — reopen (its board-full re-anchors and repaints), re-arm to keep
   // watching the replacement, and fire onLegacyChange so the caller's ETag refetch races the reconnect.
   const deadman = createDeadman(() => {
-    if (!es || closed) return
+    // `es` being null means the constructor itself threw — a blocked or failed origin, with no error event
+    // to fall back on. That is the case that most needs another attempt, and it used to be the one case
+    // that got none: the guard returned before re-arming, so a stream that never came up was tried exactly
+    // once and recovery fell entirely to the poll. It also contradicted the reason the switch is armed from
+    // the subscribe instant at all, which is precisely so a stream that never comes up still breaches.
+    // `reopen` tolerates a null `es`, so only a real unsubscribe stops this.
+    if (closed) return
     onStatus?.(false)
-    reopen(); deadman.arm(); onLegacyChange?.()
+    reopen({ resume: true }); deadman.arm(); onLegacyChange?.()
   })
   const bump = () => deadman.arm()   // heartbeat: every event proves the stream still lives
   const open = () => {
     if (closed) return
-    try { es = new EventSource(apiUrl('/api/graph/stream?mode=delta')) } catch { es = null; return }
+    // where we already are. The browser sends Last-Event-ID only on its OWN automatic reconnect and not
+    // reliably even then (measured), so the position rides a query param we control — which also covers the
+    // reopens the browser knows nothing about. An auto-reconnect replays whatever `from` this URL was opened
+    // with; if we have since moved on, the answer's `from` will not match and the chain check reopens us at
+    // the current position, one extra hop rather than a wrong board.
+    const at = values && tag ? `&from=${encodeURIComponent(tag)}` : ''
+    try { es = new EventSource(apiUrl(`/api/graph/stream?mode=delta${at}`)) } catch { es = null; return }
     es.addEventListener('graph-full', (e) => {
       bump()
       const { to, graph } = JSON.parse(e.data)
-      values = unitize(graph)
+      values = unitize(graph).units
       tag = to
-      clearBoardTag()   // the display's identity is now this frame's tag — the HTTP lane must re-earn its 304s
       onBoard(graph, { authoritative: true, tag: to })
+      void verify(values, to, holdUnits(values))
       onStatus?.(true)
     })
     es.addEventListener('graph-delta', (e) => {
       bump()
       const d = JSON.parse(e.data)
-      if (!values || tag !== d.from) { reopen(); return }
-      for (const k of d.del || []) values.delete(k)
-      for (const [k, v] of Object.entries(d.set || {})) values.set(k, v)
+      // a missed or reordered frame: what we hold is still a verified board, so resume from it rather than
+      // asking for a snapshot we mostly already have
+      if (!values || tag !== d.from) { reopen({ resume: !!(values && tag) }); return }
+      values = applyDeltaUnits(values, { set: d.set || {}, del: d.del || [] })
       tag = d.to
-      clearBoardTag()
-      onBoard(boardFrom(values), { authoritative: false, tag: d.to })
+      onBoard(boardFromUnits(unitValues(values)), { authoritative: false, tag: d.to })
+      void verify(values, d.to, holdUnits(values))
       onStatus?.(true)
     })
     es.addEventListener('graph-changed', () => { bump(); onLegacyChange?.() })

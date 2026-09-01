@@ -1,5 +1,22 @@
 ---
 scenarios:
+  - name: blind-change-surfaces-to-a-polling-client
+    tags: [backend-api]
+    code: spec-cli/src/graphCache.ts
+    description: >-
+      Serve a QUIET fixture project (a fresh repo with its own small spec tree — the dogfood board changes
+      every few seconds and can never be held still long enough to test this) on its own port with
+      SPEXCODE_DISABLE_WATCHERS=project-root, so a .spec change fires no watcher event at all. Poll
+      /api/graph until the board is demonstrably settled: not dirty, and the same ETag across several
+      consecutive reads. Then write a new spec node to disk and keep polling with the held ETag, with NO
+      delta subscriber anywhere. Finally open a delta subscriber and keep polling.
+    expected: >-
+      The change reaches the polling client on its own, within about one poll period, without any delta
+      subscriber existing — because a read whose last input sample has aged past the patrol's cadence
+      starts one itself. What this forbids is the state it replaces: the route answering a bodyless 304 for
+      as long as the polling runs, against a board that no longer exists on disk, with the change appearing
+      only once a delta subscriber turns up to ungate [[graph-stream]]'s patrol. Zero loss = the only lane a
+      polling-only consumer has is not silently dependent on somebody else holding a stream open.
   - name: unchanged-patrol-does-not-rebuild
     tags: [backend-api]
     code: [spec-cli/src/graphCache.ts, spec-cli/src/graphStream.ts]

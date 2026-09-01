@@ -100,16 +100,26 @@ app.get('/api/instance', (c) => {
 // the assembled graph (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[graph-stream]]): the
 // dashboard reloads on a `/api/graph/stream` event, not a tight poll, so the route is a conditional-request
-// endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
-// instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
-// WIRE only; the COMPUTE is saved by [[graph-cache]]: getBoard() is single-flight + cached, so a poll storm
+// endpoint whose validator is the board's OWN content tag ([[graph-cache]]) — the same value the delta chain
+// names its frames with — so a client holding a push-delivered board can quote it back and get a bodyless 304
+// instead of the full transfer (~650 KB on the dogfood board — it scales with the node count). A board whose
+// units are not a faithful identity publishes no validator at all, rather than one that cannot tell two
+// boards apart. The 304 saves the WIRE only; the COMPUTE is saved by [[graph-cache]]: getBoard() is
+// single-flight + cached, so a poll storm
 // shares ONE build instead of each running its own — the poll-frequency cut (push channel) and the
 // build-coalescing cut compound. A hard timeout bounds a wedged build to a loud 503 rather than an
 // unboundedly-held connection (the wall sits well above the legitimately-several-seconds cold first build);
 // a merely-slow single-flight build keeps running and caches for the next poll, while a NEVER-settling one
 // is bounded by [[graph-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
-app.get('/api/graph', etag(), async (c) => {
+// If-None-Match is a list, and an intermediary may weaken a validator in transit; both sides are naming the
+// same board, so compare on the opaque tag rather than on byte-equal header syntax.
+function ifNoneMatchHits(header: string | undefined, value: string): boolean {
+  if (!header) return false
+  const bare = (v: string): string => v.trim().replace(/^W\//, '')
+  return header.split(',').some((v) => bare(v) === value || bare(v) === '*')
+}
+app.get('/api/graph', async (c) => {
   await ensureBoardFileWatchers()
   const timeout = Symbol('timeout')
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -124,6 +134,11 @@ app.get('/api/graph', etag(), async (c) => {
   if (result === timeout) return c.json({ error: 'graph build timed out' }, 503)
   const freshness = result.refreshing ? `${result.freshness}, refreshing` : result.freshness
   c.header('x-spexcode-graph', freshness)
+  const validator = result.tag ? `"${result.tag}"` : null
+  if (validator) {
+    c.header('etag', validator)
+    if (ifNoneMatchHits(c.req.header('if-none-match'), validator)) return c.body(null, 304)
+  }
   return c.body(result.json, 200, { 'content-type': 'application/json; charset=UTF-8' })
 })
 // the graph's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard

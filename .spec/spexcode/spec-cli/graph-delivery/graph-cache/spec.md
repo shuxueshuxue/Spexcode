@@ -126,6 +126,23 @@ The graph is built **once per change, not once per poll — and only as much of 
   rebuilds, while the just-finished build still answers its own waiters. The stream and
   the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
 
+- **A board names itself once, where it is built.** A snapshot's bytes, its unit decomposition
+  ([[graph-delta]]) and the content tag over that decomposition are three views of one build, so they are
+  produced together and memoised together against the cached board. Two consequences, and the second is the
+  reason the first is worth having. The cheap one: a poll storm of cache hits costs zero serialization and
+  zero hashing, and a patrol tick that returns the anchor object re-serializes nothing. The load-bearing
+  one: both delivery lanes then quote the SAME tag instead of each hashing its own answer to "which board
+  is this" — the SSE chain's frame tag and the HTTP validator are one value, which is what makes a
+  push-delivered board expressible on the conditional-request lane at all ([[dashboard-shell]]). Identity
+  computed twice is identity that can disagree; the disagreement is not a hash collision but a category
+  error, and it costs a full snapshot every time it happens.
+
+  The tag is publishable only while the decomposition is faithful. `unitize`'s bijection precondition is
+  checked per build, and a board that fails it has units that dropped a colliding id — such a tag no longer
+  distinguishes this board from another, so the route publishes NO validator rather than one that cannot
+  tell two boards apart. A malformed board degrades to full transfers, which is the same degradation the
+  delta chain already makes for it, and never to a wrong 304.
+
 Generated workspace build output is not a graph input. The project-root watcher excludes package `dist/` trees
 and the atomic `.dist-next-*`/`.dist-previous-*` staging trees used by the compiler. A build must not invalidate
 the board that is only serving the source tree, otherwise every artifact swap can start another full graph build
@@ -143,6 +160,26 @@ and turn a normal reload into backend event-loop and memory pressure.
   background build keeps the last-good board, logs loudly, exposes a non-refreshing stale state during a
   bounded retry backoff, and never creates an unhandled rejection or a retry storm. A successful fresh
   completion replaces the JSON/ETag anchor and is the only event that makes the stale signal disappear.
+
+- **A read pays for the freshness it claims.** Cache-until-change is only sound while something notices the
+  change. Every producer above is owed by a SIGNAL, and a missed watcher event emits none — `dirty` never
+  moves, so nothing re-reads disk and the cached board is served as current for as long as it is asked for.
+  [[graph-stream]]'s patrol is the only unprompted sampler and it is gated on having a delta subscriber, so
+  a polling-only client — a script, a CI job, a dashboard behind an SSE-hostile proxy — has nobody checking
+  on its behalf. Measured on a quiet fixture with the project-root watcher deliberately blinded: a new spec
+  node written to disk stayed invisible across every poll for as long as the polling ran, the route
+  answering 304 against a board that no longer existed. So a stale-ok read whose last input sample has aged
+  past the patrol's own cadence starts one itself. It does not wait for it — that caller still returns
+  last-good bytes immediately — but the next reader gets the truth: measured, the same blinded change
+  surfaced on the following poll. The cost lands on whoever is actually reading, which preserves the
+  property that made the patrol subscriber-gated to begin with: with nobody looking, nothing runs.
+
+  **A verification is not a refresh.** `x-spexcode-graph` speaks two words — `fresh`, and `stale,
+  refreshing` — and a reader waiting on `fresh` is waiting on the BOARD, not on whether some background
+  check happens to be running. A check that may well conclude nothing moved must not tell every idle reader
+  its bytes are being superseded; conflating the two broke a real caller before the distinction existed. So
+  a read-driven verification is neither stale nor refreshing until it finds something, at which point the
+  ordinary dirty machinery reports it like any other obligation.
 
 Session rows' eval summaries compose with this cache rather than hiding inside it ([[session-eval]]): graph
 assembly batch-reads a separate content-addressed projection cache and may start only its missing/invalidated

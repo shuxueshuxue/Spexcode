@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { unitize, tagOf, diffUnits, applyDelta, boardFromUnits, unitValues } from '@spexcode/spec-core'
+import { unitize, tagOf, tagOfAsync, tagOfWithoutWebCrypto, diffUnits, diffFromPosition, positionOf, applyDelta, applyDeltaUnits, boardFromUnits, unitValues } from '@spexcode/spec-core'
 
 // Executable evidence for the two lemmas the incremental push stands on (see the board-delta spec node's
 // equivalence.md): RECONSTRUCTION — boardFromUnits(unitize(B)) = B whenever unitize reports ok; ROUND-TRIP —
@@ -87,6 +87,90 @@ test('tag: equal content ⇒ equal tag; a content change moves the tag', () => {
   assert.strictEqual(t1, t2, 'stringify-equal snapshots tag identically')
   const changed = mutate(rng(100), board)
   assert.notStrictEqual(tagOf(unitize(changed).units), t1)
+})
+
+// The whole point of a HOLDER's fingerprint is that the other side computes the identical function over the
+// identical bytes. Two digest call-sites is a platform accommodation; two ANSWERS would silently break the
+// only guarantee the tag carries, and would break it in the direction that certifies a board nobody has.
+test('the two platforms compute one tag: tagOf === await tagOfAsync, over many random boards', async () => {
+  const r = rng(4242)
+  for (let i = 0; i < 24; i++) {
+    const units = unitize(randBoard(r, ['a', 'b', 'c'])).units
+    assert.strictEqual(await tagOfAsync(units), tagOf(units), `platform tags diverged on board ${i}`)
+  }
+})
+
+// A holder that keeps only values cannot state what it has. Carrying `j` through every apply must land on
+// exactly the units a fresh decomposition of the same board would produce — otherwise the fingerprint drifts
+// from the board it claims to describe, patch by patch, and says so only once it is far too late.
+test('applyDeltaUnits keeps a holder byte-identical to a fresh decomposition across a mutation chain', () => {
+  const r = rng(777)
+  let board = randBoard(r, ['a', 'b'])
+  let held = unitize(board).units
+  for (let step = 0; step < 12; step++) {
+    const next = mutate(r, board)
+    const nextUnits = unitize(next).units
+    held = applyDeltaUnits(held, diffUnits(unitize(board).units, nextUnits))
+    assert.strictEqual(tagOf(held), tagOf(nextUnits), `held tag diverged at step ${step}`)
+    assert.deepStrictEqual(boardFromUnits(unitValues(held)), next, `held board diverged at step ${step}`)
+    board = next
+  }
+})
+
+// A remembered position keeps only serializations, so the resume path answers "what changed" from strictly
+// less than the units-based diff has. That is only safe if it reaches the SAME answer — otherwise a
+// reconnecting client is carried forward by a patch that differs from the one a live subscriber received,
+// and the two would render different boards from the same server state.
+test('a diff from a remembered position equals the diff from the whole snapshot', () => {
+  const r = rng(31337)
+  let board = randBoard(r, ['a', 'b', 'c'])
+  for (let step = 0; step < 20; step++) {
+    const next = mutate(r, board)
+    const prev = unitize(board).units
+    const nextUnits = unitize(next).units
+    assert.deepStrictEqual(diffFromPosition(positionOf(prev), nextUnits), diffUnits(prev, nextUnits),
+      `position-based diff diverged at step ${step}`)
+    board = next
+  }
+})
+
+// A resume may be answered from a position many changes old, so the patch has to carry a holder across the
+// whole gap in one hop — not just across the most recent change.
+test('a position several changes old still carries a holder exactly to the present', () => {
+  const r = rng(90210)
+  const start = randBoard(r, ['a', 'b'])
+  const startUnits = unitize(start).units
+  const remembered = positionOf(startUnits)
+  let board = start
+  for (let i = 0; i < 9; i++) board = mutate(r, board)
+  const nowUnits = unitize(board).units
+  const caught = applyDeltaUnits(startUnits, diffFromPosition(remembered, nowUnits))
+  assert.strictEqual(tagOf(caught), tagOf(nowUnits), 'a nine-change gap did not close in one patch')
+  assert.deepStrictEqual(boardFromUnits(unitValues(caught)), board)
+})
+
+// A hand-written hash is only acceptable while something pins it to a real one. This is that pin: the
+// fallback runs on every platform under test, not only on the insecure origins where it is the ONLY path —
+// so a defect in it fails here rather than silently on the address a human actually opens.
+test('the WebCrypto-free digest agrees with the platform one, over many random boards', async () => {
+  const r = rng(5150)
+  for (let i = 0; i < 24; i++) {
+    const units = unitize(randBoard(r, ['a', 'b', 'c'])).units
+    const expected = tagOf(units)
+    assert.strictEqual(tagOfWithoutWebCrypto(units), expected, `hand-written digest diverged on board ${i}`)
+    assert.strictEqual(await tagOfAsync(units), expected, `platform digest diverged on board ${i}`)
+  }
+})
+
+// SHA-1 pads by message length, so the interesting inputs are the ones that straddle a block boundary
+test('the WebCrypto-free digest handles every length around a block boundary', () => {
+  const r = rng(6060)
+  for (const n of [0, 1, 54, 55, 56, 57, 63, 64, 65, 119, 120, 127, 128, 1000]) {
+    const bytes = new Uint8Array(n)
+    for (let i = 0; i < n; i++) bytes[i] = Math.floor(r() * 256)
+    const units = new Map([['k', { j: new TextDecoder().decode(bytes), v: null }]])
+    assert.strictEqual(tagOfWithoutWebCrypto(units), tagOf(units), `diverged at message length ${n}`)
+  }
 })
 
 test('P violation (duplicate node id) is reported, never silently decomposed', () => {

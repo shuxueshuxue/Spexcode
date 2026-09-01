@@ -32,11 +32,32 @@ the legacy contract, kept verbatim for old clients: a bare `graph-changed` signa
 `/api/graph` on its ETag/304 path. **Delta mode** (`?mode=delta`) inverts who fetches: the server sends a
 full snapshot on every (re)connect (`graph-full {to, graph}`), then per change either the hash-chained patch
 (`graph-delta {from, to, set, del}`) or a fresh full when the patch wouldn't win — the algebra, and the
-proof that this renders exactly what refetching would, is [[graph-delta]]'s contract. The cached anchor
-snapshot a connecting subscriber is seeded with lives exactly as long as its subscriber era: with zero
-delta subscribers nothing rebuilds on change, so the anchor dies with the era's last unsub (and a build
-that completes after it caches nothing) — a new era's first frame is a fresh build, never a kept frame
-from before the gap, whose missing sessions would empty the client's warm-terminal panes (issue #70).
+proof that this renders exactly what refetching would, is [[graph-delta]]'s contract. The `to` a frame
+carries is not this module's own hash of the board: it is the board's identity as [[graph-cache]] computed
+it at build time, the same value `/api/graph` publishes as its validator. One tag for both lanes is what
+lets a client name a push-delivered board on the conditional-request lane, so the cold fallback poll behind
+this stream stays bodyless while the stream is doing its job ([[dashboard-shell]] holds that end). **A client says where it is; the server does not have to guess.** The stream remembers the last
+RESUME_DEPTH boards it published, each as a [[graph-delta]] Position — serializations only, shared with the
+snapshot they came from, so remembering 64 of them costs under a megabyte against 650KB for one snapshot.
+A connecting subscriber names its position (a `from` query parameter, which covers every reopen; SSE's own
+`Last-Event-ID` is accepted as a bonus but is not the mechanism — measured, a browser omits it entirely
+from an explicit `new EventSource()` and does not send it reliably even on its own auto-reconnect). If that
+position is still remembered the subscriber is owed only the difference to now; otherwise it is owed
+everything. Measured on the dogfood board: a reconnect after a 30–60s gap needs 0.37% of a snapshot, and
+reconnects are not rare — every backend hot-reload drops every open tab's stream.
+
+This is why the memory may outlive a subscriber gap where a single cached anchor could not. The old hazard
+was serving a stale cached FRAME to the next era's first subscriber, whose missing sessions would empty the
+client's warm-terminal panes (issue #70), which forced a whole regime: the anchor died with its era's last
+unsub, a build completing after that unsub cached nothing, and a new era's first frame had to be a fresh
+build rather than an heirloom. A position is never sent. It is only subtracted from the board that is true
+NOW, so age cannot make it wrong — only unreachable, and unreachable degrades to a full. Four rules about
+when a shared anchor is still valid collapse into one local lookup with an obvious answer. A snapshot that
+failed the unitize precondition is remembered with a null position: its tag still orders the chain, but
+nothing may resume from it. Seeding a subscriber is deliberately OFF the connect path's critical section —
+a cold first build takes seconds, and a stream that opens and then goes silent past the client's dead
+window is indistinguishable from a dead one, so awaiting it there would turn every cold start into a
+reconnect storm.
 
 **Every change signal carries its domain.** `fireChanged(scope)` — 'sessions' or 'full' — feeds
 [[graph-cache]]'s scoped invalidation, so a session-only change is answered by the sessions SPLICE (fresh
@@ -184,7 +205,12 @@ well as its trigger tags, so a product latency reading can allocate route/store,
 transport, and browser time without treating a wall-clock gap as one opaque number. The trigger set is what
 caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
 tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
-exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db, refs, worktrees, project-root) deliberately blinds
+exactly the machines that need it. The gate is load-bearing and it is also this lane's blind spot, stated here rather than left to be
+rediscovered: with no delta subscriber the patrol does not run, so a change no watcher saw is noticed by
+nobody. That is not the patrol's bug to fix — a closed dashboard must cost nothing — but it means the
+patrol cannot be the ONLY unprompted sampler. [[graph-cache]] closes it from the other side: a read whose
+last input sample has aged past this same cadence starts one, so whoever is actually looking pays, and with
+nobody looking nothing runs. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db, refs, worktrees, project-root) deliberately blinds
 a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
 generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains

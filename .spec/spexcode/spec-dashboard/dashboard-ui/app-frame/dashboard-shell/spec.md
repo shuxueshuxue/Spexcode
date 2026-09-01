@@ -16,6 +16,10 @@ related:
   - spec-dashboard/src/project.js
   - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/streamHeartbeat.test.mjs
+  - spec-dashboard/test/board-poll-bodyless.e2e.mjs
+  - spec-dashboard/test/board-divergence-self-heals.e2e.mjs
+  - spec-dashboard/test/board-digest-fallback.e2e.mjs
+  - spec-dashboard/src/streamCtorThrow.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
   - spec-dashboard/THEME-CREDITS.md
@@ -153,8 +157,15 @@ default; a fresh `ok` or `denied` always applies — denied is an answer, a mid-
 **Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
 primary is the **delta subscription** ([[graph-stream]]/[[graph-delta]]): whole boards arrive over the push
 channel — a full on connect, then patches the data layer applies to its unit-map mirror — straight into
-state, no refetch per change; a patch whose chain tag mismatches reopens the stream and re-anchors on the
-fresh full. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
+state, no refetch per change; a patch whose chain tag mismatches reopens the stream, naming the position it
+already holds so the server answers with the difference rather than a snapshot.
+
+**A reopen resumes only what was verified.** The distinction is not liveness versus correctness by
+accident — it is exactly which reopens may trust their own contents. A stream that went quiet, or a frame
+that was missed or reordered, leaves this client holding a board it fingerprinted and believes, so it names
+that position and is carried forward from it. A fingerprint that disagreed with the frame that produced it
+leaves the opposite: the thing a resume would start from is the suspect, so that reopen discards and asks
+for everything. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
 surface reflects the change at once, and an old backend that only speaks bare `board-changed` downgrades the
 subscription to exactly this refetch path. Third, a **slow fallback poll that always runs** as the final belt. Between them a **heartbeat dead-man switch**
 holds the stream to its contract: the server pings on a fixed cadence, so silence past 2.5× that window means
@@ -165,14 +176,63 @@ ping cadences by test, never a per-channel copy. Detection is **event-driven, no
 stream event (pings included) re-arms one one-shot timer, so on a healthy link liveness costs zero wakeups and
 nothing ever fires. On a breach it reopens (board-full re-anchors and repaints), re-arms to keep watching the
 replacement, and kicks the ETag refetch, so catch-up is instant; a frozen tab runs no timers, so its overdue
-one-shot fires on resume and converges likewise. The poll's cost is zeroed by conditional
+one-shot fires on resume and converges likewise. **A stream that never came up is a breach like any other.**
+The switch is armed from the subscribe instant for exactly that case, so the breach must re-arm even when
+there is no EventSource to close — a constructor that throws (a blocked or failed origin) raises no error
+event, so nothing else is watching it. Treating that as "nothing to reopen" and returning early is the one
+shape that disarms the switch permanently: the stream is then tried once and never again, and recovery
+falls silently to the poll. The poll's cost is zeroed by conditional
 requests: `loadGraph` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
-the repaint, so no failure mode is staler than the poll period. That guarantee holds only while the
-conditional key is the identity of the board actually DISPLAYED: the ETag latches when its body paints
-(never from a response a fresher board superseded), and a pushed board clears it — the display's identity
-is then a delta-chain tag the HTTP lane can't express, so the next poll goes unconditional once and
-re-earns its 304s from a painted response. A key that outlives its paint would let the poll 304 forever
-against a board nobody sees, turning push-delivered staleness permanent. Because pushed boards and in-flight fetches can
+the repaint, so no failure mode is staler than the poll period.
+
+**The conditional key is MEASURED, not remembered.** It is the fingerprint of the units this client is
+actually holding — `tagOf` over [[graph-delta]]'s canonical bytes, computed here — never the tag the server
+handed us. Echoing a server-issued tag is a receipt: it attests that a frame arrived, and says nothing
+about what applying it produced, so a client whose apply had diverged would quote it with perfect
+confidence and be answered 304 — the lane certifying a board nobody holds. A self-computed fingerprint
+depends on the bytes on this machine, so that state cannot survive one exchange. It also retires the
+key-outlives-its-paint hazard (issue #70) STRUCTURALLY rather than by discipline: there is no stored key to
+go stale, only a function of the display, so no latch can be forgotten and no seal misplaced. What it names
+is the board this client has ACCEPTED from the server, which is what a transfer decision is about; the
+session-eval generation guard is a rendering policy layered above that and deliberately not part of it.
+
+**Every applied frame is checked, and the check is the same computation as the key.** After applying a
+patch the shell fingerprints what it now holds and compares it to the tag the frame was named with. Equal
+discharges [[graph-delta]]'s equivalence obligation for that frame on this client, and the hash is then the
+poll's conditional key — verification and the 304 lane are ONE computation, not two mechanisms. Unequal
+means the apply produced a board the server never had: the chain check cannot see it (a patch whose
+from/to line up but whose content does not), and it is the one state the equivalence proof exists to
+exclude. So it is loud (`BOARD-DIVERGENCE`, in the same register as [[graph-stream]]'s patrol repairs —
+the target is zero) and it self-heals by reopening onto a fresh anchor. Measured with an injected patch
+whose content contradicted its tag: detected in 15ms, replacement stream open 185ms later. The digest does not depend on a secure
+context. `crypto.subtle` exists only in one, and this product's dashboards are opened over plain HTTP on
+tailnet addresses — measured in Chromium, `isSecureContext` is false and `crypto.subtle` undefined on the
+very address a human uses. A WebCrypto-free digest ([[graph-delta]]) therefore backs the platform one, so
+this lane is live where the product actually runs rather than only on localhost and the TLS gateway; it
+costs 17ms against WebCrypto's 4ms on a 429-unit board, 0.15% of the interval between frames. And if the
+digest is unavailable for any reason at all, computing the key answers with NO key and the poll goes
+unconditional — what the belt cost before there was a key. A missing digest may cost this lane its
+CHEAPNESS; it may never cost the lane itself. A key computation that REJECTS takes `loadGraph` down with
+it, and with it the fallback poll, the dead-man's kick and the retry, leaving a board that is stale forever
+while the shell still reports the stream live — which is precisely the state everything here exists to make
+unreachable.
+
+Before this, that state was survivable only because the poll was resyncing unconditionally every period:
+real recovery, but silent, ~15 seconds slow, and paid for with a full snapshot on every poll forever. The
+fingerprint is what lets the cheap lane and the honest lane be the same lane.
+
+**Both lanes name the board with the same tag, or the fallback stops being a fallback.** The server's
+validator IS the delta chain's content tag ([[graph-cache]] computes the one identity; [[graph-delta]] owns
+the algebra), so a push-delivered board is expressible on the conditional-request lane and the poll keeps
+earning its 304s while the stream works. When the two lanes named the board differently the shell had no
+way to say what it was holding, so every pushed frame dropped the key and the next poll went unconditional
+— and because a patch arrives more often than the poll period on any board worth watching, "unconditional
+once" was in practice unconditional always. Measured on the dogfood board before this was one tag: over 105
+seconds, one tab, the stream delivered its whole job in a single full plus six patches totalling 53KB,
+while the poll beside it re-downloaded the complete board five times out of seven — 3.2MB carrying, by unit
+comparison against the board the client had already applied, zero changed units. The pathology inverted the
+design: the better the push channel worked, the more full snapshots the belt behind it shipped. A fallback
+whose cost scales UP with the primary's success is not a belt, it is a second primary nobody sized for. Because pushed boards and in-flight fetches can
 interleave, the shell stamps every application with a monotonic sequence — a pushed board is freshest by
 channel order, so it bumps the sequence and invalidates any older fetch still in flight; a superseded
 response is dropped, never painted. Without that guard a just-closed session resurrects: the post-close

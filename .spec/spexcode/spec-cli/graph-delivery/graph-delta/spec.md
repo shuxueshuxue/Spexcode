@@ -32,8 +32,8 @@ per array, one `meta` remainder — and two snapshots diff into a `{set, del}` p
 **tags**. A subscriber on `/api/graph/stream?mode=delta` gets one full snapshot on every (re)connect, then a
 patch per change, and applies it only when its tag matches the patch's `from`; any mismatch reopens the
 stream, which re-anchors on a fresh full. The decomposition, diff, apply, and reconstruction live in one
-pure module with no I/O, mirrored by the dashboard's data layer, so the correctness argument closes over
-functions a property test can sweep.
+pure module with no I/O that the dashboard's data layer IMPORTS rather than mirrors, so the correctness
+argument closes over the functions actually running on both sides — and a property test sweeps those.
 
 **Equivalence is proved, not assumed.** The co-located `equivalence.md` carries the argument: reconstruction
 is a bijection wherever ids are collision-free (the precondition is *checked* per snapshot — a violation
@@ -50,8 +50,8 @@ refetches. The full snapshot itself — the first paint and the resync path — 
 (its evals cut took it ~576KB → ~270KB), and the two compose: leaner fulls, thinner deltas.
 
 The transport that carries these frames — event sources, debounce, subscriber gating, the legacy
-`graph-changed` mode — stays [[graph-stream]]'s contract; the client wiring (apply mirror, fallback
-stand-down) stays [[dashboard-shell]]'s. This node owns the algebra: units, tags, diff, apply, and the
+`graph-changed` mode — stays [[graph-stream]]'s contract; the client wiring (what it holds, when it
+verifies, the fallback belt) stays [[dashboard-shell]]'s. This node owns the algebra: units, tags, diff, apply, and the
 equivalence obligations anything touching them must keep true.
 
 The unit decomposition lives in `@spexcode/spec-core`, not in the CLI, because the guarantee that
@@ -61,7 +61,48 @@ would be a second answer to "which unit kinds exist". The browser-safe `@spexcod
 entry exports the zero-I/O unit algebra (`unitize`, `unitKeyKind`, diff, apply, reconstruction, and unit
 values); its module graph contains no `node:*` import. The existing `.` entry stays Node-side and retains
 tags plus every existing export, so browser consumers have an explicit pure boundary without changing
-Node consumers' resolution.
+Node consumers' resolution. The dashboard IMPORTS that entry rather than mirroring it. A mirror was the
+earlier arrangement and it did what mirrors do: the two copies drifted, and not cosmetically — the client's
+units carried no serialization, ran no bijection check, and shaped `#order` differently. A client that
+cannot serialize a unit cannot state what it holds, so the drift was not untidiness; it was the thing
+standing between this system and its own strongest guarantee.
+
+**The tag has one definition of WHAT is hashed, and two of HOW.** `tagBytes` is the canonical byte
+sequence — every unit as `key \0 serialization \0`, keys sorted so map order cannot matter. Over those
+bytes, the Node side takes a `node:crypto` digest and a browser takes a WebCrypto one. Which digest API is
+reachable is a platform question and belongs at that boundary; what the bytes ARE is product semantics and
+may have exactly one answer, because two answers would let both sides pass their own tests while
+disagreeing with each other — and disagreeing in the direction that certifies a board nobody holds. There are two HOWs on the browser side as well: `crypto.subtle` exists only in a secure context, and this
+product's dashboards are opened over plain HTTP on tailnet addresses, so a WebCrypto-free digest backs it.
+Without that the fingerprint lane would be inert exactly where the product runs — a holder could not state
+what it has, no frame could be verified, and the conditional lane would fall back to whole snapshots. All
+of them are held byte-equal by test, over random boards and over every message length that straddles a
+block boundary, not by inspection: a hand-written hash is acceptable only while something pins it to a real
+one, and the pin must run on the platforms that have a real one, or the defect surfaces only on the
+platform that does not.
+
+**A holder can therefore state its own identity, and that changes what a tag is FOR.** Until now a tag was
+something the server asserted and a client repeated. A client that computes `tagOf` over the units it
+actually holds is making a measurement instead of quoting a receipt, and the difference is the whole
+equivalence argument moving from prose into the running system: apply a patch, fingerprint the result,
+compare it to the tag the patch was named with. Equal discharges the contract for that frame, on that
+client. Unequal is the exact failure this node's proof exists to exclude — a rendered board that is not any
+true server snapshot — and it is now observable at the moment it happens rather than inferred later, or
+never. `applyDeltaUnits` exists so that a holder carries each unit's serialization through every apply and
+can answer that question without re-serializing the whole board.
+
+**A POSITION is what a board looked like, not the board.** `positionOf` keeps each unit's serialization and
+drops its value, because the values a patch carries always come from the CURRENT snapshot — retaining a
+past board to answer "what changed since" would be paying to keep values nobody will ever send. The
+strings are shared with the snapshot they came from, so an unchanged unit is one string however many
+positions remember it: measured on the dogfood board, 14KB per remembered position against 650KB for the
+snapshot. `diffFromPosition` is the same algebra as `diffUnits` over one of these, and the two are held to
+the same answer by test — a resuming client must be carried forward by exactly the patch a live subscriber
+would have received, or the two render different boards from one server state.
+
+The consequence is what [[graph-stream]] builds on: because a position is only ever SUBTRACTED from the
+board that is true now, and never replayed, it cannot go stale. It can only become unreachable, and
+unreachable degrades to a full snapshot.
 
 That question has one answer here and nowhere else, via `unitKeyKind`. Deriving it from `unitize`'s
 body is what a reader will try, and it is wrong: the two `keyed()` calls yield four kinds and miss

@@ -4,6 +4,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { rebasePublishedSessions } from '@spexcode/spec-core'
 import { buildBoard, spliceSessions } from './graphSnapshot.js'
 import { headSha, repoRoot, requireGitWorkspace, withGitAbortSignal } from '@spexcode/spec-core'
+import { unitize, tagOf, type Units } from '@spexcode/spec-core'
 import { listSessionIds, mainBranch, mainCheckout, readPublicRecordEntry, sessionArtifactPath, sessionRecordPath } from '@spexcode/spec-core'
 import { boardThreads } from './issues.js'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
@@ -16,7 +17,12 @@ import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'
 export type BoardRead = { board: Board; freshness: 'fresh' | 'stale'; refreshing: boolean; error?: string }
-export type BoardJsonRead = BoardRead & { json: string }
+// the board's identity: its serialization, its unit decomposition, and the content tag over that
+// decomposition. `ok` is [[graph-delta]]'s bijection precondition — false means the units dropped a
+// colliding id, so the tag no longer distinguishes this board from another and may not be quoted as one.
+export type BoardIdentity = { json: string; units: Units; ok: boolean; tag: string }
+// `tag` is null exactly when the identity is not faithful, so a caller cannot accidentally publish one.
+export type BoardJsonRead = BoardRead & { json: string; tag: string | null }
 export type RevisionPublication = {
   revision: () => number
   invalidate: () => void
@@ -336,14 +342,20 @@ const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 // fires on a genuine wedge.
 const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 120000)
 const RETRY_BACKOFF_MS = Number(process.env.SPEXCODE_BOARD_RETRY_BACKOFF_MS || 1000)
+// How long a cached board may be SERVED on the strength of a past verification before a read pays for a
+// fresh one. Sized to [[graph-stream]]'s patrol cadence so a board's freshness contract is the same
+// whoever happens to be checking it.
+const VERIFY_MAX_AGE_MS = Number(process.env.SPEXCODE_BOARD_VERIFY_MAX_AGE_MS || 15000)
 const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS || 300)
 
 // The structural/full and sessions obligations are deliberately separate. A full build can take seconds;
 // a persisted session row cannot be silently converted into time behind that unrelated topology work.
 type Scope = 'sessions' | 'full'
 let cached: Board | null = null   // last completed build; served while `dirty === 'none'`
-let cachedJson: string | null = null   // JSON.stringify(cached), serialized ONCE per build (see getBoardJson)
+let cachedIdentity: BoardIdentity | null = null   // serialization + units + tag of `cached`, computed ONCE per build (see boardIdentity)
 let cachedRevision: BoardInputRevision | null = null // input revision represented by `cached`
+let verifiedAt = 0   // when `cached`'s inputs were last SAMPLED off disk, not merely assumed unchanged
+let verifyFlight: Flight | null = null   // a read-driven verification: not an obligation, not a refresh
 let dirty: Scope | 'none' = 'full'   // no cached board yet → the first read builds fully
 type Flight = { wait: Promise<Board>; settle: Promise<Board> }
 let inflight: Flight | null = null
@@ -404,7 +416,7 @@ function startSessionSplice(): Flight | null {
       const rootTransition = carrySubtractiveWorktrees(revision, projectedRoots)
       const carried = stable ? rootTransition.revision : revision
       cached = board
-      cachedJson = null
+      cachedIdentity = null
       cachedRevision = revisionCarriedBySessionSplice(carried, before, board, stable)
       sessionProjectionPublication++
       if (rootTransition.added) mergeDirty('full')
@@ -494,6 +506,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         const anchor = cachedRevision
         const sampledGen = gen
         const before = await boardInputRevision(prev)
+        verifiedAt = Date.now()   // the inputs were just read; whatever this flight concludes, that is a fact
         if (controller.signal.aborted)
           throw Object.assign(new Error('graph build aborted before producer start'), { name: 'AbortError' })
         // ONE rule for every refresh: the domain a producer runs is DERIVED from the inputs that actually
@@ -607,7 +620,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         mergeDirty('sessions')
       }
       cached = board
-      cachedJson = null
+      cachedIdentity = null
       cachedRevision = completedRevision
       if (buildScope === 'full') topologyGeneration++
       else sessionProjectionPublication++
@@ -715,28 +728,58 @@ export function patrolBoard(): Promise<Board> {
 
 export async function readBoard(consistency: BoardConsistency = 'fresh'): Promise<BoardRead> {
   if (consistency === 'stale-ok' && cached) {
-    const stale = dirty !== 'none' || inflight !== null || sessionFlight !== null || sessionOwed
     // A held session splice already owns this refresh. Returning stale bytes must not manufacture a full
     // producer beside it; a real full obligation still starts its one structural producer independently.
-    const flight = inflight
+    const owed = (inflight && inflight !== verifyFlight ? inflight : null)
       ?? (dirty === 'full' ? startBuild('dirty') : null)
       ?? sessionFlight
       ?? (sessionOwed ? startSessionSplice() : null)
       ?? (dirty === 'sessions' ? startBuild('dirty') : null)
-    return { board: cached, freshness: stale ? 'stale' : 'fresh', refreshing: !!flight, ...(lastFailure ? { error: lastFailure.message } : {}) }
+    // @@@ a read pays for the freshness it is claiming - none of the producers above run when the board is
+    // considered clean, and "considered clean" is exactly what a MISSED watcher event leaves behind: `dirty`
+    // never moved, so nothing is owed, so nothing re-reads disk, and the cached board is served as current
+    // for as long as it is asked for. [[graph-stream]]'s patrol is the only thing that samples the inputs
+    // unprompted, and it is gated on having a delta subscriber — so a polling-only client (a script, a CI
+    // job, a dashboard behind an SSE-hostile proxy) has NOBODY checking on its behalf, and is answered 304
+    // against a board that no longer exists. Reproduced on a quiet fixture: a spec node written while the
+    // project-root watcher was blinded stayed invisible across every poll, for as long as the polling ran.
+    //
+    // So a read whose verification has aged past the patrol's own cadence starts one. It does not wait for
+    // it — this caller still returns last-good bytes immediately — but the next reader gets the truth. The
+    // cost lands on whoever is actually reading, which keeps the property that made the patrol
+    // subscriber-gated in the first place: with nobody looking, nothing runs.
+    //
+    // A verification is NOT a refresh, and saying so cost a real contract before this distinction existed:
+    // `x-spexcode-graph` speaks two words, `fresh` and `stale, refreshing`, and a reader waiting for `fresh`
+    // waits on the board's state — not on whether some background check happens to be running. A check that
+    // may well conclude nothing moved must not tell every idle reader its bytes are being superseded.
+    if (!owed && Date.now() - verifiedAt > VERIFY_MAX_AGE_MS) verifyFlight = startBuild('patrol')
+    const stale = dirty !== 'none' || sessionOwed || sessionFlight !== null || !!owed
+    return { board: cached, freshness: stale ? 'stale' : 'fresh', refreshing: !!owed, ...(lastFailure ? { error: lastFailure.message } : {}) }
   }
   const board = await getBoard()
   return { board, freshness: 'fresh', refreshing: false }
 }
 
-// the SERIALIZED board for the /api/graph route — JSON.stringify runs ONCE per build, not once per poll,
-// so a poll storm of cache hits costs zero serialization CPU (only the etag hash for the 304 path). The SSE
-// path still takes the object (getBoard) because it decomposes it into delta units ([[graph-delta]]).
+// @@@ one identity per build - a board's bytes, its unit decomposition and its content tag are three
+// views of the same snapshot, so they are produced together, once, where the board is built. Both delivery
+// lanes then quote the SAME tag rather than each hashing its own answer to "which board is this": the SSE
+// chain's `to` and the HTTP ETag become one value, which is what lets a push-delivered board keep the
+// fallback poll bodyless ([[graph-delta]]). Computing it once is also the cheaper half — a poll storm of
+// cache hits costs zero serialization and zero hashing, and a patrol tick that returns the anchor object
+// re-serializes nothing.
+export function boardIdentity(board: Board): BoardIdentity {
+  if (board === cached && cachedIdentity !== null) return cachedIdentity
+  const json = JSON.stringify(board)
+  const { units, ok } = unitize(board as Record<string, unknown>)
+  const identity: BoardIdentity = { json, units, ok, tag: tagOf(units) }
+  if (board === cached) cachedIdentity = identity   // memoize only the CURRENT build's identity
+  return identity
+}
+
+// the SERIALIZED board plus its publishable tag for the /api/graph route.
 export async function getBoardJson(consistency: BoardConsistency = 'fresh'): Promise<BoardJsonRead> {
   const result = await readBoard(consistency)
-  const board = result.board
-  if (board === cached && cachedJson !== null) return { ...result, json: cachedJson }
-  const json = JSON.stringify(board)
-  if (board === cached) cachedJson = json   // memoize only the CURRENT build's serialization
-  return { ...result, json }
+  const { json, ok, tag } = boardIdentity(result.board)
+  return { ...result, json, tag: ok ? tag : null }
 }

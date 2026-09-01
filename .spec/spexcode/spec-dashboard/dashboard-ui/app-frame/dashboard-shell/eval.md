@@ -110,6 +110,64 @@ scenarios:
       stays stale and the pane's only recovery is a hard refresh: the blackhole this scenario forbids.
       Zero loss = no interleaving of pushed boards and in-flight fetches leaves the 304 lane certifying a
       board nobody is seeing.
+  - name: digest-loss-costs-cheapness-not-the-lane
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js]
+    related: [packages/spec-core/src/graph-delta.ts]
+    description: >-
+      Drive the dashboard in a real browser at the INSECURE origin a human actually opens — a plain-HTTP
+      tailnet address, not localhost — and confirm the premise first: isSecureContext false and
+      crypto.subtle undefined. Watch every /api/graph response and the conditional key it carried. Then
+      load it again with crypto.subtle.digest replaced by a function that rejects, and watch the same
+      thing.
+    expected: >-
+      On the insecure origin the fingerprint lane is LIVE: polls carry a conditional key and are answered
+      bodyless when the board has not moved, because the digest does not depend on a secure context. With
+      the digest broken outright the lane survives at its old price: the fallback poll keeps firing on its
+      period, carrying NO key and taking full bodies. What must never happen is the third outcome — a
+      digest that rejects taking loadGraph down with it, so the belt, the dead-man's kick and the retry
+      all stop and the board is stale forever while the shell still reports the stream live. Zero loss =
+      the cheap lane works where the product runs, and losing it costs only its cheapness.
+  - name: applied-frame-is-self-verified
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js]
+    related: [packages/spec-core/src/graph-delta.ts]
+    description: >-
+      Real browser against a live backend. Wrap the page's own EventSource and corrupt exactly ONE
+      graph-delta before the data layer sees it — mutate a unit inside `set` while leaving `from` and `to`
+      untouched, which is what a server-side diff bug looks like on the wire and is invisible to the chain
+      check. Then watch, without reloading: the console, how many board streams the page opens, and every
+      /api/graph response with the conditional key it carried.
+    expected: >-
+      The client detects that applying the patch produced a board the server never had — it fingerprints
+      what it now holds and finds it differs from the tag the frame was named with — says so loudly
+      (BOARD-DIVERGENCE, naming both tags), and self-heals by reopening onto a fresh anchor, all within a
+      second and without a reload. It must NOT quietly absorb the patch: a client that echoes the server's
+      tag instead of measuring its own would quote that tag with confidence and be answered a bodyless 304,
+      certifying a board nobody holds until the tab is hard-refreshed. Zero loss = a rendered board that is
+      not any true server snapshot is observable at the moment it happens, on the cheap lane, rather than
+      inferred later or masked by re-downloading the whole graph every poll.
+  - name: pushed-board-keeps-poll-bodyless
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js, spec-dashboard/src/App.jsx]
+    related: [spec-cli/src/index.ts, spec-cli/src/graphCache.ts]
+    description: >-
+      Real browser against a live backend on a board that is genuinely moving, so patches actually flow.
+      Load the dashboard and watch BOTH channels for ~95 seconds without touching the tab: every
+      /api/graph response with the conditional key the request carried, and every push frame the page's
+      own EventSource received. For each response that still carries a full body, decompose it into
+      units and compare against the board the page was holding at that instant, so a full body is judged
+      by what it ADDS rather than by its size.
+    expected: >-
+      While the push channel is delivering, the fallback poll beside it stays bodyless. Every poll that
+      fires once a pushed board is the display carries a conditional key naming that board — the same
+      content tag the frame did, because both lanes name a board the same way — and is answered with a
+      bodyless 304. A full body is permitted ONLY where it is earned: the boot poll before any board has
+      landed, and a poll that catches real divergence, which must then carry units the display genuinely
+      lacked (its sibling obligation is push-stale-poll-corrects, which requires exactly that 200). Zero
+      loss = no poll ever re-downloads the whole graph while holding every unit of it; the belt behind a
+      working stream costs headers, and the cost of the fallback never scales UP with how well the
+      primary is working.
   - name: idle-heartbeat-costs-nothing
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/data.js, spec-dashboard/src/heartbeat.js]

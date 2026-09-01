@@ -38,6 +38,9 @@ export function normalizeTabs(raw, isDocument = () => true) {
   for (const t of raw) {
     if (!isDocument(t.page, t.param ?? null)) continue
     const tab = { page: t.page, param: t.param ?? null, query: t.query ?? null }
+    if (tab.page === 'sessions' && tab.param && tab.param !== 'new' && typeof t.title === 'string' && t.title.trim()) {
+      tab.title = t.title
+    }
     const key = tabKey(tab)
     if (seen.has(key)) continue
     seen.add(key)

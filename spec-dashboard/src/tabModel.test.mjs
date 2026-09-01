@@ -121,6 +121,15 @@ test('persisted marks from older releases are dropped, and duplicates collapse t
   assert.ok(tabs.every((tab) => !('pinned' in tab) && !('held' in tab) && !('preview' in tab)))
 })
 
+test('session tab titles are presentation metadata that survive the persisted tab normalization', () => {
+  const tabs = normalizeTabs([
+    { page: 'sessions', param: 'closed-session', query: null, title: 'Closed session' },
+    { page: 'file', param: 'README.md', query: null, title: 'ignored on non-session tabs' },
+  ])
+  assert.deepEqual(tabs[0], { page: 'sessions', param: 'closed-session', query: null, title: 'Closed session' })
+  assert.deepEqual(tabs[1], { page: 'file', param: 'README.md', query: null })
+})
+
 test('resource closing returns to its session before the new-session page', () => {
   const owner = session('s1')
   const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }

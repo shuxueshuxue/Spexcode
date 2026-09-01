@@ -56,11 +56,12 @@ test('tab dragging reorders during motion and treats the strip tail as an end la
 })
 
 test('session tabs use the shared visible title, not the stable search handle', () => {
-  assert.match(source, /import \{ STATUS_COLOR, sessionHeadline \} from '\.\/session\.js'/)
-  assert.match(source, /const title = s \? sessionHeadline\(s\) : \(rememberedSessionTitle\(tab\.param\) \|\| tab\.param\.slice\(0, 8\)\)/)
-  assert.match(source, /rememberSessionTitles\(sessions\)/)
+  assert.match(source, /import \{ moveTab, setTabTitle, tabKey, useTabs \} from '\.\/tabs\.js'/)
+  assert.match(source, /const title = s \? sessionHeadline\(s\) : \(tab\.title \|\| tab\.param\.slice\(0, 8\)\)/)
+  assert.match(source, /setTabTitle\(tab, title\)/)
   assert.doesNotMatch(source, /localStorage/)
   assert.doesNotMatch(source, /archive-index/)
+  assert.match(tabs, /export const setTabTitle = \(tabOrKey, title\)/)
 })
 
 test('Spec detail tabs keep the resident icon and slot while naming the focused document', () => {

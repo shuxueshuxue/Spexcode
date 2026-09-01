@@ -60,6 +60,13 @@ test('session tabs use the shared visible title, not the stable search handle', 
   assert.match(source, /const title = s \? sessionHeadline\(s\) : tab\.param\.slice\(0, 8\)/)
 })
 
+test('session tabs keep closed-session titles from the retained archive projection', () => {
+  assert.match(readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8'),
+    /<TabStrip specs=\{specs\} sessions=\{sessionsWithRetention\} route=\{route\}/)
+  assert.match(source, /apiFetch\('\/api\/sessions\/archive-index'/)
+  assert.match(source, /const sessionRows = useMemo\(\(\) => \{[\s\S]*archivedSessions/)
+})
+
 test('Spec detail tabs keep the resident icon and slot while naming the focused document', () => {
   assert.match(source, /if \(tab\.page === 'spec'\) return tab\.param \?\s*[\s\S]*?tab\.param/)
   assert.match(source, /specs\?\.find\(\(s\) => s\.id === tab\.param\)\?\.title \|\| tab\.param/)

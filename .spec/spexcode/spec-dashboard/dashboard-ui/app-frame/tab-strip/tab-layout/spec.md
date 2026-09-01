@@ -30,10 +30,10 @@ surface is the one pane that keeps its own dark ground, so its tab joins the ban
 Tab order is the stored array order. Dragging splices one entry without navigating or changing its active state;
 the shared drag gesture owns threshold, cancellation, and swallowed-click behavior. The strip wraps onto rows
 when minimum widths cannot fit, never scrolls sideways, and remains one budget band. Labels and status marks come
-from the document's existing projections. A session tab also remembers the last title it received in the
-workspace's local state, so removing a closed session from the live projection does not rename an already-open
-tab to its raw id. The strip does not fetch a second archive projection to draw a label; a selector with neither
-a live nor remembered projection shows its raw address rather than blank chrome.
+from the document's existing projections. A session tab also remembers the last title it received while the
+workspace is mounted, so removing a closed session from the live projection does not rename an already-open tab
+to its raw id. The strip does not fetch a second archive projection to draw a label; a selector with neither a
+live nor remembered projection shows its raw address rather than blank chrome.
 
 Wrapping begins while the row can still give each tab a readable face (a 128px per-tab budget), rather than
 waiting for flex-shrink to exhaust the 120px tab floor. The active tab keeps a slightly larger 132px floor for

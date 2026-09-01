@@ -22,28 +22,15 @@ const resourceLabel = (url) => {
 }
 
 const TAB_WRAP_FLOOR = 128
-const SESSION_TAB_TITLES_KEY = 'spexcode.session-tab-titles'
-
-const readSessionTabTitles = () => {
-  try {
-    const raw = JSON.parse(window.localStorage.getItem(SESSION_TAB_TITLES_KEY) || '{}')
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? new Map(Object.entries(raw)) : new Map()
-  } catch { return new Map() }
-}
-
-const rememberedSessionTitles = typeof window === 'undefined' ? new Map() : readSessionTabTitles()
+const rememberedSessionTitles = new Map()
 
 const rememberSessionTitles = (sessions) => {
-  let changed = false
   for (const session of sessions || []) {
     const id = session?.id
     const title = session ? sessionHeadline(session) : ''
     if (!id || !title || rememberedSessionTitles.get(id) === title) continue
     rememberedSessionTitles.set(id, title)
-    changed = true
   }
-  if (!changed) return
-  try { window.localStorage.setItem(SESSION_TAB_TITLES_KEY, JSON.stringify(Object.fromEntries(rememberedSessionTitles))) } catch {}
 }
 
 const rememberedSessionTitle = (id) => {

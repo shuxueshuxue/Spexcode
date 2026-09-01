@@ -86,6 +86,12 @@
   /* GEOMETRY. One corner radius for every box that is not a circle, and one spacing ladder. New rules
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
+  /* A CORNER IS PROPORTIONAL TO ITS BOX. 6px is the control rung — a button, a field, a row band — and it
+     reads as a square once the box is dialog-sized: the archive card is 980px wide, and a 6px corner on it
+     is a corner nobody sees. So there is a second rung for a surface that owns a whole region, and it is a
+     token like the first, retunable per preset (the Notion row sets both). Two rungs, not a scale: a third
+     would be a hand-written radius wearing a variable's costume. */
+  --radius-lg: 14px;
   --radius-full: 999px;
   /* THE CONVERSATION'S ONE MEASURE ([[conversation]]): the column the agent's prose, the person's quotes
      and the composer all share. One number, so the exchange has a middle to happen in at every width. */
@@ -170,6 +176,7 @@
   --term-bg: #191919; /* the app's dark page tone — the terminal stays dark in every theme */
   --ui-font: var(--ui-font-sans);
   --radius: 4px;
+  --radius-lg: 10px;
   --shadow: 0 0 0 1px rgba(15, 15, 15, .04), 0 3px 6px rgba(15, 15, 15, .08), 0 9px 24px rgba(15, 15, 15, .16);
   --wash-hover: rgba(55, 53, 47, .08);
   --wash-active: rgba(55, 53, 47, .16);
@@ -329,7 +336,6 @@ html, body, #root { height: 100%; margin: 0; }
 .rf-compact input:focus-visible,
 .cred-input:focus:focus-visible,
 .identity-search input:focus-visible,
-.proj-remove-confirm input:focus:focus-visible,
 .pa-input:focus:focus-visible,
 .pa-message:focus-visible,
 .pa-address-input:focus-visible { box-shadow: none; }
@@ -1108,7 +1114,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* ---- node overlay (multi-pane) ---- */
 /* ONE scrim for every lifted layer; a layer chooses only its stacking order and where the panel sits. */
-.ov-backdrop, .legend-backdrop, .search-backdrop {
+.ov-backdrop, .legend-backdrop, .search-backdrop, .si-archive-backdrop {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
@@ -2245,46 +2251,68 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    chrome that steps for them. */
 .si-content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; padding-left: var(--space-3); background: var(--paper); }
 
-.si-archive-backdrop {
-  position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
-  padding: 5vh 5vw; box-sizing: border-box; background: color-mix(in srgb, var(--ink) 18%, transparent);
-}
+/* THE ARCHIVE INDEX IS ONE CARD, AND EVERYTHING INSIDE IT IS THE SAME SURFACE. It used to paint its
+   header and every sticky date band --paper — a rung BELOW the --raised card holding them — so the ladder
+   ran backwards inside a single box and a lifted slab arrived striped with darker bars ([[typography]]:
+   depth has a direction). It also hand-rolled its own scrim out of --ink — a colour that FLIPS with the
+   theme — where the sheet already has ONE scrim every other lifted layer shares; in the dark presets that
+   was a near-white haze which lifted the plane behind it 14 L*, half again the shared veil's 9. Both are
+   gone: the card is --raised throughout and it takes that one scrim, while the divider rule, the space
+   between groups, and the recessed field bed do all of the separating. */
+.si-archive-backdrop { z-index: 70; padding: 5vh 5vw; box-sizing: border-box; }
 .si-archive-page {
   width: min(980px, 90vw); height: min(760px, 86vh); min-width: 0; min-height: 0;
-  display: flex; flex-direction: column; background: var(--raised); border: 1px solid var(--edge);
-  box-shadow: var(--shadow);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow); animation: pop var(--dur-pop) ease;
 }
 .si-archive-head {
-  flex: 0 0 auto; min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px;
-  padding: 14px 24px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--paper);
+  flex: 0 0 auto; min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-7);
+  padding: var(--space-5) var(--space-7); box-sizing: border-box; border-bottom: var(--divider-rule);
 }
-.si-archive-head > div { min-width: 0; }
-.si-archive-head h1 { margin: 0; color: var(--ink); font-size: var(--type-title); line-height: var(--leading-ui); letter-spacing: var(--tracking-normal); }
+.si-archive-head > div { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.si-archive-head h1 { margin: 0; color: var(--ink2); font-size: var(--type-heading); line-height: var(--leading-tight); letter-spacing: var(--tracking-normal); }
 .si-archive-head > div > span { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); }
+/* the one recessed thing on the card: a field is a BED, not a rung of the ladder, which is what --field-bg
+   names — the same answer the command palette's own search bar already spends. */
 .si-archive-search {
-  width: min(420px, 52%); height: 34px; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
-  padding: 0 10px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  width: min(420px, 52%); height: 34px; box-sizing: border-box; display: flex; align-items: center; gap: var(--space-4);
+  padding: 0 var(--space-5); color: var(--muted); background: var(--field-bg); border: 1px solid var(--edge); border-radius: var(--radius-full);
 }
 .si-archive-search:focus-within { color: var(--blue); border-color: var(--blue); }
 .si-archive-search input { flex: 1; min-width: 0; padding: 0; color: var(--ink); background: transparent; border: 0; outline: 0; font: var(--type-control)/var(--leading-ui) var(--ui-font); }
-.si-archive-index { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px 32px; }
+/* the scrollport carries NO top padding: the date head pins at `top: 0` and the geometry proof reads the
+   distance between the pinned head's box and this container's, so an inset here would show up as a gap.
+   The head's own top padding is inside its box, so it breathes without moving the pin. */
+.si-archive-index { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--space-5) var(--space-7); }
 .si-archive-group { max-width: 1040px; margin: 0 auto; }
 .si-archive-date {
-  position: sticky; top: 0; z-index: 2; margin: 0 -2px; padding: 14px 2px 7px;
-  color: var(--ink2); background: var(--paper); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 2; margin: 0;
+  padding: var(--space-6) var(--space-5) var(--space-3);
+  color: var(--muted); background: var(--raised); border-bottom: var(--divider-rule);
   font-family: var(--ui-font); font-size: var(--type-meta); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal);
 }
+/* AN ARCHIVE ROW IS A SESSION ROW ([[session-forest]]): an inset rounded band that wears the hover wash,
+   with no rule drawn between rows. The full-bleed hairline ledger it used to be said "table" on the one
+   surface whose own spec already declared a row grammar two paragraphs above it. The handle rides beside
+   the title only when it DIFFERS from it — the lean index carries `label` as the search key, and for a
+   session nobody renamed that key is the title again, so a column of it was the left column repeated. */
 .si-archive-page-row {
-  width: 100%; min-height: 44px; box-sizing: border-box; display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(100px, .55fr) auto 18px; align-items: center; gap: 16px;
-  padding: 7px 8px; color: var(--ink2); background: transparent; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  width: 100%; min-height: 40px; box-sizing: border-box; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: var(--space-6);
+  margin: var(--space-1) 0; padding: var(--space-3) var(--space-5);
+  color: var(--ink); background: transparent; border: 0; border-radius: var(--radius);
   text-align: left; cursor: pointer;
 }
-.si-archive-page-row:hover { background: var(--wash-hover); color: var(--ink); }
+.si-archive-page-row:hover { background: var(--wash-hover); color: var(--ink2); }
+.si-archive-row-name { min-width: 0; display: flex; align-items: baseline; gap: var(--space-4); }
 .si-archive-row-title, .si-archive-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-archive-row-title { font-family: var(--ui-font); font-size: var(--type-control); }
-.si-archive-row-label, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
-.si-archive-empty { padding: 18vh 24px; color: var(--muted); font-family: var(--ui-font); text-align: center; }
+.si-archive-row-title { font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui); }
+.si-archive-row-label { flex: none; max-width: 38%; }
+.si-archive-row-label, .si-archive-page-row time { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); }
+.si-archive-row-go { color: var(--muted); }
+.si-archive-page-row:hover .si-archive-row-go { color: var(--ink2); }
+.si-archive-empty { padding: 18vh var(--space-7); color: var(--muted); font-family: var(--ui-font); text-align: center; }
 
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
@@ -2366,6 +2394,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-launcher-btn:hover { background: var(--wash-hover); }
 .si-launcher-btn.on { border-color: var(--blue); }
 .si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+.si-launcher-add {
+  width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 4px; padding: 0; color: var(--blue); background: transparent;
+  border: 1px solid var(--line); border-radius: var(--radius-full); cursor: pointer;
+}
+.si-launcher-add:hover:not(:disabled) { background: var(--wash-hover); border-color: var(--blue); }
+.si-launcher-add:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.si-launcher-add:disabled { opacity: .45; cursor: default; }
 /* the pop-out — a viewport-CENTRED dialog over a light backdrop (not an anchored dropdown), scale-in from
    centre. Sizes to its content so a typical command preview fits on ONE line; the cap guards huge
    commands/viewports, and overflow scrolls when a project has many launchers. */
@@ -2417,6 +2453,53 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
   opacity: .75;
 }
+/* harness target dialog: a compact form inside the shared modal chrome. */
+.si-harness-modal { width: min(500px, 92vw); max-height: 86vh; }
+.si-harness-form { display: grid; gap: 12px; padding: 4px 2px 2px; }
+.si-harness-copy { margin: 0; color: var(--muted); font-size: var(--type-control); line-height: var(--leading-relaxed); }
+.si-harness-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.si-harness-fieldset legend { margin: 0 0 6px; color: var(--muted); font-size: var(--type-meta); }
+.si-harness-mode { display: flex; gap: 6px; flex-wrap: wrap; }
+.si-harness-mode label {
+  position: relative; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: var(--type-control); cursor: pointer;
+}
+.si-harness-mode label.on { color: var(--blue); border-color: var(--blue); background: var(--wash-selected); }
+.si-harness-mode input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.si-harness-mode label:has(input:focus-visible) { box-shadow: var(--focus-ring); }
+.si-harness-label { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-meta); }
+.si-harness-label select, .si-harness-label input {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 7px 9px; color: var(--ink2);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-control); outline: none;
+}
+.si-harness-label select:focus, .si-harness-label input:focus { border-color: var(--blue); box-shadow: var(--focus-ring); }
+.si-harness-label select:disabled, .si-harness-label input:disabled { opacity: .6; }
+.si-harness-empty { padding: 7px 0; color: var(--muted); }
+.si-harness-current { display: grid; gap: 4px; color: var(--muted); font-size: var(--type-meta); }
+.si-harness-current code {
+  min-width: 0; padding: 6px 8px; color: var(--ink2); background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--mono); overflow-wrap: anywhere;
+}
+.si-harness-state { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
+.si-harness-state.error { color: var(--red); }
+.si-harness-spinner { flex: none; animation: si-harness-spin .8s linear infinite; }
+@keyframes si-harness-spin { to { transform: rotate(360deg); } }
+.si-harness-output { min-width: 0; color: var(--muted); font-size: var(--type-meta); }
+.si-harness-output summary { cursor: pointer; }
+.si-harness-output pre {
+  max-height: 180px; margin: 6px 0 0; padding: 7px 8px; overflow: auto; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.si-harness-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .si-harness-modal { width: min(440px, calc(100vw - 24px)); }
+  .si-harness-mode { display: grid; grid-template-columns: 1fr 1fr; }
+  .si-harness-mode label { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .si-harness-spinner { animation: none; } }
 /* The resizable terminal pane, not the viewport, determines the terminal's breakpoint. */
 .si-session-wrap { container-type: inline-size; }
 .si-tab {
@@ -3033,10 +3116,17 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rich-text .katex-error { color: var(--red); white-space: pre-wrap; }
 
 /* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
-.m-senderr, .m-sendnote, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
+.m-senderr, .m-sendnote { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-senderr { color: var(--red); }
 .m-sendnote { color: var(--muted); }
-.m-copy-status { color: var(--muted); }
+.m-copy-status {
+  /* The composer floats at the same bottom edge. Keep the acknowledgement above its idle footprint so the
+     two transient surfaces never cover one another; the timeline itself remains completely out of flow. */
+  position: absolute; left: 50%; bottom: calc(var(--space-5) + 5rem); z-index: 5; transform: translate(-50%, 0);
+  padding: 6px 14px; color: var(--muted); background: color-mix(in srgb, var(--raised) 94%, transparent);
+  border: 1px solid var(--line); border-radius: var(--radius); font-size: var(--type-control);
+  pointer-events: none;
+}
 .m-copy-status.failed { color: var(--red); }
 /* [[session-console]]: the conversation's composer is a SURFACE the reading column floats, not a chrome
    band stacked under it — the same treatment the terminal surface gives its command box, so both session
@@ -3483,6 +3573,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .proj-act.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
 .proj-act:disabled { opacity: 0.5; cursor: default; }
 .proj-act.icon { padding: 3px 6px; }
+.proj-remove-icon { color: var(--muted); }
+.proj-remove-icon:hover:not(:disabled) { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); background: color-mix(in srgb, var(--red) 8%, transparent); }
 
 /* the shared inline drawer input (password forms) */
 .proj-add-path {
@@ -3575,12 +3667,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .proj-remove-copy { display: grid; gap: 10px; padding: 2px; color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed); }
 .proj-remove-copy p { margin: 0; }
 .proj-remove-warning { color: var(--red); font-weight: var(--weight-semibold); }
-.proj-remove-check { display: flex; align-items: flex-start; gap: 8px; color: var(--ink2); font-size: var(--type-meta); }
-.proj-remove-check input { margin-top: 3px; accent-color: var(--red); }
-.proj-remove-confirm { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-meta); }
-.proj-remove-confirm code { color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); overflow-wrap: anywhere; }
-.proj-remove-confirm input { min-width: 0; box-sizing: border-box; width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: var(--type-control); }
-.proj-remove-confirm input:focus { outline: none; border-color: var(--red); }
 .proj-remove-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
 .proj-act.danger { color: var(--red); border-color: var(--red); background: color-mix(in srgb, var(--red) 9%, transparent); font-weight: var(--weight-semibold); }
 .proj-act.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--red) 18%, transparent); }

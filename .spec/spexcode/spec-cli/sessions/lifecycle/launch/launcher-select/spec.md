@@ -68,6 +68,10 @@ is always a visible launcher choice: a still-valid remembered (per-browser) pick
 `default`, else the first visible launcher in the list. That last case is not an implicit backend fallback — the
 dashboard sends the selected launcher name explicitly. The seeded `claude`/`codex` profiles are ordinary
 configured entries (and a default may name one of them), never an implicit no-choice fallback.
+On a project-scoped New Session tab, the picker also has a plus action for extending the project's persisted
+harness delivery targets. That action is host-admin guarded and revision checked; after a successful native
+addition the settings read is refreshed so any launcher seeded from the init template becomes an ordinary
+selectable profile. A plugin target may be delivered without a launcher when no safe command template exists.
 A resolved launcher fixes the session's harness; an unknown launcher name is rejected fail-loud (a 400 from
 the create path), never silently defaulted. `--harness` and `POST /api/sessions { harness }` are not
 create-session inputs; callers use `--launcher <name>` / `{ launcher }`. CLI parsing rejects every unknown

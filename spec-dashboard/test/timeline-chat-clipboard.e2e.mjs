@@ -102,14 +102,23 @@ async function state(page) {
   })
 }
 
+async function timelineBox(page) {
+  return page.locator('.m-timeline:visible').evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, clientHeight: element.clientHeight }
+  })
+}
+
 async function runShortcutCase(name, config, expected) {
   const page = await makePage(config)
   try {
     await setComposer(page)
     const selected = await selectTimelineWord(page)
+    const beforeLayout = await timelineBox(page)
     await page.keyboard.press('Control+c')
     await page.locator('.m-copy-status').waitFor({ state: 'visible' })
     const result = await state(page)
+    assert.deepEqual(await timelineBox(page), beforeLayout, `${name}: copy status changed timeline layout`)
     assert.equal(result.probe.apiCalls, expected.apiCalls, `${name}: Clipboard API calls`)
     assert.equal(result.probe.execCalls, expected.execCalls, `${name}: fallback calls`)
     assert.equal(result.probe.apiText, expected.apiCalls ? selected : null, `${name}: API payload`)

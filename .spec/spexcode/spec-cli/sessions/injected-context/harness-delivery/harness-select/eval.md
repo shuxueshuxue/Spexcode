@@ -81,6 +81,21 @@ scenarios:
       Project-scoped Codex transport survives a sibling materialize, while the final per-tree allowlist makes
       dispatch in an unselected tree a no-op. Git status/index keep host prose honest and no user global ignore
       configuration is replaced.
+  - name: post-init-harness-target-addition
+    tags: [backend-api, cli]
+    test:
+      path: spec-cli/src/host-harness-target.test.ts
+      name: harness target addition persists targets, materializes, and is exposed through the admin route
+    code: [spec-cli/src/host.ts, spec-cli/src/harness-select.ts]
+    description: >-
+      After a real `spex init`, add a native target through the host operation, then try a plugin/native
+      mixture and a project whose persisted selection is missing. Inspect the config and materialized tree
+      after each attempt.
+    expected: >-
+      A valid addition extends the explicit selection and the real materialize output reflects the new target;
+      no implicit full-set selection is introduced. Native and plugin targets remain exclusive, and a missing
+      `harnesses` field is rejected with the normal `spex init --harness` repair rather than silently created.
+      Failed validation leaves the previous config and artifacts unchanged.
 ---
 # eval.md — harness-select
 

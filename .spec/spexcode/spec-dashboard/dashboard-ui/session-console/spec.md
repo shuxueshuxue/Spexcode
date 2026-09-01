@@ -115,8 +115,8 @@ Enter, inserts a newline on Shift+Enter, and leaves IME composition Enter to the
 is the pointer twin, while an open completion menu consumes Enter for its highlighted choice first.
 When its create response publishes a session id, the address is marked for a new tab before routing so creation
 appends a fresh workspace tab and cannot replace the session tab the reader was on.
-The picker has no configuration or add action; its pop-out exposes a settings link, and launcher profiles plus
-built-in harness delivery are owned by the routed Settings page.
+The picker has no configuration or add action; its pop-out exposes a settings link, and launcher profiles are
+owned by the routed Settings page.
 
 An existing session has one visible **surface**. A pane-backed adapter offers Terminal, Conversation, Diff, and
 published resource faces selected by the one session object address:

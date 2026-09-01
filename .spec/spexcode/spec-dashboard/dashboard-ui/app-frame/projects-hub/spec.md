@@ -49,7 +49,8 @@ KNOWN-project view ([[host-gateway]]): a repo enters the fleet by running `spex 
 the page's dedicated Add Project modal. The modal is a focused host-folder picker, not another inline
 drawer: an editable absolute-path bar and parent/home navigation select one directory while a bounded list
 shows its child folders. A typed missing path becomes a clear New project command, which creates that
-directory, initializes Git, and registers it through the host's one add workflow. The selected folder's
+directory, initializes Git, runs the neutral `spex init --harness none` foundation, and registers it through
+the host's one add workflow. The selected folder's
 actual state drives a compact setup section. An existing Git
 repo can be added as-is; a plain folder requires an explicit checked Git initialization choice. SpexCode
 initialization is independently optional, recognizes an already-initialized repo, and requires explicit
@@ -71,10 +72,12 @@ surface because it holds host-specific paths and may hold secrets. The raw JSON 
 work area: about half the viewport tall on desktop, with sensible bounds, and a large viewport-constrained
 mobile height that leaves its controls reachable without overlap. Inside that same project details drawer,
 the final, low-emphasis action is **Remove project registration**. It opens a warning rather than
-acting immediately, explains that the checkout and source files remain, requires an acknowledgement checkbox
-and exact `REMOVE <project title>` text, and then calls `DELETE /projects/:id`. The page does not expose a
-local-directory delete command. Online backends and active sessions are shown as server-side blockers with
-their repair reason, so the user is never nudged into deleting around live work. Identity editing remains a
+acting immediately, names the project, and states that the checkout and source files remain. One explicit
+confirmation button submits the canonical `REMOVE <project title>` phrase to `DELETE /projects/:id`; the page
+does not expose a local-directory delete command. The project row also exposes a trash icon that opens this same
+warning, and the icon never bypasses server-side safety checks.
+Online backends and active sessions are shown as server-side blockers with their repair reason, so the user is
+never nudged into deleting around live work. Identity editing remains a
 quiet secondary disclosure: its compact current mark and edit button reveal the shared
 searchable, source-filtered icon browser only on request. The global gateway equivalent sits in the page's low-priority
 settings/details area, never as a prominent picker block. A project pick changes only its existing

@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 import { once } from 'node:events'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -22,8 +23,6 @@ const freePort = () => new Promise((resolvePort, reject) => {
   })
 })
 
-const close = (server) => new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()))
-
 test('Projects creates a cataloged Git project from an absent folder path', async () => {
   if (!existsSync(playwrightPath)) throw new Error(`Playwright is missing: ${playwrightPath}`)
   if (!existsSync(chromiumPath)) throw new Error(`Chromium is missing: ${chromiumPath}`)
@@ -41,7 +40,7 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
   try {
     const { chromium } = await import(pathToFileURL(playwrightPath).href)
     browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
     await page.goto(`http://127.0.0.1:${port}/projects`, { waitUntil: 'domcontentloaded' })
     await page.getByRole('button', { name: 'add project' }).click()
 
@@ -60,26 +59,32 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     await page.locator('.proj-row .proj-name', { hasText: 'new-project' }).waitFor({ state: 'visible' })
     assert.equal(existsSync(project), true)
     assert.equal(existsSync(join(project, '.git')), true)
+    assert.equal(execFileSync('git', ['-C', project, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
+    assert.match(execFileSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' }).trim(), /^[0-9a-f]{40,64}$/)
+    const config = JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8'))
+    assert.equal(config.mainBranch, 'main')
+    assert.deepEqual(config.harnesses, [])
     const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
-    assert.equal(catalog.projects.some((entry) => entry.root === project), true)
+    assert.equal(catalog.projects.some((entry) => entry.root === realpathSync(project)), true)
 
-    // Removal is intentionally several decisions away from the row's primary action: open details,
-    // read the warning, acknowledge the scope, then type the exact title phrase. The checkout remains.
+    // Removal opens one concise warning. The confirm button submits the server's canonical title phrase;
+    // the checkout remains.
     const row = page.locator('.proj-row', { hasText: 'new-project' })
-    await row.getByRole('button', { name: 'edit spexcode.json' }).click()
-    await row.getByRole('button', { name: 'remove project registration' }).click()
+    await row.getByRole('button', { name: 'remove project registration' }).first().click()
     const remove = page.locator('.proj-remove-modal')
-    await remove.getByText('The local directory, Git history, and source files stay exactly where they are.', { exact: false }).waitFor()
-    await remove.getByRole('checkbox').check()
-    await remove.getByLabel('removal confirmation phrase').fill('REMOVE new-project')
-    await remove.getByRole('button', { name: 'confirm registration removal' }).click()
+    await remove.getByText('Its local directory, Git history, and source files stay in place.', { exact: false }).waitFor()
+    const confirm = remove.getByRole('button', { name: 'confirm registration removal' })
+    assert.equal(await remove.getByRole('checkbox').count(), 0)
+    assert.equal(await remove.locator('input').count(), 0)
+    assert.equal(await confirm.isEnabled(), true)
+    await confirm.click()
     await remove.waitFor({ state: 'detached' })
     assert.equal(existsSync(project), true)
     const afterRemove = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
-    assert.equal(afterRemove.projects.some((entry) => entry.root === project), false)
+    assert.equal(afterRemove.projects.some((entry) => entry.root === realpathSync(project)), false)
   } finally {
     await browser?.close()
-    await close(gateway.server)
+    await gateway.close()
     if (savedHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = savedHome
     rmSync(home, { recursive: true, force: true })

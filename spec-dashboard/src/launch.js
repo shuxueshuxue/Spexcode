@@ -57,8 +57,15 @@ const loadLauncherSettings = () => {
 // A missing field means an older backend and lets an already-loaded value survive; an explicit empty
 // array is authoritative and must clear stale UI state after a config change.
 const launcherListFrom = (d) => Array.isArray(d?.launchers) ? d.launchers : null
+// zcode is a backend-only adapter for the external zswarm integration. Keep it available to
+// materialize/session records, but do not offer it as a dashboard launch choice.
+export const isDashboardVisibleHarness = (id) => typeof id !== 'string' || id.trim() !== 'zcode'
+const dashboardLauncherListFrom = (d) => {
+  const list = launcherListFrom(d)
+  return list ? list.filter((entry) => isDashboardVisibleHarness(entry?.harness)) : null
+}
 const harnessTargetListFrom = (d) => Array.isArray(d?.harnessTargets)
-  ? d.harnessTargets.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())
+  ? d.harnessTargets.filter((id) => typeof id === 'string' && id.trim() && isDashboardVisibleHarness(id)).map((id) => id.trim())
   : null
 const rememberedLauncher = () => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } }
 const initialLauncher = (list, configuredDefault, remembered = rememberedLauncher()) => {
@@ -72,13 +79,13 @@ const initialLauncher = (list, configuredDefault, remembered = rememberedLaunche
 // honors the config default: remembered pick (if still configured) → configured `default` → first row. The
 // list is the complete configured registry — headless launchers are ordinary rows, not a hidden tier.
 export function useLaunchers() {
-  const cached = launcherListFrom(launcherSettings) || []
+  const cached = dashboardLauncherListFrom(launcherSettings) || []
   const [launchers, setLaunchers] = useState(cached)
   const [launcher, setLauncher] = useState(() => initialLauncher(cached, launcherSettings?.default))
   const [harnessTargets, setHarnessTargets] = useState(() => harnessTargetListFrom(launcherSettings) || [])
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
   const applySettings = useCallback((d, current = null) => {
-    const list = launcherListFrom(d)
+    const list = dashboardLauncherListFrom(d)
     if (list) {
       setLaunchers(list)
       setLauncher((cur) => initialLauncher(list, d.default, current ?? cur))

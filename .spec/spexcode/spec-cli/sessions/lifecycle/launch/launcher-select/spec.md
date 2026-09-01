@@ -37,9 +37,11 @@ declares it as an explicit launcher choice in `spexcode.json` or the gitignored 
 init never grants those permissions silently. There is NO runtime env or harness-specific branch that rewrites
 a launcher's command. The complete
 launcher registry therefore lists exactly the config's real launchers, and two names can never resolve to the
-same command as ghost duplicates; the dashboard picker offers that same complete list — a headless launcher is
-an ordinary row, not a hidden tier. Because a launcher NAMES a harness, picking a launcher is the ONLY user-facing launch
-selection. The old free-standing harness pick is gone.
+same command as ghost duplicates; the dashboard picker offers that same complete list of dashboard-visible launchers —
+a headless launcher is an ordinary row, not a hidden tier. External adapters reserved for integrations outside the
+dashboard remain valid in backend config and session records but are filtered from dashboard launchers, autocomplete,
+and target choices. Because a launcher NAMES a harness, picking a launcher is the ONLY user-facing launch selection.
+The old free-standing harness pick is gone.
 
 `sessions.defaultLauncher` names the profile a session with no explicit choice uses; it is required for any
 no-choice create. Omitting it is a configuration error for those create paths, reported with the repair: write

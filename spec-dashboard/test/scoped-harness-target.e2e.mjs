@@ -21,7 +21,7 @@ const stopBackend = async (entry) => {
   await new Promise((resolve) => setTimeout(resolve, 500))
 }
 
-test('scoped New Session adds a harness target and refreshes the launcher picker', async () => {
+test('scoped Settings adds a built-in harness target', async () => {
   if (!existsSync(playwrightPath)) throw new Error(`Playwright is missing: ${playwrightPath}`)
   if (!existsSync(chromiumPath)) throw new Error(`Chromium is missing: ${chromiumPath}`)
 
@@ -44,39 +44,28 @@ test('scoped New Session adds a harness target and refreshes the launcher picker
     browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
     await page.goto(`http://127.0.0.1:${gateway.server.address().port}/p/${encodeProject(setup.root)}/#/sessions`, { waitUntil: 'domcontentloaded' })
-    const prompt = page.locator('.si-input')
-    await prompt.fill('keep this draft')
-    await page.locator('[data-action="add-harness-target"]').click()
-
-    const modal = page.locator('[data-harness-target-modal]')
-    await modal.waitFor({ state: 'visible' })
-    await modal.locator('select').waitFor({ state: 'visible' })
-    assert.equal(await prompt.inputValue(), 'keep this draft')
-    assert.match(await modal.innerText(), /current targets[\s\S]*claude/i)
-    const native = modal.locator('select')
+    await page.goto(`http://127.0.0.1:${gateway.server.address().port}/p/${encodeProject(setup.root)}/#/settings`, { waitUntil: 'domcontentloaded' })
+    const settings = page.locator('[data-settings-harnesses]')
+    await settings.waitFor({ state: 'visible' })
+    const native = page.locator('.set-add-target select')
+    await native.waitFor({ state: 'visible' })
+    assert.equal((await native.locator('option').allTextContents()).includes('zcode'), false)
     await native.selectOption('codex')
-    await modal.getByRole('button', { name: 'add target' }).click()
-    await modal.waitFor({ state: 'detached' })
-
-    await page.locator('.si-launcher-picker .si-launcher-name', { hasText: 'codex' }).waitFor({ state: 'visible' })
-    assert.match(await page.locator('body').innerText(), /harness target added/i)
+    await page.getByRole('button', { name: 'Add harness' }).click()
+    await page.waitForFunction(() => document.querySelector('[data-settings-harnesses]')?.textContent?.match(/Codex/i))
     assert.deepEqual(JSON.parse(readFileSync(join(setup.root, 'spexcode.json'), 'utf8')).harnesses, ['claude', 'codex'])
 
     // A concurrent source edit invalidates the modal's revision. The modal refreshes the current revision
     // for a retry, but keeps the conflict reason visible instead of turning it into a silent reload.
-    await page.locator('[data-action="add-harness-target"]').click()
-    const conflictModal = page.locator('[data-harness-target-modal]')
-    await conflictModal.locator('select').waitFor({ state: 'visible' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const conflictSelect = page.locator('.set-add-target select')
+    await conflictSelect.waitFor({ state: 'visible' })
     const changed = JSON.parse(readFileSync(join(setup.root, 'spexcode.json'), 'utf8'))
     changed.dashboard = { ...(changed.dashboard || {}), title: 'concurrent edit' }
     writeFileSync(join(setup.root, 'spexcode.json'), `${JSON.stringify(changed, null, 2)}\n`)
-    await conflictModal.locator('select').selectOption('opencode')
-    await conflictModal.getByRole('button', { name: 'add target' }).click()
-    const conflict = conflictModal.getByRole('alert')
-    await conflict.waitFor({ state: 'visible' })
-    assert.match(await conflict.innerText(), /changed on disk/i)
-    await conflictModal.getByRole('button', { name: 'cancel' }).click()
-    await conflictModal.waitFor({ state: 'detached' })
+    await conflictSelect.selectOption('opencode')
+    await page.getByRole('button', { name: 'Add harness' }).click()
+    await page.waitForFunction(() => document.body.textContent?.match(/changed on disk/i))
   } finally {
     await browser?.close()
     await stopBackend(backend)

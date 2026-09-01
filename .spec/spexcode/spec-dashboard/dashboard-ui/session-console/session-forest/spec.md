@@ -94,9 +94,24 @@ closes on Esc or backdrop press. Choosing an index row closes the overlay and ha
 read-only Conversation, so the right pane always represents the selected session (or New Session), never an archive
 page.
 
+**The overlay is ONE card, and everything on it is that card's own surface.** It floats, so it is painted
+`--raised` and it takes the sheet's single scrim ([[typography]]); its header, its sticky date heads and its
+list are all that same tone, and the divider rule, the space between groups, and the recessed field bed are
+what separate them. Both failures this states against were live here: a header and a date band painted a rung
+BELOW the card holding them run the ladder backwards inside a single box — a lifted slab arriving striped with
+darker bars — and a scrim mixed from `--ink` is a second answer to a question the sheet answers once, wearing a
+colour that flips with the theme: in the dark presets it was a near-white haze that lifted the plane behind it
+half again as far as the shared veil does. The card wears the large corner rung because it owns a whole region, and **its rows are the forest's own row
+grammar**: an inset rounded band with the hover wash and no rule drawn between rows, not a full-bleed hairline
+ledger. A row carries the session's title, the time it closed, and a chevron that lifts out of muted under the
+pointer. The lean index also carries `label` as the SEARCH key, and for a session nobody renamed that key is the
+title again cut to a different width — so the handle is rendered beside the title only when neither string opens
+the other, while the search matches it either way.
+
 The archive index overlay reads the full closed-session lean index in one request, renders the newest-closed-first rows
 under sticky Today / Yesterday / calendar-date headings, and owns a search field that filters that complete index
-locally. Pagination is deliberately absent: the overlay's index scrollbar represents the whole result set from its
+locally. A date head pins at the scrollport's own top edge, so the scroll container carries no top inset of its
+own and the head's breathing room is its own padding. Pagination is deliberately absent: the overlay's index scrollbar represents the whole result set from its
 first paint. This overlay is the only archive-search entry; the global palette neither includes closed rows nor
 hints at hidden archive matches. Esc/backdrop closes it, and choosing a row returns to that session's ordinary
 Conversation in the right pane.

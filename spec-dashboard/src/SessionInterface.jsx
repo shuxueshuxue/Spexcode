@@ -94,6 +94,17 @@ const localDay = (time) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+// `title` and `label` are two truncations of ONE source in the ordinary case — a session nobody renamed
+// carries a 60-column prompt preview as its title and whatever the record stored as its search key — so
+// string inequality is not difference, and a handle that is the title again, cut shorter, is the left
+// column printed twice. The handle earns its place beside the title only when neither opens the other.
+const archiveHandle = (session) => {
+  const label = String(session?.label ?? '')
+  if (!label) return null
+  const [title, handle] = [String(sessionHeadline(session) ?? ''), label].map((value) => value.replace(/…$/, ''))
+  return title.startsWith(handle) || handle.startsWith(title) ? null : label
+}
+
 function ArchivePage({ sessions, onOpenSession, onClose }) {
   const { lang, t } = useI18n()
   const [query, setQuery] = useState('')
@@ -163,10 +174,12 @@ function ArchivePage({ sessions, onOpenSession, onClose }) {
             {group.rows.map((session) => (
               <button key={session.id} ref={(element) => { rowRefs.current[archiveRows.indexOf(session)] = element }} type="button" className="si-archive-page-row" data-sid={session.id}
                 onClick={() => onOpenSession(session.id)}>
-                <span className="si-archive-row-title">{sessionHeadline(session)}</span>
-                <span className="si-archive-row-label">{session.label}</span>
+                <span className="si-archive-row-name">
+                  <span className="si-archive-row-title">{sessionHeadline(session)}</span>
+                  {archiveHandle(session) && <span className="si-archive-row-label">{archiveHandle(session)}</span>}
+                </span>
                 <time dateTime={session.closedAt || undefined}>{timeLabel(session)}</time>
-                <Icon name="chevron-right" size={14} />
+                <Icon name="chevron-right" size={14} className="si-archive-row-go" />
               </button>
             ))}
           </section>

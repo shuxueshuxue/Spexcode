@@ -6,7 +6,7 @@ import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, i
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, readBoard, type Board } from './graphCache.js'
-import { diffFromPosition, positionOf, type Position, type Units } from '@spexcode/spec-core'
+import { diffFromPosition, positionOf, type Position } from '@spexcode/spec-core'
 import {
   holdSessionEvalProjectionObserver,
   invalidateSessionEvalProjections,

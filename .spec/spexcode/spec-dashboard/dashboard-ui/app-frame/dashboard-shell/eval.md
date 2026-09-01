@@ -141,7 +141,7 @@ scenarios:
     expected: >-
       The client detects that applying the patch produced a board the server never had — it fingerprints
       what it now holds and finds it differs from the tag the frame was named with — says so loudly
-      (BOARD-DIVERGENCE, naming both tags), and self-heals by reopening onto a fresh anchor, all within a
+      (GRAPH-DIVERGENCE, naming both tags), and self-heals by re-anchoring on a fresh snapshot, all within a
       second and without a reload. It must NOT quietly absorb the patch: a client that echoes the server's
       tag instead of measuring its own would quote that tag with confidence and be answered a bodyless 304,
       certifying a board nobody holds until the tab is hard-refreshed. Zero loss = a rendered board that is

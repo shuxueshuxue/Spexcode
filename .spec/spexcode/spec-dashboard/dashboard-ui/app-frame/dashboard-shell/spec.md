@@ -202,7 +202,7 @@ discharges [[graph-delta]]'s equivalence obligation for that frame on this clien
 poll's conditional key — verification and the 304 lane are ONE computation, not two mechanisms. Unequal
 means the apply produced a board the server never had: the chain check cannot see it (a patch whose
 from/to line up but whose content does not), and it is the one state the equivalence proof exists to
-exclude. So it is loud (`BOARD-DIVERGENCE`, in the same register as [[graph-stream]]'s patrol repairs —
+exclude. So it is loud (`GRAPH-DIVERGENCE`, in the same register as [[graph-stream]]'s patrol repairs —
 the target is zero) and it self-heals by reopening onto a fresh anchor. Measured with an injected patch
 whose content contradicted its tag: detected in 15ms, replacement stream open 185ms later. The digest does not depend on a secure
 context. `crypto.subtle` exists only in one, and this product's dashboards are opened over plain HTTP on

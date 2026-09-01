@@ -425,7 +425,7 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
     catch { return }   // no WebCrypto (an insecure origin): the check is unavailable, never falsely failing
     if (version === heldVersion) heldFingerprint = { version, tag: mine }
     if (mine === claimed || closed || version !== heldVersion) return
-    console.error(`BOARD-DIVERGENCE: applied frame ${claimed} but hold ${mine} — reopening onto a fresh anchor`)
+    console.error(`GRAPH-DIVERGENCE: applied frame ${claimed} but hold ${mine} — re-anchoring on a fresh snapshot`)
     reopen()
   }
   // the dead-man's switch: any stream event (data OR ping) re-arms it; on a healthy stream it never fires.

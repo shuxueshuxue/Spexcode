@@ -76,8 +76,9 @@ scenarios:
       parent/home controls, and bounded child-directory list browse the real host filesystem. The selected
       plain folder is not silently mutated: submit remains unavailable until Git initialization is explicitly
       checked; SpexCode initialization independently requires at least one harness target. A missing typed
-      path is a clear New project action that creates a Git-initialized, cataloged project without making the
-      user locate an existing folder. Submitting runs
+      path is a clear New project action that creates a Git-initialized, cataloged project with the neutral
+      SpexCode foundation (`spex init --harness none`) without making the user locate an existing folder.
+      The scoped New Session launcher picker can then add the first Harness target. Submitting runs
       the real init chain, keeps a failure and its full transcript in place for retry, and closes only on
       catalog success. The resulting row appears with a calm 'stopped' dot and Start as the primary action,
       never a dead Open. The gear opens a monospace editor containing the project's actual portable
@@ -94,6 +95,23 @@ scenarios:
       calm at 375px and skinned correctly by other theme presets with no extra rules. Zero loss = a
       repo goes from unregistered to a browsable governed project entirely through the browser,
       against the real gateway code.
+  - name: catalog-removal-confirmation
+    tags: [frontend-e2e, backend-api, desktop]
+    test:
+      path: spec-dashboard/test/projects-new-project.e2e.mjs
+      name: Projects creates a cataloged Git project from an absent folder path
+    code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/projects.js, spec-cli/src/host.ts]
+    description: >-
+      Through the real host dashboard, create a throwaway project, use the project row's trash icon, and
+      inspect the shared removal modal before submitting, then use its one confirmation button. Read the
+      catalog and filesystem after the response.
+    expected: >-
+      The row-level trash action opens the same concise warning as the settings disclosure and never removes
+      anything by itself. The warning names the project and says its local directory, Git history, and source
+      files remain; one explicit confirmation button submits the canonical `REMOVE <project title>` phrase.
+      A successful `DELETE /projects/:id` removes only the catalog registration and its gateway credential; the
+      checkout, `.git`, and source files remain. A live backend or active/unreadable session is refused with
+      its repair reason and leaves the catalog unchanged.
 ---
 # projects-hub — measurement
 

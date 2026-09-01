@@ -53,6 +53,14 @@ This node owns ONLY the vocabulary + validation (`resolveHarnessTargets`) and th
 bundles — that is [[plugin-harness]], which materialize drives off `partitionHarnesses`'s `plugins`; here a
 plugin target only validates (and, being exclusive, leaves every native harness UNSELECTED → pruned).
 
+An adopted project may extend this explicit set after initialization through the host admin action
+`POST /projects/:id/harnesses`. The action takes one native id or one explicit plugin folder and a config
+revision, validates both the old and new sets through this node, writes the persistent choice, and invokes
+the real `spex materialize`. It never creates a missing `harnesses` field implicitly: an absent or malformed
+selection is a loud repair state, and plugin/native exclusivity remains in force. A successful addition is
+therefore immediately self-healing for the current tree while every later materialize leg continues to read
+the persisted set.
+
 **The chain contract — every materialize leg honors the persisted selection.** materialize is reached by four
 distinct legs, and ALL of them read the materialized tree's own `spexcode.json` set, never a
 default full set: `spex init`'s adoption materialize, a manual `spex materialize`, the pre-commit anchor's

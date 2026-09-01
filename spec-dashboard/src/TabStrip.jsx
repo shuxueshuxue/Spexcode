@@ -22,6 +22,37 @@ const resourceLabel = (url) => {
 }
 
 const TAB_WRAP_FLOOR = 128
+const SESSION_TAB_TITLES_KEY = 'spexcode.session-tab-titles'
+
+const readSessionTabTitles = () => {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(SESSION_TAB_TITLES_KEY) || '{}')
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? new Map(Object.entries(raw)) : new Map()
+  } catch { return new Map() }
+}
+
+const rememberedSessionTitles = typeof window === 'undefined' ? new Map() : readSessionTabTitles()
+
+const rememberSessionTitles = (sessions) => {
+  let changed = false
+  for (const session of sessions || []) {
+    const id = session?.id
+    const title = session ? sessionHeadline(session) : ''
+    if (!id || !title || rememberedSessionTitles.get(id) === title) continue
+    rememberedSessionTitles.set(id, title)
+    changed = true
+  }
+  if (!changed) return
+  try { window.localStorage.setItem(SESSION_TAB_TITLES_KEY, JSON.stringify(Object.fromEntries(rememberedSessionTitles))) } catch {}
+}
+
+const rememberedSessionTitle = (id) => {
+  if (!id) return null
+  const exact = rememberedSessionTitles.get(id)
+  if (exact) return exact
+  for (const [sessionId, title] of rememberedSessionTitles) if (sessionId.startsWith(id)) return title
+  return null
+}
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -54,7 +85,7 @@ function label(tab, { specs, sessions, t }) {
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
     const s = sessions?.find((x) => x.id === tab.param || x.id?.startsWith(tab.param)) || pendingSessionFor(tab.param)
-    const title = s ? sessionHeadline(s) : tab.param.slice(0, 8)
+    const title = s ? sessionHeadline(s) : (rememberedSessionTitle(tab.param) || tab.param.slice(0, 8))
     const requestedSurface = tab.query?.surface
     if (isResourceSurface(requestedSurface)) {
       const key = resourceSurfaceKey(requestedSurface)
@@ -146,6 +177,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
   const names = useDocumentNames()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
+  useEffect(() => { rememberSessionTitles(sessions) }, [sessions])
   // WHAT IS MOVING AND WHERE IT WOULD LAND — `{ key, before }`, with `before` naming the tab it would go in
   // FRONT of and null meaning the end of the strip ([[tab-strip]]'s splice). Nothing else about the strip
   // changes during a drag: the active document stays active, no address is written, and a release outside

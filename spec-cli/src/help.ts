@@ -314,14 +314,22 @@ effective system-contract view follows materialization order; no separate author
   // ── the noun drawers ──────────────────────────────────────────────────────
   peer: {
     line: 'peer <verb>           gateway-owned SSH communication tunnels between machines',
-    body: `Usage: spex peer connect <SSH-ADDRESS>
+    body: `Usage: spex peer connect [SSH-OPTION...] <SSH-ADDRESS>
        spex peer ls [--json]
        spex peer disconnect <SSH-ADDRESS>
 
 connect asks the local host gateway to own one bidirectional SSH tunnel to the opaque address. The
 same tunnel survives session closure and is reused by later sessions. The gateway must already be
 running (\`spex dashboard\`); no command leaves an SSH child owned by the CLI. ls reports known peers;
-disconnect retires the local peer and asks its remote counterpart to do the same.`,
+disconnect retires the local peer and asks its remote counterpart to do the same.
+
+Ordinary single-dash ssh options may precede the address and are passed to ssh verbatim, in the order
+given — \`spex peer connect -F ~/ssh_config -i ~/.ssh/key gateway-host\`. They are recorded on the peer
+and replayed on every later dial (the tunnel, the handshake, the remote cleanup), so an address that
+only resolves under a custom ssh config keeps working for later \`--ssh\` sends without repeating them;
+disconnect therefore takes none. Use \`--\` before an address that begins with a dash. Options are ssh's
+grammar, not spex's: spex still owns its own \`--flag\` space, and a bare -F/-i/-o/-p style option
+consumes the token after it.`,
     see: 'spex session send --ssh <address> <full-session-id> "<msg>" · spex dashboard (the host gateway)',
   },
   spec: {

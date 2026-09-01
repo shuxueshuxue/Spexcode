@@ -7,7 +7,7 @@ import { THEMES, getTheme, applyTheme } from './theme.js'
 import { PageScroll } from './PageScroll.jsx'
 import { PROJECT_ID } from './project.js'
 import { useLaunchers, isDashboardVisibleHarness } from './launch.js'
-import { addProjectHarnessTarget, loadProjectConfig } from './projects.js'
+import { addProjectHarnessTarget, loadProjectConfig, saveProjectConfig } from './projects.js'
 import { harnessForId } from './harness.jsx'
 import {
   getTerminalFontSize,
@@ -114,7 +114,32 @@ function ThemeSwatch({ theme, on, onPick, label }) {
   )
 }
 
-function LauncherProfiles({ t, launchers }) {
+const LAUNCHER_TYPES = ['claude', 'claude-headless', 'codex', 'codex-headless', 'opencode', 'opencode-headless', 'pi', 'pi-headless']
+
+function LauncherProfiles({ t, launchers, refreshLaunchers }) {
+  const [name, setName] = useState('')
+  const [harness, setHarness] = useState('claude')
+  const [cmd, setCmd] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const addLauncher = async () => {
+    if (!PROJECT_ID || !name.trim() || !cmd.trim() || busy) return
+    setBusy(true); setMessage('')
+    const loaded = await loadProjectConfig(PROJECT_ID)
+    if (!loaded.ok) { setMessage(loaded.error || t('settings.launcherSaveFailed')); setBusy(false); return }
+    try {
+      const parsed = JSON.parse(loaded.content)
+      const sessions = parsed.sessions && typeof parsed.sessions === 'object' && !Array.isArray(parsed.sessions) ? parsed.sessions : {}
+      const profiles = sessions.launchers && typeof sessions.launchers === 'object' && !Array.isArray(sessions.launchers) ? sessions.launchers : {}
+      profiles[name.trim()] = { harness, cmd: cmd.trim() }
+      const next = { ...parsed, sessions: { ...sessions, launchers: profiles } }
+      const saved = await saveProjectConfig(PROJECT_ID, `${JSON.stringify(next, null, 2)}\n`, loaded.revision)
+      if (!saved.ok) { setMessage(saved.error || t('settings.launcherSaveFailed')); setBusy(false); return }
+      setName(''); setCmd(''); setMessage(t('settings.launcherSaved'))
+      await refreshLaunchers().catch(() => {})
+    } catch { setMessage(t('settings.launcherInvalidConfig')) }
+    setBusy(false)
+  }
   return (
     <Section title={t('settings.secLaunchers')}>
       <p className="set-hint set-section-copy">{t('settings.launchersDescription')}</p>
@@ -134,7 +159,56 @@ function LauncherProfiles({ t, launchers }) {
           )
         }) : <p className="set-hint">{t('settings.noLaunchers')}</p>}
       </div>
+      {PROJECT_ID ? (
+        <div className="set-launcher-add">
+          <div className="set-launcher-fields">
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('settings.launcherName')} aria-label={t('settings.launcherName')} />
+            <select value={harness} onChange={(event) => setHarness(event.target.value)} aria-label={t('settings.launcherType')}>
+              {LAUNCHER_TYPES.map((id) => <option key={id} value={id}>{harnessForId(id).label}{id.endsWith('-headless') ? ' (headless)' : ''}</option>)}
+            </select>
+            <input className="set-launcher-command" value={cmd} onChange={(event) => setCmd(event.target.value)} placeholder={t('settings.launcherCommand')} aria-label={t('settings.launcherCommand')} />
+          </div>
+          <button type="button" className="set-action" onClick={addLauncher} disabled={busy || !name.trim() || !cmd.trim()}>{busy ? t('settings.launcherSaving') : t('settings.launcherAdd')}</button>
+          {message && <span className="set-hint">{message}</span>}
+        </div>
+      ) : null}
       <p className="set-hint set-section-foot">{t('settings.launcherConfigPath')}</p>
+    </Section>
+  )
+}
+
+function ProjectConfigEditor({ t }) {
+  const [loaded, setLoaded] = useState(null)
+  const [content, setContent] = useState('')
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const read = async () => {
+    if (!PROJECT_ID) return
+    const result = await loadProjectConfig(PROJECT_ID)
+    if (!result.ok) { setMessage(result.error || t('settings.configLoadFailed')); return }
+    setLoaded({ content: result.content, revision: result.revision }); setContent(result.content); setMessage('')
+  }
+  const save = async () => {
+    if (!loaded || busy) return
+    try { const parsed = JSON.parse(content); if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid') } catch { setMessage(t('settings.configInvalid')); return }
+    setBusy(true)
+    const result = await saveProjectConfig(PROJECT_ID, content.endsWith('\n') ? content : `${content}\n`, loaded.revision)
+    setBusy(false)
+    if (!result.ok) { setMessage(result.error || t('settings.configSaveFailed')); return }
+    setLoaded({ content: result.content, revision: result.revision }); setContent(result.content); setMessage(t('settings.configSaved'))
+  }
+  if (!PROJECT_ID) return null
+  return (
+    <Section title={t('settings.secConfig')}>
+      <div className="set-config-head">
+        <p className="set-hint">{t('settings.configDescription')}</p>
+        <button type="button" className="set-action" onClick={() => { setOpen((value) => !value); if (!loaded) void read() }}>{open ? t('settings.configClose') : t('settings.configOpen')}</button>
+      </div>
+      {open && (loaded ? <>
+        <textarea className="set-config-editor" value={content} onChange={(event) => { setContent(event.target.value); setMessage('') }} spellCheck={false} disabled={busy} aria-label={t('settings.configEditor')} />
+        <div className="set-config-actions"><button type="button" className="set-action" onClick={save} disabled={busy || content === loaded.content}>{busy ? t('settings.configSaving') : t('settings.configSave')}</button><button type="button" className="set-action" onClick={() => void read()} disabled={busy}>{t('settings.configReload')}</button>{message && <span className="set-hint">{message}</span>}</div>
+      </> : <p className="set-hint">{message || t('settings.configLoading')}</p>)}
     </Section>
   )
 }
@@ -251,8 +325,9 @@ export default function Settings() {
             </label>
           </Row>
         </Section>
-        <LauncherProfiles t={t} launchers={launcherState.launchers} />
+        <LauncherProfiles t={t} launchers={launcherState.launchers} refreshLaunchers={launcherState.refreshLaunchers} />
         <HarnessDelivery t={t} harnessTargets={launcherState.harnessTargets} refreshLaunchers={launcherState.refreshLaunchers} />
+        <ProjectConfigEditor t={t} />
         <Shortcuts t={t} />
       </div>
     </PageScroll>

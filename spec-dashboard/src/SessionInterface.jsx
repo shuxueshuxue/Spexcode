@@ -459,7 +459,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher, onSettings }) {
               <IconButton
                 icon="settings"
                 size={15}
-                className="si-launcher-settings"
+                className="icon-btn si-launcher-settings"
                 label={t('session.launcherSettings')}
                 onClick={() => { setPop(false); onSettings?.() }}
               />

@@ -1583,6 +1583,18 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .set-launcher-main strong { color: var(--ink); font-size: var(--type-control); font-weight: var(--weight-medium); }
 .set-launcher-main span { color: var(--muted); font-size: var(--type-meta); }
 .set-launcher code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); margin-left: auto; }
+.set-launcher-add { display: grid; gap: 8px; margin-top: var(--space-4); }
+.set-launcher-fields { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(150px, 1fr) minmax(180px, 2fr); gap: 8px; }
+.set-launcher-fields input, .set-launcher-fields select {
+  min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; color: var(--ink);
+  background: var(--field-bg); border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--ui-font); font-size: var(--type-control);
+}
+.set-launcher-fields input:focus, .set-launcher-fields select:focus, .set-config-editor:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus-ring); }
+.set-launcher-command { font-family: var(--mono); }
+.set-config-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.set-config-head .set-hint { margin: 0; }
+.set-config-editor { width: 100%; min-height: 280px; box-sizing: border-box; margin-top: var(--space-4); padding: 10px; resize: vertical; color: var(--ink); background: var(--field-bg); border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
+.set-config-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .set-targets { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
 .set-target { padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink2); background: var(--panel); font-size: var(--type-meta); }
 .set-add-target { display: flex; align-items: center; gap: 8px; margin-top: var(--space-4); }
@@ -1591,6 +1603,7 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .set-action:hover:not(:disabled) { border-color: var(--blue); background: var(--wash-hover); }
 .set-action:disabled { opacity: .5; cursor: default; }
 .set-error { margin: var(--space-3) 0 0; color: var(--red); font-size: var(--type-control); }
+@media (max-width: 620px) { .set-launcher-fields { grid-template-columns: 1fr; } .set-config-head { align-items: flex-start; flex-direction: column; } }
 .set-row { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; align-items: center; gap: var(--space-6); padding: var(--space-3) 0; }
 .set-label { color: var(--ink); font-size: var(--type-control); }
 .set-control { min-width: 0; display: flex; align-items: center; }

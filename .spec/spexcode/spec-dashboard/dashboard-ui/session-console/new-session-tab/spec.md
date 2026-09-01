@@ -62,6 +62,8 @@ never assumes a node, and composes orthogonally with the `/<preset> [[node]]… 
 Harness delivery is configured from the routed Settings page, reached from the picker's top-right settings
 button. The picker itself has no add action or configuration form: it only selects a configured launcher. Settings
 offers built-in harness targets through the existing host admin API; external adapter targets remain backend-only.
+The pop-out settings control uses the shared `IconButton`/`.icon-btn` chrome, so its hit area, tooltip, focus ring,
+and hover treatment stay identical to other icon-only controls.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
 one `POST /api/sessions` — is shared with the phone's composer ([[mobile-ui]]): both send the raw grammar
 through `launch.js`, while [[launch]]'s backend owner performs the command-plugin invocation for every caller,

@@ -67,6 +67,9 @@ test('Settings owns launcher and built-in harness configuration', () => {
   assert.match(source, /data-settings-launchers/)
   assert.match(source, /data-settings-harnesses/)
   assert.match(source, /addProjectHarnessTarget\(PROJECT_ID, selected, revision\)/)
+  assert.match(source, /LAUNCHER_TYPES = \['claude', 'claude-headless'/)
+  assert.match(source, /sessions: \{ \.\.\.sessions, launchers: profiles \}/)
+  assert.match(source, /configOpen/)
   assert.doesNotMatch(source, /plugin host|adopter|\.plugins|zcode/)
 })
 

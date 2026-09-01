@@ -76,15 +76,23 @@ test('chrome labels are sentence case — no all-caps, no tracked-out shouting',
   assert.equal(declarations('letter-spacing').filter((v) => v !== 'var(--tracking-normal)').length, 0)
 })
 
-test('three weights, one radius token, one elevation — the geometry is spendable, not hand-written', () => {
+test('three weights, two radius rungs, one elevation — the geometry is spendable, not hand-written', () => {
   // Every extra weight is another way to say "important" competing with the ones that already work; every
   // hand-written radius is a number nobody can re-tune. The sheet declares the ladder and then uses it.
   const weights = new Set(declarations('font-weight'))
   assert.deepEqual([...weights].sort(), ['var(--weight-medium)', 'var(--weight-regular)', 'var(--weight-semibold)'])
   assert.doesNotMatch(css, /--weight-(?:bold|black)/)
 
+  // TWO rungs, because a corner is proportional to its box: the control rung, and one for a surface that
+  // owns a whole region (a 6px corner on a 980px dialog is a corner nobody sees). Both are tokens, so a
+  // preset retunes the product's geometry in one row — Notion's tighter row sets both.
   assert.match(css, /--radius:\s*6px;/)
+  assert.match(css, /--radius-lg:\s*14px;/)
   assert.match(css, /--radius-full:\s*999px;/)
+  const notionGeometry = css.match(/:root\[data-theme=notion\]\s*\{([\s\S]*?)\n\}/)[1]
+  for (const rung of ['--radius', '--radius-lg']) {
+    assert.match(notionGeometry, new RegExp(`${rung}:\\s*\\d+px;`), `a preset that retunes geometry resolves ${rung} too`)
+  }
   // a circle is a shape, not a step on a radius scale; everything else spends the token.
   const radii = declarations('border-radius')
     .filter((v) => !v.includes('var(--radius') && v !== '0' && !v.includes('50%'))

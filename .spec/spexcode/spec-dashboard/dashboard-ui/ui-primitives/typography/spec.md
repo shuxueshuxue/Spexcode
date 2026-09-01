@@ -173,10 +173,16 @@ hand-copied, so a swatch cannot show a palette nobody gets.
 
 ## geometry
 
-`--radius` (6px) is the corner of every box that is not a circle, `--radius-full` the pill. A circle is a
-shape, not a step on a radius scale, so `50%` stays literal — and so do the one- and two-pixel marks, which
-are ticks rather than boxes. Everything else spends the token: sixty-nine hand-written radii across the
-sheet were sixty-nine numbers nobody could re-tune together.
+**A corner is proportional to its box, so the corner is two rungs.** `--radius` (6px) is the control
+rung — a button, a field, a row band, a chip — and `--radius-lg` (14px) is what a surface that owns a whole
+region wears, because 6px on a 980px dialog is a corner nobody sees. `--radius-full` is the pill. A circle
+is a shape, not a step on a radius scale, so `50%` stays literal — and so do the one- and two-pixel marks,
+which are ticks rather than boxes. Everything else spends a token: sixty-nine hand-written radii across the
+sheet were sixty-nine numbers nobody could re-tune together, and the large rung is a token for exactly the
+reason the control rung is — a preset retunes the product's whole geometry in one row, which is what the
+Notion row does when it takes both down to 4 and 10. **Two rungs, and it stops there**: a third would be a
+hand-written radius wearing a variable's costume. A surface moves onto the large rung as it is touched, the
+same way the spacing ladder is adopted rather than churned.
 
 `--space-1` … `--space-7` is the spacing ladder new rules spend. Existing padding is not churned for its own
 sake; a rule being edited moves onto the ladder as it is touched.
@@ -218,8 +224,9 @@ defaults to the mono stack and `--ui-font-sans` stays declared for a preset to r
 does), that every `font-family` in the sheet names a role token rather than a family and that both roles
 are still spent (collapsing language onto `--mono` would weld the board to one family and leave a preset
 nothing to flip), that no all-caps or tracked label survives, that exactly three weight tokens are in
-use, that the radius and elevation tokens own their properties (a ring drawn as `var(--focus-ring)` is a
-border, not a drop), that all nine palettes resolve the full ground ladder and the chrome surfaces spend
+use, that both radius rungs are declared and a preset that retunes geometry resolves both of them, that the
+radius and elevation tokens own their properties (a ring drawn as `var(--focus-ring)` is a border, not a
+drop), that all nine palettes resolve the full ground ladder and the chrome surfaces spend
 it, that the ladder never inverts and every depth step in every preset clears its floor in L\* — the
 arithmetic runs in the gate, so a palette edit that flattens a step fails the build instead of shipping —
 that the terminal stays the darkest surface and no rung lands on it, that everything spending `--shadow` is

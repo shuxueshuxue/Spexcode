@@ -47,6 +47,14 @@ the initiator. The peer has a stable randomly-minted machine id for semantic nam
 mutable reachability hint. A hostname, gateway URL, and backend `instanceId` are neither an identity nor an
 authorization proof.
 
+**The remote command resolves in the remote's own environment.** The accept handshake and the remote cleanup run
+`spex` on the far machine, and where a program lives is that machine's own configuration rather than something this
+side may assume from its own: the dial resolves them through the remote user's login shell, never the bare
+non-interactive PATH an SSH command string is handed. A login shell may greet before it runs anything, so the peer
+reply is read off the last line of the reply stream rather than the whole stream. When no reply arrives at all the
+failure is named and states that `spex` must be on that SSH user's login PATH, instead of passing the remote shell's
+raw not-found text back as malformed JSON.
+
 **The gateway is the transport endpoint; the backend remains ordinary.** A dedicated loopback listener accepts five
 full-id peer requests: `GET /api/sessions/:id` (show), `POST /api/sessions/:id/input` (text send), `POST
 /api/sessions/:id/close` (close), `GET /api/sessions/:id/project/sessions` (the selected project's default session

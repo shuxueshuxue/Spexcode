@@ -361,8 +361,22 @@ function validRpc(value: unknown): value is PeerRpcRequest {
     validPort(request.remoteInboundPort) && validPort(request.remoteOutboundPort)
 }
 
+// @@@login-shell dial - PATH is per-machine config, so the remote command is resolved by the remote
+// user's own login shell rather than the bare non-interactive PATH ssh hands us. The payload is
+// base64url (A-Za-z0-9_-), so it carries no shell metacharacter and needs no quoting beyond this.
 function remoteCommand(op: 'peer-accept' | 'peer-drop', body: object): string {
-  return `spex internal ${op} ${Buffer.from(JSON.stringify(body)).toString('base64url')}`
+  return `exec "$SHELL" -lc 'spex internal ${op} ${Buffer.from(JSON.stringify(body)).toString('base64url')}'`
+}
+
+// @@@reply is the last line - a login shell may print profile chatter before the command runs, so the
+// reply is read off the last non-empty line rather than the whole stream.
+function parseRemoteReply(sshAddress: string, stdout: string, stderr: string): RpcResponse {
+  const lines = stdout.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+  const last = lines[lines.length - 1]
+  if (last?.startsWith('{')) {
+    try { return JSON.parse(last) as RpcResponse } catch { /* fall through to the named failure */ }
+  }
+  throw new Error(`remote peer accept produced no peer reply from ${sshAddress}: spex must be on the login PATH of that ssh user (fix the remote login shell's PATH, then rerun spex peer connect). Remote output: ${lines.join(' | ') || stderr.trim() || '(none)'}`)
 }
 
 function sshArgs(peer: MachinePeer): string[] {
@@ -506,8 +520,7 @@ export class MachinePeerGateway {
     const remote = await execFileAsync('ssh', [...sshOptions, '--', sshAddress, remoteCommand('peer-accept', {
       sourceMachineId, sshAddress, remoteInboundPort: inboundPort, remoteOutboundPort: outboundPort,
     })], { maxBuffer: 64 * 1024 })
-    let reply: RpcResponse
-    try { reply = JSON.parse(remote.stdout.trim()) as RpcResponse } catch { throw new Error(`remote peer accept returned invalid JSON: ${remote.stdout.trim() || remote.stderr.trim()}`) }
+    const reply = parseRemoteReply(sshAddress, remote.stdout, remote.stderr)
     if (!reply.ok || !reply.peer || !validMachineId(reply.machineId)) throw new Error(reply.ok ? 'remote peer accept returned no machine identity' : reply.error)
     const peer: MachinePeer = {
       machineId: reply.machineId, sshAddress, sshOptions, inboundPort, outboundPort,

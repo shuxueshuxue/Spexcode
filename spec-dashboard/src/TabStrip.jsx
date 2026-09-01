@@ -145,8 +145,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
   const missingSessionIds = tabs
     .filter((tab) => tab.page === 'sessions' && tab.param && tab.param !== 'new' && !(sessions || []).some((s) => s.id === tab.param || s.id?.startsWith(tab.param)))
     .map((tab) => tab.param)
-  const unresolvedSessionIds = missingSessionIds.filter((id) => !rememberedSessions.has(id))
-  const missingSessionKey = [...new Set(unresolvedSessionIds)].sort().join(',')
+  const missingSessionKey = [...new Set(missingSessionIds)].sort().join(',')
   const archiveRequestKey = useRef('')
   useEffect(() => {
     if (!missingSessionKey || archiveRequestKey.current === missingSessionKey) return

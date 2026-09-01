@@ -23,13 +23,6 @@ const resourceLabel = (url) => {
 }
 
 const TAB_WRAP_FLOOR = 128
-// A board update can remove a closed session before the lean archive request completes. Keep the last
-// projection this browser actually rendered as an immediate display fallback; the archive index remains the
-// authoritative refresh, while this cache prevents a known title from flashing into a raw id.
-const rememberedSessions = new Map()
-const rememberSessions = (sessions) => {
-  for (const session of sessions || []) if (session?.id) rememberedSessions.set(session.id, session)
-}
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -156,12 +149,9 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
       if (Array.isArray(rows)) setArchivedSessions(rows.map((session) => ({ ...session, archived: true })))
     }).catch(() => {})
   }, [missingSessionKey])
-  rememberSessions(sessions)
-  rememberSessions(archivedSessions)
   const sessionRows = useMemo(() => {
     const byId = new Map((sessions || []).map((session) => [session.id, session]))
     for (const session of archivedSessions) if (!byId.has(session.id)) byId.set(session.id, session)
-    for (const [id, session] of rememberedSessions) if (!byId.has(id)) byId.set(id, session)
     return [...byId.values()]
   }, [sessions, archivedSessions])
   useEffect(() => {

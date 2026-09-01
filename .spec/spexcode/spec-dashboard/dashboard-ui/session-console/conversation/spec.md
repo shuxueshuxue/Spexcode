@@ -246,6 +246,10 @@ referent it cannot mistake, which is the thing a reader loses in a long turn. It
 [[prose-dispatch]] already offers a spec passage, minus the one part that surface needs and this one does
 not — an address to choose — because this composer already stands inside the session it is quoting.
 
+The copy acknowledgement is a transient overlay owned by the conversation shell. It must not become a flex
+row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is feedback,
+not conversation content.
+
 **This footer sends to its own session and nowhere else, and the `@` in a draft does not change that.** An
 `@` naming an existing session is a passive reference ([[mentions]]) — text, not a route; delivering to
 another running session stays the explicit `spex session send`, and handing a passage to one is

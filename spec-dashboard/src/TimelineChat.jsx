@@ -844,7 +844,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const dayRow = (ts, key) => {
     if (dayKey(ts) === lastDay) return
     lastDay = dayKey(ts)
-    rows.push(<div className="m-day" key={`d${key}`}><div className="m-gut">{dayOf(ts)}</div><div className="m-day-rule" /></div>)
+    rows.push(<div className="m-day" key={`d${key}`}><div className="m-day-rule" /><span className="m-day-label">{dayOf(ts)}</span></div>)
   }
   const gutter = (ts) => <div className="m-gut"><time>{timeOf(ts)}</time></div>
   const promptTs = s.created || detail?.created || events?.[0]?.ts

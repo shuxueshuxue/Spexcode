@@ -205,9 +205,9 @@ reader scans a conversation by what was said and asks for the time only when the
 time rests at reduced opacity and comes up under the pointer or keyboard focus — it never leaves the DOM,
 so nothing assistive loses it. The day stays in normal document flow, because it is structure rather than a stamp. When the PANE (a
 container query, not the viewport — a desktop side pane is as narrow as a phone) is under 560px the gutter
-goes and each row keeps its own inline time. Day separators stay in normal flow with their date label in the
-ruler gutter and a quiet rule alongside it; the rule is visually interrupted by the label and never passes
-through or paints over the date.
+goes and each row keeps its own inline time. Day separators stay in normal flow with a quiet rule running
+through the conversation measure and the date label centered on that rule; the label interrupts the rule and
+never has a second left-gutter position.
 
 Every seam starts folded on first load, after a timeline/status refresh, and when a different session is
 selected; no data arrival or remount may open it. The disclosure choice is keyed to the seam's first event,

@@ -2929,12 +2929,16 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    focus; it never leaves the DOM. The DAY stays in normal flow — it is structure, not a stamp. */
 .m-gut time { opacity: .6; transition: opacity var(--dur-tab); }
 .m-ev:hover .m-gut time, .m-ev:focus-within .m-gut time { opacity: 1; }
-.m-day { align-items: center; padding: var(--space-4) 0 var(--space-2); background: var(--paper); }
-.m-day .m-gut {
-  position: relative; z-index: 1; padding-top: 0; color: var(--ink2); font-weight: var(--weight-medium);
+.m-day {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  padding: var(--space-4) 0 var(--space-2); background: var(--paper);
+}
+.m-day-rule { position: absolute; inset-inline: 0; top: 50%; border-top: 1px solid var(--edge); }
+.m-day-label {
+  position: relative; z-index: 1; padding-inline: var(--space-3); color: var(--ink2);
+  font-family: var(--ui-font); font-size: var(--type-caption); font-weight: var(--weight-medium);
   background: var(--paper);
 }
-.m-day-rule { border-top: 1px solid var(--edge); }
 /* The ruler is an annotation, not part of the reading measure. Keeping its 52px cell in the grid pushed
    every agent note, event and seam 34px to the right, even though `.m-col` itself was centred. Let those
    rows use the whole measure and pull only their empty gutter back outside it; quoted rows keep the
@@ -2945,10 +2949,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .m-ev-seam > .m-seam {
     width: calc(100% + 52px + 16px);
     max-width: none;
-    margin-left: calc(-1 * (52px + 16px));
-  }
-  .m-day-rule {
-    width: calc(100% + 52px + 16px);
     margin-left: calc(-1 * (52px + 16px));
   }
 }
@@ -3029,14 +3029,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-transcript-state, .m-transcript-empty, .m-transcript-truncated { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-meta); overflow-wrap: anywhere; }
 .m-transcript-state.is-error { color: var(--red); }
 
-/* A NARROW PANE HAS NO RULER: the gutter goes and each row keeps its own inline time; the day still leads
-   its rule. The pane, not the viewport, decides — a side pane on a desktop is as narrow as a phone. */
+/* A NARROW PANE HAS NO RULER: the gutter goes and each row keeps its own inline time; the centered day label
+   still interrupts its rule. The pane, not the viewport, decides — a side pane on a desktop is as narrow as a phone. */
 @container (max-width: 560px) {
   .m-timeline { padding-inline: 14px; }
   .m-ev { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: var(--space-4) 0; }
   .m-ev > .m-gut { display: none; }
-  .m-day { grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
-  .m-day .m-gut { text-align: left; }
   .m-say-head .m-copy-note { display: none; }
 }
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------

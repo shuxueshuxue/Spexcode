@@ -65,6 +65,8 @@ test('session tabs keep closed-session titles from the retained archive projecti
     /<TabStrip specs=\{specs\} sessions=\{sessionsWithRetention\} route=\{route\}/)
   assert.match(source, /apiFetch\('\/api\/sessions\/archive-index'/)
   assert.match(source, /const sessionRows = useMemo\(\(\) => \{[\s\S]*archivedSessions/)
+  assert.match(source, /const rememberedSessions = new Map\(\)/)
+  assert.match(source, /for \(const \[id, session\] of rememberedSessions\) if \(!byId\.has\(id\)\)/)
 })
 
 test('Spec detail tabs keep the resident icon and slot while naming the focused document', () => {

@@ -39,6 +39,23 @@ scenarios:
       path: spec-cli/src/machine-peer.test.ts
       name: a common-dir session routes to the endpoint published for its linked worktree
     code: spec-cli/src/machine-peer.ts
+  - name: ssh-options-recorded-and-replayed
+    description: >
+      Through the real CLI, connect a peer whose address resolves ONLY under a custom ssh config, then
+      confirm the options were kept on the peer rather than on the one call: read them back with `peer ls`,
+      and reach a session on the far machine with `session send --ssh` without naming them again. Include a
+      peer record minted before options existed, and a `peer disconnect` that tries to supply them.
+    expected: >
+      The connect succeeds where a bare dial cannot resolve the address at all, and every later dial replays
+      the recorded options - the tunnel, the accept handshake, and the remote cleanup - so no cross-machine
+      command repeats them and disconnect refuses them loudly. A legacy peer carrying no options renders and
+      dials as an empty list instead of failing the read. Options keep ssh's own grammar and order, and
+      spex's `--flag` space stays separate.
+    tags: [cli]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: ordinary ssh options are parsed in ssh grammar, recorded on the peer, and replayed on every dial
+    code: spec-cli/src/machine-peer.ts
 ---
 
 The local regression uses a disposable SPEXCODE_HOME and a pair-shaped loopback forward so it can prove the

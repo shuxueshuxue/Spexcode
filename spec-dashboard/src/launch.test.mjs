@@ -53,25 +53,21 @@ test('the New tab launches on plain Enter and keeps Shift+Enter for multiline dr
   assert.match(css, /\.sess-glyph\s*\{[^}]*order:\s*2;/s)
 })
 
-test('the scoped New tab exposes a plus action for adding a harness target', () => {
+test('the New tab sends harness configuration to Settings', () => {
   const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
   const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
-  assert.match(source, /import Modal from '\.\/Modal\.jsx'/)
-  assert.match(source, /data-action="add-harness-target"/)
-  assert.match(source, /onAdd=\{PROJECT_ID \? \(\) => setAddHarnessOpen\(true\) : undefined\}/)
-  assert.match(source, /AddHarnessTargetModal[\s\S]*projectId=\{PROJECT_ID\}[\s\S]*onAdded=\{handleHarnessAdded\}/)
-  assert.match(source, /addProjectHarnessTarget\(projectId, attemptedTarget, config\.revision\)/)
-  assert.match(source, /loadProjectConfig\(projectId\)/)
-  assert.match(source, /hasOwnProperty\.call\(parsed, 'harnesses'\)/)
-  assert.match(source, /harnessTargetSelectionMissing/)
-  assert.match(css, /\.si-launcher-add\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s)
-  assert.match(css, /\.si-harness-modal\s*\{[^}]*width:/s)
+  assert.doesNotMatch(source, /add-harness-target|AddHarnessTargetModal|onAdd=/)
+  assert.match(source, /onSettings=\{\(\) => scope\.open\(\{ page: 'settings'/)
+  assert.doesNotMatch(css, /\.si-launcher-add\s*\{/)
+  assert.match(css, /\.si-launcher-pop-head\s*\{/)
 })
 
-test('the harness target modal explains plugin folders and hides external targets in its summary', () => {
-  const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
-  assert.match(source, /visibleExisting = existing\.filter\(\(entry\) => typeof entry !== 'string' \|\| isDashboardVisibleHarness\(entry\)\)/)
-  assert.match(source, /harnessTargetPluginHelp/)
+test('Settings owns launcher and built-in harness configuration', () => {
+  const source = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8')
+  assert.match(source, /data-settings-launchers/)
+  assert.match(source, /data-settings-harnesses/)
+  assert.match(source, /addProjectHarnessTarget\(PROJECT_ID, selected, revision\)/)
+  assert.doesNotMatch(source, /plugin host|adopter|\.plugins|zcode/)
 })
 
 test('project rows expose a one-step catalog-registration removal action', () => {

@@ -1571,6 +1571,26 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .set-sec { padding: var(--space-6) 0; border-bottom: var(--divider-rule); }
 .set-sec:last-child { border-bottom: 0; }
 .set-h { margin: 0 0 var(--space-5); font-size: var(--type-subtitle); font-weight: var(--weight-medium); color: var(--ink2); }
+.set-section-copy { margin: 0 0 var(--space-4); max-width: 62ch; }
+.set-section-foot { margin: var(--space-4) 0 0; }
+.set-launchers { display: grid; gap: 2px; }
+.set-launcher {
+  display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+}
+.set-launcher-mark { display: inline-flex; color: var(--ink2); flex: none; }
+.set-launcher-main { display: grid; gap: 2px; min-width: 120px; }
+.set-launcher-main strong { color: var(--ink); font-size: var(--type-control); font-weight: var(--weight-medium); }
+.set-launcher-main span { color: var(--muted); font-size: var(--type-meta); }
+.set-launcher code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); margin-left: auto; }
+.set-targets { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
+.set-target { padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink2); background: var(--panel); font-size: var(--type-meta); }
+.set-add-target { display: flex; align-items: center; gap: 8px; margin-top: var(--space-4); }
+.set-add-target select { min-width: 180px; height: 30px; padding: 0 8px; color: var(--ink); background: var(--field-bg); border: 1px solid var(--line); border-radius: var(--radius); }
+.set-action { height: 30px; padding: 0 11px; color: var(--blue); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; font-family: var(--ui-font); font-size: var(--type-control); }
+.set-action:hover:not(:disabled) { border-color: var(--blue); background: var(--wash-hover); }
+.set-action:disabled { opacity: .5; cursor: default; }
+.set-error { margin: var(--space-3) 0 0; color: var(--red); font-size: var(--type-control); }
 .set-row { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; align-items: center; gap: var(--space-6); padding: var(--space-3) 0; }
 .set-label { color: var(--ink); font-size: var(--type-control); }
 .set-control { min-width: 0; display: flex; align-items: center; }
@@ -2387,21 +2407,13 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-launcher-harness { display: inline-flex; align-items: center; color: var(--ink2); flex: none; }
 .si-launcher-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  height: 28px; padding: 0 12px; cursor: pointer; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-full);
+  height: 32px; padding: 0 12px; cursor: pointer; color: var(--ink);
+  background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius);
   font-size: var(--type-control); transition: border-color .12s ease, box-shadow .12s ease;
 }
-.si-launcher-btn:hover { background: var(--wash-hover); }
+.si-launcher-btn:hover { background: var(--wash-hover); border-color: var(--edge); }
 .si-launcher-btn.on { border-color: var(--blue); }
 .si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
-.si-launcher-add {
-  width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  margin-left: 4px; padding: 0; color: var(--blue); background: transparent;
-  border: 1px solid var(--line); border-radius: var(--radius-full); cursor: pointer;
-}
-.si-launcher-add:hover:not(:disabled) { background: var(--wash-hover); border-color: var(--blue); }
-.si-launcher-add:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.si-launcher-add:disabled { opacity: .45; cursor: default; }
 /* the pop-out — a viewport-CENTRED dialog over a light backdrop (not an anchored dropdown), scale-in from
    centre. Sizes to its content so a typical command preview fits on ONE line; the cap guards huge
    commands/viewports, and overflow scrolls when a project has many launchers. */
@@ -2413,9 +2425,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @keyframes si-launcher-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .si-launcher-pop {
   position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  z-index: 30; width: max-content; min-width: 340px; max-width: min(720px, calc(100vw - 64px));
+  z-index: 30; width: min(480px, calc(100vw - 32px)); min-width: 0;
   max-height: min(70vh, 640px); overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
   background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius);
   box-shadow: var(--shadow);
   animation: si-launcher-pop-in .16s ease;
@@ -2424,12 +2436,21 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   from { opacity: 0; transform: translate(-50%, -50%) scale(.94); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
+.si-launcher-pop-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 2px 2px 12px; border-bottom: 1px solid var(--line); margin-bottom: 6px;
+}
+.si-launcher-pop-copy { display: grid; gap: 3px; min-width: 0; }
+.si-launcher-pop-title { color: var(--ink); font-size: var(--type-body); font-weight: var(--weight-semibold); }
+.si-launcher-pop-subtitle { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
+.si-launcher-settings { color: var(--muted); flex: none; }
+.si-launcher-settings:hover { color: var(--blue); }
 /* one row per launcher — the row ITSELF is the pick button (name line + cmd preview inside it), so a
    click anywhere on it, cmd included, selects the launcher. */
 .si-launcher-row {
   display: flex; flex-direction: column; border-radius: var(--radius); width: 100%;
   appearance: none; background: none; border: none; font: inherit; text-align: left;
-  cursor: pointer; padding: 0;
+  cursor: pointer; padding: 2px 0;
 }
 .si-launcher-row.on { background: color-mix(in srgb, var(--blue) 10%, transparent); }
 .si-launcher-row-main {
@@ -2437,6 +2458,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   padding: 8px 10px 2px; color: var(--ink); font-size: var(--type-control);
 }
 .si-launcher-row:not(.on):not(.off):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.si-launcher-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* a row the ARMED MODE can't launch — greyed, unpickable (aria-disabled in the JSX; no `disabled` attr,
    which would mute the hover events the config-repair tooltip rides on). */
 .si-launcher-row.off { opacity: .45; cursor: not-allowed; }
@@ -2453,54 +2475,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
   opacity: .75;
 }
-/* harness target dialog: a compact form inside the shared modal chrome. */
-.si-harness-modal { width: min(500px, 92vw); max-height: 86vh; }
-.si-harness-form { display: grid; gap: 12px; padding: 4px 2px 2px; }
-.si-harness-copy { margin: 0; color: var(--muted); font-size: var(--type-control); line-height: var(--leading-relaxed); }
-.si-harness-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.si-harness-fieldset legend { margin: 0 0 6px; color: var(--muted); font-size: var(--type-meta); }
-.si-harness-mode { display: flex; gap: 6px; flex-wrap: wrap; }
-.si-harness-mode label {
-  position: relative; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px;
-  color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  font-size: var(--type-control); cursor: pointer;
-}
-.si-harness-mode label.on { color: var(--blue); border-color: var(--blue); background: var(--wash-selected); }
-.si-harness-mode input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.si-harness-mode label:has(input:focus-visible) { box-shadow: var(--focus-ring); }
-.si-harness-label { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-meta); }
-.si-harness-help { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
-.si-harness-label select, .si-harness-label input {
-  width: 100%; min-width: 0; box-sizing: border-box; padding: 7px 9px; color: var(--ink2);
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: var(--ui-font); font-size: var(--type-control); outline: none;
-}
-.si-harness-label select:focus, .si-harness-label input:focus { border-color: var(--blue); box-shadow: var(--focus-ring); }
-.si-harness-label select:disabled, .si-harness-label input:disabled { opacity: .6; }
-.si-harness-empty { padding: 7px 0; color: var(--muted); }
-.si-harness-current { display: grid; gap: 4px; color: var(--muted); font-size: var(--type-meta); }
-.si-harness-current code {
-  min-width: 0; padding: 6px 8px; color: var(--ink2); background: var(--panel);
-  border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--mono); overflow-wrap: anywhere;
-}
-.si-harness-state { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
-.si-harness-state.error { color: var(--red); }
-.si-harness-spinner { flex: none; animation: si-harness-spin .8s linear infinite; }
-@keyframes si-harness-spin { to { transform: rotate(360deg); } }
-.si-harness-output { min-width: 0; color: var(--muted); font-size: var(--type-meta); }
-.si-harness-output summary { cursor: pointer; }
-.si-harness-output pre {
-  max-height: 180px; margin: 6px 0 0; padding: 7px 8px; overflow: auto; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere;
-}
-.si-harness-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-@media (max-width: 480px) {
-  .si-harness-modal { width: min(440px, calc(100vw - 24px)); }
-  .si-harness-mode { display: grid; grid-template-columns: 1fr 1fr; }
-  .si-harness-mode label { justify-content: center; }
-}
-@media (prefers-reduced-motion: reduce) { .si-harness-spinner { animation: none; } }
 /* The resizable terminal pane, not the viewport, determines the terminal's breakpoint. */
 .si-session-wrap { container-type: inline-size; }
 .si-tab {

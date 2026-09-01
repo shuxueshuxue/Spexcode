@@ -66,8 +66,9 @@ the guarded target to `POST /projects/:id/harnesses`; the host validates and mat
 configuration. A native target with a safe init-template launcher appears in the picker after refresh, while
 plugin/native conflicts, stale revisions, missing selections, and materialize failures remain visible and
 retryable. The plus action is absent from unscoped/single-project serving, where no host project id exists. The
-plugin-folder choice means the host agent's plugin scan directory; materialize writes the bundle under
-`<folder>/plugins/spexcode`, so it is distinct from choosing a built-in harness.
+plugin-host-folder choice means the external agent's project-relative scan directory (for example `.claude` or
+`.adopter-a`), not SpexCode's own `.spec/spexcode/.plugins` source tree; materialize writes the generated bundle
+under `<folder>/plugins/spexcode`, so it is distinct from choosing a built-in harness.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
 one `POST /api/sessions` — is shared with the phone's composer ([[mobile-ui]]): both send the raw grammar
 through `launch.js`, while [[launch]]'s backend owner performs the command-plugin invocation for every caller,

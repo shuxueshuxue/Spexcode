@@ -82,6 +82,10 @@ Before that attempt the CLI opens a bounded TCP connection, which is the presenc
 enumerate session records or derive layout overlays. The TCP presence budget ends when a connection is accepted;
 the identity read then uses the ordinary create request deadline, so a busy event loop cannot look absent merely
 because response headers are late.
+
+The dashboard may project the backend launcher registry into a dashboard-visible subset for adapters reserved for
+external integrations. That presentation filter does not change this creation transaction: an explicit CLI/API
+launcher remains resolved and validated by the backend under the normal launcher contract.
 For an implicit target, each supplied root is resolved through the shared lightweight main-root resolver before
 comparison, so a linked worktree and an explicit configured `main` retain their canonical project identity;
 `--api` names the target and skips that comparison but still makes this availability decision: normally that

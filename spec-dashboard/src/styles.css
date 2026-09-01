@@ -2469,6 +2469,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-harness-mode input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .si-harness-mode label:has(input:focus-visible) { box-shadow: var(--focus-ring); }
 .si-harness-label { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-meta); }
+.si-harness-help { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
 .si-harness-label select, .si-harness-label input {
   width: 100%; min-width: 0; box-sizing: border-box; padding: 7px 9px; color: var(--ink2);
   background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);

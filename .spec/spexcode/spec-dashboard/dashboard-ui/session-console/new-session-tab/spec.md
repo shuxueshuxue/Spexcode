@@ -55,7 +55,8 @@ harness glyph + name, the selected row marked), and beneath each name the profil
 clickable except the row select itself; no chevron buttons, no edit surface: config files remain the
 sole place a `cmd` is written). Selecting a row closes the pop;
 a backdrop click or Esc closes it too. Seeded interactive launchers keep the picker present in an initialized
-project, and configured dashboard-visible profiles add more names. The launcher pick is
+project, and configured dashboard-visible profiles add more names; profiles for external adapters remain backend-only
+and do not appear in this picker or its autocomplete. The launcher pick is
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 In a project-scoped New Session tab, a plus icon beside this picker opens an **Add harness target** modal.
@@ -64,7 +65,9 @@ offers a native target or an explicit plugin folder, and displays the existing s
 the guarded target to `POST /projects/:id/harnesses`; the host validates and materializes the real project
 configuration. A native target with a safe init-template launcher appears in the picker after refresh, while
 plugin/native conflicts, stale revisions, missing selections, and materialize failures remain visible and
-retryable. The plus action is absent from unscoped/single-project serving, where no host project id exists.
+retryable. The plus action is absent from unscoped/single-project serving, where no host project id exists. The
+plugin-folder choice means the host agent's plugin scan directory; materialize writes the bundle under
+`<folder>/plugins/spexcode`, so it is distinct from choosing a built-in harness.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
 one `POST /api/sessions` — is shared with the phone's composer ([[mobile-ui]]): both send the raw grammar
 through `launch.js`, while [[launch]]'s backend owner performs the command-plugin invocation for every caller,

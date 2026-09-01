@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import DiffDocument from './DiffDocument.jsx'
-import { createSession, useLaunchers, useCommandPresets, useHarnessCommands } from './launch.js'
+import { createSession, useLaunchers, useCommandPresets, useHarnessCommands, isDashboardVisibleHarness } from './launch.js'
 import { sessionFooterState, sessionForest, sessionHeadline } from './session.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -565,7 +565,8 @@ function AddHarnessTargetModal({ projectId, harnessTargets = [], onAdded, onClos
     }
   }
 
-  const existingLabel = existing.length ? existing.map(targetText).join(', ') : t('session.harnessTargetNone')
+  const visibleExisting = existing.filter((entry) => typeof entry !== 'string' || isDashboardVisibleHarness(entry))
+  const existingLabel = visibleExisting.length ? visibleExisting.map(targetText).join(', ') : t('session.harnessTargetNone')
   return (
     <Modal
       title={t('session.addHarnessTargetTitle')}
@@ -612,6 +613,7 @@ function AddHarnessTargetModal({ projectId, harnessTargets = [], onAdded, onClos
                   disabled={busy}
                   spellCheck={false}
                 />
+                <span className="si-harness-help">{t('session.harnessTargetPluginHelp')}</span>
               </label>
             )}
             <div className="si-harness-current"><span>{t('session.harnessTargetCurrent')}</span><code>{existingLabel}</code></div>

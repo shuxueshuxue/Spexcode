@@ -1,7 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createSession } from './launch.js'
+import { createSession, isDashboardVisibleHarness } from './launch.js'
+
+test('dashboard hides external adapter harnesses from launch and target choices', () => {
+  assert.equal(isDashboardVisibleHarness('zcode'), false)
+  assert.equal(isDashboardVisibleHarness('codex'), true)
+  const source = readFileSync(new URL('./launch.js', import.meta.url), 'utf8')
+  assert.match(source, /dashboardLauncherListFrom[\s\S]*list\.filter\(\(entry\) => isDashboardVisibleHarness\(entry\?\.harness\)\)/)
+  assert.match(source, /harnessTargets[\s\S]*isDashboardVisibleHarness\(id\)/)
+})
 
 test('ordinary interactive launch posts only the prompt and named launcher', async () => {
   const originalFetch = globalThis.fetch
@@ -58,6 +66,12 @@ test('the scoped New tab exposes a plus action for adding a harness target', () 
   assert.match(source, /harnessTargetSelectionMissing/)
   assert.match(css, /\.si-launcher-add\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s)
   assert.match(css, /\.si-harness-modal\s*\{[^}]*width:/s)
+})
+
+test('the harness target modal explains plugin folders and hides external targets in its summary', () => {
+  const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+  assert.match(source, /visibleExisting = existing\.filter\(\(entry\) => typeof entry !== 'string' \|\| isDashboardVisibleHarness\(entry\)\)/)
+  assert.match(source, /harnessTargetPluginHelp/)
 })
 
 test('project rows expose a one-step catalog-registration removal action', () => {

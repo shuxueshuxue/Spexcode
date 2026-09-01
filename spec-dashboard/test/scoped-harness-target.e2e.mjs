@@ -54,6 +54,7 @@ test('scoped New Session adds a harness target and refreshes the launcher picker
     assert.equal(await prompt.inputValue(), 'keep this draft')
     assert.match(await modal.innerText(), /current targets[\s\S]*claude/i)
     const native = modal.locator('select')
+    assert.equal((await native.locator('option').allTextContents()).includes('zcode'), false)
     await native.selectOption('codex')
     await modal.getByRole('button', { name: 'add target' }).click()
     await modal.waitFor({ state: 'detached' })

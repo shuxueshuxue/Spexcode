@@ -62,15 +62,18 @@ test('the New tab sends harness configuration to Settings', () => {
   assert.match(css, /\.si-launcher-pop-head\s*\{/)
 })
 
-test('Settings owns launcher and built-in harness configuration', () => {
+test('Settings owns launcher configuration without a harness-add section', () => {
   const source = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
   assert.match(source, /data-settings-launchers/)
-  assert.match(source, /data-settings-harnesses/)
-  assert.match(source, /addProjectHarnessTarget\(PROJECT_ID, selected, revision\)/)
+  assert.doesNotMatch(source, /data-settings-harnesses|HarnessDelivery|addProjectHarnessTarget\(/)
+  assert.match(source, /si-launcher-row/)
   assert.match(source, /LAUNCHER_TYPES = \['claude', 'claude-headless'/)
   assert.match(source, /sessions: \{ \.\.\.sessions, launchers: profiles \}/)
   assert.match(source, /configOpen/)
   assert.doesNotMatch(source, /plugin host|adopter|\.plugins|zcode/)
+  assert.match(css, /\.set-launchers\s*\{[^}]*max-height:\s*176px[^}]*overflow-y:\s*auto/s)
+  assert.match(css, /\.set-launchers\s*\{[^}]*scrollbar-width:\s*thin/s)
 })
 
 test('project rows expose a one-step catalog-registration removal action', () => {

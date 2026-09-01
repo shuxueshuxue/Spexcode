@@ -100,7 +100,7 @@ export function useLaunchers() {
       applySettings(d)
     }).catch(() => {})
   }, [applySettings])
-  // A successful host-side harness addition invalidates the module snapshot and refreshes this picker in
+  // A successful host-side launcher/config change invalidates the module snapshot and refreshes this picker in
   // place. Other consumers that mount later inherit the same fresh snapshot synchronously.
   const refreshLaunchers = useCallback(async () => {
     launcherSettings = null

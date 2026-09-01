@@ -97,11 +97,14 @@ Settings page refit locally without claiming tmux geometry; returning to Session
   through [[page-scroll]] (the pane supplies the viewport, the shared primitive supplies overflow and
   scrollbar geometry, and this component supplies only its centered content), and the single home for
   future settings. Today it owns the language picker, the terminal base-surface and font-size controls, the shortcuts editor,
-  the theme-preset picker, the CLI-backed launcher profile list, and project-scoped built-in harness delivery.
+  the theme-preset picker, the CLI-backed launcher profile list, project-scoped built-in harness addition, and the optional
+  raw project config editor.
   Launcher profiles are read through the same `/api/settings` path as the New Session picker. Harness delivery
   reads and updates the portable project config through the existing host project API; the host invokes the CLI
-  materialize operation, so the browser does not grow a second configuration or execution path. External adapter
-  targets are never offered here.
+  materialize operation, so the browser does not grow a second configuration or execution path. The page can add
+  multiple named launchers of the same harness type, including headless variants, by collecting a name, type, and
+  command and writing the same `sessions.launchers` object the CLI reads. It also owns an optional raw
+  `spexcode.json` editor using the same revision-guarded API. External adapter targets are never offered here.
   The direct route mounts that same page inside the phone shell above its tab bar, without inventing a
   mobile Settings clone or a fifth primary tab. `,` again routes home to the graph; Esc routes nothing
   ([[side-nav]] — it only closes in-page overlays).

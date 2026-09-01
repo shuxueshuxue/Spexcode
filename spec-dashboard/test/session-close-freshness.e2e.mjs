@@ -167,6 +167,10 @@ try {
   const removedInMs = Date.now() - responseAt
   assert.ok(removedInMs <= 2_000, `closed row took ${removedInMs}ms to leave the live dashboard`)
   assert.equal(page.url().split('#')[1], `/sessions/${sessionId}`, 'closing the selected session must keep its routed document')
+  const tabTitle = page.locator('.tab-label').filter({ hasText: 'close freshness target' })
+  await waitFor(() => tabTitle.count().then((count) => count === 1), 'closed session tab title')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await waitFor(() => tabTitle.count().then((count) => count === 1), 'persisted closed session tab title after reload')
   await page.locator('.tl-chat:visible [data-footer-state="archived"], .tl-chat:visible [data-footer-state="offline"]').waitFor({ state: 'visible', timeout: 5_000 })
   assert.match(await page.locator('.tl-chat:visible .m-coldline').innerText(), /只读|read[ -]only/i, 'closed session did not become the read-only Conversation')
   assert.ok(browserErrors.every((message) => /404 \(Not Found\)/.test(message)), `unexpected browser errors: ${browserErrors.join('\n')}`)

@@ -5,6 +5,16 @@ import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } 
 
 export { closeDestination, moveTab, placeTab, tabKey }
 
+// A tab title is presentation metadata, not identity. Keeping it beside the address lets a session tab retain
+// its last known name after the live session projection removes the closed session.
+export const setTabTitle = (tabOrKey, title) => {
+  const key = typeof tabOrKey === 'string' ? tabOrKey : tabKey(tabOrKey)
+  const value = typeof title === 'string' ? title.trim() : ''
+  const current = getTabs().find((tab) => tabKey(tab) === key)
+  if (!current || current.page !== 'sessions' || !current.param || current.param === 'new' || !value || current.title === value) return
+  putTabs(getTabs().map((tab) => tabKey(tab) === key ? { ...tab, title: value } : tab))
+}
+
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
 // navigation model laid beside it.
 //

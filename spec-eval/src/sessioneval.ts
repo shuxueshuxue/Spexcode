@@ -1650,7 +1650,6 @@ async function buildSessionEvalModelInLedger(
   ctxRoot: string,
 ): Promise<SessionEvalModel> {
   const specs = await loadSpecs(ctxRoot)
-  const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
   const { impact, shas } = await sessionImpactForContext(id, ctx, wtPath)

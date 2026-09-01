@@ -35,11 +35,6 @@ navigation path, so the strip, deep links, and browser history agree. Session ba
 session tab; published resources are separate file-class tabs. The shell owns the strip's position in the
 frame and the document-actions slot at its right edge; documents do not render a second tab rail.
 
-A session tab may outlive its live board row after the session is closed. In that case the strip resolves the
-same visible title from the canonical lean archive index, keeping the retained document named instead of
-falling back to its raw id; the archive read is on demand and only occurs when an open session tab is missing
-from the live projection.
-
 Every tab is an ordinary tab. There is no pinned, held, or preview state: a tab is an address in the working
 set, drawn the same way whether it arrived by a plain click, by ctrl/⌘-click, or by creating a session, and
 replaced the same way. A tab that could not be replaced was a tab whose history the reader had to remember;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
@@ -10,7 +10,6 @@ import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey, resourceTabKey } from './sessionSurface.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
-import { apiFetch } from './data.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
 import { iconFor, isResident } from './viewCatalog.js'
@@ -114,7 +113,6 @@ export function placeLabel(route, ctx) {
 
 export default function TabStrip({ specs, sessions, route, trailing = null, onSessionContextMenu = null }) {
   const t = useT()
-  const [archivedSessions, setArchivedSessions] = useState([])
   const [closing, setClosing] = useState([])
   const [wrapped, setWrapped] = useState(false)
   const tabsHostRef = useRef(null)
@@ -131,29 +129,6 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
   const tabsRef = useRef([])
   const { tabs, activeKey, open, close, closeOthers, move } = useTabs({ onCloseStart: startTabClose })
   tabsRef.current = tabs
-  // A closed session leaves the live board projection, but its address can remain in the workspace working
-  // set. The archive index is the canonical retained title projection; read it only when an open session tab
-  // has no live row, so the strip never turns a valid closed document into a bare id (and normal boots pay no
-  // archive request).
-  const missingSessionIds = tabs
-    .filter((tab) => tab.page === 'sessions' && tab.param && tab.param !== 'new' && !(sessions || []).some((s) => s.id === tab.param || s.id?.startsWith(tab.param)))
-    .map((tab) => tab.param)
-  const missingSessionKey = [...new Set(missingSessionIds)].sort().join(',')
-  const archiveRequestKey = useRef('')
-  useEffect(() => {
-    if (!missingSessionKey || archiveRequestKey.current === missingSessionKey) return
-    archiveRequestKey.current = missingSessionKey
-    apiFetch('/api/sessions/archive-index', { cache: 'no-store' }).then(async (response) => {
-      if (!response.ok) return
-      const rows = await response.json()
-      if (Array.isArray(rows)) setArchivedSessions(rows.map((session) => ({ ...session, archived: true })))
-    }).catch(() => {})
-  }, [missingSessionKey])
-  const sessionRows = useMemo(() => {
-    const byId = new Map((sessions || []).map((session) => [session.id, session]))
-    for (const session of archivedSessions) if (!byId.has(session.id)) byId.set(session.id, session)
-    return [...byId.values()]
-  }, [sessions, archivedSessions])
   useEffect(() => {
     const host = tabsHostRef.current
     if (!host || typeof ResizeObserver === 'undefined') return undefined
@@ -260,7 +235,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
         const key = tabKey(tab)
         const isClosing = closing.some((entry) => entry.key === key) && !tabs.some((item) => tabKey(item) === key)
         const active = key === activeKey
-        const tabLabel = label(tab, { specs, sessions: sessionRows, names, t })
+        const tabLabel = label(tab, { specs, sessions, names, t })
         // the insertion marker rides the tab the moved one would land in front of — or, for the end of the
         // strip, the trailing edge of the last tab. Two classes, one line, at home in any row of a wrapped
         // strip because it is drawn on a tab rather than between them.
@@ -275,7 +250,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
               if (isClosing) return
               e.preventDefault()
               const session = tab.page === 'sessions' && tab.param && tab.param !== 'new'
-                ? (sessionRows.find((item) => item.id === tab.param || item.id?.startsWith(tab.param)) || pendingSessionFor(tab.param))
+                ? (sessions?.find((item) => item.id === tab.param || item.id?.startsWith(tab.param)) || pendingSessionFor(tab.param))
                 : null
               if (session && onSessionContextMenu) {
                 setMenu(null)
@@ -288,7 +263,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
             <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
               onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
               <TabKindIcon tab={tab} />
-              <TabDot tab={tab} specs={specs} sessions={sessionRows} />
+              <TabDot tab={tab} specs={specs} sessions={sessions} />
               <span className="tab-label">{tabLabel}</span>
             </button>
             <button type="button" className="tab-x" onClick={() => { if (!isClosing) close(tab) }} aria-label={t('tabs.close')}>

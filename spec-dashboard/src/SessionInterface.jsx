@@ -1298,7 +1298,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
       />}
       <div className="si-document">
-        {route && <TabStrip specs={specs} sessions={sessionsWithRetention} route={route}
+        {route && <TabStrip specs={specs} sessions={sessions} route={route}
           onSessionContextMenu={(next) => { setResourceMenu(false); setCtxMenu(next) }} />}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen

@@ -356,6 +356,14 @@ test('the chrome bands the budget does not allow are gone from the sheet', () =>
   assert.match(css, /\.m-composer\s*\{[^}]*position:\s*absolute;/s)
 })
 
+test('conversation day separators center their date on one continuous rule', () => {
+  assert.match(timelineChat, /className="m-day"[\s\S]*className="m-day-rule"[\s\S]*className="m-day-label"/)
+  assert.doesNotMatch(timelineChat, /<div className="m-day"[^>]*><div className="m-gut"/)
+  assert.match(css, /\.m-day\s*\{[^}]*position:\s*relative;[^}]*display:\s*flex;[^}]*justify-content:\s*center;/s)
+  assert.match(css, /\.m-day-rule\s*\{[^}]*position:\s*absolute;[^}]*inset-inline:\s*0;[^}]*top:\s*50%;/s)
+  assert.match(css, /\.m-day-label\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*background:\s*var\(--paper\);/s)
+})
+
 test('tab widths follow content before wrapping and keep the active close affordance', () => {
   assert.match(css, /\.tabstrip-tabs\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*container-type:\s*inline-size;/s)
   assert.match(css, /\.tabstrip-tabs\.wrapped\s*\{[^}]*flex-wrap:\s*wrap;/s)

@@ -109,11 +109,11 @@ scenarios:
     tags: [backend-api]
     description: >
       Through a real backend running this code, drive a launchPayloadProof harness (codex, codex-headless) into the
-      state a deployment reaches whenever a launch's readiness window is interrupted: the native identity already
-      bound on the record and the single-use launch receipt already consumed by another serialized consumer — the
-      recovered-receipt drain branch, which consumes before it arms the observer, or a re-arm after the previous
-      observer died with a reloaded backend child. Read what the readiness observer then does, and what diagnostic
-      lands on the record, the board, and the log.
+      state a saturated deployment reaches on roughly two thirds of its launches: a readiness observer armed while
+      the native identity was still unbound, and then another serialized consumer — a recovered-receipt drain, a
+      resume recovery — binds that identity and takes the single-use receipt before the observer's next poll sees
+      it. Read what the readiness observer then does, and what diagnostic lands on the record, the board, and the
+      log.
     expected: >
       The observer reads the bound identity as this launch's success and proceeds straight to the adapter liveness
       check. It records no readiness diagnostic and the session stays active: an absent single-use receipt is never

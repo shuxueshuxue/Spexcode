@@ -867,7 +867,7 @@ if (cmd === 'serve') {
       const peers = await peerControlOrThrow({ op: 'list' })
       if (!Array.isArray(peers)) throw new Error('peer service returned an invalid list')
       if (has('json')) console.log(JSON.stringify(peers, null, 2))
-      else for (const peer of peers) console.log(`${peer.state.padEnd(10)} ${peer.sshAddress}  ${peer.machineId}  ${peer.owner ? 'owner' : 'reverse'}${peer.sshOptions.length ? `  ssh: ${peer.sshOptions.join(' ')}` : ''}`)
+      else for (const peer of peers) console.log(`${peer.state.padEnd(10)} ${peer.sshAddress}  ${peer.machineId}  ${peer.owner ? 'owner' : 'reverse'}${peer.sshOptions?.length ? `  ssh: ${peer.sshOptions.join(' ')}` : ''}`)
     } catch (error) { console.error(`spex peer ls: ${(error as Error).message}`); process.exit(1) }
   } else {
     console.error(`spex peer: unknown verb '${sub}' — connect | ls | disconnect  (spex help peer)`)

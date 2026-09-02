@@ -54,7 +54,9 @@ reason rather than accepting a slow project.
 
 `wsl.js` is the shell's WSL adapter. It decodes the UTF-16 `wsl.exe -l -v` response, selects the starred
 version-2 distro, exposes the `SPEXCODE_DESKTOP_WSL_PROBE` test seam, reads the host record through `wsl.exe`, and
-translates `\\wsl$\\<distro>\\home\\…` paths to `/home/…`. Native drive paths and `/mnt/*` are refused before
+translates `\\wsl$\\<distro>\\home\\…` paths to `/home/…`. The Windows picker also accepts the
+`SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY` seam so native-dialog outcomes remain reproducible through Electron.
+Native drive paths and `/mnt/*` are refused before
 the existing project POST with the 9p reason. A missing `wsl.exe` reports the install action; other probe spawn
 errors remain detection failures. `wsl-bootstrap.sh` is fed through `wsl.exe` with a piped stdin, so apt's
 single sudo prompt remains in the verbatim transcript; it uses a bundled tarball when supplied and otherwise

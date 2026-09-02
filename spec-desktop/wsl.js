@@ -98,7 +98,7 @@ function readWslHostRecord(distro, { probe = process.env.SPEXCODE_DESKTOP_WSL_PR
 function bootstrapCommand(distro, scriptPath = resolve(__dirname, 'wsl-bootstrap.sh'), bundleDir = process.env.SPEXCODE_DESKTOP_BUNDLE_DIR || '') {
   const wslScriptPath = windowsPathToWsl(scriptPath)
   const script = `sed 's/\\r$//' ${shellQuote(wslScriptPath)} > /tmp/spexcode-wsl-bootstrap.sh && bash /tmp/spexcode-wsl-bootstrap.sh`
-  const bundle = bundleDir ? `SPEXCODE_BUNDLE_DIR=${shellQuote(windowsPathToWsl(bundleDir))} ` : ''
+  const bundle = bundleDir ? `export SPEXCODE_BUNDLE_DIR=${shellQuote(windowsPathToWsl(bundleDir))}; ` : ''
   return { file: process.env.SPEXCODE_DESKTOP_WSL_PROBE || DEFAULT_PROBE, args: ['-d', distro, '--', 'bash', '-lc', `${bundle}${script}`] }
 }
 

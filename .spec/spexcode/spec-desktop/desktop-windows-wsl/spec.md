@@ -68,6 +68,9 @@ closes that page and loads the same gateway URL used by a browser.
 The bootstrap must install the self-consistent SpexCode package set from [[desktop-packaging]]: one local tarball
 per package from the same commit. A thin root tarball must not mix release lines, and there is no registry fallback.
 
+The packaged command exports `SPEXCODE_BUNDLE_DIR` before invoking the unpacked bootstrap script, so the
+script sees the complete local tarball set rather than treating the directory as a transient `sed` input.
+
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource
 rules. WSL2 takes up to half of RAM by default: the bootstrap offers a recommended `%UserProfile%\.wslconfig`

@@ -14,7 +14,7 @@ related:
 # tab-icon
 
 The sibling of [[tab-title]]: every tab projects the icon belonging to its current pathname scope. A project
-stores its chosen value in `spexcode.json` `dashboard.icon` (featured presets and the broad Iconify
+stores its chosen value in `.spec/spexcode.json` `dashboard.icon` (featured presets and the broad Iconify
 catalog plus preserved legacy emoji/Iconify/URL forms); the global gateway stores its chosen icon only in the
 host config described by [[identity-config]]. The backend and catalog expose resolved identities, and
 [[project-identity]] selects the gateway record for `/projects` or the matching project row for `/p/<id>/`.

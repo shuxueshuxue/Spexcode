@@ -21,7 +21,7 @@ related:
 command, on one machine. After installing `spex`, `spex flat new <repo-url|path>` asks which local coding
 agent will run the conversion when the caller has no configured launcher. A repository URL is cloned into an
 isolated flat; a local repository is the target and receives only `.spec` intent commits. An already initialized
-local project keeps its existing `.spec`, `spexcode.json`, and launcher configuration. Flatcode infers source,
+local project keeps its existing `.spec`, `.spec/spexcode.json`, and launcher configuration. Flatcode infers source,
 then runs the chosen agent until the spec tree passes a gate. It owns no server, no account, no queue, and no
 hostname: the whole capability is a local command whose durable work is readable project intent.
 
@@ -50,7 +50,7 @@ flat that stops early is a legible outcome; a flat that claims success it did no
 
 ## Profiling is load-bearing, and it is proposed, not asserted
 
-A foreign repository has no `spexcode.json`, and lint with no `governedRoots`/`sourceExtensions` finds zero
+A foreign repository has no `.spec/spexcode.json`, and lint with no `governedRoots`/`sourceExtensions` finds zero
 source files. Zero governed files makes coverage vacuously complete and every drift and coverage rule
 silent — the gate would pass an empty `.spec` on any repository in the world. So Flatcode derives the
 governed roots and source extensions from what the repository actually contains and writes them down before
@@ -95,7 +95,7 @@ can continue from the configuration it already has.
 A URL conversion commits the spec tree onto a dedicated `flatcode` branch inside Flatcode's isolated clone,
 because the graph payload is anchored to a Git revision and drift is derived from history. That branch is never
 pushed. A local path runs on its checked-out branch, refuses a dirty tree, and commits only `.spec` (or the
-initial `.spec` plus `spexcode.json` adoption seed). Agent changes outside `.spec` fail the run and are never
+initial `.spec` plus `.spec/spexcode.json` adoption seed). Agent changes outside `.spec` fail the run and are never
 included in a Flatcode commit. Its `flat.json` reading is written beside the source repository, never inside it.
 
 ## What it hands off, and what it is not

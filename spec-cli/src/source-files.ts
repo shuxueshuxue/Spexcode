@@ -31,6 +31,7 @@ function globToRe(glob: string): RegExp {
 
 function isSpexCodeData(path: string): boolean {
   return path === 'spexcode.json' || path === 'spexcode.local.json'
+    || path === '.spec/spexcode.json' || path === '.spec/spexcode.local.json'
     || path === '.spec' || path.startsWith('.spec/')
     || path === '.plugins' || path.startsWith('.plugins/')
 }

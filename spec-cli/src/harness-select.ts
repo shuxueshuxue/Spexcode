@@ -1,7 +1,7 @@
 import { HARNESSES, type Harness, type HarnessId } from './harness.js'
 
 // @@@ harness-select - the DECLARATIVE choice of WHICH harness targets `spex materialize` delivers the
-// SpexCode system into. The selection is persistent config (spexcode.json's `harnesses`), NOT a one-shot
+// SpexCode system into. The selection is persistent config (.spec/spexcode.json's `harnesses`), NOT a one-shot
 // flag, because materialize re-runs at every git-native anchor ([[commit-surgery]]), so the intent
 // must live where every re-materialize can read it. This module owns ONLY the vocabulary + validation; the
 // per-harness write/clean mechanics live on the [[harness-adapter]], the materialize loop on [[harness-delivery]].
@@ -21,7 +21,7 @@ const KNOWN: readonly string[] = HARNESSES.map((h) => h.id)
 // the one-line repair every missing-selection error carries — the field is REQUIRED, never defaulted,
 // because with many harnesses a silent "deliver everywhere" would litter the adopter's tree with artifacts
 // for tools they never installed.
-const MISSING = `spexcode.json has no "harnesses" field — the delivery targets are an EXPLICIT choice, never a default. Declare it, e.g. "harnesses": ["claude"] — members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}, and [] means deliver into NO harness (the L0-only posture, \`spex init --harness none\`). Fresh adoption: \`spex init --harness <ids>\` stamps it.`
+const MISSING = `.spec/spexcode.json has no "harnesses" field — the delivery targets are an EXPLICIT choice, never a default. Declare it, e.g. "harnesses": ["claude"] — members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}, and [] means deliver into NO harness (the L0-only posture, \`spex init --harness none\`). Fresh adoption: \`spex init --harness <ids>\` stamps it.`
 
 // the CLI spelling of the empty set. `--harness none` is a whole-selection word, not a member: mixing it with
 // a real target is a contradiction, so it only translates when it IS the entire flag (otherwise it falls
@@ -37,13 +37,13 @@ export function parseHarnessFlag(spec: string): unknown[] {
     .map((s) => (s.startsWith('plugin:') ? { plugin: s.slice('plugin:'.length) } : s))
 }
 
-// parse + validate the spexcode.json `harnesses` field into resolved targets. FAIL LOUD on an illegal set —
+// parse + validate the .spec/spexcode.json `harnesses` field into resolved targets. FAIL LOUD on an illegal set —
 // materialize and init both gate on this so a bad config never silently delivers the wrong thing. `raw` is the
 // JSON value as written; a MISSING field is itself illegal (the choice must exist, stamped by init).
 export function resolveHarnessTargets(raw: unknown): HarnessTarget[] {
   if (raw === undefined || raw === null) throw new Error(MISSING)
   if (!Array.isArray(raw))
-    throw new Error(`spexcode.json "harnesses" must be an ARRAY of targets (got ${typeof raw}). Members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}.`)
+    throw new Error(`.spec/spexcode.json "harnesses" must be an ARRAY of targets (got ${typeof raw}). Members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}.`)
   // THE EMPTY SET IS A LEGAL, EXPLICIT CHOICE: deliver into no harness at all. That is the L0-only posture —
   // the spec tree, the lint, and the git hooks, with zero artifacts written into any agent's config. It is
   // distinct from a MISSING field (undefined/null, rejected above): [] is somebody saying "none", not
@@ -54,26 +54,26 @@ export function resolveHarnessTargets(raw: unknown): HarnessTarget[] {
   for (const m of raw) {
     if (typeof m === 'string') {
       if (m === 'plugin')
-        throw new Error(`spexcode.json "harnesses": a plugin target needs an EXPLICIT landing folder — write {"plugin":"<folder>"} (e.g. {"plugin":".adopter-a"}), not the bare string "plugin", because each host agent reads a different plugins dir.`)
+        throw new Error(`.spec/spexcode.json "harnesses": a plugin target needs an EXPLICIT landing folder — write {"plugin":"<folder>"} (e.g. {"plugin":".adopter-a"}), not the bare string "plugin", because each host agent reads a different plugins dir.`)
       if (m === NO_DELIVERY)
-        throw new Error(`spexcode.json "harnesses": "${NO_DELIVERY}" is not a member — it is the CLI spelling of the WHOLE selection being empty. Write "harnesses": [] for no delivery, or drop "${NO_DELIVERY}" and keep the real targets (\`spex init --harness none\` cannot be combined with another id).`)
+        throw new Error(`.spec/spexcode.json "harnesses": "${NO_DELIVERY}" is not a member — it is the CLI spelling of the WHOLE selection being empty. Write "harnesses": [] for no delivery, or drop "${NO_DELIVERY}" and keep the real targets (\`spex init --harness none\` cannot be combined with another id).`)
       if (!KNOWN.includes(m))
-        throw new Error(`spexcode.json "harnesses": unknown harness id "${m}" — known native ids are ${KNOWN.join(', ')}, or use {"plugin":"<folder>"}; [] (\`--harness ${NO_DELIVERY}\`) delivers into no harness at all.`)
+        throw new Error(`.spec/spexcode.json "harnesses": unknown harness id "${m}" — known native ids are ${KNOWN.join(', ')}, or use {"plugin":"<folder>"}; [] (\`--harness ${NO_DELIVERY}\`) delivers into no harness at all.`)
       targets.push({ kind: 'native', id: m as HarnessId })
     } else if (m && typeof m === 'object' && !Array.isArray(m) && 'plugin' in m) {
       const folder = (m as { plugin?: unknown }).plugin
       if (typeof folder !== 'string' || !folder.trim())
-        throw new Error(`spexcode.json "harnesses": a {"plugin":…} target needs a NON-EMPTY folder string (e.g. {"plugin":".adopter-a"}) — each host agent reads a different plugins dir, so the folder must be explicit.`)
+        throw new Error(`.spec/spexcode.json "harnesses": a {"plugin":…} target needs a NON-EMPTY folder string (e.g. {"plugin":".adopter-a"}) — each host agent reads a different plugins dir, so the folder must be explicit.`)
       targets.push({ kind: 'plugin', folder: folder.trim() })
     } else {
-      throw new Error(`spexcode.json "harnesses": each member must be a native id string (${KNOWN.join(', ')}) or a {"plugin":"<folder>"} object — got ${JSON.stringify(m)}.`)
+      throw new Error(`.spec/spexcode.json "harnesses": each member must be a native id string (${KNOWN.join(', ')}) or a {"plugin":"<folder>"} object — got ${JSON.stringify(m)}.`)
     }
   }
   // PLUGIN EXCLUSIVITY: a plugin bundle is a SUPERSET delivery to its host agent, so pairing it with any
   // native harness double-delivers. So a set with a plugin may carry NO native harness.
   const natives = targets.filter((t): t is { kind: 'native'; id: HarnessId } => t.kind === 'native')
   if (targets.some((t) => t.kind === 'plugin') && natives.length)
-    throw new Error(`spexcode.json "harnesses": a plugin target is EXCLUSIVE — it cannot coexist with native harnesses (${natives.map((t) => t.id).join(', ')}). A plugin bundle already delivers the whole system to its host agent, so pairing it with a native harness double-delivers. Choose EITHER native harnesses OR plugin target(s).`)
+    throw new Error(`.spec/spexcode.json "harnesses": a plugin target is EXCLUSIVE — it cannot coexist with native harnesses (${natives.map((t) => t.id).join(', ')}). A plugin bundle already delivers the whole system to its host agent, so pairing it with a native harness double-delivers. Choose EITHER native harnesses OR plugin target(s).`)
   return targets
 }
 

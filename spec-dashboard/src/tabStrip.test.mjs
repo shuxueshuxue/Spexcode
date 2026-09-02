@@ -62,6 +62,12 @@ test('tab tear-off captures the pointer so release outside the viewport reaches 
   assert.match(gesture, /window\.addEventListener\('pointerup', onPointerUp, true\)/)
 })
 
+test('tab gesture defers pointer capture until a real drag', () => {
+  assert.match(gesture, /if \(pointerMode\) \{[\s\S]*window\.addEventListener\('pointermove', onPointerMove, true\)/)
+  assert.match(gesture, /if \(canCapture\) \{[\s\S]*captureTarget\.setPointerCapture\(pointerId\)/)
+  assert.match(gesture, /if \(captured && captureTarget\.hasPointerCapture\?\.\(pointerId\)\)/)
+})
+
 test('dragging a tab outside the viewport opens its scoped address and closes through the tab store', () => {
   assert.match(source, /outsideViewport = \(\{ x, y \}\) => x < 0 \|\| y < 0 \|\| x > window\.innerWidth \|\| y > window\.innerHeight/)
   assert.match(source, /window\.open\(tabWindowAddress\(detached\)\)/)

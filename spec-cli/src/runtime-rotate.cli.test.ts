@@ -13,7 +13,7 @@ test('doctor repair app-server reads launcher configuration from the project, no
   const home = mkdtempSync(`${tmpdir()}/spex-runtime-rotate-`)
   const project = mkdtempSync(`${tmpdir()}/spex-runtime-rotate-project-`)
   try {
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
       sessions: {
         launchers: { codex: { harness: 'codex', cmd: 'codex' } },
         defaultLauncher: 'codex',

@@ -376,7 +376,7 @@ export interface Harness {
   // clean is the EXACT inverse of materialize's per-harness write: SURGICALLY remove ONLY SpexCode's own
   // artifacts — the managed contract block (sentinels), the generated shim file, the trust block, and the
   // skill/agent files named in `arts` — never the user's surrounding prose, their other settings, or any .spec
-  // data. materialize calls it for every UNSELECTED harness, so dropping a harness from spexcode.json's
+  // data. materialize calls it for every UNSELECTED harness, so dropping a harness from .spec/spexcode.json's
   // `harnesses` prunes that harness's products on the next re-materialize.
   clean(proj: string, arts: HarnessArtifacts, preserveProject?: boolean): void
   // the inverse of writeTrust: strip THIS project's spexcode trust block from the harness's global config.
@@ -1147,7 +1147,7 @@ export function harnessById(id: string): Harness {
 }
 
 // --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------
-// a launcher = a `{ harness, cmd }` entry in spexcode.json's `sessions.launchers`, keyed by a
+// a launcher = a `{ harness, cmd }` entry in .spec/spexcode.json's `sessions.launchers`, keyed by a
 // human-chosen name. `claude` and `native adapter` are NOT special built-ins — `spex init` SEEDS them as ordinary named
 // launchers (with the regular command path), so they are edited like any other. harness defaults to claude.
 // resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
@@ -1156,7 +1156,7 @@ export function harnessById(id: string): Harness {
 export type Launcher = { name: string; harness: string; cmd: string; headless: boolean; configDir: string | null }
 export type LauncherDefault = { default: string | null; error: string | null }
 
-// the complete configured named launchers from spexcode.json, as a stable name-sorted list (for CLI/session
+// the complete configured named launchers from .spec/spexcode.json, as a stable name-sorted list (for CLI/session
 // resolution and downstream projections). Picking a launcher is the ONLY launch choice; the old separate
 // harness pick is gone.
 export function launcherList(root = mainCheckout()): Launcher[] {
@@ -1171,7 +1171,7 @@ export function launcherList(root = mainCheckout()): Launcher[] {
 }
 
 export const MISSING_DEFAULT_LAUNCHER_ERROR =
-  'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
+  'sessions.defaultLauncher is required for a launch without --launcher; set it in .spec/spexcode.json or .spec/spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
 
 // the configured default launcher NAME ([[launcher-select]]) — the profile `spex session new`/a dropdown pick with no
 // explicit choice resolves. Missing config is a fail-loud setup error, never an implicit fallthrough to a

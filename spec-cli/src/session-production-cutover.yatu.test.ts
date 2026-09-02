@@ -34,7 +34,7 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
   const port = await freePort()
   mkdirSync(join(project, '.spec', 'project'), { recursive: true }); mkdirSync(home); mkdirSync(bin)
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: fixture\nstatus: active\n---\n# fixture\n')
-  writeFileSync(join(project, 'spexcode.json'), '{"harnesses":["claude"]}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{"harnesses":["claude"]}\n')
   writeFileSync(join(bin, 'tmux'), '#!/bin/sh\n[ "$1" = "-V" ] && { echo "tmux 3.4"; exit 0; }\nexit 1\n'); chmodSync(join(bin, 'tmux'), 0o755)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project }); execFileSync('git', ['config', 'user.email', 'yatu@example.test'], { cwd: project }); execFileSync('git', ['config', 'user.name', 'YATU'], { cwd: project }); execFileSync('git', ['add', '.'], { cwd: project }); execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: project })
   // the test worker pins the canonical database beside its own home; this fixture owns a different home

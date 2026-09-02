@@ -97,8 +97,8 @@ test('escaping the worktree is refused before any read', { skip }, () => {
 })
 
 test('the spec tree and spexcode config are not source files', { skip }, () => {
-  const root = fixture({ '.spec/x/spec.md': '# x\n', 'spexcode.json': '{}\n' })
-  for (const hidden of ['.spec/x/spec.md', 'spexcode.json']) {
+  const root = fixture({ '.spec/x/spec.md': '# x\n', '.spec/spexcode.json': '{}\n' })
+  for (const hidden of ['.spec/x/spec.md', '.spec/spexcode.json']) {
     assert.throws(() => readSourceSlice(root, hidden, POLICY), (e: unknown) =>
       e instanceof SourceReadError && (e as SourceReadError).status === 404)
   }

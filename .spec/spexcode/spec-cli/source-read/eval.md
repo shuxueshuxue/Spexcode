@@ -21,7 +21,7 @@ scenarios:
     tags: [backend-api]
     description: >-
       Against the same running backend, request `/api/source` for each of: a path escaping the worktree
-      (`../etc/passwd`), an absolute path, a spec-tree file (`.spec/…/spec.md`), `spexcode.json`, a test
+      (`../etc/passwd`), an absolute path, a spec-tree file (`.spec/…/spec.md`), `.spec/spexcode.json`, a test
       file, and a path that does not exist. Record each status and body.
     expected: >-
       Every one is refused with a status and a sentence naming why — an escape as 400, everything the source

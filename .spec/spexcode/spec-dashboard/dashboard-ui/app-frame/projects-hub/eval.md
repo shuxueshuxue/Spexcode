@@ -65,7 +65,7 @@ scenarios:
       explicitly choose Git initialization and SpexCode initialization with a harness target, and submit;
       also enter a missing path, confirm the path action becomes New project, and create it; exercise an
       unreadable path and a failed init so their errors remain in the modal. Open
-      the added row's settings gear, confirm the raw `spexcode.json` editor contains the initialized
+      the added row's settings gear, confirm the raw `.spec/spexcode.json` editor contains the initialized
       source, occupies about half the desktop viewport and a large bounded mobile
       height without covering its controls, save a valid project setting, and confirm the file changed on disk;
       open the separate setup action and run init — first confirming the button refuses with no harness
@@ -82,7 +82,7 @@ scenarios:
       the real init chain, keeps a failure and its full transcript in place for retry, and closes only on
       catalog success. The resulting row appears with a calm 'stopped' dot and Start as the primary action,
       never a dead Open. The gear opens a monospace editor containing the project's actual portable
-      `spexcode.json`; valid JSON saves through the admin surface, invalid JSON cannot save, and a
+      `.spec/spexcode.json`; valid JSON saves through the admin surface, invalid JSON cannot save, and a
       concurrent disk change is refused visibly rather than overwritten. The editor is the drawer's large
       work area at desktop and 375px; icon details start collapsed below it, expand in flow without overlap,
       and re-collapse after selection. The setup action is distinct

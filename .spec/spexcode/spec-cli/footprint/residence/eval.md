@@ -4,12 +4,12 @@ scenarios:
     description: >
       On a repo whose spec data is tracked (the model's invariant), create a session worktree the way
       newSession does (git worktree add + seed + materialize) and measure what a dispatched agent finds:
-      does the worktree carry the spec sources (.spec, spexcode.json via checkout; spexcode.local.json via
+      does the worktree carry the spec sources (.spec, .spec/spexcode.json via checkout; .spec/spexcode.local.json via
       copy), does `spex graph --json`/lint from inside it see the project's nodes, and are the sources real files
       (never symlinks)?
     expected: >
-      The fresh worktree holds all three spec sources as REAL files — .spec and spexcode.json delivered by
-      git checkout, spexcode.local.json as a copied snapshot — spex inside it sees the full node tree, and
+      The fresh worktree holds all three spec sources as REAL files — .spec and .spec/spexcode.json delivered by
+      git checkout, .spec/spexcode.local.json as a copied snapshot — spex inside it sees the full node tree, and
       nothing in the repo's tracked files changes. No symlink anywhere: a link is a write-semantics
       declaration this model retired.
     tags: [backend-api, cli]
@@ -18,11 +18,11 @@ scenarios:
   - name: worktree-host-state-isolation
     description: >
       Seed a session worktree the way newSession does, then run the two probes that produced real
-      incidents: (1) a worker overwrites "its" spexcode.local.json in the worktree — read the MAIN
-      checkout's spexcode.local.json afterwards; (2) run `git status --porcelain` from inside the worktree —
+      incidents: (1) a worker overwrites "its" .spec/spexcode.local.json in the worktree — read the MAIN
+      checkout's .spec/spexcode.local.json afterwards; (2) run `git status --porcelain` from inside the worktree —
       list what an agent's `git add -A` would pick up.
     expected: >
-      (1) The main checkout's spexcode.local.json is byte-identical to before the worker's write — the
+      (1) The main checkout's .spec/spexcode.local.json is byte-identical to before the worker's write — the
       worktree got a per-worktree COPY snapshot, not a shared write path (launchers config survives).
       (2) git status inside the worktree shows no seeded entry — seeding hides what it makes git-visible in
       the shared .git/info/exclude, so nothing tempts a force-add.

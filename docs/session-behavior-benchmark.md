@@ -38,7 +38,7 @@ goal, and a single session can complete a task without creating unnecessary coor
 
 ### Forced Swarm, adopted consumer, read-only worker behavior
 
-The same `sqlite-db-truncate` task was run in a consumer containing a real `spexcode.json`. The parent was required
+The same `sqlite-db-truncate` task was run in a consumer containing a real `.spec/spexcode.json`. The parent was required
 to dispatch three isolated workers and then synthesize the result. The model chose investigation-only roles.
 
 Observed facts:

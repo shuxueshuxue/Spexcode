@@ -56,7 +56,7 @@ test('a note carrying quote/backslash/newline/unicode survives every real declar
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-record-integrity-home-'))
   const project = realpathSync(mkdtempSync(join(tmpdir(), 'spex-record-integrity-project-')))
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')

@@ -44,7 +44,7 @@ scenarios:
   - name: adopted-repo-grows-opencode-artifacts
     tags: [cli]
     description: >-
-      In a throwaway git repo, run the real `spex init .`, inspect the tree, then narrow spexcode.json's
+      In a throwaway git repo, run the real `spex init .`, inspect the tree, then narrow .spec/spexcode.json's
       `harnesses` to ["claude","codex"] and re-run `spex materialize`.
     expected: >-
       init materializes .opencode/plugins/spexcode.ts (the generated plugin, dispatch.sh command baked), the

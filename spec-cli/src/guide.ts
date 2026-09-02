@@ -33,13 +33,13 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    loopback-only by default; \`--host\` widens its bind as described by \`spex dashboard --help\`.
 
 5. Govern your layout (optional)
-     spexcode.json sets lint's governedRoots/include/exclude/test source policy and any non-default layout.
+     .spec/spexcode.json sets lint's governedRoots/include/exclude/test source policy and any non-default layout.
      \`spex spec lint\` must report 0 errors; coverage warnings are your adoption TODO (files no node claims yet).
 
 Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec       the spec.md format (frontmatter + body + the rules lint enforces)
   spex guide eval       the eval.md format (scenario schema + how loss is measured and filed)
-  spex guide settings   the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, upload,
+  spex guide settings   the .spec/spexcode.json / .spec/spexcode.local.json settings (launchers, dashboard icon, upload,
                         lint budgets, layout) — every field, and which of the two files it belongs in
   spex guide footprint  the footprint model — what SpexCode plants in a repo, and who sees it
                         (committed | ignored | hidden), and every migration recipe`
@@ -170,7 +170,7 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
   description  REQUIRED. What to check / how to measure it through the running product.
   expected     REQUIRED. What ZERO loss looks like — the target the measurement is compared against.
   tags         REQUIRED. ≥1 classification tag (a comma list / flow list \`[a, b]\`), each drawn from the
-               configured library (\`lint.scenarioTags\` in spexcode.json; ships
+               configured library (\`lint.scenarioTags\` in .spec/spexcode.json; ships
                \`frontend-e2e, backend-api, cli, desktop, mobile\`). A tag outside the library is rejected —
                use an existing one, or add it to the library to mint it. Tags classify a scenario (surface,
                device) so it can be filtered and, later, routed to the right driver.
@@ -297,35 +297,35 @@ code file or the scenario (the eval.md) moves since it was filed.
 
 const UPLOAD_DEFAULTS = uploadPolicyDefaults()
 
-const SETTINGS = `spex guide settings — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
+const SETTINGS = `spex guide settings — SpexCode's runtime settings (.spec/spexcode.json / .spec/spexcode.local.json)
 
 SpexCode reads PROJECT runtime settings from TWO optional JSON files at the repo root. There is no imperative
 settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. The two split by
 PORTABILITY, and picking the right one is the whole discipline:
 
-  spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, upload policy,
+  .spec/spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, upload policy,
                         dashboard identity and launcher visibility, lint policy, resource and doctor health budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
-  spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
-                        paths. Layered OVER spexcode.json (see MERGE
+  .spec/spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
+                        paths. Layered OVER .spec/spexcode.json (see MERGE
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
-icon, upload policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
-PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
+icon, upload policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed .spec/spexcode.json. The ABSOLUTE
+PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored .spec/spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
 
 The host-wide gateway has one separate per-user setting, \`gateway.icon\` in
 \`$SPEXCODE_HOME/config.json\`. It is documented below and never belongs to either project file.
 
-MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
+MERGE: .spec/spexcode.local.json is layered over .spec/spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
 uploads, sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
 pass through untouched. This is exactly what lets a launcher's portable NAME reference (defaultLauncher)
 sit in the committed file while its host-specific DEFINITION (with the abs cmd) sits in the local file —
 see LAUNCHERS.
 
-── LAYOUT (spexcode.json — portable; set only for a NON-DEFAULT repo layout) ──
+── LAYOUT (.spec/spexcode.json — portable; set only for a NON-DEFAULT repo layout) ──
   main          path to the source-of-truth checkout. Default: the \`main\` worktree.
   mainBranch    the stable source-of-truth BRANCH worktrees fork from. spex init stamps the root checkout's
                 branch at adoption and the stamped value stays put for every later checkout, so a clone or a
@@ -334,7 +334,7 @@ see LAUNCHERS.
 Example — a repo whose trunk is \`staging\`, not \`main\`:
   { "mainBranch": "staging" }
 
-── DASHBOARD (spexcode.json — portable project identity) ──
+── DASHBOARD (.spec/spexcode.json — portable project identity) ──
   dashboard.title   browser-tab name. Default: the repo-root basename.
   dashboard.icon    the project's icon identity. The Projects UI writes one shared preset id:
                     spexcode | gateway | mdi:rocket-launch | compass | terminal | package | database | spark.
@@ -349,35 +349,35 @@ Example:
 ── HOST GATEWAY ($SPEXCODE_HOME/config.json — per-user host identity, never a project file) ──
   gateway.icon      the global /projects icon, using the same preset ids above. Default: "gateway".
                     The admin-only Projects picker writes this field atomically. It is the gateway's ONE
-                    authored icon setting and is never copied into spexcode.json or spexcode.local.json.
+                    authored icon setting and is never copied into .spec/spexcode.json or .spec/spexcode.local.json.
 Example:
   { "gateway": { "icon": "database" } }
 
 ── SESSIONS / WORKERS ──
   sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 8;
-                            precedence: spexcode.json → SPEXCODE_MAX_ACTIVE env → default; read live, so
+                            precedence: .spec/spexcode.json → SPEXCODE_MAX_ACTIVE env → default; read live, so
                             an edit applies without a restart).
                             Counts compute slots, not total sessions: idle/asking/review/done do not
-                            occupy one. A policy number → committed spexcode.json; omit it to use the
+                            occupy one. A policy number → committed .spec/spexcode.json; omit it to use the
                             default, or tune higher/lower for the project's usual host.
   sessions.launchers        the NAMED launcher profiles (see LAUNCHERS). \`spex init\` seeds one entry per
                             SELECTED harness (--harness); edit/add more like any other.
   sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
                             (required for no-choice creates). A portable NAME → committed.
-A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
+A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in .spec/spexcode.local.json — the committed file
 must stay free of machine paths.
 
-── RESOURCE GOVERNANCE (spexcode.json — portable project budgets) ──
+── RESOURCE GOVERNANCE (.spec/spexcode.json — portable project budgets) ──
   resources.sessionRssMiB      resident-memory budget per governed session. Default 1024.
   resources.backendRssMiB      resident-memory budget for a backend/shared runtime owner. Default 2048.
   resources.idleCpuPercent     CPU budget for a non-progressing owner. Default 2.
   resources.sampleMs           on-demand CPU measurement window. Default 1000 (minimum 50).
   resources.reportIntervalMs   supervisor-owned snapshot cadence. Default 60000 (minimum 5000).
 The report is read-only: \`spex session resources [--json]\`. Reclaim eligibility is advisory and the
-projection never issues mutation authority or signals a process. Budgets are project policy and belong in committed spexcode.json;
-host-specific tuning may override this top-level section in spexcode.local.json.
+projection never issues mutation authority or signals a process. Budgets are project policy and belong in committed .spec/spexcode.json;
+host-specific tuning may override this top-level section in .spec/spexcode.local.json.
 
-── UPLOADS (spexcode.json — portable transfer policy; local overrides are useful for one machine's disk/network) ──
+── UPLOADS (.spec/spexcode.json — portable transfer policy; local overrides are useful for one machine's disk/network) ──
   uploads.maxBytes          maximum bytes in one attached file. Default ${UPLOAD_DEFAULTS.maxBytes}.
   uploads.chunkBytes        maximum raw PATCH body and client slice size. Default ${UPLOAD_DEFAULTS.chunkBytes}.
   uploads.concurrency       simultaneous attachment streams from one dashboard batch. Default ${UPLOAD_DEFAULTS.concurrency}.
@@ -393,7 +393,7 @@ All fields are positive integers except retryLimit, retryDelayMs, and minFreeByt
 The seed template is the one default source; omit a field to use it. The backend reads the merged files for
 each transfer and cleanup pass. The dashboard receives chunk, concurrency, timeout, and retry policy from
 the create/status response, so a portable project policy takes effect without another browser setting.
-Put team-wide transfer policy in committed spexcode.json; use the same keys in gitignored spexcode.local.json
+Put team-wide transfer policy in committed .spec/spexcode.json; use the same keys in gitignored .spec/spexcode.local.json
 only when the backend machine needs a local override. The normal top-level shallow merge lets a local
 uploads.chunkBytes replace only that key.
 
@@ -417,7 +417,7 @@ The interactive profiles preserve each harness's normal permission model. \`open
 \`codex-headless\` are deliberate seed exceptions: their terminal-free runs require \`opencode --auto\` and
 \`codex --yolo\`; interactive profiles stay plain. Other automatic-permission commands are NEVER clean-init
 defaults: define and select one explicitly only when that access is intended. To run workers under an auth
-wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
+wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in .spec/spexcode.local.json — there is no environment
 override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir or
 permission variants. Shape:
   "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi" | "claude-headless" | "codex-headless" | "opencode-headless" | "pi-headless",
@@ -430,15 +430,15 @@ somewhere non-default — e.g. a wrapper exporting CLAUDE_CONFIG_DIR=~/.claude-g
 native conversation (the dashboard timeline / transcript), and NEVER injects it into the launch environment —
 the wrapper stays the sole authority over what it exports. Omit it for a launcher whose harness uses its
 default dir. A wrong or missing declaration fails loud (transcript "file was not found"), never silently reads
-another launcher's dir. Like an absolute \`cmd\`, a \`configDir\` is a machine fact → spexcode.local.json. A portable plain command may live
-in committed spexcode.json (as the init seeds do). A host-specific command — an absolute wrapper path,
-credential route, or personal permission choice — belongs in gitignored spexcode.local.json, while its
-portable defaultLauncher NAME may stay in committed spexcode.json; the merge keeps both:
+another launcher's dir. Like an absolute \`cmd\`, a \`configDir\` is a machine fact → .spec/spexcode.local.json. A portable plain command may live
+in committed .spec/spexcode.json (as the init seeds do). A host-specific command — an absolute wrapper path,
+credential route, or personal permission choice — belongs in gitignored .spec/spexcode.local.json, while its
+portable defaultLauncher NAME may stay in committed .spec/spexcode.json; the merge keeps both:
 
-  spexcode.json  (committed — the portable name reference)
+  .spec/spexcode.json  (committed — the portable name reference)
   { "sessions": { "defaultLauncher": "gpt5" } }
 
-  spexcode.local.json  (gitignored — the host-specific definitions)
+  .spec/spexcode.local.json  (gitignored — the host-specific definitions)
   {
     "sessions": {
       "launchers": {
@@ -448,8 +448,8 @@ portable defaultLauncher NAME may stay in committed spexcode.json; the merge kee
     }
   }
 
-── SERVE (spexcode.json ONLY — public-exposure for \`spex serve --public\`; this section is read straight
-   from spexcode.json, the local overlay is NOT consulted here) ──
+── SERVE (.spec/spexcode.json ONLY — public-exposure for \`spex serve --public\`; this section is read straight
+   from .spec/spexcode.json, the local overlay is NOT consulted here) ──
   serve.public.enabled   turn public mode on without the --public flag.
   serve.public.http      drop TLS (the --http escape hatch) — the password then travels in cleartext.
   serve.public.tls       { "cert": "<path>", "key": "<path>" } — PATHS to your own cert/key; omit for a
@@ -476,13 +476,13 @@ WRITES are project-bound: every mutating verb (new/merge/send/close/rename/resum
 loudly when the resolved backend serves a DIFFERENT same-host project — an explicit --api/--port skips
 the guard (the flag is the declaration of intent). Reads point anywhere.
 
-── ISSUES (spexcode.json — portable policy) ──
+── ISSUES (.spec/spexcode.json — portable policy) ──
   issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
                       hides the dashboard view. Flip it by editing the JSON — there is no CLI toggle verb;
                       \`spex doctor\` reports the current state (and flags a legacy \`proposals.enabled\` key,
                       which is no longer read).
 
-── FORGE (spexcode.json — which forge this repo's remote is; a project fact, so committed) ──
+── FORGE (.spec/spexcode.json — which forge this repo's remote is; a project fact, so committed) ──
   forge.host          explicit forge host id ('github' | 'gitlab' | …) overriding the automatic derivation.
                       Normally OMIT it: spec-forge resolves the host from the origin remote's hostname —
                       github.com → github, bitbucket → bitbucket, any other remote → gitlab (the common
@@ -490,7 +490,7 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                       A resolved host with no registered driver degrades to an EMPTY forge slice (local
                       issues still work, no error).
 
-── LINT (spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
+── LINT (.spec/spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).
                            '.' = the whole project (only git-TRACKED files). Default
                            ["spec-dashboard/src", "spec-cli/src"].
@@ -511,7 +511,7 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                            scoped code: file whose window commits hit no selector (a miss). "ignore"
                            silences ONLY that advisory; it never touches hit blocks (anchor-drift),
                            bare-path drift, integrity, Spec-OK acks, related semantics, or eval
-                           freshness. A project policy → committed spexcode.json.
+                           freshness. A project policy → committed .spec/spexcode.json.
   lint.scenarioTags        the closed vocabulary an eval scenario's tags: must draw from (default
                            ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
 Example — govern your own source dir:
@@ -521,7 +521,7 @@ Example — declare project-specific exclusions (nothing is guessed from these n
 Migration: \`lint.maxChildren\` is RETIRED and no longer read; move its value to
   \`doctor.breadth.maxChildren\`. Bare \`spex doctor\` flags a stale key.
 
-── DOCTOR HEALTH (spexcode.json — portable advisory-diagnosis budgets) ──
+── DOCTOR HEALTH (.spec/spexcode.json — portable advisory-diagnosis budgets) ──
   doctor.altitude         the one altitude proxy config consumed by bare \`spex doctor\`:
                           { lineBudget, charBudget, sizeable, dense, steps, identifierExtensions }
                           Defaults: 50 / 4200 / 35 / 1.3 / 3 / []. Exact filename signals derive from
@@ -533,7 +533,7 @@ Migration: \`lint.maxChildren\` is RETIRED and no longer read; move its value to
 Example — tune opt-in health diagnosis without changing the lint gate:
   { "doctor": { "altitude": { "lineBudget": 70 }, "breadth": { "maxChildren": 10 } } }
 
-── OTHER (spexcode.json unless noted) ──
+── OTHER (.spec/spexcode.json unless noted) ──
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids
@@ -551,16 +551,16 @@ measurement) and leaves the MIDDLE — construction — to the harness/agent/tes
 stitches the two ends into a closed loop. Materialize is the base operation of harness ADAPTATION:
 one pass renders the spec tree into whatever artifacts the selected harness auto-discovers, so that
 is how SpexCode reaches an agent — never a launch-time flag. The footprint follows: the head+tail
-(.spec, spexcode.json, evals) is the ASSET and lives in git like source; everything else is derived
+(.spec, .spec/spexcode.json, evals) is the ASSET and lives in git like source; everything else is derived
 wiring or a machine fact. Materialized artifacts carry no facts, so they are NEVER tracked — there is exactly one residence
 behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
 ── THE FOUR KINDS (all fixed) ──
-  spec data       .spec/ (incl .plugins/) + spexcode.json — ALWAYS tracked. Git is the database; there is
+  spec data       .spec/ (incl .plugins/) + .spec/spexcode.json — ALWAYS tracked. Git is the database; there is
                   deliberately NO way to say "untrack the spec" in this schema.
   (no delivery)   \`spex init --harness none\` ("harnesses": []) adopts the spec tree, the lint and the git
                   hooks and writes NOTHING into any agent's config — the L0-only footprint.
-  machine facts   spexcode.local.json, the hook shims, plugin bundles — NEVER tracked; always in the
+  machine facts   .spec/spexcode.local.json, the hook shims, plugin bundles — NEVER tracked; always in the
                   per-clone exclude. A shim is a machine fact only while it is WHOLLY OURS: where the harness
                   discovers its hooks in a file that is ALSO your project config (.claude/settings.json,
                   .codex/hooks.json, .zcode/settings.json), SpexCode co-owns only its own hook entries —
@@ -600,7 +600,7 @@ SpexCode's own identity stamps, then re-asserts — legacy states (a .gitignore 
 artifact) are forgotten by the same pass. \`spex uninstall\` is the empty
 materialize plus the global store: a total backout that never touches your .spec/.plugins or prose. Fresh
 clones and session worktrees are self-sufficient: data by checkout, materialized artifacts by
-re-materialize, the machine snapshot (spexcode.local.json) by copy.
+re-materialize, the machine snapshot (.spec/spexcode.local.json) by copy.
 
 ── THE CONTENT FILTER (mixed-content contract files) ──
 Per-clone only — git config filter.spexcode.* + .git/info/attributes + a shim under .git/spexcode/ —
@@ -627,7 +627,7 @@ remote; and taking the node public later is a migration (move it into the shared
 not a flag flip.
 
 ── MIGRATIONS ──
-  legacy untracked spec     track the sources once:  git add .spec spexcode.json  (commit on your branch)
+  legacy untracked spec     track the sources once:  git add .spec  (commit on your branch)
                             WARNING: tracking is not retroactive secrecy — history already pushed
                             elsewhere cannot be recalled.
   back out entirely         \`spex uninstall\` (add --hooks to also remove the spexcode git hooks).`

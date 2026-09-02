@@ -40,7 +40,7 @@ what this design refuses is not fine-grained privacy but the bit-flip *represent
   where governed code lives, and a sha is just a name; cross-repo naming is honest.
 - **The ignore entry rides the managed block**, so its home follows [[residence]]'s one behavior like every
   other rule — no second mechanism. The dir name is a fixed convention (the `*.local` family, like
-  `spexcode.local.json`), so the committed rule leaks nothing personal.
+  `.spec/spexcode.local.json`), so the committed rule leaks nothing personal.
 - **Commits are direct.** The branch/merge ritual governs SHARED intent; a single-person tree needs no
   proposal gate. An auto-commit affordance can come later.
 - **CI blindness is free.** A CI clone never contains the private root, so private coverage claims and

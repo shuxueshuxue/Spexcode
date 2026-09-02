@@ -2,7 +2,7 @@
 title: spex-uninstall
 status: active
 hue: 20
-desc: `spex uninstall [dir]` = materialize(∅) plus the store — remove all SpexCode-derived wiring and project-local state by ownership identity while preserving the user's tracked `.spec`/`.plugins`/`spexcode.json` intent and prose.
+desc: `spex uninstall [dir]` = materialize(∅) plus the store — remove all SpexCode-derived wiring and project-local state by ownership identity while preserving the user's tracked `.spec`/`.plugins`/`.spec/spexcode.json` intent and prose.
 code:
   - spec-cli/src/uninstall.ts#uninstall
   - spec-cli/src/uninstall.ts#sweepPluginBundles
@@ -24,7 +24,7 @@ the shim's own `dispatch.sh` command line, the trust sentinels, the generated ma
 paths, the plugin name stamp, or byte-identity with a canonical hook template), so it can only ever delete what
 SpexCode itself generated and the user has not modified.
 
-**The inviolable rule — tracked intent is never touched.** `.spec` (including `.plugins`) and `spexcode.json`
+**The inviolable rule — tracked intent is never touched.** `.spec` (including `.plugins`) and `.spec/spexcode.json`
 are the user's adoption data. Their `CLAUDE.md`/`AGENTS.md` prose, hand-made settings, sibling skills, and other
 user files also survive. Uninstall removes only derived wiring and local state, not the intent they served.
 

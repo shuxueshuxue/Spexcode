@@ -53,16 +53,18 @@ export function startDrag(event, { threshold = DRAG_THRESHOLD, onStart, onMove, 
   const origin = { x: event.clientX, y: event.clientY }
   const captureTarget = event.currentTarget || event.target
   const pointerId = event.pointerId
-  const captured = Number.isFinite(pointerId) && typeof captureTarget?.setPointerCapture === 'function'
+  const pointerMode = Number.isFinite(pointerId)
+  const canCapture = pointerMode && typeof captureTarget?.setPointerCapture === 'function'
+  let captured = false
   let live = false
 
   const detach = () => {
     window.removeEventListener('mousemove', onPointerMove, true)
     window.removeEventListener('mouseup', onPointerUp, true)
-    if (captured) {
+    if (pointerMode) {
       window.removeEventListener('pointermove', onPointerMove, true)
       window.removeEventListener('pointerup', onPointerUp, true)
-      if (captureTarget.hasPointerCapture?.(pointerId)) captureTarget.releasePointerCapture(pointerId)
+      if (captured && captureTarget.hasPointerCapture?.(pointerId)) captureTarget.releasePointerCapture(pointerId)
     }
     window.removeEventListener('keydown', onKey, true)
     if (live) document.body.classList.remove(DRAGGING_CLASS)
@@ -74,6 +76,10 @@ export function startDrag(event, { threshold = DRAG_THRESHOLD, onStart, onMove, 
     if (!live) {
       if (Math.hypot(point.x - origin.x, point.y - origin.y) < threshold) return
       live = true
+      if (canCapture) {
+        captureTarget.setPointerCapture(pointerId)
+        captured = true
+      }
       document.body.classList.add(DRAGGING_CLASS)
       onStart?.(point)
     }
@@ -89,12 +95,12 @@ export function startDrag(event, { threshold = DRAG_THRESHOLD, onStart, onMove, 
   }
   function onKey(key) { if (key.key === 'Escape') abandon() }
 
-  window.addEventListener('mousemove', onPointerMove, true)
-  window.addEventListener('mouseup', onPointerUp, true)
-  if (captured) {
-    captureTarget.setPointerCapture(pointerId)
+  if (pointerMode) {
     window.addEventListener('pointermove', onPointerMove, true)
     window.addEventListener('pointerup', onPointerUp, true)
+  } else {
+    window.addEventListener('mousemove', onPointerMove, true)
+    window.addEventListener('mouseup', onPointerUp, true)
   }
   window.addEventListener('keydown', onKey, true)
   return abandon

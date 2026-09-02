@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './viewCatalog.js'
-import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
+import { closeDestination, focusTab, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
 
-export { closeDestination, moveTab, placeTab, tabKey }
+export { closeDestination, focusTab, moveTab, placeTab, tabKey }
 
 // A tab title is presentation metadata, not identity. Keeping it beside the address lets a session tab retain
 // its last known name after the live session projection removes the closed session.
@@ -234,6 +234,10 @@ export function useTabs({ onCloseStart } = {}) {
       const index = list.findIndex((tab) => tabKey(tab) === activeKey)
       if (index < 0 || list.length < 2) return
       open(list[(index + dir + list.length) % list.length])
+    },
+    focus: (ordinal) => {
+      const target = focusTab(getTabs(), ordinal)
+      if (target) open(target)
     },
     active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
   }), [activeKey, open, close])

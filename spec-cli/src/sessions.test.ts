@@ -17,7 +17,7 @@ import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, canDrainQueued, fromRaw
 import { mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
 
 // Test fixtures write the runtime envelope directly to exercise harness edges. The production contract has
 // no JSON fallback after cutover, so seed the canonical application row only the first time a fixture envelope
@@ -28,7 +28,7 @@ function writeFileSync(path: string, data: string, options?: any): void {
   if (!path.endsWith('/runtime.json')) return
   const id = basename(dirname(path))
   const raw = JSON.parse(data) as Record<string, unknown>
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   if (!application) throw new Error('fixture write requires the canonical session application')
   if (application.readState(id)) return
   const rawStatus = raw.status === OWNED_QUEUE_RAW_STATUS ? 'queued' : raw.status
@@ -233,12 +233,12 @@ function assertIsolatedResumeStore(home: string, id: string): void {
   assert.ok(runtimeRoot().startsWith(`${home}/`), `resume fixture ${id} runtime root escaped isolated SPEXCODE_HOME`)
 }
 function canonicalState(id: string): { status: string; proposal: string | null; note: string | null; parentSessionId: string | null } {
-  const state = configuredSessionApplicationIfCutover()?.readState(id)
+  const state = configuredSessionApplication()?.readState(id)
   assert.ok(state, `fixture ${id} must have a canonical session row`)
   return state
 }
 function transitionFixtureState(id: string, status: string, proposal: string | null = null, note: string | null = null): void {
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   assert.ok(application, 'fixture state transition requires the canonical session application')
   application.transitionSession(id, { status, proposal, note })
 }
@@ -961,7 +961,7 @@ test('successful resume publishes a capacity-queued record as idle after readine
   process.env.PATH = `${bin}:${previousPath}`
   const helper = join(home, 'helper.sh'); writeFileSync(helper, '#!/usr/bin/env bash\nexit 0\n'); chmodSync(helper, 0o755)
   writeResumeFixtureRecord(id, project, helper)
-  configuredSessionApplicationIfCutover()?.bindRuntime(id, {
+  configuredSessionApplication()?.bindRuntime(id, {
     namespace: 'spex-governed', runtimeKind: 'codex-headless', nativeSessionId: `thread-${id}`, nativeStartToken: 'fixture-start',
   })
   const queued = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
@@ -1026,7 +1026,7 @@ test('successful resume clears a prior terminal error instead of leaving an onli
     status: 'error', stopped: true, note: 'queued launch readiness failed: previous attempt',
   })
   transitionFixtureState(id, 'error', null, 'queued launch readiness failed: previous attempt')
-  configuredSessionApplicationIfCutover()?.bindRuntime(id, {
+  configuredSessionApplication()?.bindRuntime(id, {
     namespace: 'spex-governed', runtimeKind: 'codex-headless', nativeSessionId: `thread-${id}`, nativeStartToken: 'fixture-start',
   })
   try {

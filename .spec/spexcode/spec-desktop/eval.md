@@ -3,29 +3,61 @@ scenarios:
   - name: shell-renders-dashboard
     tags: [desktop]
     description: >-
-      Launch the real Electron shell against a small committed git project. Wait for the window to settle,
-      inspect the rendered document through the window's browser surface, and capture the settled window image.
-      The dashboard origin must be the gateway started by the shell, not the backend API index.
+      Launch the real Electron shell with no host gateway running. It must start `spex dashboard` as its
+      utility child, wait for the ready line, load that origin, and render the projects hub.
     expected: >-
-      The window document has a non-empty project title and contains the dashboard root `.app` element; its
-      body is the graph shell (rail/HUD/graph), not the backend's plain-text route index. The attached `m0b-`
-      screenshot is captured after that selector is present.
+      The window document contains the dashboard root `.app` element and the project switcher; the loaded origin
+      is the gateway the shell started, never a backend's plain-text API index. Screenshot captured after the
+      selector is present.
     code: [spec-desktop/main.js]
-    related: [spec-desktop/node-entry.mjs]
-  - name: shell-death-reaps-backend-tree
+  - name: shell-attaches-to-running-gateway
     tags: [desktop]
     description: >-
-      Launch the real Electron shell, record the backend and dashboard ports from their ready lines, then
-      `kill -9` the Electron main process. Poll `ss -tlnp`, `ps`, and the user's systemd scopes for those
-      exact ports and the shell-owned process tree.
+      Start `spex dashboard` by hand on a loopback port, then launch the shell. It must load the existing gateway
+      and start no second one.
     expected: >-
-      Before the kill both ports are listening and both service scopes are active. After the kill the exact
-      ports have no listener, no `spec-desktop` backend or node-entry process remains, and no
-      `spex-desktop-*` scope remains. This is the fail-to-pass repair for the measured reparenting leak.
-    code: [spec-desktop/node-entry.mjs, spec-desktop/main.js]
+      Exactly one `spex dashboard` process exists after the window renders, its pid unchanged from before the
+      launch, and the window's location is that gateway's origin.
+    code: [spec-desktop/main.js]
+  - name: quit-leaves-backends-running
+    tags: [desktop]
+    description: >-
+      From the shell, open an offline project so the gateway starts its detached `spex serve`; record that
+      serve's pid and port; quit the app normally, then `kill -9` a second launch. Poll the port and pid.
+    expected: >-
+      After both exits the gateway process the shell owned is gone and the project's `spex serve` is still
+      listening on the recorded port with the same pid; its endpoint record still validates online.
+    code: [spec-desktop/main.js]
+    related: [spec-cli/src/host.ts]
+  - name: second-launch-focuses-first
+    tags: [desktop]
+    description: >-
+      With the shell running, launch it again from a terminal.
+    expected: >-
+      The second process exits immediately, no second window appears, and the first window receives focus.
+    code: [spec-desktop/main.js]
+  - name: menu-add-project-registers-folder
+    tags: [desktop]
+    description: >-
+      Launch the real Electron shell with SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY naming a fixture Git repository,
+      then choose File -> Add Project... from the application menu.
+    expected: >-
+      Electron bypasses only the native dialog under that documented test seam; the main process sends the real
+      POST /projects request, the durable catalog gains the fixture root, and the project appears in the switcher.
+    code: [spec-desktop/desktop-integration.js]
+    related: [spec-cli/src/host.ts, spec-dashboard/src/ProjectsPage.jsx]
+  - name: mac-gui-launch-reads-keychain
+    tags: [desktop]
+    description: >-
+      Launch the shell from the logged-in macOS GUI context, open a project, and dispatch a session using the
+      plain `claude` launcher (not reclaude and not a credential-sync path). Observe whether the worker
+      authenticates from the login keychain.
+    expected: >-
+      The worker authenticates and reaches a live session because the backend runs inside the Aqua session and
+      can read the user's login keychain. A failure is a finding against this claim and must be filed honestly.
+    code: [spec-desktop/main.js, spec-cli/src/sessions.ts]
 ---
 # eval.md - spec-desktop
 
-The shell is measured through the real Electron window and its real process boundary. Linux evidence uses the
-user systemd cgroup adapter; Windows Job Objects and a macOS equivalent remain explicitly unavailable in the
-current implementation and are not claimed by these scenarios.
+The shell is measured through the real Electron window and the real process table. The gateway is the only
+process the shell owns; backends are the web deployment's and are proven to survive the shell's death.

@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/tabModel.test.mjs
   - spec-dashboard/src/subtractive-boundaries.test.mjs
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/dragGesture.js
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
@@ -52,3 +53,17 @@ Three focused child contracts keep this node readable:
 The cross-surface law is one mechanism: row surfaces use the shared new-tab predicate and tab APIs, while
 views write addresses through their host scope. The strip itself owns no session lifecycle actions beyond the shared
 tab close menu; session rename/archive/close remains the session document or row menu's concern.
+
+## Desktop-realised affordances
+
+Two gestures are written once here and are merely latent in a browser tab. **⌘/Ctrl+W closes the active tab and
+⌘/Ctrl+1–9 focus the Nth tab**: each ordinal is a fixed registry action, with ⌘/Ctrl+9 selecting the last tab;
+in a browser those keys belong to the browser and never reach the page, which is why the shell chords are
+Alt+Shift; on macOS the desktop Window menu ([[spec-desktop]]) owns the native accelerators as the reliable,
+discoverable route and injects the equivalent page keydown, so the keymap ([[keyboard-service]]) fires and
+[[tab-lifecycle]]'s close destination decides where focus goes. Whether an unclaimed ⌘ chord would otherwise
+reach the page is not established. On Linux, Ctrl chords arrive directly at the page. **Tear-off**: a drag whose release
+point is outside the viewport and has no in-strip landing opens the tab's own full URL (including the current
+`/p/<id>/` scope) through `window.open` and removes it through the same close path — a popup in a browser, a
+real window in the desktop. Both windows talk to the same backend, so no state crosses between them. Neither
+gesture asks whether it is running in Electron.

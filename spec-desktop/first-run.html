@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SpexCode setup</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; background: #1f211f; color: #eee; }
+    body { margin: 0; padding: 32px; max-width: 980px; }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    p { color: #bbb; }
+    #transcript { min-height: 300px; padding: 16px; background: #111; border: 1px solid #444; white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; overflow: auto; }
+    #password { display: none; margin-top: 18px; }
+    input, button { font: inherit; padding: 8px 10px; }
+    button { margin-left: 8px; cursor: pointer; }
+    .actions { color: #f0c674; }
+  </style>
+</head>
+<body>
+  <h1>SpexCode is preparing WSL2</h1>
+  <p id="action" class="actions">The setup transcript below is live. You may be asked for your sudo password and to log in to your agent inside WSL. Agent login is interactive and happens in the WSL terminal.</p>
+  <pre id="transcript" aria-live="polite"></pre>
+  <form id="password"><label for="secret">sudo password</label><input id="secret" type="password" autocomplete="current-password"><button type="submit">Send</button></form>
+  <script>
+    const transcript = document.getElementById('transcript')
+    const form = document.getElementById('password')
+    const append = (text) => { transcript.textContent += text; transcript.scrollTop = transcript.scrollHeight }
+    window.desktopBootstrap = {
+      append,
+      promptPassword: () => { form.style.display = 'block'; document.getElementById('secret').focus() },
+      hidePassword: () => { form.style.display = 'none' },
+    }
+    form.addEventListener('submit', (event) => {
+      event.preventDefault()
+      window.desktopBootstrapBridge.sendPassword(document.getElementById('secret').value)
+      document.getElementById('secret').value = ''
+      form.style.display = 'none'
+    })
+  </script>
+</body>
+</html>

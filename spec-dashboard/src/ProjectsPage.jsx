@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import {
   CATALOG_POLL_MS, loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
   setAdminPassword, clearAdminPassword, browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig,
   initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon, paginateProjects, removeProject,
+  loadHostFacts, runHostDoctor,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -12,6 +13,7 @@ import { IdentityIcon, IdentityPicker } from './IdentityIcon.jsx'
 import Modal from './Modal.jsx'
 import { PageScroll } from './PageScroll.jsx'
 import { useEscLayer } from './escStack.js'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 // The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
 // ([[gateway-hub]] + [[host-gateway]]): one row per KNOWN project — the host's reconciled view of the
@@ -404,6 +406,7 @@ function ProjectRow({ p, health, onRefresh, t }) {
   const [removing, setRemoving] = useState(false)
   const [removeBusy, setRemoveBusy] = useState(false)
   const [removeError, setRemoveError] = useState(null)
+  const [hostError, setHostError] = useState(false)
   const current = p.id === PROJECT_ID
   const offline = p.online === false
   // the dot: an offline row is calmly 'stopped' (the host already validated there is no live backend —
@@ -424,7 +427,7 @@ function ProjectRow({ p, health, onRefresh, t }) {
     const r = await fn()
     setBusyOp(null)
     if (op !== 'serve') setResult({ op, ok: r.ok, code: r.code, output: r.output || (r.ok ? '' : r.error || '') })
-    else if (!r.ok) setError(r.error || t('projects.actionFailed'))
+    else if (!r.ok) { setError(r.error || t('projects.actionFailed')); setHostError(true) }
     onRefresh()
   }
 
@@ -487,7 +490,7 @@ function ProjectRow({ p, health, onRefresh, t }) {
           )}
         </span>
       </div>
-      {error && <div className="proj-err">{error}</div>}
+      {error && <div className="proj-err">{error}{hostError && <> {' '}<a href="#host-facts-card">{t('projects.seeHostFacts')}</a></>}</div>}
       {panel === 'pw' && (
         <PasswordForm
           t={t}
@@ -509,6 +512,26 @@ function ProjectRow({ p, health, onRefresh, t }) {
       {panel === 'setup' && <SetupDrawer p={p} busyOp={busyOp} run={runOp} result={result} t={t} />}
       {removing && <RemoveProjectModal project={p} busy={removeBusy} error={removeError} onClose={() => setRemoving(false)} onRemove={remove} t={t} />}
     </li>
+  )
+}
+
+function HostCard({ facts, busy, result, onDoctor, t }) {
+  if (!facts) return null
+  const agentRows = Object.entries(facts.agents || {})
+  return (
+    <section className="host-facts-card" id="host-facts-card" aria-label={t('projects.hostFactsTitle')}>
+      <div className="host-facts-head">
+        <div><h2>{t('projects.hostFactsTitle')}</h2><div className="proj-dim">{facts.runtime?.label}{facts.runtime?.distro ? ` · ${facts.runtime.distro}` : ''}</div></div>
+        <button className="proj-act" type="button" disabled={busy} onClick={onDoctor}>{busy ? t('projects.hostDoctorRunning') : t('projects.hostDoctor')}</button>
+      </div>
+      <div className="host-facts-grid">
+        <div><b>{t('projects.hostVersions')}</b><span>node {facts.versions?.node || '?'}</span><span>tmux {facts.versions?.tmux || t('projects.missing')}</span><span>git {facts.versions?.git || t('projects.missing')}</span></div>
+        <div><b>{t('projects.hostAgents')}</b>{agentRows.map(([name, agent]) => <span key={name}>{name}: {agent.installed ? t('projects.installed') : t('projects.missing')} · {agent.loggedIn ? t('projects.loggedIn') : t('projects.notLoggedIn')}</span>)}</div>
+        <div><b>{t('projects.hostMemory')}</b><span>{facts.memory?.kind}: {facts.memory?.present ? t('projects.present') : t('projects.missing')}{facts.memory?.limitBytes ? ` · ${facts.memory.limitBytes}` : ''}</span></div>
+      </div>
+      {!!facts.launchers?.length && <div className="host-facts-launchers"><b>{t('projects.hostLaunchers')}</b>{facts.launchers.map((l) => <span key={`${l.projectId}:${l.name}`} className={l.resolves ? '' : 'broken'}>{l.project}/{l.name}: {l.resolves ? t('projects.resolves') : t('projects.broken')} · {l.cmd}</span>)}</div>}
+      {result && <div className="proj-op-result proj-full"><div className={result.ok ? 'proj-op-status ok' : 'proj-op-status fail'}>{result.ok ? t('projects.hostDoctorOk') : t('projects.hostDoctorFail', { code: result.code ?? '?' })}</div>{result.output ? <pre className="proj-log">{result.output}</pre> : null}</div>}
+    </section>
   )
 }
 
@@ -546,6 +569,7 @@ function GatewayIdentityEditor({ gateway, onRefresh, t }) {
 
 export default function ProjectsPage() {
   const t = useT()
+  const { notify } = useTransientNotice()
   const [state, setState] = useState({ kind: 'loading' }) // loading | ok | denied | absent
   const [health, setHealth] = useState({})                // id → 'running' | 'unreachable' (probed)
   const [drawer, setDrawer] = useState(null)              // 'admin' | null
@@ -554,7 +578,19 @@ export default function ProjectsPage() {
   const [adminErr, setAdminErr] = useState(null)
   const [projectPage, setProjectPage] = useState(1)
   const [pollRetry, setPollRetry] = useState(0)
+  const [hostFacts, setHostFacts] = useState(null)
+  const [hostDoctorBusy, setHostDoctorBusy] = useState(false)
+  const [hostDoctorResult, setHostDoctorResult] = useState(null)
   const seq = useRef(0)
+
+  useLayoutEffect(() => {
+    const url = new URL(window.location.href)
+    const notice = url.searchParams.get('notice')
+    if (!notice) return
+    notify(notice, { kind: 'error' })
+    url.searchParams.delete('notice')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [notify])
 
   const refresh = useCallback(async () => {
     const mine = ++seq.current
@@ -567,6 +603,7 @@ export default function ProjectsPage() {
       r.projects.filter((p) => p.online !== false).forEach((p) => {
         probeProjectHealth(p.id).then((h) => { if (mine === seq.current) setHealth((m) => ({ ...m, [p.id]: h })) })
       })
+      loadHostFacts().then((host) => { if (host.ok) setHostFacts(host) })
     } else if (r.state === 'denied') setState({ kind: 'denied', reason: r.reason })
     else setState((s) => (s.kind === 'ok' ? s : { kind: 'absent' })) // a transient miss keeps the last catalog
     return r
@@ -633,6 +670,12 @@ export default function ProjectsPage() {
         {!state.adminGated && (
           <div className="proj-hint">{t('projects.adminUngated')}</div>
         )}
+        <HostCard facts={hostFacts} busy={hostDoctorBusy} result={hostDoctorResult} t={t} onDoctor={async () => {
+          setHostDoctorBusy(true); setHostDoctorResult(null)
+          const result = await runHostDoctor()
+          setHostDoctorBusy(false); setHostDoctorResult(result)
+          if (result.ok) loadHostFacts().then((host) => { if (host.ok) setHostFacts(host) })
+        }} />
         {drawer === 'admin' && (
           <div className="proj-admin-pw">
             <PasswordForm

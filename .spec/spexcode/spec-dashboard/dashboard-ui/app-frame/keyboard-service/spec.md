@@ -112,9 +112,14 @@ cannot race one another or a shell route when documents remain mounted but hidde
 ## tab grammar
 
 The tab commands are new registry entries with non-browser-reserved defaults: close the active tab, select
-the next tab, select the previous tab, and send the active tab to the split pane. They must not steal
-Ctrl/Meta accelerators. The service calls the existing `useTabs` and workspace APIs, so closing the last tab
-still lands on the explicit empty address and split remains window state as required by [[tab-strip]] and
+the next tab, select the previous tab, and send the active tab to the split pane. `shell.tabClose` also lists
+Meta+KeyW and Ctrl+KeyW, and `shell.tabFocus1` through `shell.tabFocus9` list both Meta+DigitN and
+Ctrl+DigitN (9 means the last tab). They must not steal Ctrl/Meta accelerators in a browser. On macOS, the
+desktop shell's Window menu owns the native ⌘ accelerators as the reliable, discoverable route and injects the
+equivalent cancelable keydown into the focused page; this service then dispatches through the same `useTabs` APIs
+as a browser-delivered Ctrl chord. The SPA does not branch on Electron, and whether an unclaimed ⌘ chord would
+otherwise reach the page is not established. The service calls the existing workspace APIs, so closing the last
+tab still lands on the explicit empty address and split remains window state as required by [[tab-strip]] and
 [[workspace-shell]]. All labels and shortcut descriptions are present in both English and Chinese.
 
 **The typing restraint is enforced by registration, not handler memory.** `useKeyboardScope` withholds every

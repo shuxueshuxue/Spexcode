@@ -21,7 +21,7 @@ import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoa
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
-import { TMUX_SOCK } from './session-tmux.js'
+import { sessionHost } from './session-host.js'
 import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable } from './session-record.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionTranscript, readSessionTranscriptTool, sessionTranscriptStream } from './session-transcript.js'
@@ -48,7 +48,7 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
-import { configuredSessionApplicationIfCutover, setSessionApplicationCommitObserver } from './session-application.js'
+import { configuredSessionApplication, setSessionApplicationCommitObserver } from './session-application.js'
 import { editSpecBody, readSpecBodyEdit, SpecBodyEditError } from './spec-body-edit.js'
 
 installEvalHost()
@@ -324,7 +324,7 @@ app.get('/api/settings', async (c) => c.json({
   // The picker uses this live registry when offering the explicit post-init target action. Keeping the
   // vocabulary on the backend avoids a second frontend list drifting as adapters are added.
   harnessTargets: [...NATIVE_HARNESS_IDS],
-  tmuxSocket: TMUX_SOCK,
+  tmuxSocket: sessionHost().socket,
   ...launcherDefault(),
 }))
 // the `surface: command` plugin-root nodes (built/active only) for new-session and live-inbox `/` dropdowns — each with
@@ -607,9 +607,7 @@ app.post('/api/sessions', async (c) => {
 })
 
 const runtimeApplicationOr503 = (_c: any) => {
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) throw new ResourceConflict('session runtime is unavailable until the legacy JSON store is migrated')
-  return application
+  return configuredSessionApplication()
 }
 
 app.get('/api/session-runtime/:id/events', (c) => {
@@ -962,8 +960,8 @@ app.post('/api/sessions/:id/input', async (c) => {
     const handoffDeferred = r.delivery === 'deferred'
     void drainSession(id).then(() => {
       if (!handoffDeferred) return
-      const application = configuredSessionApplicationIfCutover()
-      if (application ? !application.readPendingMessages(id).length : true) markHumanPromptActive(id)
+      const application = configuredSessionApplication()
+      if (!application.readPendingMessages(id).length) markHumanPromptActive(id)
     }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })

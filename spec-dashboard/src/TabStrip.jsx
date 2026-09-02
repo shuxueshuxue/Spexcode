@@ -13,6 +13,7 @@ import { pendingSessionFor } from './launch.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
 import { iconFor, isResident } from './viewCatalog.js'
+import { PROJECT_ID, projectHref } from './project.js'
 
 const resourceLabel = (url) => {
   try {
@@ -22,6 +23,14 @@ const resourceLabel = (url) => {
 }
 
 const TAB_WRAP_FLOOR = 128
+
+const tabWindowAddress = (tab) => {
+  const hash = routeHash(tab.page, tab.param, tab.query)
+  const scoped = PROJECT_ID ? projectHref(PROJECT_ID, hash) : hash
+  return new URL(scoped, window.location.origin).href
+}
+
+const outsideViewport = ({ x, y }) => x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight
 
 // [[tab-strip]]'s face. It draws what [[tabs]] holds and owns no navigation of its own — every click is an
 // ordinary `navigate`, so a tab and a link are the same action reaching the same address.
@@ -218,6 +227,13 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
         setDrag(null)
         abandon.current = null
         if (before !== undefined) move(key, before)
+        else if (outsideViewport(point)) {
+          const detached = tabsRef.current.find((item) => tabKey(item) === key)
+          if (detached) {
+            window.open(tabWindowAddress(detached))
+            close(detached)
+          }
+        }
       },
       onCancel: () => { setDrag(null); abandon.current = null },
     })
@@ -253,7 +269,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
           <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${isClosing ? ' tab-closing' : ''}${marks}`}
             role="tab" aria-selected={active} aria-grabbed={drag?.key === key || undefined}
             aria-hidden={isClosing ? 'true' : undefined}
-            onMouseDown={(e) => { if (!isClosing) startTabDrag(e, tab) }}
+            onPointerDown={(e) => { if (!isClosing) startTabDrag(e, tab) }}
             onContextMenu={(e) => {
               if (isClosing) return
               e.preventDefault()

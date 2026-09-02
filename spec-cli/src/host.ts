@@ -28,6 +28,8 @@ import {
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { clearProjectPassword } from './gateway-auth.js'
 import { resolveHarnessTargets } from './harness-select.js'
+import { collectHostFacts } from './host-facts.js'
+import { dropOwnHostRecord, newHostRecord, publishHostRecord, type HostRecord } from './host-record.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 // ── the endpoint record ──────────────────────────────────────────────────────────────────────────────
@@ -35,6 +37,8 @@ const here = dirname(fileURLToPath(import.meta.url))
 // Re-exported here because this module is where the host's readers already look for it.
 export { endpointRecordPath, publishEndpoint, dropOwnEndpoint, readEndpointRecord } from './endpoint-record.js'
 export type { EndpointRecord } from './endpoint-record.js'
+export { hostRecordPath, readHostRecord, publishHostRecord, dropOwnHostRecord } from './host-record.js'
+export type { HostRecord } from './host-record.js'
 // ── the durable known-project catalog ────────────────────────────────────────────────────────────────
 // ~/.spexcode/projects.json — the host's memory of which projects exist, so /projects can list a project
 // whose backend is OFFLINE (records vanish with their serve; the catalog does not). It is populated only
@@ -725,7 +729,7 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 // so an operator deployment runs the ONE host gateway directly over TLS — no second proxy in front.
 // Absent tls = the default plain-HTTP loopback `spex dashboard` serves.
 export type HostDashboardOpts = { port: number; host?: string; distDir?: string; tls?: { cert: string; key: string } | null }
-export type HostDashboard = { server: http.Server; close: () => Promise<void> }
+export type HostDashboard = { server: http.Server; close: () => Promise<void>; hostRecord: HostRecord }
 
 const json = (res: http.ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -760,6 +764,14 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   }
 
   const extensions: HubExtensions = {
+    hostRoute: (req, res, path) => {
+      if (path === '/host' && req.method === 'GET') { json(res, 200, collectHostFacts()); return true }
+      if (path === '/host/doctor' && req.method === 'POST') {
+        void runSpex(process.cwd(), ['doctor', '--host']).then((r) => json(res, 200, { ok: r.code === 0, code: r.code, output: r.output }))
+        return true
+      }
+      return false
+    },
     // the hub's GET /projects rows, host-enriched: every cataloged/claimed project (not only live
     // records), instance-validated online state, and the hub's own gating flag per row. `id` mirrors
     // projectId — the hub's documented row key, kept so both shapes read the same list.
@@ -929,7 +941,15 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
     fallback: (req, res, path) => serveStatic(req, res, distDir, path),
   }
 
-  const server = startHubGateway({ port: opts.port, host: opts.host ?? '127.0.0.1', tls: opts.tls ?? null, extensions })
+  const hostRecord = newHostRecord(`${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${opts.port}`)
+  const server = startHubGateway({
+    port: opts.port, host: opts.host ?? '127.0.0.1', tls: opts.tls ?? null, extensions,
+    onListen: (actualPort) => {
+      hostRecord.url = `${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${actualPort}`
+      publishHostRecord(hostRecord)
+    },
+    onBindFail: () => dropOwnHostRecord(hostRecord.instanceId),
+  })
 
   // continuous reconciliation: the stream stays live without a client-side poll and the list the hub
   // serves stays fresh. Heartbeat comments keep intermediaries from timing the stream out. Both timers
@@ -948,6 +968,8 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
       await peers.close()
       await new Promise<void>((resolve) => server.close(() => resolve()))
       server.closeAllConnections?.()
+      dropOwnHostRecord(hostRecord.instanceId)
     },
+    hostRecord,
   }
 }

@@ -7,6 +7,8 @@ const root = join(import.meta.dirname, '..')
 const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const desktopManifest = JSON.parse(readFileSync(join(root, 'spec-desktop', 'package.json'), 'utf8'))
 const desktopSpec = readFileSync(join(root, '.spec', 'spexcode', 'spec-desktop', 'spec.md'), 'utf8')
+const desktopMain = readFileSync(join(root, 'spec-desktop', 'main.js'), 'utf8')
+const gatewayDiscovery = readFileSync(join(root, 'spec-desktop', 'gateway-discovery.js'), 'utf8')
 
 test('desktop shell has explicit optional root entrypoints', () => {
   assert.equal(rootManifest.scripts['desktop:install'], 'npm --prefix spec-desktop install')
@@ -22,7 +24,23 @@ test('desktop remains optional and does not tax normal workspace installs', () =
 })
 
 test('desktop contract keeps browser and shell on the same served product', () => {
-  assert.match(desktopSpec, /same origin/)
-  assert.match(desktopSpec, /spex serve ui/)
+  assert.match(desktopSpec, /same dashboard dist/)
+  assert.match(desktopSpec, /spex dashboard/)
   assert.match(desktopSpec, /desktop:install/)
+})
+
+test('macOS menu forwards native tab accelerators into the page key service', () => {
+  assert.match(desktopMain, /process\.platform === 'darwin'/)
+  assert.match(desktopMain, /accelerator: 'Command\+W'/)
+  assert.match(desktopMain, /accelerator: `Command\+\$\{ordinal\}`/)
+  assert.match(desktopMain, /executeJavaScript\(`window\.dispatchEvent\(new KeyboardEvent/)
+  assert.match(desktopSpec, /Menu accelerators are the native, reliable/)
+  assert.match(desktopSpec, /Each menu item injects the\s+equivalent cancelable/)
+})
+
+test('desktop attach reads the shared host record without a port or record-name fallback', () => {
+  assert.match(gatewayDiscovery, /dist.*host-record\.js/)
+  assert.match(gatewayDiscovery, /\/host/)
+  assert.match(gatewayDiscovery, /gateway\?\.instanceId === record\.instanceId/)
+  assert.doesNotMatch(`${desktopMain}\n${gatewayDiscovery}`, /gateway\.json|SPEXCODE_DASHBOARD_PORT/)
 })

@@ -9,6 +9,7 @@ import { loadConfig } from './lint.js'
 import { GENERATED_MARK } from './harness.js'
 import { trackedSourceFiles } from './source-files.js'
 import { gitBinary } from '@spexcode/spec-core'
+import { collectHostFacts, formatHostFacts } from './host-facts.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.
@@ -533,6 +534,7 @@ function migrationRemoved(): number {
 function usage(): number {
   console.error(`spex doctor — diagnose spec health and how the SpexCode workflow reaches your agent
   (bare)         spec-health findings + delivery report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
+  --host         host runtime, toolchain, agent-login, launcher, and memory facts (same data as GET /host)
   --contract     print the surface:system contract text (hand it to any agent)
   --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
   repair app-server [--launcher <name>]
@@ -544,6 +546,7 @@ export async function runDoctor(args: string[]): Promise<number> {
   // contract/conflicts are FLAGS, not subcommands ([[cli-surface]] §4: another representation of the same
   // diagnosis read, not a distinct action). The old positional spellings signpost — report, never run.
   if (args.includes('--migrate')) return migrationRemoved()
+  if (args.includes('--host')) { console.log(formatHostFacts(collectHostFacts())); return 0 }
   if (args.includes('--contract')) return contract()
   if (args.includes('--conflicts')) return await conflicts()
   if (args[0] === 'repair') {

@@ -9,7 +9,8 @@ import { repoRoot } from '@spexcode/spec-core'
 import { endpointRecordPath } from './endpoint-record.js'
 import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from '@spexcode/spec-core'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
+import { sessionHost } from './session-host.js'
 
 type Proc = ProcessIdentity & {
   ppid: number
@@ -196,17 +197,17 @@ const descendants = (root: number, procs: Map<number, Proc>): Set<number> => {
   return ids
 }
 
-// tmux is a shared host for many independent session windows. Its inherited environment is therefore
-// not a launch receipt: a token on the server or one of its panes cannot charge the whole hosted tree.
-const isTmuxServer = (proc: Proc | undefined): boolean => proc?.command === 'tmux: server'
-const hasTmuxAncestor = (pid: number, procs: Map<number, Proc>): boolean => {
+// A host is shared across independent sessions. Its inherited environment is therefore not a launch receipt:
+// a token on the host process or one of its panes cannot charge the whole hosted tree.
+const isHostProcess = (proc: Proc | undefined): boolean => !!proc && sessionHost().isSharedProcess(proc.command)
+const hasHostAncestor = (pid: number, procs: Map<number, Proc>): boolean => {
   const seen = new Set<number>()
   let next = procs.get(pid)?.ppid
   while (next && !seen.has(next)) {
     seen.add(next)
     const parent = procs.get(next)
     if (!parent) return false
-    if (isTmuxServer(parent)) return true
+    if (isHostProcess(parent)) return true
     next = parent.ppid
   }
   return false
@@ -219,10 +220,10 @@ type PublicRecordInventory = {
 }
 const publicRecordInventory = (): PublicRecordInventory => {
   const entries = listSessionIds().map(readPublicRecordEntry)
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   const byId = new Map<string, PublicRecordEntry>()
   const projected = entries.map((entry): PublicRecordEntry => {
-    if (entry.kind !== 'ok' || !application || !entry.raw.governed) return entry
+    if (entry.kind !== 'ok' || !entry.raw.governed) return entry
     const state = application.readState(entry.raw.session_id)
     if (!state) throw new ResourceConflict(`session ${entry.raw.session_id} has no canonical application state after JSON cutover`)
     return {
@@ -393,12 +394,12 @@ const buildInventory = (procs: Map<number, Proc>, publicRecords = publicRecordIn
   for (const p of procs.values()) {
     const acting = actingSession(p)
     const fallback = p.env.SPEXCODE_SESSION_ID
-    const sid = acting ?? (!hasTmuxAncestor(p.pid, procs) && !isTmuxServer(p) && fallback ? byId.get(fallback) : undefined)
+    const sid = acting ?? (!hasHostAncestor(p.pid, procs) && !isHostProcess(p) && fallback ? byId.get(fallback) : undefined)
     if (sid) ownership.set(p.pid, `session:${sid}`)
   }
   for (const rec of activeRecs) {
     const root = runtimePid(join(runtimeRoot(), 'sessions', rec.session_id, 'agent.pid'))
-    if (root && procs.has(root) && !isTmuxServer(procs.get(root)))
+    if (root && procs.has(root) && !isHostProcess(procs.get(root)))
       for (const pid of descendants(root, procs)) if (!ownership.has(pid)) ownership.set(pid, `session:${rec.session_id}`)
   }
 
@@ -432,7 +433,7 @@ const buildInventory = (procs: Map<number, Proc>, publicRecords = publicRecordIn
 
   const root = repoRoot()
   for (const p of procs.values()) {
-    if (ownership.has(p.pid) || p.env.SPEXCODE_PROJECT_ROOT !== root || hasTmuxAncestor(p.pid, procs) || isTmuxServer(p)) continue
+    if (ownership.has(p.pid) || p.env.SPEXCODE_PROJECT_ROOT !== root || hasHostAncestor(p.pid, procs) || isHostProcess(p)) continue
     const claimed = p.env.SPEXCODE_SESSION_ID
     if (claimed && !byId.has(claimed)) ownership.set(p.pid, `orphan:session:${claimed}`)
     else if (p.env.SPEXCODE_INSTANCE_ID && p.env.SPEXCODE_INSTANCE_ID !== backendInstance) ownership.set(p.pid, `orphan:backend:${p.env.SPEXCODE_INSTANCE_ID}`)

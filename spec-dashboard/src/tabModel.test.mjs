@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { closeDestination, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
+import { closeDestination, focusTab, moveTab, normalizeTabs, placeTab, tabKey } from './tabModel.js'
 
 // [[tab-strip]]'s law, checked without a browser: **a new tab is a gesture, never a side effect** — and the
 // tab a gesture mints is an ordinary tab. The two regressions this exists to catch both shipped: browsing
@@ -248,4 +248,13 @@ test('closing with no focus history lands on the nearest same-kind tab, then the
   const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
   assert.deepEqual(closeDestination(resource, [], 0), { page: 'sessions', param: 'new', query: null })
   assert.deepEqual(closeDestination(board('evals'), [], 0), { page: 'empty', param: null, query: null })
+})
+
+test('focusTab resolves one-based ordinals and maps 9 to the last tab', () => {
+  const tabs = [session('a'), file('b'), specDocument('c')]
+  assert.deepEqual(focusTab(tabs, 1), tabs[0])
+  assert.deepEqual(focusTab(tabs, 2), tabs[1])
+  assert.deepEqual(focusTab(tabs, 9), tabs[2])
+  assert.equal(focusTab(tabs, 4), null)
+  assert.equal(focusTab(tabs, 0), null)
 })

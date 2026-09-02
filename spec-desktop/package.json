@@ -2,7 +2,7 @@
   "name": "@spexcode/spec-desktop",
   "version": "0.6.7",
   "private": true,
-  "description": "SpexCode desktop shell — a window over `spex serve`. Deliberately OUTSIDE the root workspaces: `npm install` at the repo root must not pull ~150 MB of Electron on a contributor who is not working on the shell.",
+  "description": "SpexCode desktop shell — a window over `spex dashboard`. Deliberately OUTSIDE the root workspaces: `npm install` at the repo root must not pull ~150 MB of Electron on a contributor who is not working on the shell.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { appendFileSync } from 'node:fs'
 
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -16,7 +17,10 @@ export const TMUX_PROBE_TIMEOUT_MS = 4000
 export const TARGET_PROBE_TIMEOUT_MS = 15000
 export const TARGET_TMUX_CLOSE_SETTLE_MS = 3000
 export async function tmux(args: string[], timeoutMs?: number): Promise<string> {
-  const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
+  const child = pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
+  const recordPath = process.env.SPEXCODE_TMUX_RECORD
+  if (recordPath) appendFileSync(recordPath, JSON.stringify({ socket: TMUX_SOCK, args, timeoutMs: timeoutMs ?? null }) + '\n')
+  const { stdout } = await child
   return stdout
 }
 // a rejected pexec whose child we KILLED (timeout) vs one that exited cleanly non-zero (e.g. tmux "no server

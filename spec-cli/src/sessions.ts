@@ -13,7 +13,7 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { acquireFreshSessionApplicationForCreate, configuredSessionApplicationIfCutover, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
+import { acquireFreshSessionApplicationForCreate, configuredSessionApplication, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
@@ -25,7 +25,7 @@ import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { lastHumanSendVia } from './session-timeline.js'
-import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
+import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, sessionHost, probeTimedOut } from './session-host.js'
 
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
@@ -211,8 +211,8 @@ export const sessionTitle = (s: Session): string => s.title
 // Compatibility for older callers; all visible surfaces now resolve through `title`.
 export const sessionHeadline = sessionTitle
 
-async function tmuxOk(args: string[]): Promise<boolean> { try { await tmux(args); return true } catch { return false } }
-export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-session', '-t', id]) }
+async function hostOk(args: string[]): Promise<boolean> { try { await sessionHost().command(args); return true } catch { return false } }
+export async function alive(id: string): Promise<boolean> { return hostOk(['has-session', '-t', id]) }
 
 function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
@@ -221,9 +221,8 @@ function pkgRoot(): string {
 export type WatchSource = 'manual' | 'parent'
 type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[] }
 export type SessionWatch = { target: string; createdAt: string }
-function canonicalWatchEntries(target: string): WatchEntry[] | null {
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) return null
+function canonicalWatchEntries(target: string): WatchEntry[] {
+  const application = configuredSessionApplication()
   if (!application.readState(target)) return []
   const seen = new Map<string, WatchEntry>()
   for (const edge of application.topology.parents(target)) {
@@ -246,7 +245,7 @@ function canonicalWatchEntries(target: string): WatchEntry[] | null {
 function readWatchEntries(target: string): WatchEntry[] {
   const canonical = canonicalWatchEntries(target)
   if (canonical) return canonical
-  throw new ResourceConflict('session application is unavailable; refusing the legacy watcher path')
+  throw new ResourceConflict('session application returned no watcher projection')
 }
 
 function managedWatchRecord(id: string): SessRec {
@@ -285,8 +284,7 @@ setRecordTransitionNotifier(scheduleWatchNotifications)
 
 export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) throw new ResourceConflict('session application is unavailable; refusing the legacy watcher path')
+  const application = configuredSessionApplication()
   const watched: string[] = []
   const channel = source === 'parent' ? 'watch:parent' : 'watch:manual'
   for (const target of [...new Set(targets)]) {
@@ -310,8 +308,7 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
 
 export function listSessionWatches(watcher: string): SessionWatch[] {
   managedWatchRecord(watcher)
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) throw new ResourceConflict('session application is unavailable; refusing the legacy watcher path')
+  const application = configuredSessionApplication()
   // `listWatchers` defaults to the bare `watch` channel. Canonical policy stores the source
   // (`watch:parent`/`watch:manual`) in the relation type, so listing must inspect every watch
   // channel or a valid parent watch appears to have disappeared.
@@ -325,8 +322,7 @@ export function listSessionWatches(watcher: string): SessionWatch[] {
 
 export function cancelSessionWatch(watcher: string, targets: string[]): number {
   managedWatchRecord(watcher)
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) throw new ResourceConflict('session application is unavailable; refusing the legacy watcher path')
+  const application = configuredSessionApplication()
   let cancelled = 0
   for (const target of [...new Set(targets)]) {
     for (const channel of ['watch:manual', 'watch']) {
@@ -366,8 +362,7 @@ function assertReparentable(children: string[], parent: string | null, records: 
 
 export async function reparentSessionRecords(rawChildren: string[], parent: string | null): Promise<SessionReparentResult> {
   const children = [...new Set(rawChildren)].sort()
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) throw new ResourceConflict('session application is unavailable; refusing the legacy reparent path')
+  const application = configuredSessionApplication()
   const notify: SessRec[] = []
   await withRecordLock('session-reparent-transaction', async () => {
     const before = new Map(children.map((id) => [id, managedWatchRecord(id)]))
@@ -483,7 +478,7 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
     const args = targetId
       ? ['list-panes', '-t', targetId, '-F', TMUX_PANE_FORMAT]
       : ['list-panes', '-a', '-F', TMUX_PANE_FORMAT]
-    out = await tmux(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
+    out = await sessionHost().command(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
     // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
@@ -690,8 +685,8 @@ export type SessionHookState = {
 export function sessionHookState(id: string): SessionHookState | null {
   const rec = readRecord(id)
   if (!rec) return null
-  const application = configuredSessionApplicationIfCutover()
-  const state = application?.readState(id)
+  const application = configuredSessionApplication()
+  const state = application.readState(id)
   return {
     governed: rec.governed,
     status: (state?.status ?? rec.status) as Lifecycle,
@@ -838,7 +833,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
       snapshots.set(id, { entry, rec: entry.kind === 'ok' ? fromRaw(entry.raw) : null })
     } catch { /* guardSession below preserves the last-known row for a transient read failure */ }
   }
-  const canonical = configuredSessionApplicationIfCutover()
+  const canonical = configuredSessionApplication()
   const canonicalStates = new Map<string, ReturnType<NonNullable<typeof canonical>['readState']>>()
   if (canonical) {
     for (const [id, snapshot] of snapshots) {
@@ -1246,10 +1241,8 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
   // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
   if (harness.ownsRendezvous) stampRvSock(id)
-  await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
   const file = launchScript(id, tail, harness, cmd)
-  await tmux(['send-keys', '-t', id, '-l', '--', launchShellCommand(file)])
-  await tmux(['send-keys', '-t', id, 'Enter'])
+  await sessionHost().launch(id, launchShellCommand(file), path)
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
@@ -1297,8 +1290,8 @@ const readinessWakeSuppressed = new Set<string>()
 function hasLaterLaunchReadinessEvent(rec: SessRec): boolean {
   const startedAt = rec.launchReadinessStartedAt
   if (!Number.isFinite(startedAt)) return false
-  const application = configuredSessionApplicationIfCutover()
-  if (!application?.readState(rec.session)) return false
+  const application = configuredSessionApplication()
+  if (!application.readState(rec.session)) return false
   const events = application.readEvents(rec.session)
   const statusPayload = (event: (typeof events)[number]): Record<string, unknown> | null => {
     const payload = decodeEventJson(event.payload)
@@ -1350,7 +1343,7 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
 }
 
 function clearReadinessResidueUnlocked(rec: SessRec, clearDiagnostic: boolean): void {
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   const next = {
     ...rec,
     status: 'active' as const,
@@ -1358,7 +1351,7 @@ function clearReadinessResidueUnlocked(rec: SessRec, clearDiagnostic: boolean): 
     note: clearDiagnostic ? null : rec.note,
     launchReadinessStartedAt: null,
   }
-  if (application?.readState(rec.session) && (clearDiagnostic || rec.status !== 'active' || rec.stopped)) {
+  if (application.readState(rec.session) && (clearDiagnostic || rec.status !== 'active' || rec.stopped)) {
     application.transitionSession(rec.session, {
       status: 'active',
       proposal: rec.proposal,
@@ -1390,9 +1383,8 @@ export function sessionHasPendingDelivery(
   id: string,
   application: Pick<ProductionSessionApplication, 'readPendingMessages'>
     & Partial<Pick<ProductionSessionApplication, 'resolveRuntime'>>
-    | null = configuredSessionApplicationIfCutover() ?? null,
+    = configuredSessionApplication(),
 ): boolean {
-  if (!application) throw new ResourceConflict(`session application is unavailable for ${id}`)
   const runtime = application.resolveRuntime?.(id, 'spex-governed')
   if (runtime === null) return false
   try {
@@ -1429,8 +1421,7 @@ export function canonicalRecordProjection<T extends Pick<SessRec, 'status' | 'st
 }
 
 function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) return
+  const application = configuredSessionApplication()
   if (!application.readState(rec.session)) {
     application.createSession({ sessionId: rec.session, status, proposal, note, parentSessionId: rec.parent })
     if (rec.parent) application.attachWatcher(rec.parent, rec.session, 'watch:parent')
@@ -1756,7 +1747,7 @@ export function superviseDelivery(intervalMs = 2000): void {
   supervisingDelivery = true
   const tick = async () => {
     try {
-      const application = configuredSessionApplicationIfCutover()
+      const application = configuredSessionApplication()
       for (const id of listSessionIds()) {
         if (!sessionHasPendingDelivery(id, application)) continue
         try { await drainSession(id) } catch (error) {
@@ -2861,7 +2852,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     catch (error) {
       return { ok: false, refused: true, error: error instanceof Error ? error.message : String(error) }
     }
-    await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
+    await sessionHost().stop(id)   // drop a dead/offline pane (or a force-killed live one)
     await launch(id, wt.path, resumeTail, h, launcherCmd(wt.rec))
     let readiness: LaunchReadinessOutcome = { ok: false, stage: 'liveness' }
     let readinessError = ''
@@ -2932,26 +2923,16 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     if (raw?.archived) throw new ResourceConflict(`refusing lifecycle change for closed session ${id}: it is read-only; resume it before changing state`)
     const rec = readLiveRecord(id)
     if (!rec?.governed) return false
-    const application = configuredSessionApplicationIfCutover()
-    if (application) {
-      const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
-      const note = opts.note ?? null
-      const current = application.readState(id)
-      if (current && current.status === status && current.proposal === proposal && current.note === note) return true
-      const recipients = canonicalWatchRecipients(application, id, status)
-      application.transitionSession(id, {
-        status,
-        proposal,
-        note,
-        recipientSessionIds: recipients,
-      })
-      return true
-    }
+    const application = configuredSessionApplication()
     const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
-    writeRecord({
-      ...rec, status,
+    const note = opts.note ?? null
+    const current = application.readState(id)
+    if (current && current.status === status && current.proposal === proposal && current.note === note) return true
+    application.transitionSession(id, {
+      status,
       proposal,
-      note: opts.note ?? null,
+      note,
+      recipientSessionIds: canonicalWatchRecipients(application, id, status),
     })
     return true
   })
@@ -2978,15 +2959,11 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
   return withRecordLockSync(sessionId, () => {
     const rec = readLiveRecord(sessionId)
     if (!rec?.governed || rec.status !== 'active' || rec.stopped || rec.archived) return false
-    const application = configuredSessionApplicationIfCutover()
-    if (application) {
-      application.transitionSession(sessionId, {
-        status: 'error', proposal: null, note,
-        recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'error'),
-      })
-      return true
-    }
-    writeRecord({ ...rec, status: 'error', proposal: null, note })
+    const application = configuredSessionApplication()
+    application.transitionSession(sessionId, {
+      status: 'error', proposal: null, note,
+      recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'error'),
+    })
     return true
   })
 }
@@ -3015,15 +2992,11 @@ function consumeInterruptMarker(id: string): boolean {
 function projectInterruptedUnlocked(sessionId: string): boolean {
   const rec = readLiveRecord(sessionId)
   if (!rec?.governed || rec.status !== 'active' || rec.stopped || rec.archived) return false
-  const application = configuredSessionApplicationIfCutover()
-  if (application) {
-    application.transitionSession(sessionId, {
-      status: 'asking', proposal: null, note: INTERRUPTED_NOTE,
-      recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'asking'),
-    })
-    return true
-  }
-  writeRecord({ ...rec, status: 'asking', proposal: null, note: INTERRUPTED_NOTE })
+  const application = configuredSessionApplication()
+  application.transitionSession(sessionId, {
+    status: 'asking', proposal: null, note: INTERRUPTED_NOTE,
+    recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'asking'),
+  })
   return true
 }
 export const markInterrupted = (sessionId: string): boolean => withRecordLockSync(sessionId, () => projectInterruptedUnlocked(sessionId))
@@ -3052,21 +3025,18 @@ function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, ge
       registrationPrepared = true
     }
   }
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   const nativeStartToken = rec.runtimeStartToken || process.env.SPEXCODE_NATIVE_START_TOKEN?.trim()
-  if (application && !nativeStartToken)
+  if (!nativeStartToken)
     throw new ResourceConflict(`refusing to bind runtime for ${id}: native start token is missing`)
   try {
     writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
-    if (application) {
-      if (!nativeStartToken) throw new ResourceConflict(`refusing to bind runtime for ${id}: native start token is missing`)
-      application.bindRuntime(id, {
-        namespace: 'spex-governed',
-        runtimeKind: rec.harness || defaultHarness.id,
-        nativeSessionId: harnessSessionId,
-        nativeStartToken,
-      })
-    }
+    application.bindRuntime(id, {
+      namespace: 'spex-governed',
+      runtimeKind: rec.harness || defaultHarness.id,
+      nativeSessionId: harnessSessionId,
+      nativeStartToken,
+    })
   } catch (error) {
     if (codex && generationId && registrationPrepared) {
       try { bindCodexGeneration(root, id, harnessSessionId, null) }
@@ -3255,7 +3225,7 @@ export function markIdle(sessionId?: string): boolean {
     publishCanonicalLifecycle(rec, 'idle', null, null)
     // After cutover the JSON file is only the runtime/worktree envelope. Do not mirror this inferred
     // lifecycle transition into it: doing so creates a second, stale-looking status surface for hooks.
-    if (!configuredSessionApplicationIfCutover()) writeRecord({ ...rec, status: 'idle' })
+    writeRecord({ ...rec, status: 'idle' })
     return true
   })
 }
@@ -3967,7 +3937,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   // Adapter-owned headless sessions may have no live leaf PID, but launch still created an exact tmux session
   // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the leaf receipt proof, never the
   // exact tmux teardown.
-  await tmuxOk(['kill-session', '-t', id])
+  await sessionHost().stop(id)
   await assertTargetTmuxAbsent(id, 'after kill')
   if (leaf) {
     await killAgentProcess(id, assertOwned, leaf)
@@ -4206,8 +4176,8 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   })
   // The canonical lifecycle must settle at the same terminal boundary as the durable close fact. `archived`
   // is an internal terminal marker; public projections render its closed record as `retired`.
-  const application = configuredSessionApplicationIfCutover()
-  if (application?.readState(id)) {
+  const application = configuredSessionApplication()
+  if (application.readState(id)) {
     application.transitionSession(id, {
       status: 'archived',
       proposal: null,
@@ -4251,7 +4221,7 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
     const harness = harnessById(wt.rec.harness || defaultHarness.id)
     if (!harness.exactNativeTargetId(wt.rec)) {
       await assertUnboundCloseSafe(id, wt.rec)
-      await tmuxOk(['kill-session', '-t', id])
+      await sessionHost().stop(id)
       await assertTargetTmuxAbsent(id, 'after unbound residue close')
       await harness.cleanupRuntime(wt.rec)
       unboundStopped = true
@@ -4301,7 +4271,7 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
     const known = (await listSessions(true)).some((s) => s.id === id)
     return { ok: false, reason: known ? 'offline' : 'unknown' }
   }
-  try { return { ok: true, pane: await tmux(['capture-pane', '-e', '-p', '-t', id]) } }
+  try { return { ok: true, pane: await sessionHost().command(['capture-pane', '-e', '-p', '-t', id]) } }
   catch { return { ok: false, reason: 'capture-failed' } }
 }
 
@@ -4494,9 +4464,8 @@ type SendTextOptions = {
 }
 export async function sendText(id: string, text: string, from?: string, opts: SendTextOptions = {}): Promise<AcceptedDispatch> {
   if (!text.trim()) return { ok: false, error: EMPTY_PROMPT_ERROR }
-  const application = configuredSessionApplicationIfCutover()
-  if (application) {
-    let message: ReturnType<ProductionSessionApplication['protocol']['enqueue']>
+  const application = configuredSessionApplication()
+  let message: ReturnType<ProductionSessionApplication['protocol']['enqueue']>
     let replayed = false
     try {
       const rec = readRecord(id)
@@ -4539,22 +4508,19 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     // transport state, harness, or runtime binding could change it. Name the deferral instead, so the one
     // caller that defers can say "accepted, handover in flight" and the callers that DO drain keep a
     // `queued` that still means what it says.
-    return {
-      ok: true,
-      delivery: opts.deferDrain ? 'deferred' : pending ? 'queued' : 'accepted',
-      ...(opts.idempotency || opts.deliveryKey ? { replayed } : {}),
-    }
+  return {
+    ok: true,
+    delivery: opts.deferDrain ? 'deferred' : pending ? 'queued' : 'accepted',
+    ...(opts.idempotency || opts.deliveryKey ? { replayed } : {}),
   }
-  throw new ResourceConflict('session application is unavailable; refusing the legacy delivery path')
 }
 
 // @@@ drainSession - hand over what this session is owed, as ordinary prompts. Safe to call from anywhere and
 // at any time: the queue's own lock serializes concurrent passes, and an empty queue costs one existsSync.
 // The retry sweep in `serve` calls this for the sessions whose queues an earlier pass could not empty.
 export async function drainSession(id: string): Promise<void> {
-  const application = configuredSessionApplicationIfCutover()
-  if (application) {
-    const rec = readRecord(id)
+  const application = configuredSessionApplication()
+  const rec = readRecord(id)
     if (!rec) return
     // An empty canonical queue is a successful no-op. Do not turn a resume with no owed prompt into a
     // runtime-binding error; require a bound adapter only when there is a message that must be handed over.
@@ -4577,7 +4543,7 @@ export async function drainSession(id: string): Promise<void> {
             const text = canonicalMessageText(msg, rec)
             if (h.deliveryBlockedBy) {
               try {
-                if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+            if (h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
               } catch { /* no pane to consult — let the adapter decide */ }
             }
             const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
@@ -4599,7 +4565,7 @@ export async function drainSession(id: string): Promise<void> {
         const text = canonicalMessageText(msg, rec)
         if (h.deliveryBlockedBy) {
           try {
-            if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+                if (h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
           } catch { /* no pane to consult — let the adapter decide */ }
         }
         const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
@@ -4609,9 +4575,7 @@ export async function drainSession(id: string): Promise<void> {
         if (!msg.senderSessionId) markHumanPromptActive(id)
       }
     })
-    return
-  }
-  throw new ResourceConflict('session application is unavailable; refusing the legacy delivery path')
+  return
 }
 
 // `recipient` is the session this text is delivered TO; a state message speaks about its `sessionId`, the
@@ -4720,7 +4684,9 @@ async function sendRawKeysLocked(id: string, keys: readonly string[]): Promise<b
   for (const k of list) {
     const args = rawKeyArgs(id, k)
     if (!args) continue
-    await tmux(args); sent = true
+    const sendKeys = sessionHost().sendKeys
+    if (!sendKeys) continue
+    await sendKeys(id, args.slice(3)); sent = true
   }
   return sent
 }

@@ -343,7 +343,7 @@ async function followKit(selectors: string[], verb: string): Promise<{
   const { ownSessionId, selectSessions, toSession } = await import('./sessions.js')
   const { fromRaw } = await import('./session-record.js')
   const { listSessionIds, readPublicRecordEntry } = await import('@spexcode/spec-core')
-  const { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } = await import('./session-application.js')
+  const { configuredSessionApplication } = await import('./session-application.js')
   const real = selectors.filter((sel) => sel && sel !== '@all')
   let picked: string[] = []
   if (real.length) {
@@ -356,8 +356,7 @@ async function followKit(selectors: string[], verb: string): Promise<{
   const row = (id: string, status: import('./sessions.js').DisplayStatus, note: string | null) => {
     const entry = readPublicRecordEntry(id)
     if (entry.kind === 'ok') return { ...toSession(fromRaw(entry.raw), status, 'unknown'), note }
-    const cutover = sessionApplicationCutoverState()
-    const state = cutover === 'fresh' ? null : configuredSessionApplicationIfCutover()?.readState(id)
+    const state = configuredSessionApplication().readState(id)
     if (!state) return null
     return {
       id,
@@ -506,6 +505,19 @@ if (cmd === 'serve') {
   const host = flag('host') ?? '127.0.0.1'
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
   startHostDashboard({ port, host })
+} else if (cmd === 'open') {
+  rejectFlags('spex open', 3, ['print-only'])
+  const targets = positionals(3)
+  if (targets.length !== 1) { console.error('usage: spex open <node-id|session-SEL|path> [--print-only]'); process.exit(2) }
+  const { invokePlatformOpener, resolveOpenDashboardUrl } = await import('./open-dashboard.js')
+  try {
+    const url = await resolveOpenDashboardUrl(targets[0])
+    console.log(url)
+    if (!has('print-only')) await invokePlatformOpener(url)
+  } catch (error) {
+    console.error(`spex open: ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(2)
+  }
 } else if (cmd === 'guidance') {
   let out: string | undefined
   for (let i = 3; i < process.argv.length; i++) {

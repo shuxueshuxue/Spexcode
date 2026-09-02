@@ -7,7 +7,7 @@ import { jsonMigrationFencePath, MIGRATED_STATE_EVENT, openProjectSessionApplica
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { runtimeRoot } from '@spexcode/spec-core'
 
-import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest, sessionApplicationCutoverState } from './session-application.js'
+import { configuredSessionApplication, resetConfiguredSessionApplicationForTest, sessionApplicationCutoverState } from './session-application.js'
 
 test('a marked store with legacy residue settles on its first canonical access, then reads as ready', () => {
   resetConfiguredSessionApplicationForTest()
@@ -27,7 +27,7 @@ test('a marked store with legacy residue settles on its first canonical access, 
     writeFileSync(join(recordsRoot, 'legacy', 'timeline', '000000000001.ndjson'), JSON.stringify({ kind: 'status', status: 'active', proposal: null, note: 'launched', ts: '2026-01-01T00:00:00.000Z' }) + '\n')
 
     assert.equal(sessionApplicationCutoverState(), 'residue')
-    const application = configuredSessionApplicationIfCutover()
+    const application = configuredSessionApplication()
     assert.ok(application)
     assert.equal(sessionApplicationCutoverState(), 'ready')
     assert.deepEqual(readdirSync(join(recordsRoot, 'legacy')), ['runtime.json'])
@@ -35,7 +35,7 @@ test('a marked store with legacy residue settles on its first canonical access, 
     assert.equal(application.readState('legacy')?.status, 'awaiting')
     assert.deepEqual(application.readEvents('legacy').map(event => [event.type, event.ignorable]), [['session.state.changed.v1', false], [MIGRATED_STATE_EVENT, true]])
     // the settled root answers from memory: a second access does not rescan or re-run the importer
-    assert.equal(configuredSessionApplicationIfCutover(), application)
+    assert.equal(configuredSessionApplication(), application)
   } finally {
     resetConfiguredSessionApplicationForTest()
   }

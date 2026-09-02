@@ -30,6 +30,7 @@
     "desktop:install": "npm --prefix spec-desktop install",
     "desktop:start": "npm --prefix spec-desktop start",
     "desktop:check": "node --test scripts/desktop-contract.test.mjs",
+    "desktop:pack": "node scripts/desktop-pack.mjs",
     "build:public": "node scripts/public-graph-build.mjs",
     "test:public-graph": "npm run build:public && node spec-dashboard/test/public-graph-static.e2e.mjs",
     "lint": "node scripts/sync-init-plugins.mjs --check && cd spec-cli && npm run -s lint",

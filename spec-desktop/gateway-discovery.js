@@ -3,8 +3,10 @@
 const { pathToFileURL } = require('node:url')
 const { resolve } = require('node:path')
 
-const HOST_RECORD_MODULE = process.env.SPEXCODE_DESKTOP_HOST_RECORD_MODULE ||
-  resolve(__dirname, '..', 'spec-cli', 'dist', 'host-record.js')
+const PACKAGED_HOST_RECORD_MODULE = process.resourcesPath
+  ? resolve(process.resourcesPath, 'spexcode', 'node_modules', '@spexcode', 'spec-cli', 'dist', 'host-record.js')
+  : resolve(__dirname, '..', 'spec-cli', 'dist', 'host-record.js')
+const HOST_RECORD_MODULE = process.env.SPEXCODE_DESKTOP_HOST_RECORD_MODULE || PACKAGED_HOST_RECORD_MODULE
 const PROBE_TIMEOUT_MS = 1_000
 
 async function findRunningGateway() {

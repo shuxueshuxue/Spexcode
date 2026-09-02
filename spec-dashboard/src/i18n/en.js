@@ -237,6 +237,11 @@ export default {
       unreachable: 'unreachable',
       stopped: 'backend stopped — start it from here',
     },
+    hostFactsTitle: 'Host facts', hostDoctor: 'run host doctor', hostDoctorRunning: 'running…',
+    hostDoctorOk: 'host doctor: exit 0 — succeeded', hostDoctorFail: ({ code }) => `host doctor: exit ${code} — failed`,
+    hostVersions: 'toolchain', hostAgents: 'agent CLIs', hostMemory: 'memory envelope', hostLaunchers: 'launchers',
+    installed: 'installed', missing: 'missing', loggedIn: 'logged in', notLoggedIn: 'not logged in', present: 'present',
+    resolves: 'resolves', broken: 'broken', seeHostFacts: 'see host facts',
   },
 
   credential: {

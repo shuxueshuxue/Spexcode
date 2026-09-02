@@ -165,7 +165,7 @@ function childrenScopeOption(): string | null | undefined {
 const idLikeSelector = (selector: string): boolean => /^[0-9a-f-]{8,}$/i.test(stripRefSigil(selector))
 
 type SessionSendArgs =
-  | { selector: string; kind: 'text'; text: string; sshAddress?: string }
+  | { selector?: string; kind: 'text'; text?: string; sshAddress?: string; children?: boolean; direct?: boolean }
   | { selector: string; kind: 'keys'; keys: string[]; sshAddress?: undefined }
 
 function sessionSendUsage(detail: string, keys = false): never {
@@ -178,7 +178,7 @@ function sessionSendUsage(detail: string, keys = false): never {
 
 function parseSessionSendArgs(args: string[]): SessionSendArgs {
   const valueFlags = new Set([...EXPLICIT_BACKEND_VALUE_FLAGS, '--keys', '--ssh'])
-  const bareFlags = new Set(EXPLICIT_BACKEND_BARE_FLAGS)
+  const bareFlags = new Set([...EXPLICIT_BACKEND_BARE_FLAGS, '--children', '--direct'])
   const values = new Map<string, string>()
   const positionals: string[] = []
   let endOfOptions = false
@@ -211,6 +211,14 @@ function parseSessionSendArgs(args: string[]): SessionSendArgs {
     if (!keys.length) sessionSendUsage('--keys expects one non-empty value', true)
     return { selector: positionals[0], kind: 'keys', keys }
   }
+  const children = values.has('--children')
+  if (children) {
+    if (values.has('--ssh')) sessionSendUsage('--children cannot cross a machine peer')
+    if (positionals.length > 1) sessionSendUsage('--children accepts an optional message, not a selector and message')
+    if (positionals[0] !== undefined && !positionals[0].trim()) sessionSendUsage('message must not be empty or whitespace')
+    return { kind: 'text', text: positionals[0], children: true, direct: values.has('--direct') }
+  }
+  if (values.has('--direct')) sessionSendUsage('--direct requires --children')
   if (positionals.length !== 2) sessionSendUsage('plain send requires exactly one selector and one message')
   if (!positionals[1].trim()) sessionSendUsage('message must not be empty or whitespace')
   return { selector: positionals[0], kind: 'text', text: positionals[1], ...(values.has('--ssh') ? { sshAddress: values.get('--ssh')! } : {}) }
@@ -696,6 +704,27 @@ if (cmd === 'serve') {
       const ids = names(owners)
       console.log(`${rel} is governed whole-file by ${whole.length} specs (all claims: ${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
+  } else if (sub === 'report') {
+    rejectUnknownFlags('spex spec report', 4, ['note', 'always'])
+    const args = positionals(4)
+    if (args.length > 1) {
+      console.error('usage: spex spec report [<rev>|<a..b>] [--note <text>] [--always]')
+      process.exit(2)
+    }
+    const { buildChangeReport } = await import('@spexcode/spec-core')
+    const revision = args[0]
+    const report = buildChangeReport({
+      repoRoot: process.cwd(),
+      ...(revision?.includes('..') ? { range: revision } : { rev: revision }),
+      ...(flag('note') !== undefined ? { note: flag('note') } : {}),
+      parentSessionId: (await import('./sessions.js')).ownSessionId() ?? undefined,
+    })
+    if (!has('always') && /仅 ack\/eval，正文未变 \(empty=true\)/u.test(report)) {
+      console.log('无正文变化')
+    } else {
+      process.stdout.write(`${report}\n`)
+    }
+    await flushExit(0)
   } else if (sub === 'lint') {
     const { specLintReport, pendingTouchesGoverned, DRIFT_GUIDANCE } = await import('./lint.js')
     const pending = flag('pending')
@@ -950,7 +979,7 @@ if (cmd === 'serve') {
     // pretty list of living sessions + states. `spex session ls [SEL...] [--children[=PARENT-SEL]] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
-    const { ownSessionId, resolveSession, selectChildren, selectSessions, formatTable } = await import('./sessions.js')
+    const { ownSessionId, resolveSession, selectDescendants, selectSessions, formatTable } = await import('./sessions.js')
     const { clientListSessions, clientListSessionsThroughPeer } = await import('./client.js')
     // The backend's default projection excludes closed records. --all and an explicit selector request the
     // retained record projection so an operator can inspect or resume one deliberately.
@@ -961,9 +990,10 @@ if (cmd === 'serve') {
     if (peerAnchor && selectors.length !== 1) sessionPeerAnchorUsage('ls', '--ssh accepts exactly one full-id project anchor, not session selectors')
     if (peerAnchor && has('all')) sessionPeerAnchorUsage('ls', '--all is unavailable through a machine peer')
     if (peerAnchor && children === null) sessionPeerAnchorUsage('ls', '--children over a machine peer requires --children=<remote-parent-SEL>')
+    const topologyRead = children !== undefined
     const visible = peerAnchor
       ? await clientListSessionsThroughPeer(peerAnchor.sshAddress, peerAnchor.sessionId)
-      : await clientListSessions(has('all') || selectors.length > 0)
+      : await clientListSessions(has('all') || selectors.length > 0 || topologyRead)
     let scoped = visible
     let scope: import('./sessions.js').SessionTableScope = { kind: 'sessions' }
     if (children !== undefined) {
@@ -992,9 +1022,10 @@ if (cmd === 'serve') {
           }
         }
       }
-      scoped = selectChildren(visible, parent)
+      scoped = selectDescendants(visible, parent)
       scope = { kind: 'children', parent }
     }
+    if (children !== undefined && !has('all')) scoped = scoped.filter((session) => !session.closedAt && !session.archived)
     const selected = selectSessions(scoped, peerAnchor ? [] : selectors)
     const picked = flag('status') ? selected.filter((session) => flag('status')!.split(',').includes(session.status)) : selected
     if (!peerAnchor && children === undefined && selectors.length === 1 && !selected.length && idLikeSelector(selectors[0])) {
@@ -1233,6 +1264,38 @@ if (cmd === 'serve') {
       console.log(`reparented ${result.children.join(', ')} -> ${result.parent}`)
     } else if (sub === 'send') {
       if (!sendArgs) sessionSendUsage('arguments were not parsed')
+      if (sendArgs.kind === 'text' && sendArgs.children) {
+        const senderId = (await import('./sessions.js')).ownSessionId()
+        if (!senderId) sessionSendUsage('--children needs a governed caller session')
+        const text = sendArgs.text ?? readFileSync(0, 'utf8')
+        if (!text.trim()) sessionSendUsage('message must not be empty or whitespace')
+        const { clientListSessions, clientPushQueued, backendConnectionRefused } = c
+        const { configuredSessionApplication } = await import('./session-application.js')
+        const { MESSAGE_KINDS } = await import('@spexcode/session-protocol')
+        const application = configuredSessionApplication()
+        const all = await clientListSessions(true)
+        const known = new Set(all.map((session) => session.id))
+        const closed = new Set(all.filter((session) => session.closedAt || session.archived).map((session) => session.id))
+        const descendants = (sendArgs.direct
+          ? application.topology.children(senderId, 'parent').map((edge) => edge.toSessionId)
+          : application.topology.descendants(senderId, 'parent'))
+          .filter((id) => id !== senderId && known.has(id) && !closed.has(id))
+        application.broadcast(senderId, descendants, { kind: MESSAGE_KINDS.SPEC_CHANGE_REPORT, body: Buffer.from(text) })
+        let pushed = 0
+        for (const recipient of descendants) {
+          try {
+            const result = await clientPushQueued(recipient)
+            if (result.ok) pushed++
+          } catch (error) {
+            if (!backendConnectionRefused(error)) throw error
+          }
+        }
+        if (pushed < descendants.length) {
+          console.error('已入队，等接收方在回合边界取走；backend 不在，无法推送')
+        }
+        console.log(`sent to ${descendants.length} descendant${descendants.length === 1 ? '' : 's'}`)
+        process.exit(0)
+      }
       const full = sendArgs.sshAddress
         ? (FULL_SESSION_ID.test(id ?? '')
             ? id!
@@ -1265,7 +1328,7 @@ if (cmd === 'serve') {
         // the board), NOT the stable sessionLabel that stops at the bare prompt-truncation title.
         sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionHeadline(sr.ok) } : { id: senderId, label: null }
       }
-      let text = sendArgs.text
+      let text = sendArgs.text!
       let from = senderId ?? undefined
       if (sendArgs.sshAddress && sender) {
         const { peerSenderRef, readPeerMachineId } = await import('./machine-peer.js')
@@ -1275,9 +1338,24 @@ if (cmd === 'serve') {
       } else if (!sendArgs.sshAddress) {
         text = s.withSenderHint(text, sender)
       }
-      const r = sendArgs.sshAddress
-        ? await c.clientSendThroughPeer(sendArgs.sshAddress, full, text, from)
-        : await c.clientSend(full, text, from)
+      let r
+      try {
+        r = sendArgs.sshAddress
+          ? await c.clientSendThroughPeer(sendArgs.sshAddress, full, text, from)
+          : await c.clientSend(full, text, from)
+      } catch (error) {
+        if (sendArgs.sshAddress || !c.backendConnectionRefused(error)) throw error
+        const { configuredSessionApplication } = await import('./session-application.js')
+        const { MESSAGE_KINDS } = await import('@spexcode/session-protocol')
+        configuredSessionApplication().enqueueMessage(full, {
+          kind: MESSAGE_KINDS.SESSION_TEXT,
+          body: Buffer.from(text),
+          senderSessionId: from ?? null,
+        })
+        console.error('已入队，等接收方在回合边界取走；backend 不在，无法推送')
+        console.log('sent')
+        process.exit(0)
+      }
       if (r.ok) { console.log('sent'); process.exit(0) }
       console.error(`dispatch failed: ${r.error}`)
       process.exit(1)

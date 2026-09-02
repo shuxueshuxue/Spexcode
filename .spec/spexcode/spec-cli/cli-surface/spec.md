@@ -213,6 +213,11 @@ lives in their own modules; `session-declarations.ts` owns the worker-authored `
 record declarations; help text lives in `help.ts`; a sibling verb's churn in the hub is that feature's,
 not this node's drift.
 
+`spex spec report [<rev>|<a..b>] [--note <text>] [--always]` is the CLI face of [[change-report]]:
+it defaults to `HEAD`, passes the revision window and note through to `buildChangeReport`, and uses the
+current session as the parent in its reread request. A report whose diff contains only ack stamps or
+`evals.ndjson` is silent except for `无正文变化` and exits zero; `--always` prints the complete report.
+
 The hub rule has a MECHANISM, and stating only the rule leaves the mechanism unprotected. Every dispatch site
 reaches its verb through a lazy `await import(...)` — around eighty of them, one per verb — and the point is
 what a single invocation must NOT pay for: `spex session ls` cannot afford to load the eval engine, the harness

@@ -4345,6 +4345,29 @@ export function selectChildren(all: Session[], parent: string): Session[] {
   return all.filter((session) => session.parent === parent)
 }
 
+/** Read-time descendant closure; callers may filter terminal rows after traversing closed intermediates. */
+export function selectDescendants(all: Session[], parent: string): Session[] {
+  const byParent = new Map<string, Session[]>()
+  for (const session of all) {
+    if (!session.parent) continue
+    const children = byParent.get(session.parent) ?? []
+    children.push(session)
+    byParent.set(session.parent, children)
+  }
+  const out: Session[] = []
+  const seen = new Set<string>([parent])
+  const visit = (id: string): void => {
+    for (const child of byParent.get(id) ?? []) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      out.push(child)
+      visit(child.id)
+    }
+  }
+  visit(parent)
+  return out
+}
+
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
 // selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
 // ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a branch/
@@ -4431,17 +4454,30 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
   const label = scope.kind === 'children' ? `children of ${scope.parent.slice(0, 8)}` : 'sessions'
   const heading = c('1', `SpexCode ${label} (${sessions.length}${sessions.length ? `; ${statusSummary(sessions)}` : ''})`)
   if (!sessions.length) return [heading, c('90', `  no ${scope.kind === 'children' ? 'children' : 'living sessions'}`)].join('\n')
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'PARENT'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
+  const depthOf = (session: Session): number => {
+    let depth = 0
+    const ids = new Set(sessions.map((item) => item.id))
+    const seen = new Set<string>()
+    let parent = session.parent
+    while (parent && ids.has(parent) && !seen.has(parent)) {
+      seen.add(parent)
+      depth++
+      parent = sessions.find((item) => item.id === parent)?.parent ?? null
+    }
+    return depth
+  }
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'PARENT'.padEnd(8)} ${'DEPTH'.padEnd(5)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
     const title = padWidth(truncWidth(sessionTitle(s), 22), 22)
     const st = s.status.padEnd(13)
     const parent = c('90', (s.parent || '-').slice(0, 8).padEnd(8))
+    const depth = String(depthOf(s)).padEnd(5)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${parent} ${merges}${prompt}${note}`
+    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${parent} ${depth}${merges}${prompt}${note}`
   })
   return [heading, header, ...rows, statusLegend(color)].join('\n')
 }
@@ -4596,7 +4632,7 @@ export async function drainSession(id: string): Promise<void> {
 // `recipient` is the session this text is delivered TO; a state message speaks about its `sessionId`, the
 // watched subject, and the notice must name that subject — never the reader of the notice.
 export function canonicalMessageText(message: { kind: string; body: Uint8Array }, recipient: SessRec): string {
-  if (message.kind === 'session.prompt.v1') return Buffer.from(message.body).toString('utf8')
+  if (message.kind === 'session.prompt.v1' || message.kind === 'session.text.v1' || message.kind === 'spec.change-report.v1') return Buffer.from(message.body).toString('utf8')
   if (message.kind === 'session.state.changed.v1') {
     try {
       const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as { sessionId?: string; status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }

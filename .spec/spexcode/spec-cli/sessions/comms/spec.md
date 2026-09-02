@@ -34,3 +34,6 @@ The mesh is the log plus three things done with it:
 
 An agent therefore never looks for its mail at all — it arrives as a prompt — while a supervisor has exactly
 one place to look for everything a worker said and everything said to it. The log is read; it is not a chore.
+
+The CLI communication surface includes one-transaction descendant broadcast and an offline enqueue fallback;
+backend push is a separate best-effort handoff after queue acceptance.

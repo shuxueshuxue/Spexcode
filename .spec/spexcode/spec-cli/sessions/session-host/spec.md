@@ -59,4 +59,6 @@ changing its socket, command arguments, probe timeouts, or witness value; lifecy
 quarantine, attach/input routes, PTY probes, and resource accounting select that host rather than invoking
 tmux directly. `runtime-guard.ts` now exposes host selection and retains the existing loud refusal when tmux
 is unavailable. The invocation recorder is opt-in via `SPEXCODE_TMUX_RECORD` for the `tmux-host-parity` proof.
+Periodic poll cadence is timing, not a `SessionHost` contract; parity therefore compares poll command shape and
+order while collapsing only consecutive repeats of the same periodic poll invocation.
 Process-host remains intentionally unimplemented for phase 2.

@@ -126,6 +126,10 @@ scripts and agents can do through the same CLI.
 
 This part needs tmux on the machine (on Windows, run inside WSL2).
 
+The Windows desktop bootstrap runs `spex doctor` from the WSL user's home so it can validate host prerequisites.
+Its `layer 1 ABSENT` and `agent ungoverned` lines are expected in that host-scoped context; they do not mean the
+adopted project is missing its hooks. Project-scoped doctor output is the appropriate check for a repository.
+
 ```sh
 spex session new "[[uploader]] retry failed chunks with backoff"
 ```

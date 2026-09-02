@@ -11,7 +11,12 @@
 # @@@ all sessions, global ledger - like [[spec-first]], spec-awareness is UNIVERSAL so this is NOT gated on
 # `governed`. The once-per-file ledger lives in the session's GLOBAL store dir (keyed by the harness
 # session_id, grouped per-project — see hp_store_dir).
+SPEX_PROFILE_VALUE="${SPEX_PROFILE:-full}"
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
+hp_profile_hook_enabled spec-of-file
+profile_status=$?
+[ "$profile_status" -eq 1 ] && exit 0
+[ "$profile_status" -ne 0 ] && exit "$profile_status"
 S="${SPEX:-spex}"
 payload=$(cat 2>/dev/null)
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0

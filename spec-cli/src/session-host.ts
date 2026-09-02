@@ -142,5 +142,16 @@ export function hasTmux(): boolean {
 // Runtime boot performs the loud capability check. Keeping the accessor transport-pure preserves the old
 // lifecycle behavior in narrow teardown paths (a missing tmux binary is treated as an ordinary failed command,
 // allowing ownership guards to report their precise refusal first).
-export function sessionHost(): SessionHost { return selectSessionHost() }
+let cachedHostPath: string | undefined
+let cachedHost: SessionHost | undefined
+// Host capability is stable for a backend lifetime. Cache the probe so lifecycle polling does not turn
+// every snapshot into a synchronous `tmux -V` invocation (and so tmux-host traces retain phase-1 parity).
+export function sessionHost(): SessionHost {
+  const path = process.env.PATH || ''
+  if (!cachedHost || cachedHostPath !== path) {
+    cachedHostPath = path
+    cachedHost = selectSessionHost()
+  }
+  return cachedHost
+}
 export { TMUX_SOCK, TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, probeTimedOut }

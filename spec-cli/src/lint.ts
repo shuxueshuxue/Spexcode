@@ -2,7 +2,6 @@ import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { readConfig, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
-import { readJsonConfig } from '@spexcode/spec-core'
 import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
@@ -41,8 +40,8 @@ const DEFAULT_CONFIG: LintConfig = {
   scopedCodeMiss: 'warn',
 }
 export function loadConfig(root: string, pendingSource?: string | null): LintConfig {
-  // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
-  // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
+  // Absent .spec/spexcode.json → tuned defaults; a malformed one throws rather than silently
+  // reverting the author's budgets to defaults.
   let parsed: any
   if (pendingSource === undefined) parsed = readConfig(root)
   else if (pendingSource === null) parsed = {}

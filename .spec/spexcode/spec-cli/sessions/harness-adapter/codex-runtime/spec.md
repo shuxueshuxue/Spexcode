@@ -49,6 +49,11 @@ which was the macOS-only version-skew failure. `SPEXCODE_CODEX_SERVER_CMD` overr
 (`<binary> --help`) obeys the same rule: the launch script exports `SPEXCODE_CODEX_CMD` so the probe interrogates
 the codex the session will actually run rather than mis-deciding off a stray PATH entry.
 
+The generation ledger is a live coordination file, but its parsed value is process-local state: readers stat the
+ledger path and reuse the parsed object while its `mtimeNs` and byte size are unchanged, then re-read and parse
+after an atomic replacement. No ledger content or cache survives the process, so generation routing remains
+derived from the current runtime files.
+
 **Started once, under a portable lock.** Check-and-start is serialized by an atomic `mkdir` mutex with a bounded
 wait, not `flock` — absent on macOS, where it failed the whole bootstrap and left the pane at a shell. The lock
 is held only across check-and-start, and a stale dir left by a dead launcher clears after a bounded wait so it

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 // @@@ help journey - the CLI's three help layers, each pointing at the next so no probe dead-ends:
 //   1. `spex help`            → the MAP: the whole noun-first surface, one line per drawer/verb.
 //   2. `spex help <cmd>`      → ONE drawer/command's usage (also `spex <cmd> --help`, intercepted pre-verb).
@@ -12,6 +14,55 @@
 
 // One command's help entry. `see` renders as a trailing "see also:" journey pointer.
 type Entry = { line: string; body: string; see?: string }
+
+export type CliProfile = Readonly<{
+  name: string
+  commands: ReadonlySet<string>
+  hooks: ReadonlySet<string>
+}>
+
+const REPO_COMMANDS = ['spec', 'eval', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
+const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
+const REPO_HOOKS = new Set(['spec-first', 'spec-of-file', 'comment-altitude'])
+
+function profileError(message: string): never {
+  const error = new Error(message)
+  error.name = 'ConfigError'
+  throw error
+}
+
+/** Resolve the startup-only agent surface from SPEX_PROFILE. */
+export function resolveCliProfile(): CliProfile {
+  const raw = process.env.SPEX_PROFILE?.trim() || 'full'
+  if (raw === 'full') return { name: 'full', commands: new Set(), hooks: new Set(ALL_CORE_HOOKS) }
+  if (raw === 'repo') return { name: 'repo', commands: new Set(REPO_COMMANDS), hooks: REPO_HOOKS }
+  let parsed: unknown
+  try { parsed = JSON.parse(readFileSync(raw, 'utf8')) } catch (error) {
+    profileError(`invalid SPEX_PROFILE '${raw}': expected 'full', 'repo', or a readable JSON profile file (${error instanceof Error ? error.message : String(error)})`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) profileError(`invalid SPEX_PROFILE '${raw}': JSON must be an object`)
+  const value = parsed as { commands?: unknown; hooks?: unknown }
+  if (!Array.isArray(value.commands) || value.commands.some((name) => typeof name !== 'string' || !name.trim())) {
+    profileError(`invalid SPEX_PROFILE '${raw}': commands must be an array of command names`)
+  }
+  const commands = new Set(value.commands as string[])
+  const known = new Set([...Object.keys(ENTRIES), 'help'])
+  for (const name of commands) if (!known.has(name) || name === 'internal') profileError(`invalid SPEX_PROFILE '${raw}': unknown command '${name}'`)
+  if (value.hooks !== undefined && (!Array.isArray(value.hooks) || (value.hooks as unknown[]).some((name) => typeof name !== 'string' || !ALL_CORE_HOOKS.includes(name as typeof ALL_CORE_HOOKS[number])))) {
+    profileError(`invalid SPEX_PROFILE '${raw}': hooks must list known core plugin names`)
+  }
+  const hooks = value.hooks === undefined ? new Set(ALL_CORE_HOOKS) : new Set(value.hooks as string[])
+  return { name: raw, commands, hooks }
+}
+
+export function profileAllowsCommand(profile: CliProfile, name: string): boolean {
+  return name === 'help' || profile.name === 'full' || profile.commands.has(name)
+}
+
+export function profileRefusal(profile: CliProfile, name: string): never {
+  console.error(`spex: command '${name}' is not exposed by SPEX_PROFILE=${profile.name}; sessions are owned by your harness; use SPEX_PROFILE=full for the full CLI`)
+  process.exit(2)
+}
 
 const SEL_NOTE = `SEL = session id (or unique id-prefix) | branch — every session read/control verb
 accepts any of the three; inside a session worktree, . means that worktree's session. On the list verbs (ls/watch),
@@ -563,8 +614,9 @@ configured Codex launcher.\n\nsee also: spex doctor (the complete command) · sp
 export type PublicCommand = Readonly<{ name: string; text: string }>
 
 export function publicCommands(): readonly PublicCommand[] {
+  const profile = resolveCliProfile()
   return Object.entries(ENTRIES)
-    .filter(([name]) => name !== 'internal')
+    .filter(([name]) => name !== 'internal' && profileAllowsCommand(profile, name))
     .map(([name, entry]) => ({ name, text: `${entry.line}\n${entry.body}` }))
 }
 
@@ -602,7 +654,15 @@ export function peerSessionLaunchReceipt(id: string, sshAddress: string): string
 }
 
 export function overviewHelp(): string {
-  return `spex — SpexCode CLI (spec↔code graph + worktree session state machine)
+  const profile = resolveCliProfile()
+  const full = profile.name === 'full'
+  const visible = (name: string) => profileAllowsCommand(profile, name)
+  const projectLines = ['graph', 'init', 'materialize', 'doctor', 'uninstall', 'serve', 'dashboard', 'open', 'guidance']
+    .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
+  const nounLines = ['spec', 'session', 'peer', 'eval', 'issue', 'remark', 'evidence', 'flat']
+    .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
+  const manualLines = ['guide'].filter(visible).map((name) => `  ${ENTRIES[name].line}`)
+  return `spex — SpexCode CLI (spec↔code graph${full ? ' + worktree session state machine' : ''})
 
 Usage: spex <noun> <verb> [object] [flags]     the verb is always the token after its noun;
                                                a bare noun prints that drawer's help
@@ -610,34 +670,18 @@ Usage: spex <noun> <verb> [object] [flags]     the verb is always the token afte
                                                safe: a help probe never runs the verb)
 
 Project verbs (implicit object = this project)
-  ${ENTRIES.graph.line}
-  ${ENTRIES.init.line}
-  ${ENTRIES.materialize.line}
-  ${ENTRIES.doctor.line}
-  ${ENTRIES.uninstall.line}
-  ${ENTRIES.serve.line}
-  ${ENTRIES.dashboard.line}
-  ${ENTRIES.open.line}
-  ${ENTRIES.guidance.line}
+${projectLines.join('\n')}
 
 Noun drawers
-  ${ENTRIES.spec.line}
-  ${ENTRIES.session.line}
-  ${ENTRIES.peer.line}
-  ${ENTRIES.eval.line}
-  ${ENTRIES.issue.line}
-  ${ENTRIES.remark.line}
-  ${ENTRIES.evidence.line}
-  ${ENTRIES.flat.line}
+${nounLines.join('\n')}
 
 Manuals
-  ${ENTRIES.guide.line}
+${manualLines.join('\n')}
 
 Conventions (stated once, hold everywhere)
-  ${SEL_NOTE.split('\n').join('\n  ')}
-  ${JSON_NOTE.split('\n').join('\n  ')}
+${full ? `  ${SEL_NOTE.split('\n').join('\n  ')}\n  ${JSON_NOTE.split('\n').join('\n  ')}` : '  Profile-scoped help lists only commands exposed to this agent; hidden surfaces are owned by the harness.'}
   ${ROUTING_NOTE.split('\n').join('\n  ')}
-  ${MENTION_NOTE.split('\n').join('\n  ')}
+${full ? `  ${MENTION_NOTE.split('\n').join('\n  ')}` : ''}
 
 Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide settings · guide footprint.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`

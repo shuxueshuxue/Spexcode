@@ -206,7 +206,7 @@ A machine dump names its human twin: `spex graph --json` is for programs, so whe
 single stderr line points at the readable `spex graph`. The hint is stderr-only and tty-gated, so
 piped output stays byte-identical.
 
-The map must stay honest: every porcelain verb `cli.ts` dispatches appears in it (a hidden typeable
+The startup `SPEX_PROFILE` selects the agent-facing surface: `full` (the default) preserves this complete map, `repo` exposes only `spec`, `eval`, `graph`, `guide`, `init`, `materialize`, `doctor`, `issue`, and `help`, and a JSON file names its `commands` (with optional `hooks`). Help projects only exposed nouns; a hidden noun is rejected non-zero with its profile and `SPEX_PROFILE=full` repair. Dispatch is never silent.
 verb is the bug this node exists to prevent), and capabilities that do not exist yet appear nowhere
 — help grows a line only when the verb lands. `cli.ts` remains the thin dispatch hub — verbs' logic
 lives in their own modules; `session-declarations.ts` owns the worker-authored `done` / `park` / `ask`

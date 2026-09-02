@@ -10,6 +10,7 @@ block: false
 code:
 - .spec/spexcode/.plugins/core/session-fail/fail.sh
 ---
+The startup `SPEX_PROFILE` hook list may disable this lifecycle hook with a clean no-op; `full` and profiles that include `session-fail` retain it.
 When a turn ends not because the agent declared but because the API itself failed, this hook structurally marks the session `error`. A failed turn is a real outcome the board must show, and without this signal the session would freeze under whatever state it last held — reading as "active" or "awaiting" long after it actually died.
 
 **A SUBAGENT'S FAILED TURN IS NOT THIS SESSION'S FAILED TURN.** An in-process subagent (Claude's Task tool) fires the parent's hooks carrying the PARENT's `session_id`, so a helper the session spawned could flip the session that spawned it to `error` — a supervising parent marked dead by a delegate it is still supervising. The discriminator is the payload's own top-level `agent_id` stamp, the deterministic one [[mark-active]] already uses for the same reason; it is not a timing window. This is one defect class, so it gets one answer at both hooks rather than a second idea of what "this session acted" means.

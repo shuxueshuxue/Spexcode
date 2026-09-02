@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -u
+SPEX_PROFILE_VALUE="${SPEX_PROFILE:-full}"
+. "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
+hp_profile_hook_enabled session-listen
+profile_status=$?
+[ "$profile_status" -eq 1 ] && exit 0
+[ "$profile_status" -ne 0 ] && exit "$profile_status"
 
 # Registration only. Message receipt is owned by backend push or by the caller's explicit dequeue.
 if [ -z "${SPEX_SESSION_DATABASE_PATH+x}" ] && [ -z "${SPEX_SESSION_CONFIG+x}" ]; then

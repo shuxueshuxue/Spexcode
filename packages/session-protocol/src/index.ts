@@ -1,12 +1,5 @@
 export type SqlParam = null | number | bigint | string | Uint8Array
 
-/** Published message kinds; validation remains intentionally open to adopter-defined kinds. */
-export const MESSAGE_KINDS = Object.freeze({
-  SESSION_TEXT: 'session.text.v1',
-  SPEC_CHANGE_REPORT: 'spec.change-report.v1',
-  ZCODE_SWARM_STATE: 'zcode.swarm.state',
-} as const)
-
 export interface MessageInput {
   kind: string
   body: Uint8Array

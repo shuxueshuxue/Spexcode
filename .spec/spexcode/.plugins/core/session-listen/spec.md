@@ -8,6 +8,7 @@ events:
 order: 20
 block: true
 ---
+The startup `SPEX_PROFILE` hook list may disable this lifecycle hook with a clean no-op; `full` and profiles that include `session-listen` retain it.
 The backend-free self-launch registration hook. On `SessionStart`, it initializes the harness's native session id in
 the adopter protocol database; initialization is idempotent and creates no governed lifecycle record. The hook does
 not read messages on `UserPromptSubmit`: message receipt is owned by backend push or by the caller, which chooses

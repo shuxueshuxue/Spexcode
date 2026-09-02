@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('node:path')
 const { hubNoticeUrl, mapDeepLink } = require('./deep-link.js')
 
 const PROTOCOL = 'spexcode'
@@ -31,7 +32,10 @@ function createDesktopIntegration({ app, dialog, getGateway, getMainWindow }) {
   const pendingLinks = []
   let ready = false
 
-  if (!app.setAsDefaultProtocolClient(PROTOCOL)) {
+  const registered = app.isPackaged
+    ? app.setAsDefaultProtocolClient(PROTOCOL)
+    : app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])])
+  if (!registered) {
     console.error(`[shell] could not register ${PROTOCOL}:// as the default protocol handler`)
   }
 

@@ -64,6 +64,9 @@ reports its npm fallback before running the real `spex doctor`. `first-run.html`
 surface; the preload bridge only carries the sudo response back to the shell. Once `/health` responds, the shell
 closes that page and loads the same gateway URL used by a browser.
 
+The bootstrap must install a self-consistent SpexCode package set: either one tarball per package from the same
+commit or a pinned published set whose dependency versions agree; a thin root tarball must not mix release lines.
+
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource
 rules. WSL2 takes up to half of RAM by default: the bootstrap offers a recommended `%UserProfile%\.wslconfig`

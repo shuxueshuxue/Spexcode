@@ -32,6 +32,9 @@ through a second instance's argv. A cold argv or pre-ready macOS event waits for
 In every case the handler reads the live catalog, maps a known project plus a structurally valid registered-page
 address onto the gateway origin, focuses the existing window and navigates it — a link never spawns a second app.
 
+An unpackaged development launch registers `process.execPath` with the resolved application entry argument so the
+OS invokes this shell rather than Electron's default app; packaged builds use the installed application handler.
+
 **`spex open` is the terminal twin.** `spex open <node|session|path>` reads [[host-facts]]'s live `host.json`,
 validates its instance against `GET /host`, and matches the current project's main root against the gateway
 catalog. It resolves an exact node id first, then a session selector, then an existing file within that project;

@@ -326,6 +326,24 @@ export async function runProjectOp(id, op, body = {}) {
 export const initProject = (id, harness) => runProjectOp(id, 'init', { harness })
 export const doctorProject = (id) => runProjectOp(id, 'doctor')
 
+export async function loadHostFacts() {
+  let res
+  try { res = await fetch('/host', { cache: 'no-store', headers: { Accept: 'application/json' } }) }
+  catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  return data && typeof data === 'object' ? { ok: true, ...data } : { ok: false, error: 'unexpected answer' }
+}
+
+export async function runHostDoctor() {
+  let res
+  try { res = await fetch('/host/doctor', { method: 'POST', headers: { Accept: 'application/json' } }) }
+  catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  return { ok: data?.ok === true, code: data?.code ?? null, output: String(data?.output ?? '') }
+}
+
 // start an OFFLINE project's backend — POST /projects/:id/serve. The host spawns a detached `spex
 // serve` and waits for its instance-validated record to reconcile online, so success means the project
 // IS reachable, not merely spawned. A 409 (already online) is the desired end state, read as success;

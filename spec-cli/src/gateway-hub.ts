@@ -44,12 +44,14 @@ export type HubExtensions = {
   // extra ADMIN-scope routes under /projects/* (stream, registration, project operations) — called only
   // AFTER admin authorization, for /projects paths the hub itself doesn't handle. True = handled.
   adminRoute?: (req: http.IncomingMessage, res: http.ServerResponse, path: string) => Promise<boolean> | boolean
+  // host-level reads outside the project catalog, still behind the same admin scope.
+  hostRoute?: (req: http.IncomingMessage, res: http.ServerResponse, path: string) => Promise<boolean> | boolean
   // paths the hub would 404 (everything outside /projects, /p, /login) — the dashboard SPA shell +
   // assets. Unauthorized by design: the shell is code, not data; every data call it makes re-enters
   // the authorized routes.
   fallback?: (req: http.IncomingMessage, res: http.ServerResponse, path: string) => void
 }
-export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; extensions?: HubExtensions }
+export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; onListen?: (port: number) => void; extensions?: HubExtensions }
 
 // ---- registry ---------------------------------------------------------------------------------------
 // A project = a live backend record under ~/.spexcode/projects/<enc>/backend.json (written by supervise.ts
@@ -236,6 +238,17 @@ export function startHubGateway(opts: HubOpts): http.Server {
       return sendJson(res, 404, { error: 'not found' })
     }
 
+    // Host facts are an admin-scoped extension just like the project catalog, but live at a stable
+    // top-level path so browsers, shells, and CLI readers share one identity-bearing endpoint.
+    if (path === '/host' && ext.hostRoute) {
+      const d = adminz()
+      if (!d.ok) return d.reason === 'locked'
+        ? sendJson(res, 403, { error: 'admin surface is locked: no admin password is configured and this is not a loopback connection' })
+        : sendJson(res, 401, { error: 'authentication required', login: '/login' })
+      if (await ext.hostRoute(req, res, path)) return
+      return sendJson(res, 404, { error: 'not found' })
+    }
+
     // ---- project surface ----
     const pm = path.match(/^\/p\/([^/]+)(\/.*)?$/)
     if (pm) {
@@ -343,6 +356,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
     host: opts.host,
     label: opts.label ?? 'hub gateway',
     cleanup: opts.onBindFail,
+    onListen: opts.onListen,
     ready: (actualPort) => `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${actualPort} — /projects + /p/:projectId/*`,
   })
   return server

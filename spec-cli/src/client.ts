@@ -288,6 +288,12 @@ export async function clientSend(id: string, text: string, from?: string): Promi
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
 }
 
+/** Ask the live backend to drain messages already enqueued by a local broadcast. */
+export async function clientPushQueued(id: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/push`, post({}))
+  return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as { ok: boolean; error?: string }
+}
+
 // A machine peer's outbound loopback port is an SSH forward into the remote gateway's dedicated ingress.
 // It exposes only the small session-id allowlist the gateway can safely route to a derived local project.
 async function peerFetch(sshAddress: string, path: string, init?: RequestInit): Promise<Response> {

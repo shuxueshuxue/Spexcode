@@ -100,7 +100,7 @@ The successful receipt names what to read, monitor, and reply on. --ssh uses an 
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
 prompt carries a runnable reply path over that same tunnel.`, ['project-bound']],
     ls: [['spex session ls [SEL…] [--children[=<PARENT-SEL>]] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--children=<PARENT-SEL>] [--status a,b] [--json]'],
-      'One-shot table of this project\'s session records, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Closed records are hidden from the working projection; --all includes them, and naming one explicitly always shows it. A missing id is a loud record miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table.', ['selector']],
+      'One-shot table of this project\'s session records, with each direct parent beside the row. --children scopes it to the caller\'s all descendants (use the former direct-child scope only through a selector-specific call); --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Closed records are hidden from the working projection; --all includes them, and naming one explicitly always shows it. A missing id is a loud record miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
       'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
@@ -122,8 +122,8 @@ session's store is gone.`, ['selector']],
     merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     reparent: ['spex session reparent <child-SEL...> --to <parent-SEL>',
       'Move one or more governed children to a replacement parent, replacing only the former parent\'s managed watch relation. It never restarts a child and works when the former parent is offline.', ['selector', 'project-bound']],
-    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send --ssh <address> <FULL-SESSION-ID> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
-      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --ssh uses an existing gateway-to-gateway communication tunnel and requires a full session id; no tunnel fails loud so an agent may run \`spex peer connect <address>\` then retry. --keys is the LAST RESORT:
+    send: [['spex session send <SEL> "<msg>"', 'spex session send --children [--direct] ["<msg>"]', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send --ssh <address> <FULL-SESSION-ID> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
+      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. With --children, the caller's descendants are enqueued in one transaction; --direct limits the set to direct children. With no inline message, stdin supplies the body. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --ssh uses an existing gateway-to-gateway communication tunnel and requires a full session id; no tunnel fails loud so an agent may run \`spex peer connect <address>\` then retry. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
 is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use keys only when text
 provably cannot land.`, ['selector', 'project-bound']],
@@ -396,10 +396,11 @@ consumes the token after it.`,
     see: 'spex session send --ssh <address> <full-session-id> "<msg>" · spex dashboard (the host gateway)',
   },
   spec: {
-    line: 'spec <verb>           the governance graph: search · owner · lint · ack',
+    line: 'spec <verb>           the governance graph: search · owner · lint · ack · report',
     body: `Usage: spex spec search <query…> [--limit N=10] [--json]
        spex spec owner <path> [--actionable]
        spex spec lint [--json]
+       spex spec report [<rev>|<a..b>] [--note <text>] [--always]
        spex spec ack <node-id>… --reason "<why the contract still holds>"
 
 search — which spec node GOVERNS a topic, ranked by user-story relevance (which surfaces user-facing

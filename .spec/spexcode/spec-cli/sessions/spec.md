@@ -18,6 +18,9 @@ its own state** and may only *propose* merge or close; a **human** makes those c
 auto-disappears, so a self-finished session stays findable, and the dashboard and the terminal are two
 faces of the **same** state.
 
+The session CLI keeps topology reads and message acceptance local when no backend is reachable: child scopes use
+the durable parent closure, and send writes the canonical application queue before any optional backend handoff.
+
 ## expanded spec
 
 State lives on disk, not in memory, but NOT in the worktree: each session has a record in a per-user GLOBAL

@@ -975,6 +975,15 @@ app.post('/api/sessions/:id/input', async (c) => {
   }
   return c.json({ error: 'input needs kind: "text" | "command" | "keys"' }, 400)
 })
+app.post('/api/sessions/:id/push', async (c) => {
+  const id = c.req.param('id')
+  try {
+    await drainSession(id)
+    return c.json({ ok: true })
+  } catch (error) {
+    return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 502)
+  }
+})
 app.post('/api/sessions/reparent', async (c) => {
   const result = await reparentRequest(await c.req.json().catch(() => null))
   notifyBoardChanged('sessions')

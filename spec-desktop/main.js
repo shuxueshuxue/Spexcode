@@ -254,11 +254,26 @@ async function attachOrStartGateway() {
 }
 
 function installApplicationMenu() {
+  const dispatchPageShortcut = (key, code) => {
+    const win = BrowserWindow.getFocusedWindow() || mainWindow
+    if (!win || win.isDestroyed()) return
+    const event = JSON.stringify({ key, code })
+    win.webContents.executeJavaScript(`window.dispatchEvent(new KeyboardEvent('keydown', { ...${event}, metaKey: true, bubbles: true, cancelable: true }))`).catch(() => {})
+  }
+  const macTabShortcuts = process.platform === 'darwin'
+    ? [
+        { label: 'Close Tab', accelerator: 'Command+W', click: () => dispatchPageShortcut('w', 'KeyW') },
+        ...Array.from({ length: 9 }, (_, index) => {
+          const ordinal = index + 1
+          return { label: `Focus Tab ${ordinal}`, accelerator: `Command+${ordinal}`, click: () => dispatchPageShortcut(String(ordinal), `Digit${ordinal}`) }
+        }),
+      ]
+    : []
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'File', submenu: [{ id: 'add-project', label: 'Add Project…', click: () => void (process.platform === 'win32' ? pickProject(gateway?.url, gateway?.distro) : desktopIntegration.addProject()) }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
-    { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }] },
+    { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }, ...macTabShortcuts] },
   ]))
 }
 

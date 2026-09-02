@@ -40,7 +40,16 @@ export const ACT = [
   { id: 'shell.dockToggle',   keys: ['Alt+Shift+KeyE'],          rebind: false, desc: 'legend.shell.dockToggle' },
   { id: 'shell.dockMode',     keys: ['Alt+Shift+KeyM'],          rebind: false, desc: 'legend.shell.dockMode' },
   { id: 'shell.contextToggle',keys: ['Alt+Shift+KeyC'],          rebind: false, desc: 'legend.shell.contextToggle' },
-  { id: 'shell.tabClose',     keys: ['Alt+Shift+KeyX'],          rebind: false, desc: 'legend.shell.tabClose' },
+  { id: 'shell.tabClose',     keys: ['Alt+Shift+KeyX', 'Meta+KeyW', 'Ctrl+KeyW'], rebind: false, desc: 'legend.shell.tabClose' },
+  ...Array.from({ length: 9 }, (_, index) => {
+    const ordinal = index + 1
+    return {
+      id: `shell.tabFocus${ordinal}`,
+      keys: [`Meta+Digit${ordinal}`, `Ctrl+Digit${ordinal}`],
+      rebind: false,
+      desc: `legend.shell.tabFocus${ordinal}`,
+    }
+  }),
   { id: 'shell.tabNext',      keys: ['Alt+Shift+ArrowRight'],    rebind: false, desc: 'legend.shell.tabNext' },
   { id: 'shell.tabPrevious',  keys: ['Alt+Shift+ArrowLeft'],     rebind: false, desc: 'legend.shell.tabPrevious' },
   { id: 'shell.tabSplit',     keys: ['Alt+Shift+Enter'],         rebind: false, desc: 'legend.shell.tabSplit' },

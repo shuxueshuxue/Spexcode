@@ -22,7 +22,7 @@ test('desktop remains optional and does not tax normal workspace installs', () =
 })
 
 test('desktop contract keeps browser and shell on the same served product', () => {
-  assert.match(desktopSpec, /same origin/)
-  assert.match(desktopSpec, /spex serve ui/)
+  assert.match(desktopSpec, /same dashboard dist/)
+  assert.match(desktopSpec, /spex dashboard/)
   assert.match(desktopSpec, /desktop:install/)
 })

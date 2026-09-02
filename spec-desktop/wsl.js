@@ -63,6 +63,7 @@ function detectWsl({ probe = DEFAULT_PROBE } = {}) {
             : 'no default WSL2 distro is available'
         const failure = new Error(`WSL2 is unavailable: ${reason}`)
         failure.code = 'WSL_UNAVAILABLE'
+        if (distros.length > 0 && distros.every((distro) => distro.version === 1)) failure.distro = distros[0].name
         rejectResult(failure)
         return
       }

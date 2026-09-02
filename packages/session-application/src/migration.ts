@@ -506,6 +506,11 @@ function requireOrphanPolicy(policy: string, orphanParents: string[]): void {
   }
 }
 
+function reportOrphanTombstones(orphanParents: string[], backupRoot: string): void {
+  if (orphanParents.length === 0) return
+  console.error(`[session-application] tombstoned orphan parent(s): ${orphanParents.join(', ')}; backup ${backupRoot}`)
+}
+
 // Once the SQLite marker is published, the JSON tree is no longer a protocol. Keep only runtime/worktree
 // metadata in each envelope and remove the old communication artifacts. Every file removed here was imported
 // and copied to a backup root first, so this is a reversible one-time cutover, not an in-place compatibility mode.
@@ -555,7 +560,7 @@ function migrateLegacyResidue(options: JsonSessionMigrationOptions, tree: Legacy
     const records = tree.flatMap(dir => dir.record ? [dir.record] : [])
     const known = new Set([...canonicalIds, ...records.map(record => record.session_id)])
     const orphanParents = [...new Set(records.flatMap(record => record.parent && !known.has(record.parent) ? [record.parent] : []))].sort()
-    const orphanParentPolicy = options.orphanParentPolicy ?? 'fail'
+    const orphanParentPolicy = options.orphanParentPolicy ?? 'tombstone'
     requireOrphanPolicy(orphanParentPolicy, orphanParents)
     for (const dir of tree) {
       for (const entry of dir.watches) if (!known.has(entry.watcher)) fail(`session ${dir.id} names missing watcher ${entry.watcher}`)
@@ -563,6 +568,7 @@ function migrateLegacyResidue(options: JsonSessionMigrationOptions, tree: Legacy
     }
     requireParentForest(records)
     backupInputs(options.recordsRoot, files, residueBackupRoot, sourceDigest)
+    if (orphanParentPolicy === 'tombstone') reportOrphanTombstones(orphanParents, residueBackupRoot)
     const seedFor = (id: string) => `migration\0residue\0${sourceDigest}\0${id}`
     let created = 0, events = 0, parentEdges = 0, watchEdges = 0, pending = 0
     const unclaimed: string[] = []
@@ -639,12 +645,13 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
     fail(`database exists without a migration marker: ${options.databasePath}; refusing to import into an ambiguous live database`)
   }
   if (existsSync(fencePath)) fail(`JSON migration fence already exists: ${fencePath}; refusing a concurrent or incomplete cutover`)
-  const orphanParentPolicy = options.orphanParentPolicy ?? 'fail'
+  const orphanParentPolicy = options.orphanParentPolicy ?? 'tombstone'
   requireOrphanPolicy(orphanParentPolicy, input.orphanParents)
   writeFence(fencePath, 'migrating', sourceDigest)
   let databaseInstalled = false
   try {
     backupInputs(options.recordsRoot, input.files, backupRoot, sourceDigest)
+    if (orphanParentPolicy === 'tombstone') reportOrphanTombstones(input.orphanParents, backupRoot)
     const stagingDatabasePath = `${options.databasePath}.migration-${process.pid}.tmp`
     if (existsSync(stagingDatabasePath)) fail(`migration staging database already exists: ${stagingDatabasePath}`)
     const app = openProjectSessionApplication({ databasePath: stagingDatabasePath, locality: options.locality, now: options.now })

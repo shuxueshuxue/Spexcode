@@ -15,6 +15,7 @@ import { claudeTranscript, claudeTranscriptReader, opencodeTranscript, piTranscr
 import { harnessIdentity, type HarnessId } from '@spexcode/spec-core'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
 import { buildShim, cleanHarness, listenerAt, noLaunchEnv, pexec, SPEX } from './harness-shim.js'
+import { sessionHost } from './session-host.js'
 import type { ListenerProbe } from './harness-shim.js'
 export { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact } from './harness-shim.js'
 export type { ListenerProbe } from './harness-shim.js'
@@ -433,7 +434,9 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // derivation can change again without stranding anything already running.
 // `legacyRvSock` is the answer for a session launched BEFORE the stamp existed — its agent really did bind
 // the unscoped path — so those keep working untouched, and the fallback retires as they turn over.
-export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+export const legacyRvSock = (id: string) => process.platform === 'win32'
+  ? `\\\\.\\pipe\\spexcode-rv-${id}`
+  : join(tmpdir(), `spexcode-rv-${id}.sock`)
 
 // @@@ scoped rendezvous path - a rendezvous endpoint IS this session's address, so it needs a durable home and
 // a bounded name. `<SPEXCODE_HOME>/s/<16hex>/c` is both: the store is SpexCode-owned (normally ~/.spexcode),
@@ -443,7 +446,9 @@ export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.so
 // their stamped old path through rvSock(); only a new stamp uses this derivation.
 const RENDEZVOUS_SUN_PATH_LIMIT = 104
 export const scopedRvSock = (id: string, dir = runtimeRoot()) =>
-  join(spexcodeHome(), 's', createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 16), 'c')
+  process.platform === 'win32'
+    ? `\\\\.\\pipe\\spexcode-rv-${createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 24)}`
+    : join(spexcodeHome(), 's', createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 16), 'c')
 export function assertRvSockPath(id: string, dir = runtimeRoot()): string {
   const path = scopedRvSock(id, dir)
   const bytes = Buffer.byteLength(path)
@@ -1161,6 +1166,7 @@ export function launcherList(root = mainCheckout()): Launcher[] {
       const harness = harnessById(m[name].harness || defaultHarness.id)
       return { name, harness: harness.id, cmd: m[name].cmd, headless: harness.headless, configDir: m[name].configDir || null }
     })
+    .filter((launcher) => sessionHost().kind === 'tmux-host' || launcher.headless)
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -1191,5 +1197,7 @@ export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
   if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
   const harness = harnessById(l.harness || defaultHarness.id)   // validate the harness id fail-loud
+  if (sessionHost().kind === 'process-host' && !harness.headless)
+    throw new Error(`launcher '${name}' uses ${harness.id}, which requires an attachable tmux host; process-host offers headless adapters only`)
   return { name, harness: harness.id, cmd: l.cmd, headless: harness.headless, configDir: l.configDir || null }
 }

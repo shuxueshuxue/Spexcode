@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 import { controlRequest, withTimeout } from './headless-controller.js'
 import { shQuote } from './sh.js'
+import { hostControlSocket } from './session-host.js'
 
 type ControlRequest = { type: 'deliver'; text: string; mode: 'steer' | 'wake' } | { type: 'interrupt' }
 type ClaudeHeadlessDeliveryRecord = HarnessDeliveryRecord & { status?: string }
@@ -39,7 +40,7 @@ const userEvent = (text: string) => JSON.stringify({
   message: { role: 'user', content: [{ type: 'text', text }] },
 })
 
-export const claudeHeadlessSock = (id: string) => join(tmpdir(), `spexcode-ch-${id}.sock`)
+export const claudeHeadlessSock = (id: string) => hostControlSocket('ch', id)
 
 export function claudeHeadlessLaunchCommand(id: string, runtimeDir: string, claudeCmd: string): string {
   return [shQuote(SPEX), 'internal', 'claude-headless-run', shQuote(id), shQuote(runtimeDir), shQuote(claudeCmd), '--'].join(' ')

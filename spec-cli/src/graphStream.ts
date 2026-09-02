@@ -1,6 +1,6 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
-import { watch, mkdirSync, readdirSync, readFileSync, type Dirent, type FSWatcher } from 'node:fs'
+import { watch, mkdirSync, readdirSync, readFileSync, existsSync, type Dirent, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
@@ -692,6 +692,7 @@ const worktreeObserver = (name: string): string => `graph:worktree:${name}`
 const worktreeSource = (name: string): string => `worktree:${name}`
 const PROJECT_ROOT_SOURCE = 'project-root'
 let projectRootWatcher: TreeWatcherRegistry | null = null
+let projectRootExitScheduled = false
 
 const ignoredWorktreePath = (file: string): boolean =>
   file.split(/[\\/]/).some((segment) => segment === '.git' || segment === 'node_modules')
@@ -716,6 +717,7 @@ export const ignoredProjectRootPath = (file: string): boolean =>
 // from a linked worktree must observe that linked root, not the common-dir checkout.
 function ensureProjectRootWatcher(): void {
   const root = resolve(repoRoot())
+  if (existsSync(root)) projectRootExitScheduled = false
   const coveredByWorktree = [...worktreeWatchers.values()].some((row) => row.path === root)
   if (projectRootWatcher?.root === root && !coveredByWorktree) return
   if (projectRootWatcher) { projectRootWatcher.close(); projectRootWatcher = null }
@@ -735,6 +737,13 @@ function ensureProjectRootWatcher(): void {
       if (projectRootWatcher === registry) projectRootWatcher = null
       noteSourceFailure(PROJECT_ROOT_SOURCE, error)
       fireChanged('full', 'all')
+      // A served checkout disappearing is terminal for this backend. Retrying a missing root forever leaves
+      // the orphan process alive after fixture/deployment teardown and turns every repair pass into a spin.
+      if (!existsSync(root) && !projectRootExitScheduled) {
+        projectRootExitScheduled = true
+        console.error(`spec-cli: served project root disappeared at ${root}; exiting backend`)
+        setImmediate(() => process.exit(1))
+      }
     },
   })
   projectRootWatcher = registry

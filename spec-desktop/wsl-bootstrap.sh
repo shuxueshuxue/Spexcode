@@ -49,8 +49,12 @@ if [[ -n "$bundle" && -f "$bundle" ]]; then
   say "Installing spexcode from the bundled tarball (offline-safe): $bundle"
   npm install --global --force "$bundle" @spexcode/spec-dashboard
 else
-  say 'Installing spexcode from npm (the bundled tarball was not supplied).'
-  npm install --global spexcode @spexcode/spec-dashboard
+  if command -v spex >/dev/null 2>&1; then
+    say 'spexcode is already installed; nothing to change.'
+  else
+    say 'Installing spexcode from npm (the bundled tarball was not supplied).'
+    npm install --global spexcode @spexcode/spec-dashboard
+  fi
 fi
 
 if command -v spex >/dev/null 2>&1; then

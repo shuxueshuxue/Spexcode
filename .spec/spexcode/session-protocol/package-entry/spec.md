@@ -18,3 +18,5 @@ read models while keeping connection handles, inspection helpers, and partial wr
 The entry has one spelling for each capability and no compatibility aliases or internal package subpath. Its runtime
 keys and generated declarations are both part of the boundary: adding an export is a contract change even when no
 current consumer imports it.
+`MESSAGE_KINDS` declares `session.text.v1`, `spec.change-report.v1`, and `zcode.swarm.state` without narrowing the
+protocol's open kind grammar.

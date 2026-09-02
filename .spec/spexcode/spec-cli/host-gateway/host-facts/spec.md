@@ -19,7 +19,7 @@ Some facts belong to the machine, not to any project: which runtime hosts the ga
 WSL2 and its distro), node and tmux and git versions, which agent CLIs are installed and logged in, the launcher
 wrappers the local config names and whether they resolve, and the memory envelope (a `.wslconfig` cap on Windows,
 the enclosing cgroup elsewhere). Today these are diagnosed by hand — a 401 wave traced to a missing
-`spexcode.local.json` launcher, a hung worker traced to a missing tmux — and by whoever remembers to look.
+`.spec/spexcode.local.json` launcher, a hung worker traced to a missing tmux — and by whoever remembers to look.
 
 **Render once, at host level; link, never copy.** The gateway answers `GET /host` with those facts, computed
 where the gateway runs so a WSL gateway reports WSL. `spex doctor` gains the same facts at host scope so a
@@ -42,7 +42,7 @@ and the same questions as the desktop user.
 The host extension owns `GET /host` and `POST /host/doctor` behind the hub's admin scope. The response is one
 stable projection: `runtime` (`native-linux`, `darwin`, or `wsl2` with `distro`), `versions` (`node`, `tmux`,
 `git`), four `agents` rows (`installed` from PATH and `loggedIn` from each tool's local credential file),
-`launchers` from the known projects' merged `spexcode.json` / `spexcode.local.json` profiles (including the
+`launchers` from the known projects' merged `.spec/spexcode.json` / `.spec/spexcode.local.json` profiles (including the
 resolved binary or a broken resolution), and `memory` (WSL `.wslconfig` or the enclosing cgroup limit). No
 credential check calls a network. `spex doctor --host` prints the same projection in a human-readable form;
 the flag is documented in `spex help doctor`.

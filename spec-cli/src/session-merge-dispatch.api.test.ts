@@ -54,7 +54,7 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
   const tmux = `spex-merge-dispatch-${process.pid}-${Date.now()}`
   mkdirSync(join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n')
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')

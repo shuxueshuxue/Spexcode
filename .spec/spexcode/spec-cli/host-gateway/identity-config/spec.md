@@ -13,7 +13,7 @@ related:
 # identity-config
 
 Identity has exactly two authored sources. A project's human-readable source is its committed
-`spexcode.json` `dashboard.title` and `dashboard.icon`; the gateway icon is the one host-level
+`.spec/spexcode.json` `dashboard.title` and `dashboard.icon`; the gateway icon is the one host-level
 `gateway.icon` value in `SPEXCODE_HOME/config.json`. Neither value is copied into the other tier.
 
 Backends and the host catalog carry only a resolved `{title, icon}` projection. Missing values receive

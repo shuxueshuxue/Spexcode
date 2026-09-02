@@ -42,7 +42,7 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   TypeScript projects with Claude-only and Codex-only delivery in disposable real git repositories. Every row
   goes through the actual `spex init` and `spex materialize` CLI surfaces and checks the whole deterministic
   self-launch boundary. After init, it follows the printed adoption repair with ordinary Git: stage exactly
-  `.spec` and `spexcode.json`, commit them through the installed hooks (the documented main-seeding allowance,
+  `.spec` and `.spec/spexcode.json`, commit them through the installed hooks (the documented main-seeding allowance,
   never `--no-verify` or a lint bypass), and prove that commit reaches every project source asset while the
   local-only source and generated harness files remain untracked. Then git-tracked source is visible to coverage
   while untracked source is not; init's receipt
@@ -64,7 +64,7 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   offline install; it must never
   ask the consumer for a sibling from the source checkout. The adoption leg also runs a negative control: the
   installed managed hook rejects a direct commit on `main`, preserves the staged source tree, and only the explicit
-  adoption allowance may create the seed commit containing `.spec` and `spexcode.json`.
+  adoption allowance may create the seed commit containing `.spec` and `.spec/spexcode.json`.
   Full git history is fetched because lint derives the version timeline and drift from git.
 - **Why a backstop and not the only gate** — the [[main-guard]] hook still gives fast *local* feedback and
   blocks direct commits on `main`; CI guarantees the [[spec-lint]] contract holds even when that hook is

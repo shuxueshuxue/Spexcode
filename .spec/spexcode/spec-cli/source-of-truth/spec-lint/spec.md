@@ -9,7 +9,7 @@ code:
   - spec-cli/src/lint.ts#specLintReport
   - spec-cli/src/lint.ts#loadConfig
 related:
-  - spexcode.json
+  - .spec/spexcode.json
   - spec-cli/templates/hooks/commit-msg
   - spec-cli/templates/hooks/reference-transaction
   - spec-cli/src/lint-json.cli.test.ts
@@ -51,8 +51,8 @@ anchor-hunk demand. The linter therefore shares one decoded, integrity-checked s
 locked replacement with its anchor engine; it never causes a hunk lookup to reopen or rewrite that ledger.
 
 Before constructing history indexes, lint checks a worktree's adoption boundary. An untracked `.spec/` file
-or `spexcode.json` is an **integrity error** naming the untracked project source of truth and the ordinary
-`git add .spec spexcode.json` repair. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
+or `.spec/spexcode.json` is an **integrity error** naming the untracked project source of truth and the ordinary
+`git add .spec` repair. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
 are machine-local and are not part of this check. A staged candidate is judged from its candidate tree, so
 staged adoption data is valid; an untracked seed cannot masquerade as a clean graph. Bare receivers have no
 worktree state to inspect and continue with the immutable candidate tree.
@@ -153,7 +153,7 @@ emits those findings nor carries their thresholds into the commit hook or CI. Th
 `doctor.breadth.maxChildren` replacement so an old settings file cannot silently keep a second owner.
 
 Reusable as a **product**, not a SpexCode-only script: every project-shaped value (roots, source policy,
-and ownership bounds) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values tuned
+and ownership bounds) is read from an optional **`.spec/spexcode.json`** (`lint` key), defaulting to values tuned
 to this tree; a different layout or language overrides what fits. `loadConfig` reads it through the shared
 fail-loud `readJsonConfig` ([[portable-layout]]): an ABSENT file defaults silently, but a MALFORMED one
 throws LOUD rather than quietly reverting the author's policy to defaults — a typo that green-washes the

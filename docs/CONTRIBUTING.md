@@ -97,7 +97,7 @@ licensed under the same terms.
   `GET /api/slash-commands`, and the whole **`/api/sessions` state-machine** (list/create/review/
   merge/resume/capture/input/stop/close/rename + the **`:id/socket` terminal WebSocket** and `edges`).
   Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
-  portability seam: `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for
+  portability seam: `src/layout.ts` (`resolveLayout()`, optional `.spec/spexcode.json` override for
   non-default layouts).
 - `spec-dashboard/` — Vite + React. `src/data.js`'s `loadGraph()` fetches **`/api/graph`**; the x/y
   tidy-tree `layout()` is exported from `data.js` but **applied in `Dashboard.jsx`** (focus-driven
@@ -135,10 +135,10 @@ live):
 3. Run `spex spec lint` — the **coverage** warnings are your adoption TODO: every source file not yet
    claimed by a spec. Work the list down.
 4. If your layout differs from the default (main at root, worktrees in `.worktrees/`, `node/<id>`
-   branches), drop a `spexcode.json` to point the tool at your structure instead of forking it.
+   branches), drop a `.spec/spexcode.json` to point the tool at your structure instead of forking it.
 
 `spex init` does steps 1–4's scaffolding in one shot: it seeds a starter `.spec/` tree (a root `project`
-node + the default `.plugins` plugins), plants a starter `spexcode.json`, installs the hooks, and
+node + the default `.plugins` plugins), plants a starter `.spec/spexcode.json`, installs the hooks, and
 **materializes** the harness artifacts. Materialize is the **base operation of harness adaptation** —
 one pass renders the spec tree into whatever artifacts the selected harness auto-discovers: the
 `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
@@ -149,5 +149,5 @@ git-native anchors (an unconditional materialize in pre-commit, plus post-checko
 no harness event ever triggers a materialize) — so a
 fresh clone re-runs `spex init`/`spex materialize` rather than pulling them from git. This is the same
 materialize that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
-adoption (launchers, dashboard icon, lint policy, doctor health budgets) all live in those two `spexcode.json` /
-`spexcode.local.json` files, documented in full by **`spex guide settings`**.
+adoption (launchers, dashboard icon, lint policy, doctor health budgets) all live in those two `.spec/spexcode.json` /
+`.spec/spexcode.local.json` files, documented in full by **`spex guide settings`**.

@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { git } from '@spexcode/spec-core'
 
 export function seedWorktreeHostState(main: string, wt: string): void {
-  const f = 'spexcode.local.json'
+  const f = '.spec/spexcode.local.json'
   try {
     if (!existsSync(join(main, f)) || existsSync(join(wt, f))) return
     copyFileSync(join(main, f), join(wt, f))

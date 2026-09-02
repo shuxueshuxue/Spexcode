@@ -18,7 +18,7 @@ related:
 SpexCode claims software engineering's HEAD — the recording of intent — and its TAIL — the storage of
 measurement — and deliberately leaves the MIDDLE, construction, to the harness/agent/test framework;
 freshness stitches the two ends into a closed loop. The footprint model follows: the head and tail
-(`.spec`, `spexcode.json`, the readings) are the ASSET and live in git like any other source; everything
+(`.spec`, `.spec/spexcode.json`, the readings) are the ASSET and live in git like any other source; everything
 else SpexCode puts in a repo is either WIRING derived from that asset or a MACHINE fact. A materialized
 artifact is a pure export of `spex materialize` — it carries no facts — so it is **never tracked**: the old
 three-word vote (`committed | ignored | hidden`) is RETIRED and there is exactly ONE residence behavior. An
@@ -30,13 +30,13 @@ using SpexCode.
 
 The four kinds, each with a FIXED track/transport fact (no votes anywhere):
 
-- **Spec data** — `.spec/` (including `.plugins/`) + `spexcode.json`: ALWAYS tracked. Git is the database;
+- **Spec data** — `.spec/` (including `.plugins/`) + `.spec/spexcode.json`: ALWAYS tracked. Git is the database;
   no configuration can untrack them ("untrack the spec" is unsayable in the schema). Wanting spec data off
   the SHARED REMOTE is a different question with a different answer: change the node's git HOME, never its
   tracking — that design is [[spec-local]] (a private overlay root that is its own git repository; pending).
-- **Machine facts** — `spexcode.local.json`, the hook shims, plugin bundles (they bake this install's
+- **Machine facts** — `.spec/spexcode.local.json`, the hook shims, plugin bundles (they bake this install's
   paths): NEVER tracked; ignored by the materialized tree's working `.gitignore` projection. Truly
-  checkout-invariant residue (`spexcode.local.json`, `.worktrees/`, `.session`) keeps the common per-clone
+  checkout-invariant residue (`.spec/spexcode.local.json`, `.worktrees/`, `.session`) keeps the common per-clone
   exclude. **A shim file is a machine fact only while it is WHOLLY OURS.** Some harnesses discover their hooks
   in a file that is also the user's project config — `.claude/settings.json`, `.codex/hooks.json`,
   `.zcode/settings.json` carry their permissions, env, statusLine and their own hooks. There the shim is
@@ -69,7 +69,7 @@ choice, never a question to the user):
 **Ignore is a citizenship declaration, not a history guard.** History is guarded by the pre-commit
 surgery ([[commit-surgery]]); the ignored-bit is what every OTHER git door consults — checkout may
 silently overwrite an ignored file (an unignored untracked one hard-fails a branch switch), `git clean
--fd` spares it (an unexcluded `spexcode.local.json` was once wiped by routine cleanup, 401-ing every later
+-fd` spares it (an unexcluded `.spec/spexcode.local.json` was once wiped by routine cleanup, 401-ing every later
 dispatch), and status/`add -A`/stash/IDE panes stay silent. The two mechanisms cover git's two disjoint
 domains: filters exist only on the tracked-content pipeline; the untracked namespace's only masking
 primitive is the ignore family. Neither can replace the other.
@@ -77,7 +77,7 @@ primitive is the ignore family. Neither can replace the other.
 **Worktree seeding — no links.** A fresh session worktree is fed by three transports, and the KIND decides
 the transport: tracked data arrives by GIT CHECKOUT; materialized artifacts are DERIVED and travel by
 RE-MATERIALIZE (creation-time materialize + the git-native anchors); the machine snapshot
-(`spexcode.local.json`) is COPIED. Symlink vs copy is a WRITE-SEMANTICS declaration — write-through vs
+(`.spec/spexcode.local.json`) is COPIED. Symlink vs copy is a WRITE-SEMANTICS declaration — write-through vs
 snapshot — and a materialized artifact is a third thing, a derivative, neither linked nor copied. The copy is a snapshot on purpose: a worker's config
 writes die with its worktree (a worker once wiped the host's launchers through the old link). What seeding
 makes git-visible it hides in the shared `.git/info/exclude` — idempotent, self-healing, no force-add bait.

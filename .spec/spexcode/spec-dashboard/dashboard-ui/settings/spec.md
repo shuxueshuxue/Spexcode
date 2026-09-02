@@ -100,7 +100,7 @@ Settings page refit locally without claiming tmux geometry; returning to Session
   Launcher profiles are read through the same `/api/settings` path as the New Session picker. The page can add
   multiple named launchers of the same harness type, including headless variants, by collecting a name, type, and
   command and writing the same `sessions.launchers` object the CLI reads. It also owns an optional raw
-  `spexcode.json` editor using the same revision-guarded API. The launcher list is a compact embedded viewport
+  `.spec/spexcode.json` editor using the same revision-guarded API. The launcher list is a compact embedded viewport
   with its own vertical scroll when profiles exceed the short list height, and its rows reuse the New Session
   picker grammar (harness mark, name, and command preview). External adapter targets are never offered here.
   The direct route mounts that same page inside the phone shell above its tab bar, without inventing a

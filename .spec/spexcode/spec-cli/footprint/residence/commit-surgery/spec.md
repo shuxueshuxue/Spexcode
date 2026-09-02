@@ -60,7 +60,7 @@ exclude entry — the kind transition heals itself; file checkouts (flag 0) are 
 re-materializes after received `.spec`/`.plugins` changes. Both are quiet and best-effort: a missed refresh
 self-heals at the next anchor, pre-commit being the backstop. A session-created worktree is the one deliberate
 handoff: its `git worktree add` passes a child-only defer marker to post-checkout, then the creation transaction
-copies `spexcode.local.json` and performs ONE explicit materialize. The marker neither changes Git's hook
+copies `.spec/spexcode.local.json` and performs ONE explicit materialize. The marker neither changes Git's hook
 semantics nor persists beyond that child; it prevents a pre-seed best-effort render from racing or duplicating
 the transaction-owned render. Ordinary checkout, switch, worktree add, and merge carry no marker.
 

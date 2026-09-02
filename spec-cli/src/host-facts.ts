@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import { spexcodeHome, encodeProject, readJsonConfig } from '@spexcode/spec-core'
+import { spexcodeHome, encodeProject, readConfig } from '@spexcode/spec-core'
 import { readHostRecord, type HostRecord } from './host-record.js'
 import { readEndpointRecord } from './endpoint-record.js'
 import { sessionHost } from './session-host.js'
@@ -77,9 +77,7 @@ function discoverRoots(): string[] {
 function launcherFacts(roots: string[]): LauncherFact[] {
   const rows: LauncherFact[] = []
   for (const root of roots) {
-    const portable = readJsonConfig(join(root, 'spexcode.json'))
-    const local = readJsonConfig(join(root, 'spexcode.local.json'))
-    const merged = { ...(portable.sessions?.launchers ?? {}), ...(local.sessions?.launchers ?? {}) }
+    const merged = readConfig(root).sessions?.launchers ?? {}
     for (const [name, cfg] of Object.entries(merged as Record<string, any>)) {
       if (!cfg || typeof cfg.cmd !== 'string') continue
       if (sessionHost().kind === 'process-host' && !['claude-headless', 'codex-headless', 'opencode-headless', 'pi-headless'].includes(cfg.harness || 'claude')) continue

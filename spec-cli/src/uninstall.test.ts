@@ -187,7 +187,7 @@ desc: The house rules for this repo.
 
 Follow the house rules.
 `)
-    g('add', '.spec', 'spexcode.json')
+    g('add', '.spec')
     g('commit', '-qm', 'adopt tracked intent', '--no-verify')
     assert.ok(existsSync(hookTrace), `${row.id}: reference hook invoked the branch-pinned CLI shim`)
     // the collision report is a WARNING (stderr, like every other materialize diagnostic), so read both streams.
@@ -195,7 +195,7 @@ Follow the house rules.
     const rematerialized = `${remat.stdout}${remat.stderr}`
 
     const specBefore = snapshotTree(join(proj, '.spec'))
-    const configBefore = readFileSync(join(proj, 'spexcode.json'))
+    const configBefore = readFileSync(join(proj, '.spec/spexcode.json'))
     assert.ok(readFileSync(join(proj, row.contract), 'utf8').includes('spexcode:start'), `${row.id}: contract materialized into pre-existing prose`)
     assert.ok(existsSync(join(proj, row.shim)), `${row.id}: shim materialized`)
     const shimNow = JSON.parse(readFileSync(join(proj, row.shim), 'utf8'))
@@ -289,7 +289,7 @@ Follow the house rules.
     for (const name of generatedHooks) assert.ok(existsSync(join(hooksDir, name)), `${row.id}: ${name} preserved without --hooks`)
 
     assert.deepEqual(snapshotTree(join(proj, '.spec')), specBefore, `${row.id}: tracked .spec/.plugins intent is byte-identical`)
-    assert.ok(readFileSync(join(proj, 'spexcode.json')).equals(configBefore), `${row.id}: tracked spexcode.json intent is byte-identical`)
+    assert.ok(readFileSync(join(proj, '.spec/spexcode.json')).equals(configBefore), `${row.id}: tracked .spec/spexcode.json intent is byte-identical`)
     for (const [path, content] of Object.entries(userFiles)) {
       assert.equal(readFileSync(join(proj, path), 'utf8'), content, `${row.id}: user ${path} bytes preserved`)
     }

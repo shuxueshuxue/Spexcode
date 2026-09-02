@@ -1636,7 +1636,7 @@ async function drainQueueUnlocked(): Promise<void> {
   if (draining) return
   draining = true
   try {
-    const cap = maxActive()   // read once per drain pass (spexcode.json → env → default); won't shift mid-burst
+    const cap = maxActive()   // read once per drain pass (.spec/spexcode.json → env → default); won't shift mid-burst
     for (;;) {
       const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
       for (const session of sessions) {
@@ -2226,7 +2226,7 @@ async function resetFailedMaterializeCandidate(rec: SessRec, signal: AbortSignal
     throw new SessionCreateError('session_create_failed', 'materialize',
       `materialize failed and its prepared worktree could not be restored: ${detail}`, 500)
   }
-  const clean = await gitTry(['-C', rec.worktreePath, '-c', 'core.hooksPath=/dev/null', 'clean', '-fd', '-e', 'spexcode.local.json'])
+  const clean = await gitTry(['-C', rec.worktreePath, '-c', 'core.hooksPath=/dev/null', 'clean', '-fd', '-e', '.spec/spexcode.local.json'])
   if (clean.ok) return
   const detail = (clean.stderr || clean.stdout || 'git clean failed without diagnostic').trim()
   throw new SessionCreateError('session_create_failed', 'materialize',

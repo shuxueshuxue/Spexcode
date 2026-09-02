@@ -216,10 +216,10 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
   const fullInputs = {
     root: worktreeRevision(root),
     config: [
-      [join(root, 'spexcode.json'), textOrNull(join(root, 'spexcode.json'))],
-      [join(root, 'spexcode.local.json'), textOrNull(join(root, 'spexcode.local.json'))],
-      [join(main, 'spexcode.json'), textOrNull(join(main, 'spexcode.json'))],
-      [join(main, 'spexcode.local.json'), textOrNull(join(main, 'spexcode.local.json'))],
+      [join(root, '.spec', 'spexcode.json'), textOrNull(join(root, '.spec', 'spexcode.json'))],
+      [join(root, '.spec', 'spexcode.local.json'), textOrNull(join(root, '.spec', 'spexcode.local.json'))],
+      [join(main, '.spec', 'spexcode.json'), textOrNull(join(main, '.spec', 'spexcode.json'))],
+      [join(main, '.spec', 'spexcode.local.json'), textOrNull(join(main, '.spec', 'spexcode.local.json'))],
     ],
     main: { root: main, branch: base, tip: mainTip },
     worktrees: worktreeParts,

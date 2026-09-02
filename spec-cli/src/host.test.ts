@@ -295,7 +295,7 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.match(plainTree, /(^|\n)spexcode\.json\n/)
   assert.doesNotMatch(plainTree, /(^|\n)notes\.md\n/, 'the bootstrap commit does not stage user source')
   assert.match(execFileSync('git', ['-C', plain, 'status', '--short'], { encoding: 'utf8' }), /notes\.md/)
-  assert.deepEqual(JSON.parse(readFileSync(join(plain, 'spexcode.json'), 'utf8')).harnesses, ['codex'])
+  assert.deepEqual(JSON.parse(readFileSync(join(plain, '.spec/spexcode.json'), 'utf8')).harnesses, ['codex'])
   assert.deepEqual(readCatalog().map((entry) => entry.root), [realpathSync(plain)])
 
   const existingUnborn = join(parent, 'existing-unborn')
@@ -371,8 +371,8 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.equal(created.init?.code, 0)
   assert.equal(existsSync(join(unborn, '.git')), true)
   assert.equal(execFileSync('git', ['-C', unborn, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
-  assert.equal(JSON.parse(readFileSync(join(unborn, 'spexcode.json'), 'utf8')).mainBranch, 'main')
-  assert.deepEqual(JSON.parse(readFileSync(join(unborn, 'spexcode.json'), 'utf8')).harnesses, [])
+  assert.equal(JSON.parse(readFileSync(join(unborn, '.spec/spexcode.json'), 'utf8')).mainBranch, 'main')
+  assert.deepEqual(JSON.parse(readFileSync(join(unborn, '.spec/spexcode.json'), 'utf8')).harnesses, [])
   assert.match(gitHead(unborn) ?? '', /^[0-9a-f]{40,64}$/)
   assert.equal(readCatalog().some((entry) => entry.root === realpathSync(unborn)), true)
 
@@ -417,7 +417,7 @@ test('structured gateway and offline-project icon writes are admin-only', async 
       assert.equal(denied.status, 401)
     }
     assert.equal(existsSync(join(home, 'config.json')), false)
-    assert.equal(existsSync(join(repo, 'spexcode.json')), false)
+    assert.equal(existsSync(join(repo, '.spec/spexcode.json')), false)
   } finally { await gw.close() }
 })
 
@@ -538,7 +538,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(createdBody.setup.initialCommitCreated, true)
     assert.equal(createdBody.setup.init.code, 0)
     assert.equal(existsSync(join(unborn, '.git')), true)
-    assert.equal(JSON.parse(readFileSync(join(unborn, 'spexcode.json'), 'utf8')).mainBranch, 'main')
+    assert.equal(JSON.parse(readFileSync(join(unborn, '.spec/spexcode.json'), 'utf8')).mainBranch, 'main')
     assert.equal(execFileSync('git', ['-C', unborn, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
     const repoId = encodeProject(canonicalRepo)
 
@@ -554,7 +554,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     })
     assert.equal(savedConfigRes.status, 200)
     const savedConfig = await savedConfigRes.json()
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), `${configText}\n`)
+    assert.equal(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), `${configText}\n`)
     const legacyRow = (await getJson(`${base}/projects`)).body.projects.find((p: any) => p.projectId === repoId)
     assert.deepEqual(legacyRow.identity, { title: 'Offline Repo', icon: 'lucide:radar' }, 'existing Iconify values remain canonical while offline')
 
@@ -565,7 +565,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(iconSavedRes.status, 200)
     const iconSaved = await iconSavedRes.json()
     assert.deepEqual(iconSaved.identity, { title: 'Offline Repo', icon: 'spark' })
-    assert.equal(iconSaved.content, readFileSync(join(repo, 'spexcode.json'), 'utf8'), 'response is the canonical source bytes')
+    assert.equal(iconSaved.content, readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), 'response is the canonical source bytes')
     assert.deepEqual(JSON.parse(iconSaved.content), { preset: 'default', dashboard: { title: 'Offline Repo', icon: 'spark' } })
     const iconifySavedRes = await fetch(`${base}/projects/${repoId}/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
@@ -574,13 +574,13 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(iconifySavedRes.status, 200, 'structured writes restore the established Iconify namespace')
     const iconifySaved = await iconifySavedRes.json()
     assert.deepEqual(iconifySaved.identity, { title: 'Offline Repo', icon: 'lucide:radar' })
-    assert.equal(iconifySaved.content, readFileSync(join(repo, 'spexcode.json'), 'utf8'))
+    assert.equal(iconifySaved.content, readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'))
     const rejectedIcon = await fetch(`${base}/projects/${repoId}/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ icon: 'not a catalog choice', revision: iconifySaved.revision }),
     })
     assert.equal(rejectedIcon.status, 400, 'structured writes reject values outside presets and Iconify')
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconifySaved.content)
+    assert.equal(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), iconifySaved.content)
     const staleIcon = await fetch(`${base}/projects/${repoId}/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ icon: 'package', revision: savedConfig.revision }),
@@ -591,14 +591,14 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
       body: JSON.stringify({ content: '[]', revision: iconifySaved.revision }),
     })
     assert.equal(invalidConfig.status, 400)
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconifySaved.content)
-    writeFileSync(join(repo, 'spexcode.json'), '{"newer":true}\n')
+    assert.equal(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), iconifySaved.content)
+    writeFileSync(join(repo, '.spec/spexcode.json'), '{"newer":true}\n')
     const staleConfig = await fetch(`${base}/projects/${repoId}/config`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ content: '{"stale":true}', revision: savedConfig.revision }),
     })
     assert.equal(staleConfig.status, 409)
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), '{"newer":true}\n')
+    assert.equal(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), '{"newer":true}\n')
 
     const refused = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: join(repo, 'nope') }) })
     assert.equal(refused.status, 400)
@@ -680,13 +680,13 @@ test('a host-created project can create its first real session from the committe
   assert.equal(setup.initialCommitCreated, true)
   assert.equal(gitHead(project) !== null, true)
   assert.equal(execFileSync('git', ['-C', project, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
-  assert.equal(JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8')).mainBranch, 'main')
-  assert.deepEqual(JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8')).harnesses, [])
+  assert.equal(JSON.parse(readFileSync(join(project, '.spec/spexcode.json'), 'utf8')).mainBranch, 'main')
+  assert.deepEqual(JSON.parse(readFileSync(join(project, '.spec/spexcode.json'), 'utf8')).harnesses, [])
 
   // The path-only flow deliberately has no selected harness. A local fixture launcher models the later
   // scoped New Session `+` action without changing the portable empty selection that the host created.
   const fakeLauncher = join(here, '..', 'test', 'fixtures', 'fake-claude')
-  writeFileSync(join(project, 'spexcode.local.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.local.json'), JSON.stringify({
     sessions: { launchers: { fixture: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fixture' },
   }, null, 2) + '\n')
 

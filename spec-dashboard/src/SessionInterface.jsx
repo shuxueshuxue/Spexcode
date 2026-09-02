@@ -878,8 +878,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // the other half of the same rule: whatever has no live pane to show is shown as a Conversation, so
       // no selection can land on a session with neither layer mounted (a corrupt row's `unknown` liveness
       // used to fall through both when the terminal gate stopped naming dead states one by one).
-      // THE SET'S ORDER IS THE RECENCY ORDER. Re-adding the selection at the end is what the bound below reads
-      // to pick its victim, so eviction is least-recently-SHOWN rather than first-visited.
+      // THE SET'S ORDER IS THE RECENCY ORDER, and it is read by the EVICTION ALONE. Re-adding the selection at
+      // the end is what the bound below reads to pick its victim, so eviction is least-recently-SHOWN rather
+      // than first-visited. Nothing on screen may be ordered by it — the layers below have their own stable
+      // mount order, because a moved layer is a detached layer and loses the reading position inside it.
       if (selected && (!hasLivePane(selected) || isHeadlessSession(selected)
         || conversationSurface)) { next.delete(selected.id); next.add(selected.id) }
       while (next.size > CONVERSATION_LIMIT) {
@@ -894,6 +896,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       return next
     })
   }, [sessionsWithRetention, active, conversationSurface, surfaceVersion])
+
+  // THE MOUNTED LAYERS KEEP THEIR DOM ORDER, which is neither of the two sets' own order. Every layer below is
+  // an absolutely-positioned overlay, so their order on the page means nothing to a reader — but it means
+  // everything to a SCROLLER inside one: React reorders keyed children by DETACHING the node and re-inserting
+  // it, and a scroll container that leaves the document comes back at scrollTop 0. Both sets order themselves
+  // by the SELECTION (the terminal set holds the selected headless id; the conversation set re-adds the
+  // selection at its end, because that end is what its eviction reads), so reading the DOM order off them made
+  // selecting another session move the layer that was already there — and the reader's place in that
+  // Conversation's history was gone, on nothing but a tab switch. Mount order is arbitrary and never moves:
+  // a layer keeps the slot it arrived in for as long as it stays mounted, and a new one is appended after it.
+  const layerOrderRef = useRef([])
+  const layerIds = useMemo(() => {
+    const mounted = new Set([...opened, ...openedConversations])
+    const order = [...layerOrderRef.current.filter((id) => mounted.has(id))]
+    for (const id of mounted) if (!order.includes(id)) order.push(id)
+    layerOrderRef.current = order
+    return order
+  }, [opened, openedConversations])
 
   // a board chord (nn/dd) seeds this surface with an @-directive. Apply ONCE to the New draft, then clear it
   // upstream so a later reopen restores the user's own draft. Clobbering the draft is intended here.
@@ -1416,7 +1436,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 style={{ position: 'relative' }}
               >
                 {/* Live terminals stay warm; every lifecycle state uses the same Conversation DOM. */}
-                {[...new Set([...opened, ...openedConversations])].map((id) => {
+                {layerIds.map((id) => {
                   const session = sessionsWithRetention.find((candidate) => candidate.id === id)
                   if (!session) return null
                   const headless = isHeadlessSession(session)
@@ -1444,10 +1464,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         // layout tree, so every mounted timeline was measured again each time the console's own
                         // composer autosized itself — one forced reflow per character, over every retained
                         // session's rendered history. `content-visibility` skips the contents of what nobody is
-                        // looking at while KEEPING its rendering state (unlike `display: none`, which would
-                        // throw away the scroll position and the mount is here to preserve it), so the price of
-                        // typing stops depending on how much history is warm behind the composer: measured on
-                        // this project's board, 119ms per character down to 3.6ms, the same as an empty console.
+                        // looking at while KEEPING its rendering state — which is the one thing this mount is
+                        // for — so the price of typing stops depending on how much history is warm behind the
+                        // composer: measured on this project's board, 119ms per character down to 3.6ms, the
+                        // same as an empty console. What actually forfeits a scroll offset is leaving the
+                        // document, which is why the layers' DOM order above is stable and not the sets' own.
                         // The terminal layer beside it deliberately keeps its layout — [[terminal-io]]'s warm
                         // pane owes xterm its final geometry, and terminals are not what the reflow was costing.
                         <div className="si-term-layer" style={{

@@ -404,6 +404,23 @@ scenarios:
       no timeline render work (no transcript vocabulary or quote rendering) attributable to a keystroke in a
       composer that belongs to no timeline. Zero loss = a reader who has worked through a whole board's
       sessions types as fast as one who just opened the page.
+  - name: a-reading-position-survives-a-session-switch
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/conversation-scroll-survives-switch.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/TimelineChat.jsx]
+    description: >-
+      In a real browser, warm two Conversations, then scroll one of them to a line in the middle of its history
+      and leave it there. Select another session and come back; then select two others and come back. Read the
+      scroll offset off that same DOM node each time — identify it by its own content, not by which layer is
+      visible, and record which slot it occupies among the mounted layers. Keep one control reading that the
+      node's `scrollHeight` never changes, so a remount can never be mistaken for a kept position.
+    expected: >-
+      The offset is exactly where the reader left it after every return, and the node holds the same slot
+      throughout — the mounted layers keep their arrival order, so selecting elsewhere changes what is visible
+      and moves nothing. Zero loss = a reader mid-history keeps their line across any number of switches; the
+      defect is the offset back at 0 with the history intact, which is a layer that left the document and
+      returned.
   - name: headless-conversation-mount-is-bounded
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs

@@ -25,8 +25,9 @@ product, TUI sessions included; the shell adds nothing the Linux build lacks. Th
 assumption rather than fixing it; the fix is [[session-host]], and this node does not wait for it.
 
 **Detect, then either bootstrap or stop.** `wsl.exe -l -v` decides: no WSL, or a version-1 distro, and the shell
-shows the first-run page naming the exact user action — `wsl --install` in an administrator PowerShell, reboot,
-reopen — and does nothing else. It never falls back to a half-working native mode.
+shows the first-run page naming the exact user action — `wsl --install` in an administrator PowerShell for an
+absent distro, or upgrade the existing distro to WSL2 — then reopen. It does nothing else and never falls back to
+a half-working native mode.
 
 **The first-run page is the one shell-owned surface, and it shows the transcript.** Until the gateway exists
 there is no dashboard to load, so the shell ships a static page that streams the bootstrap's real stdout and

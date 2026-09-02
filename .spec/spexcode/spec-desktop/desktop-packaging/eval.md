@@ -34,6 +34,33 @@ scenarios:
       Quitting closes the Electron gateway utility child but leaves project backends running and discoverable;
       no backend is killed as a side effect of the packaged window closing.
     related: [spec-desktop/main.js]
+  - name: desktop-deep-link
+    tags: [desktop]
+    description: >-
+      With the installed packaged macOS app running, invoke `open spexcode://p/<id>/<address>` from the Aqua
+      session and inspect the existing window.
+    expected: >-
+      The app's `CFBundleURLTypes` registration routes the link to the running instance, which focuses the
+      existing window and navigates its gateway page without spawning a second shell.
+    related: [spec-desktop/desktop-integration.js, spec-desktop/deep-link.js]
+  - name: mac-gui-launch-reads-keychain
+    tags: [desktop]
+    description: >-
+      Launch the packaged app in a throwaway Aqua `gui/<uid>` agent, read the `Claude Code-credentials` item
+      through that GUI domain, and dispatch the plain `claude` launcher.
+    expected: >-
+      Record the keychain read and the launcher's actual authentication result verbatim; a launcher failure is
+      a finding and must not be softened.
+    related: [spec-desktop/main.js, spec-cli/src/sessions.ts]
+  - name: gatekeeper-quarantine
+    tags: [desktop]
+    description: >-
+      Apply a quarantine xattr to the dmg and installed app, then run macOS assessment and LaunchServices
+      opening on the measured OS version.
+    expected: >-
+      Preserve the exact Gatekeeper/spctl text and open result as Tier 2 distribution evidence, not a product
+      pass/fail claim.
+    related: [spec-desktop/electron-builder.config.cjs]
 ---
 # eval.md - desktop-packaging
 

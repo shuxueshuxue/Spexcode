@@ -2,22 +2,22 @@
 
 // The desktop shell is a window over `spex dashboard`. It owns the gateway child when it has to start one,
 // and adds only operating-system integration around the same dashboard a browser loads.
-const { app, BrowserWindow, Menu, utilityProcess, shell } = require('electron')
+const { app, BrowserWindow, Menu, utilityProcess, shell, dialog } = require('electron')
 const { createServer } = require('node:net')
-const { homedir } = require('node:os')
-const { resolve, join } = require('node:path')
-const { existsSync, readFileSync } = require('node:fs')
+const { resolve } = require('node:path')
+const { existsSync } = require('node:fs')
+const { createDesktopIntegration } = require('./desktop-integration.js')
+const { findRunningGateway } = require('./gateway-discovery.js')
 
 const SPEX_ENTRY = process.env.SPEXCODE_DESKTOP_ENTRY || resolve(__dirname, '..', 'bin', 'spex.mjs')
 const NODE_ENTRY = resolve(__dirname, 'node-entry.mjs')
 const PROJECT_CWD = process.env.SPEXCODE_DESKTOP_CWD || process.cwd()
-const DEFAULT_DASHBOARD_PORT = Number(process.env.SPEXCODE_DASHBOARD_PORT || 5173)
 const BOOT_TIMEOUT_MS = 30_000
-const PROBE_TIMEOUT_MS = 1_000
 const MAX_BIND_ATTEMPTS = 5
 
 let gateway = null
 let mainWindow = null
+let desktopIntegration = null
 
 // Electron's second-instance event is delivered to the first process. Acquire the lock before registering any
 // ready handlers so a losing launch exits without starting a gateway or creating a window.
@@ -25,12 +25,8 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  })
+  desktopIntegration = createDesktopIntegration({ app, dialog, getGateway: () => gateway, getMainWindow: () => mainWindow })
+  app.on('second-instance', (_event, argv) => desktopIntegration.handleSecondInstance(argv))
 }
 
 function freePort() {
@@ -42,56 +38,6 @@ function freePort() {
       server.close(() => resolvePort(port))
     })
   })
-}
-
-function validLoopbackUrl(value) {
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname)) return null
-    if (url.port && (!Number.isInteger(Number(url.port)) || Number(url.port) < 1 || Number(url.port) > 65535)) return null
-    return url.origin
-  } catch {
-    return null
-  }
-}
-
-// The host-facts gateway record will become the authoritative discovery source. Keeping it behind this
-// function means that landing that record changes one seam; until then the configured default is probed.
-function gatewayRecordUrl() {
-  const file = process.env.SPEXCODE_GATEWAY_RECORD || join(process.env.SPEXCODE_HOME || join(homedir(), '.spexcode'), 'gateway.json')
-  try {
-    const record = JSON.parse(readFileSync(file, 'utf8'))
-    return validLoopbackUrl(record?.url || record?.gateway?.url)
-  } catch {
-    return null
-  }
-}
-
-async function probeGateway(url) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
-  try {
-    // `/` is intentionally outside the admin gate, so this identifies a password-locked gateway too.
-    const response = await fetch(`${url}/`, {
-      redirect: 'manual',
-      signal: controller.signal,
-    })
-    return response.status === 302 && response.headers.get('location') === '/projects' ? url : null
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function findRunningGateway() {
-  const recorded = gatewayRecordUrl()
-  if (recorded) {
-    const found = await probeGateway(recorded)
-    if (found) return found
-  }
-  const configured = validLoopbackUrl(`http://127.0.0.1:${DEFAULT_DASHBOARD_PORT}`)
-  return configured ? probeGateway(configured) : null
 }
 
 function startGateway(port) {
@@ -158,7 +104,7 @@ async function attachOrStartGateway() {
 
 function installApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'File', submenu: [{ role: 'quit' }] },
+    { label: 'File', submenu: [{ id: 'add-project', label: 'Add Project…', click: () => void desktopIntegration.addProject() }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }] },
@@ -208,6 +154,7 @@ if (hasSingleInstanceLock) {
     try {
       gateway = await attachOrStartGateway()
       openWindow(gateway.url, `${gateway.url}/`, true)
+      await desktopIntegration.ready()
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) openWindow(gateway.url, `${gateway.url}/`, true)
       })

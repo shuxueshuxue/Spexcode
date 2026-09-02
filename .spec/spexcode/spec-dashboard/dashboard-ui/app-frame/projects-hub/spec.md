@@ -93,7 +93,10 @@ setter's cookie so they stay signed in. Freshness is a plain poll — registrati
 backend, and health flips land on their own. The complete reconciled list is shown ten rows at a time with
 plain previous/next pagination; a shrinking list clamps back to its last valid page. The page mounts only as the global hub face at `/projects`
 (the shell shows it when there is no board but `/projects` answers — [[dashboard-shell]] owns that boot
-pick). A denied global catalog is handled by that same shell-level credential card before the management
+pick). A `notice` query parameter is a generic one-shot arrival message: the page sends it through the existing
+transient error-notice viewport and immediately removes it from the address, so an OS integration failure can
+land on the hub loudly without adding another error component or teaching the SPA about its source. A denied
+global catalog is handled by that same shell-level credential card before the management
 page mounts, so the denied probe is not repeated by a second page instance. A `/p/<id>/` shell contains only project-owned views and never mounts the page or advertises its
 management controls in the rail. The old direct `/p/<id>/#/projects` address remains a compatibility door:
 arrival performs one full-page redirect to `/projects`, leaving no duplicate in-shell admin route behind.

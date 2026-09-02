@@ -28,7 +28,7 @@ import {
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { clearProjectPassword } from './gateway-auth.js'
 import { resolveHarnessTargets } from './harness-select.js'
-import { collectHostFacts } from './host-facts.js'
+import { collectHostFacts, isWsl } from './host-facts.js'
 import { dropOwnHostRecord, newHostRecord, publishHostRecord, type HostRecord } from './host-record.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -86,6 +86,14 @@ function existingDirectory(dir: string): string {
 function gitProjectRoot(dir: string): string | null {
   try { return dirname(git(['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()) }
   catch { return null }
+}
+
+const WINDOWS_DRIVE_PROJECT_MESSAGE = 'Projects on Windows drives reach WSL through 9p, where git and inotify are slow or unreliable; choose a folder under \\\\wsl$\\<distro>\\home instead.'
+export function rejectWindowsDriveProjectPath(dir: string, runningInWsl = isWsl()): void {
+  if (!runningInWsl) return
+  if (/^[A-Za-z]:[\\/]/.test(dir) || /^\/mnt\/[A-Za-z](?:\/|$)/i.test(dir)) {
+    throw new Error(WINDOWS_DRIVE_PROJECT_MESSAGE)
+  }
 }
 
 // The admin folder picker reads directory NAMES only. An absent typed path is a read-only candidate, so
@@ -401,6 +409,7 @@ function createInitialProjectCommit(root: string, before: SeedState): void {
 // can add its first target later.
 export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
   if (setup.createDir && !setup.initGit) throw new Error('creating a project directory requires Git initialization')
+  rejectWindowsDriveProjectPath(dir)
   let directoryCreated = false
   let path: string
   try { path = existingDirectory(dir) }

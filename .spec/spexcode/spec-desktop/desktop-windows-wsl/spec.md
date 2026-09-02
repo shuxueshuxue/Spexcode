@@ -48,7 +48,9 @@ Attach-before-start reads the WSL-side records the same way.
 **Projects live on the Linux side.** A repo under `/mnt/c` goes through 9p, where git and inotify are slow or
 broken and the graph's live rebuild would suffer; the folder picker therefore browses `\\wsl$\<distro>\`,
 translates the UNC path to `/home/…` before `POST /projects`, and refuses a `/mnt/c` path with that one-line
-reason rather than accepting a slow project.
+reason rather than accepting a slow project. When the gateway is running inside WSL, the `POST /projects`
+registration boundary repeats that refusal for native drive paths and `/mnt/<drive>` paths:
+`Projects on Windows drives reach WSL through 9p, where git and inotify are slow or unreliable; choose a folder under \\wsl$\<distro>\home instead.`
 
 ## Implementation boundary
 

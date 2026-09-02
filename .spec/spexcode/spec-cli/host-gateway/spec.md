@@ -58,7 +58,8 @@ directory; a removed checkout/worktree disappears from `GET /projects` without m
 Explicit registration is one admin-scoped workflow over
 the real host filesystem: a read-only directory browser selects an existing folder or reports a typed absent
 path as a candidate, then `POST /projects` normalizes it to the repo's main checkout. An existing Git repo
-can be cataloged directly; a plain folder enters only after the user explicitly chooses the bounded `git init`
+can be cataloged directly; inside WSL, `POST /projects` refuses native drive paths and `/mnt/<drive>` roots
+before any Git or catalog work, with [[desktop-windows-wsl]] for the 9p reason. A plain folder enters only after the user explicitly chooses the bounded `git init`
 side effect. An absent candidate enters only through the explicit `createDir` + Git-initialization transaction,
 which creates the requested path before that same Git/catalog workflow. The add transaction establishes a
 branchable source-of-truth before it writes the catalog: a repository it initializes gets an initial commit

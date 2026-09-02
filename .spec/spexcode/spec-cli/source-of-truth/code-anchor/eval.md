@@ -8,8 +8,10 @@ scenarios:
       profile after unchanged governed blobs have been seen once, then change one governed blob and profile
       again against the same store and backend.
     expected: >
-      The after profile keeps `extract` inclusive below 5% at steady state. The unchanged blobs are not
-      reparsed, while the changed blob is extracted once and the drift verdict remains derived live from Git.
+      In the measured throwaway workload, `extract` is absent from the self-time and inclusive CPU tops. The
+      unchanged blobs are not reparsed, while the changed blob is extracted once and the drift verdict remains
+      derived live from Git. Production-load percentage validation is a live-backend follow-up because the
+      throwaway has no active SSE/poll demand.
   - name: fold-project-boundary
     tags: [cli]
     code: [packages/spec-core/src/git.ts#canonicalPathProjector]

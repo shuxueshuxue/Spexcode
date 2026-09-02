@@ -53,3 +53,9 @@ Windows SmartScreen is an explicitly unmeasured Tier 2 gap for this phase: the u
 requires an interactive Windows desktop session and cannot be driven or observed from the SSH-only machine
 access used for the reproducible package run. No SmartScreen reading is filed until that interactive path is
 available.
+
+The Windows `packaged-deep-link-windows`, `mnt-c-project-refused`, and `quit-leaves-backends-running`
+readings remain unmeasured in this SSH-only run. Launching the installed app itself is reproducible, but the
+non-interactive session loses the renderer context when invoking the Windows single-instance protocol/menu
+callbacks, so focus, picker refusal, and post-quit backend state cannot be observed as product evidence here.
+They are deferred to an interactive Windows session rather than filed as passes.

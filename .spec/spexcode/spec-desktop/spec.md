@@ -55,10 +55,11 @@ window carries the project switcher; a tab torn out of the strip ([[tab-strip]])
 `BrowserWindow` through the SPA's ordinary `window.open`, so the same gesture yields a popup in a browser and a
 window here. Same-origin opens become windows; every off-origin link goes to the user's real browser.
 
-**The application menu deliberately owns no ⌘W.** In a browser tab ⌘W and ⌘1–9 belong to the browser and never
-reach the page, which is why the dashboard's chords are Alt+Shift. In this window nothing claims those
-accelerators, so they reach the page as ordinary keydowns and the keymap ([[keyboard-service]]) fires; the shell's
-only job is to build a menu that leaves them unclaimed. Quit, copy/paste, zoom and the platform's standard items
+**The application menu owns the macOS ⌘W and ⌘1–9 accelerators.** Chromium's Aqua path consumes these
+accelerators before the page's capture listener can arbitrate them, so the Window menu catches them and injects
+the equivalent cancelable `KeyboardEvent` into the focused page. The page still dispatches through the ordinary
+keymap ([[keyboard-service]]) and tab APIs; the SPA has no Electron branch. On Linux, where the browser delivers
+Ctrl chords to the page, the menu remains unchanged. Quit, copy/paste, zoom and the platform's standard items
 remain.
 
 **Native folder picker, existing route.** "Add project" in the desktop opens the OS folder dialog and posts the

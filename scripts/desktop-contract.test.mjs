@@ -29,6 +29,14 @@ test('desktop contract keeps browser and shell on the same served product', () =
   assert.match(desktopSpec, /desktop:install/)
 })
 
+test('macOS menu forwards native tab accelerators into the page key service', () => {
+  assert.match(desktopMain, /process\.platform === 'darwin'/)
+  assert.match(desktopMain, /accelerator: 'Command\+W'/)
+  assert.match(desktopMain, /accelerator: `Command\+\$\{ordinal\}`/)
+  assert.match(desktopMain, /executeJavaScript\(`window\.dispatchEvent\(new KeyboardEvent/)
+  assert.match(desktopSpec, /Window menu catches them and injects/)
+})
+
 test('desktop attach reads the shared host record without a port or record-name fallback', () => {
   assert.match(gatewayDiscovery, /dist.*host-record\.js/)
   assert.match(gatewayDiscovery, /\/host/)

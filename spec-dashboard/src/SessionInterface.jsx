@@ -19,7 +19,7 @@ import { routeHash } from './route.js'
 import { markNewTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
 import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS, sendSessionCommand } from './data.js'
-import { apiUrl } from './project.js'
+import { PROJECT_BASE, apiUrl } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
   SESSION_SURFACE_TERMINAL,

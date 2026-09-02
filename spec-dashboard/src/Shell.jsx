@@ -613,6 +613,13 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     }
     if (!graphOnly && firesEvent('shell.contextToggle', event)) { event.preventDefault(); toggleContext(); return true }
     if (!graphOnly && firesEvent('shell.tabClose', event)) { event.preventDefault(); runTabCommand('closeActive'); return true }
+    if (!graphOnly) {
+      for (let ordinal = 1; ordinal <= 9; ordinal += 1) {
+        if (firesEvent(`shell.tabFocus${ordinal}`, event)) {
+          event.preventDefault(); runTabCommand('focus', ordinal); return true
+        }
+      }
+    }
     if (!graphOnly && firesEvent('shell.tabNext', event)) { event.preventDefault(); runTabCommand('move', 1); return true }
     if (!graphOnly && firesEvent('shell.tabPrevious', event)) { event.preventDefault(); runTabCommand('move', -1); return true }
     if (!graphOnly && firesEvent('shell.tabSplit', event)) {

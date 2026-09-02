@@ -141,6 +141,39 @@ scenarios:
     code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
     related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/test/tab-inactive-survives.e2e.mjs
+  - name: meta-w-closes-active-tab
+    description: >-
+      In the real Electron shell from the desktop spike (`npm run desktop:install &&
+      SPEXCODE_DESKTOP_CWD=<a project> npm run desktop:start`), open at least two document tabs and drive the
+      window through Playwright Electron support or CDP. Send Meta+W to the focused shell window, then inspect
+      the active route and visible tab strip.
+    expected: >-
+      Meta+W closes exactly the active tab, the tab leaves the strip, and the active route is the deterministic
+      closeDestination result. No browser-only shortcut handling or Electron detection branch is present in
+      the SPA.
+    tags: [desktop, frontend-e2e]
+    code: [spec-dashboard/src/keymap.js, spec-dashboard/src/Shell.jsx, spec-dashboard/src/tabs.js]
+  - name: meta-digit-focuses-tab
+    description: >-
+      In the same real Electron shell, open at least three document tabs and send Meta+Digit1, Meta+Digit2,
+      and Meta+Digit9 through the shell window, reading the active tab after each event.
+    expected: >-
+      Meta+Digit1 and Meta+Digit2 focus the first and second tabs; Meta+Digit9 focuses the last tab (the
+      Obsidian/browser convention). Ctrl+Digit1..9 are equivalent. The legend and Settings render every
+      declared chord with ⌘/⌃ glyphs derived from MOD_GLYPH.
+    tags: [desktop, frontend-e2e]
+    code: [spec-dashboard/src/keymap.js, spec-dashboard/src/KeyboardService.jsx, spec-dashboard/src/Legend.jsx, spec-dashboard/src/Settings.jsx]
+  - name: tear-off-opens-window
+    description: >-
+      In a real headless browser against the running dashboard, open two document tabs and drag one tab beyond
+      the viewport so the release has no in-strip drop target. Observe popup creation and inspect its URL and
+      the original strip after the drag settles.
+    expected: >-
+      One popup opens at the dragged tab's full scoped address, including `/p/<id>/` when scoped, and the
+      dragged tab leaves the original strip through the normal close path. No cross-window tab state sync is
+      attempted; both pages continue to use the same backend.
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/TabStrip.jsx, spec-dashboard/src/tabs.js, spec-dashboard/src/route.js]
 ---
 
 Measure YATU through the Vite dashboard in this worktree and a real browser against the running Spex backend.

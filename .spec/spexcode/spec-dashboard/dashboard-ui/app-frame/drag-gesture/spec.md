@@ -33,15 +33,18 @@ the pointer behaves on the way there must not be.
   gesture's own job rather than the caller's: a per-caller suppression flag is a piece of shared state that
   drifts, and it drifted before.
 - **The listeners are on the WINDOW.** A pointer leaves the row it started on immediately — that is the
-  whole point of dragging — so a listener bound to the row would lose the gesture on the first movement.
+  whole point of dragging — so a listener bound to the row would lose the gesture on the first movement. When
+  the caller receives a PointerEvent, the pressed element captures that pointer for the gesture. The window
+  listeners remain the shared dispatch point, while capture keeps move and release delivery alive after the
+  pointer leaves the viewport; mouse-event callers retain the same window-listener fallback.
 - **Escape abandons it**, applying nothing.
 - **Unmount abandons it too.** Starting a gesture returns the abandon call, so a component that disappears
   mid-drag leaves nothing on the window and no stuck cursor.
 
 **It is deliberately not native HTML5 drag-and-drop.** That API brings a drop-target protocol, a transfer
 payload and a browser-drawn ghost, none of which either caller wants, and its `dragstart` is swallowed by
-the interactive elements both lists are built from — a row here IS a button. Mouse events on the window are
-the smaller mechanism and they are the one the retired list proved out.
+the interactive elements both lists are built from — a row here IS a button. Pointer/mouse events on the
+window are the smaller mechanism and they are the one the retired list proved out.
 
 **The window wears the gesture.** One body class carries the grabbing cursor and the text-selection ban for
 every caller, so a drag reads the same whether it began in the strip or in the dock. Each caller still owns

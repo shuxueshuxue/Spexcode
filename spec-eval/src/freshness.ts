@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
-import { batchRevisionOids, gitTry, headSha, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, primeAncestorClosures, unionTopology, type DriftIndex, type Reachability, eventsSince } from '@spexcode/spec-core'
-import { anchorHitExists, extOf, extractorFor, extractors, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '@spexcode/spec-core'
+import { batchRevisionOids, gitTry, headSha, gitObjectFormat, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, primeAncestorClosures, unionTopology, type DriftIndex, type Reachability, eventsSince } from '@spexcode/spec-core'
+import { anchorHitExists, blobShaForContent, extractCachedBlob, extOf, extractorFor, extractors, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '@spexcode/spec-core'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocks, type ScenarioIndex } from './scenariofresh.js'
@@ -542,23 +541,16 @@ const anchorKey = (sinceSha: string, path: string, selectors: readonly string[])
 // about. Digesting is ~10x cheaper than parsing, so the read stays and only the parse is saved. Bounded like
 // the historical-revision memo it mirrors ([[code-anchor]]), and it caches the extractor's REJECTION too, so
 // an unparseable file does not re-parse once per entry.
-const CURRENT_TREE_MEMO_MAX = 4096
-const currentTreeUnitMemo = new Map<string, { units: Unit[] } | { failed: string }>()
 // The memo key doubles as the IMAGE's name — the extractor that answered plus the exact bytes it read — so a
 // caller retaining a verdict derived from these units names it by the same identity that decides the parse
 // ([[selector-anchor-scope]]). Returning the key rather than re-deriving it elsewhere is what keeps the two
 // from drifting apart.
 async function currentTreeImage(root: string, x: Extractor, path: string): Promise<{ key: string; units: Unit[] }> {
   const source = readFileSync(join(root, path), 'utf8')
-  const key = `${x.memoKey(path)}\0${createHash('sha1').update(source).digest('hex')}`
-  const hit = currentTreeUnitMemo.get(key)
-  if (hit) { if ('failed' in hit) throw new Error(hit.failed); return { key, units: hit.units } }
-  let entry: { units: Unit[] } | { failed: string }
-  try { entry = { units: await x.extract(source, path) } }
-  catch (err: any) { entry = { failed: err?.message ?? String(err) } }
-  if (currentTreeUnitMemo.size >= CURRENT_TREE_MEMO_MAX) currentTreeUnitMemo.clear()
-  currentTreeUnitMemo.set(key, entry)
-  if ('failed' in entry) throw new Error(entry.failed)
+  const blobSha = blobShaForContent(source, gitObjectFormat(root))
+  const key = `${x.memoKey(path)}\0${blobSha}`
+  const entry = await extractCachedBlob(source, path, x, blobSha)
+  if ('error' in entry) throw new Error(entry.error)
   return { key, units: entry.units }
 }
 

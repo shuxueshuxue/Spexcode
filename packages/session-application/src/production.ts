@@ -8,7 +8,6 @@ import {
   type MessageInput,
   type ProtocolTransaction,
   type SessionProtocol,
-  payloadHash,
 } from '@spexcode/session-protocol'
 import {
   encodeEventJson,
@@ -123,7 +122,6 @@ export interface ProductionSessionApplication extends SessionApplication {
   transitionSession(sessionId: string, input: TransitionSessionInput): CommittedSessionChange
   enqueueMessage(sessionId: string, message: MessageInput): Message
   enqueueConversationMessage(sessionId: string, message: MessageInput, conversation: ConversationMessageInput): Message
-  broadcast(senderSessionId: string, recipients: readonly string[], message: MessageInput): Record<string, string>
   attachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
   detachWatcher(watcherSessionId: string, subjectSessionId: string, channel?: string): TopologyEdge
   listWatchers(watcherSessionId: string, channel?: string): TopologyEdge[]
@@ -267,24 +265,6 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     topology,
     events,
     runtimeBindings,
-
-    broadcast(senderSessionId, recipients, message) {
-      requireId(senderSessionId, 'senderSessionId')
-      const unique = [...new Set(recipients)]
-      unique.forEach(recipient => requireId(recipient, 'recipientSessionId'))
-      return protocol.withTransaction(tx => Object.fromEntries(unique.map(recipient => {
-        const hash = Buffer.from(payloadHash({
-          protocolVersion: message.protocolVersion ?? 1,
-          targetSessionId: recipient,
-          senderSessionId,
-          kind: message.kind,
-          headers: message.headers,
-          body: message.body,
-        })).toString('hex')
-        const queued = tx.enqueue(recipient, { ...message, senderSessionId, idempotencyKey: `${senderSessionId}:${hash}:${recipient}` })
-        return [recipient, queued.messageId]
-      })))
-    },
 
     notifyRecipients(subjectSessionId, message) {
       const result = protocol.withTransaction(tx => {

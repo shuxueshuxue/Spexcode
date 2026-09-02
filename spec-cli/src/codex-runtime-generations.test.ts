@@ -37,7 +37,7 @@ test('generation ledger cache avoids unchanged reads and invalidates on replacem
     assert.equal(readCodexGenerationLedger(root).revision, 0)
     assert.equal(readCodexGenerationLedger(root).revision, 0)
     assert.equal(codexGenerationLedgerCacheStatsForTests(root).reads, 1)
-    writeFileSync(path, `${JSON.stringify({ ...empty, revision: 1 })}\n`)
+    writeFileSync(path, `${JSON.stringify({ ...empty, revision: 1, padding: 'changed' })}\n`)
     assert.equal(readCodexGenerationLedger(root).revision, 1)
     assert.equal(codexGenerationLedgerCacheStatsForTests(root).reads, 2)
   } finally {

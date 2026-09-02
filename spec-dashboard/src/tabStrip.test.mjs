@@ -55,6 +55,13 @@ test('tab dragging reorders during motion and treats the strip tail as an end la
   assert.match(source, /tabsHostRef\.current[\s\S]{0,500}getBoundingClientRect\(\)/)
 })
 
+test('dragging a tab outside the viewport opens its scoped address and closes through the tab store', () => {
+  assert.match(source, /outsideViewport = \(\{ x, y \}\) => x < 0 \|\| y < 0 \|\| x > window\.innerWidth \|\| y > window\.innerHeight/)
+  assert.match(source, /window\.open\(tabWindowAddress\(detached\)\)/)
+  assert.match(source, /window\.open\(tabWindowAddress\(detached\)\)[\s\S]{0,80}close\(detached\)/)
+  assert.match(source, /PROJECT_ID \? projectHref\(PROJECT_ID, hash\) : hash/)
+})
+
 test('session tabs use the shared visible title, not the stable search handle', () => {
   assert.match(source, /import \{ moveTab, setTabTitle, tabKey, useTabs \} from '\.\/tabs\.js'/)
   assert.match(source, /const title = s \? sessionHeadline\(s\) : \(tab\.title \|\| tab\.param\.slice\(0, 8\)\)/)

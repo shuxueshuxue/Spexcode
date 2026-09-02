@@ -8,7 +8,11 @@ const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')
 const desktopManifest = JSON.parse(readFileSync(join(root, 'spec-desktop', 'package.json'), 'utf8'))
 const desktopSpec = readFileSync(join(root, '.spec', 'spexcode', 'spec-desktop', 'spec.md'), 'utf8')
 const desktopMain = readFileSync(join(root, 'spec-desktop', 'main.js'), 'utf8')
+const desktopIntegration = readFileSync(join(root, 'spec-desktop', 'desktop-integration.js'), 'utf8')
 const gatewayDiscovery = readFileSync(join(root, 'spec-desktop', 'gateway-discovery.js'), 'utf8')
+const desktopBuilder = readFileSync(join(root, 'spec-desktop', 'electron-builder.config.cjs'), 'utf8')
+const desktopPack = readFileSync(join(root, 'scripts', 'desktop-pack.mjs'), 'utf8')
+const wslBootstrap = readFileSync(join(root, 'spec-desktop', 'wsl-bootstrap.sh'), 'utf8')
 
 test('desktop shell has explicit optional root entrypoints', () => {
   assert.equal(rootManifest.scripts['desktop:install'], 'npm --prefix spec-desktop install')
@@ -21,6 +25,29 @@ test('desktop remains optional and does not tax normal workspace installs', () =
   assert.equal(desktopManifest.scripts.start, 'electron .')
   assert.equal(desktopManifest.private, true)
   assert.ok(desktopManifest.devDependencies.electron)
+  assert.ok(desktopManifest.devDependencies['electron-builder'])
+  assert.equal(desktopManifest.version, rootManifest.version)
+})
+
+test('desktop packaging is an explicit, unsigned bundle with runAsNode enabled', () => {
+  assert.match(rootManifest.scripts['desktop:pack'], /desktop-pack\.mjs/)
+  assert.match(desktopBuilder, /appImage|AppImage/)
+  assert.match(desktopBuilder, /deb/)
+  assert.match(desktopBuilder, /dmg/)
+  assert.match(desktopBuilder, /nsis/)
+  assert.match(desktopBuilder, /runAsNode:\s*true/)
+  assert.match(desktopBuilder, /protocols:.*spexcode/)
+  assert.match(desktopIntegration, /xdg-mime/)
+  assert.match(desktopIntegration, /x-scheme-handler\/spexcode/)
+  assert.match(desktopPack, /npm pack/)
+  assert.match(desktopPack, /spexcodeCommit/)
+  assert.match(desktopPack, /SPEXCODE_DESKTOP_BUNDLE_DIR/)
+})
+
+test('WSL bootstrap refuses registry installs and consumes the packaged tarball set', () => {
+  assert.match(wslBootstrap, /SPEXCODE_BUNDLE_DIR/)
+  assert.match(wslBootstrap, /npm install --global --force/) 
+  assert.doesNotMatch(wslBootstrap, /npm install --global spexcode/)
 })
 
 test('desktop contract keeps browser and shell on the same served product', () => {

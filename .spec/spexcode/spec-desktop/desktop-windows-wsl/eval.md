@@ -29,3 +29,7 @@ scenarios:
 # eval.md - desktop-windows-wsl
 
 Measured on a real Windows machine through the real shell; no scenario is filed from a Linux host.
+
+Under SSH-only access the installed picker callback cannot be driven, so the refusal half of
+`mnt-c-project-refused` was measured through the packaged gateway HTTP API and the `\\wsl$` registration half
+is unmeasured. The missing actionable 9p explanation is tracked in github#111 for a follow-up re-measurement.

@@ -7,6 +7,8 @@ const root = join(import.meta.dirname, '..')
 const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const desktopManifest = JSON.parse(readFileSync(join(root, 'spec-desktop', 'package.json'), 'utf8'))
 const desktopSpec = readFileSync(join(root, '.spec', 'spexcode', 'spec-desktop', 'spec.md'), 'utf8')
+const desktopMain = readFileSync(join(root, 'spec-desktop', 'main.js'), 'utf8')
+const gatewayDiscovery = readFileSync(join(root, 'spec-desktop', 'gateway-discovery.js'), 'utf8')
 
 test('desktop shell has explicit optional root entrypoints', () => {
   assert.equal(rootManifest.scripts['desktop:install'], 'npm --prefix spec-desktop install')
@@ -25,4 +27,11 @@ test('desktop contract keeps browser and shell on the same served product', () =
   assert.match(desktopSpec, /same dashboard dist/)
   assert.match(desktopSpec, /spex dashboard/)
   assert.match(desktopSpec, /desktop:install/)
+})
+
+test('desktop attach reads the shared host record without a port or record-name fallback', () => {
+  assert.match(gatewayDiscovery, /dist.*host-record\.js/)
+  assert.match(gatewayDiscovery, /\/host/)
+  assert.match(gatewayDiscovery, /gateway\?\.instanceId === record\.instanceId/)
+  assert.doesNotMatch(`${desktopMain}\n${gatewayDiscovery}`, /gateway\.json|SPEXCODE_DASHBOARD_PORT/)
 })

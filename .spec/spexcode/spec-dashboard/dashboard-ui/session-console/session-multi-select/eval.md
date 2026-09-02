@@ -24,6 +24,24 @@ scenarios:
       name. The bar reports both checked rows and cancel exits selection. A full-row drag renders a 75% inert row ghost,
       highlights valid hierarchy targets, sends the reparent request on release, and sends parent: null at
       the top-level zone; self/descendant/current-parent releases are no-ops.
+  - name: one-ring-in-the-fold-column
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-pick-ring.e2e.mjs
+    code:
+      - spec-dashboard/src/SessionWindow.jsx
+      - spec-dashboard/src/SessionForestPanel.jsx
+    related:
+      - spec-dashboard/src/styles.css
+    description: >-
+      In Chromium, open the routed Sessions document with a live top-level parent whose fold pod is visible.
+      Record that pod's text and position, enter row selection from the parent's context menu, read what every
+      visible row draws in its lead, pick and unpick a second row, then cancel.
+    expected: >-
+      While selecting, every visible row (N of N) leads with exactly one ring, and nothing else is drawn in
+      the lead: no checkbox, no separate fold control, so nothing overlaps. The parent's ring sits at the
+      same position as its resting pod and still shows the subtree count; a leaf's ring is empty. The
+      context-menu row starts picked (ring filled), picking another row fills its ring and unpicking hollows
+      it, and cancel removes the rings and restores the resting pods.
 ---
 
 ## focused browser scenarios

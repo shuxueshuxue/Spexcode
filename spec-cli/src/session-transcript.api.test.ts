@@ -169,3 +169,78 @@ test('YATU: the transcript GET and stream read one native thread through the ada
     rmSync(fixture, { recursive: true, force: true })
   }
 })
+
+test('YATU: a launcher-declared config dir routes the transcript read — pinned dir first, launcher name as the fleet-heal fallback, default root otherwise', { timeout: 90_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-transcript-configdir-'))
+  const project = join(fixture, 'project')
+  const home = join(fixture, 'home')
+  const defaultClaudeDir = join(fixture, 'claude-default')   // where the backend's own CLAUDE_CONFIG_DIR points — and where NONE of the threads live
+  const pinnedDir = join(fixture, 'claude-glm-pinned')
+  const declaredDir = join(fixture, 'claude-glm-declared')
+  const port = await freePort()
+  let backend: ChildProcess | null = null
+  const launch = () => spawn(process.execPath, ['--import', import.meta.resolve('tsx'), index], {
+    cwd: project,
+    env: { ...process.env, PORT: String(port), SPEXCODE_HOME: home, CLAUDE_CONFIG_DIR: defaultClaudeDir, SPEXCODE_TMUX: `transcript-configdir-${port}` },
+    stdio: 'ignore', detached: true,
+  })
+  const record = (id: string, extra: Record<string, unknown>) => {
+    const sessionDir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
+    mkdirSync(sessionDir, { recursive: true })
+    writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({
+      session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'configdir', name: '', parent: '',
+      status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '',
+      stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launch_cmd: 'claude', launch_owner: '', ...extra,
+    }) + '\n')
+  }
+  const thread = (configDir: string, id: string) => {
+    const path = join(configDir, 'projects', project.replace(/[/.]/g, '-'), `${id}.jsonl`)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, line({ type: 'assistant', timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: `hello from ${id}` }] } }))
+  }
+  try {
+    mkdirSync(join(project, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
+    // the launcher registry declares WHERE claude-glm keeps its config dir; 'plain' declares nothing
+    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { defaultLauncher: 'plain', launchers: {
+      plain: { harness: 'claude', cmd: 'claude' },
+      'claude-glm': { harness: 'claude', cmd: 'claude-glm-wrapper', configDir: declaredDir },
+    } } }) + '\n')
+    spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+    spawnSync('git', ['config', 'user.email', 'transcript@example.test'], { cwd: project })
+    spawnSync('git', ['config', 'user.name', 'Transcript Fixture'], { cwd: project })
+    spawnSync('git', ['add', '.'], { cwd: project }); spawnSync('git', ['commit', '-qm', 'fixture'], { cwd: project })
+    mkdirSync(join(defaultClaudeDir, 'projects'), { recursive: true })
+
+    // pinned: the record carries launch_config_dir (creation pinned it) — the read follows the pin
+    record('configdir-pinned', { launcher: 'claude-glm', launch_config_dir: pinnedDir })
+    thread(pinnedDir, 'configdir-pinned')
+    // unpinned old record: only the launcher NAME — the read resolves it against live config (fleet self-heal)
+    record('configdir-by-name', { launcher: 'claude-glm' })
+    thread(declaredDir, 'configdir-by-name')
+    // no pin, launcher declares nothing: the default root — and the thread is NOT there, so the read fails loud
+    record('configdir-default', { launcher: 'plain' })
+    thread(pinnedDir, 'configdir-default')   // present on disk, but under a dir nothing declared
+
+    const base = `http://127.0.0.1:${port}`
+    backend = launch()
+    await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), 'backend health')
+    const from = Date.now() - 60_000
+    const to = Date.now() + 60_000
+
+    const pinned = await fetch(`${base}/api/sessions/configdir-pinned/transcript?from=${from}&to=${to}`)
+    assert.equal(pinned.status, 200)
+    assert.deepEqual(((await pinned.json()) as Frame).turns?.map((turn) => turn.text), ['hello from configdir-pinned'])
+
+    const byName = await fetch(`${base}/api/sessions/configdir-by-name/transcript?from=${from}&to=${to}`)
+    assert.equal(byName.status, 200)
+    assert.deepEqual(((await byName.json()) as Frame).turns?.map((turn) => turn.text), ['hello from configdir-by-name'])
+
+    const fallback = await fetch(`${base}/api/sessions/configdir-default/transcript?from=${from}&to=${to}`)
+    assert.equal(fallback.status, 409, 'an undeclared dir is the default root, and a thread not there stays a loud missing — never a silent read of another dir')
+    assert.match((((await fallback.json()) as Frame).error) ?? '', /was not found/)
+  } finally {
+    if (backend) await stop(backend)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})

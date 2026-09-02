@@ -2107,15 +2107,15 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
       claude: { harness: 'claude', cmd: 'claude' },
       codex: { harness: 'codex', cmd: 'codex' },
       reclaude: { cmd: 'reclaude --dangerously-skip-permissions' },
-      'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
+      'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', configDir: '/isolated/claude-glm' },
     } },
   }))
   // Name-sorted, exactly the config's real launchers — no ghost duplicates or derived execution variants.
   assert.deepEqual(launcherList(root), [
-    { name: 'claude', harness: 'claude', cmd: 'claude', headless: false },
-    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', headless: false },
-    { name: 'codex', harness: 'codex', cmd: 'codex', headless: false },
-    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions', headless: false },
+    { name: 'claude', harness: 'claude', cmd: 'claude', headless: false, configDir: null },
+    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', headless: false, configDir: '/isolated/claude-glm' },
+    { name: 'codex', harness: 'codex', cmd: 'codex', headless: false, configDir: null },
+    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions', headless: false, configDir: null },
   ])
   assert.deepEqual(
     [claudeHarness, codexHarness, opencodeHarness, piHarness].map((h) => h.headless),
@@ -2123,6 +2123,10 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
     'every existing adapter declares the capability explicitly',
   )
   assert.equal(resolveLauncher('claude-glm', root).cmd, 'claude-glm --dangerously-skip-permissions')
+  // the declared agent config dir rides the profile (null when undeclared): read-side data for the
+  // transcript resolver, never launch-env injection
+  assert.equal(resolveLauncher('claude-glm', root).configDir, '/isolated/claude-glm')
+  assert.equal(resolveLauncher('reclaude', root).configDir, null)
   assert.equal(resolveLauncher('codex', root).harness, 'codex')
   assert.throws(() => resolveLauncher('nope', root), /unknown launcher 'nope'/)
 })

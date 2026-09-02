@@ -2573,7 +2573,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
             title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, runtimeStartToken: randomUUID(), stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
-            launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
+            launchCmd: pinned, launchConfigDir: chosen.configDir, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
             diffComments: [],
             ...(base ? { base } : {}),
             ...(forkCommit ? { forkCommit } : {}),

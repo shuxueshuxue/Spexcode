@@ -29,6 +29,7 @@ export type SessRec = {
   adapterRecovery?: string | null // explicit adapter recovery state after an uncertain partial cold mutation
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
+  launchConfigDir?: string | null // the launcher's DECLARED agent config dir pinned at creation ([[launcher-select]]) — where this conversation's native thread lives; null/absent → resolve the launcher name live, else the harness default root
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
   launchReadinessStartedAt?: number | null // durable bounded readiness window for queued launches
   createRequestId?: string | null // digest of the public Idempotency-Key; binds retry without storing the bearer
@@ -88,7 +89,7 @@ export function readRecord(id: string): SessRec | null {
       merges: 0, note: state.note, sortKey: null, createdAt: state.updatedAtMs,
       harness: 'claude', harnessSessionId: null, runtimeStartToken: null,
       stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null,
-      launcher: null, launchCmd: null, launchOwner: null, launchReadinessStartedAt: null,
+      launcher: null, launchCmd: null, launchConfigDir: null, launchOwner: null, launchReadinessStartedAt: null,
       createRequestId: null, createPayloadHash: null, zcodeChildSessionIds: [], base: null,
       diffComments: [], launchReadinessPending: null,
     }
@@ -203,6 +204,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     adapterRecovery: raw.adapter_recovery || null,
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
+    launchConfigDir: raw.launch_config_dir || null, // records written before the field → null → resolve launcher name live
     launchOwner: launchOwner || null,
     launchReadinessStartedAt: Number.isFinite(Number((raw as RawRecord & { launch_readiness_started_at?: unknown }).launch_readiness_started_at))
       ? Number((raw as RawRecord & { launch_readiness_started_at?: unknown }).launch_readiness_started_at) : null,
@@ -279,7 +281,7 @@ export function writeRecord(rec: SessRec): void {
   const metadataChanged = !previous || [
     'governed', 'worktreePath', 'branch', 'title', 'name', 'merges', 'sortKey', 'createdAt',
     'harness', 'harnessSessionId', 'runtimeStartToken', 'stopped', 'archived', 'closedAt', 'coldProof',
-    'adapterRecovery', 'launcher', 'launchCmd', 'launchOwner', 'launchReadinessStartedAt', 'createRequestId',
+    'adapterRecovery', 'launcher', 'launchCmd', 'launchConfigDir', 'launchOwner', 'launchReadinessStartedAt', 'createRequestId',
     'createPayloadHash', 'zcodeChildSessionIds', 'base', 'forkCommit', 'diffComments', 'launchReadinessPending',
   ].some((key) => JSON.stringify((previous as unknown as Record<string, unknown>)[key]) !== JSON.stringify((rec as unknown as Record<string, unknown>)[key]))
   // Once a canonical row exists, a lifecycle-only write is already complete when the application transition
@@ -306,6 +308,9 @@ export function writeRecord(rec: SessRec): void {
     adapter_recovery: rec.adapterRecovery ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
+    // Written only when the launcher declared one: an undeclared record keeps its exact legacy bytes (the
+    // same conditional shape as `base`/`fork_commit` below).
+    ...(rec.launchConfigDir ? { launch_config_dir: rec.launchConfigDir } : {}),
     launch_owner: (lifecycle.status === 'queued' || lifecycle.status === OWNED_QUEUE_RAW_STATUS)
       ? rec.launchOwner ?? envelopeLaunchOwner ?? '' : '',
     ...(rec.launchReadinessStartedAt ? { launch_readiness_started_at: rec.launchReadinessStartedAt } : {}),

@@ -78,7 +78,11 @@ surface:
   transcript stream ([[session-transcript]]) — reads through this one field, so a harness has exactly one parser.
   Claude, Codex, pi and OpenCode resolve their native sources; the headless rows inherit their base reader; a
   harness without a reliable native transcript declares the unsupported reader, which fails loudly rather than
-  pretending the conversation was empty. The transcript is an ephemeral adapter observation, never a second
+  pretending the conversation was empty. Beside it, an adapter whose thread location is config-dir-relative may
+  expose `transcriptAt(configDir)` — the same reader addressed under a launcher-declared agent config dir
+  ([[launcher-select]]'s `configDir`; claude: `<configDir>/projects`) — because WHERE a thread lives is launcher
+  knowledge, not harness knowledge, and [[session-transcript]]'s resolver owns the precedence. The transcript is
+  an ephemeral adapter observation, never a second
   SpexCode session record; [[message-stream]] owns the one conversation entry it feeds.
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —

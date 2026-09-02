@@ -1,15 +1,15 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { readAliasedRawRecord } from '@spexcode/spec-core'
-import { defaultHarness, harnessById, type Harness } from './harness.js'
-import { TranscriptReadError, openFrameStream } from '@spexcode/transcript'
+import { defaultHarness, harnessById, resolveLauncher, type Harness } from './harness.js'
+import { TranscriptReadError, openFrameStream, type TranscriptReader } from '@spexcode/transcript'
 
 // The session-addressed face of [[transcript-reader]]: one resolver from a governed session to its adapter and
 // native thread, one bounded GET for a closed interval, and one SSE for the OPEN interval — the stretch the
 // agent is working in right now, whose end is "now" and moves. Native bytes never cross here; the adapter's
 // reader hands back normalized turns and this module only addresses them.
 
-type Target = { ok: true; harness: Harness; threadId: string } | { ok: false; status: 404 | 409 | 500; error: string }
+type Target = { ok: true; harness: Harness; transcript: TranscriptReader; threadId: string } | { ok: false; status: 404 | 409 | 500; error: string }
 
 export function resolveTranscriptTarget(id: string): Target {
   let raw: ReturnType<typeof readAliasedRawRecord>
@@ -25,7 +25,18 @@ export function resolveTranscriptTarget(id: string): Target {
     archived: !!raw.archived,
   })
   if (!threadId) return { ok: false, status: 409, error: `session ${id} transcript is unavailable: native harness identity is missing` }
-  return { ok: true, harness, threadId }
+  // WHERE the thread lives is LAUNCHER knowledge, not harness knowledge: two launchers of the same harness
+  // may keep their conversations under different agent config dirs (reclaude → ~/.claude, claude-glm →
+  // ~/.claude-glm), and the adapter's default reader only knows the default root. The dir PINNED at creation
+  // wins; an unpinned older record resolves its launcher NAME against live config, so the existing fleet
+  // self-heals the moment a `configDir` is declared; a launcher since removed (or undeclared) falls back to
+  // the harness default — the read then fails `missing` exactly as before, never silently somewhere else.
+  let configDir = typeof raw.launch_config_dir === 'string' && raw.launch_config_dir ? raw.launch_config_dir : null
+  if (!configDir && typeof raw.launcher === 'string' && raw.launcher) {
+    try { configDir = resolveLauncher(raw.launcher).configDir } catch { /* removed launcher: default root */ }
+  }
+  const transcript = configDir && harness.transcriptAt ? harness.transcriptAt(configDir) : harness.transcript
+  return { ok: true, harness, transcript, threadId }
 }
 
 const epoch = (value: string | undefined): number | null => {
@@ -54,7 +65,7 @@ export async function readSessionTranscript(c: Context) {
   const target = resolveTranscriptTarget(id)
   if (!target.ok) return c.json({ error: target.error }, target.status)
   try {
-    return c.json(await target.harness.transcript.read(target.threadId, { from, to }))
+    return c.json(await target.transcript.read(target.threadId, { from, to }))
   } catch (error) {
     const { body, status } = failure(error)
     return c.json(body, status)
@@ -72,7 +83,7 @@ export async function readSessionTranscriptTool(c: Context) {
   const target = resolveTranscriptTarget(id)
   if (!target.ok) return c.json({ error: target.error }, target.status)
   try {
-    const read = await target.harness.transcript.read(target.threadId, { from, to: Math.max(from + 1, Date.now()) })
+    const read = await target.transcript.read(target.threadId, { from, to: Math.max(from + 1, Date.now()) })
     for (const turn of read.turns) for (const tool of turn.tools ?? []) {
       if (tool.id !== toolId) continue
       return c.json({ id: tool.id, output: tool.output ?? null, outputLines: tool.outputLines, outputBytes: tool.outputBytes })
@@ -99,7 +110,7 @@ export async function sessionTranscriptStream(c: Context) {
   if (from === null) return c.json({ error: 'transcript stream needs from as integer epoch milliseconds' }, 400)
   const target = resolveTranscriptTarget(id)
   if (!target.ok) return c.json({ error: target.error }, target.status)
-  const frames = openFrameStream(target.harness.transcript, target.threadId, from)
+  const frames = openFrameStream(target.transcript, target.threadId, from)
   return streamSSE(c, async (stream) => {
     let aborted = false
     let ticks = 0

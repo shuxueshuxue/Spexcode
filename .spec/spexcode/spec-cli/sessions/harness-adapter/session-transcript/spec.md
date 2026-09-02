@@ -19,7 +19,15 @@ related:
 [[transcript-reader]] answers for a native thread; this module addresses it by session. One resolver turns a
 governed session id into its adapter and exact native thread identity (`exactNativeTargetId`) — an unknown or
 unmanaged session is a 404, a record without a native identity yet is a 409, and native bytes never cross here:
-the adapter's reader hands back normalized turns and these routes only address them. Nothing is persisted; no
+the adapter's reader hands back normalized turns and these routes only address them.
+
+The resolver also picks WHICH root the reader looks under, because that is launcher knowledge, not harness
+knowledge ([[launcher-select]]'s `configDir`): two launchers of one harness may keep their threads under
+different agent config dirs, and the adapter's default reader only knows the default root. The dir pinned on
+the record at creation wins; an unpinned older record resolves its launcher name against live config; a
+launcher since removed or undeclared falls back to the adapter's default reader — the read then fails
+`missing` exactly as before, never silently under another launcher's dir. The adapter contributes only the
+dir-to-thread mapping (`transcriptAt`, claude: `<configDir>/projects`); the resolver owns the precedence. Nothing is persisted; no
 event is ever appended to `timeline.ndjson`.
 
 `GET /api/sessions/:id/transcript?from=<ms>&to=<ms>` reads a CLOSED interval. Both bounds are required finite

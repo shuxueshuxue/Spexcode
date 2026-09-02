@@ -49,7 +49,11 @@ export type Config = {
     // its harness AND its exact launch command; the chosen NAME is persisted on the record so resume reuses the
     // same auth. `harness` defaults to 'claude'. Host-specific `cmd`s (abs wrapper paths) belong in the
     // gitignored spexcode.local.json — the name is portable, the cmd is a machine fact.
-    launchers?: { [name: string]: { harness?: HarnessId; cmd: string } }
+    // `configDir` declares WHERE the launcher's agent keeps its config/state dir when its cmd (a wrapper)
+    // points the harness somewhere non-default (claude-glm's CLAUDE_CONFIG_DIR=~/.claude-glm). It is a
+    // read-side declaration the transcript resolver consumes ([[session-transcript]]) — never injected into
+    // the launch env; the wrapper stays the sole authority over what it exports. Host path → local file.
+    launchers?: { [name: string]: { harness?: HarnessId; cmd: string; configDir?: string } }
     defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses; required for no-choice creates
   }
   resources?: {
@@ -271,6 +275,7 @@ export type RawRecord = {
   adapter_recovery?: string // explicit lifecycle recovery required after a partial adapter mutation; absent on old records
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
+  launch_config_dir?: string // the launcher's DECLARED agent config dir PINNED at creation ([[launcher-select]]), so transcript reads address the dir this conversation actually lives under; absent → resolve the launcher name live, else the harness default root
   create_request_id?: string // SHA-256 digest of the create Idempotency-Key; the raw key is never persisted
   create_payload_hash?: string // normalized create payload bound to create_request_id
   zcode_child_session_ids?: string[] // exact ZCode child ids explicitly bound to this SpexCode session; absent means no cross-product association

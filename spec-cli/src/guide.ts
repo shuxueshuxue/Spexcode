@@ -421,8 +421,16 @@ wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json
 override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir or
 permission variants. Shape:
   "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi" | "claude-headless" | "codex-headless" | "opencode-headless" | "pi-headless",
-                             "cmd": "<launch command>" } }
-\`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. A portable plain command may live
+                             "cmd": "<launch command>",
+                             "configDir": "<agent config dir the cmd points its harness at>" } }
+\`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. \`configDir\` is optional and
+declares WHERE the launcher's agent keeps its config/state dir when the cmd (a wrapper) points the harness
+somewhere non-default — e.g. a wrapper exporting CLAUDE_CONFIG_DIR=~/.claude-glm declares
+"configDir": "/home/me/.claude-glm". It is a read-side declaration: the backend uses it to find the session's
+native conversation (the dashboard timeline / transcript), and NEVER injects it into the launch environment —
+the wrapper stays the sole authority over what it exports. Omit it for a launcher whose harness uses its
+default dir. A wrong or missing declaration fails loud (transcript "file was not found"), never silently reads
+another launcher's dir. Like an absolute \`cmd\`, a \`configDir\` is a machine fact → spexcode.local.json. A portable plain command may live
 in committed spexcode.json (as the init seeds do). A host-specific command — an absolute wrapper path,
 credential route, or personal permission choice — belongs in gitignored spexcode.local.json, while its
 portable defaultLauncher NAME may stay in committed spexcode.json; the merge keeps both:

@@ -116,3 +116,17 @@ truly old session) falls back to the current ambient resolution, so nothing pre-
 The pinned command reaches the agent through
 `launchCmd`, which builds its invocation ON TOP of this base — the ONE seam where a session's frozen launcher
 identity overrides the ambient default.
+
+**The config dir is DECLARED, pinned, and read — never injected (`configDir`).** The same two-launchers-one-
+harness fact that breaks resume breaks READING: the backend's transcript reader used to resolve the harness's
+default config root from its own environment, so a session launched under a wrapper that exports a non-default
+dir (claude-glm's `CLAUDE_CONFIG_DIR=~/.claude-glm`) wrote its conversation where the backend never looked, and
+its timeline read "0 turns" off a loud not-found. The env lives inside an opaque wrapper script, so there is no
+honest way to parse it out — the launcher entry therefore declares it: an optional `configDir` beside `cmd`
+(same file, same host-specific nature — a machine path belongs in spexcode.local.json). Creation pins the
+resolved value on the record (`launchConfigDir`, exactly as `launchCmd` is pinned), and [[session-transcript]]'s
+resolver reads through it: pinned dir first, else the launcher NAME resolved against live config (so records
+predating the field self-heal the moment the config declares one), else the harness default root. The
+declaration is consumed on the READ side only: nothing injects it into the launch environment — the wrapper
+stays the sole authority over what it exports, and a declaration that drifts from the wrapper fails exactly as
+loudly as no declaration (transcript not found), never silently reading another launcher's dir.

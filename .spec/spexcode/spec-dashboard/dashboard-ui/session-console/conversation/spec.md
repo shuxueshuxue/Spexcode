@@ -39,7 +39,10 @@ controls are absent; the footer contains `⏻ agent 已离线 · 内容只读` a
 archived session those controls are likewise absent and the footer contains `▤ 已归档 · 内容只读`; its
 archive restore action remains available. A `retired` record is the other legislated offline exception: it keeps
 the `⚑` badge that says its worktree is gone and has no relaunch action. These are data states of one footer
-component, not separate panels. The timeline remains
+component, not separate panels. The cold footer is a status line, not an empty input: the same card the live
+composer floats, collapsed to one control row, its statement in body ink, and its relaunch / restore action
+wearing the filled accent the live send mark wears — the card's one action in that state — rather than a hairline
+chip at the far edge of a tall empty sheet. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
 once when selected and does not poll.

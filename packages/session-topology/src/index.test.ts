@@ -181,18 +181,6 @@ test('directional reads and reparent use the same edge relation', async () => {
   protocol.close()
 })
 
-test('descendants traverses every active edge recursively and filters relation when requested', async () => {
-  const { protocol, topology } = await fixture(['root', 'mid', 'leaf', 'other'])
-  protocol.withTransaction(tx => {
-    topology.attach(tx, 'root', 'mid', 'parent')
-    topology.attach(tx, 'mid', 'leaf', 'parent')
-    topology.attach(tx, 'root', 'other', 'watch')
-  })
-  assert.deepEqual(topology.descendants('root'), ['leaf', 'mid', 'other'])
-  assert.deepEqual(topology.descendants('root', 'parent'), ['leaf', 'mid'])
-  protocol.close()
-})
-
 test('topology failures use stable topology codes and hide storage diagnostics', async () => {
   const { protocol, topology } = await fixture(['a', 'b'])
   assert.equal(topologyCode(() => protocol.withTransaction(tx => topology.attach(tx, 'a', 'missing', 'parent'))),
@@ -293,7 +281,6 @@ test('the runtime surface has no mutation path for taking a message', async () =
   assert.deepEqual(Object.keys(topology).sort(), [
     'attach',
     'children',
-    'descendants',
     'detach',
     'parents',
     'recipients',

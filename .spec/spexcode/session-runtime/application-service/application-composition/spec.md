@@ -8,7 +8,6 @@ code:
 related:
   - .spec/spexcode/session-runtime/application-service/spec.md
   - .spec/spexcode/session-runtime/runtime-bindings/spec.md
-  - packages/session-application/src/index.ts
 ---
 # session application composition
 
@@ -30,6 +29,3 @@ Lifecycle transitions resolve watcher recipients by their durable channel: a `wa
 routine `active`/working transition, while `watch:manual` opts into the complete feed. A migrated `watch` channel
 is normalized by the importer. When both channels point at one watcher, the union emits one queue item. Creation still publishes its initial
 snapshot through the ordinary relation transaction; this policy applies to later transitions.
-The pure `broadcast(senderSessionId, recipients, message)` action enqueues once per distinct explicit recipient in
-one transaction. Each idempotency key derives from sender, canonical payload hash, and recipient; filtering remains
-caller-owned.

@@ -14,8 +14,6 @@ related:
 The package entry exposes one neutral edge model. Attachment and subscription are vocabulary over the same directed
 edge relation, and recipient resolution returns the distinct active sources pointing at one subject in stable order.
 It decides neither message content nor whether a relation change requires a message.
-`descendants(sessionId, relationType?, tx?)` recursively traverses active edges and returns every reachable session
-id in stable order, crossing intermediate lifecycle states because topology stores no lifecycle policy.
 
 Every mutation accepts a live protocol transaction context and performs only bounded synchronous SQL and in-memory
 validation. The caller may enqueue zero or more messages on that same context, so the outer protocol transaction is

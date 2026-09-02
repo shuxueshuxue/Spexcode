@@ -70,6 +70,8 @@ per package from the same commit. A thin root tarball must not mix release lines
 
 The packaged command exports `SPEXCODE_BUNDLE_DIR` before invoking the unpacked bootstrap script, so the
 script sees the complete local tarball set rather than treating the directory as a transient `sed` input.
+When a project root is supplied, bootstrap changes into that WSL path before running `spex doctor`, keeping
+doctor's git/config probes on the selected project rather than the Windows launch directory.
 
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource

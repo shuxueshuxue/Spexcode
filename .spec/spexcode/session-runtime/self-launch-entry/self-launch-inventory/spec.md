@@ -7,8 +7,6 @@ code:
   - docs/session-platform-m4-inventory.md
 related:
   - docs/session-platform-m4-self-launch-cutover.md
-  - docs/session-architecture-concept-map.md
-  - docs/session-legacy-deletion-gate.md
   - docs/session-adopter-cutin-plan.md
   - spec-cli/hooks/dispatch.sh
   - spec-cli/hooks/harness.sh

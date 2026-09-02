@@ -193,20 +193,8 @@ Spex adopter 拥有 config/path resolver、`spex_governed_sessions` 与 topology
 
 Spex M6 cutover 要求 G.1 L01-L11 的正常 readers/writers 全部切到上述 authority；同时按 G.2 R04 删除 protocol 对 cwd/Spex global locator 的隐式假设、按 R05 删除 `@spexcode/session-core` mixed root/internal exports、按 R07 删除 global manifest fallback（M8）、按 R06 清理旧 dist/packed copies。G.1 L07 仅删除 DB-state lock callers，保留 Git/harness/resource fences；G.2 R01-R03、R08-R09 是 adapter/lifecycle state，不因协议切换整体删除。M6 先 sabotage + positive YATU，M7 再运行隔离 importer，M8 才删除 codec、package、生成物与无 caller lock roots。
 
-## HTML 待更新与冲突清单（只列，不改）
+## Former review artifacts
 
-### 需要更新的具体段落
-
-- `session-platform-architecture.html` §6：三条 adopter flow 需要补上每一步的进程归属、Spex 的 global opaque id 结论和 self-launch 薄 CLI argv；ZSwarm flow 必须标为 spec-derived/unproven。
-- `session-platform-architecture.html` §7：补充 Spex `project_id` 只是 adopter metadata、`protocol_sessions.session_id` 在共享 DB 内全局唯一，以及 config→absolute path 的 self-launch CLI 证据。
-- `session-platform-architecture.html` §11：Self-launch 与 Spex 验收条目应引用可执行 fixture；ZSwarm 条目应要求外部 clean consumer evidence，而不是暗示仓库已有实现。
-- `session-management-refactor.html` §5：补充 producer/commit/wake/dequeue/adapter 的进程边界和 at-most-once 后的 consumer journal；§6 的 `spex_governed_sessions` 示例需要明确全局 `session_id` 与 `project_id` 不构成复合主键；§7 L01-L11 映射应指向本计划的 adopter-owned replacement。
-- `session-platform-construction-roadmap.html` §3：M4/M5/M6 owner rows 应分别写入 self-launch CLI contract、ZSwarm evidence gate、Spex global-id/cursor/revocation decisions；§4 的 M4/M5/M6 exit/delete 条款应引用 fail-first/pass logs 与“先 importer 后删除”。
-
-### 与真实证据冲突的段落
-
-- `session-platform-architecture.html` §6 ZSwarm flow、§11 ZSwarm “不 import …”验收：文档把 ZSwarm 当作可运行 adopter，但仓库没有 production importer；只能作为目标形态，不能当当前证据。
-- `session-management-refactor.html` §6 的 `spex_governed_sessions` 示例：`project_id` 看起来像作用域字段，但 `session_id` 单列主键与共享 `spexcode.db` 的全局地址语义未解释，存在实际作用域空洞。
-- `session-management-refactor.html` §8 “三 adopter YATU 全部通过”：当前只有 self-launch/Spex in-spike proof，ZSwarm 没有 executable proof，因此该句超出真实证据。
-- `session-platform-construction-roadmap.html` M5 exit “ZSwarm workflow PASS”：在没有外部 clean consumer 证据前不能标记 PASS。
-- `docs/session-architecture-concept-map.md` G.1 L09 已正确记录无 production importer；任何把 `runtime-session.ts` public export 视作现有 ZSwarm consumer 的文字都与其自身 ledger 冲突。
+The former architecture-review HTML pages and concept-map ledgers were removed. Current adopter boundaries and
+evidence are stated in this document and in the owning protocol/topology/runtime specs; this plan no longer tracks
+an independent review queue for deleted artifacts.

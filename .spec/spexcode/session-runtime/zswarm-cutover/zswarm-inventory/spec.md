@@ -9,7 +9,6 @@ related:
   - .spec/spexcode/session-runtime/zswarm-cutover/spec.md
   - .spec/spexcode/session-runtime/spec.md
   - .spec/spexcode/session-protocol/runtime-session/spec.md
-  - .spec/spexcode/session-protocol/concept-map/legacy-deletion-gate/spec.md
 ---
 # zswarm legacy inventory
 

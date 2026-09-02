@@ -2,8 +2,8 @@
 
 This freezes the M2 implementation details of the `session-protocol` SQLite engine: exact DDL, canonical
 byte encodings, connection gates, open-path policy, migration mechanics, and the stable error-code
-inventory. It closes the OPEN items that `docs/session-architecture-concept-map.md` deliberately left to
-this milestone. It does not reopen any frozen decision above it, and it does not authorise production
+inventory. It closes the OPEN items that the protocol contract deliberately left to this milestone. It does not
+reopen any frozen decision above it, and it does not authorise production
 wiring: the protocol package, the adopters, and the legacy deletion all remain later milestones.
 
 Every number, PRAGMA value, and constraint behaviour below was measured. Nothing here is written from
@@ -280,9 +280,8 @@ we actually ship, not by the mode we measured first.
 
 ## 5. Exact DDL
 
-This is the final, executable schema — migration version 1, component `session-protocol`. The draft in
-`session-management-refactor.html` §3 is superseded where they differ; the differences are justified
-below.
+This is the final, executable schema — migration version 1, component `session-protocol`. Earlier review material
+is superseded where it differs; the differences are justified below.
 
 ```sql
 CREATE TABLE protocol_sessions (

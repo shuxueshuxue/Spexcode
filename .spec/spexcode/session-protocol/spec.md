@@ -6,7 +6,6 @@ desc: The published, adapter-neutral SQLite protocol for durable session message
 code:
   - packages/session-protocol/src/index.ts
 related:
-  - docs/session-architecture-concept-map.md
   - packages/session-protocol/src/errors.ts
   - packages/session-protocol/src/canonical.ts
   - packages/session-protocol/src/schema.ts

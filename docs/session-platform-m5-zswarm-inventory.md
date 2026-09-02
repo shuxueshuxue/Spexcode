@@ -21,8 +21,7 @@ facilities. The row ledger is:
 release is clean. `NOT-MEASURED` is used where the source snapshot cannot establish the running product's artifact,
 process, or installed-copy behavior.
 
-This corrects the older M0 wording in `docs/session-architecture-concept-map.md:205` and the earlier M5 draft's
-“no production importer” claim. “No importer in this repository” remains true; “ZSwarm use is unproven” is false once
+This corrects the earlier M5 draft's “no production importer” claim. “No importer in this repository” remains true; “ZSwarm use is unproven” is false once
 the external z-code ref is inspected.
 
 ## Fail-first evidence

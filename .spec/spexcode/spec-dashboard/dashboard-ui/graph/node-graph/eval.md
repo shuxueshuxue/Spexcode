@@ -1,5 +1,15 @@
 ---
 scenarios:
+  - name: empty-repository-renders-empty-graph
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the graph route in a real desktop browser for a freshly initialized Git repository whose
+      assembled graph payload has zero nodes. Capture the settled page, inspect the browser console, and
+      verify the graph surface remains usable.
+    expected: >-
+      The graph route renders an explicit empty-project state with next-step setup guidance; it does not
+      show a view-crashed panel, throw a render error, or leave a white screen. The browser console has no
+      uncaught graph render error, and the screenshot proves the state is visible in the graph surface.
   - name: drill-down-tree-renders
     tags: [frontend-e2e, desktop]
     description: >-

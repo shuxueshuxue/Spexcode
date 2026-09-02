@@ -46,6 +46,16 @@ scenarios:
       POST /projects request, the durable catalog gains the fixture root, and the project appears in the switcher.
     code: [spec-desktop/desktop-integration.js]
     related: [spec-cli/src/host.ts, spec-dashboard/src/ProjectsPage.jsx]
+  - name: mac-gui-launch-reads-keychain
+    tags: [desktop]
+    description: >-
+      Launch the shell from the logged-in macOS GUI context, open a project, and dispatch a session using the
+      plain `claude` launcher (not reclaude and not a credential-sync path). Observe whether the worker
+      authenticates from the login keychain.
+    expected: >-
+      The worker authenticates and reaches a live session because the backend runs inside the Aqua session and
+      can read the user's login keychain. A failure is a finding against this claim and must be filed honestly.
+    code: [spec-desktop/main.js, spec-cli/src/sessions.ts]
 ---
 # eval.md - spec-desktop
 

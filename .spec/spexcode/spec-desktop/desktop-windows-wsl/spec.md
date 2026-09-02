@@ -54,13 +54,18 @@ reason rather than accepting a slow project.
 
 `wsl.js` is the shell's WSL adapter. It decodes the UTF-16 `wsl.exe -l -v` response, selects the starred
 version-2 distro, exposes the `SPEXCODE_DESKTOP_WSL_PROBE` test seam, reads the host record through `wsl.exe`, and
-translates `\\wsl$\\<distro>\\home\\…` paths to `/home/…`. Native drive paths and `/mnt/*` are refused before
+translates `\\wsl$\\<distro>\\home\\…` paths to `/home/…`. The Windows picker also accepts the
+`SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY` seam so native-dialog outcomes remain reproducible through Electron.
+Native drive paths and `/mnt/*` are refused before
 the existing project POST with the 9p reason. A missing `wsl.exe` reports the install action; other probe spawn
 errors remain detection failures. `wsl-bootstrap.sh` is fed through `wsl.exe` with a piped stdin, so apt's
 single sudo prompt remains in the verbatim transcript; it uses a bundled tarball when supplied and otherwise
 reports its npm fallback before running the real `spex doctor`. `first-run.html` is a static `file://` transcript
 surface; the preload bridge only carries the sudo response back to the shell. Once `/health` responds, the shell
 closes that page and loads the same gateway URL used by a browser.
+
+The bootstrap must install a self-consistent SpexCode package set: either one tarball per package from the same
+commit or a pinned published set whose dependency versions agree; a thin root tarball must not mix release lines.
 
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource

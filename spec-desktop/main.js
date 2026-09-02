@@ -295,9 +295,14 @@ function openWindow(gatewayUrl, target = `${gatewayUrl}/`, isMain = false) {
 }
 
 async function pickProject(gatewayUrl, distro) {
-  const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-  if (result.canceled || !result.filePaths[0]) return { canceled: true }
-  const root = wsl.projectRootForPost(result.filePaths[0], distro)
+  const testPath = process.env.SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY?.trim() || ''
+  let selectedPath = testPath
+  if (!selectedPath) {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    if (result.canceled || !result.filePaths[0]) return { canceled: true }
+    selectedPath = result.filePaths[0]
+  }
+  const root = wsl.projectRootForPost(selectedPath, distro)
   const response = await fetch(`${gatewayUrl}/projects`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

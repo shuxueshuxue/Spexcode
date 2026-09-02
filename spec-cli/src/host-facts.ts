@@ -5,10 +5,12 @@ import { basename, join, resolve } from 'node:path'
 import { spexcodeHome, encodeProject, readJsonConfig } from '@spexcode/spec-core'
 import { readHostRecord, type HostRecord } from './host-record.js'
 import { readEndpointRecord } from './endpoint-record.js'
+import { sessionHost } from './session-host.js'
 
 export type AgentFact = { installed: boolean; path: string | null; loggedIn: boolean; credential: string | null }
 export type LauncherFact = { projectId: string; project: string; name: string; harness: string; cmd: string; resolves: boolean; binary: string | null }
 export type HostFacts = {
+  host: { kind: 'tmux-host' | 'process-host'; reason: string }
   runtime: { kind: 'native-linux' | 'darwin' | 'wsl2'; label: string; distro?: string }
   versions: { node: string; tmux: string | null; git: string | null }
   agents: Record<'claude' | 'codex' | 'opencode' | 'pi', AgentFact>
@@ -80,6 +82,7 @@ function launcherFacts(roots: string[]): LauncherFact[] {
     const merged = { ...(portable.sessions?.launchers ?? {}), ...(local.sessions?.launchers ?? {}) }
     for (const [name, cfg] of Object.entries(merged as Record<string, any>)) {
       if (!cfg || typeof cfg.cmd !== 'string') continue
+      if (sessionHost().kind === 'process-host' && !['claude-headless', 'codex-headless', 'opencode-headless', 'pi-headless'].includes(cfg.harness || 'claude')) continue
       const binary = commandPath(cfg.cmd)
       rows.push({ projectId: encodeProject(root), project: basename(root), name, harness: cfg.harness || 'claude', cmd: cfg.cmd, resolves: !!binary, binary })
     }
@@ -115,6 +118,9 @@ export function collectHostFacts(roots = discoverRoots()): HostFacts {
       : { kind: 'native-linux' as const, label: 'native linux' }
   const record = readHostRecord()
   return {
+    host: sessionHost().kind === 'tmux-host'
+      ? { kind: 'tmux-host', reason: 'tmux is available on PATH' }
+      : { kind: 'process-host', reason: 'tmux is absent from PATH; detached process hosting is active and only headless adapters are available' },
     runtime,
     versions: { node: process.version, tmux: commandVersion('tmux', ['-V']), git: commandVersion('git', ['--version']) },
     agents: agentFacts(),
@@ -125,7 +131,7 @@ export function collectHostFacts(roots = discoverRoots()): HostFacts {
 }
 
 export function formatHostFacts(facts: HostFacts): string {
-  const lines = [`Host facts`, `runtime: ${facts.runtime.label}${facts.runtime.distro ? ` (${facts.runtime.distro})` : ''}`, `node: ${facts.versions.node}`, `tmux: ${facts.versions.tmux || 'missing'}`, `git: ${facts.versions.git || 'missing'}`]
+  const lines = [`Host facts`, `host: ${facts.host.kind} (${facts.host.reason})`, `runtime: ${facts.runtime.label}${facts.runtime.distro ? ` (${facts.runtime.distro})` : ''}`, `node: ${facts.versions.node}`, `tmux: ${facts.versions.tmux || 'missing'}`, `git: ${facts.versions.git || 'missing'}`]
   for (const [name, value] of Object.entries(facts.agents)) lines.push(`${name}: ${value.installed ? 'installed' : 'missing'}; ${value.loggedIn ? 'logged in' : 'not logged in'}`)
   lines.push(`memory: ${facts.memory.kind} ${facts.memory.present ? 'present' : 'missing'}${facts.memory.limitBytes ? ` (${facts.memory.limitBytes} bytes)` : ''}`)
   lines.push('launchers:')

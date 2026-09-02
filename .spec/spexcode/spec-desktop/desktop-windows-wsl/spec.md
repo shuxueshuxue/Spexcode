@@ -5,9 +5,16 @@ hue: 30
 desc: Windows runs the gateway inside WSL2 — detection, an honest first-run page, an idempotent bootstrap, spawn-through-wsl, and WSL-side project paths.
 related:
   - spec-desktop/main.js
+  - spec-desktop/wsl.js
+  - spec-desktop/wsl-bootstrap.sh
+  - spec-desktop/first-run.html
+  - spec-desktop/first-run-preload.js
+  - spec-desktop/wsl-entry.cjs
   - spec-desktop/node-entry.mjs
   - spec-cli/src/runtime-guard.ts
   - spec-cli/src/doctor.ts
+code:
+  - spec-desktop/wsl.js
 ---
 # desktop-windows-wsl
 
@@ -41,6 +48,17 @@ Attach-before-start reads the WSL-side records the same way.
 broken and the graph's live rebuild would suffer; the folder picker therefore browses `\\wsl$\<distro>\`,
 translates the UNC path to `/home/…` before `POST /projects`, and refuses a `/mnt/c` path with that one-line
 reason rather than accepting a slow project.
+
+## Implementation boundary
+
+`wsl.js` is the shell's WSL adapter. It decodes the UTF-16 `wsl.exe -l -v` response, selects the starred
+version-2 distro, exposes the `SPEXCODE_DESKTOP_WSL_PROBE` test seam, and translates `\\wsl$\\<distro>\\home\\…`
+paths to `/home/…`. Native drive paths and `/mnt/*` are refused before the existing project POST with the 9p
+reason. `wsl-bootstrap.sh` is fed through `wsl.exe` with a piped stdin, so apt's single sudo prompt remains in
+the verbatim transcript; it uses a bundled tarball when supplied and otherwise reports its npm fallback before
+running the real `spex doctor`. `first-run.html` is a static `file://` transcript surface; the preload bridge
+only carries the sudo response back to the shell. Once `/health` responds, the shell closes that page and loads
+the same gateway URL used by a browser.
 
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource

@@ -43,7 +43,14 @@ that desktop entry from the package manager; a portable AppImage writes the equi
 desktop-integration path: `xdg-mime query default x-scheme-handler/spexcode` must name `spexcode.desktop`, and
 `xdg-open spexcode://...` must focus the already-running packaged shell.
 
-`npm run desktop:pack` is an explicit developer/evidence command and is not part of normal installs or CI.
+`npm run desktop:pack` is an explicit developer/evidence command and is not part of normal installs or CI. The
+pack driver selects native targets from the host platform (Linux AppImage/deb, macOS dmg, Windows nsis), with
+`SPEXCODE_DESKTOP_PLATFORM` and `SPEXCODE_DESKTOP_TARGETS` available for a deliberate evidence override. The
+macOS phase is an unsigned dmg with Electron's ad-hoc signature, installed outside the checkout. Its packaged
+`.app` must declare `CFBundleURLTypes` for `spexcode`; a quarantined dmg is inspected on the measured macOS
+version to record the exact Gatekeeper prompt for Tier 2 distribution, which is evidence rather than a pass/fail
+product claim. The Aqua GUI run also rechecks keychain readability and records the plain `claude` launcher's
+authentication result without softening a failure.
 Electron remains outside the root workspaces; `npm run desktop:install` is the only installation path for its
 toolchain. The pack command writes artifacts and its README under `/home/jeffry/spex-evidence/<lane>/` (or
 `SPEXCODE_EVIDENCE_DIR`), never into the repository.

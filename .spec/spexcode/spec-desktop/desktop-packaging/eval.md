@@ -37,6 +37,19 @@ scenarios:
 ---
 # eval.md - desktop-packaging
 
-These scenarios are measured on the ThinkPad through the real AppImage with `DISPLAY=:0` and
-`XAUTHORITY=/run/user/1000/gdm/Xauthority`. Evidence is stored under `/home/jeffry/spex-evidence/<lane>/`,
+Linux scenarios are measured on the ThinkPad through the real AppImage with `DISPLAY=:0` and
+`XAUTHORITY=/run/user/1000/gdm/Xauthority`. macOS scenarios are measured on `macmini-tail` from the logged-in
+Aqua session using a throwaway `gui/<uid>` LaunchAgent; the dmg is mounted and the `.app` is copied to a
+temporary install directory outside the checkout. Evidence is stored under `/home/jeffry/spex-evidence/<lane>/`,
 published with `spex session files add`, and filed with `spex eval add` against the commit that was measured.
+
+The macOS phase adds these scenarios:
+
+- `packaged-shell-renders-hub`: the installed packaged `.app` renders the projects hub.
+- `packaged-cli-is-self-consistent`: bundled `@spexcode/*` versions and commit stamp match the monorepo.
+- `desktop-deep-link`: `open spexcode://p/<id>/<address>` focuses the running window via `CFBundleURLTypes`.
+- `quit-leaves-backends-running`: normal quit leaves a detached backend healthy and discoverable.
+- `mac-gui-launch-reads-keychain`: the Aqua-domain keychain read is recorded alongside the plain `claude`
+  launcher's actual authentication result.
+- `gatekeeper-quarantine`: after applying quarantine xattrs to the dmg, record exactly what this macOS version
+  shows for the ad-hoc-signed app; this is Tier 2 distribution evidence, not a product failure.

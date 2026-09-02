@@ -147,18 +147,28 @@ async function main() {
 
   const builder = resolve(repo, 'spec-desktop', 'node_modules', '.bin', 'electron-builder')
   if (!existsSync(builder)) fail('electron-builder is not installed; run npm run desktop:install first')
+  const platform = process.env.SPEXCODE_DESKTOP_PLATFORM || process.platform
+  const defaults = {
+    linux: { flag: '--linux', targets: ['AppImage', 'deb'], extensions: ['AppImage', 'deb'] },
+    darwin: { flag: '--mac', targets: ['dmg'], extensions: ['dmg'] },
+    win32: { flag: '--win', targets: ['nsis'], extensions: ['exe'] },
+  }
+  const target = defaults[platform]
+  if (!target) fail(`unsupported desktop packaging platform ${platform}`)
+  const targets = (process.env.SPEXCODE_DESKTOP_TARGETS || target.targets.join(',')).split(',').map((value) => value.trim()).filter(Boolean)
+  const extensions = new Set(target.extensions)
   const env = { ...process.env, SPEXCODE_DESKTOP_BUNDLE_DIR: bundle, SPEXCODE_DESKTOP_OUTPUT_DIR: output }
-  run(builder, ['--config', resolve(repo, 'spec-desktop', 'electron-builder.config.cjs'), '--linux', 'AppImage', 'deb', '--publish', 'never'], { env })
+  run(builder, ['--config', resolve(repo, 'spec-desktop', 'electron-builder.config.cjs'), target.flag, ...targets, '--publish', 'never'], { env })
 
-  const artifacts = readdirSync(output).filter((name) => /\.(AppImage|deb)$/.test(name)).map((name) => ({ name, bytes: statSync(join(output, name)).size }))
-  if (artifacts.length < 2) fail(`expected AppImage and deb artifacts in ${output}`)
+  const artifacts = readdirSync(output).filter((name) => [...extensions].some((extension) => name.endsWith(`.${extension}`))).map((name) => ({ name, bytes: statSync(join(output, name)).size }))
+  if (artifacts.length < targets.length) fail(`expected ${targets.join(', ')} artifacts in ${output}`)
   const elapsedMs = Date.now() - started
   writeFileSync(join(evidence, 'README.md'), [
     '# SpexCode desktop packaging',
     '',
-    `Machine: ${process.platform} ${process.arch}`,
+    `Machine: ${platform} ${process.arch}`,
     `Commit: ${commit}`,
-    `Method: npm run desktop:pack (electron-builder; unsigned, no notarization, no auto-update)`,
+    `Method: npm run desktop:pack (electron-builder; unsigned/ad-hoc, no notarization, no auto-update)`,
     `Build time: ${(elapsedMs / 1000).toFixed(1)}s`,
     '',
     'Artifacts:',

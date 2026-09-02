@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { encodeEventJson } from '@spexcode/session-events'
 import { MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from '@spexcode/session-application'
 
-import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import {
   currentHumanTurn,
   lastHumanSendVia,
@@ -35,13 +35,13 @@ const freshHome = (): string => {
   // the test worker pins the canonical database path once per process; a fresh home moves it along
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   resetConfiguredSessionApplicationForTest()
-  const app = configuredSessionApplicationIfCutover()!
+  const app = configuredSessionApplication()!
   app.createSession({ sessionId: ID, status: 'idle' })
   app.createSession({ sessionId: PARENT, status: 'idle' })
   return home
 }
 
-const app = () => configuredSessionApplicationIfCutover()!
+const app = () => configuredSessionApplication()!
 
 const transition = (status: string, proposal: string | null = null, note: string | null = null): void => {
   app().transitionSession(ID, { status, proposal, note, reason: 'timeline-test' })

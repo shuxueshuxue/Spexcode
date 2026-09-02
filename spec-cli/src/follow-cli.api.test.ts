@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -84,7 +84,7 @@ function seedSession(home: string, id = ID, parent: string | null = null, root =
 const append = (dir: string, ev: Record<string, unknown>): void =>
   (() => {
     const id = dir.split('/').at(-1)!
-    const app = configuredSessionApplicationIfCutover()!
+    const app = configuredSessionApplication()!
     if (ev.kind === 'status') {
       const status = String(ev.status)
       const proposal = (ev.proposal as string | null) ?? null
@@ -100,7 +100,7 @@ const append = (dir: string, ev: Record<string, unknown>): void =>
 const events = (dir: string): Array<{ kind: string; text?: string; from?: string | null }> => {
   const id = dir.split('/').at(-1)!
   resetConfiguredSessionApplicationForTest()
-  const app = configuredSessionApplicationIfCutover()
+  const app = configuredSessionApplication()
   if (!app?.readState(id)) return []
   const messages = app.readPendingMessages(id).flatMap((message) => {
     const raw = Buffer.from(message.body).toString('utf8')
@@ -192,7 +192,7 @@ test('managed watch registers once, delivers child states, and cancel stops deli
   const unmanaged = await runCli(['session', 'watch', ID], base, repo)
   assert.equal(unmanaged.code, 0, unmanaged.stderr)
   assert.match(unmanaged.stderr, new RegExp(`spex session wait ${ID}`))
-  assert.equal(configuredSessionApplicationIfCutover()!.readState(ID)?.status, 'asking')
+  assert.equal(configuredSessionApplication()!.readState(ID)?.status, 'asking')
 })
 
 test('CLI stop and close exit nonzero when the backend commits no target transition', async () => {

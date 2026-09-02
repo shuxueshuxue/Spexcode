@@ -48,7 +48,7 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { installEvalHost } from './eval-host.js'
-import { configuredSessionApplicationIfCutover, setSessionApplicationCommitObserver } from './session-application.js'
+import { configuredSessionApplication, setSessionApplicationCommitObserver } from './session-application.js'
 import { editSpecBody, readSpecBodyEdit, SpecBodyEditError } from './spec-body-edit.js'
 
 installEvalHost()
@@ -607,9 +607,7 @@ app.post('/api/sessions', async (c) => {
 })
 
 const runtimeApplicationOr503 = (_c: any) => {
-  const application = configuredSessionApplicationIfCutover()
-  if (!application) throw new ResourceConflict('session runtime is unavailable until the legacy JSON store is migrated')
-  return application
+  return configuredSessionApplication()
 }
 
 app.get('/api/session-runtime/:id/events', (c) => {
@@ -962,8 +960,8 @@ app.post('/api/sessions/:id/input', async (c) => {
     const handoffDeferred = r.delivery === 'deferred'
     void drainSession(id).then(() => {
       if (!handoffDeferred) return
-      const application = configuredSessionApplicationIfCutover()
-      if (application ? !application.readPendingMessages(id).length : true) markHumanPromptActive(id)
+      const application = configuredSessionApplication()
+      if (!application.readPendingMessages(id).length) markHumanPromptActive(id)
     }).catch((error) => console.error(`spex: command handoff deferred for ${id}: ${error instanceof Error ? error.message : String(error)}`))
     const outcomes = await dispatchNewMentions(text, { sessionId: id })
     return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })

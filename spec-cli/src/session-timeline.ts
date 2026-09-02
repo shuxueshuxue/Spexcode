@@ -1,7 +1,7 @@
 import { readAliasedRawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { decodeEventJson, type SessionEvent } from '@spexcode/session-events'
 import { MIGRATED_MESSAGE_EVENT, MIGRATED_STATE_EVENT } from '@spexcode/session-application'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
 
 export type TimelineEvent =
   | { ts: string; kind: 'status'; status: SessionLifecycle; proposal: SessionProposal | null; note: string | null; display?: string }
@@ -38,8 +38,8 @@ const publicEvent = (event: SessionEvent): TimelineEvent[] => {
 // early time, so a position in the shown history is not a sequence and the two are never interchanged.
 const canonicalTimeline = (id: string): { events: TimelineEvent[]; stamp: string | null } | null => {
   const canonicalId = canonicalSessionId(id)
-  const application = configuredSessionApplicationIfCutover()
-  if (!application || !application.readState(canonicalId)) return null
+  const application = configuredSessionApplication()
+  if (!application.readState(canonicalId)) return null
   const rows = application.readEvents(canonicalId)
   const ordered = [...rows].sort((a, b) => a.occurredAtMs - b.occurredAtMs || a.eventSeq - b.eventSeq)
   return { events: ordered.flatMap(publicEvent), stamp: rows.length === 0 ? null : String(rows.at(-1)!.eventSeq) }
@@ -49,8 +49,8 @@ export const timelineEvents = (id: string): TimelineEvent[] => canonicalTimeline
 
 export const timelineStamp = (id: string): string | null => {
   const canonicalId = canonicalSessionId(id)
-  const application = configuredSessionApplicationIfCutover()
-  if (application?.readState(canonicalId)) {
+  const application = configuredSessionApplication()
+  if (application.readState(canonicalId)) {
     const events = application.readEvents(canonicalId)
     return events.length === 0 ? null : String(events.at(-1)!.eventSeq)
   }
@@ -72,8 +72,8 @@ export const currentHumanTurn = (id: string): { token: string; acceptedAt: strin
 }
 
 export const recordStatus = (id: string, status: SessionLifecycle, proposal: SessionProposal | null, note: string | null): void => {
-  const application = configuredSessionApplicationIfCutover()
-  if (!application?.readState(id)) throw new Error(`cannot record status for unknown canonical session ${id}`)
+  const application = configuredSessionApplication()
+  if (!application.readState(id)) throw new Error(`cannot record status for unknown canonical session ${id}`)
   application.transitionSession(id, { status, proposal, note, reason: 'cli-status' })
 }
 
@@ -142,9 +142,9 @@ export type TimelineWindow = {
 //     the whole history. Growth past `limit` is answered with a whole window instead, because a reader that
 //     far behind is cheaper to re-seat than to catch up event by event.
 export function readTimeline(id: string, read: TimelineRead = {}): TimelineWindow | null {
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   const canonicalId = canonicalSessionId(id)
-  if (!application || !application.readState(canonicalId)) return null
+  if (!application.readState(canonicalId)) return null
   const limit = Math.max(1, Math.trunc(read.limit ?? DEFAULT_TIMELINE_WINDOW))
   if (read.since !== undefined) {
     const rows = application.readEvents(canonicalId, Math.max(0, Math.trunc(read.since)))

@@ -191,10 +191,10 @@ prose.
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
 `/api/sessions` list + spawn; `/api/sessions/archive-index` is the archived-only lean index (`id`, `title`, `label`,
-`closedAt`, `node`) and never substitutes for the id-addressed detail. After the one-time JSON migration marker exists,
-ordinary list rows take lifecycle status and parent topology from the canonical session application database and fail
-loudly for a governed record with no row; before that explicit cutover fence, the list does not initialize a database as
-a read side effect. Per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
+`closedAt`, `node`) and never substitutes for the id-addressed detail. The one-time JSON importer is the only
+legacy-tree entry; once it completes, ordinary list rows and every mutation read lifecycle status and parent topology
+from the canonical session application database and fail loudly for a governed record with no row. Fenced or
+ambiguous cutover states are rejected rather than selecting a compatibility path. Per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
 bundle), `capture` (the live pane as text), `prompt`, and id-addressed `closure` (the durable terminal-close
 audit answer after record removal). `closure` returns only its target id and close time or 404; it is not a
 second historical session collection. Every closure response carries its capability marker, including a 404,

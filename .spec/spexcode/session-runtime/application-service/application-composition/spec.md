@@ -26,6 +26,6 @@ opt-in compatibility switch. State replay folds `session.state.changed.v1` and p
 fact recorded beside it; migrated legacy history carries its own ignorable types and is skipped by the same fold.
 
 Lifecycle transitions resolve watcher recipients by their durable channel: a `watch:parent` relation suppresses the
-routine `active`/working transition, while `watch:manual` (and the legacy `watch` channel) opts into the complete
-feed. When both channels point at one watcher, the union emits one queue item. Creation still publishes its initial
+routine `active`/working transition, while `watch:manual` opts into the complete feed. A migrated `watch` channel
+is normalized by the importer. When both channels point at one watcher, the union emits one queue item. Creation still publishes its initial
 snapshot through the ordinary relation transaction; this policy applies to later transitions.

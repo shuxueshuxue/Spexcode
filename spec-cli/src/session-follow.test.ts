@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
-import { configuredSessionApplicationIfCutover, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { recordStatus } from './session-timeline.js'
 import type { Session } from './sessions.js'
 
@@ -20,16 +20,16 @@ const freshHome = (): string => {
   resetConfiguredSessionApplicationForTest()
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
-  configuredSessionApplicationIfCutover()!.createSession({ sessionId: ME, status: 'idle' })
+  configuredSessionApplication()!.createSession({ sessionId: ME, status: 'idle' })
   return home
 }
 function status(id: string, s: string, proposal: string | null = null, note: string | null = null): void {
-  const application = configuredSessionApplicationIfCutover()!
+  const application = configuredSessionApplication()!
   if (application.readState(id)) application.transitionSession(id, { status: s, proposal, note, reason: 'follow-test' })
   else application.createSession({ sessionId: id, status: s, proposal, note })
 }
 const sent = (id: string, text: string, from: string | null = null): void => {
-  const application = configuredSessionApplicationIfCutover()!
+  const application = configuredSessionApplication()!
   if (!application.readState(id)) application.createSession({ sessionId: id, status: 'idle' })
   application.enqueueConversationMessage(id, { kind: 'session.prompt.v1', body: Buffer.from(text), senderSessionId: from, idempotencyKey: `follow-test:${id}:${text}` }, { text, from })
 }
@@ -112,7 +112,7 @@ test('a stored cursor is the resume: a restarted follower starts where it stoppe
   status(T, 'active')
   later(30, () => status(T, 'asking', null, 'which branch?'))
   await take()
-  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, T), 2, 'the cursor names the next unread line')
+  assert.equal(configuredSessionApplication()!.readFollowCursor(ME, T), 2, 'the cursor names the next unread line')
   // the same actionable state is already consumed, so a fresh follow must NOT re-return it
   const r = await take()
   assert.deepEqual(r, { timedOut: true, path: ['asking'] })
@@ -141,10 +141,10 @@ test('waking on mail advances the follower own-log cursor and takes the next mes
   sent(ME, 'second')
   const first = await followSessions(() => {}, { targets: () => [], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.deepEqual(first, { mail: { from: null, text: 'unread' } })
-  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, ME), 2)
+  assert.equal(configuredSessionApplication()!.readFollowCursor(ME, ME), 2)
   const second = await followSessions(() => {}, { targets: () => [], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.deepEqual(second, { mail: { from: null, text: 'second' } })
-  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, ME), 3)
+  assert.equal(configuredSessionApplication()!.readFollowCursor(ME, ME), 3)
 })
 
 test('a follow with no session record of its own keeps its cursors in memory and still works', async () => {
@@ -153,7 +153,7 @@ test('a follow with no session record of its own keeps its cursors in memory and
   later(30, () => status(T, 'awaiting', 'merge'))
   const r = await followSessions(() => {}, { targets: () => [T], self: null, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.deepEqual(r, { reached: 'review', id: T, path: ['working', 'review'] })
-  assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, T), null, 'nothing was written to a record this follower does not have')
+  assert.equal(configuredSessionApplication()!.readFollowCursor(ME, T), null, 'nothing was written to a record this follower does not have')
 })
 
 test('a session that launches mid-follow is read from its first line, so its arrival is not missed', async () => {
@@ -174,7 +174,7 @@ test('a pre-seeded follow cursor replays exactly the lines behind it', async () 
   freshHome()
   status(T, 'active')
   status(T, 'awaiting', 'merge')
-  configuredSessionApplicationIfCutover()!.advanceFollowCursor(ME, T, 1)   // the follower had consumed only the first line before it died
+  configuredSessionApplication()!.advanceFollowCursor(ME, T, 1)   // the follower had consumed only the first line before it died
   const r = await take()
   assert.deepEqual(r, { reached: 'review', id: T, path: ['working', 'review'] })
 })
@@ -187,7 +187,7 @@ test('a wait crosses a rotation boundary without skipping its actionable edge', 
     status(T, 'active', null, 'x'.repeat(900))
     later(30, () => status(T, 'awaiting', 'merge', 'y'.repeat(900)))
     assert.deepEqual(await take(), { reached: 'review', id: T, path: ['working', 'review'] })
-    assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, T), 2, 'the durable event-index cursor still spans canonical history')
+    assert.equal(configuredSessionApplication()!.readFollowCursor(ME, T), 2, 'the durable event-index cursor still spans canonical history')
   } finally {
     if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
     else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
@@ -218,7 +218,7 @@ test('a 13-session fleet follow resumes across 1,664 sealed history events', asy
     })
 
     assert.deepEqual(result, { reached: 'review', id: fleet.at(-1), path: ['working', 'review'] })
-    assert.equal(configuredSessionApplicationIfCutover()!.readFollowCursor(ME, fleet.at(-1)!), 129, 'the event-index cursor resumes across canonical history')
+    assert.equal(configuredSessionApplication()!.readFollowCursor(ME, fleet.at(-1)!), 129, 'the event-index cursor resumes across canonical history')
   } finally {
     if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
     else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous

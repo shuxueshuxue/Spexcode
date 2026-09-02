@@ -11,7 +11,7 @@ import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, spawnOpenCo
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, interruptPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
-import { claudeTranscript, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from '@spexcode/transcript'
+import { claudeTranscript, claudeTranscriptReader, opencodeTranscript, piTranscript, unsupportedTranscript, type TranscriptReader } from '@spexcode/transcript'
 import { harnessIdentity, type HarnessId } from '@spexcode/spec-core'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
 import { buildShim, cleanHarness, listenerAt, noLaunchEnv, pexec, SPEX } from './harness-shim.js'
@@ -199,6 +199,11 @@ export interface Harness {
   // exactly one parser. Adapters without a reliable native transcript declare `unsupportedTranscript`, which
   // fails loudly instead of pretending the conversation was empty.
   readonly transcript: TranscriptReader
+  // the same reader addressed under a DECLARED agent config dir ([[launcher-select]]'s `configDir`): two
+  // launchers of one harness may keep their threads under different dirs (reclaude → ~/.claude, claude-glm →
+  // ~/.claude-glm), and the default `transcript` above only knows the harness default root. Optional — an
+  // adapter whose thread location is not config-dir-relative simply has no override to offer.
+  readonly transcriptAt?: (configDir: string) => TranscriptReader
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; native adapter starts a project-scoped app-server and launches the
   // visible TUI with `--remote` pointed at it. `cmd` is the SESSION's persisted launcher command
@@ -840,6 +845,7 @@ export const claudeHarness: Harness = {
   ownsRendezvous: true,                              // claude's background daemon opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
   transcript: claudeTranscript,
+  transcriptAt: (configDir) => claudeTranscriptReader(join(configDir, 'projects')),   // claude's threads live at <configDir>/projects/<project>/<id>.jsonl
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   oneShotTurn: (prompt, cmd) => ({ command: `${claudeBaseCmd(cmd)} -p`, stdin: prompt }),   // --print reads the prompt from stdin
@@ -1142,7 +1148,7 @@ export function harnessById(id: string): Harness {
 // resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
 // auth) and validates the harness id. There is NO env-derived built-in fallback: this registry lists exactly
 // the config's real launchers, and the dashboard picker offers that same complete list.
-export type Launcher = { name: string; harness: string; cmd: string; headless: boolean }
+export type Launcher = { name: string; harness: string; cmd: string; headless: boolean; configDir: string | null }
 export type LauncherDefault = { default: string | null; error: string | null }
 
 // the complete configured named launchers from spexcode.json, as a stable name-sorted list (for CLI/session
@@ -1153,7 +1159,7 @@ export function launcherList(root = mainCheckout()): Launcher[] {
   return Object.keys(m)
     .map((name) => {
       const harness = harnessById(m[name].harness || defaultHarness.id)
-      return { name, harness: harness.id, cmd: m[name].cmd, headless: harness.headless }
+      return { name, harness: harness.id, cmd: m[name].cmd, headless: harness.headless, configDir: m[name].configDir || null }
     })
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -1185,5 +1191,5 @@ export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
   if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
   const harness = harnessById(l.harness || defaultHarness.id)   // validate the harness id fail-loud
-  return { name, harness: harness.id, cmd: l.cmd, headless: harness.headless }
+  return { name, harness: harness.id, cmd: l.cmd, headless: harness.headless, configDir: l.configDir || null }
 }

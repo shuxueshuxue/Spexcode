@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname, isAbsolute, resolve } from 'node:path'
-import { mainRoot, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, rawLaunchReadinessOriginal, readRecordEntry, readAliasedRecordEntry, processStartToken, isSessionLifecycle, isSessionProposal, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
+import { mainRoot, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, rawLaunchReadinessOriginal, readRecordEntry, readAliasedRecordEntry, processStartToken, isSessionLifecycle, isSessionProposal, type RawRecord, type SessionLifecycle, type SessionProposal, type ProcessIdentity } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 import { configuredSessionApplication, sessionApplicationCutoverState } from './session-application.js'
 import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
@@ -359,7 +359,8 @@ export function writeRecord(rec: SessRec): void {
 export type CorruptRecordQuarantineWitness = {
   adapter: string
   thread: string | null
-  tmux: string
+  // Legacy CLI calls this field `tmux`; on process-host it carries the exact `{pid,startToken}` identity.
+  tmux: string | ProcessIdentity
   worktree: string
   branch: string
 }
@@ -379,7 +380,15 @@ function normalizeQuarantineWitness(id: string, raw: unknown): CorruptRecordQuar
   const value = raw as Record<string, unknown>
   const text = (key: keyof CorruptRecordQuarantineWitness): string => typeof value[key] === 'string' ? value[key].trim() : ''
   const adapter = text('adapter')
-  const tmux = text('tmux')
+  const rawHost = value.tmux
+  const tmux = typeof rawHost === 'string' ? rawHost.trim() : rawHost && typeof rawHost === 'object' && !Array.isArray(rawHost)
+    ? (() => {
+      const identity = rawHost as Record<string, unknown>
+      if (!Number.isSafeInteger(identity.pid) || (identity.pid as number) <= 0 || typeof identity.startToken !== 'string' || !identity.startToken)
+        throw new ResourceConflict(`refusing to quarantine ${id}: process host witness must be {pid,startToken}`)
+      return { pid: identity.pid as number, startToken: identity.startToken } satisfies ProcessIdentity
+    })()
+    : ''
   const worktree = text('worktree')
   const branch = text('branch')
   if (!Object.prototype.hasOwnProperty.call(value, 'thread'))
@@ -388,14 +397,23 @@ function normalizeQuarantineWitness(id: string, raw: unknown): CorruptRecordQuar
   const thread = typeof threadValue === 'string' && threadValue.trim() ? threadValue.trim() : threadValue == null || threadValue === '' ? null : null
   if (!adapter || !HARNESSES.some((h) => h.id === adapter)) throw new ResourceConflict(`refusing to quarantine ${id}: adapter must name one registered harness`)
   const expectedWitness = sessionHost().witness(id)
-  if (tmux !== expectedWitness) throw new ResourceConflict(`refusing to quarantine ${id}: tmux witness must be the exact session id ${id}`)
+  if (typeof expectedWitness === 'string') {
+    if (tmux !== expectedWitness) throw new ResourceConflict(`refusing to quarantine ${id}: host witness must be the exact session id ${id}`)
+  } else if (!expectedWitness || !tmux || typeof tmux === 'string' || tmux.pid !== expectedWitness.pid || tmux.startToken !== expectedWitness.startToken) {
+    throw new ResourceConflict(`refusing to quarantine ${id}: process host witness must match the recorded pid and start token`)
+  }
   if (!worktree || !isAbsolute(worktree)) throw new ResourceConflict(`refusing to quarantine ${id}: worktree witness must be an absolute path`)
   if (!branch || branch.startsWith('-') || branch.startsWith('refs/')) throw new ResourceConflict(`refusing to quarantine ${id}: branch witness must be one local branch name`)
   if (threadValue !== undefined && threadValue !== null && typeof threadValue !== 'string') throw new ResourceConflict(`refusing to quarantine ${id}: thread witness must be a string or null`)
   return { adapter, thread, tmux, worktree: resolve(worktree), branch }
 }
 
-async function proveQuarantineTmuxAbsent(id: string): Promise<{ state: 'absent' }> {
+async function proveQuarantineTmuxAbsent(id: string, witness: CorruptRecordQuarantineWitness): Promise<{ state: 'absent' }> {
+  if (typeof witness.tmux !== 'string') {
+    const live = processStartToken(witness.tmux.pid)
+    if (live === witness.tmux.startToken) throw new ResourceConflict(`refusing to quarantine ${id}: recorded process ${witness.tmux.pid}@${witness.tmux.startToken} is live`)
+    return { state: 'absent' }
+  }
   try { await sessionHost().alive(id, TMUX_PROBE_TIMEOUT_MS) }
   catch (error) {
     if (probeTimedOut(error)) throw new ResourceConflict(`refusing to quarantine ${id}: tmux absence is unknown (probe timed out)`)
@@ -477,7 +495,7 @@ export async function quarantineCorruptRecord(id: string, rawWitness: unknown): 
     const sha256 = recordSha256(original)
     const observedAt = new Date().toISOString()
     const leaf = proveQuarantineLeafAbsent(id)
-    const tmux = await proveQuarantineTmuxAbsent(id)
+    const tmux = await proveQuarantineTmuxAbsent(id, witness)
     const git = await proveQuarantineGitAbsent(id, witness)
     const adapter = await proveQuarantineAdapter(id, witness)
     const bundle = join(quarantineRoot(id), `${observedAt.replace(/[:.]/g, '-')}-${randomUUID()}`)

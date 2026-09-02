@@ -19,7 +19,8 @@ related:
 
 pi's `-p` form is an independent harness adapter with id `pi-headless`, not a mode of the interactive pi
 adapter. It keeps pi's materialized surface exactly, but replaces the interactive runtime with a resident
-controller in the session's tmux window. It uses pi's default text output; `--mode json` is deliberately not
+controller in the session host container. On tmux-host that container is a tmux window; on process-host the
+detached controller process IS the container. It uses pi's default text output; `--mode json` is deliberately not
 used because it can hang on the supported local runtime.
 
 The adapter is literal object composition over `piHarness` for shim, contract, skills, trust, slash commands,

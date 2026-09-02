@@ -105,6 +105,17 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TabStrip.jsx, spec-dashboard/src/tabs.js, spec-dashboard/src/tabModel.js]
     test: spec-dashboard/test/tab-strip-drag.e2e.mjs
+  - name: click-activates-tab
+    description: >-
+      In a real Chromium dashboard served by this worktree's Vite dev server against an isolated throwaway
+      backend, seed two document tabs with the first active, click the inactive tab face without moving the
+      pointer, and inspect the URL plus visible strip after the route settles.
+    expected: >-
+      The inactive tab becomes active, the URL changes to that tab's full address, and the strip keeps the same
+      two tabs. A below-threshold press remains the tab button's ordinary click even though the tab is movable.
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/dragGesture.js, spec-dashboard/src/TabStrip.jsx]
+    test: spec-dashboard/test/tab-click-activates.e2e.mjs
   - name: close-returns-to-last-focused-tab
     tags: [frontend-e2e, desktop]
     description: >-

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/dragGesture.js
 related:
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/dragGesture.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/styles.css
   - .spec/spexcode/spec-dashboard/dashboard-ui/app-frame/tab-strip/spec.md
@@ -34,9 +35,11 @@ the pointer behaves on the way there must not be.
   drifts, and it drifted before.
 - **The listeners are on the WINDOW.** A pointer leaves the row it started on immediately — that is the
   whole point of dragging — so a listener bound to the row would lose the gesture on the first movement. When
-  the caller receives a PointerEvent, the pressed element captures that pointer for the gesture. The window
-  listeners remain the shared dispatch point, while capture keeps move and release delivery alive after the
-  pointer leaves the viewport; mouse-event callers retain the same window-listener fallback.
+  the caller receives a PointerEvent, the window observes the press without capture until the threshold is
+  crossed; then the pressed element captures that pointer for the live gesture. Deferring capture preserves
+  the browser's ordinary click target for a below-threshold press, while capture keeps move and release
+  delivery alive after a real drag leaves the viewport. Mouse-event callers retain the same window-listener
+  fallback.
 - **Escape abandons it**, applying nothing.
 - **Unmount abandons it too.** Starting a gesture returns the abandon call, so a component that disappears
   mid-drag leaves nothing on the window and no stuck cursor.

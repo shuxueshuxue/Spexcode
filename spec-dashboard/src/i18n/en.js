@@ -101,6 +101,12 @@ export default {
     search: 'Search for a node',
     explorer: 'Browse the explorer',
   },
+  graphEmpty: {
+    title: 'No spec nodes yet',
+    hint: 'This repository has no spec tree. Start a session to describe the project and create its first node, or browse the repository files to decide where to begin.',
+    newSession: 'Start a new session',
+    explorer: 'Browse the explorer',
+  },
   tabs: {
     aria: 'open documents',
     close: 'close tab',

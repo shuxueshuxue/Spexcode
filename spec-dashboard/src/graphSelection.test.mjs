@@ -24,3 +24,9 @@ test('focus camera keeps zoom, roots use reading pairs, and non-root tiles use p
   assert.match(data, /const focusAnchorRatio = parent \? 0\.5 : anchorRatio/)
   assert.match(graph, /centerRef\.current\(focusRef\.current, undefined, 300, false\)/)
 })
+
+test('empty graph uses the explicit setup state before mounting the canvas', () => {
+  assert.match(graph, /function GraphView\(props\) \{[\s\S]*?if \(specs\.length === 0\) return <GraphEmptyState graphOnly=\{graphOnly\} \/>/)
+  assert.match(graph, /graphEmpty\.newSession/)
+  assert.match(graph, /graphEmpty\.explorer/)
+})

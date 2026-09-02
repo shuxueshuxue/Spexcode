@@ -23,6 +23,7 @@ import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 import { useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
+import { Icon } from './icons.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
 // the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
@@ -57,7 +58,7 @@ const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 // pages (the graph's camera, the session console's terminals) stay mounted and display-toggle instead of
 // unmounting — a property any page may claim, never a session-board special case.
 
-function GraphView({ param, page: routePage = 'graph' }) {
+function GraphCanvas({ param, page: routePage = 'graph' }) {
   const { specs, sessions, graphOnly } = useBoard()
   const { openPalette, setCompose, lockGraphTo, toggleHelp } = useWorkspaceApi()
   const { helpOpen } = useWorkspace()
@@ -659,6 +660,35 @@ function GraphView({ param, page: routePage = 'graph' }) {
       </div>
     </div>
   )
+}
+
+function GraphEmptyState({ graphOnly }) {
+  const t = useT()
+  const scope = useViewScope()
+  const { setDock, setDockMode } = useWorkspaceApi()
+  const showExplorer = () => { setDockMode('explorer'); setDock(true) }
+  return (
+    <div className="empty-view graph-empty-view">
+      <div className="empty-card">
+        <h1 className="empty-title">{t('graphEmpty.title')}</h1>
+        <p className="empty-hint">{t('graphEmpty.hint')}</p>
+        {!graphOnly && <div className="empty-doors">
+          <button type="button" className="empty-door" onClick={() => scope.open({ page: 'sessions', param: 'new', query: null })}>
+            <Icon name="plus" size={14} /><span>{t('graphEmpty.newSession')}</span>
+          </button>
+          <button type="button" className="empty-door" onClick={showExplorer}>
+            <Icon name="files" size={14} /><span>{t('graphEmpty.explorer')}</span>
+          </button>
+        </div>}
+      </div>
+    </div>
+  )
+}
+
+function GraphView(props) {
+  const { specs = [], graphOnly = false } = useBoard()
+  if (specs.length === 0) return <GraphEmptyState graphOnly={graphOnly} />
+  return <GraphCanvas {...props} />
 }
 
 // the graph owns its own ReactFlowProvider: the provider is xyflow, and hoisting it into the shell would

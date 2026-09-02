@@ -98,6 +98,12 @@ export default {
     search: '搜索节点',
     explorer: '在资源管理器里浏览',
   },
+  graphEmpty: {
+    title: '还没有规格节点',
+    hint: '此仓库还没有规格树。启动新会话来描述项目并创建第一个节点，或浏览仓库文件来决定从哪里开始。',
+    newSession: '启动新会话',
+    explorer: '在资源管理器里浏览',
+  },
   tabs: {
     aria: '已打开的文档',
     close: '关闭标签',

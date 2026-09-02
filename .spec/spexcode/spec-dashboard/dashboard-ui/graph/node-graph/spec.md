@@ -73,6 +73,12 @@ navigates to `#/sessions/<id>`. This is a graph affordance, not a second full se
 the desktop list home, while the badge keeps the people attached to the graph's overlays visible without
 another tall panel.
 
+When the assembled board contains zero spec nodes, the graph surface remains a usable landing place: it
+renders an explicit empty-project state with setup guidance and the existing New Session / Explorer doors,
+instead of trying to focus a missing node or showing the generic view-crashed fallback. This is a valid
+empty tree, not a malformed payload; the state tells the reader what to do next while preserving the graph
+route and shell.
+
 **Inside the workspace this view is the hidden-tab bottom sheet.** `#/graph` and `#/graph/<node>` still
 parse, still render, and still behave exactly as described above. With no document focus, the shell lands on
 `#/graph`: the graph is the workspace bottom sheet, the same kind of quiet first surface as the New Session

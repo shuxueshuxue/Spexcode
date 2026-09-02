@@ -72,6 +72,8 @@ The packaged command exports `SPEXCODE_BUNDLE_DIR` before invoking the unpacked 
 script sees the complete local tarball set rather than treating the directory as a transient `sed` input.
 When a project root is supplied, bootstrap changes into that WSL path before running `spex doctor`, keeping
 doctor's git/config probes on the selected project rather than the Windows launch directory.
+The bootstrap command exports both the bundle directory and project root inside the `wsl.exe` shell; relying
+on inherited Windows environment variables is insufficient because WSL does not forward arbitrary variables.
 
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource

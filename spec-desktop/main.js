@@ -182,7 +182,7 @@ function showFirstRunPage(message = '') {
 }
 
 function runBootstrap(distro, win) {
-  const command = wsl.bootstrapCommand(distro, BOOTSTRAP_SCRIPT, BUNDLE_DIR)
+  const command = wsl.bootstrapCommand(distro, BOOTSTRAP_SCRIPT, BUNDLE_DIR, process.env.SPEXCODE_WSL_PROJECT_ROOT || '')
   const child = wsl.runWsl(distro, command.args.slice(3), {
     probe: command.file,
     env: { ...process.env, SPEXCODE_PROJECT_ROOT: process.env.SPEXCODE_WSL_PROJECT_ROOT || '' },

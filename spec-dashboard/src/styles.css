@@ -2605,7 +2605,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
-.si-eval-spinner, .si-attach-busy { animation: si-attach-spin .8s linear infinite; }
+.si-eval-spinner, .si-attach-busy, .si-coldline-busy { animation: si-attach-spin .8s linear infinite; }
 @keyframes si-attach-spin { to { transform: rotate(360deg); } }
 @keyframes si-attach-complete-out {
   0%, 78% { opacity: 1; transform: translateY(0); }
